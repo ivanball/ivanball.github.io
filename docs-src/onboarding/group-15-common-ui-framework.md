@@ -16,7 +16,7 @@ and user administration** screens, and a turnkey **notification inbox / push / l
 A second, thinner package `MMCA.Common.UI.Web` sits above it and holds the pieces that need an ASP.NET
 pipeline (server-side token storage, the Blazor Content-Security-Policy provider, the
 trusted-caller header an SSR host stamps on its gateway calls, and the host's own edge rate limiter
-and ceiling on open circuits). The per-app and per-module Razor pages in the consumer apps
+and ceiling on open circuits, plus an opt-in same-origin API proxy that keeps every token out of script). The per-app and per-module Razor pages in the consumer apps
 ([chapter 21](group-21-conference-ui.md)) derive from and consume these primitives, and the same
 components render across Blazor Server, WebAssembly and MAUI with no per-platform reimplementation.
 `[Rubric §18, UI Architecture & Component Design]` assesses component reuse, separation of
@@ -36,22 +36,32 @@ a [`Result`](group-01-result-error-handling.md#result) or `Result<T>`
 (`MMCA.Common.UI/Services/Api/AuthenticatedServiceBase.cs:15`). That base owns the cross-cutting concerns
 of an outbound call. First, a **Polly** retry policy: 3 retries with exponential backoff (2s, 4s, 8s)
 plus up to one second of random jitter so a fleet of clients does not re-converge on the same instant
-(`AuthenticatedServiceBase.cs:25`, `:114-116`), over a deliberate retryable set rather than "any
+(`AuthenticatedServiceBase.cs:25`, `:119-122`), over a deliberate retryable set rather than "any
 5xx", since 501 and 505 are permanent verdicts and are excluded while 408 and 429 are explicit
-invitations to come back (`AuthenticatedServiceBase.cs:100-109`); the policy's `onRetry` disposes each
+invitations to come back (`AuthenticatedServiceBase.cs:100-114`); the policy's `onRetry` disposes each
 superseded response, because Polly hands the caller only the final outcome and an undisposed 5xx
 leaks its content buffer and holds its connection out of the pool under exactly the sustained failure
-the retries exist to survive (`AuthenticatedServiceBase.cs:131-134`). Second, a helper that creates a
+the retries exist to survive (`AuthenticatedServiceBase.cs:130-140`). Second, a helper that creates a
 `"APIClient"` `HttpClient` from `IHttpClientFactory` and stamps the JWT Bearer token onto it from
 [`ITokenStorageService`](#itokenstorageservice), swallowing the `InvalidOperationException` that JS
-interop throws during SSR prerender (`AuthenticatedServiceBase.cs:51-70`); a sibling
+interop throws during SSR prerender (`AuthenticatedServiceBase.cs:51-76`); a sibling
 `CreateClientWithToken` builds a client around an explicitly supplied token so a request the API
 answered `401` can be replayed with one acquired straight from [`ITokenRefresher`](#itokenrefresher)
-rather than resending the token the server just rejected (`AuthenticatedServiceBase.cs:80-87`).
+rather than resending the token the server just rejected (`AuthenticatedServiceBase.cs:78-93`).
+The same policy object is reachable without inheritance: [`IdempotentReadRetry`](#idempotentreadretry)
+(`MMCA.Common.UI/Services/Api/IdempotentReadRetry.cs:18`) hands anonymous lookup services the exact
+instance the base exposes to its subclasses, so the two paths cannot drift, and its only entry point
+is a GET because re-sending is safe only for an idempotent read (`IdempotentReadRetry.cs:9-16`, `:24`,
+`:35-44`, `AuthenticatedServiceBase.cs:36`). Its read-side sibling [`PagedReadAll`](#pagedreadall)
+(`MMCA.Common.UI/Services/Api/PagedReadAll.cs:19`) exists because a single read truncates silently at
+the API's page-size maximum: it pages a `/paged` endpoint in stable id order with a `PageSize` of 500
+until the server's reported total is reached, hands back the first failure unchanged, and stops after
+40 pages (20,000 rows) whatever the server claims (`PagedReadAll.cs:12-18`, `:22`, `:28`, `:43-46`,
+`:57-90`).
 
 Retry and idempotency are coupled on purpose: `NewIdempotencyKey()`
-(`AuthenticatedServiceBase.cs:43`) is generated **once per logical write** and set as a default header
-on the single client that serves every attempt (`EntityServiceBase.cs:159-163`, `:376-397`), so a
+(`AuthenticatedServiceBase.cs:49`) is generated **once per logical write** and set as a default header
+on the single client that serves every attempt (`EntityServiceBase.cs:159-163`, `:376-402`), so a
 retried create dedupes on the server instead of producing a duplicate row (the server half is
 [`IdempotencyHeaders`](group-08-auth.md#idempotencyheaders) and
 [`IdempotentAttribute`](group-12-api-hosting-mapping.md#idempotentattribute),
@@ -62,13 +72,13 @@ DTO's `RowVersion` as a weak entity tag when the DTO implements
 [`IConcurrencyAware`](group-12-api-hosting-mapping.md#iconcurrencyaware), and that tag travels as the
 `If-Match` header on the same per-operation client, so every retry states the same precondition
 instead of a later attempt succeeding against a version the user never saw
-(`EntityServiceBase.cs:197-200`, `:389-395`,
+(`EntityServiceBase.cs:197-200`, `:393-399`,
 [ADR-035](https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html)). Responses come back
 in the same [`PagedCollectionResult<T>`](group-01-result-error-handling.md#pagedcollectionresultt) /
 [`CollectionResult<T>`](group-01-result-error-handling.md#collectionresultt) envelopes the API
 returns, and both `SendRequestAsync` overloads read the response through
 [`ProblemDetailsResultReader`](group-08-auth.md#problemdetailsresultreader)
-(`EntityServiceBase.cs:324-342`, `:354-370`), so a 404 arrives as an
+(`EntityServiceBase.cs:328-343`, `:358-371`), so a 404 arrives as an
 [`ErrorType`](group-01-result-error-handling.md#errortype)`.NotFound` failure, a rejection as
 `Validation`, a 500 as `Unexpected`, each carrying the server's own text. What the reader cannot
 convert is the *absence* of a response, and that is
@@ -100,8 +110,9 @@ of the old exception-throwing UI deviation in
 **A third caching tier, on the client.** [`IUiReadCache`](#iuireadcache)
 (`MMCA.Common.UI/Services/Caching/IUiReadCache.cs:32`) is a read-through cache sitting in front of the
 API client, so a list re-read twice within a few seconds (a grid re-mounted by navigation, a lookup
-rendered in two components) costs one round trip. Its four members are `TryGetFresh`, `Set`,
-`InvalidatePrefix` and `Clear` (`IUiReadCache.cs:42`, `:51`, `:59`, `:66`), and the key is
+rendered in two components) costs one round trip. Its operations are `TryGetFresh`, `Set`,
+`InvalidatePrefix` and `Clear` (`IUiReadCache.cs:50`, `:59`, `:78`, `:85`), plus a `Generation` counter that moves on every
+invalidation (`:35-40`), and the key is
 **deliberately the relative URL, path plus the full query string**, which is the same key shape the
 server's authenticated output cache uses, so a filter, page or sort change misses on both tiers
 rather than being served stale by one of them (`IUiReadCache.cs:9-15`,
@@ -109,24 +120,27 @@ rather than being served stale by one of them (`IUiReadCache.cs:9-15`,
 [`UiReadCache`](#uireadcache) (`MMCA.Common.UI/Services/Caching/UiReadCache.cs:18`) implements it as a
 lock-guarded ordinal dictionary (`UiReadCache.cs:20`, `:25`) with **lazy** expiry, dropping a stale
 entry when it is next read instead of running a sweep timer over the few dozen entries a circuit ever
-holds (`UiReadCache.cs:11-14`, `:50-52`), and TTL resolution picks the **longest** matching route
+holds (`UiReadCache.cs:12-14`, `:68`, `:76`), and TTL resolution picks the **longest** matching route
 prefix so a child route can state a different budget than the endpoint it sits under
-(`UiReadCache.cs:120-135`). Staleness is configuration, not accident:
+(`UiReadCache.cs:157-178`). Staleness is configuration, not accident:
 [`UiReadCacheOptions`](#uireadcacheoptions)
 (`MMCA.Common.UI/Common/Settings/UiReadCacheOptions.cs:13`) binds the `UiReadCache` section with an
 `Enabled` escape hatch, a 60-second `DefaultTtl` and the per-prefix override map
 (`UiReadCacheOptions.cs:16`, `:24`, `:32`, `:41`). `EntityServiceBase` takes the cache as an
 **optional** constructor argument, so a service registered without one behaves exactly like a plain
-GET (`EntityServiceBase.cs:47`, `:58`, `:241-268`); only successes are stored, because caching a
+GET (`EntityServiceBase.cs:47`, `:58`, `:241-272`), and a `bypassCache` flag forces a round trip
+for a read the user explicitly asked to be current (`:231-235`); only successes are stored, because caching a
 failure would pin a transient outage in front of the user for the whole TTL and let a 404 survive the
-create that fixed it (`EntityServiceBase.cs:260-265`); and every successful write invalidates its own
-endpoint prefix (`EntityServiceBase.cs:281-287`). The one cross-cutting hazard is scope: the cache is
+create that fixed it (`EntityServiceBase.cs:264-269`), while the generation captured before the GET
+drops a late store that a concurrent write has already made stale (`:258-261`,
+`IUiReadCache.cs:63-70`); and every successful write invalidates its own
+endpoint prefix (`EntityServiceBase.cs:279-290`). The one cross-cutting hazard is scope: the cache is
 scoped, which is per-circuit on Blazor Server but per **app lifetime** on WebAssembly and MAUI, so
 [`AuthUIService`](#authuiservice)`.LogoutAsync` clears it explicitly rather than trusting the scope to
-end with the session (`MMCA.Common.UI/Services/Auth/AuthUIService.cs:138`, and again on an
-unrefreshable session at `:168`); the device-local document cache that backs offline list snapshots is
+end with the session (`MMCA.Common.UI/Services/Auth/AuthUIService.cs:352`, and again on an
+unrefreshable session at `:162`); the device-local document cache that backs offline list snapshots is
 wiped in the same pass, since those snapshots are keyed by surface rather than by user
-(`AuthUIService.cs:38-42`, `:366`). `[Rubric §12, Performance & Scalability]` and `[Rubric §19, State
+(`AuthUIService.cs:38-42`, `:397-406`). `[Rubric §12, Performance & Scalability]` and `[Rubric §19, State
 Management]` both land here, and the tier is recorded in
 [ADR-026](https://ivanball.github.io/docs/adr/026-caching-strategy.html).
 
@@ -182,7 +196,7 @@ releases its own disposables in a `Dispose(bool)` override that calls the base l
 `:86-101`). `[Rubric §22, Responsive &
 Cross-Browser]` is named by `BreakpointConstants` and exercised by
 [`MobileInfiniteScrollList<TItem>`](#mobileinfinitescrolllisttitem)
-(`MMCA.Common.UI/Components/Lists/MobileInfiniteScrollList.razor.cs:21`), the mobile card list whose
+(`MMCA.Common.UI/Components/Lists/MobileInfiniteScrollList.razor.cs:20`), the mobile card list whose
 IntersectionObserver sentinel, 500-item rendered cap (`:54`, `:214`) and generation-guarded
 supersession of in-flight fetches keep a long list bounded; a page that wants infinite scroll without
 giving up its own card markup renders [`InfiniteScrollSentinel`](#infinitescrollsentinel) alone
@@ -210,7 +224,7 @@ expressions. [`NavigationHistoryService`](#navigationhistoryservice)
 when a previous entry exists and fall back to a fixed path otherwise. `[Rubric §19, State Management &
 Data Flow]` assesses a deliberate, scoped state model rather than ambient globals: these are
 registered `Scoped`, so each circuit gets its own instance
-(`MMCA.Common.UI/DependencyInjection.cs:133-135`). `[Rubric §25, Navigation & Information
+(`MMCA.Common.UI/DependencyInjection.cs:149-151`). `[Rubric §25, Navigation & Information
 Architecture]` covers the route catalogue ([`RoutePaths`](#routepaths)
 (`MMCA.Common.UI/Common/RoutePaths.cs:7`), [`NavItem`](#navitem) with its role, claim, permission,
 section and group facets plus resource-key titles resolved per circuit
@@ -230,7 +244,7 @@ persists tokens through [`ITokenStorageService`](#itokenstorageservice), pushes 
 through [`JwtAuthenticationStateProvider`](#jwtauthenticationstateprovider) so `AuthorizeView` reacts
 immediately, and coordinates push-registration through the device-capability contract
 [`IPushRegistrationService`](group-26-device-capability-layer.md#ipushregistrationservice)
-(`AuthUIService.cs:32`). Two named codes make its local-only failures legible rather than null:
+(`AuthUIService.cs:49`). Two named codes make its local-only failures legible rather than null:
 `Auth.TokenStorageUnavailable` when the sign-in succeeded but JS interop could not persist the tokens,
 and `Auth.MissingAccessToken` when a 2xx carried no usable token, which means the response shape
 drifted (`AuthUIService.cs:57`, `:63`). The provider round trip is bound to the client that started
@@ -245,10 +259,10 @@ complete the provider flow with their own account and hand the victim the comple
 victim's app in as the attacker (`OAuthFlowStateStore.cs:8-16`). A host with no durable storage at all
 reports `IsEnforced` false and keeps the previous behavior, because nothing can be written across the
 redirect (`:39`, `:48-51`, `:70-73`). Alongside login, register, OAuth exchange, logout, refresh and
-change-password, it carries the self-service reset pair (`IAuthUIService.cs:55`, `:62`,
+change-password, it carries the self-service reset pair (`IAuthUIService.cs:57`, `:64`,
 [ADR-091](https://ivanball.github.io/docs/adr/091-cache-backed-password-reset.html)) and the
 multi-device session pair: `GetSessionsAsync` lists the caller's live refresh sessions newest first
-and `RevokeSessionAsync` ends one of them (`IAuthUIService.cs:70`, `:79`,
+and `RevokeSessionAsync` ends one of them (`IAuthUIService.cs:72`, `:81`,
 [ADR-097](https://ivanball.github.io/docs/adr/097-multi-device-refresh-sessions.html)). Those two are
 rendered by the framework-owned [`Sessions`](#sessions) page
 (`MMCA.Common.UI/Pages/Auth/Sessions.razor.cs:26`), reachable at `/profile/sessions`
@@ -256,7 +270,10 @@ rendered by the framework-owned [`Sessions`](#sessions) page
 other device's session, and a page-level sign-out-everywhere that also ends the caller's own and is
 therefore followed by the local logout and a redirect. The current device's row carries no button at
 all, since revoking it from here would leave the app signed in on a dead session until the access
-token expired (`Sessions.razor.cs:16-24`, `:33`, `:55`). Each row is labelled from
+token expired (`Sessions.razor.cs:16-24`, `:110-112`). The page-level path is
+`RevokeAllSessionsAsync`, which signs out locally only once the server confirmed the revoke
+(`IAuthUIService.cs:91`), and one busy flag disables every button while any revoke is in flight, so a
+second click cannot race the list rebuild (`Sessions.razor.cs:52-55`). Each row is labelled from
 [`UserAgentSummary`](#useragentsummary) (`MMCA.Common.UI/Services/Auth/UserAgentSummary.cs:18`), which
 extracts a browser and a platform from the raw header with the most specific token winning (every
 Chromium browser also says "Chrome", and Chrome and Edge both say "Safari",
@@ -268,7 +285,7 @@ Email confirmation
 way, as a framework page over a framework client. [`IEmailConfirmationUIService`](#iemailconfirmationuiservice)
 (`MMCA.Common.UI/Services/Auth/IEmailConfirmationUIService.cs:21`) is a separate interface rather than
 two new `IAuthUIService` members, so a consumer's own `IAuthUIService` implementation keeps compiling
-(`MMCA.Common.UI/DependencyInjection.cs:126-128`). Its two anonymous, Result-returning calls redeem a
+(`MMCA.Common.UI/DependencyInjection.cs:142-144`). Its two anonymous, Result-returning calls redeem a
 link's single-use token and ask for a fresh link, the latter answering success on any well-formed
 request because the endpoint returns 202 whether or not the address holds an account
 (`IEmailConfirmationUIService.cs:28`, `:30-38`). The in-box
@@ -320,17 +337,113 @@ hydrates again with its own handling (`TokenHydrationWarmup.cs:18-22`, `:36-57`)
 wires it that way (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Program.cs:89`). The
 [`ISessionCookieSync`](#isessioncookiesync) / [`JsFetchSessionCookieSync`](#jsfetchsessioncookiesync)
 pair mirrors the in-memory access token into the cookie by firing the fetch **from the browser**, so
-the `Set-Cookie` lands in the user's own jar under both render modes. All three storage services agree
+the `Set-Cookie` lands in the user's own jar under both render modes, and both calls report
+whether the jar was actually updated, `false` on a non-2xx answer or when JS interop is unavailable
+(`MMCA.Common.UI/Services/Auth/ISessionCookieSync.cs:8-19`, `JsFetchSessionCookieSync.cs:26-34`). All three storage services agree
 on one 30-second expiry skew read through [`JwtTokenInfo`](#jwttokeninfo)`.IsFresh`
 (`MMCA.Common.UI/Services/Auth/Tokens/JwtTokenInfo.cs:16-37`, used at `WasmTokenStorageService.cs:15,24` and
-`ServerTokenStorageService.cs:23,40`), which parses the token client-side **without validating its
+`ServerTokenStorageService.cs:41`), which parses the token client-side **without validating its
 signature**, because the API validates every request. Every outbound call also passes
 [`AuthDelegatingHandler`](#authdelegatinghandler), which attaches the stored bearer token to requests
 that do not go through `CreateAuthenticatedClientAsync`
-(`MMCA.Common.UI/Services/Auth/AuthDelegatingHandler.cs:10`). The lifecycle across render modes is
+(`MMCA.Common.UI/Services/Auth/AuthDelegatingHandler.cs:12`), except one that sets its `SkipBearer` request
+option: the token-refresh POST does, because that endpoint is anonymous and reading storage from
+inside a refresh would re-enter the very acquisition waiting on it (`AuthDelegatingHandler.cs:9-19`). The lifecycle across render modes is
 [ADR-051](https://ivanball.github.io/docs/adr/051-client-auth-token-lifecycle.html); the cross-service
 JWKS validation these tokens flow into is
 [ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html).
+
+**An opt-in same-origin API proxy: no token in the page at all.** By default a browser client still
+holds an access token in memory, the one `/auth/session/token` hands to script. A Blazor Web host can
+remove even that by calling `AddCommonSameOriginApiProxy(configuration)` and
+`MapCommonSameOriginApiProxy()` from `MMCA.Common.UI.Web`, a backend-for-frontend in which the browser
+calls `/api/**` on the UI host's own origin and the host forwards to the gateway with the bearer taken
+from the HttpOnly session cookie
+([`SameOriginApiProxyServiceExtensions`](#sameoriginapiproxyserviceextensions),
+`MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxyServiceExtensions.cs:12-18`, `:51`;
+[`SameOriginApiProxyEndpointExtensions`](#sameoriginapiproxyendpointextensions),
+`MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxyEndpointExtensions.cs:15`, `:33`).
+[`SameOriginApiProxySettings`](#sameoriginapiproxysettings)
+(`MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxySettings.cs:21`) binds `SameOriginApiProxy`
+with a default for every value, so a host opts in with no section at all: a `/api` `PathPrefix`, a
+`GatewayAddress` that falls back to `Api:ApiEndpoint` so a service-discovery name resolves exactly as
+it does for the host's own clients, `auth/login`, `auth/register` and `auth/oauth/exchange` as the
+token-issuing paths, `auth/refresh` and `auth/revoke`, and `SameSite=Strict` session cookies (`:31`,
+`:38`, `:46`, `:52`, `:59`, `:66`, `:74`; the gateway fallback at
+`SameOriginApiProxyServiceExtensions.cs:57-64`).
+[`SameOriginApiProxySettingsValidator`](#sameoriginapiproxysettingsvalidator)
+(`MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxySettingsValidator.cs:14`) runs on start and
+refuses a prefix or path carrying route syntax, a query, a fragment or whitespace, a gateway that is
+not an absolute address, and any `SameSite` other than `Strict` or `Lax`, because a cookie that
+authenticates data calls must never ride on a cross-site request (`:7-13`, `:16`, `:26-49`). Opting in
+also makes the session cookies claims-only toward the browser and has `/client-config` advertise the
+proxy, which is what moves the WebAssembly `"APIClient"` and notification hub onto it
+(`SameOriginApiProxyServiceExtensions.cs:21-28`, `:69-74`).
+
+Each request runs through [`SameOriginApiProxyEndpoint`](#sameoriginapiproxyendpoint)
+(`MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxyEndpoint.cs:29`) in a fixed order (`:15-28`).
+A foreign `Origin` or `Sec-Fetch-Site` is refused with 403 before anything else, and a WebSocket
+upgrade must carry this host's own `Origin`, because an upgrade is not CORS-protected and the origin
+is the only proof of who opened it (`:115-131`, `:232-237`); `OPTIONS` is answered locally with 204
+and no CORS grant, so the gateway's CORS policy is never consulted on the proxy's behalf
+(`:241-245`); and every unsafe method must carry the `X-CSRF: 1` header named by
+[`SameOriginProxyHeaders`](#sameoriginproxyheaders)
+(`MMCA.Common.UI/Services/Auth/SameOriginProxyHeaders.cs:11`, `:14`, `:17`), the one exemption being
+an HTTP/2 WebSocket, to which a browser cannot add a header (`SameOriginApiProxyEndpoint.cs:250-254`).
+The header is defense in depth behind the origin check and carries no secret
+(`SameOriginProxyHeaders.cs:3-9`). The session step then validates or refreshes the cookie's access
+token through the single-flighted `ICookieSessionRefresher`: a refused refresh token clears the
+cookies and answers 401, while a refresh that could not be decided keeps them and answers 503 with
+`Retry-After`, so a blip at the identity endpoint does not sign the user out (`:22-25`, `:261-284`).
+A browser POST to the refresh path is answered by the proxy itself from the refresh cookie
+(`:351-356`), and a safe method the gateway answers 401 gets one forced refresh and one replay, never
+an unsafe one whose body the upstream could apply twice (`:313-328`). The per-request YARP transform
+is [`SameOriginProxyTransformer`](#sameoriginproxytransformer)
+(`MMCA.Common.UI.Web/SameOriginProxy/SameOriginProxyTransformer.cs:34`): it maps `{prefix}/rest` to
+`{gateway}/rest`, replaces whatever `Authorization` the browser sent with the session's bearer, and
+keeps the session cookies and the CSRF header off the upstream request (`:26-33`, `:55-62`). Its
+[`ProxyResponseMode`](#proxyresponsemode) (`:14`) picks the response treatment: `Forward` copies,
+`TokenIssuing` moves a sign-in's token pair into the cookies and sends the browser the same JSON with
+a claims-only `accessToken` and an empty `refreshToken` under `no-store`, and `Revoke` clears the
+cookies whatever the upstream answered, so a failed revoke cannot strand the user in a session
+(`:16-23`, `:84-95`, `:100-145`). Forwarding goes through
+[`SameOriginProxyInvoker`](#sameoriginproxyinvoker)
+(`MMCA.Common.UI.Web/SameOriginProxy/SameOriginProxyInvoker.cs:19`), one `HttpMessageInvoker` built
+the way YARP requires rather than taken from `IHttpClientFactory`: no cookie container, which would
+replay one user's upstream cookies on another user's request, no redirects or decompression, and none
+of the host's default handlers, since a retry would replay a streamed body and the trusted-caller
+header would exempt every browser request from the gateway's rate limiter (`:9-18`, `:50-58`). On the
+client, [`SameOriginProxyRequestHandler`](#sameoriginproxyrequesthandler)
+(`MMCA.Common.UI/Services/Auth/SameOriginProxyRequestHandler.cs:11`) is the innermost `"APIClient"`
+handler: it strips any `Authorization` header, since the client only ever holds a claims-only token,
+and stamps the CSRF header (`:3-10`, `:18-20`).
+
+The Blazor Server circuit keeps calling the gateway server-to-server, but its tokens still have to
+meet the browser's cookie jar, which it can reach only through a script `fetch`. The proxy therefore
+replaces the circuit's `ITokenRefresher` and `ISessionCookieSync` with
+[`HandoffTokenRefresher`](#handofftokenrefresher) and
+[`HandoffSessionCookieSync`](#handoffsessioncookiesync)
+(`SameOriginApiProxyServiceExtensions.cs:83-84`,
+`MMCA.Common.UI.Web/SameOriginProxy/HandoffSessionServices.cs:14`, `:39`), which trade only
+ciphertext with the page. [`SessionHandoffProtector`](#sessionhandoffprotector)
+(`MMCA.Common.UI.Web/SameOriginProxy/SessionHandoffProtector.cs:16`) encrypts and signs with the
+host's data-protection key ring under one purpose each way, so an access-token handoff can never be
+replayed as a cookie write, and expires a handoff after one minute (`:7-15`, `:19`, `:23-27`); a
+tampered, expired or wrong-purpose value unprotects to null (`:57-72`), and the cookie direction
+serializes the pair as the private [`TokenPair`](#tokenpair) record (`:33-34`, `:75`).
+[`SessionHandoffEndpoints`](#sessionhandoffendpoints)
+(`MMCA.Common.UI.Web/SameOriginProxy/SessionHandoffEndpoints.cs:15`) maps the two halves,
+`POST /auth/session/handoff` (validate-or-refresh from the cookies, answered with a protected access
+token) and `POST /auth/session-cookie/handoff` (seed the cookies from a protected pair), both
+requiring the CSRF header and both exchanging the [`HandoffBody`](#handoffbody) `{ "handoff": "..." }`
+record (`:17-18`, `:23-60`, `:64`). Because a registration that lands later would silently put the
+access token back in the page, `MapCommonSameOriginApiProxy` resolves both services and fails the boot
+naming the culprit when either is not the handoff implementation, and it also fails when
+`AddCommonSameOriginApiProxy` was never called, which it detects through the internal
+[`SameOriginApiProxyMarker`](#sameoriginapiproxymarker)
+(`SameOriginApiProxyEndpointExtensions.cs:38-44`, `:59-92`,
+`SameOriginApiProxyServiceExtensions.cs:91-92`). `[Rubric §26, Front-End Security]` is the home
+category: with the proxy on, no token is readable by script on the page.
 
 **Front-end security beyond tokens.** `[Rubric §26, Front-End Security]` assesses token handling, XSS
 exposure and secret storage, and this group answers it in five places: keeping the refresh token out
@@ -348,7 +461,7 @@ Report-Only header that protects nothing and nobody notices (`BlazorCspPolicyPro
 previous user's page out of the bfcache while anonymous pages stay bfcache-eligible
 (`MMCA.Common.UI/Extensions/WebApplicationExtensions.cs:24-44`); the `returnUrl` sanitizer already
 covered; and, on a native head, the app-lock overlay [`BiometricGate`](#biometricgate)
-(`MMCA.Common.UI/Components/Capabilities/BiometricGate.razor.cs:17`), which re-arms once the app has
+(`MMCA.Common.UI/Components/Capabilities/BiometricGate.razor.cs:18`), which re-arms once the app has
 sat in the background longer than its 30-second `ReLockAfter` parameter, short by design because a
 device handed to someone else is usually away for longer than a glance at a notification
 (`BiometricGate.razor.cs:19-25`). It subscribes to the resume event regardless of the current
@@ -390,7 +503,7 @@ typically sized at 0.25 vCPU and 0.5 GiB
 ships a limiter of its own. [`UiRateLimitingSettings`](#uiratelimitingsettings)
 (`UiRateLimitingSettings.cs:33`) binds the `UiRateLimiting` section with an `Enabled` switch that
 defaults on, a per-IP `PermitLimit` of 300 over a 60-second `WindowSeconds`, and a replica-wide
-`GlobalConcurrencyLimit` of 200 (`:36`, `:43`, `:58`, `:62`, `:74`). The 300 sits well above any single
+`GlobalConcurrencyLimit` of 200 (`:36`, `:43`, `:58`, `:62`, `:76`). The 300 sits well above any single
 visitor on purpose, because an office or carrier NAT presents many visitors as one address, and a
 host whose audience shares one egress (a venue's wifi) is told to raise it (`:49-55`).
 [`UiRateLimitingExtensions`](#uiratelimitingextensions)
@@ -417,7 +530,7 @@ binds `BlazorCircuitLimits` with a `MaxActiveCircuits` of 200 per replica, deriv
 container's memory and stated as an abuse ceiling rather than a capacity plan, plus a tighter
 disconnected retention of 25 circuits for 60 seconds against the framework's 100 and three minutes
 (`:20`, `:27-38`, `:46`, `:57`). [`BoundedCircuitHandler`](#boundedcircuithandler)
-(`MMCA.Common.UI.Web/Hardening/BoundedCircuitHandler.cs:39`) keeps the count as a `CircuitHandler`,
+(`MMCA.Common.UI.Web/Hardening/BoundedCircuitHandler.cs:43`) keeps the count as a `CircuitHandler`,
 the documented extension point that sees a circuit open and close (`:14-20`). It increments first and
 rolls back on refusal so two simultaneous opens cannot both take the last slot, floors the close-side
 decrement at zero so an unpaired close never hands out permits forever, and runs last among the
@@ -431,7 +544,7 @@ calls because they attach to different builders: `RetentionFrom(configuration)` 
 validates the options on start and registers the handler as a **singleton**, since circuit handlers
 resolve from each circuit's own scope and a scoped one would count to one and cap nothing (`:13-17`,
 `:28-40`, `:51-60`). Both read the same section, so the two numbers cannot drift apart. The ADC Blazor
-Web host wires all four calls (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:68`, `:62`,
+Web host wires all four calls (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:69`, `:62`,
 `:127`, `:197`). `[Rubric §12, Performance & Scalability]` and `[Rubric §29, Resilience]`: a public
 origin sheds load at its own edge instead of letting an unauthenticated loop exhaust its container.
 
@@ -441,7 +554,7 @@ origin sheds load at its own edge instead of letting an unauthenticated loop exh
 [`PasswordComplexityAttribute`](#passwordcomplexityattribute) mirroring the server's rule (at least 8
 characters with upper, lower, digit and a non-alphanumeric character) so the form gives the verdict
 the API would, and deferring empty input to `[Required]` so a blank field shows one message rather
-than two (`MMCA.Common.UI/Pages/Auth/PasswordComplexityAttribute.cs:12`, `:21-30`).
+than two (`MMCA.Common.UI/Pages/Auth/PasswordComplexityAttribute.cs:15`, `:21-30`).
 [`AbsoluteUrlAttribute`](#absoluteurlattribute)
 (`MMCA.Common.UI/Validation/AbsoluteUrlAttribute.cs:26`) is the same parity argument with sharper
 stakes: it requires an absolute `http`/`https` URL (`:39-52`) because these values are rendered
@@ -456,7 +569,12 @@ in-box [`DataAnnotationsModelValidator`](#dataannotationsmodelvalidator)
 (`MMCA.Common.UI/Validation/DataAnnotationsModelValidator.cs:21`) runs the attributes on the model and
 resolves every produced message as a resource key with pass-through, so a model can declare
 `ErrorMessage = "Validation.AbsoluteUrl"` and a plain-English message still renders verbatim
-(`DataAnnotationsModelValidator.cs:13-19`, `:36-41`); a consumer that keeps its rules in
+(`DataAnnotationsModelValidator.cs:13-19`, `:36-41`); an `EditForm` gets the same localizing path by swapping
+`<DataAnnotationsValidator />` for
+[`LocalizedDataAnnotationsValidator`](#localizeddataannotationsvalidator)
+(`MMCA.Common.UI/Validation/LocalizedDataAnnotationsValidator.cs:21`), which writes the results into
+the form's `EditContext`, re-validating a field when it changes and the whole model on submit
+(`:9-20`); a consumer that keeps its rules in
 FluentValidation supplies its own implementation and `MMCA.Common.UI` never references a validation
 library. That client-side parity is the point of `[Rubric §24, Forms, Validation & UX Safety]`: the
 client predicts, the server decides.
@@ -482,7 +600,7 @@ provider block hosts MudBlazor's snackbar inside a `role="status" aria-live="pol
 rendered toast already is the live-region content and a second channel would read the same sentence
 twice (`MudToastService.cs:12-17`). The dialog facade collapses a dismissal (backdrop click, escape) onto
 `false`, so a caller only ever branches on `true` (`MudAppDialogService.cs:14-26`). Both are
-registered by their own `AddCommonUiFacades()` (`MMCA.Common.UI/DependencyInjection.cs:181-186`),
+registered by their own `AddCommonUiFacades()` (`MMCA.Common.UI/DependencyInjection.cs:197-202`),
 separate from `AddUIShared` so a bUnit harness can resolve exactly these two without the rest of the
 shared-UI surface. `[Rubric §1, SOLID]` (dependency inversion) and `[Rubric §14, Testability]`: a
 component test records toasts instead of driving a rendered snackbar host.
@@ -513,7 +631,7 @@ into the chrome, down to the skip-to-content link the shared layout renders firs
 (`MMCA.Common.UI/Layout/MainLayout.razor:17`).
 
 **Dark mode is a service, not a flag.** [`ThemeService`](#themeservice)
-(`MMCA.Common.UI/Theme/ThemeService.cs:17`, registered `Scoped` at `DependencyInjection.cs:138`)
+(`MMCA.Common.UI/Theme/ThemeService.cs:17`, registered `Scoped` at `DependencyInjection.cs:154`)
 owns the preference: `InitializeAsync` reads the stored value through a `theme.js` module and falls
 back to the OS `prefers-color-scheme` only when nothing is stored (`ThemeService.cs:18`, `:34`),
 `SetDarkModeAsync` persists through the same module and raises `OnChange` (`ThemeService.cs:28`,
@@ -543,7 +661,7 @@ single non-HttpOnly culture cookie is the source of truth. The WASM client reads
 culture as an `Accept-Language` header through
 [`CultureDelegatingHandler`](#culturedelegatinghandler)
 (`MMCA.Common.UI/Services/Culture/CultureDelegatingHandler.cs:13`, `:20-25`), wired into the `"APIClient"`
-pipeline at `DependencyInjection.cs:93,117`, because the cross-origin Gateway does not carry the
+pipeline at `DependencyInjection.cs:93,125`, because the cross-origin Gateway does not carry the
 cookie through to the services and that header is what makes a backend failure come back localized.
 View strings are externalized to co-located `.resx` resolved by `IStringLocalizer<T>`
 (`AddLocalization()` at `DependencyInjection.cs:66`), anchored by two marker types:
@@ -636,7 +754,7 @@ so the host can add it to `AdditionalAssemblies` for route discovery, and two de
 component types to render in the app bar and at the root layout (`IUIModule.cs:12-22`). The
 registration prologue is shared too: `AddUIModule<TModule>()` runs one Scrutor scan that picks up
 every `IEntityService<,>` implementation in the module's assembly as scoped, then registers the
-descriptor as a singleton (`MMCA.Common.UI/DependencyInjection.cs:273-283`), so a module's own
+descriptor as a singleton (`MMCA.Common.UI/DependencyInjection.cs:289-299`), so a module's own
 `Add{Module}UI()` no longer carries its own copy of that scan and can still register services that
 must win afterwards. [`UIModuleConfiguration`](#uimoduleconfiguration) lets a host switch a module off
 through `Modules:{name}:Enabled`, defaulting to enabled when the section is absent
@@ -661,19 +779,21 @@ form model) render it; [`NotificationInboxService`](#notificationinboxservice) a
 [`INotificationInboxUIService`](#inotificationinboxuiservice) and
 [`IPushNotificationUIService`](#ipushnotificationuiservice)) call the API; and
 [`NotificationHubService`](#notificationhubservice)
-(`MMCA.Common.UI/Services/Notifications/NotificationHubService.cs:26`) holds the **SignalR**
+(`MMCA.Common.UI/Services/Notifications/NotificationHubService.cs:34`) holds the **SignalR**
 connection to the API's [`NotificationHub`](group-10-notifications.md#notificationhub), retrying an
 initial connect up to 3 times with doubling backoff and discarding a connection that never started so
-a later join is not blocked forever (`NotificationHubService.cs:28`, `:146-176`). The same connection
+a later join is not blocked forever (`NotificationHubService.cs:36`). The same connection
 carries ephemeral **live channel** events
 ([ADR-039](https://ivanball.github.io/docs/adr/039-live-channel-push.html)): components join through
-`JoinChannelAsync` (`NotificationHubService.cs:192`), membership is reference-counted per key by
+`JoinChannelAsync` (`NotificationHubService.cs:231`), membership is reference-counted per key by
 [`ChannelReferenceCounter`](#channelreferencecounter)
 (`MMCA.Common.UI/Services/Notifications/ChannelReferenceCounter.cs:16`) so one subscriber leaving does
 not cut the channel off for the others, handlers are multicast through disposable
-[`ChannelSubscription`](#channelsubscription) handles (`NotificationHubService.cs:412`), and every held
+[`ChannelSubscription`](#channelsubscription) handles (`NotificationHubService.cs:490`), and every held
 channel is re-joined on `Reconnected` because SignalR group membership does not survive a new
-connection (`NotificationHubService.cs:143`). Which notifications a user sees can be narrowed by
+connection (`NotificationHubService.cs:178`). On a WebAssembly client whose host runs the same-origin
+proxy, the hub connects through it and sends the proxy's CSRF header instead of an access token
+(`NotificationHubService.cs:74-83`, `:361-363`). Which notifications a user sees can be narrowed by
 [`INotificationScopeProvider`](#inotificationscopeprovider), an app-supplied scope key such as
 `"event:2"` that both HTTP services consume so a send and the reads that follow agree, defaulting to
 the unscoped [`NullNotificationScopeProvider`](#nullnotificationscopeprovider) and contractually
@@ -696,7 +816,12 @@ registers strictly symmetrically, because hosts render it twice inside `<Authori
 token refresh tears both instances down and rebuilds them (`NotificationBell.razor.cs:22-29`). The
 whole feature is wired by its own `AddNotificationUI()`
 (`MMCA.Common.UI/Notifications/DependencyInjection.cs:12`, `:20-42`), kept separate so an app that does
-not want real-time notifications never pays for the SignalR plumbing.
+not want real-time notifications never pays for the SignalR plumbing. A host that skips it can also set
+`HideNotificationPagesWhenUnregistered` (`MMCA.Common.UI/Common/Settings/LayoutSettings.cs:49`), and
+[`NotificationPageGate`](#notificationpagegate)
+(`MMCA.Common.UI/Notifications/NotificationPageGate.cs:12`) then has the router answer the three
+notification pages with the not-found page whenever no `NotificationUIModule` is registered
+(`:14-25`).
 
 **Administration screens ship as components, not pages.** Identity administration is the second
 finished feature in the package
@@ -761,7 +886,7 @@ the DTO.
 **How it wires up at startup.** A host's `Program.cs` calls `AddUIShared(configuration)` once, a C#
 `extension(IServiceCollection)` member (see
 [primer §4](00-primer.md#4-c-build-and-code-style-conventions)) on
-[`DependencyInjection`](#dependencyinjection) (`MMCA.Common.UI/DependencyInjection.cs:28`, `:36-162`).
+[`DependencyInjection`](#dependencyinjection) (`MMCA.Common.UI/DependencyInjection.cs:28`, `:36-178`).
 In order it binds and **validates on start** [`ApiSettings`](#apisettings), so a missing endpoint
 fails the host rather than the first request (`:39-42`; the read-only face of those options is
 [`IApiSettings`](#iapisettings), whose `WasmApiEndpoint` lets the server call an internal URL while
@@ -775,9 +900,11 @@ culture delegating handlers and the named
 `"APIClient"` whose base address comes from `ApiSettings` and whose timeout is pinned to
 [`HttpResilienceDefaults`](group-16-aspire-orchestration.md#httpresiliencedefaults)`.TotalRequestTimeout`
 rather than the BCL's arbitrary 100s, so the transport never pre-empts the resilience budget
-(`:92-117`); calls `AddCommonUiFacades()` for the toast and dialog pair (`:121`); then `TryAdd`s
-[`AuthUIService`](#authuiservice), the email-confirmation client (`:128`), the
-[`OAuthFlowStateStore`](#oauthflowstatestore) (`:132`),
+(`:92-125`; when `Api:SameOriginApiEndpoint` is configured the base address is that proxy endpoint
+and [`SameOriginProxyRequestHandler`](#sameoriginproxyrequesthandler) joins as the innermost handler,
+`:96-133`); calls `AddCommonUiFacades()` for the toast and dialog pair (`:137`); then `TryAdd`s
+[`AuthUIService`](#authuiservice), the email-confirmation client (`:144`), the
+[`OAuthFlowStateStore`](#oauthflowstatestore) (`:148`),
 the two list-page state services,
 [`NavigationHistoryService`](#navigationhistoryservice), [`ThemeService`](#themeservice),
 [`EndpointCultureApplier`](#endpointcultureapplier),
@@ -790,11 +917,11 @@ default [`IOAuthUISettings`](#ioauthuisettings) ([`DefaultOAuthUISettings`](#def
 that downstream apps override with
 [`ConfigurationOAuthUISettings`](#configurationoauthuisettings), which reads provider availability
 from the `OAuth` section for a server host and from pre-computed `Enabled` flags for a WASM client
-(`:124-158`, `MMCA.Common.UI/Services/Auth/OAuth/ConfigurationOAuthUISettings.cs:13`, `:24-30`); and finally
-calls `AddDeviceCapabilityDefaults()` so every capability contract resolves on every head (`:162`,
+(`:139-174`, `MMCA.Common.UI/Services/Auth/OAuth/ConfigurationOAuthUISettings.cs:13`, `:24-30`); and finally
+calls `AddDeviceCapabilityDefaults()` so every capability contract resolves on every head (`:178`,
 [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html), chapter 26).
 The `TryAdd*` discipline is what lets a consumer pre-register its own implementation and win. Browser
-hosts add `AddClientAuthSessionCookieSync()` (`:193-196`) and `AddWasmFormFactor()` (`:205-206`); a
+hosts add `AddClientAuthSessionCookieSync()` (`:209-211`) and `AddWasmFormFactor()` (`:221`); a
 Blazor Server head adds `AddCommonServerTokenStorage()`, `AddCommonBlazorCsp()` (before
 `AddCommonSecurityHeaders`, so it beats the `TryAdd`ed static provider) and
 `AddCommonWebFormFactor()` from `MMCA.Common.UI.Web`
@@ -802,10 +929,10 @@ Blazor Server head adds `AddCommonServerTokenStorage()`, `AddCommonBlazorCsp()` 
 `UseAuthenticatedNoStore()` middleware. The administration screens are opt-in on the same pattern:
 `AddUserAdministrationUI<TUserDto>()` registers the generic service and **forwards** the non-generic
 actions contract to that same instance, so the roster and the actions it performs go through one
-object and one substitute in a test (`MMCA.Common.UI/DependencyInjection.cs:222-229`), and
-`AddRoleAdministrationUI()` registers the role client (`:248-250`); nothing in the framework calls
+object and one substitute in a test (`MMCA.Common.UI/DependencyInjection.cs:238-245`), and
+`AddRoleAdministrationUI()` registers the role client (`:264-266`); nothing in the framework calls
 either, so an app serving no administration endpoints registers nothing and the components are
-simply never rendered (`:216-217`, `:243-244`). An
+simply never rendered. An
 SSR host behind the gateway also calls `AddTrustedCallerHeader(configuration)`, which composes
 [`TrustedCallerHandler`](#trustedcallerhandler)
 (`MMCA.Common.UI.Web/Security/TrustedCallerHandler.cs:35`) onto **every** `HttpClient` the host creates,
@@ -818,31 +945,33 @@ cannot reach, while the handler itself stays narrow, stamping the secret only on
 scheme, host and port match the gateway origin and replacing rather than appending the header, because
 the gateway compares one single-valued header in constant time (`TrustedCallerHandler.cs:9-27`,
 `:67-79`). [`UISharedAssemblyReference`](#uisharedassemblyreference)
-(`MMCA.Common.UI/DependencyInjection.cs:288`) is the marker other assemblies scan against.
+(`MMCA.Common.UI/DependencyInjection.cs:304`) is the marker other assemblies scan against.
 
 **How a WebAssembly client learns its API address.** The WASM bundle is static, so the API base
 address is fetched at runtime rather than baked in. On the server side,
 [`ClientConfigEndpointExtensions`](#clientconfigendpointextensions)
-(`MMCA.Common.UI.Web/ClientConfig/ClientConfigEndpointExtensions.cs:15`) adds
+(`MMCA.Common.UI.Web/ClientConfig/ClientConfigEndpointExtensions.cs:17`) adds
 `MapClientConfigEndpoint`, an anonymous `GET /client-config` excluded from the OpenAPI description
-whose framework-owned `Api` section carries `Api:WasmApiEndpoint` (`:18`, `:21`, `:50-79`). It
+whose framework-owned `Api` section carries `Api:WasmApiEndpoint` (`:17`, `:52-81`). It
 **fails closed**: with that key missing it throws rather than fall back to `Api:ApiEndpoint`, which is
 the server head's service-discovery name a browser cannot resolve, so the client fails to start
-instead of pointing at the wrong API (`:32-38`, `:53-59`). The endpoint declares `AllowAnonymous`
+instead of pointing at the wrong API (`:32-38`, `:53-59`). When the host runs the same-origin proxy,
+the same `api` section also carries `sameOriginApiEndpoint`, the proxy prefix with a trailing slash,
+which is what moves the client's `"APIClient"` onto it (`:84-99`). The endpoint declares `AllowAnonymous`
 itself, because the client fetches the document before it can hold a session and a host's fallback
-policy would otherwise gate it (`:40-44`, `:78`). A host adds its own sections through a per-request
+policy would otherwise gate it (`:40-44`, `:80`). A host adds its own sections through a per-request
 [`ClientConfigBuilder`](#clientconfigbuilder)
 (`MMCA.Common.UI.Web/ClientConfig/ClientConfigBuilder.cs:17`), whose `Add` refuses a blank name, the
 reserved `Api` section and a duplicate, and whose remarks warn that everything added is served to
 every browser before sign-in, so only public values belong there (`:12-16`, `:45-62`). The client
 half is [`MmcaClientConfigBootstrap`](#mmcaclientconfigbootstrap)
-(`MMCA.Common.UI/Common/Settings/MmcaClientConfigBootstrap.cs:24`), whose `LoadAsync` fetches the
+(`MMCA.Common.UI/Common/Settings/MmcaClientConfigBootstrap.cs:28`), whose `LoadAsync` fetches the
 document from the app's own origin with a 15-second per-attempt timeout and a single retry after one
 second (for the cold-start case where the Server host is still warming), then rethrows a second
 failure on purpose, and returns a buffered stream because browser fetch streams do not support the
 synchronous reads `AddJsonStream` performs (`:12-22`, `:30`, `:33`, `:44-85`). Only the timeout it
 did not ask for is retried, never the caller's own cancellation (`:87-90`). ADC wires both halves
-(`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:247`,
+(`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:259`,
 `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Program.cs:31`).
 
 The small Level-0 supporting cast fills in the rest: [`NotificationRoutePaths`](#notificationroutepaths)
@@ -901,7 +1030,7 @@ lives.
 - **Depends on**: nothing first-party (the file carries no `using` directives at all). Implemented by [MudAppDialogService](#mudappdialogservice) over MudBlazor's `IDialogService`.
 - **Concept introduced, the vendor-neutral UI facade.** `[Rubric §32, Dependency & Supply-Chain]` assesses whether a third-party dependency is contained behind your own contract or spread across call sites; `[Rubric §14, Testability]` assesses whether a unit of behavior can be exercised without its infrastructure; `[Rubric §1, SOLID]` covers the dependency-inversion half of the same idea. The framework applies all three the same way twice: this interface and its sibling [IToastService](#itoastservice) are the only shapes pages depend on, and their two implementations are the only types in the framework that name MudBlazor's `IDialogService` / `ISnackbar` ([MudAppDialogService](#mudappdialogservice) at `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/MudAppDialogService.cs:11`, doc comment at `:6-10`). The payoff is concrete: a bUnit test answers a confirmation prompt with a stub instead of rendering, driving and dismissing a real dialog. The doc comment (`IAppDialogService.cs:3-13`) also states the deliberate scope limit: only the yes/no shape is abstracted, and richer entity-specific dialogs (`DeleteConfirmation`) stay component-side rather than growing this contract.
 - **Walkthrough**: one member. `ConfirmAsync(string title, string message, string confirmText, string cancelText)` returns `Task<bool>` (`IAppDialogService.cs:26`). Two contract details are stated in the XML doc and honored by the implementation. First, every string parameter is documented as "already-localized" (`:21-24`): the facade never touches `IStringLocalizer`, the caller resolves its own copy, which is what keeps the resource key next to the page that owns it ([ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)). Second, dismissing the dialog without choosing counts as declining (`:17-19`), so a caller only ever has to branch on `true`. [MudAppDialogService](#mudappdialogservice) implements exactly that by collapsing MudBlazor's tri-state answer with `return confirmed is true;` (`MudAppDialogService.cs:25`), because `ShowMessageBoxAsync` answers `null` for a backdrop click or an escape key press (`MudAppDialogService.cs:16-18`).
-- **Why it's built this way**: a four-string method with a `bool` answer is the smallest contract that covers every destructive-action prompt in the framework, and keeping it that small is what makes the vendor genuinely swappable: the whole surface an alternative renderer must satisfy is one method. It is registered by `AddCommonUiFacades()` alongside the toast facade ([DependencyInjection](#dependencyinjection), `MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:184`), scoped to match the MudBlazor services it wraps. See [ADR-067](https://ivanball.github.io/docs/adr/067-ui-module-shell-composition.html), whose 2026-08-29 revision records the vendor choice and these two facades, and whose 2026-08-31 revision records their move into their own registration call.
+- **Why it's built this way**: a four-string method with a `bool` answer is the smallest contract that covers every destructive-action prompt in the framework, and keeping it that small is what makes the vendor genuinely swappable: the whole surface an alternative renderer must satisfy is one method. It is registered by `AddCommonUiFacades()` alongside the toast facade ([DependencyInjection](#dependencyinjection), `MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:200`), scoped to match the MudBlazor services it wraps. See [ADR-067](https://ivanball.github.io/docs/adr/067-ui-module-shell-composition.html), whose 2026-08-29 revision records the vendor choice and these two facades, and whose 2026-08-31 revision records their move into their own registration call.
 - **Where it's used**: injected by the shared framework surfaces that ask before doing something lossy: [DataGridListPageBase<TDto>](#datagridlistpagebasetdto), the notification list, send and inbox pages, `ListPageActions`, the signed-in-devices page (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/Sessions.razor.cs`), and the `UnsavedChangesGuard` component. Registered for component tests by the shipped bUnit base's `Services.AddCommonUiFacades()` call (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.UI/Infrastructure/BunitComponentTestBase.cs:53`), which uses `TryAdd` semantics so a test that wants a recording double registers one afterwards (`BunitComponentTestBase.cs:50-52`).
 
 ---
@@ -915,7 +1044,7 @@ lives.
 - **Concept introduced, late-bound content injection into a packaged shell.** `[Rubric §18, UI Architecture & Component Design]` assesses whether shared UI infrastructure adapts to per-app content without duplication. The shared package owns the route: `Home.razor` declares `@page "/"` once (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Home.razor:1`), injects `IEnumerable<IHomePageContent>` (`Home.razor:3`), and renders `<DynamicComponent Type="_contentType" />` when a provider resolved (`Home.razor:8-11`). Because the component arrives as a runtime `Type` rather than a compile-time reference, the framework package renders an app's landing page without referencing the app. When no implementation is registered the page falls back to a localized welcome panel (`Home.razor:12-21`), so a brand-new host still renders something coherent.
 - **Walkthrough**: two read-only members. `ComponentType` (`IHomePageContent.cs:11`) is the `System.Type` of the Razor component to render as the home-page body. `PageTitle` (`IHomePageContent.cs:14`) is the browser-tab title, bound by `Home.razor:6`.
 - **Why it's built this way**: an inverted dependency (the app registers into the framework, never the reverse) is what lets the whole shell ship as a NuGet package. Compare the sibling mechanism in [IUIModule](#iuimodule): both hand the framework a `Type` or an `Assembly` and let reflection do the binding, and both exist for the same reason ([ADR-067](https://ivanball.github.io/docs/adr/067-ui-module-shell-composition.html)).
-- **Where it's used**: implemented once per app and registered once per head. ADC registers `ADCHomePageContent` as a singleton in all three heads (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:92`, `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Program.cs:45`, `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:124`), with two separate implementations, one for the web heads (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Pages/ADCHomePageContent.cs:11`) and one for MAUI (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Pages/ADCHomePageContent.cs:8`). Store does the same with `StoreHomePageContent` (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:101`, `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web.Client/Program.cs:41`, `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/MauiProgram.cs:76`).
+- **Where it's used**: implemented once per app and registered once per head. ADC registers `ADCHomePageContent` as a singleton in all three heads (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:93`, `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Program.cs:45`, `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:124`), with two separate implementations, one for the web heads (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Pages/ADCHomePageContent.cs:11`) and one for MAUI (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Pages/ADCHomePageContent.cs:8`). Store does the same with `StoreHomePageContent` (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:101`, `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web.Client/Program.cs:41`, `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/MauiProgram.cs:76`).
 - **Caveats / not-in-source**: the injection point is `IEnumerable<IHomePageContent>`, so several registrations do not fail; which one wins is decided by `Home.razor`'s selection code (`Home.razor:23` onward), not by this interface. Every current host registers exactly one.
 
 ---
@@ -963,7 +1092,7 @@ lives.
   - `Home = "/"` (`RoutePaths.cs:9`).
   - `Sessions = "/profile/sessions"` (`:16`), the signed-in-devices page. Its doc comment (`:11-15`) records why it belongs to the framework rather than to an app: the page is framework-owned (`MMCA.Common.UI.Pages.Auth.Sessions`), lists the user's live refresh sessions with per-device and account-wide sign-out, and is reachable from the shared nav menu's authenticated section, so a consuming app gets it without doing any routing work.
 - **Why it's built this way**: `static readonly` rather than `const` is sufficient because these strings are consumed in navigation and `Href` expressions, not in attribute arguments. That has one consequence worth knowing: a `@page` directive still needs its own literal, so `Home.razor:1` writes `@page "/"` directly and this constant covers only the linking and navigating side. `Sessions` shows the cost of the convention: the route literal appears in the page's own `@page` directive and again here, and only the tests hold the two together.
-- **Where it's used**: `RoutePaths.Home` backs the navbar brand link (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Layout/NavMenu.razor:18`), the Home nav link (`NavMenu.razor:58`), and the first breadcrumb of the sessions page (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/Sessions.razor.cs:65`). `RoutePaths.Sessions` backs the authenticated-section nav link (`NavMenu.razor:142`) and is asserted by name in both repos' component tests: `MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Layout/NavMenuTests.cs:76` pins that the link renders inside `.nav-auth-section`, `:75` pins its position, `:88` pins that it is absent for an anonymous user, and `MMCA.Store/Tests/Modules/Identity/MMCA.Store.Identity.UI.Tests/Pages/Profile/ProfileTests.cs:67` pins that the profile page links to it.
+- **Where it's used**: `RoutePaths.Home` backs the navbar brand link (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Layout/NavMenu.razor:18`), the Home nav link (`NavMenu.razor:58`), and the first breadcrumb of the sessions page (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/Sessions.razor.cs:66`). `RoutePaths.Sessions` backs the authenticated-section nav link (`NavMenu.razor:142`) and is asserted by name in both repos' component tests: `MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Layout/NavMenuTests.cs:76` pins that the link renders inside `.nav-auth-section`, `:75` pins its position, `:88` pins that it is absent for an anonymous user, and `MMCA.Store/Tests/Modules/Identity/MMCA.Store.Identity.UI.Tests/Pages/Profile/ProfileTests.cs:67` pins that the profile page links to it.
 - **Caveats / not-in-source**: `Sessions` is still listed in `PublicAPI.Unshipped.txt` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/PublicAPI.Unshipped.txt:339`) while `Home` is baselined in `PublicAPI.Shipped.txt:916`, so the two members sit at different points in the public-API baseline cycle.
 
 ---
@@ -977,21 +1106,21 @@ lives.
 - **Concept reinforced, keeping the vendor enum out of call sites.** The facade idea is taught at [IAppDialogService](#iappdialogservice); this enum is the part of it that is easy to skip. A contract that abstracts the snackbar but takes `MudBlazor.Severity` as a parameter has not abstracted anything, because every caller still references the vendor assembly. The doc comment says exactly that (`IToastService.cs:3-7`): the five levels mirror what every component library exposes, so a host maps them one-to-one without losing anything, and "naming them here is what keeps the vendor's own severity enum out of page code". `[Rubric §32, Dependency & Supply-Chain]` and `[Rubric §9, API & Contract Design]` both apply: the mapping to `MudBlazor.Severity` lives in one private method inside [MudToastService](#mudtoastservice), so swapping renderers is a change to one `switch`.
 - **Walkthrough**: five explicitly numbered members, each documented by what it means for the user rather than by color. `Normal = 0` (`IToastService.cs:11`), neutral with no color emphasis. `Info = 1` (`:14`), something happened that the user did not ask for. `Success = 2` (`:17`), the action the user asked for completed. `Warning = 3` (`:20`), completed partially or with something worth knowing. `Error = 4` (`:23`), the action failed. The explicit values keep the enum stable if members are ever reordered.
 - **Why it's built this way**: five levels rather than four, because `Normal` (an uncolored toast) is a distinct affordance from `Info`, and not more, because there is no shape beyond these that the framework raises. `Info` is the default parameter value on both `ShowPersistent` and `ShowAction` (`:72`, `:100`), which is the neutral choice for an unprompted message.
-- **Where it's used**: the `severity` parameter of `IToastService.Show`, `ShowPersistent` and `ShowAction`; the `severity` parameter of [ResultUiExtensions](#resultuiextensions)`.NotifyOnFailure`, where it defaults to `ToastSeverity.Error` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/ResultUiExtensions.cs:269`); and [MudToastService](#mudtoastservice), the one type that maps it to `MudBlazor.Severity` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/MudToastService.cs:27`).
+- **Where it's used**: the `severity` parameter of `IToastService.Show`, `ShowPersistent` and `ShowAction`; the `severity` parameter of [ResultUiExtensions](#resultuiextensions)`.NotifyOnFailure`, where it defaults to `ToastSeverity.Error` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/ResultUiExtensions.cs:272`); and [MudToastService](#mudtoastservice), the one type that maps it to `MudBlazor.Severity` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/MudToastService.cs:27`).
 
 ---
 
 ### UISharedAssemblyReference
 
-> MMCA.Common.UI · `MMCA.Common.UI` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:288` · Level 0 · class
+> MMCA.Common.UI · `MMCA.Common.UI` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:304` · Level 0 · class
 
 - **What it is**: an empty marker class whose only job is to give code a compile-checked `typeof(...).Assembly` handle on the shared UI assembly.
 - **Depends on**: nothing.
 - **Concept introduced, the assembly-marker type.** Reflection over an assembly needs an `Assembly` instance, and there are two ways to get one: a string (`Assembly.Load("MMCA.Common.UI")`, which fails at run time when someone renames the project) or a type reference (`typeof(UISharedAssemblyReference).Assembly`, which fails at compile time and is carried along by a rename refactoring). Every layer of the framework ships an equivalent marker; this is the UI layer's. `[Rubric §15, Best Practices & Code Quality]` assesses exactly this kind of refactor-safety over stringly-typed lookups.
-- **Walkthrough**: a single declaration using the semicolon type body, `public class UISharedAssemblyReference;` (`DependencyInjection.cs:288`), with its doc comment on line 217. It shares a file with [DependencyInjection](#dependencyinjection) but is declared at namespace scope **beneath** it, outside that static class, because a type nested inside a static class could not serve as a public marker the same way. It carries no members, so nothing can accidentally depend on state it does not have.
+- **Walkthrough**: a single declaration using the semicolon type body, `public class UISharedAssemblyReference;` (`DependencyInjection.cs:304`), with its doc comment on line 217. It shares a file with [DependencyInjection](#dependencyinjection) but is declared at namespace scope **beneath** it, outside that static class, because a type nested inside a static class could not serve as a public marker the same way. It carries no members, so nothing can accidentally depend on state it does not have.
 - **Why it's built this way**: type-only, public and empty is the whole point. It is the assembly's identity expressed as a symbol the compiler tracks.
 - **Where it's used**: the architecture fitness suite is the real consumer. `CommonArchitectureMap` registers the assembly as the framework's UI layer with `Framework(Layer.Ui, typeof(Common.UI.UISharedAssemblyReference).Assembly)` (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/CommonArchitectureMap.cs:27`), which is what lets the shared layer-dependency rules know which assembly *is* the UI layer; `AnonymousEndpointTests` includes it in the assemblies it scans (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Api/AnonymousEndpointTests.cs:19`); and `NavigationContractTests` enumerates its types with `typeof(UI.UISharedAssemblyReference).Assembly.GetTypes()` (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Ui/NavigationContractTests.cs:105`). `[Rubric §34, Architecture Governance & Documentation]` applies: this one-line type is what makes a layer boundary machine-checkable.
-- **Caveats / not-in-source**: the doc comment (`DependencyInjection.cs:287`) offers "e.g., for Scrutor scanning" as the motivating case, but no Scrutor registration in this repo takes its scan root from this marker. `AddUIModule<TModule>()` scans `FromAssemblyOf<TModule>()` (`DependencyInjection.cs:277`), taking the root from the module descriptor's own assembly instead. Trust the call sites: the current consumers are the architecture tests.
+- **Caveats / not-in-source**: the doc comment (`DependencyInjection.cs:303`) offers "e.g., for Scrutor scanning" as the motivating case, but no Scrutor registration in this repo takes its scan root from this marker. `AddUIModule<TModule>()` scans `FromAssemblyOf<TModule>()` (`DependencyInjection.cs:293`), taking the root from the module descriptor's own assembly instead. Trust the call sites: the current consumers are the architecture tests.
 
 ---
 
@@ -1007,7 +1136,7 @@ lives.
   - **`Show(string message, ToastSeverity severity)`** (`:62`) is the same thing with the level as a parameter, and the doc comment names its motivating caller: [ResultUiExtensions](#resultuiextensions)`.NotifyOnFailure`, which carries the severity through as an argument rather than picking one of the four (`:55-58`).
   - **`ShowPersistent(string title, string body, ToastSeverity severity = ToastSeverity.Info)`** (`:72`) is the push-notification shape: an emphasized title above a body, staying on screen until dismissed. The reasoning (`:64-67`) is that a message arriving unprompted must not expire before the user has looked at the screen. [MudToastService](#mudtoastservice) builds it as a render fragment, a `<strong>` title, a `<br>`, then the body (`MudToastService.cs:41-51`).
   - **`ShowAction(string message, string actionText, Func<Task> onAction, ToastSeverity severity = ToastSeverity.Info, bool requireInteraction = false)`** (`:96-101`) is the undo / view-it / retry shape a bare message cannot express. Two contract details are documented rather than enforced. First, the callback runs outside any render callback, so nothing catches what it throws: a caller whose work can fail must guard it and raise its own failure toast (`:78-81`, restated at `:86-88`). Second, `requireInteraction: true` pins the toast open until the user dismisses it or takes the action, and the MudBlazor implementation additionally renders it filled, following the same emphasis convention `ShowPersistent` uses, "because a toast that waits for the user has to look like it is waiting" (`:90-95`).
-- **Why it's built this way**: a small, `void`-returning, already-localized contract is what allows the vendor to appear in exactly one class. It is registered scoped by `AddCommonUiFacades()` ([DependencyInjection](#dependencyinjection), `MMCA.Common.UI/DependencyInjection.cs:183`) to match the lifetime of the MudBlazor `ISnackbar` it wraps. See [ADR-067](https://ivanball.github.io/docs/adr/067-ui-module-shell-composition.html).
+- **Why it's built this way**: a small, `void`-returning, already-localized contract is what allows the vendor to appear in exactly one class. It is registered scoped by `AddCommonUiFacades()` ([DependencyInjection](#dependencyinjection), `MMCA.Common.UI/DependencyInjection.cs:199`) to match the lifetime of the MudBlazor `ISnackbar` it wraps. See [ADR-067](https://ivanball.github.io/docs/adr/067-ui-module-shell-composition.html).
 - **Where it's used**: essentially everywhere a page reports an outcome. Inside the framework package: [DataGridListPageBase<TDto>](#datagridlistpagebasetdto), [MobileInfiniteScrollList<TItem>](#mobileinfinitescrolllisttitem), `ListPageActions`, the three notification pages, the sessions page, and the `UnsavedChangesGuard`, `SharePageButton`, `ApiFileDownloadButton` and `NotificationListener` components. Outside it, every consumer page reaches it indirectly through [ResultUiExtensions](#resultuiextensions)`.NotifyOnFailure`. Component tests resolve it from the shipped bUnit base (`BunitComponentTestBase.cs:53`, whose comment at `:50-51` records that without it a consumer's component test fails to resolve `IToastService` and each repo ends up re-registering the same pair).
 
 ---
@@ -1045,7 +1174,7 @@ lives.
   - `IReadOnlyList<Type> AppBarComponentTypes => []` (`:19`): a **default interface member** returning an empty collection expression. Components listed here render inside the top app bar (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Layout/MainLayout.razor:98`, also gathered by `NavMenu.razor:194`).
   - `IReadOnlyList<Type> LayoutComponentTypes => []` (`:22`): the same idea at the root-layout level, for drawers, overlays and headless listeners (`MainLayout.razor:99`).
 - **Why it's built this way**: the two default interface members are what keep the simple case simple. A module that only contributes navigation implements two properties, not four, and can gain app-bar or layout contributions later without a breaking change to anything already written. Passing an `Assembly` rather than a list of page types keeps route discovery reflective, so adding a page is never a framework edit.
-- **Where it's used**: implemented by module descriptors across the workspace: the framework's own [NotificationUIModule](#notificationuimodule) (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Notifications/NotificationUIModule.cs:15`), ADC's `ConferenceUIModule` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/ConferenceUIModule.cs:14`), `EngagementUIModule` (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/EngagementUIModule.cs:17`), `IdentityUIModule` (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.UI/IdentityUIModule.cs:15`) and the MAUI-head-only `DeviceUIModule` (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/DeviceUIModule.cs:18`), plus Store's `CatalogUIModule` (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.UI/CatalogUIModule.cs:13`), `SalesUIModule` (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/SalesUIModule.cs:16`), `IdentityUIModule` (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.UI/IdentityUIModule.cs:13`) and `MauiUIModule` (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/MauiUIModule.cs:14`). The optional members earn their keep in practice: `NotificationUIModule` contributes `NotificationBell` to the app bar and `NotificationListener` to the layout (`NotificationUIModule.cs:23-25`), Store's `SalesUIModule` contributes `CartButton` plus `CartDrawer` and `OrphanOrderRecovery` (`SalesUIModule.cs:30-32`), ADC's `EngagementUIModule` contributes `LiveEventListener` (`EngagementUIModule.cs:31`), and ADC's `DeviceUIModule` contributes five headless native listeners at once (`DeviceUIModule.cs:33`). Registration goes through `AddUIModule<TModule>()` (see [DependencyInjection](#dependencyinjection)), which each module's own one-line `Add{Module}UI()` delegates to, for example `MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.UI/DependencyInjection.cs:19`. A stub implementation drives the menu tests (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Layout/NavMenuTests.cs:290`) and another drives the backend-less component gallery (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Gallery/Stubs/GalleryUIModule.cs:14`).
+- **Where it's used**: implemented by module descriptors across the workspace: the framework's own [NotificationUIModule](#notificationuimodule) (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Notifications/NotificationUIModule.cs:15`), ADC's `ConferenceUIModule` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/ConferenceUIModule.cs:14`), `EngagementUIModule` (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/EngagementUIModule.cs:17`), `IdentityUIModule` (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.UI/IdentityUIModule.cs:15`) and the MAUI-head-only `DeviceUIModule` (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/DeviceUIModule.cs:18`), plus Store's `CatalogUIModule` (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.UI/CatalogUIModule.cs:13`), `SalesUIModule` (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/SalesUIModule.cs:16`), `IdentityUIModule` (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.UI/IdentityUIModule.cs:13`) and `MauiUIModule` (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/MauiUIModule.cs:14`). The optional members earn their keep in practice: `NotificationUIModule` contributes `NotificationBell` to the app bar and `NotificationListener` to the layout (`NotificationUIModule.cs:23-25`), Store's `SalesUIModule` contributes `CartButton` plus `CartDrawer` and `OrphanOrderRecovery` (`SalesUIModule.cs:30-32`), ADC's `EngagementUIModule` contributes `LiveEventListener` (`EngagementUIModule.cs:31`), and ADC's `DeviceUIModule` contributes five headless native listeners at once (`DeviceUIModule.cs:33`). Registration goes through `AddUIModule<TModule>()` (see [DependencyInjection](#dependencyinjection)), which each module's own one-line `Add{Module}UI()` delegates to, for example `MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.UI/DependencyInjection.cs:19`. A stub implementation drives the menu tests (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Layout/NavMenuTests.cs:308`) and another drives the backend-less component gallery (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Gallery/Stubs/GalleryUIModule.cs:14`).
 
 ---
 
@@ -1064,7 +1193,7 @@ lives.
   - `AddAsync(TEntityDTO entity, CancellationToken)` (`:56-58`) returns the server-assigned DTO including its generated id.
   - `UpdateAsync(TEntityDTO entity, CancellationToken)` (`:61-63`) and `DeleteAsync(TIdentifierType id, CancellationToken)` (`:66-68`) return the non-generic `Result`, because there is no value to carry back, only a verdict.
 - **Why it's built this way**: an interface keeps Blazor components testable (mock the contract, no HTTP) and hides the API URL structure behind a typed surface. The generic-over-DTO shape is the client mirror of the server's generic controller layer ([ADR-034](https://ivanball.github.io/docs/adr/034-generic-entity-query-layer.html)), which is why one base class implements it for every entity in the system. The uniform `Result` return is deliberate rather than convenient: mixing nullable returns for reads with `bool` for writes forces each call site to invent its own error story, whereas returning `Result` everywhere means one small set of helpers covers all seven members.
-- **Where it's used**: implemented for every entity by [EntityServiceBase<TEntityDTO, TIdentifierType>](#entityservicebasetentitydto-tidentifiertype) (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/EntityServiceBase.cs:43-47`, which also composes an optional [IUiReadCache](#iuireadcache)) and consumed by every module CRUD page, most of them through [DataGridListPageBase<TDto>](#datagridlistpagebasetdto). Registration is automatic: `AddUIModule<TModule>()` runs a Scrutor scan over the module's assembly that picks up every class assignable to `IEntityService<,>` and registers it scoped as its implemented interfaces ([DependencyInjection](#dependencyinjection), `MMCA.Common.UI/DependencyInjection.cs:276-280`). The `(Items, TotalItems)` shape of `GetPagedAsync` is also the shape [MobileInfiniteScrollList<TItem>](#mobileinfinitescrolllisttitem)'s page-fetch delegate expects.
+- **Where it's used**: implemented for every entity by [EntityServiceBase<TEntityDTO, TIdentifierType>](#entityservicebasetentitydto-tidentifiertype) (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/EntityServiceBase.cs:43-47`, which also composes an optional [IUiReadCache](#iuireadcache)) and consumed by every module CRUD page, most of them through [DataGridListPageBase<TDto>](#datagridlistpagebasetdto). Registration is automatic: `AddUIModule<TModule>()` runs a Scrutor scan over the module's assembly that picks up every class assignable to `IEntityService<,>` and registers it scoped as its implemented interfaces ([DependencyInjection](#dependencyinjection), `MMCA.Common.UI/DependencyInjection.cs:292-296`). The `(Items, TotalItems)` shape of `GetPagedAsync` is also the shape [MobileInfiniteScrollList<TItem>](#mobileinfinitescrolllisttitem)'s page-fetch delegate expects.
 
 ---
 
@@ -1073,7 +1202,7 @@ lives.
 > MMCA.Common.UI · `MMCA.Common.UI.Common` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/ResultUiExtensions.cs:63` · Level 3 · class (static, extension methods)
 
 - **What it is**: the page-side half of the Result transport. It is the four things a Blazor page ever does with a failed [Result](group-01-result-error-handling.md#result), written once so no page hand-rolls them again: unwrap the value, push the message into an inline alert, raise it as a toast, or branch on **why** it failed.
-- **Depends on**: [Result](group-01-result-error-handling.md#result), [Error](group-01-result-error-handling.md#error), [ErrorType](group-01-result-error-handling.md#errortype) and [ErrorTypeSeverity](group-01-result-error-handling.md#errortypeseverity) from `MMCA.Common.Shared.Abstractions` (`ResultUiExtensions.cs:3`); [IToastService](#itoastservice) and [ToastSeverity](#toastseverity) (`:4`); `Microsoft.Extensions.Localization.IStringLocalizer` (`:2`); `System.Diagnostics.CodeAnalysis.NotNullWhenAttribute` (`:1`).
+- **Depends on**: [Result](group-01-result-error-handling.md#result), [Error](group-01-result-error-handling.md#error), [ErrorType](group-01-result-error-handling.md#errortype) and [ErrorTypeSeverity](group-01-result-error-handling.md#errortypeseverity) from `MMCA.Common.Shared.Abstractions` (`ResultUiExtensions.cs:3`); [IToastService](#itoastservice) and [ToastSeverity](#toastseverity) (`:4`); `Microsoft.Extensions.Localization.IStringLocalizer` (`:2`); `System.Diagnostics.CodeAnalysis.NotNullWhenAttribute` and `SuppressMessageAttribute` (`:1`).
 - **Concept introduced, localize-with-pass-through, and severity-ordered deduplication.** `[Rubric §24, Forms, Validation & UX Safety]` assesses whether a failure reaches the user as one clear, actionable sentence; `[Rubric §27, Internationalization]` assesses whether that sentence follows the active culture; `[Rubric §15, Best Practices & Code Quality]` assesses whether the same five lines get re-typed per page. Two mechanisms carry all three.
   - **Pass-through localization** (`:17-23`): every message is looked up as a resource key, and one the localizer does not declare renders **verbatim**. That is what lets a single call site handle both an API error whose text the server already localized and a client-side error whose `Message` is a resource key.
   - **Severity-ordered deduplication** (`:24-29`): messages are made distinct with `StringComparer.Ordinal` and ordered most-severe-first via [ErrorTypeSeverity](group-01-result-error-handling.md#errortypeseverity), so a real 403 or 500 leads and an incidental validation message never buries it. The shape this guards against is common once `Result.Combine` aggregates invariants: the same sentence arriving under several codes now reads as one sentence. This is the client mirror of the server-side status selection recorded in [ADR-013](https://ivanball.github.io/docs/adr/013-result-pattern.html), using the very same ranking type hoisted into `Shared` (`MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/ErrorTypeSeverity.cs:57`) so both edges classify one aggregate identically.
@@ -1082,9 +1211,9 @@ lives.
 - **Walkthrough**: eleven public members plus one private helper, in four tiers.
   - **Unwrapping.** `TryGetValue<T>(this Result<T>, [NotNullWhen(true)] out T? value)` (`:82-97`) reads like `Dictionary.TryGetValue` so the success and failure branches sit side by side. The implementation carries a subtle correctness note in its comment (`:86-88`): the failure branch is decided by `result.IsFailure`, **not** by whether the value is null, because for a value type (a `(Items, TotalItems)` tuple, an `int` count) `default` is never null and a null test alone would report every failure as a success. The three-argument overload (`:116-133`) hands the errors back on the failing branch and documents one edge honestly (`:102-109`): a *success* carrying a null value also takes the failing branch, and a success has no errors, so `errors` comes back empty. The framework's own services never produce that shape (a 2xx with no value fails with `Http.EmptyResponse`), but a caller switching on the error list should not assume it is non-empty.
   - **Composing the message.** `LocalizedErrorMessages(this Result, IStringLocalizer?)` (`:145-159`) returns an empty list for a success, so a caller can bind it without a null or success check, and otherwise orders by `ErrorTypeSeverity.Rank` descending, localizes, drops blanks, and takes ordinal-distinct values (`:154-158`). `LocalizedErrorMessage` (`:169-173`) joins that list with a space and returns `null` for a success. `LocalizeDistinct(IEnumerable<string>?, IStringLocalizer?)` (`:185-197`) gives the same treatment to a plain message list, specifically the `MudForm.Errors` shape whose entries are resource keys produced by the model's DataAnnotations; it preserves original order rather than re-ranking, since those entries carry no `ErrorType`.
-  - **Rendering.** `OnFailureSetError(this Result, Action<string?> setError, IStringLocalizer?)` (`:226-233`) hands the composed message to the page's own error field, the one an inline `MudAlert` or the `PageErrorState` component renders (its doc comment names it by its current home, `MMCA.Common.UI.Components.PageState.PageErrorState`, at `:200-202`, matching the file at `MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/PageState/PageErrorState.razor:1`), and **clears it on success** by passing `null` (`:231`), which is why a retry that succeeds does not leave a stale alert on screen. `NotifyOnFailure(this Result, IToastService, IStringLocalizer?, ToastSeverity = Error)` (`:265-281`) raises the composed message as **one** toast, never one per error, calling `toast.Show(message, severity)` only when the composed message is non-null (`:274-278`). Both return the same result instance so the call can sit inline, and both have a `Result<T>` overload that delegates to the non-generic one and returns the typed result (`:237-241`, `:285-293`), which is what keeps `(await Service.AddAsync(dto, token)).NotifyOnFailure(Toast, L)` chainable.
-  - **Branching on why.** `HasErrorType(this Result, ErrorType)` (`:303-307`) is the general predicate; the doc comment (`:295-299`) notes the category survives the HTTP round trip through [ProblemDetailsResultReader](group-08-auth.md#problemdetailsresultreader), which is what makes this meaningful client-side at all. `IsNotFound()` (`:315`) and `IsUnauthorized()` (`:323`) are the two named cases, and their doc comments state the intended UI reaction: a 404 becomes a "not found" state rather than an error alert, a 401 becomes a redirect to the login route.
-  - **The private helper.** `Localize(string message, IStringLocalizer?)` (`:325-334`) is where pass-through actually happens: a null localizer or a blank message returns the input unchanged, otherwise it indexes the localizer and returns `localized.ResourceNotFound ? message : localized.Value` (`:333`).
+  - **Rendering.** `OnFailureSetError(this Result, Action<string?> setError, IStringLocalizer?)` (`:227-234`) hands the composed message to the page's own error field, the one an inline `MudAlert` or the `PageErrorState` component renders (its doc comment names it by its current home, `MMCA.Common.UI.Components.PageState.PageErrorState`, at `:200-202`, matching the file at `MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/PageState/PageErrorState.razor:1`), and **clears it on success** by passing `null` (`:232`), which is why a retry that succeeds does not leave a stale alert on screen. `NotifyOnFailure(this Result, IToastService, IStringLocalizer?, ToastSeverity = Error)` (`:268-284`) raises the composed message as **one** toast, never one per error, calling `toast.Show(message, severity)` only when the composed message is non-null (`:278-281`). Both return the same result instance so the call can sit inline, and both have a `Result<T>` overload that delegates to the non-generic one and returns the typed result (`:239-243`, `:289-297`), which is what keeps `(await Service.AddAsync(dto, token)).NotifyOnFailure(Toast, L)` chainable. All four rendering overloads carry the same `[SuppressMessage("ApiDesign", "RS0026...")]` (`:226`, `:238`, `:267`, `:288`): two public overloads with optional parameters is the shape RS0026 forbids, and the justification records them as grandfathered, released after the v1.152 public-API baseline while RS0026/RS0027 were off, so changing the signatures now would be a breaking change.
+  - **Branching on why.** `HasErrorType(this Result, ErrorType)` (`:307-311`) is the general predicate; the doc comment (`:299-302`) notes the category survives the HTTP round trip through [ProblemDetailsResultReader](group-08-auth.md#problemdetailsresultreader), which is what makes this meaningful client-side at all. `IsNotFound()` (`:319`) and `IsUnauthorized()` (`:327`) are the two named cases, and their doc comments state the intended UI reaction: a 404 becomes a "not found" state rather than an error alert, a 401 becomes a redirect to the login route.
+  - **The private helper.** `Localize(string message, IStringLocalizer?)` (`:329-338`) is where pass-through actually happens: a null localizer or a blank message returns the input unchanged, otherwise it indexes the localizer and returns `localized.ResourceNotFound ? message : localized.Value` (`:337`).
 - **Why it's built this way**: extension methods on `Result` rather than an injectable service, because there is no state and nothing to resolve, so a page uses them without a constructor parameter and a unit test calls them directly. Every rendering helper returns the result it was given, which is what allows the fluent one-liner style the class doc advertises. The nullable `IStringLocalizer?` parameter everywhere means the helpers work from a context that has no localizer (they then render verbatim) rather than forcing one in.
 - **Where it's used**: by every page and component that calls an [IEntityService<TEntityDTO, TIdentifierType>](#ientityservicetentitydto-tidentifiertype) member, across the framework package and both consumer apps, plus the shared deduplicating error-summary component. Covered by [ResultUiExtensionsTests](group-28-testing-infrastructure.md#per-project-test-rollup) (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Common/ResultUiExtensionsTests.cs:17`) `[Rubric §28, Front-End Testing]`.
 - **Caveats / not-in-source**: the class doc opens with "the Result transport (ADR-030)" (`ResultUiExtensions.cs:9`), but ADR-030 is `030-startup-sole-migrator.md`. The Result-pattern record, including the 2026-08-27 revision that names `ResultUiExtensions` and its exact member list, is [ADR-013](https://ivanball.github.io/docs/adr/013-result-pattern.html); the client data-access half is [ADR-094](https://ivanball.github.io/docs/adr/094-client-entity-data-access.html). Trust the ADR index over the comment.
@@ -1104,7 +1233,7 @@ lives.
   - `NotificationInbox = "/notifications/inbox"` (`:12`), the per-user inbox.
   - `NotificationInboxItem(UserNotificationIdentifierType id)` (`:21-22`) composes the deep link with `string.Create(CultureInfo.InvariantCulture, $"{NotificationInbox}/{id}")`. The target route exists: `NotificationInbox.razor` carries both `@page "/notifications/inbox"` and `@page "/notifications/inbox/{Id:int}"` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Notifications/NotificationInbox.razor:1-2`).
 - **Why it's built this way**: kept separate from [RoutePaths](#routepaths) so an app that never enables the notification module carries no irrelevant constants, and so notification routes evolve on their own. `string.Create` with an explicit culture, rather than plain string interpolation, is the analyzer-friendly way to state "this formatting is deliberate" in a repo where every analyzer is an error.
-- **Where it's used**: the notification surfaces navigate by these constants rather than by literals: `NotificationSend.razor.cs:62` (its breadcrumb back to the list), `:117` (post-send navigation) and `:136` (the cancel path), `NotificationList.razor.cs:77` (navigate to send), and `NotificationBell.razor.cs:238` (`NavigateToInbox`). [NotificationUIModule](#notificationuimodule) builds its two [NavItem](#navitem) entries from `NotificationInbox` and `Notifications` (`NotificationUIModule.cs:19-20`). ADC's `AppActionRouteMapTests` asserts that a push action resolves to `NotificationRoutePaths.NotificationInbox` (`MMCA.ADC/Tests/Modules/Engagement/MMCA.ADC.Engagement.UI.Tests/Services/AppActionRouteMapTests.cs:39`).
+- **Where it's used**: the notification surfaces navigate by these constants rather than by literals: `NotificationSend.razor.cs:62` (its breadcrumb back to the list), `:117` (post-send navigation) and `:136` (the cancel path), `NotificationList.razor.cs:77` (navigate to send), and `NotificationBell.razor.cs:249` (`NavigateToInbox`). [NotificationUIModule](#notificationuimodule) builds its two [NavItem](#navitem) entries from `NotificationInbox` and `Notifications` (`NotificationUIModule.cs:19-20`). ADC's `AppActionRouteMapTests` asserts that a push action resolves to `NotificationRoutePaths.NotificationInbox` (`MMCA.ADC/Tests/Modules/Engagement/MMCA.ADC.Engagement.UI.Tests/Services/AppActionRouteMapTests.cs:39`).
 - **Caveats / not-in-source**: `NotificationInboxItem` has **no call site** in any of the four repos as of this source; it is listed in `PublicAPI.Unshipped.txt` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/PublicAPI.Unshipped.txt:315`, recorded there with its resolved signature `NotificationInboxItem(int id)`), while the three string constants are baselined in `PublicAPI.Shipped.txt:913-915`. The `{Id:int}` route it targets is live; the typed builder for it is shipped but not yet adopted.
 
 ---
@@ -1114,25 +1243,25 @@ lives.
 > MMCA.Common.UI · `MMCA.Common.UI` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:28` · Level 7 · class (static, with one `extension(IServiceCollection)` block)
 
 - **What it is**: the composition root of the UI layer. One `AddUIShared(configuration)` call wires the shared UI infrastructure every head needs (Blazor Server, WebAssembly, MAUI), and six smaller methods cover the per-head, per-module and per-opt-in registrations.
-- **Depends on**: nearly the whole group. Settings: [ApiSettings](#apisettings), [LayoutSettings](#layoutsettings), [UiReadCacheOptions](#uireadcacheoptions), [NotificationBellOptions](#notificationbelloptions). Caching: [IUiReadCache](#iuireadcache) / [UiReadCache](#uireadcache). Localization: [PseudoStringLocalizerFactory](#pseudostringlocalizerfactory), [ResxMudLocalizer](#resxmudlocalizer), [InvariantMudLocalizationInterceptor](#invariantmudlocalizationinterceptor). HTTP: [AuthDelegatingHandler](#authdelegatinghandler), [CultureDelegatingHandler](#culturedelegatinghandler), [HttpResilienceDefaults](group-16-aspire-orchestration.md#httpresiliencedefaults). Facades: [IToastService](#itoastservice) / [MudToastService](#mudtoastservice), [IAppDialogService](#iappdialogservice) / [MudAppDialogService](#mudappdialogservice). Services: [IAuthUIService](#iauthuiservice), [IEmailConfirmationUIService](#iemailconfirmationuiservice) / [EmailConfirmationUIService](#emailconfirmationuiservice), [OAuthFlowStateStore](#oauthflowstatestore), [ListPageStateService](#listpagestateservice), [ListPageQueryStateService](#listpagequerystateservice), [NavigationHistoryService](#navigationhistoryservice), [ThemeService](#themeservice), [ICultureApplier](#icultureapplier) / [EndpointCultureApplier](#endpointcultureapplier), [IPublicLinkBuilder](#ipubliclinkbuilder) / [NavigationPublicLinkBuilder](#navigationpubliclinkbuilder), [IUserPreferenceWriter](#iuserpreferencewriter), [IUserPreferenceReader](#iuserpreferencereader), [IOAuthUISettings](#ioauthuisettings) / [DefaultOAuthUISettings](#defaultoauthuisettings), [ISessionCookieSync](#isessioncookiesync) / [JsFetchSessionCookieSync](#jsfetchsessioncookiesync). Administration opt-ins: [IUserAdminUIService<TUserDto>](#iuseradminuiservicetuserdto) / [UserAdminService<TUserDto>](#useradminservicetuserdto), [IUserAdminActionsUIService](#iuseradminactionsuiservice), [IRoleAdminUIService](#iroleadminuiservice) / [RoleAdminService](#roleadminservice). Capabilities: [IFormFactor](group-26-device-capability-layer.md#iformfactor) / [WasmFormFactor](group-26-device-capability-layer.md#wasmformfactor). Composition: [IUIModule](#iuimodule), [IEntityService<TEntityDTO, TIdentifierType>](#ientityservicetentitydto-tidentifiertype). Externals: Scrutor (`Decorate`, `Scan`), MudBlazor, and `Microsoft.Extensions.{Configuration, DependencyInjection, Localization, Options}` (`DependencyInjection.cs:1-17`).
+- **Depends on**: nearly the whole group. Settings: [ApiSettings](#apisettings), [LayoutSettings](#layoutsettings), [UiReadCacheOptions](#uireadcacheoptions), [NotificationBellOptions](#notificationbelloptions). Caching: [IUiReadCache](#iuireadcache) / [UiReadCache](#uireadcache). Localization: [PseudoStringLocalizerFactory](#pseudostringlocalizerfactory), [ResxMudLocalizer](#resxmudlocalizer), [InvariantMudLocalizationInterceptor](#invariantmudlocalizationinterceptor). HTTP: [AuthDelegatingHandler](#authdelegatinghandler), [CultureDelegatingHandler](#culturedelegatinghandler), [SameOriginProxyRequestHandler](#sameoriginproxyrequesthandler), [HttpResilienceDefaults](group-16-aspire-orchestration.md#httpresiliencedefaults). Facades: [IToastService](#itoastservice) / [MudToastService](#mudtoastservice), [IAppDialogService](#iappdialogservice) / [MudAppDialogService](#mudappdialogservice). Services: [IAuthUIService](#iauthuiservice), [IEmailConfirmationUIService](#iemailconfirmationuiservice) / [EmailConfirmationUIService](#emailconfirmationuiservice), [OAuthFlowStateStore](#oauthflowstatestore), [ListPageStateService](#listpagestateservice), [ListPageQueryStateService](#listpagequerystateservice), [NavigationHistoryService](#navigationhistoryservice), [ThemeService](#themeservice), [ICultureApplier](#icultureapplier) / [EndpointCultureApplier](#endpointcultureapplier), [IPublicLinkBuilder](#ipubliclinkbuilder) / [NavigationPublicLinkBuilder](#navigationpubliclinkbuilder), [IUserPreferenceWriter](#iuserpreferencewriter), [IUserPreferenceReader](#iuserpreferencereader), [IOAuthUISettings](#ioauthuisettings) / [DefaultOAuthUISettings](#defaultoauthuisettings), [ISessionCookieSync](#isessioncookiesync) / [JsFetchSessionCookieSync](#jsfetchsessioncookiesync). Administration opt-ins: [IUserAdminUIService<TUserDto>](#iuseradminuiservicetuserdto) / [UserAdminService<TUserDto>](#useradminservicetuserdto), [IUserAdminActionsUIService](#iuseradminactionsuiservice), [IRoleAdminUIService](#iroleadminuiservice) / [RoleAdminService](#roleadminservice). Capabilities: [IFormFactor](group-26-device-capability-layer.md#iformfactor) / [WasmFormFactor](group-26-device-capability-layer.md#wasmformfactor). Composition: [IUIModule](#iuimodule), [IEntityService<TEntityDTO, TIdentifierType>](#ientityservicetentitydto-tidentifiertype). Externals: Scrutor (`Decorate`, `Scan`), MudBlazor, and `Microsoft.Extensions.{Configuration, DependencyInjection, Localization, Options}` (`DependencyInjection.cs:1-20`).
 - **Concept introduced, the composition root written as an `extension(T)` block.** The whole registration surface lives inside `extension(IServiceCollection services)` (`DependencyInjection.cs:30`) rather than as classic `this`-parameter extension methods; see [primer, C# extension(T) types](00-primer.md#c-extensiont-types-read-this-once) for the language mechanics, taught once. `[Rubric §15, Best Practices & Code Quality]` assesses one consistent idiom across layers, and this file matches the other `DependencyInjection` classes in every layer of the workspace. `[Rubric §33, Developer Experience]` assesses fail-fast startup and a small number of calls per host. `[Rubric §12, Performance & Scalability]` assesses whether concerns are wired once, centrally: localization, culture forwarding, authentication, resilience and caching are all configured here rather than per page.
 - **Walkthrough**: seven methods in the extension block.
-  - **`AddUIShared(IConfiguration configuration)`** (`:36-165`), in order:
+  - **`AddUIShared(IConfiguration configuration)`** (`:36-181`), in order:
     - **Options.** [ApiSettings](#apisettings) binds with `.ValidateDataAnnotations().ValidateOnStart()` (`:39-42`), so a missing `ApiEndpoint` fails the host at startup rather than at the first HTTP call. [LayoutSettings](#layoutsettings) binds without validation because empty defaults are acceptable (`:45-46`). [UiReadCacheOptions](#uireadcacheoptions) (`:50-51`) and [NotificationBellOptions](#notificationbelloptions) (`:53-54`) bind the client-side staleness policy; the comment (`:48-49`) records that both sections are optional and an absent section leaves the compiled-in defaults, which is what a host gets without configuring anything.
     - **Clock and read cache.** `TryAddSingleton(TimeProvider.System)` (`:58`), with a comment explaining both directions of the `TryAdd` (`:56-57`): a host that already registered one, as `AddInfrastructure` does, keeps it, and a test substitutes a `FakeTimeProvider`. `TryAddScoped<IUiReadCache, UiReadCache>()` (`:63`) is scoped so it is per-circuit on Blazor Server; the comment (`:60-62`) records the consequence on the other heads, where the scope is the app lifetime, which is why the sign-out path clears it explicitly, otherwise one account's reads would outlive its session `[Rubric §26, Front-End Security]`.
     - **Localization** ([ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)). `AddLocalization()` (`:66`) for `IStringLocalizer<T>`, then `Decorate<IStringLocalizerFactory, PseudoStringLocalizerFactory>()` (`:73`), registered unconditionally because the pseudo-locale transform is inert under every other culture and the pseudo locale is only ever activatable in Development (`:68-72`). `TryAddTransient<MudBlazor.MudLocalizer, ResxMudLocalizer>()` (`:79`) localizes MudBlazor's own component text; the comment (`:75-78`) records why `TryAdd` is authoritative regardless of host registration order, namely that `AddMudServices` registers no `MudLocalizer` of its own and a DI resolution test guards that assumption. `AddLocalizationInterceptor<InvariantMudLocalizationInterceptor>()` (`:88`) follows immediately: MudBlazor's own default interceptor reads its built-in English strings by assigning `CultureInfo.CurrentUICulture` (invariant, then the previous value back), which writes an `AsyncLocal` culture into the calling context; on a MAUI hybrid head, where that is the main thread, nothing resets it and the app pins to its launch language even after a culture switch reloads the thread defaults. [InvariantMudLocalizationInterceptor](#invariantmudlocalizationinterceptor) reads the same resource under an explicit invariant culture instead, and registers with replace semantics so it wins whether `AddMudServices` ran before or after this call ([ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html) Decision 10) (`:81-87`).
-    - **The one HTTP client.** Both delegating handlers register transient (`:92-93`), then the named `"APIClient"` (`:96-117`). Its factory resolves `IOptions<ApiSettings>` and sets `client.BaseAddress = new Uri(apiSettings.ApiEndpoint!, UriKind.Absolute)` (`:103-106`). There is deliberately **no** hand-written endpoint guard, and the comment says why (`:98-102`): resolving `.Value` runs the `ValidateDataAnnotations` rules registered above, so a missing `[Required]` endpoint already fails as an `OptionsValidationException`, and a second check would only give the same failure a different, less informative exception. `client.Timeout` is pinned to [HttpResilienceDefaults](group-16-aspire-orchestration.md#httpresiliencedefaults)`.TotalRequestTimeout` (`:112`) because the BCL's own 100-second default was chosen with no knowledge of the resilience budget and would cut a call off mid-policy at an arbitrary point (`:108-111`) `[Rubric §29, Resilience & Business Continuity]`. Default headers are cleared and `Accept: application/json` added (`:113-114`), and the two handlers chain in order (`:116-117`) so every outgoing call carries both the bearer token and the active UI culture as `Accept-Language`.
-    - **Facades.** `services.AddCommonUiFacades()` (`:121`), factored out so a bUnit harness can register exactly these two without pulling in the whole shared-UI surface (`:119-120`).
-    - **Scoped services**, all via `TryAdd` so several composing hosts cannot double-register: [IAuthUIService](#iauthuiservice) (`:124`), [IEmailConfirmationUIService](#iemailconfirmationuiservice) to [EmailConfirmationUIService](#emailconfirmationuiservice) (`:128`, the `/confirm-email` page's client per [ADR-116](https://ivanball.github.io/docs/adr/116-identity-completions-opt-in.html); a separate interface rather than new `IAuthUIService` members, so a consumer's own `IAuthUIService` implementation keeps compiling, per the comment at `:126-127`), [OAuthFlowStateStore](#oauthflowstatestore) (`:132`, binding an OAuth completion to the flow this client started so a deep-linked completion code from someone else's provider round trip is dropped instead of exchanged, per its own comment at `:130-131`), [ListPageStateService](#listpagestateservice) (`:133`), [ListPageQueryStateService](#listpagequerystateservice) (`:134`), [NavigationHistoryService](#navigationhistoryservice) (`:135`), [ThemeService](#themeservice) (`:138`, [ADR-028](https://ivanball.github.io/docs/adr/028-dark-theme-mode.html)), [ICultureApplier](#icultureapplier) defaulting to [EndpointCultureApplier](#endpointcultureapplier) (`:144`), [IPublicLinkBuilder](#ipubliclinkbuilder) defaulting to [NavigationPublicLinkBuilder](#navigationpubliclinkbuilder) (`:150`), and the per-user preference writer and reader (`:153-154`), documented as best-effort and a no-op for an anonymous user (`:152`). `TryAddSingleton<IOAuthUISettings, DefaultOAuthUISettings>()` (`:158`) supplies a no-op default that a downstream app replaces.
-    - **Capabilities.** `AddDeviceCapabilityDefaults()` (`:162`, [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)) so every capability contract resolves on every head, registered here specifically so MAUI and browser hosts can override afterwards under last-registration-wins (`:160-161`).
-  - **`AddCommonUiFacades()`** (`:181-186`): two `TryAddScoped` calls, [IToastService](#itoastservice) to [MudToastService](#mudtoastservice) (`:183`) and [IAppDialogService](#iappdialogservice) to [MudAppDialogService](#mudappdialogservice) (`:184`). Its doc comment (`:167-180`) is the clearest statement of the facade rule anywhere in the codebase: these two implementations are the ONLY types in the framework that name MudBlazor's `ISnackbar` / `IDialogService`, they are scoped to match the MudBlazor services they wrap, and the method is called both by `AddUIShared` and by the shipped bUnit base so a component test resolves the facades without the rest of the shared-UI surface.
-  - **`AddClientAuthSessionCookieSync()`** (`:193-197`): one `TryAddScoped<ISessionCookieSync, JsFetchSessionCookieSync>()` (`:195`), the bridge that mirrors the client's in-memory tokens into the HttpOnly cookie read during server-side SSR prerender. Called from both the Blazor Server host and the WebAssembly client (`:188-192`).
-  - **`AddWasmFormFactor()`** (`:205-206`): registers [IFormFactor](group-26-device-capability-layer.md#iformfactor) to [WasmFormFactor](group-26-device-capability-layer.md#wasmformfactor) as a singleton. The doc comment names the two alternatives (`:199-204`): `AddCommonWebFormFactor()` from `MMCA.Common.UI.Web` on the Blazor Server head, `AddMauiFormFactor()` from `MMCA.Common.UI.Maui` on the MAUI head.
-  - **`AddUserAdministrationUI<TUserDto>()`** (`:222-232`), the [ADR-116](https://ivanball.github.io/docs/adr/116-identity-completions-opt-in.html) UI opt-in for user administration: registers [IUserAdminUIService<TUserDto>](#iuseradminuiservicetuserdto) to [UserAdminService<TUserDto>](#useradminservicetuserdto) (`:224`), then forwards [IUserAdminActionsUIService](#iuseradminactionsuiservice) to the same instance rather than registering it a second time (`:228-229`), so the actions the component performs and the page it lists go through one instance (and one substitute, in a test), per the comment at `:226-227`. The doc comment (`:208-221`) states the call convention (once per app, after `AddUIShared`, with the app's own administration DTO) and that an app which serves no administration endpoints registers nothing and the component the service backs is simply never rendered.
-  - **`AddRoleAdministrationUI()`** (`:248-253`): the non-generic [ADR-116](https://ivanball.github.io/docs/adr/116-identity-completions-opt-in.html) sibling, registering [IRoleAdminUIService](#iroleadminuiservice) to [RoleAdminService](#roleadminservice) (`:250`). Its doc comment (`:234-247`) explains why it takes no type parameter unlike `AddUserAdministrationUI<TUserDto>()`: roles and permissions are strings the framework already owns, so there is no app DTO to name.
-  - **`AddUIModule<TModule>()`** (`:273-283`), constrained to `TModule : class, IUIModule` (`:274`): a Scrutor scan `FromAssemblyOf<TModule>()` registering every [IEntityService<TEntityDTO, TIdentifierType>](#ientityservicetentitydto-tidentifiertype) implementation scoped as its implemented interfaces (`:276-280`), then `AddSingleton<IUIModule, TModule>()` (`:282`). The doc comment (`:262-267`) records the deliberate boundary: this is the two-step prologue every module's `Add{Module}UI()` opens with, and module-specific services stay with the caller **afterwards**, so a module whose service must beat a shared default still controls its own registration order. The type-parameter doc (`:269-272`) states the constraint that follows from using the descriptor's assembly as the scan root: it must live alongside the module's entity services and Razor pages.
-- **Why it's built this way**: `TryAdd` throughout is both a safety property (several composing hosts calling `AddUIShared` cannot double-register) and the override mechanism (a host that registers its own implementation **before** the call wins). Two ordering choices push in the opposite direction and are called out in comments because they are load-bearing: [ICultureApplier](#icultureapplier)'s default round-trips a server `/culture/set` endpoint that a MAUI hybrid head does not have, so hybrids override it **after** `AddUIShared` (`:140-143`), and [IPublicLinkBuilder](#ipubliclinkbuilder)'s default resolves against the browser origin, which is wrong for a MAUI WebView whose origin is a virtual host nobody else can open, so that is overridden after as well (`:146-149`). [InvariantMudLocalizationInterceptor](#invariantmudlocalizationinterceptor) follows the same head-dependent pattern one layer down: MudBlazor's own interceptor is correct everywhere except the MAUI hybrid main thread, so the replacement is registered unconditionally here rather than left to the affected head to override, because replace semantics make the registration order irrelevant (`:81-88`). Read together, the file encodes a rule worth carrying into any new registration: a contract whose correct implementation depends on the *head* is defaulted here and replaced later (or, where replace semantics make order irrelevant, registered outright), while a contract that is the same everywhere is `TryAdd`ed and left alone. The two administration opt-ins follow the same principle one level up: nothing else in the framework calls either one, so an app that serves no administration or role-administration endpoints registers nothing and the corresponding component is simply never rendered.
-- **Where it's used**: called once at startup by all six consuming UI hosts (ADC's `MMCA.ADC.UI.Web`, `MMCA.ADC.UI.Web.Client` and MAUI `MMCA.ADC.UI`, plus the three Store equivalents), each followed by the per-module `Add{Module}UI()` calls, which are usually one-liners over `AddUIModule<TModule>()`, for example `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.UI/DependencyInjection.cs:19` and `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.UI/DependencyInjection.cs:24`. `AddCommonUiFacades()` has a second caller outside any host, the shipped bUnit base (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.UI/Infrastructure/BunitComponentTestBase.cs:53`). `AddUserAdministrationUI<TUserDto>()` and `AddRoleAdministrationUI()` are each meant to be called once per app, after `AddUIShared`, by an app that opts into the corresponding [ADR-116](https://ivanball.github.io/docs/adr/116-identity-completions-opt-in.html) administration surface (`:212`, `:239`); nothing inside the framework itself calls either one. The `"APIClient"` configured here is the client every [EntityServiceBase<TEntityDTO, TIdentifierType>](#entityservicebasetentitydto-tidentifiertype)-derived service resolves. The assembly this class lives in is also the one [UISharedAssemblyReference](#uisharedassemblyreference) names for the architecture fitness suite.
+    - **The one HTTP client.** Both delegating handlers register transient (`:92-93`). Before the client itself, `usesSameOriginProxy` is computed from the raw configuration (`:98-99`): it is true only when `Api:SameOriginApiEndpoint` carries a value, which per the comment (`:95-97`) happens only on a WebAssembly client whose Server host opted into the same-origin API proxy ([ADR-131](https://ivanball.github.io/docs/adr/131-same-origin-api-proxy.html)) and handed that value down through `/client-config`; every other host (Server, MAUI, a WASM client of a host that did not opt in) keeps the pipeline unchanged. Then the named `"APIClient"` (`:102-125`), whose builder is kept in `apiClient` (`:102`) so a handler can be appended afterwards. Its factory resolves `IOptions<ApiSettings>` and sets `client.BaseAddress = new Uri(apiSettings.SameOriginApiEndpoint ?? apiSettings.ApiEndpoint!, UriKind.Absolute)` (`:109-114`): the same-origin proxy base, when present, replaces the gateway URL for data calls, and the comment (`:112-113`) notes the bootstrap has already resolved it to an absolute address. There is deliberately **no** hand-written endpoint guard, and the comment says why (`:104-108`): resolving `.Value` runs the `ValidateDataAnnotations` rules registered above, so a missing `[Required]` endpoint already fails as an `OptionsValidationException`, and a second check would only give the same failure a different, less informative exception. `client.Timeout` is pinned to [HttpResilienceDefaults](group-16-aspire-orchestration.md#httpresiliencedefaults)`.TotalRequestTimeout` (`:120`) because the BCL's own 100-second default was chosen with no knowledge of the resilience budget and would cut a call off mid-policy at an arbitrary point (`:116-119`) `[Rubric §29, Resilience & Business Continuity]`. Default headers are cleared and `Accept: application/json` added (`:121-122`), and the two handlers chain in order (`:124-125`) so every outgoing call carries both the bearer token and the active UI culture as `Accept-Language`. When `usesSameOriginProxy` is true, [SameOriginProxyRequestHandler](#sameoriginproxyrequesthandler) is registered transient and appended as the **innermost** handler (`:127-133`); the comment (`:129-130`) gives the reason for that position: it must see, and strip, every `Authorization` header the outer handlers or a service's `DefaultRequestHeaders` attached, and it stamps the proxy's CSRF header `[Rubric §26, Front-End Security]`.
+    - **Facades.** `services.AddCommonUiFacades()` (`:137`), factored out so a bUnit harness can register exactly these two without pulling in the whole shared-UI surface (`:135-136`).
+    - **Scoped services**, all via `TryAdd` so several composing hosts cannot double-register: [IAuthUIService](#iauthuiservice) (`:140`), [IEmailConfirmationUIService](#iemailconfirmationuiservice) to [EmailConfirmationUIService](#emailconfirmationuiservice) (`:144`, the `/confirm-email` page's client per [ADR-116](https://ivanball.github.io/docs/adr/116-identity-completions-opt-in.html); a separate interface rather than new `IAuthUIService` members, so a consumer's own `IAuthUIService` implementation keeps compiling, per the comment at `:142-143`), [OAuthFlowStateStore](#oauthflowstatestore) (`:148`, binding an OAuth completion to the flow this client started so a deep-linked completion code from someone else's provider round trip is dropped instead of exchanged, per its own comment at `:146-147`), [ListPageStateService](#listpagestateservice) (`:149`), [ListPageQueryStateService](#listpagequerystateservice) (`:150`), [NavigationHistoryService](#navigationhistoryservice) (`:151`), [ThemeService](#themeservice) (`:154`, [ADR-028](https://ivanball.github.io/docs/adr/028-dark-theme-mode.html)), [ICultureApplier](#icultureapplier) defaulting to [EndpointCultureApplier](#endpointcultureapplier) (`:160`), [IPublicLinkBuilder](#ipubliclinkbuilder) defaulting to [NavigationPublicLinkBuilder](#navigationpubliclinkbuilder) (`:166`), and the per-user preference writer and reader (`:169-170`), documented as best-effort and a no-op for an anonymous user (`:168`). `TryAddSingleton<IOAuthUISettings, DefaultOAuthUISettings>()` (`:174`) supplies a no-op default that a downstream app replaces.
+    - **Capabilities.** `AddDeviceCapabilityDefaults()` (`:178`, [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)) so every capability contract resolves on every head, registered here specifically so MAUI and browser hosts can override afterwards under last-registration-wins (`:176-177`).
+  - **`AddCommonUiFacades()`** (`:197-202`): two `TryAddScoped` calls, [IToastService](#itoastservice) to [MudToastService](#mudtoastservice) (`:199`) and [IAppDialogService](#iappdialogservice) to [MudAppDialogService](#mudappdialogservice) (`:200`). Its doc comment (`:183-196`) is the clearest statement of the facade rule anywhere in the codebase: these two implementations are the ONLY types in the framework that name MudBlazor's `ISnackbar` / `IDialogService`, they are scoped to match the MudBlazor services they wrap, and the method is called both by `AddUIShared` and by the shipped bUnit base so a component test resolves the facades without the rest of the shared-UI surface.
+  - **`AddClientAuthSessionCookieSync()`** (`:209-213`): one `TryAddScoped<ISessionCookieSync, JsFetchSessionCookieSync>()` (`:211`), the bridge that mirrors the client's in-memory tokens into the HttpOnly cookie read during server-side SSR prerender. Called from both the Blazor Server host and the WebAssembly client (`:204-208`).
+  - **`AddWasmFormFactor()`** (`:221-222`): registers [IFormFactor](group-26-device-capability-layer.md#iformfactor) to [WasmFormFactor](group-26-device-capability-layer.md#wasmformfactor) as a singleton. The doc comment names the two alternatives (`:215-220`): `AddCommonWebFormFactor()` from `MMCA.Common.UI.Web` on the Blazor Server head, `AddMauiFormFactor()` from `MMCA.Common.UI.Maui` on the MAUI head.
+  - **`AddUserAdministrationUI<TUserDto>()`** (`:238-248`), the [ADR-116](https://ivanball.github.io/docs/adr/116-identity-completions-opt-in.html) UI opt-in for user administration: registers [IUserAdminUIService<TUserDto>](#iuseradminuiservicetuserdto) to [UserAdminService<TUserDto>](#useradminservicetuserdto) (`:240`), then forwards [IUserAdminActionsUIService](#iuseradminactionsuiservice) to the same instance rather than registering it a second time (`:244-245`), so the actions the component performs and the page it lists go through one instance (and one substitute, in a test), per the comment at `:242-243`. The doc comment (`:224-237`) states the call convention (once per app, after `AddUIShared`, with the app's own administration DTO) and that an app which serves no administration endpoints registers nothing and the component the service backs is simply never rendered.
+  - **`AddRoleAdministrationUI()`** (`:264-269`): the non-generic [ADR-116](https://ivanball.github.io/docs/adr/116-identity-completions-opt-in.html) sibling, registering [IRoleAdminUIService](#iroleadminuiservice) to [RoleAdminService](#roleadminservice) (`:266`). Its doc comment (`:250-263`) explains why it takes no type parameter unlike `AddUserAdministrationUI<TUserDto>()`: roles and permissions are strings the framework already owns, so there is no app DTO to name.
+  - **`AddUIModule<TModule>()`** (`:289-299`), constrained to `TModule : class, IUIModule` (`:290`): a Scrutor scan `FromAssemblyOf<TModule>()` registering every [IEntityService<TEntityDTO, TIdentifierType>](#ientityservicetentitydto-tidentifiertype) implementation scoped as its implemented interfaces (`:292-296`), then `AddSingleton<IUIModule, TModule>()` (`:298`). The doc comment (`:278-283`) records the deliberate boundary: this is the two-step prologue every module's `Add{Module}UI()` opens with, and module-specific services stay with the caller **afterwards**, so a module whose service must beat a shared default still controls its own registration order. The type-parameter doc (`:285-288`) states the constraint that follows from using the descriptor's assembly as the scan root: it must live alongside the module's entity services and Razor pages.
+- **Why it's built this way**: `TryAdd` throughout is both a safety property (several composing hosts calling `AddUIShared` cannot double-register) and the override mechanism (a host that registers its own implementation **before** the call wins). Two ordering choices push in the opposite direction and are called out in comments because they are load-bearing: [ICultureApplier](#icultureapplier)'s default round-trips a server `/culture/set` endpoint that a MAUI hybrid head does not have, so hybrids override it **after** `AddUIShared` (`:156-159`), and [IPublicLinkBuilder](#ipubliclinkbuilder)'s default resolves against the browser origin, which is wrong for a MAUI WebView whose origin is a virtual host nobody else can open, so that is overridden after as well (`:162-165`). [InvariantMudLocalizationInterceptor](#invariantmudlocalizationinterceptor) follows the same head-dependent pattern one layer down: MudBlazor's own interceptor is correct everywhere except the MAUI hybrid main thread, so the replacement is registered unconditionally here rather than left to the affected head to override, because replace semantics make the registration order irrelevant (`:81-88`). [SameOriginProxyRequestHandler](#sameoriginproxyrequesthandler) is the one registration decided by configuration rather than by order: it is added only when `Api:SameOriginApiEndpoint` is present (`:98-99`, `:127-133`), so a host that never opts in carries no trace of it in its pipeline. Read together, the file encodes a rule worth carrying into any new registration: a contract whose correct implementation depends on the *head* is defaulted here and replaced later (or, where replace semantics make order irrelevant, registered outright), while a contract that is the same everywhere is `TryAdd`ed and left alone. The two administration opt-ins follow the same principle one level up: nothing else in the framework calls either one, so an app that serves no administration or role-administration endpoints registers nothing and the corresponding component is simply never rendered.
+- **Where it's used**: called once at startup by all six consuming UI hosts (ADC's `MMCA.ADC.UI.Web`, `MMCA.ADC.UI.Web.Client` and MAUI `MMCA.ADC.UI`, plus the three Store equivalents), each followed by the per-module `Add{Module}UI()` calls, which are usually one-liners over `AddUIModule<TModule>()`, for example `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.UI/DependencyInjection.cs:19` and `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.UI/DependencyInjection.cs:24`. `AddCommonUiFacades()` has a second caller outside any host, the shipped bUnit base (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.UI/Infrastructure/BunitComponentTestBase.cs:53`). `AddUserAdministrationUI<TUserDto>()` and `AddRoleAdministrationUI()` are each meant to be called once per app, after `AddUIShared`, by an app that opts into the corresponding [ADR-116](https://ivanball.github.io/docs/adr/116-identity-completions-opt-in.html) administration surface (`:228`, `:255`); nothing inside the framework itself calls either one. The `"APIClient"` configured here is the client every [EntityServiceBase<TEntityDTO, TIdentifierType>](#entityservicebasetentitydto-tidentifiertype)-derived service resolves. The assembly this class lives in is also the one [UISharedAssemblyReference](#uisharedassemblyreference) names for the architecture fitness suite.
 
 ### ApiFileDownloadButton
 
@@ -1144,10 +1273,10 @@ lives.
 - **Walkthrough**:
   - Parameters (lines 17-80). Three are `[EditorRequired]`: `RelativeApiPath` (line 19), `FileName` (line 30) and `ShareTitle` (line 35). `ContentType` defaults to `application/octet-stream` (line 43) and is what the share sheet uses to pick target apps. `Icon` defaults to the generic download glyph (line 47), `Size` to `Size.Small` (line 51). `AriaLabel`, `UnavailableMessage` and `FailureMessage` (lines 59, 66, 73) are nullable overrides over localized defaults. `HttpClientName` defaults to `"APIClient"` (line 80), the framework's bearer-token plus culture-header client.
   - `AccessibleLabel` (line 84) resolves `AriaLabel ?? L["Button.Download.Aria"].Value`, and the markup binds it to BOTH `aria-label` and `title` on either branch (`ApiFileDownloadButton.razor:22-23`, `:31-32`), so an icon-only control always carries a name. The default key lives in the component's own resource file (`Components/ApiFileDownloadButton.resx:15`).
-  - `BrowserDownloadUrl` (lines 89-98) is the browser branch's `Href`. It prefers `WasmApiEndpoint` over `ApiEndpoint` (line 93) because the browser needs the externally reachable gateway URL: on the Server head `ApiEndpoint` may be a container-internal name, and on the WASM head `ApiEndpoint` is already the browser-reachable value fetched from `/client-config` (lines 86-88). With no base URL configured it falls back to the relative path (lines 94-95); otherwise it composes an absolute URI (line 96).
-  - `ShareDownloadedFileAsync` (lines 100-149) is the native branch. It re-entrancy-guards on `_isExporting` and an empty path (lines 102-105), sanitizes the file name **before** the fetch so an unusable name costs no download (lines 110-116), creates the named client and pulls the bytes (lines 118-119), stages the file (line 121), and calls `Share.ShareFileAsync` (line 123), toasting a warning when no share surface accepted it (line 125). Three catch blocks all surface a toast rather than throwing: `HttpRequestException` (line 128), `OperationCanceledException` (line 132, which here is the `HttpClient` timeout, not a disposal, since no token is passed), and a bare `Exception` (line 138) covering the staging write and the share sheet, because this runs in an `OnClick` callback where an unhandled exception is fatal to a native host (lines 140-143). The `finally` clears the guard (line 147).
-  - `ResolveStagedFileName` (lines 162-171) reduces the caller's name to a bare file name with `Path.GetFileName` and rejects `.` and `..` (lines 164-170), returning null when nothing usable remains. The remarks (lines 155-161) state the exact hazard: `Path.Combine` discards its first argument outright when the second is rooted, and `..` segments walk out of the temp root, so an unsanitized name would decide where the delete and the write land.
-  - `StageFileAsync` (lines 180-192) writes into `Path.GetTempPath()` under the already-sanitized name (line 182), deleting any leftover first (lines 184-187) so a truncated previous copy is never shared. It deliberately does **not** delete after sharing: on Android the share intent returns as soon as it launches, so deleting would race the receiving app (lines 174-178).
+  - `BrowserDownloadUrl` (lines 93-103) is the browser branch's `Href`. The anchor is a plain top-level navigation, so it carries cookies but never an `Authorization` header (lines 86-92), and the base is chosen in that light as `SameOriginApiEndpoint ?? WasmApiEndpoint ?? ApiEndpoint` (line 98). On a WebAssembly client of a host running the same-origin API proxy the link targets the proxy, the same base the `"APIClient"` uses: the browser sends the HttpOnly session cookie and the proxy attaches the real bearer server-side, so an authenticated download works with no token in script ([ADR-131](https://ivanball.github.io/docs/adr/131-same-origin-api-proxy.html)). Everywhere else it prefers `WasmApiEndpoint` over `ApiEndpoint` because the browser needs the externally reachable gateway URL: on the Server head `ApiEndpoint` may be a container-internal name, and on the WASM head `ApiEndpoint` is already the browser-reachable value fetched from `/client-config`. With no base URL configured it falls back to the relative path (lines 99-100); otherwise it composes an absolute URI (line 101).
+  - `ShareDownloadedFileAsync` (lines 105-154) is the native branch. It re-entrancy-guards on `_isExporting` and an empty path (lines 107-110), sanitizes the file name **before** the fetch so an unusable name costs no download (lines 115-121), creates the named client and pulls the bytes (lines 123-124), stages the file (line 126), and calls `Share.ShareFileAsync` (line 128), toasting a warning when no share surface accepted it (line 130). Three catch blocks all surface a toast rather than throwing: `HttpRequestException` (line 133), `OperationCanceledException` (line 137, which here is the `HttpClient` timeout, not a disposal, since no token is passed), and a bare `Exception` (line 143) covering the staging write and the share sheet, because this runs in an `OnClick` callback where an unhandled exception is fatal to a native host (lines 145-147). The `finally` clears the guard (line 152).
+  - `ResolveStagedFileName` (lines 167-176) reduces the caller's name to a bare file name with `Path.GetFileName` and rejects `.` and `..` (lines 169-175), returning null when nothing usable remains. The remarks (lines 160-166) state the exact hazard: `Path.Combine` discards its first argument outright when the second is rooted, and `..` segments walk out of the temp root, so an unsanitized name would decide where the delete and the write land.
+  - `StageFileAsync` (lines 185-197) writes into `Path.GetTempPath()` under the already-sanitized name (line 187), deleting any leftover first (lines 189-192) so a truncated previous copy is never shared. It deliberately does **not** delete after sharing: on Android the share intent returns as soon as it launches, so deleting would race the receiving app (lines 179-184).
 - **Why it's built this way**: the download mechanics are the part every consumer would otherwise re-implement per file type, and they are exactly the part that differs per head, so they belong in the framework behind a capability query ([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)). Keeping the wording out of the component (labels are parameters with localized fallbacks) is what lets one button serve a calendar file, an export, or a receipt without the framework knowing any of those words.
 - **Where it's used**: ADC wraps it in a thin calendar affordance, `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Components/AddToCalendarButton.razor:8-17`, which supplies `ContentType="text/calendar"`, the calendar glyph, and its own localized aria-label and failure messages while the download and share mechanics stay here. Covered by [`ApiFileDownloadButtonTests`](group-28-testing-infrastructure.md#per-project-test-rollup).
 - **Caveats / not-in-source**: the doc comment on `AriaLabel` (line 54) tags the icon-only accessible-name rule as "ADR-021", but ADR-021 in the current set is `021-consumer-inbox-idempotency`; the accessibility contract the rule belongs to is [ADR-063](https://ivanball.github.io/docs/adr/063-accessibility-conformance-gate.html). Which apps a native share sheet offers for a given MIME type is OS behavior and not determinable from this source.
@@ -1162,7 +1291,7 @@ lives.
 - **Walkthrough**: `string? ApiEndpoint { get; }` (line 9) and `string? WasmApiEndpoint { get; }` (line 17). Both are nullable, because the interface itself imposes no requirement; the `[Required]` rule lives on the implementation ([`ApiSettings`](#apisettings)).
 - **Why it's built this way**: a read-only interface over an options class is the shape that lets a consumer state "I only read configuration" instead of taking a mutable settings object. It also documents the contract in one place while `ApiSettings` carries the binding and validation attributes.
 - **Where it's used**: implemented by [`ApiSettings`](#apisettings) (`Common/Settings/ApiSettings.cs:9`). The two endpoint values are read through `IOptions<ApiSettings>` at the `/client-config` endpoints and in the API client factory, not through this interface.
-- **Caveats / not-in-source**: no injection site resolves `IApiSettings` today: a repo-wide search finds the interface only at its declaration and on the `ApiSettings` class. The doc comment (line 15) says `WasmApiEndpoint` "falls back to `ApiEndpoint` when null", but neither host's `/client-config` endpoint actually does that today: both ADC and Store serve it through the shared `MapClientConfigEndpoint` (`MMCA.Common.UI.Web`), which throws an `InvalidOperationException` naming the missing key when `WasmApiEndpoint` is unset instead of substituting `ApiEndpoint` (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/ClientConfig/ClientConfigEndpointExtensions.cs:56-58`, called from `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:247` and `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:247`). The fail-closed behavior is now framework policy shared by both hosts, not a per-host divergence, and the doc comment's fallback claim is stale.
+- **Caveats / not-in-source**: no injection site resolves `IApiSettings` today: a repo-wide search finds the interface only at its declaration and on the `ApiSettings` class. The doc comment (line 15) says `WasmApiEndpoint` "falls back to `ApiEndpoint` when null", but neither host's `/client-config` endpoint actually does that today: both ADC and Store serve it through the shared `MapClientConfigEndpoint` (`MMCA.Common.UI.Web`), which throws an `InvalidOperationException` naming the missing key when `WasmApiEndpoint` is unset instead of substituting `ApiEndpoint` (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/ClientConfig/ClientConfigEndpointExtensions.cs:58-60`, called from `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:259` and `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:247`). The fail-closed behavior is now framework policy shared by both hosts, not a per-host divergence, and the doc comment's fallback claim is stale.
 
 ### InfiniteScrollSentinel
 
@@ -1173,13 +1302,13 @@ lives.
 - **Concept introduced, the observer as a child component so disposal is correct.** `[Rubric §23, Front-End Performance]` (assesses render and network cost: paging on demand instead of loading everything, and detaching observers so they stop costing anything), `[Rubric §21, Accessibility]` (assesses whether dynamic content changes are announced without hijacking focus) and `[Rubric §18, UI Architecture]`. The design point recorded in the doc comment (lines 14-19) is a lifecycle one: a page deriving from [`DataGridListPageBase<TDto>`](#datagridlistpagebasetdto) cannot hook async disposal because its `DisposeAsync` is not virtual, whereas a child component is disposed by the renderer the moment the host stops rendering it. Rendering the sentinel only while more pages exist therefore makes "detach the observer" a rendering decision rather than a bookkeeping one, and a filter reset that refills the list gets a fresh instance with a fresh observer.
 - **Walkthrough**:
   - Parameters: `OnVisible` (line 26), `IsLoading` (line 29) which renders the inline progress row, and `LoadingLabel` (line 32), the localized accessible name for that row.
-  - State (lines 34-39): a per-instance `_observerId` (a `Guid` "N" string, line 34), the `_sentinelRef` element reference, the imported `_module`, the `_dotNetRef` self-reference handed to JS, plus `_observing` and `_disposed` flags.
-  - `OnSentinelVisible()` (lines 45-47) is the `[JSInvokable]` callback. Its name is fixed by the shared JS module, which calls it by string (lines 41-44). It returns immediately when disposed, otherwise marshals onto the renderer with `InvokeAsync` before invoking `OnVisible`.
-  - `OnAfterRenderAsync` (lines 50-58) attaches the observer once, on the first render only.
-  - `AttachObserverAsync` (lines 98-113) imports the module lazily (lines 102-103), creates the `DotNetObjectReference` (line 104), calls `observe` with the reference, the element and the id (line 105), and sets `_observing`. A `JSDisconnectedException` is swallowed (lines 108-112): during prerendering or circuit teardown there is no JS to talk to, and the list simply stops at the pages already loaded rather than failing the render.
-  - `DisposeAsync` (lines 61-96) suppresses finalization, guards re-entry with `_disposed`, calls `unobserve` when it was observing (lines 76-79), disposes the module (line 81), tolerates both `JSDisconnectedException` and `JSException` (lines 84-91), and disposes the `DotNetObjectReference` in a `finally` (line 94) so the .NET side is released even if the JS side already went away.
+  - State (lines 34-44): a per-instance `_observerId` (a `Guid` "N" string, line 34), the `_sentinelRef` element reference, the imported `_module`, the `_dotNetRef` self-reference handed to JS, the `_observing` flag, `_wasLoading` (line 43, the previous render's `IsLoading`), and `_disposed`.
+  - `OnSentinelVisible()` (lines 50-52) is the `[JSInvokable]` callback. Its name is fixed by the shared JS module, which calls it by string (lines 46-49). It returns immediately when disposed, otherwise marshals onto the renderer with `InvokeAsync` before invoking `OnVisible`.
+  - `OnAfterRenderAsync` (lines 55-66) attaches the observer on the first render, and re-attaches it on the render where a load has just finished: `loadJustFinished` is `_wasLoading && !IsLoading && _observing` (line 57), `_wasLoading` is then updated (line 58), and either condition triggers `AttachObserverAsync` (line 60). The reason is recorded on the field (lines 40-42): an IntersectionObserver reports threshold crossings only, so a sentinel that is still inside the viewport when the appended page arrives would never fire again and the list would stall until the user scrolled away and back. Re-observing creates a fresh observer, which delivers a fresh initial entry.
+  - `AttachObserverAsync` (lines 106-121) imports the module lazily (lines 110-111), creates the `DotNetObjectReference` once (line 112), calls `observe` with the reference, the element and the id (line 113), and sets `_observing` (line 114). A `JSDisconnectedException` is swallowed (lines 116-120): during prerendering or circuit teardown there is no JS to talk to, and the list simply stops at the pages already loaded rather than failing the render.
+  - `DisposeAsync` (lines 69-104) suppresses finalization, guards re-entry with `_disposed`, calls `unobserve` when it was observing (lines 84-87), disposes the module (line 89), tolerates both `JSDisconnectedException` and `JSException` (lines 92-99), and disposes the `DotNetObjectReference` in a `finally` (line 102) so the .NET side is released even if the JS side already went away.
   - The markup (`Components/InfiniteScrollSentinel.razor:4-13`) is a single `div` carrying the element reference, with the progress row rendered only while `IsLoading`. That row is `role="status" aria-live="polite" aria-busy="true"` (line 9), matching `PageLoadingState`'s politeness so a screen reader hears that more items are loading without the announcement interrupting reading.
-  - The JS side is deliberately tiny: `observe` disconnects any prior observer for the id, creates an `IntersectionObserver` with `rootMargin: '200px'` and invokes `OnSentinelVisible` on intersection (`wwwroot/infinite-scroll.js:3-14`); `unobserve` disconnects and forgets the id (lines 16-22). The 200px margin is what makes the next page start loading slightly *before* the sentinel is on screen.
+  - The JS side is deliberately tiny: `observe` disconnects any prior observer for the id, creates an `IntersectionObserver` with `rootMargin: '200px'` and invokes `OnSentinelVisible` on intersection (`wwwroot/infinite-scroll.js:3-14`); `unobserve` disconnects and forgets the id (lines 16-22). The 200px margin is what makes the next page start loading slightly *before* the sentinel is on screen, and the disconnect-before-create step is what makes the post-load re-attach above safe to call repeatedly with the same id.
 - **Why it's built this way**: extracting just the observer is what lets a page keep its own cards, empty state and error state and still get infinite scroll (lines 10-13). The alternative, folding the behavior into the list component, would force any page that wants infinite scroll to also adopt that component's layout.
 - **Where it's used**: ADC's public speaker list renders it below the card grid while more pages exist, wiring `OnVisible` to its own loader and passing a localized loading label (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/Speakers/PublicSpeakerList.razor:144-145`, inside [`PublicSpeakerList`](group-21-conference-ui.md#publicspeakerlist)). Covered by [`InfiniteScrollSentinelTests`](group-28-testing-infrastructure.md#per-project-test-rollup).
 
@@ -1187,7 +1316,7 @@ lives.
 
 > MMCA.Common.UI · `MMCA.Common.UI.Common.Settings` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/Settings/LayoutSettings.cs:9` · Level 0 · class (sealed)
 
-- **What it is**: the four settings that make the shared shell look and behave like a specific application: the navbar brand text, an optional brand logo URL, the footer text, and an optional role gate on the framework-owned "signed-in devices" nav entry.
+- **What it is**: the five settings that make the shared shell look and behave like a specific application: the navbar brand text, an optional brand logo URL, the footer text, an optional role gate on the framework-owned "signed-in devices" nav entry, and an opt-in switch that hides the framework's notification pages in a host that never registered the notification UI.
 - **Depends on**: nothing first-party. `System.Diagnostics.CodeAnalysis.SuppressMessage` (BCL) for one analyzer waiver, and the `Microsoft.Extensions.Options` binder at registration time.
 - **Concept introduced, a settings section as a bound options class.** `[Rubric §17, DevOps & Deployment]` (assesses whether configuration is centralized and typed rather than read ad hoc) and `[Rubric §20, Design System and Theming]` (assesses whether the look of the app is expressed once rather than repeated per page). The shape repeats across every settings class in this namespace: a `public static readonly string SectionName` naming the configuration section (line 12), `init`-only properties with compiled-in defaults, and one `services.AddOptions<T>().Bind(configuration.GetSection(T.SectionName))` call in `AddUIShared` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:45-46`). Because every property has a default, an absent section is not an error: the host simply gets the compiled-in values. Components then take `IOptions<LayoutSettings>` and read `.Value`, so nothing in the shell parses configuration itself.
 - **Walkthrough**:
@@ -1196,24 +1325,27 @@ lives.
   - `FooterText` (line 18) defaults to `string.Empty`, and `MainLayout` renders the footer block only when it is non-blank (`Layout/MainLayout.razor:72-76`). An empty default therefore means "no footer", not "an empty footer".
   - `BrandLogoUrl` (line 30) defaults to empty, which renders the text-only brand. When set, `NavMenu` emits an `img` beside the brand text with `alt=""` and `aria-hidden="true"` (`Layout/NavMenu.razor:22-24`): the image is decorative because the brand link already carries its own accessible name, so alt text here would only repeat it to a screen reader (lines 20-24). The property carries a `[SuppressMessage]` for CA1056 (lines 26-29) whose justification records why it is a `string` and not a `Uri`: the value is usually a host-relative path such as `/img/logo.svg`, which `System.Uri` cannot represent without `RelativeOrAbsolute` round-tripping.
   - `SessionsNavRequiredRole` (line 39) is nullable and unset by default, which shows the "signed-in devices" nav entry to every signed-in user. `NavMenu` reads it in `OnInitializedAsync` and computes `_showSessionsLink` as unset-or-blank OR the current user is in that role (`Layout/NavMenu.razor:214-215`). The gate covers only the menu entry: `/profile/sessions` itself stays reachable for any signed-in account whether or not the link is shown (`Layout/NavMenu.razor:78-82`).
-- **Why it's built this way**: the shell ships in the framework package, so the only way a consuming app can brand it, or narrow a framework-owned menu entry, without forking is configuration. Keeping the branding in `appsettings.json` also means a deployment can rebrand without a rebuild.
-- **Where it's used**: injected as `IOptions<LayoutSettings>` by `Layout/NavMenu.razor:12` and `Layout/MainLayout.razor:11`. Configured by every UI host, for example `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:15-18`. Covered by [`NavMenuTests`](group-28-testing-infrastructure.md#per-project-test-rollup).
+  - `HideNotificationPagesWhenUnregistered` (line 49) defaults to `false`, which leaves the routes exactly as they are. When `true`, the framework's notification pages (`/notifications`, `/notifications/inbox`, `/notifications/inbox/{Id}` and `/notifications/send`) answer with the not-found page in a host that never called `AddNotificationUI()`, instead of being reachable by URL with none of the services they need (lines 41-48). The decision is [`NotificationPageGate`](#notificationpagegate)`.Hides`, which requires the flag, a page type in its notification set, and no registered [`NotificationUIModule`](#notificationuimodule) (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Notifications/NotificationPageGate.cs:22-25`), so a host that registers the notification UI is unaffected either way.
+- **Why it's built this way**: the shell ships in the framework package, so the only way a consuming app can brand it, narrow a framework-owned menu entry, or close framework-owned routes it does not use, without forking is configuration. Keeping the branding in `appsettings.json` also means a deployment can rebrand without a rebuild.
+- **Where it's used**: injected as `IOptions<LayoutSettings>` by `Layout/NavMenu.razor:12` and `Layout/MainLayout.razor:11`, and read by [`NotificationPageGate`](#notificationpagegate) (`Notifications/NotificationPageGate.cs:22`). Configured by every UI host, for example `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:15-18`. Covered by [`NavMenuTests`](group-28-testing-infrastructure.md#per-project-test-rollup) and `NotificationPageGateTests`.
 
 ### MmcaClientConfigBootstrap
 
-> MMCA.Common.UI · `MMCA.Common.UI.Common.Settings` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/Settings/MmcaClientConfigBootstrap.cs:24` · Level 0 · class (static)
+> MMCA.Common.UI · `MMCA.Common.UI.Common.Settings` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/Settings/MmcaClientConfigBootstrap.cs:28` · Level 2 · class (static)
 
-- **What it is**: the WebAssembly client's bootstrap-time fetch of the `client-config` document (served by [`ClientConfigEndpointExtensions.MapClientConfigEndpoint`](#clientconfigendpointextensions)) into a stream `AddJsonStream` can consume, with one automatic retry on failure or timeout.
-- **Depends on**: `System.Net.Http.HttpClient` (BCL) only; no first-party type. That is deliberate, since it runs before `builder.Services` exists.
+- **What it is**: the WebAssembly client's bootstrap-time fetch of the `client-config` document (served by [`ClientConfigEndpointExtensions.MapClientConfigEndpoint`](#clientconfigendpointextensions)) into a stream `AddJsonStream` can consume, with one automatic retry on failure or timeout, and with a same-origin API proxy path resolved to an absolute address on the way through.
+- **Depends on**: [`ApiSettings`](#apisettings), used only for its `SectionName` and the `SameOriginApiEndpoint` property name when rewriting the document; otherwise `System.Net.Http.HttpClient`, `System.Text.Json.Nodes` and `System.Text.Encoding` (BCL). Nothing it touches needs a service provider, which is deliberate, since it runs before `builder.Services` exists.
 - **Concept introduced, a bounded retry at the one point in startup where configuration itself is still unknown.** `[Rubric §29, Resilience, Reliability & Business Continuity]` (assesses whether a single transient failure at startup is survivable) and `[Rubric §17, DevOps & Deployment]`. Every other resilience mechanism in the framework (Polly pipelines, the outbox, internal commands) runs once DI and configuration exist; this runs *before* both, in `Program.cs`, fetching the very document that will configure the rest of the client. A `Polly`-based retry is unavailable at this point (no service provider yet), so the retry is hand-rolled: one attempt, then one retry after a fixed delay, with the caller's own `HttpClient` and its own `Timeout`.
 - **Walkthrough**:
-  - `ClientConfigPath = "client-config"` (line 28), the relative path both overloads fetch, matching the endpoint's own route.
-  - `DefaultTimeout` (line 31, 15 seconds) and `DefaultRetryDelay` (line 34, 1 second) are the defaults the single-argument overload uses.
-  - `LoadAsync(Uri baseAddress, CancellationToken)` (lines 45-56) is the convenience overload: it builds a short-lived `HttpClient` scoped to `baseAddress` with `DefaultTimeout`, then delegates to the caller-owned overload.
-  - `LoadAsync(HttpClient client, TimeSpan retryDelay, CancellationToken)` (lines 68-86) is the real logic: fetch the bytes (line 77), and on `HttpRequestException` or a caller-uncancelled timeout (`IsTimeout`, lines 79, 90-91) wait `retryDelay` then fetch once more (lines 81-82) with no further retry. `IsTimeout` (lines 90-91) is the detail that makes the retry precise: `HttpClient` reports its own per-request timeout as `TaskCanceledException`, the same exception type the caller's own cancellation produces, so the two are told apart by checking whether the caller's token was the one that fired; only a timeout the caller did not ask for is retried.
-  - The result is wrapped in a non-writable `MemoryStream` (line 85), the shape `AddJsonStream` expects.
-- **Why it's built this way**: a single flaky fetch (a cold container, a brief network blip during a rollout) would otherwise fail the entire WASM client boot before it can render anything, including an error page with any styling. One retry buys resilience against exactly that class of transient failure without turning a genuine outage into a long hang, since both attempts still respect `DefaultTimeout`.
-- **Where it's used**: `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Program.cs` calls `LoadAsync` to populate the WASM client's configuration before any service is registered. The endpoint it fetches from is [`ClientConfigEndpointExtensions`](#clientconfigendpointextensions) (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/ClientConfig/ClientConfigEndpointExtensions.cs`). Covered by `MmcaClientConfigBootstrapTests` (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Common/Settings/MmcaClientConfigBootstrapTests.cs`).
+  - `ClientConfigPath = "client-config"` (line 31), the relative path both overloads fetch, matching the endpoint's own route.
+  - `DefaultTimeout` (line 34, 15 seconds) and `DefaultRetryDelay` (line 37, 1 second) are the defaults the single-argument overload uses.
+  - `LoadAsync(Uri baseAddress, CancellationToken)` (lines 49-60) is the convenience overload: it builds a short-lived `HttpClient` scoped to `baseAddress` with `DefaultTimeout`, then delegates to the caller-owned overload. It carries an RS0027 `[SuppressMessage]` (line 48) whose justification records it as a grandfathered public overload whose signature cannot change without a breaking change.
+  - `LoadAsync(HttpClient client, TimeSpan retryDelay, CancellationToken)` (lines 72-90) is the real logic: fetch the bytes (line 81), and on `HttpRequestException` or a caller-uncancelled timeout (`IsTimeout`, lines 83, 142-143) wait `retryDelay` then fetch once more (lines 85-86) with no further retry. `IsTimeout` (lines 142-143) is the detail that makes the retry precise: `HttpClient` reports its own per-request timeout as `TaskCanceledException`, the same exception type the caller's own cancellation produces, so the two are told apart by checking whether the caller's token was the one that fired; only a timeout the caller did not ask for is retried.
+  - The result passes through `ResolveSameOriginApiEndpoint` against the client's `BaseAddress` and is wrapped in a non-writable `MemoryStream` (line 89), the shape `AddJsonStream` expects.
+  - `ResolveSameOriginApiEndpoint(byte[], Uri?)` (lines 98-128, `internal`) exists because a host running the same-origin API proxy serves `Api:SameOriginApiEndpoint` as an origin-relative path (the server cannot know the public origin a browser used behind ingress) while the `"APIClient"` needs an absolute base address (lines 92-97). It returns the document byte for byte unless every precondition holds: an absolute base address (line 100), a document that parses (a `JsonException` is left for configuration binding to report, lines 110-114), an `Api` object holding a non-blank string `SameOriginApiEndpoint` that is not already an http(s) URL (lines 116-124). Only then does it replace the value with `new Uri(baseAddress, path).AbsoluteUri` and re-serialize (lines 126-127). Parsing is case-insensitive on property names (line 108).
+  - `IsHttpAbsolute(string)` (lines 136-138, `internal`) accepts only an absolute `http` or `https` URI. A bare absolute-`Uri.TryCreate` check is not enough: on Unix-like runtimes, browser WebAssembly included, `"/api/"` parses as the absolute `file:///api/`, so the relative path would be left unresolved and every client call would go to `file:///api/...` (lines 130-135).
+- **Why it's built this way**: a single flaky fetch (a cold container, a brief network blip during a rollout) would otherwise fail the entire WASM client boot before it can render anything, including an error page with any styling. One retry buys resilience against exactly that class of transient failure without turning a genuine outage into a long hang, since both attempts still respect `DefaultTimeout`. Resolving the proxy path here rather than on the server keeps the server ignorant of the browser-facing origin, and doing it on the raw document means every later consumer of [`ApiSettings`](#apisettings) on the client sees an absolute address ([ADR-131](https://ivanball.github.io/docs/adr/131-same-origin-api-proxy.html)).
+- **Where it's used**: `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Program.cs` calls `LoadAsync` to populate the WASM client's configuration before any service is registered. The endpoint it fetches from is [`ClientConfigEndpointExtensions`](#clientconfigendpointextensions) (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/ClientConfig/ClientConfigEndpointExtensions.cs`). Covered by `MmcaClientConfigBootstrapTests` (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Common/Settings/MmcaClientConfigBootstrapTests.cs`) and `SameOriginProxyClientTests` (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Services/SameOriginProxyClientTests.cs`).
 - **Caveats / not-in-source**: only one retry is ever attempted regardless of how the second attempt fails; a second transient failure fails the boot outright.
 
 ### NotificationBellOptions
@@ -1222,11 +1354,11 @@ lives.
 
 - **What it is**: the two numbers that define how stale the unread-notification badge is allowed to be: how often it re-reads the API, and how old its count may be before a navigation re-reads it.
 - **Depends on**: nothing first-party. `TimeSpan` (BCL). Bound with the same options shape [`LayoutSettings`](#layoutsettings) introduces.
-- **Concept introduced, staleness as a stated policy.** `[Rubric §19, State Management]` (assesses whether client-side state has an explicit freshness contract) and `[Rubric §31, Cost and FinOps]` (assesses whether the design lets an operator trade money against latency). Both numbers are host decisions rather than compiled constants: a deployment paying per API call widens the poll, one where an unread count must feel instant narrows it (lines 6-10). The framing in the doc comment is important for reading the code: the periodic read is the **backstop** behind the real-time push, not the primary path, so `PollInterval` is the budget for "how long a missed push may go unnoticed" (lines 17-21).
+- **Concept introduced, staleness as a stated policy.** `[Rubric §19, State Management]` (assesses whether client-side state has an explicit freshness contract) and `[Rubric §31, Cost and FinOps]` (assesses whether the design lets an operator trade money against latency). Both numbers are host decisions rather than compiled constants: a deployment paying per API call widens the poll, one where an unread count must feel instant narrows it (lines 6-10). The framing in the doc comment is important for reading the code: the periodic read is the **backstop** behind the real-time push, not the primary path, so `PollInterval` is the budget for "how long a missed push may go unnoticed" (lines 17-22).
 - **Walkthrough**:
   - `SectionName = "NotificationBell"` (line 15).
-  - `PollInterval` (line 22), default 30 seconds. [`NotificationBell`](#notificationbell) builds its `PeriodicTimer` from it (`Components/Notifications/NotificationBell.razor.cs:92`), against the injected clock rather than the ambient one.
-  - `NavigationRefreshMaxAge` (line 29), default 30 seconds. On a page change the bell accepts the count it already holds unless it is older than this window (`NotificationBell.razor.cs:155`, via `State.IsStale(...)`). That is what keeps a user clicking through five pages in ten seconds from issuing five reads of a number that has not moved (lines 24-28).
+  - `PollInterval` (line 23), default 30 seconds. [`NotificationBell`](#notificationbell) builds its `PeriodicTimer` from it (`Components/Notifications/NotificationBell.razor.cs:103`), against the injected clock rather than the ambient one. Zero or a negative value disables periodic polling while the push refresh and the navigation refresh keep working (lines 20-21): the bell returns before creating the timer when `PollInterval <= TimeSpan.Zero` (`NotificationBell.razor.cs:96-99`), because `PeriodicTimer` rejects such a period and throwing there faulted the circuit (lines 94-95).
+  - `NavigationRefreshMaxAge` (line 30), default 30 seconds. On a page change the bell accepts the count it already holds unless it is older than this window (`NotificationBell.razor.cs:166`, via `State.IsStale(...)`). That is what keeps a user clicking through five pages in ten seconds from issuing five reads of a number that has not moved (lines 25-29).
 - **Why it's built this way**: both values are pure policy with no correct universal answer, so they belong in configuration; and because both have defaults, a host that says nothing keeps the framework's chosen 30-second budgets.
 - **Where it's used**: bound in `AddUIShared` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:53-54`) and injected as `IOptions<NotificationBellOptions>` by [`NotificationBell`](#notificationbell) (`Components/Notifications/NotificationBell.razor.cs:36`). Covered indirectly by [`NotificationBellTests`](group-28-testing-infrastructure.md#per-project-test-rollup).
 
@@ -1267,7 +1399,7 @@ lives.
 - **Concept introduced, composing a UI host from configuration.** `[Rubric §7, Microservices Readiness]` (assesses whether the same codebase can be deployed as different subsets) and `[Rubric §17, DevOps & Deployment]`. The server-side module system registers [`IModule`](group-14-module-system-composition.md#imodule) implementations in topological order; the UI side has its own analogue, [`IUIModule`](#iuimodule), registered by each module's `AddXUI()` extension ([ADR-067](https://ivanball.github.io/docs/adr/067-ui-module-shell-composition.html)). This helper is the gate in front of those calls: a host that switches a module off never calls `AddXUI()`, so no `IUIModule` descriptor is registered, and the shell composes without that module's routes, nav entries or services. The default-on behavior (lines 7-8) is a compatibility choice: a host with no `Modules` section behaves exactly as it did before the section existed.
 - **Walkthrough**: `ModulesSectionName = "Modules"` (line 12) and `IsModuleEnabled(IConfiguration configuration, string moduleName)` (lines 18-22). It walks two section levels, `Modules` then the module name (line 20), and returns `!section.Exists() || section.GetValue("Enabled", true)` (line 21). Read carefully, that is two independent defaults: an absent module entry is enabled, and a present entry missing the `Enabled` key is also enabled. Only an explicit `false` turns a module off.
 - **Why it's built this way**: a static helper over `IConfiguration` (rather than a bound options class) is what makes it usable at the exact point it is needed, inside `Program.cs`/`MauiProgram.cs` before the service provider exists. Keeping the check in the framework rather than hand-rolling `builder.Configuration["Modules:X:Enabled"]` per host is what keeps the default-on semantics identical across all six heads.
-- **Where it's used**: all six UI hosts gate their module registrations with it. ADC: `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:150-160`, `MMCA.ADC.UI.Web.Client/Program.cs:55-64`, `MMCA.ADC.UI/MauiProgram.cs:127-136` (Identity, Conference, Engagement, Notification). Store: `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:120-126`, `MMCA.Store.UI.Web.Client/Program.cs:51-57`, `MMCA.Store.UI/MauiProgram.cs:83-89` (Catalog, Sales, Identity). The corresponding configuration block is `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:9-14`.
+- **Where it's used**: all six UI hosts gate their module registrations with it. ADC: `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:162-172`, `MMCA.ADC.UI.Web.Client/Program.cs:55-64`, `MMCA.ADC.UI/MauiProgram.cs:127-136` (Identity, Conference, Engagement, Notification). Store: `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:120-126`, `MMCA.Store.UI.Web.Client/Program.cs:51-57`, `MMCA.Store.UI/MauiProgram.cs:83-89` (Catalog, Sales, Identity). The corresponding configuration block is `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:9-14`.
 
 ### UiReadCacheOptions
 
@@ -1297,7 +1429,7 @@ lives.
   - When both conditions hold it sets `Cache-Control: no-store, no-cache, must-revalidate, max-age=0` plus the HTTP/1.0-era `Pragma: no-cache` (lines 34-35), then returns `Task.CompletedTask` (line 37).
   - The middleware returns `next()` immediately (line 40), and the extension returns `app` (line 43) so it chains in the usual `app.UseX().UseY()` shape.
 - **Why it's built this way**: an `IApplicationBuilder` extension is the idiomatic ASP.NET Core registration shape, and the `OnStarting` hook is what allows a single narrow registration to make an after-the-fact decision (was this response authenticated? was it HTML?) instead of duplicating the check at every page. The remarks (lines 19-23) state the one ordering constraint: register it **before** `MapRazorComponents` so it wraps every page response.
-- **Where it's used**: both Blazor Web hosts call it once: `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:227` and `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:171`.
+- **Where it's used**: both Blazor Web hosts call it once: `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:239` and `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:171`.
 - **Caveats / not-in-source**: whether a given browser honors `no-store` as bfcache-ineligibility is browser behavior, not code, and cannot be verified from this source. This type is distinct from the same-named [`WebApplicationExtensions`](group-12-api-hosting-mapping.md#webapplicationextensions) in the API layer; they share a name across assemblies, not an implementation.
 
 ### ApiSettings
@@ -1306,33 +1438,35 @@ lives.
 
 - **What it is**: the bound implementation of [`IApiSettings`](#iapisettings): the `"Api"` configuration section, validated at startup so a host with no API endpoint fails immediately instead of at the first request.
 - **Depends on**: [`IApiSettings`](#iapisettings) (the read-only contract it implements) and `System.ComponentModel.DataAnnotations.RequiredAttribute` (BCL).
-- **Concept introduced, fail-fast configuration.** `[Rubric §29, Resilience, Reliability & Business Continuity]` and `[Rubric §15, Best Practices and Code Quality]`. The class is three lines of data, but the behavior lives in how it is registered: `AddOptions<ApiSettings>().Bind(...).ValidateDataAnnotations().ValidateOnStart()` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:39-42`). `ValidateDataAnnotations` turns the `[Required]` attribute into an options validator, and `ValidateOnStart` runs that validator during host startup rather than lazily on first resolution, so a missing `Api:ApiEndpoint` surfaces as an `OptionsValidationException` naming the key before the host accepts traffic ([ADR-070](https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html)). That is what licenses the null-forgiving `apiSettings.ApiEndpoint!` in the client factory (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:106`): the validator, not a local check, is the guarantee.
+- **Concept introduced, fail-fast configuration.** `[Rubric §29, Resilience, Reliability & Business Continuity]` and `[Rubric §15, Best Practices and Code Quality]`. The class is three properties of data, but the behavior lives in how it is registered: `AddOptions<ApiSettings>().Bind(...).ValidateDataAnnotations().ValidateOnStart()` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:39-42`). `ValidateDataAnnotations` turns the `[Required]` attribute into an options validator, and `ValidateOnStart` runs that validator during host startup rather than lazily on first resolution, so a missing `Api:ApiEndpoint` surfaces as an `OptionsValidationException` naming the key before the host accepts traffic ([ADR-070](https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html)). That is what licenses the null-forgiving `apiSettings.ApiEndpoint!` in the client factory (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:111-114`): the validator, not a local check, is the guarantee.
 - **Walkthrough**:
   - `SectionName = "Api"` (line 12), the same convention every settings class here uses.
   - `[Required] public string? ApiEndpoint { get; init; }` (lines 15-16). Nullable so the binder can leave it unset, `[Required]` so leaving it unset fails validation. `init`-only, so a bound instance is immutable after construction.
   - `WasmApiEndpoint { get; init; }` (line 19) carries `<inheritdoc />` and no `[Required]`: it is optional at the contract level, and each host decides whether an absent value is acceptable.
-- **Why it's built this way**: `sealed` plus `init` gives an immutable snapshot of configuration that cannot drift while the app runs. Putting the validation attribute on the options class rather than writing a guard in the `HttpClient` factory keeps one failure mode with one message: the comment at `MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:98-102` records that a second hand-written check would only give the same failure a different, less informative exception.
-- **Where it's used**: bound in `AddUIShared` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:39-42`); read by the named `"APIClient"` `HttpClient` factory to set `BaseAddress` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:103-106`, alongside the 90-second total-request timeout at `:97`); read by [`ApiFileDownloadButton`](#apifiledownloadbutton) for its browser download URL (`Components/ApiFileDownloadButton.razor.cs:93`); and served to the WebAssembly client by each Server head's `/client-config` endpoint, both routed through the shared `MapClientConfigEndpoint` (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/ClientConfig/ClientConfigEndpointExtensions.cs:50-59`; called at `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:247-253` and `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:247`).
+  - `SameOriginApiEndpoint { get; init; }` (line 33) is declared on the class only, not on [`IApiSettings`](#iapisettings), and is `null` everywhere except on a WebAssembly client whose Server host opted in with `AddCommonSameOriginApiProxy` (lines 21-32). The host serves it as an origin-relative path in `/client-config` and [`MmcaClientConfigBootstrap`](#mmcaclientconfigbootstrap)`.LoadAsync` resolves it to an absolute address. When it is set, the `"APIClient"` and the notification hub target it instead of `ApiEndpoint`, send no `Authorization` header (the proxy attaches the bearer from the HttpOnly session cookie server-side) and add the proxy's CSRF header; `ApiEndpoint` keeps the gateway URL for full-page navigations that must reach the gateway itself, such as the external sign-in challenge ([ADR-131](https://ivanball.github.io/docs/adr/131-same-origin-api-proxy.html)). In the client factory the switch is `client.BaseAddress = new Uri(apiSettings.SameOriginApiEndpoint ?? apiSettings.ApiEndpoint!, ...)` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:114`), and the same configuration key decides at registration time whether the proxy pipeline is wired at all (`DependencyInjection.cs:95-99`).
+- **Why it's built this way**: `sealed` plus `init` gives an immutable snapshot of configuration that cannot drift while the app runs. Putting the validation attribute on the options class rather than writing a guard in the `HttpClient` factory keeps one failure mode with one message: the comment at `MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:104-108` records that a second hand-written check would only give the same failure a different, less informative exception.
+- **Where it's used**: bound in `AddUIShared` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:39-42`); read by the named `"APIClient"` `HttpClient` factory to set `BaseAddress` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:102-114`, alongside the 90-second total-request timeout at `:120`); read by [`ApiFileDownloadButton`](#apifiledownloadbutton) for its browser download URL (`Components/Forms/ApiFileDownloadButton.razor.cs:98`); read by [`NotificationHubService`](#notificationhubservice) and [`BlazorCspPolicyProvider`](#blazorcsppolicyprovider); and served to the WebAssembly client by each Server head's `/client-config` endpoint, both routed through the shared `MapClientConfigEndpoint` (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/ClientConfig/ClientConfigEndpointExtensions.cs:52-61`; called at `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:259-265` and `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:247`).
 
 ### MobileInfiniteScrollList<TItem>
 
-> MMCA.Common.UI · `MMCA.Common.UI.Components.Lists` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/Lists/MobileInfiniteScrollList.razor.cs:21` · Level 3 · class (generic partial component)
+> MMCA.Common.UI · `MMCA.Common.UI.Components.Lists` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/Lists/MobileInfiniteScrollList.razor.cs:20` · Level 3 · class (generic partial component)
 
 - **What it is**: the mobile card list every list page falls back to on a narrow viewport. It owns the whole loop: an IntersectionObserver sentinel that asks for the next page, an accumulated item list rendered through a caller-supplied card template, a rendered-item cap that bounds DOM growth, generation-guarded supersession of in-flight fetches, and localized load-failure handling with a Retry button.
-- **Depends on**: [`Result`](group-01-result-error-handling.md#result) and its generic form (the fetch delegate's return type), [`IToastService`](#itoastservice), [`SharedResource`](#sharedresource) through `IStringLocalizer<SharedResource>`, [`ResultUiExtensions.LocalizedErrorMessage`](#resultuiextensions), the `EmptyState` component, the `ClickableCard` component each row's card is wrapped in, and the shared `_content/MMCA.Common.UI/infinite-scroll.js` module it shares with [`InfiniteScrollSentinel`](#infinitescrollsentinel). Externals: `IJSRuntime`, `DotNetObjectReference`, `CancellationTokenSource`, MudBlazor primitives.
-- **Concept introduced, generation-guarded supersession.** `[Rubric §19, State Management]` (assesses whether concurrent updates to client state have a defined winner) and `[Rubric §23, Front-End Performance]`. The hard problem in an infinite list is not fetching, it is what happens when the user changes the filter while a fetch is in flight. Cancellation alone is not enough: the fetch delegate is consumer-supplied and may ignore its `CancellationToken` entirely, so a superseded call can still complete successfully and try to append rows to a list that was cleared. The answer here is a monotonically increasing `_generation` counter (line 63). A load snapshots it before awaiting and discards its results if the value moved while it waited (lines 174-176, 192). The token cancellation is still issued (it stops work that *does* honor it), but the generation, not the token, is authoritative (lines 189-191). The second half of the pattern is that **the page counter is computed, not committed**: `targetPage = _currentPage + 1` (line 183) and `_currentPage` only advances on a successful, non-superseded completion (line 207), so a cancelled, failed or superseded fetch leaves nothing to compensate back and no page is ever re-requested (lines 180-182).
+- **Depends on**: [`Result`](group-01-result-error-handling.md#result) and its generic form (the fetch delegate's return type), [`SharedResource`](#sharedresource) through `IStringLocalizer<SharedResource>`, [`ResultUiExtensions.LocalizedErrorMessage`](#resultuiextensions), the `EmptyState` component, the `ClickableCard` component each row's card is wrapped in, and the shared `_content/MMCA.Common.UI/infinite-scroll.js` module it shares with [`InfiniteScrollSentinel`](#infinitescrollsentinel). Externals: `IJSRuntime`, `DotNetObjectReference`, `CancellationTokenSource`, MudBlazor primitives.
+- **Concept introduced, generation-guarded supersession.** `[Rubric §19, State Management]` (assesses whether concurrent updates to client state have a defined winner) and `[Rubric §23, Front-End Performance]`. The hard problem in an infinite list is not fetching, it is what happens when the user changes the filter while a fetch is in flight. Cancellation alone is not enough: the fetch delegate is consumer-supplied and may ignore its `CancellationToken` entirely, so a superseded call can still complete successfully and try to append rows to a list that was cleared. The answer here is a monotonically increasing `_generation` counter (line 62). A load snapshots it before awaiting and discards its results if the value moved while it waited (lines 181-183, 199). The token cancellation is still issued (it stops work that *does* honor it), but the generation, not the token, is authoritative (lines 196-198). The second half of the pattern is that **the page counter is computed, not committed**: `targetPage = _currentPage + 1` (line 190) and `_currentPage` only advances on a successful, non-superseded completion (line 214), so a cancelled, failed or superseded fetch leaves nothing to compensate back and no page is ever re-requested (lines 187-189).
 - **Walkthrough**:
-  - Injected services (lines 22-24) and parameters (lines 26-53). `CardTemplate` is an `[EditorRequired]` `RenderFragment<TItem>` (line 28). `FetchPageResult` (line 38) is the fetch delegate in the shape every Result-returning UI service already has, `(page, pageSize, cancellationToken)` returning `Result<(IReadOnlyList<TItem> Items, int TotalItems)>`, which is [`IEntityService<TEntityDTO, TIdentifierType>`](#ientityservicetentitydto-tidentifiertype)`.GetPagedAsync` minus the filter and sort arguments. `PageSize` defaults to 10 (line 40), `MaxRenderedItems` to 500 (line 53).
-  - State (lines 55-83): `_items`, `_totalCount`, `_currentPage`, `_generation`, the four render flags (`_isInitialLoad`, `_isLoadingMore`, `_hasMore`, `_loadError`), `_loadErrorMessage`, and the interop handles (`_sentinelRef`, `_jsModule`, `_dotNetRef`, `_observerId`, `_cts`, `_observerAttached`, `_disposed`).
-  - `OnInitializedAsync` (lines 85-91) validates the delegate then loads page 1. `ValidateFetchParameter` (lines 98-105) throws an `InvalidOperationException` when `FetchPageResult` is null, deliberately *before* the load, so a misconfigured call site fails loudly instead of rendering as a load failure with a Retry button that can never succeed (lines 93-97).
-  - `OnAfterRenderAsync` (lines 107-113) attaches the observer only once there are items to scroll past and the initial load is done (line 109). `AttachObserverAsync` (lines 115-129) and `DetachObserverAsync` (lines 131-146) import and call the same `observe`/`unobserve` module functions the sentinel component uses, tolerating `JSDisconnectedException` on both paths.
-  - `OnSentinelVisible()` (lines 148-161), the `[JSInvokable]` entry point, early-returns when already loading, exhausted or disposed (lines 151-154), then loads on the renderer's context and re-renders.
-  - `LoadNextPageAsync(bool isInitial)` (lines 163-245) is the core. It guards re-entry (lines 165-168), clears the error state (lines 171-172), snapshots the generation and publishes a fresh `CancellationTokenSource` (lines 176-178), computes `targetPage` (line 183), and awaits the delegate (line 187). After the await it checks disposal and generation (line 192), unwraps the `Result` with `TryGetValue` and routes a failure to `SetLoadFailed` (lines 197-203), and only then commits: advance the page, append the items, record the total (lines 207-209), and recompute `_hasMore` as `_items.Count < _totalCount && _items.Count < MaxRenderedItems` (line 213), which is where the DOM cap stops the loop. `OperationCanceledException` is swallowed as a normal supersession (lines 215-218); any other exception raises the generic failure, again only for the current generation (lines 219-227). The `finally` (lines 228-244) is careful about ownership: only the current generation may clear `_isLoadingMore` (a superseding reset already cleared it and may have set it again), and only the still-current `CancellationTokenSource` is disposed here (`ReferenceEquals`, line 237), because a resetter that took one over already cancelled and disposed it.
-  - `SetLoadFailed` (lines 258-267) sets the inline error state and, on the initial load only, also raises a toast, because an initial failure renders as an empty state and the toast is otherwise the only signal the user gets (lines 247-251). The message comes from `failure?.LocalizedErrorMessage(L)` (line 261); a raw exception passes `null`, because exception text is neither translatable nor safe to surface (lines 253-257), and the generic resource string is used instead.
-  - `CardCallback(TItem item)` (lines 402-405), declared between `SetLoadFailed` and `RetryAsync`, binds one row's click behavior for the markup below. When `OnCardClick` has a delegate it returns an `EventCallback.Factory.Create` wrapping the invoke; when it does not, it returns `default`, deliberately not `EventCallback.Empty`, because `EventCallback.Empty` wraps a no-op `Action` so its `HasDelegate` is still true and every card would present as interactive. `default` is the only value `ClickableCard` reads as "no handler wired", which is what lets it render a plain, non-focusable card instead of a keyboard control that does nothing (lines 395-401).
-  - `ResetAsync()` (lines 279-315) is the public API a page calls when filters change. Order matters and is commented: bump the generation *first* so any in-flight fetch is already superseded (line 283), then cancel and dispose the stale token source (lines 285-292), then clear `_isLoadingMore` explicitly (lines 294-297, because the superseded load will not clear it), then reset the list and every flag (lines 299-305), detach the observer (lines 307-308), and reload from page 1 (lines 312-314).
-  - `DisposeAsync` (lines 317-349) guards re-entry, cancels and disposes the token source, detaches the observer, disposes the JS module tolerating `JSDisconnectedException`, and disposes the `DotNetObjectReference`.
-  - The markup (`Components/MobileInfiniteScrollList.razor:1-43`) renders one of three shapes: an indeterminate progress bar on the initial load (lines 5-13), `EmptyState` when the list came back empty (lines 15-17), or a `MudStack` of `ClickableCard` wrappers around the caller's template, each keyed by item and wired to `CardCallback(item)` (lines 21-28). Below the cards it renders the sentinel `div` only while `_hasMore` (lines 30-43) and the inline error plus Retry button when a later page failed.
+  - Injected services (lines 22-23: `IJSRuntime` and the localizer, no toast service) and parameters (lines 25-52). `CardTemplate` is an `[EditorRequired]` `RenderFragment<TItem>` (line 27). `FetchPageResult` (line 37), also `[EditorRequired]`, is the fetch delegate in the shape every Result-returning UI service already has, `(page, pageSize, cancellationToken)` returning `Result<(IReadOnlyList<TItem> Items, int TotalItems)>`, which is [`IEntityService<TEntityDTO, TIdentifierType>`](#ientityservicetentitydto-tidentifiertype)`.GetPagedAsync` minus the filter and sort arguments. `PageSize` defaults to 10 (line 39), `MaxRenderedItems` to 500 (line 52).
+  - State (lines 54-87): `_items`, `_totalCount`, `_currentPage`, `_generation`, the four render flags (`_isInitialLoad`, `_isLoadingMore`, `_hasMore`, `_loadError`), `_loadErrorMessage`, the interop handles (`_sentinelRef`, `_jsModule`, `_dotNetRef`, `_observerId`, `_cts`, `_observerAttached`), `_reobservePending` (line 86) and `_disposed`.
+  - `OnInitializedAsync` (lines 89-95) validates the delegate then loads page 1. `ValidateFetchParameter` (lines 102-109) throws an `InvalidOperationException` when `FetchPageResult` is null, deliberately *before* the load, so a misconfigured call site fails loudly instead of rendering as a load failure with a Retry button that can never succeed (lines 97-101).
+  - `OnAfterRenderAsync` (lines 111-120) consumes and clears `_reobservePending` (lines 113-114), then attaches the observer only while more pages exist, there are items to scroll past and the initial load is done, either when none is attached yet or when a re-observe was queued (line 116). `AttachObserverAsync` (lines 122-136) and `DetachObserverAsync` (lines 138-153) import and call the same `observe`/`unobserve` module functions the sentinel component uses, tolerating `JSDisconnectedException` on both paths.
+  - `OnSentinelVisible()` (lines 155-168), the `[JSInvokable]` entry point, early-returns when already loading, exhausted or disposed (lines 158-161), then loads on the renderer's context and re-renders.
+  - `LoadNextPageAsync(bool isInitial)` (lines 170-254) is the core. It guards re-entry (lines 172-175), clears the error state (lines 178-179), snapshots the generation and publishes a fresh `CancellationTokenSource` (lines 183-185), computes `targetPage` (line 190), and awaits the delegate (line 194). After the await it checks disposal and generation (line 199), unwraps the `Result` with `TryGetValue` and routes a failure to `SetLoadFailed` (lines 204-210), and only then commits: advance the page, append the items, record the total (lines 214-216), recompute `_hasMore` as `_items.Count < _totalCount && _items.Count < MaxRenderedItems` (line 220), which is where the DOM cap stops the loop, and call `MarkReobserveAfterAppend(isInitial)` (line 222). `OperationCanceledException` is swallowed as a normal supersession (lines 224-227); any other exception raises the generic failure, again only for the current generation (lines 228-236). The `finally` (lines 237-253) is careful about ownership: only the current generation may clear `_isLoadingMore` (a superseding reset already cleared it and may have set it again), and only the still-current `CancellationTokenSource` is disposed here (`ReferenceEquals`, line 246), because a resetter that took one over already cancelled and disposed it.
+  - `MarkReobserveAfterAppend(bool isInitial)` (lines 260-266) sets `_reobservePending` after a non-initial append that left more pages. The IntersectionObserver reports threshold crossings only, so a sentinel still inside the viewport after the append would never fire again; re-observing creates a fresh observer, which delivers an initial entry with the current state (lines 83-85). This is the same stall [`InfiniteScrollSentinel`](#infinitescrollsentinel) guards against with its post-load re-attach.
+  - `SetLoadFailed(Result? failure)` (lines 278-282) sets the inline error state and nothing else: no toast is raised, because the inline alert is announced on its own, rendered in place of the list for a failed first page or below it for a later page (lines 268-271). The message comes from `failure?.LocalizedErrorMessage(L)` (line 281); a raw exception passes `null`, because exception text is neither translatable nor safe to surface (lines 272-276), and the generic resource string is used instead.
+  - `CardCallback(TItem item)` (lines 291-294), declared between `SetLoadFailed` and `RetryAsync`, binds one row's click behavior for the markup below. When `OnCardClick` has a delegate it returns an `EventCallback.Factory.Create` wrapping the invoke; when it does not, it returns `default`, deliberately not `EventCallback.Empty`, because `EventCallback.Empty` wraps a no-op `Action` so its `HasDelegate` is still true and every card would present as interactive. `default` is the only value `ClickableCard` reads as "no handler wired", which is what lets it render a plain, non-focusable card instead of a keyboard control that does nothing (lines 284-290).
+  - `ResetAsync()` (lines 306-342) is the public API a page calls when filters change. Order matters and is commented: bump the generation *first* so any in-flight fetch is already superseded (line 310), then cancel and dispose the stale token source (lines 312-319), then clear `_isLoadingMore` explicitly (lines 321-324, because the superseded load will not clear it), then reset the list and every flag (lines 326-332), detach the observer (lines 334-335), and reload from page 1 (lines 337-341).
+  - `DisposeAsync` (lines 344-376) guards re-entry, cancels and disposes the token source, detaches the observer, disposes the JS module tolerating `JSDisconnectedException`, and disposes the `DotNetObjectReference`.
+  - The markup (`Components/Lists/MobileInfiniteScrollList.razor:1-64`) renders one of four shapes: an indeterminate progress bar inside a `role="status"` live region on the initial load (lines 5-14), the load-failure alert when the first page itself failed (lines 15-20, because a failed first page is not an empty list), `EmptyState` when the list came back empty (lines 21-24), or a `MudStack` of `ClickableCard` wrappers around the caller's template, each keyed by item and wired to `CardCallback(item)` (lines 27-34). Below the cards it renders the sentinel `div` only while `_hasMore`, with a polite live-region spinner while a page loads (lines 36-49), and the same alert when a later page failed (lines 51-54). That alert is one `RenderFragment`, `LoadFailedAlert`, carrying `role="alert"` with the message and a Retry button (lines 58-63).
 - **Why it's built this way**: the component encapsulates the part of infinite scroll that is genuinely hard to get right (supersession, cancellation ownership, disposal, the DOM cap) and leaves the part that is app-specific (what a card looks like, where the data comes from) to parameters. The `Result`-returning delegate rather than a raw `Task<List<T>>` is what makes a *localized* failure message reachable without the component knowing any error catalogue.
 - **Where it's used**: the mobile branch of nearly every list page. ADC: `SessionList.razor:56`, `SpeakerList.razor:41`, `SponsorList.razor:41`, `RoomList.razor:41`, `EventList.razor:31`, `ActivityList.razor:41`, `QuestionList.razor:27`, `ConferenceCategoryList.razor:27`, the public views `PublicSessionListView.razor:6` and `PublicEventList.razor:23`, the check-in `AttendeeSearchPanel.razor:27`, and `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.UI/Pages/Users/UserList.razor:27`. Store: `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Pages/Order/OrderList.razor:26` and `Pages/ShoppingCart/ShoppingCartList.razor:19`. It is also exercised in the component gallery (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Gallery/Pages/ComponentsGallery.razor:57`) and covered by [`MobileInfiniteScrollListTests`](group-28-testing-infrastructure.md#per-project-test-rollup).
 - **Caveats / not-in-source**: `MaxRenderedItems` bounds the DOM but there is no virtualization, so 500 rendered cards remain in the DOM; whether that is acceptable on a given device is not determinable from source. A consumer fetch delegate that ignores its `CancellationToken` still runs to completion after a reset: the generation guard discards its results, but the request itself is not stopped.
@@ -1346,10 +1480,11 @@ lives.
 - **Concept introduced, formatting lives in the UI layer, not the value object.** `[Rubric section 3, Clean Architecture]` (assesses whether presentation concerns stay out of the inner layers: `Money` knows amounts and currencies, it does not know what a price *looks like*) and `[Rubric section 20, Design System and Theming]` (assesses consistent presentation of a recurring data shape; one formatter means every price on every page reads the same). It also shows the C# `extension(T)` preview syntax used for something other than DI: two blocks, one on `Money` and one on `IReadOnlyCollection<Money>`, sit in a single static class so both spellings (`price.ToDisplayString()` and `prices.ToDisplayRange()`) are available from one `using`.
 - **Walkthrough**:
   - The class carries a file-level `[SuppressMessage("Naming", "CA1708")]` (lines 10-13): with two or more `extension(T)` blocks in one static class, CA1708 flags the compiler-generated grouping members as case-colliding. The justification records that no user-visible identifier differs only by case, a known analyzer trap of the preview syntax.
-  - `extension(Money price)` (lines 16-21) exposes `ToDisplayString(CultureInfo? culture = null)` (lines 19-20), which delegates to `FormatGroup(price.Amount, price.Amount, price.Currency.Code, culture)`: passing the same value as both bounds is what makes the shared helper render a single price rather than a degenerate range. Left unset, `culture` resolves inside `FormatGroup` to `CultureInfo.CurrentCulture`, the request's culture as already set by its culture provider; a caller passes one explicitly only when rendering off the reader's thread (a background job, an export, a test).
-  - `extension(IReadOnlyCollection<Money> prices)` (lines 23-47) exposes `ToDisplayRange(CultureInfo? culture = null)` (lines 32-46): returns `string.Empty` for an empty collection (lines 34-37), resolves `culture ?? CultureInfo.CurrentCulture` once into `resolved` (line 78 of the diff, ahead of the grouping), then groups by `Currency.Code` with `StringComparer.Ordinal` and formats each group from its own min and max under `resolved`, joining the groups with `", "`. Grouping is the load-bearing detail: a mixed-currency collection renders one range per currency, each with its own symbol, instead of collapsing unrelated amounts under whichever currency appeared first. The inline comment notes `GroupBy` preserves first-appearance order, so the single-currency case (every collection in practice today) is unchanged. Resolving the culture once outside the `Select` and passing it into every `FormatGroup` call is what keeps a one-element range and the single price it holds reading identically: the two paths must not drift.
-  - `Symbol(string code)` (lines 54-59), a private switch mapping `"USD"` to `$` and `"EUR"` to the escaped euro sign (line 57, escaped to keep the source file ASCII-only). Every other code, **including the empty code of the `Currency.None` sentinel behind `Money.Zero()`** (`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Financial/Currency.cs:23`, `Money.cs:142`), renders with no symbol rather than falsely claiming dollars.
-  - `FormatGroup(decimal min, decimal max, string code, CultureInfo? culture)` (lines 65-73), the single formatting path: resolves `culture ?? CultureInfo.CurrentCulture`, then formats with `"N2"` under that resolved culture so an English reader gets `$1,234.56 USD` and a Spanish reader gets `$1.234,56 USD`, a single price when `min == max` and a hyphen-separated range otherwise, and the trailing code appended only when it is non-empty. Only the digit grouping and decimal separator follow the culture; the currency symbol and the trailing ISO code always come from the money itself, so a USD price stays USD in every locale.
+  - `extension(Money price)` (lines 16-31) exposes `ToDisplayString(CultureInfo? culture = null)` (lines 29-30), which delegates to `FormatGroup(price.Amount, price.Amount, price.Currency.Code, culture)`: passing the same value as both bounds is what makes the shared helper render a single price rather than a degenerate range. Left unset, `culture` resolves inside `FormatGroup` to `CultureInfo.CurrentCulture`, the request's culture as already set by its culture provider; a caller passes one explicitly only when rendering off the reader's thread (a background job, an export, a test).
+  - `extension(IReadOnlyCollection<Money> prices)` (lines 33-64) exposes `ToDisplayRange(CultureInfo? culture = null)` (lines 47-63): returns `string.Empty` for an empty collection (lines 49-52), resolves `culture ?? CultureInfo.CurrentCulture` once into `resolved` (line 54, ahead of the grouping), then groups by `Currency.Code` with `StringComparer.Ordinal` and formats each group from its own min and max under `resolved` (lines 58-60), joining the groups with `", "` (line 62). Grouping is the load-bearing detail: a mixed-currency collection renders one range per currency, each with its own symbol, instead of collapsing unrelated amounts under whichever currency appeared first. The inline comment notes `GroupBy` preserves first-appearance order, so the single-currency case (every collection in practice today) is unchanged. Resolving the culture once outside the `Select` and passing it into every `FormatGroup` call is what keeps a one-element range and the single price it holds reading identically: the two paths must not drift.
+  - `Symbol(string code)` (lines 71-76), a private switch mapping `"USD"` to `$` and `"EUR"` to the escaped euro sign (line 74, escaped to keep the source file ASCII-only). Every other code, **including the empty code of the `Currency.None` sentinel behind `Money.Zero()`** (`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Financial/Currency.cs:23`, `Money.cs:142`), renders with no symbol rather than falsely claiming dollars.
+  - `FormatGroup(decimal min, decimal max, string code, CultureInfo? culture)` (lines 88-97), the single formatting path: resolves `culture ?? CultureInfo.CurrentCulture` (line 90), then renders a single price when `min == max` and a hyphen-separated range otherwise, each bound through `FormatAmount` (lines 92-94), and appends the trailing code only when it is non-empty (line 96). Only the digit grouping and decimal separator follow the culture; the currency symbol and the trailing ISO code always come from the money itself, so a USD price stays USD in every locale.
+  - `FormatAmount(decimal amount, string symbol, CultureInfo culture)` (lines 103-106) formats one amount with `"N2"` under the resolved culture, so an English reader gets `$1,234.56` and a Spanish reader gets `$1.234,56`. A negative amount puts the sign before the symbol (`-$5.00`, not `$-5.00`) by formatting `Math.Abs(amount)` behind a leading `-`, which keeps the culture's digit grouping intact (lines 99-102).
 - **Why it's built this way**: presentational formatting belongs above the domain, so `Money` stays display-agnostic and the same value can be rendered differently by a different head. The move from a hardcoded `CultureInfo.InvariantCulture` to a caller-optional, request-defaulted `CultureInfo.CurrentCulture` lets the number format follow the reader's culture (a Spanish reader's thousands and decimal separators) while the currency symbol and ISO code stay tied to the money's own currency, so the price never implies a currency the data does not carry. The optional parameter keeps every existing call site source-compatible while opening a path for a background job, an export, or a test to format under an explicit culture instead of the ambient one.
 - **Where it's used**: Store's Sales and Catalog UIs. `ToDisplayString()` renders order totals and line amounts (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Pages/Order/OrderLinesPanel.razor:34`, `:39`, `:51`; `Pages/Order/OrderSummaryPanel.razor:54`; `Pages/Order/OrderList.razor:36`, `:102`) and the cart's order-created snackbar (`Pages/ShoppingCart/ShoppingCartDetail.razor.cs:354`); `ToDisplayRange()` renders the price span across a product's variants in catalog browse (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.UI/Pages/Catalog/CatalogBrowse.CardFormatting.razor.cs:38`, with the single-price helper alongside it at `:41`) and on the catalog product detail page (`Pages/Catalog/CatalogProductDetail.razor.cs:266`, `:269`). None of these call sites pass a `culture` argument, so all of them format under the ambient `CultureInfo.CurrentCulture`. Covered by [`MoneyExtensionsTests`](group-28-testing-infrastructure.md#per-project-test-rollup).
 - **Caveats / not-in-source**: only `USD` and `EUR` have symbols; adding a currency means editing `Symbol`, there is no configuration-driven table. The `"N2"` format assumes a two-minor-unit currency, so a zero-decimal currency (JPY) would render two spurious decimals; no code guards that today.
@@ -1601,74 +1736,74 @@ lives.
 
 ### ForgotPasswordModel
 
-> MMCA.Common.UI · `MMCA.Common.UI.Pages.Auth` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/ForgotPasswordModel.cs:9` · Level 0 · class (sealed)
+> MMCA.Common.UI · `MMCA.Common.UI.Pages.Auth` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/ForgotPasswordModel.cs:13` · Level 0 · class (sealed)
 
 - **What it is**: the `EditForm` backing model for the Forgot Password page: one `Email` string carrying DataAnnotations for shape validation. Nothing else is collected, because nothing else is needed to start a reset.
 - **Depends on**: `System.ComponentModel.DataAnnotations` (BCL): `[Required]`, `[EmailAddress]`. Nothing first-party.
-- **Concept introduced, validation deliberately capped at "shape" because of an anti-enumeration contract.** `[Rubric §24, Forms, Validation & UX Safety]` assesses whether a form gives a clear per-field verdict before submit; `[Rubric §26, Front-End Security]` assesses whether the front end avoids leaking information the back end withholds. Every other form in this group validates as much as it can client-side. This one stops at "is this a syntactically valid address", because the interesting question, does an account exist for it, is one the server refuses to answer: [ADR-091](https://ivanball.github.io/docs/adr/091-cache-backed-password-reset.html) Decision 3 has the reset request succeed on every path (malformed address, no account, throttled, failed send), so a distinguishable client-side outcome would reintroduce exactly the account-enumeration oracle the endpoint exists to avoid. The doc comment (`ForgotPasswordModel.cs:5-8`) states that trade-off directly.
-- **Walkthrough**: one `get; set;` property. `Email` (line 13) carries `[Required(ErrorMessage = "Email is required")]` and `[EmailAddress(ErrorMessage = "Enter a valid email address")]` (lines 11-12) and defaults to `string.Empty`.
+- **Concept introduced, validation deliberately capped at "shape" because of an anti-enumeration contract.** `[Rubric §24, Forms, Validation & UX Safety]` assesses whether a form gives a clear per-field verdict before submit; `[Rubric §26, Front-End Security]` assesses whether the front end avoids leaking information the back end withholds. Every other form in this group validates as much as it can client-side. This one stops at "is this a syntactically valid address", because the interesting question, does an account exist for it, is one the server refuses to answer: [ADR-091](https://ivanball.github.io/docs/adr/091-cache-backed-password-reset.html) Decision 3 has the reset request succeed on every path (malformed address, no account, throttled, failed send), so a distinguishable client-side outcome would reintroduce exactly the account-enumeration oracle the endpoint exists to avoid. The doc comment (`ForgotPasswordModel.cs:5-12`) states that trade-off directly.
+- **Walkthrough**: one `get; set;` property. `Email` (line 17) carries `[Required(ErrorMessage = "Auth.Field.Email.Required")]` and `[EmailAddress(ErrorMessage = "Auth.Field.Email.Invalid")]` (lines 15-16) and defaults to `string.Empty`. Each `ErrorMessage` is a resource key, not display text: the doc comment (lines 8-11) names the page's [`LocalizedDataAnnotationsValidator`](#localizeddataannotationsvalidator) as the component that resolves it ([ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)).
 - **Why it's built this way**: `sealed` and mutable (`set`, not `init`) because `EditForm` two-way-binds the input to the model; keeping the model to one field is what makes the page's anti-enumeration behavior easy to reason about, since there is no second field whose validation could betray a lookup.
-- **Where it's used**: instantiated as `_model` by `ForgotPassword.razor` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/ForgotPassword.razor:66`) and bound by its `<EditForm Model="_model" OnValidSubmit="HandleRequestAsync">` plus `<DataAnnotationsValidator />` (lines 34-35), with the field wired `For="@(() => _model.Email)"` (line 37) so the message attaches to that input. On valid submit `HandleRequestAsync` (lines 75-92) calls [`IAuthUIService`](#iauthuiservice)`.RequestPasswordResetAsync(_model.Email)` (line 81, contract at `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/IAuthUIService.cs:57`) inside a `try` whose `catch` is empty on purpose (lines 83-86) and whose `finally` sets `_isSubmitted = true` unconditionally (line 90), so the confirmation renders for every submitted address whether the call succeeded, failed, or threw.
-- **Caveats / not-in-source**: `RequestPasswordResetAsync` returns a `Result` and the call site never inspects it (line 81); the comment block above the method (lines 70-74) records that this is the anti-enumeration rule rather than a dropped result. The gallery E2E suite pins the behavior by asserting the confirmation appears with no backend at all (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/Auth/ForgotPasswordPageE2ETests.cs:28`), with WCAG 2.1 AA scans on both the form and the confirmation state (`:41`, `:50`).
+- **Where it's used**: instantiated as `_model` by `ForgotPassword.razor` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/ForgotPassword.razor:71`) and bound by its `<EditForm Model="_model" OnValidSubmit="HandleRequestAsync">` plus `<LocalizedDataAnnotationsValidator />` (lines 38-39), with the field wired `For="@(() => _model.Email)"` (line 41) so the message attaches to that input. On valid submit `HandleRequestAsync` (lines 80-97) calls [`IAuthUIService`](#iauthuiservice)`.RequestPasswordResetAsync(_model.Email)` (line 86, contract at `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/IAuthUIService.cs:57`) inside a `try` whose `catch` is empty on purpose (lines 88-91) and whose `finally` sets `_isSubmitted = true` unconditionally (line 95), so the confirmation renders for every submitted address whether the call succeeded, failed, or threw.
+- **Caveats / not-in-source**: `RequestPasswordResetAsync` returns a `Result` and the call site never inspects it (line 86); the comment block above the method (lines 75-79) records that this is the anti-enumeration rule rather than a dropped result. The gallery E2E suite pins the behavior by asserting the confirmation appears with no backend at all (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/Auth/ForgotPasswordPageE2ETests.cs:28`), with WCAG 2.1 AA scans on both the form and the confirmation state (`:41`, `:50`).
 
 ### LoginModel
 
-> MMCA.Common.UI · `MMCA.Common.UI.Pages.Auth` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/LoginModel.cs:9` · Level 0 · class (sealed)
+> MMCA.Common.UI · `MMCA.Common.UI.Pages.Auth` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/LoginModel.cs:13` · Level 0 · class (sealed)
 
 - **What it is**: the `EditForm` backing model for the Login page: two string properties (`Email`, `Password`) carrying DataAnnotations for field-level validation.
-- **Depends on**: `System.ComponentModel.DataAnnotations` (BCL): `[Required]`, `[EmailAddress]`. Nothing first-party.
-- **Concept introduced, the form-backing model plus `DataAnnotationsValidator`.** `[Rubric §24, Forms, Validation & UX Safety]` assesses whether forms validate at the field level with clear inline messages before submit; `[Rubric §26, Front-End Security]` assesses that client-side checks are a UX convenience, not the trust boundary. A Blazor `EditForm` binds to a plain model, a `<DataAnnotationsValidator />` reads the attributes and surfaces a per-field message as the user types, and the submit handler only fires on a valid form. The doc comment (`LoginModel.cs:5-8`) is explicit that the server remains the authority on whether the credentials are actually valid: the form only prevents an obviously malformed request.
+- **Depends on**: `System.ComponentModel.DataAnnotations` (BCL): `[Required]`, `[EmailAddress]`. Nothing first-party in the type itself; its message keys are resolved by [`LocalizedDataAnnotationsValidator`](#localizeddataannotationsvalidator) on the page.
+- **Concept introduced, the form-backing model plus a localizing DataAnnotations validator.** `[Rubric §24, Forms, Validation & UX Safety]` assesses whether forms validate at the field level with clear inline messages before submit; `[Rubric §26, Front-End Security]` assesses that client-side checks are a UX convenience, not the trust boundary; `[Rubric §27, Internationalization]` assesses whether validation messages translate. A Blazor `EditForm` binds to a plain model, a `<LocalizedDataAnnotationsValidator />` reads the attributes and surfaces a per-field message as the user types, and the submit handler only fires on a valid form. Each `ErrorMessage` is a resource key that the validator resolves (doc comment, `LoginModel.cs:8-11`, [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)), so the model carries no English text. The doc comment (`LoginModel.cs:5-12`) is also explicit that the server remains the authority on whether the credentials are actually valid: the form only prevents an obviously malformed request.
 - **Walkthrough**: two `get; set;` properties.
-  - `Email` (line 13), `[Required(ErrorMessage = "Email is required")]` plus `[EmailAddress(ErrorMessage = "Enter a valid email address")]` (lines 11-12), defaulting to `string.Empty`.
-  - `Password` (line 16), `[Required(ErrorMessage = "Password is required")]` (line 15). There is deliberately no complexity rule here: login validates an *existing* credential, not a new one, and rejecting a legacy password client-side would lock a user out of their own account.
-- **Why it's built this way**: `sealed` and mutable because `EditForm` two-way-binds each input; the messages are authored inline so each field shows exactly one verdict.
-- **Where it's used**: instantiated as `_model` and bound by `Login.razor` (`<EditForm Model="_model" OnValidSubmit="HandleLoginAsync">` plus `<DataAnnotationsValidator />`, `MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/Login.razor:33-34`, field at line 159, inputs bound `For="@(() => _model.Email)"` and `For="@(() => _model.Password)"` at lines 40 and 46 so each `MudTextField` shows its own message). On valid submit the page hands the credentials to [`IAuthUIService`](#iauthuiservice) as a [`LoginRequest`](group-08-auth.md#loginrequest) (`Login.razor:204`). Sibling of [`RegisterModel`](#registermodel); its shape rules are unit-tested alongside the other auth models in `MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Pages/Auth/AuthModelValidationTests.cs:11`.
+  - `Email` (line 17), `[Required(ErrorMessage = "Auth.Field.Email.Required")]` plus `[EmailAddress(ErrorMessage = "Auth.Field.Email.Invalid")]` (lines 15-16), defaulting to `string.Empty`.
+  - `Password` (line 20), `[Required(ErrorMessage = "Auth.Field.Password.Required")]` (line 19). There is deliberately no complexity rule here: login validates an *existing* credential, not a new one, and rejecting a legacy password client-side would lock a user out of their own account.
+- **Why it's built this way**: `sealed` and mutable because `EditForm` two-way-binds each input; each attribute names one resource key so each field shows exactly one verdict, in the reader's language.
+- **Where it's used**: instantiated as `_model` and bound by `Login.razor` (`<EditForm Model="_model" OnValidSubmit="HandleLoginAsync">` plus `<LocalizedDataAnnotationsValidator />`, `MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/Login.razor:39-40`, field at line 172, inputs bound `For="@(() => _model.Email)"` and `For="@(() => _model.Password)"` at lines 48 and 54 so each `MudTextField` shows its own message). On valid submit the page hands the credentials to [`IAuthUIService`](#iauthuiservice) as a [`LoginRequest`](group-08-auth.md#loginrequest) (`Login.razor:241`). Sibling of [`RegisterModel`](#registermodel); its shape rules are unit-tested alongside the other auth models in `MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Pages/Auth/AuthModelValidationTests.cs:11`.
 
 ### PasswordComplexityAttribute
 
-> MMCA.Common.UI · `MMCA.Common.UI.Pages.Auth` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/PasswordComplexityAttribute.cs:12` · Level 0 · class (sealed attribute)
+> MMCA.Common.UI · `MMCA.Common.UI.Pages.Auth` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/PasswordComplexityAttribute.cs:15` · Level 1 · class (sealed attribute)
 
 - **What it is**: a custom `ValidationAttribute` that enforces the framework's password-strength rule on any form that sets a new password: at least 8 characters including an uppercase, a lowercase, a digit, and a special (non-alphanumeric) character.
-- **Depends on**: `System.ComponentModel.DataAnnotations` (`ValidationAttribute`, `ValidationResult`, `ValidationContext`) and `char.IsUpper`/`IsLower`/`IsDigit`/`IsLetterOrDigit` (BCL). Nothing first-party.
-- **Concept introduced, extending DataAnnotations with a domain rule.** `[Rubric §24, Forms, Validation & UX Safety]` assesses client-side validation parity with the server. Beyond the built-in `[Required]` and `[EmailAddress]`, a bespoke rule subclasses `ValidationAttribute` and overrides `IsValid`, which plugs it straight into the same `DataAnnotationsValidator` that drives the rest of the form. The doc comment (lines 5-9) states the intent: mirror the server's rule so the `EditForm` gives the same verdict the API would. What happens to an accepted password server-side (PBKDF2-HMAC-SHA512 hashing with legacy-hash compatibility) is [ADR-032](https://ivanball.github.io/docs/adr/032-password-hashing.html); this attribute is only the client-side gate, never the security boundary.
+- **Depends on**: `System.ComponentModel.DataAnnotations` (`ValidationAttribute`, `ValidationResult`, `ValidationContext`, BCL) and the first-party [`PasswordComplexity`](group-08-auth.md#passwordcomplexity) rule in `MMCA.Common.Shared.Auth` (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/PasswordComplexity.cs:18`).
+- **Concept introduced, extending DataAnnotations with a domain rule defined once for both sides.** `[Rubric §24, Forms, Validation & UX Safety]` assesses client-side validation parity with the server. Beyond the built-in `[Required]` and `[EmailAddress]`, a bespoke rule subclasses `ValidationAttribute` and overrides `IsValid`, which plugs it straight into the same validator that drives the rest of the form. Parity is structural rather than copied: the attribute does not encode the character rules itself, it calls `PasswordComplexity.Evaluate` (`PasswordComplexity.cs:52`), the single Unicode-aware definition the server's `StrongPasswordRules` also uses (doc comment, lines 6-13; `PasswordComplexity.cs:5-17`). That definition counts any `\p{Lu}` as uppercase, any `\p{Ll}` as lowercase, any `\p{Nd}` as a digit, and anything that is neither a letter nor a decimal digit as special (`PasswordComplexity.cs:27-43`), so an accented or CJK letter is a letter, never the special character. What happens to an accepted password server-side (PBKDF2-HMAC-SHA512 hashing with legacy-hash compatibility) is [ADR-032](https://ivanball.github.io/docs/adr/032-password-hashing.html); this attribute is only the client-side gate, never the security boundary.
 - **Walkthrough**:
-  - `[AttributeUsage(AttributeTargets.Property, AllowMultiple = false)]` (line 11), so it is applied as `[PasswordComplexity]` on a single property.
-  - The constructor (lines 14-17) seeds the base `ErrorMessage` with the full human-readable rule, so a form that does not override the message still shows something actionable.
-  - `IsValid(object?, ValidationContext)` (lines 19-39): returns `ValidationResult.Success` for a non-string or a null/empty input (lines 21-24), deliberately deferring the "missing" message to `RequiredAttribute` so the field shows one message rather than two. Otherwise it evaluates five predicates in one boolean (`Length >= 8`, `Any(char.IsUpper)`, `Any(char.IsLower)`, `Any(char.IsDigit)`, `Any(c => !char.IsLetterOrDigit(c))`, lines 26-30) and, on failure, returns a `ValidationResult` scoped to the member name (lines 37-38) so the message attaches to the right input.
-- **Why it's built this way**: because the rule is an attribute rather than page code, a second form that sets a password gets identical behavior by adding one line, which is exactly how the reset vertical picked it up. Delegating emptiness to `[Required]` is what keeps one field from stacking two errors.
-- **Where it's used**: applied to `RegisterModel.Password` ([`RegisterModel`](#registermodel), `RegisterModel.cs:23`) and to `ResetPasswordModel.NewPassword` ([`ResetPasswordModel`](#resetpasswordmodel), `ResetPasswordModel.cs:21`); evaluated by the `<DataAnnotationsValidator />` in `Register.razor` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/Register.razor:28`) and `ResetPassword.razor` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/ResetPassword.razor:36`).
-- **Caveats / not-in-source**: the doc comment (line 6) still describes the attribute as the rule "for the Register form" although the reset form carries it too; the code is the wider truth. The comment also claims parity with the server's rule, but this file encodes only the client check, so whether the server rule is byte-identical is not verifiable from this source.
+  - `[AttributeUsage(AttributeTargets.Property, AllowMultiple = false)]` (line 14), so it is applied as `[PasswordComplexity]` on a single property.
+  - The constructor (lines 17-20) seeds the base `ErrorMessage` with the full English rule, so a usage that does not override the message still shows something actionable. The framework's own forms override it with the resource key `Auth.Field.Password.Complexity` (see [`RegisterModel`](#registermodel)).
+  - `IsValid(object?, ValidationContext)` (lines 22-33): one guard (line 24) returns `ValidationResult.Success` for a non-string, a null/empty input, or a password for which `PasswordComplexity.Evaluate` is true. Deferring the empty case to `RequiredAttribute` keeps the field to one message rather than two. On failure it returns a `ValidationResult` scoped to the member name (lines 31-32) so the message attaches to the right input; the member lookup is null-conditional (`validationContext?.MemberName`, line 31) because the base class routes the context-free `IsValid(object)` overload here with no context (comment, lines 29-30), and there is then no member to attach the error to.
+- **Why it's built this way**: because the rule is an attribute rather than page code, a second form that sets a password gets identical behavior by adding one line, which is exactly how the reset vertical picked it up. Delegating the predicate to a type in the Shared project, the one project both client and server may reference, is what makes the two verdicts identical by construction rather than by review. Delegating emptiness to `[Required]` keeps one field from stacking two errors. The length cap is deliberately not part of this attribute: `PasswordComplexity.MaximumLength` is a separate rule with its own message on both sides (`PasswordComplexity.cs:24`, `:45-49`).
+- **Where it's used**: applied to `RegisterModel.Password` ([`RegisterModel`](#registermodel), `RegisterModel.cs:28`) and to `ResetPasswordModel.NewPassword` ([`ResetPasswordModel`](#resetpasswordmodel), `ResetPasswordModel.cs:26`); evaluated by the [`LocalizedDataAnnotationsValidator`](#localizeddataannotationsvalidator) in `Register.razor` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/Register.razor:33`) and `ResetPassword.razor` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/ResetPassword.razor:43`). Unit-tested in `MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Pages/Auth/PasswordComplexityAttributeTests.cs:12`; its agreement with the server rule is pinned by the architecture test `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Ui/PasswordRuleParityTests.cs:21`.
+- **Caveats / not-in-source**: the doc comment (line 7) still describes the attribute as the rule "for the Register form" although the reset form carries it too; the code is the wider truth.
 
 ### RegisterModel
 
-> MMCA.Common.UI · `MMCA.Common.UI.Pages.Auth` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/RegisterModel.cs:9` · Level 0 · class (sealed)
+> MMCA.Common.UI · `MMCA.Common.UI.Pages.Auth` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/RegisterModel.cs:14` · Level 1 · class (sealed)
 
 - **What it is**: the `EditForm` backing model for the Register page: name, email, and password fields with DataAnnotations, plus six optional address fields.
-- **Depends on**: `System.ComponentModel.DataAnnotations` (`[Required]`, `[StringLength]`, `[EmailAddress]`, `[Compare]`) and the sibling first-party [`PasswordComplexityAttribute`](#passwordcomplexityattribute).
-- **Concept reinforced, multi-field form validation with a cross-field compare.** `[Rubric §24, Forms, Validation & UX Safety]`. This builds on the [`LoginModel`](#loginmodel) shape with three richer rules: `[PasswordComplexity]` on the password (paired with a `[StringLength(128)]` cap), `[Compare(nameof(Password))]` on the confirmation (a cross-field equality check the validator resolves by property name), and an address block left attribute-free because it is optional. The doc comment (lines 5-8) notes the annotations mirror the server's rules so client and server agree.
+- **Depends on**: `System.ComponentModel.DataAnnotations` (`[Required]`, `[StringLength]`, `[EmailAddress]`, `[Compare]`), the sibling first-party [`PasswordComplexityAttribute`](#passwordcomplexityattribute), and [`PasswordComplexity`](group-08-auth.md#passwordcomplexity) for the shared length cap.
+- **Concept reinforced, multi-field form validation with a cross-field compare.** `[Rubric §24, Forms, Validation & UX Safety]`. This builds on the [`LoginModel`](#loginmodel) shape with three richer rules: `[PasswordComplexity]` on the password (paired with a `[StringLength(PasswordComplexity.MaximumLength)]` cap, 128 at `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/PasswordComplexity.cs:24`, the constant the server rule shares), `[Compare(nameof(Password))]` on the confirmation (a cross-field equality check the validator resolves by property name), and an address block left attribute-free because it is optional. The doc comment (lines 6-13) notes the annotations mirror the server's rules so client and server agree, and that every `ErrorMessage` is a resource key resolved by the page's [`LocalizedDataAnnotationsValidator`](#localizeddataannotationsvalidator) ([ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)).
 - **Walkthrough**:
-  - `FirstName` / `LastName` (lines 12, 15), each `[Required]` with its own message (lines 11, 14).
-  - `Email` (line 19), `[Required]` plus `[EmailAddress]` (lines 17-18).
-  - `Password` (line 24), `[Required]` plus `[StringLength(128, ErrorMessage = "Password cannot be longer than 128 characters")]` plus `[PasswordComplexity]` (lines 21-23).
-  - `ConfirmPassword` (line 28), `[Required]` plus `[Compare(nameof(Password), ErrorMessage = "Passwords do not match")]` (lines 26-27).
-  - `AddressLine1` plus nullable `AddressLine2`/`City`/`State`/`ZipCode`/`Country` (lines 31-36), with no validation attributes; the inline comment (line 30) states that an empty Line 1 means "no address supplied".
+  - `FirstName` / `LastName` (lines 17, 20), each `[Required]` with its own key, `Auth.Field.FirstName.Required` / `Auth.Field.LastName.Required` (lines 16, 19).
+  - `Email` (line 24), `[Required]` plus `[EmailAddress]` (lines 22-23), keyed `Auth.Field.Email.Required` / `Auth.Field.Email.Invalid`.
+  - `Password` (line 29), `[Required(ErrorMessage = "Auth.Field.Password.Required")]` plus `[StringLength(PasswordComplexity.MaximumLength, ErrorMessage = "Auth.Field.Password.MaxLength")]` plus `[PasswordComplexity(ErrorMessage = "Auth.Field.Password.Complexity")]` (lines 26-28).
+  - `ConfirmPassword` (line 33), `[Required(ErrorMessage = "Auth.Field.ConfirmPassword.Required")]` plus `[Compare(nameof(Password), ErrorMessage = "Auth.Field.ConfirmPassword.Mismatch")]` (lines 31-32).
+  - `AddressLine1` plus nullable `AddressLine2`/`City`/`State`/`ZipCode`/`Country` (lines 36-41), with no validation attributes; the inline comment (line 35) states that an empty Line 1 means "no address supplied".
 - **Why it's built this way**: the address fields stay attribute-free so a user can register without supplying one; the model is a flat view-model that the page projects onto the wire DTO at submit time rather than reusing a domain type directly, which is what lets the optional-address rule live in page code instead of leaking into the contract.
-- **Where it's used**: instantiated as `_model` and bound by `Register.razor` (`<EditForm Model="_model" OnValidSubmit="HandleRegisterAsync">` plus `<DataAnnotationsValidator />`, `MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/Register.razor:27-28`, field at line 123). On valid submit the page projects it into a [`RegisterRequest`](group-08-auth.md#registerrequest) (`Register.razor:162`), folding the address fields into an [`Address`](group-02-domain-building-blocks.md#address) through `BuildAddressResult()`, which returns `null` when all six are blank (lines 132-138) and otherwise calls `Address.Create(...)` (line 140). Its password block is mirrored by [`ResetPasswordModel`](#resetpasswordmodel); the accepted password is hashed server-side per [ADR-032](https://ivanball.github.io/docs/adr/032-password-hashing.html). Rendering and validation behavior are covered by `MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Pages/Auth/RegisterFormTests.cs` and the gallery E2E suite (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/RegisterPageE2ETests.cs`).
+- **Where it's used**: instantiated as `_model` and bound by `Register.razor` (`<EditForm Model="_model" OnValidSubmit="HandleRegisterAsync">` plus `<LocalizedDataAnnotationsValidator />`, `MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/Register.razor:32-33`, field at line 148). On valid submit the page projects it into a [`RegisterRequest`](group-08-auth.md#registerrequest) (`Register.razor:189`), folding the address fields into an [`Address`](group-02-domain-building-blocks.md#address) through `BuildAddressResult()` (line 156), which returns `null` when all six are blank (lines 158-164) and otherwise calls `Address.Create(...)` (line 166). Its password block is mirrored by [`ResetPasswordModel`](#resetpasswordmodel); the accepted password is hashed server-side per [ADR-032](https://ivanball.github.io/docs/adr/032-password-hashing.html). Shape rules are unit-tested in `MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Pages/Auth/AuthModelValidationTests.cs:11`; rendering and validation behavior are covered by `MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Pages/Auth/RegisterFormTests.cs:22` and the gallery E2E suite (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/Auth/RegisterPageE2ETests.cs:9`).
 
 ### ResetPasswordModel
 
-> MMCA.Common.UI · `MMCA.Common.UI.Pages.Auth` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/ResetPasswordModel.cs:10` · Level 0 · class (sealed)
+> MMCA.Common.UI · `MMCA.Common.UI.Pages.Auth` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/ResetPasswordModel.cs:15` · Level 1 · class (sealed)
 
 - **What it is**: the `EditForm` backing model for the Reset Password page: the address and the emailed reset token that identify the request, plus the new password and its confirmation.
-- **Depends on**: `System.ComponentModel.DataAnnotations` (`[Required]`, `[StringLength]`, `[EmailAddress]`, `[Compare]`) and the sibling first-party [`PasswordComplexityAttribute`](#passwordcomplexityattribute).
-- **Concept reinforced, the same password block as registration, on a credential-carrying form.** `[Rubric §24, Forms, Validation & UX Safety]` and `[Rubric §26, Front-End Security]`. The password half is exactly the shape [`RegisterModel`](#registermodel) introduced, which is the payoff of expressing the complexity rule as an attribute rather than page code. What is new is the top half: `Email` and `Token` are not values the user chooses, they are the credential the server minted and mailed. The client validates only that both are present and that the address is well formed; every substantive rejection (unknown, expired, mismatched, or attempt-capped token) collapses into one server-side error by design ([ADR-091](https://ivanball.github.io/docs/adr/091-cache-backed-password-reset.html) Decision 3), so the form must not try to pre-judge a token it cannot verify.
+- **Depends on**: `System.ComponentModel.DataAnnotations` (`[Required]`, `[StringLength]`, `[EmailAddress]`, `[Compare]`), the sibling first-party [`PasswordComplexityAttribute`](#passwordcomplexityattribute), and [`PasswordComplexity`](group-08-auth.md#passwordcomplexity) for the shared length cap.
+- **Concept reinforced, the same password block as registration, on a credential-carrying form.** `[Rubric §24, Forms, Validation & UX Safety]` and `[Rubric §26, Front-End Security]`. The password half is exactly the shape [`RegisterModel`](#registermodel) introduced, which is the payoff of expressing the complexity rule as an attribute rather than page code. What is new is the top half: `Email` and `Token` are not values the user chooses, they are the credential the server minted and mailed. The client validates only that both are present and that the address is well formed; every substantive rejection (unknown, expired, mismatched, or attempt-capped token) collapses into one server-side error by design ([ADR-091](https://ivanball.github.io/docs/adr/091-cache-backed-password-reset.html) Decision 3), so the form must not try to pre-judge a token it cannot verify. As on the sibling models, each `ErrorMessage` is a resource key resolved by the page's [`LocalizedDataAnnotationsValidator`](#localizeddataannotationsvalidator) (doc comment, lines 10-13, [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)).
 - **Walkthrough**: four `get; set;` properties, each defaulting to `string.Empty`.
-  - `Email` (line 14), `[Required(ErrorMessage = "Email is required")]` plus `[EmailAddress(ErrorMessage = "Enter a valid email address")]` (lines 12-13).
-  - `Token` (line 17), `[Required(ErrorMessage = "Reset token is required")]` (line 16) and nothing more: length, encoding, and freshness are all properties of the server-side cache record.
-  - `NewPassword` (line 22), `[Required]` plus `[StringLength(128, ErrorMessage = "Password cannot be longer than 128 characters")]` plus `[PasswordComplexity]` (lines 19-21).
-  - `ConfirmPassword` (line 26), `[Required]` plus `[Compare(nameof(NewPassword), ErrorMessage = "Passwords do not match")]` (lines 24-25), the cross-field check retargeted at `NewPassword`.
-- **Why it's built this way**: the doc comment (lines 5-9) records the load-bearing choice, that `Email` and `Token` arrive prefilled from the reset link but stay **editable**, so a user who only has the raw token text from the email (the situation on a native head with no working deep link) can paste it by hand. Making those two ordinary bound fields rather than read-only parameters buys that fallback for free.
-- **Where it's used**: instantiated as `_model` by `ResetPassword.razor` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/ResetPassword.razor:95`) and bound by its `<EditForm Model="_model" OnValidSubmit="HandleResetAsync">` plus `<DataAnnotationsValidator />` (lines 35-36). The page declares `[SupplyParameterFromQuery]` `Email` and `Token` properties (lines 89-93) and copies them into the model in `OnParametersSet` (lines 102-113), filling a field **only when it is still blank** (lines 104, 109) so a value the user corrected by hand is not overwritten when parameters are set again. `HandleResetAsync` (lines 115-140) calls [`IAuthUIService`](#iauthuiservice)`.ResetPasswordAsync(_model.Email, _model.Token, _model.NewPassword)` (line 122, contract at `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/IAuthUIService.cs:64`), flips `_isCompleted` on success, and on failure renders `result.LocalizedErrorMessage(L)` or the generic `Auth.Reset.GenericError` string (line 129). The prefill path is pinned by a gallery E2E test (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/Auth/ResetPasswordPageE2ETests.cs:31`), with a WCAG 2.1 AA scan alongside it (`:43`).
+  - `Email` (line 19), `[Required(ErrorMessage = "Auth.Field.Email.Required")]` plus `[EmailAddress(ErrorMessage = "Auth.Field.Email.Invalid")]` (lines 17-18).
+  - `Token` (line 22), `[Required(ErrorMessage = "Auth.Field.Token.Required")]` (line 21) and nothing more: length, encoding, and freshness are all properties of the server-side cache record.
+  - `NewPassword` (line 27), `[Required(ErrorMessage = "Auth.Field.Password.Required")]` plus `[StringLength(PasswordComplexity.MaximumLength, ErrorMessage = "Auth.Field.Password.MaxLength")]` plus `[PasswordComplexity(ErrorMessage = "Auth.Field.Password.Complexity")]` (lines 24-26).
+  - `ConfirmPassword` (line 31), `[Required(ErrorMessage = "Auth.Field.ConfirmPassword.Required")]` plus `[Compare(nameof(NewPassword), ErrorMessage = "Auth.Field.ConfirmPassword.Mismatch")]` (lines 29-30), the cross-field check retargeted at `NewPassword`.
+- **Why it's built this way**: the doc comment (lines 7-9) records the load-bearing choice, that `Email` and `Token` arrive prefilled from the reset link but stay **editable**, so a user who only has the raw token text from the email (the situation on a native head with no working deep link) can paste it by hand. Making those two ordinary bound fields rather than read-only parameters buys that fallback for free.
+- **Where it's used**: instantiated as `_model` by `ResetPassword.razor` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/ResetPassword.razor:105`) and bound by its `<EditForm Model="_model" OnValidSubmit="HandleResetAsync">` plus `<LocalizedDataAnnotationsValidator />` (lines 42-43). The model is prefilled from two sources, both of which fill a field **only when it is still blank** so a value the user corrected by hand is not overwritten. First, the page declares `[SupplyParameterFromQuery]` `Email` and `Token` properties (lines 99-103) and copies them in `OnParametersSet` (lines 112-123, blank checks at 114 and 119). Second, `OnAfterRenderAsync` (lines 130-177) reads the URL fragment once on first render through the `locationHashTake` JS call (line 143), which also scrubs it from the address bar, and fills `email` / `token` from it (lines 161-170); the comment at lines 125-129 explains why: a fragment is never sent to a server, so the live token stays out of ingress logs and request telemetry, while the query-string path keeps older links working. `HandleResetAsync` (lines 179-204) calls [`IAuthUIService`](#iauthuiservice)`.ResetPasswordAsync(_model.Email, _model.Token, _model.NewPassword)` (line 186, contract at `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/IAuthUIService.cs:64`), flips `_isCompleted` on success, and on failure renders `result.LocalizedErrorMessage(L)` or the generic `Auth.Reset.GenericError` string (line 193), which a thrown call also falls back to (lines 196-199). The prefill path is pinned by a gallery E2E test (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/Auth/ResetPasswordPageE2ETests.cs:31`), with a WCAG 2.1 AA scan alongside it (`:43`).
 - **Caveats / not-in-source**: the model has no rule tying `Token` to the address; that pairing is enforced by the server's cache record ([ADR-091](https://ivanball.github.io/docs/adr/091-cache-backed-password-reset.html) Decision 1), not by anything visible here.
 
 ### DetailPageBase
@@ -1781,22 +1916,22 @@ lives.
 
 > MMCA.Common.UI · `MMCA.Common.UI.Pages.Auth` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/Sessions.razor.cs:26` · Level 6 · class (partial, page code-behind)
 
-- **What it is**: the code-behind for the signed-in devices page at `/profile/sessions`: one row per live refresh session, with a per-device sign-out and a sign-out-everywhere.
-- **Depends on**: [`IAuthUIService`](#iauthuiservice) (line 28), [`IToastService`](#itoastservice) (line 30), [`SharedResource`](#sharedresource) as `IStringLocalizer<SharedResource>` (line 31), [`RefreshSessionSummaryResponse`](group-08-auth.md#refreshsessionsummaryresponse) (the row DTO, line 38), [`Result`](group-01-result-error-handling.md#result) (line 41), [`ResultUiExtensions`](#resultuiextensions) (`IsNotFound`, `NotifyOnFailure`), [`UserAgentSummary`](#useragentsummary) (line 181), and [`RoutePaths`](#routepaths) (line 65). Externals: Blazor's `NavigationManager` and MudBlazor's `BreadcrumbItem` / `MudTable`.
-- **Concept introduced, two revoke paths with deliberately different endings.** `[Rubric §11, Security]` assesses whether a user can see and end their own live credentials; `[Rubric §25, Navigation & IA]` assesses whether a destructive action leaves the app in a coherent place. The class comment (lines 16-24) states the model: a row's button calls the per-session revoke, which ends one *other* device's session and leaves this one alone, while the page-level button is the account-wide revoke, which also ends the session the caller is using and therefore must be followed by the normal local sign-out and a redirect. The consequence is visible in the markup: the row for the current device offers no button at all (`Sessions.razor:62-69`), because revoking it from a row would leave the app signed in on a dead session until the access token expired, which reads to a user as a broken sign-out.
-- **Concept introduced (2), a single in-flight gate over two different operations.** `[Rubric §18, UI Architecture & Component Design]`. `IsBusy` (line 55) is `_revokingSessionId is not null || IsRevokingAll`, and every button in the markup reads it (`Sessions.razor:74`, `:90`). One flag over both operations is what stops a second click from starting a concurrent revoke while the list is about to be rebuilt underneath it, and `_revokingSessionId` doubles as the per-row spinner selector (`Sessions.razor:77`).
+- **What it is**: the code-behind for the signed-in devices page at `/profile/sessions`: one row per live refresh session, with a per-device sign-out and a sign-out-everywhere, each behind a confirmation dialog.
+- **Depends on**: [`IAuthUIService`](#iauthuiservice) (line 28), [`IToastService`](#itoastservice) (line 30), [`IAppDialogService`](#iappdialogservice) (line 31), [`SharedResource`](#sharedresource) as `IStringLocalizer<SharedResource>` (line 32), [`RefreshSessionSummaryResponse`](group-08-auth.md#refreshsessionsummaryresponse) (the row DTO, line 39), [`Result`](group-01-result-error-handling.md#result) (line 42), [`ResultUiExtensions`](#resultuiextensions) (`IsNotFound`, `NotifyOnFailure`), [`UserAgentSummary`](#useragentsummary) (line 218), and [`RoutePaths`](#routepaths) (line 66). Externals: Blazor's `NavigationManager` and MudBlazor's `BreadcrumbItem` / `MudTable`.
+- **Concept introduced, two revoke paths with deliberately different endings.** `[Rubric §11, Security]` assesses whether a user can see and end their own live credentials; `[Rubric §25, Navigation & IA]` assesses whether a destructive action leaves the app in a coherent place. The class comment (lines 16-24) states the model: a row's button calls the per-session revoke, which ends one *other* device's session and leaves this one alone, while the page-level button is the account-wide revoke, which also ends the session the caller is using and therefore must be followed by the local sign-out and a redirect, but only once the server confirmed the revoke (line 21). The consequence is visible in the markup: the row for the current device offers no button at all (`Sessions.razor:68-75`), because revoking it from a row would leave the app signed in on a dead session until the access token expired, which reads to a user as a broken sign-out.
+- **Concept introduced (2), a single in-flight gate over two different operations.** `[Rubric §18, UI Architecture & Component Design]`. `IsBusy` (line 56) is `_revokingSessionId is not null || IsRevokingAll`, and every button in the markup reads it (`Sessions.razor:80`, `:97`). One flag over both operations is what stops a second click from starting a concurrent revoke while the list is about to be rebuilt underneath it, and `_revokingSessionId` doubles as the per-row spinner selector (`Sessions.razor:84`). Both revoke handlers check `IsBusy` twice, before and after the awaited confirmation dialog (lines 112 and 123, 171 and 182), because another operation can start while the dialog is open.
 - **Walkthrough**:
-  - **State** (lines 33-58): a component-scoped `CancellationTokenSource` (line 35) passed into every service call and cancelled on dispose, `_breadcrumbs`, `_sessions`, the nullable `_loadResult` that carries the last load outcome for inline rendering (line 41), `_revokingSessionId`, `IsLoading` (line 49), `IsBusy` (line 55), and `IsRevokingAll` (line 58). `LoginRoute` is a `const` (line 33).
-  - `OnInitializedAsync` (lines 60-70): builds the breadcrumbs **here rather than in a field initializer** so the injected localizer is available (comment at line 62, [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)), then loads.
-  - `LoadSessionsAsync` (lines 72-101): stores the whole `Result` in `_loadResult` (line 80) so the markup can render the failure inline with a retry button rather than as a toast (`Sessions.razor:16`, `:22-29`; the comment at `Sessions.razor:14-15` explains why: an empty table and a failed load look identical once a toast expires). On failure it **empties** `_sessions` deliberately (lines 87-91), so a stale device list can never be left on screen for a user to act on. `OperationCanceledException` is swallowed as expected-on-disposal (lines 93-96) and `IsLoading` clears in the `finally`.
-  - `RevokeSessionAsync(session)` (lines 108-147): refuses to run while busy or for the current device (lines 110-113, a second guard behind the markup's), marks the row in flight, and then treats three outcomes distinctly. Success toasts (line 123). A not-found result, which means the session is already gone (a duplicate click, or the device signed itself out), toasts at *info* severity instead (lines 125-130), because the user's intent is satisfied and there is nothing to correct. Any other failure goes through `result.NotifyOnFailure(Toast, L)` and returns without reloading (lines 131-135). On either satisfied outcome it reloads the list from the server rather than removing the row locally (line 137), because the server is the authority on what is still live and a reload also catches a session that expired while the page sat open (doc comment, lines 103-107).
-  - `RevokeAllAsync` (lines 154-172): guards on `IsBusy`, calls [`IAuthUIService`](#iauthuiservice)`.LogoutAsync()` (line 165), which is exactly the account-wide revoke *plus* the local token clear and auth-state notification, and then navigates to `/login` with `forceLoad: true` (line 166) so the circuit and any cached client state are rebuilt rather than kept alive against a revoked identity.
-  - `DescribeDevice(session)` (lines 179-190): parses browser and platform out of the user agent via [`UserAgentSummary.Parse`](#useragentsummary) (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/UserAgentSummary.cs:66`) and composes them through a **resource format string** in the both-known case (line 185), so the word order translates rather than being concatenated in English order; a single known part is returned as is, and neither known falls back to an explicit "unknown device" string (line 188). `[Rubric §27, Internationalization]`.
-  - `FormatInstant(DateTime)` (lines 196-197): stamps the incoming value as UTC, converts to local time, and formats with `CultureInfo.CurrentCulture` general short pattern, because the endpoint reports UTC and "signed in at 03:14" only means something on the clock the reader uses.
-  - `Dispose(bool)` / `Dispose()` (lines 199-219): the standard idempotent pattern, cancelling and disposing the CTS.
-- **Why it's built this way**: rendering the load failure inline instead of as a toast is a deliberate `[Rubric §24, Forms, Validation & UX Safety]` choice for a page whose empty state is indistinguishable from its failure state, and it is the same reasoning [`DataGridListPageBase<TDto>`](#datagridlistpagebasetdto) encodes in its `LoadFailed` flag. Treating "already revoked" as an informational outcome rather than an error avoids punishing a user for a double click on an idempotent action.
+  - **State** (lines 34-59): a component-scoped `CancellationTokenSource` (line 36) passed into every service call and cancelled on dispose, `_breadcrumbs`, `_sessions`, the nullable `_loadResult` that carries the last load outcome for inline rendering (line 42), `_revokingSessionId`, `IsLoading` (line 50), `IsBusy` (line 56), and `IsRevokingAll` (line 59). `LoginRoute` is a `const` (line 34).
+  - `OnInitializedAsync` (lines 61-71): builds the breadcrumbs **here rather than in a field initializer** so the injected localizer is available (comment at line 63, [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)), then loads.
+  - `LoadSessionsAsync` (lines 73-102): stores the whole `Result` in `_loadResult` (line 81) so the markup can render the failure inline with a retry button rather than as a toast (`Sessions.razor:17`, `:23-30`; the comment at `Sessions.razor:15-16` explains why: an empty table and a failed load look identical once a toast expires). On failure it **empties** `_sessions` deliberately (lines 87-92), so a stale device list can never be left on screen for a user to act on. `OperationCanceledException` is swallowed as expected-on-disposal (lines 94-97) and `IsLoading` clears in the `finally`.
+  - `RevokeSessionAsync(session)` (lines 110-160): refuses to run while busy or for the current device (lines 112-115, a second guard behind the markup's), then asks for confirmation through [`IAppDialogService`](#iappdialogservice)`.ConfirmAsync` with a message naming the device via `DescribeDevice` (lines 117-121), because the device loses its session at once (doc comment, lines 104-109). After the post-dialog re-check (lines 123-126) it marks the row in flight (line 128) and treats three outcomes distinctly. Success toasts (line 136). A not-found result, which means the session is already gone (a duplicate click, or the device signed itself out), toasts at *info* severity instead (lines 138-143), because the user's intent is satisfied and there is nothing to correct. Any other failure goes through `result.NotifyOnFailure(Toast, L)` and returns without reloading (lines 144-148). On either satisfied outcome it reloads the list from the server rather than removing the row locally (line 150), because the server is the authority on what is still live and a reload also catches a session that expired while the page sat open.
+  - `RevokeAllAsync` (lines 169-209): guards on `IsBusy`, confirms through `ConfirmAsync` (lines 176-180) because this also ends the session the user is on, re-checks, then calls [`IAuthUIService`](#iauthuiservice)`.RevokeAllSessionsAsync(_cts.Token)` (line 191, contract at `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/IAuthUIService.cs:91`), which is the account-wide revoke followed, on success, by the local sign-out. Only on success does it navigate to `/login` with `forceLoad: true` (line 194), so the circuit and any cached client state are rebuilt rather than kept alive against a revoked identity. A failed revoke is shown through `result.NotifyOnFailure(Toast, L)` (line 198) and the page stays put: the doc comment (lines 162-168) explains that a best-effort logout would claim every device was signed out even when the server refused. `OperationCanceledException` is swallowed as expected-on-disposal (lines 201-204) and `IsRevokingAll` clears in the `finally` (lines 205-208).
+  - `DescribeDevice(session)` (lines 216-227): parses browser and platform out of the user agent via [`UserAgentSummary.Parse`](#useragentsummary) (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/UserAgentSummary.cs:66`) and composes them through a **resource format string** in the both-known case (line 222), so the word order translates rather than being concatenated in English order; a single known part is returned as is, and neither known falls back to an explicit "unknown device" string (line 225). `[Rubric §27, Internationalization]`. The same label feeds the per-row confirmation message and `aria-label`.
+  - `FormatInstant(DateTime)` (lines 233-234): stamps the incoming value as UTC, converts to local time, and formats with `CultureInfo.CurrentCulture` general short pattern, because the endpoint reports UTC and "signed in at 03:14" only means something on the clock the reader uses.
+  - `Dispose(bool)` / `Dispose()` (lines 236-256): the standard idempotent pattern, cancelling and disposing the CTS.
+- **Why it's built this way**: rendering the load failure inline instead of as a toast is a deliberate `[Rubric §24, Forms, Validation & UX Safety]` choice for a page whose empty state is indistinguishable from its failure state, and it is the same reasoning [`DataGridListPageBase<TDto>`](#datagridlistpagebasetdto) encodes in its `LoadFailed` flag. Treating "already revoked" as an informational outcome rather than an error avoids punishing a user for a double click on an idempotent action. Confirming both revokes before acting is the same section's destructive-action rule: each one signs a device out immediately.
 - **Where it's used**: routed at `/profile/sessions` behind `[Authorize]` with `[StreamRendering(false)]` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/Sessions.razor:1-6`), reachable in any host that maps the framework's UI pages. Its component behavior is covered by bUnit tests (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Pages/Auth/SessionsTests.cs:27`) and its rendered accessibility by the gallery E2E WCAG 2.1 AA scan (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/Auth/SessionsPageE2ETests.cs:21`).
-- **Caveats / not-in-source**: `RevokeAllAsync` has no `catch`, so a throw from `LogoutAsync` propagates out of the handler with `IsRevokingAll` reset by the `finally` but no toast; whether the local sign-out completed in that case is a property of [`IAuthUIService`](#iauthuiservice), not of this file. The accessibility markers the page relies on (the text-variant "this device" chip at `Sessions.razor:52-53`, chosen so the marker does not depend on color alone, and the per-button `aria-label`s at `:76` and `:92`) live in the markup half, not in this code-behind.
+- **Caveats / not-in-source**: whether `RevokeAllSessionsAsync` completes the local sign-out when the server call succeeds but token clearing fails is a property of [`IAuthUIService`](#iauthuiservice), not of this file; any exception other than `OperationCanceledException` still propagates out of both handlers with no toast. The accessibility markers the page relies on (the text-variant "this device" chip at `Sessions.razor:58-59`, chosen so the marker does not depend on color alone, and the per-button `aria-label`s at `:83` and `:100`) live in the markup half, not in this code-behind.
 
 ### LazyJsModule
 
@@ -1821,20 +1956,27 @@ lives.
     three fields: a `Lock` (`LazyJsModule.cs:22`), the in-flight import task (`LazyJsModule.cs:24`) and
     the resolved module (`LazyJsModule.cs:25`). `IsImported` (`LazyJsModule.cs:28`) exists so disposal
     can skip work.
-  - `GetOrImportAsync` (`LazyJsModule.cs:34`) starts with a lock-free fast path returning the cached
-    module (`LazyJsModule.cs:36-39`), then takes the lock only to publish or read the in-flight task
-    (`LazyJsModule.cs:44-48`); the inline comment (`LazyJsModule.cs:41-42`) notes why holding a lock
+  - `GetOrImportAsync` (`LazyJsModule.cs:37`) starts with a lock-free fast path returning the cached
+    module (`LazyJsModule.cs:39-42`), then takes the lock only to publish or read the in-flight task
+    (`LazyJsModule.cs:47-51`); the inline comment (`LazyJsModule.cs:44-45`) notes why holding a lock
     there is safe, since `ImportAsync` reaches its first await immediately and nothing slow runs under
-    it. The awaited task is then shared by every caller (`LazyJsModule.cs:52`).
-  - The `finally` block is the subtle part (`LazyJsModule.cs:54-68`): it clears the field only when the
-    task did **not** complete successfully (`LazyJsModule.cs:58`), and only when the field still holds
-    this task (`LazyJsModule.cs:62`), because clearing unconditionally could drop a newer import
-    started after this one completed and split the next set of callers.
-  - `ImportAsync` (`LazyJsModule.cs:71-79`) performs the actual
-    `js.InvokeAsync<IJSObjectReference>("import", ...)` and assigns `_module`.
-  - `DisposeAsync` (`LazyJsModule.cs:82-99`) returns immediately when nothing was imported
-    (`LazyJsModule.cs:84-87`), nulls the field before awaiting (`LazyJsModule.cs:89`), and swallows
-    `JSDisconnectedException` (`LazyJsModule.cs:95-98`), since a torn-down circuit is the normal end of
+    it. The import is started with no caller token at all (`LazyJsModule.cs:49`), and each caller then
+    awaits the shared task through `WaitAsync(cancellationToken)` (`LazyJsModule.cs:55`), so a caller's
+    token cancels only that caller's wait, never the import. The method summary
+    (`LazyJsModule.cs:30-36`) gives the reason: binding the import to the first caller's token would let
+    that one caller's cancellation fault the import for every concurrent awaiter.
+  - The `finally` block is the subtle part (`LazyJsModule.cs:57-73`): it clears the field only when the
+    task has completed and did **not** complete successfully (`LazyJsModule.cs:63`), and only when the
+    field still holds this task (`LazyJsModule.cs:67`), because clearing unconditionally could drop a
+    newer import started after this one completed and split the next set of callers. The inline
+    comment (`LazyJsModule.cs:59-62`) covers the cancellation case: a caller that stopped waiting on its
+    own token leaves the import still running rather than failed, so it stays cached for the others.
+  - `ImportAsync` (`LazyJsModule.cs:76-84`) performs the actual
+    `js.InvokeAsync<IJSObjectReference>("import", CancellationToken.None, modulePath)`
+    (`LazyJsModule.cs:78-80`) and assigns `_module` (`LazyJsModule.cs:82`).
+  - `DisposeAsync` (`LazyJsModule.cs:87-104`) returns immediately when nothing was imported
+    (`LazyJsModule.cs:89-92`), nulls the field before awaiting (`LazyJsModule.cs:94`), and swallows
+    `JSDisconnectedException` (`LazyJsModule.cs:100-103`), since a torn-down circuit is the normal end of
     life for a scoped UI service.
 - **Why it's built this way**: the remarks (`LazyJsModule.cs:14-19`) draw the responsibility line. This
   class deliberately does not swallow anything on the import path, so each consuming service keeps its
@@ -1921,7 +2063,7 @@ lives.
 - **Concept introduced, the resource-anchor type.** `[Rubric §27, Internationalization]` assesses whether user-facing copy is externalized to per-culture resources keyed stably rather than hard-coded. ASP.NET Core's `IStringLocalizer<T>` convention resolves keys against the resource file whose base name matches the type `T`, so a dedicated empty class becomes the *name* that ties many components to one shared string table: injecting `IStringLocalizer<SharedResource>` anywhere reads the same dotted, stable keys (`Common.Error.Load`, `Grid.Snackbar.LoadCancelled`, `Auth.Sessions.Title`). The doc comment (lines 3-8) enumerates the chrome it covers: buttons, layout labels, snackbar and error templates, and the culture- and theme-switcher text. Its counterpart for library chrome is [`MudTranslations`](#mudtranslations).
 - **Walkthrough**: there are no members. The whole contract is "be a public sealed type named `SharedResource` in this namespace, with sibling `.resx` files". The work lives in the key/value pairs and in the localization middleware that resolves them by culture.
 - **Why it's built this way**: a marker type is the idiomatic ASP.NET Core way to scope a shared resource table without inventing a real class, and one anchor keeps the chrome strings in a single table every component shares ([ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)).
-- **Where it's used**: injected as `IStringLocalizer<SharedResource>` by [`DataGridListPageBase<TDto>`](#datagridlistpagebasetdto) for its cancellation toast and its `Result` error rendering (`DataGridListPageBase.cs:25`), by [`Sessions`](#sessions) for every label on the devices page (`Sessions.razor.cs:31`), by the auth pages for their field labels and messages, and handed to [`ErrorMessages.Configure`](#errormessages) from the root layout (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Layout/MainLayout.razor:103`) so the static helper resolves the same table.
+- **Where it's used**: injected as `IStringLocalizer<SharedResource>` by [`DataGridListPageBase<TDto>`](#datagridlistpagebasetdto) for its cancellation toast and its `Result` error rendering (`DataGridListPageBase.cs:25`), by [`Sessions`](#sessions) for every label on the devices page (`Sessions.razor.cs:32`), by the auth pages for their field labels and messages, and handed to [`ErrorMessages.Configure`](#errormessages) from the root layout (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Layout/MainLayout.razor:103`) so the static helper resolves the same table.
 - **Caveats / not-in-source**: the `.resx` files are resources, not `.cs`; their per-key contents are not enumerated here.
 
 ### ListPageQueryStateService
@@ -1945,37 +2087,45 @@ lives.
   transports the same record travels over.
 - **Walkthrough**
   - The key names are private constants (`ListPageQueryStateService.cs:30-40`), including the
-    `"search"` filter name that maps to `q` by convention and the `desc`/`1` markers.
-  - `ReadCurrent()` (`ListPageQueryStateService.cs:45-49`) is the instance entry point: it resolves the
+    `"search"` filter name that maps to `q` by convention and the `desc`/`1` markers. A separate
+    `MaxPageSize` constant of `1000` (`ListPageQueryStateService.cs:45`) caps the page size a URL may
+    ask for; its summary (`ListPageQueryStateService.cs:42-44`) ties it to the same ceiling
+    `KeysetPageRequest.MaxPageSize` states.
+  - `ReadCurrent()` (`ListPageQueryStateService.cs:50-54`) is the instance entry point: it resolves the
     absolute URI from the injected `NavigationManager` and hands the query to the parser.
-  - `ParseQueryString` (`ListPageQueryStateService.cs:56`) is deliberately `static` and public,
+  - `ParseQueryString` (`ListPageQueryStateService.cs:61`) is deliberately `static` and public,
     documented as a pure helper exposed for unit testing without a `NavigationManager`
-    (`ListPageQueryStateService.cs:51-55`). It reads the three integers through `TryGetInt`
-    (`ListPageQueryStateService.cs:212-222`, which parses with `CultureInfo.InvariantCulture` and falls
-    back to the supplied default rather than throwing), treats a blank sort value as no sort
-    (`ListPageQueryStateService.cs:65-72`), matches `desc` case-insensitively
-    (`ListPageQueryStateService.cs:77`) but the dense marker `1` ordinally
-    (`ListPageQueryStateService.cs:83`), then walks every remaining key, folding `q` into the `search`
-    filter and stripping the `f:` prefix off the rest (`ListPageQueryStateService.cs:87-103`).
-  - `BuildPath` (`ListPageQueryStateService.cs:122`) is the inverse, and the omission rules are visible
-    one by one: page only when `> 0` (`ListPageQueryStateService.cs:129`), page size only when `> 0`
-    (`ListPageQueryStateService.cs:134`), mobile page only when `> 1`
-    (`ListPageQueryStateService.cs:139`), `sd` only when a sort column exists and is descending
-    (`ListPageQueryStateService.cs:144-151`), `d` only when dense
-    (`ListPageQueryStateService.cs:153-156`); with no parameters at all it returns the bare base path
-    (`ListPageQueryStateService.cs:175-177`).
-  - `ReplaceState` (`ListPageQueryStateService.cs:196`) writes the URL back using
-    `NavigationOptions { ReplaceHistoryEntry = true }` (`ListPageQueryStateService.cs:209`) so filter
+    (`ListPageQueryStateService.cs:56-60`). It reads the three integers through `TryGetInt`
+    (`ListPageQueryStateService.cs:222-232`, which parses with `CultureInfo.InvariantCulture` and falls
+    back to the supplied default rather than throwing). Out-of-range values get the same fallback as
+    unparsable ones (`ListPageQueryStateService.cs:65-69`): the page is floored at `0`, the mobile page
+    at `1`, and a page size outside `1..1000` collapses to `0`, the page default, through
+    `ClampPageSize` (`ListPageQueryStateService.cs:220`). The inline comment states the reason: a
+    hand-edited or stale link with `p=-3` or `ps=5000` must not leave the list stuck on a failing
+    fetch. It then treats a blank sort value as no sort
+    (`ListPageQueryStateService.cs:72-79`), matches `desc` case-insensitively
+    (`ListPageQueryStateService.cs:84`) but the dense marker `1` ordinally
+    (`ListPageQueryStateService.cs:90`), then walks every remaining key, folding `q` into the `search`
+    filter and stripping the `f:` prefix off the rest (`ListPageQueryStateService.cs:94-110`).
+  - `BuildPath` (`ListPageQueryStateService.cs:129`) is the inverse, and the omission rules are visible
+    one by one: page only when `> 0` (`ListPageQueryStateService.cs:136`), page size only when `> 0`
+    (`ListPageQueryStateService.cs:141`), mobile page only when `> 1`
+    (`ListPageQueryStateService.cs:146`), `sd` only when a sort column exists and is descending
+    (`ListPageQueryStateService.cs:151-158`), `d` only when dense
+    (`ListPageQueryStateService.cs:160-163`); with no parameters at all it returns the bare base path
+    (`ListPageQueryStateService.cs:182-184`).
+  - `ReplaceState` (`ListPageQueryStateService.cs:203`) writes the URL back using
+    `NavigationOptions { ReplaceHistoryEntry = true }` (`ListPageQueryStateService.cs:216`) so filter
     changes do not pollute the back stack.
 - **Why it's built this way**: the most instructive part is the guard in `ReplaceState`
-  (`ListPageQueryStateService.cs:201-206`), which drops the write when the current path no longer
-  matches the owning `basePath`. The remarks (`ListPageQueryStateService.cs:186-195`) record the
+  (`ListPageQueryStateService.cs:208-213`), which drops the write when the current path no longer
+  matches the owning `basePath`. The remarks (`ListPageQueryStateService.cs:193-202`) record the
   diagnosed defect: a grid-state write is inherently deferred (a debounced search, a late `ServerData`
   completion), so it can land after the user has already navigated away. Building from the then-current
   URI used to stamp grid parameters onto the next page's URL and issue a spurious navigation that
   disposed it mid-load, and detail pages reached by clicking a list row had their first data fetch
   canceled about 66ms in, leaving them stuck on their loading state.
-- **Where it's used**: registered `TryAddScoped` (`DependencyInjection.cs:134`) and injected into
+- **Where it's used**: registered `TryAddScoped` (`DependencyInjection.cs:150`) and injected into
   [DataGridListPageBase<TDto>](#datagridlistpagebasetdto)
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/DataGridListPageBase.cs:28`), which
   reads the URL on initialization and on parameter changes (`DataGridListPageBase.cs:203` and
@@ -2030,7 +2180,7 @@ lives.
   calling page", which is why this class swallows what [LazyJsModule](#lazyjsmodule) deliberately does
   not. Scoped registration means one instance per circuit, so the in-memory dictionary is naturally
   per-user without any keying by identity.
-- **Where it's used**: registered `TryAddScoped` (`DependencyInjection.cs:133`) and injected into
+- **Where it's used**: registered `TryAddScoped` (`DependencyInjection.cs:149`) and injected into
   [DataGridListPageBase<TDto>](#datagridlistpagebasetdto) (`DataGridListPageBase.cs:27`), which reads
   it during state restore (`DataGridListPageBase.cs:205`), hydrates from session on first render
   (`DataGridListPageBase.cs:333-338`), records scroll offsets (`DataGridListPageBase.cs:397`), and
@@ -2071,8 +2221,8 @@ lives.
   component-side (`IAppDialogService.cs:3-7`). Keeping the implementation `internal` and registered by
   `AddUIShared` means an app cannot accidentally depend on the MudBlazor type through this path.
 - **Where it's used**: registered with
-  `TryAddScoped<IAppDialogService, MudAppDialogService>()` (`DependencyInjection.cs:184`, under the
-  facade-registration doc at `DependencyInjection.cs:167-180`). Consumers resolve the interface: the
+  `TryAddScoped<IAppDialogService, MudAppDialogService>()` (`DependencyInjection.cs:200`, under the
+  facade-registration doc at `DependencyInjection.cs:183-196`). Consumers resolve the interface: the
   shared `UnsavedChangesGuard` component
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/Forms/UnsavedChangesGuard.razor:14` and
   `UnsavedChangesGuard.razor:57`) and the Helpdesk seed's ticket pages
@@ -2099,11 +2249,11 @@ lives.
   library's API. Every page, component and `Result` helper in both applications depends on
   `IToastService`; only this class and `MudAppDialogService` know that MudBlazor exists, and the DI
   comment says so outright
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:169-172`).
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:185-188`).
   `[Rubric §14, Testability & Test Strategy]` is the practical payoff: a test records toasts against
   the interface without rendering a snackbar host, which is how
   [ResultUiExtensions](#resultuiextensions)`.NotifyOnFailure` can be tested at all
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/ResultUiExtensions.cs:265,277`).
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/ResultUiExtensions.cs:268,280`).
   `[Rubric §1, SOLID Principles]` covers the shape: an internal implementation behind a public
   interface means no consumer can name the concrete type even by accident. The class doc comment also
   states why toast text is not duplicated into a second screen-reader channel: `MmcaThemeProviders`
@@ -2140,21 +2290,21 @@ lives.
 - **Why it's built this way**: keeping the vendor type behind a facade is what makes the component
   library swappable in principle and mockable in practice, and it is the reason the framework ships
   `AddCommonUiFacades()` as its own registration
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:181-186`), factored out so a
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:197-202`), factored out so a
   bUnit harness can register exactly these two services without pulling in the whole shared-UI surface
   (comment at lines 144-157). Every method returns `void`: a toast is fire-and-forget by design, and
   MudBlazor's `ISnackbar.Add` is synchronous.
 - **Where it's used**: registered by `AddCommonUiFacades` with `TryAddScoped`
-  (`DependencyInjection.cs:183`), which `AddUIShared` calls for every host
-  (`DependencyInjection.cs:121`). Consumers resolve `IToastService`, never this type: the framework's
+  (`DependencyInjection.cs:199`), which `AddUIShared` calls for every host
+  (`DependencyInjection.cs:137`). Consumers resolve `IToastService`, never this type: the framework's
   `NotificationListener` raises an incoming push as a persistent toast
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/Notifications/NotificationListener.razor:49`),
   [ResultUiExtensions](#resultuiextensions)`.NotifyOnFailure` turns a failed
   [Result](group-01-result-error-handling.md#result) into one
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/ResultUiExtensions.cs:277`), and ADC's
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/ResultUiExtensions.cs:280`), and ADC's
   [LiveEventListener](group-22-engagement-module.md#liveeventlistener) uses the action shape for its
   reconnect prompt
-  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Components/LiveEventListener.razor.cs:80,165`).
+  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Components/LiveEventListener.razor.cs:81,166`).
   Its own behavior is pinned by
   [MudToastServiceTests](group-28-testing-infrastructure.md#per-project-test-rollup), which captures the
   options lambda and applies it to a fresh `SnackbarOptions` carrying MudBlazor's defaults, so the
@@ -2194,34 +2344,38 @@ lives.
   [ADR-036](https://ivanball.github.io/docs/adr/036-external-oauth-login.html), and the mobile callback
   variant in [ADR-043](https://ivanball.github.io/docs/adr/043-mobile-deep-links-and-native-oauth-callback.html).
 - **Where it's used**: `AddUIShared()` registers the no-op default with `TryAddSingleton`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:158`, with the override
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:174`, with the override
   instructions in the comment at lines 133-134). The shared login page injects it
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/Login.razor:11`), guards each provider
   button on it (lines 86, 107, 128) and folds the three flags into one `_hasExternalProviders` value
   that decides whether the whole external-login block renders (line 167). MMCA.ADC registers
   [`ConfigurationOAuthUISettings`](#configurationoauthuisettings) on all three heads
-  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:84`,
+  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:85`,
   `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Program.cs:38`,
   `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:99`).
 
 ### PendingAttempt
-> MMCA.Common.UI · `MMCA.Common.UI.Services.Auth.OAuth` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/OAuth/OAuthFlowStateStore.cs:89` · Level 0 · record (private, sealed)
+> MMCA.Common.UI · `MMCA.Common.UI.Services.Auth.OAuth` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/OAuth/OAuthFlowStateStore.cs:92` · Level 0 · record (private, sealed)
 
 - **What it is**: the private record [OAuthFlowStateStore](#oauthflowstatestore) persists while an OAuth
   redirect is in flight, `State` (the random value sent on the challenge URL) and `StartedAt` (the
   timestamp used to expire an abandoned attempt).
 - **Depends on**: nothing beyond the BCL (`string`, `DateTimeOffset`).
 - **Where it's used**: written and read only inside
-  [OAuthFlowStateStore](#oauthflowstatestore) (`OAuthFlowStateStore.cs:80`, `100`); it never crosses the
+  [OAuthFlowStateStore](#oauthflowstatestore) (`OAuthFlowStateStore.cs:82`, `100`); it never crosses the
   store's own boundary.
 
 ### ISessionCookieSync
 > MMCA.Common.UI · `MMCA.Common.UI.Services.Auth` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/ISessionCookieSync.cs:8` · Level 0 · interface
 
 - **What it is**: a two-method contract for mirroring the client's in-memory tokens into the browser's
-  HttpOnly auth cookies, and for clearing them again on logout.
+  HttpOnly auth cookies, and for clearing them again on logout. Both methods report whether the
+  cookie jar was actually updated.
 - **Depends on**: nothing first-party. Implemented by
-  [`JsFetchSessionCookieSync`](#jsfetchsessioncookiesync); consumed by
+  [`JsFetchSessionCookieSync`](#jsfetchsessioncookiesync) and, on a Blazor Server host that enabled
+  the same-origin proxy, by [`HandoffSessionCookieSync`](#handoffsessioncookiesync)
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/HandoffSessionServices.cs:39`);
+  consumed by
   [`WasmTokenStorageService`](#wasmtokenstorageservice) and by
   [`ServerTokenStorageService`](#servertokenstorageservice)
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Services/ServerTokenStorageService.cs:21`).
@@ -2235,21 +2389,65 @@ lives.
     HttpOnly cookie, unreadable from JS, rather than `localStorage`.
   - `[Rubric §25, Navigation, Routing & Information Architecture]` assesses whether deep links behave.
     This contract is the reason a bookmarked authorized route renders instead of redirecting.
-- **Walkthrough**: two members, both returning a bare `Task` because neither has anything to report.
-  `SyncAsync(accessToken, refreshToken)` writes the pair (`ISessionCookieSync.cs:10`) and
-  `ClearAsync()` removes it (line 12).
+- **Walkthrough**: two members, both returning `Task<bool>`: `true` when the cookie jar was
+  updated, `false` when the write failed or could not be attempted (a non-2xx answer, a dropped
+  connection, JS interop unavailable).
+  `SyncAsync(accessToken, refreshToken)` writes the pair (`ISessionCookieSync.cs:15`) and
+  `ClearAsync()` removes it (line 20). The two callers treat the answers differently on purpose.
+  A failed sync is surfaced: [`WasmTokenStorageService`](#wasmtokenstorageservice) throws
+  `InvalidOperationException` when `SyncAsync` returns `false`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/Tokens/WasmTokenStorageService.cs:68-71`),
+  so [`AuthUIService`](#authuiservice) reports `Auth.TokenStorageUnavailable` instead of a sign-in
+  that silently ends at the first access-token expiry, when no cookie exists to refresh from
+  (comment at lines 64-67; [`ServerTokenStorageService`](#servertokenstorageservice) does the same at
+  `ServerTokenStorageService.cs:89`). A failed clear is discarded (`_ = await
+  sessionCookieSync.ClearAsync()`, `WasmTokenStorageService.cs:80`), because sign-out proceeds
+  locally whatever the cookie endpoint answered.
 - **Why it's built this way**: the shape is the client half of
   [ADR-022](https://ivanball.github.io/docs/adr/022-browser-session-cookie-auth.html), which decided
   the BFF-style `mmca_auth_access` / `mmca_auth_refresh` HttpOnly cookie pair and the
   `/auth/session/token` hydration endpoint. Keeping it an interface (rather than calling JS interop
   inline from token storage) is what lets a bUnit or unit test drive the storage services with a mock
   and no browser, which `WasmTokenStorageServiceTests` does
-  (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Services/Auth/WasmTokenStorageServiceTests.cs:27`).
+  (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Services/Auth/WasmTokenStorageServiceTests.cs:29`).
 - **Where it's used**: registered by the dedicated extension
   `AddClientAuthSessionCookieSync()`, which `TryAddScoped`s
   [`JsFetchSessionCookieSync`](#jsfetchsessioncookiesync)
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:193-197`); the doc there
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:209-213`); the doc there
   records that both the Blazor Server host and the WebAssembly client call it (lines 165-169).
+
+### SameOriginProxyHeaders
+> MMCA.Common.UI · `MMCA.Common.UI.Services.Auth` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/SameOriginProxyHeaders.cs:11` · Level 0 · class (static)
+
+- **What it is**: two constants naming the fixed CSRF request header the same-origin API proxy
+  requires on every state-changing request: `CsrfHeaderName = "X-CSRF"`
+  (`SameOriginProxyHeaders.cs:14`) and `CsrfHeaderValue = "1"` (line 17).
+- **Depends on**: nothing. It lives in `MMCA.Common.UI` rather than `MMCA.Common.UI.Web` so the
+  client that stamps the header and the server that checks it share one definition.
+- **Concept introduced, a custom header as a CSRF signal.** A cross-site page can make a browser send
+  a simple POST carrying the user's cookies, but it cannot add a custom header without a CORS
+  preflight. The proxy answers `OPTIONS` itself with no CORS grant and refuses any request whose
+  `Origin` or `Sec-Fetch-Site` names another origin, so the header is defense in depth behind that
+  origin check; the value carries no secret (`SameOriginProxyHeaders.cs:3-10`).
+  - `[Rubric §26, Front-End Security]` assesses cookie-borne credentials against cross-site request
+    forgery. Once the bearer moves into an HttpOnly cookie, a header the browser will not attach on a
+    cross-site request is what distinguishes the app's own calls.
+- **Walkthrough**: two `const string` members and no behavior. Being `const`, both values are baked
+  into each caller at compile time.
+- **Why it's built this way**: one shared type instead of a literal per call site keeps the stamp
+  and the check from drifting apart. The proxy design is
+  [ADR-131](https://ivanball.github.io/docs/adr/131-same-origin-api-proxy.html).
+- **Where it's used**: stamped by [`SameOriginProxyRequestHandler`](#sameoriginproxyrequesthandler)
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/SameOriginProxyRequestHandler.cs:19-20`)
+  and by [`NotificationHubService`](#notificationhubservice) on the SignalR connection options
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Notifications/NotificationHubService.cs:363`);
+  checked by [`SameOriginApiProxyEndpoint`](#sameoriginapiproxyendpoint) in `HasCsrfHeader`, which
+  demands exactly one value equal to `CsrfHeaderValue`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxyEndpoint.cs:110-113`);
+  stripped before forwarding by [`SameOriginProxyTransformer`](#sameoriginproxytransformer)
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginProxyTransformer.cs:61`).
+  Covered by `SameOriginProxyClientTests`
+  (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Services/SameOriginProxyClientTests.cs:26`).
 
 ### UserAgentSummary
 > MMCA.Common.UI · `MMCA.Common.UI.Services.Auth` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/UserAgentSummary.cs:18` · Level 0 · class (internal, static)
@@ -2288,7 +2486,7 @@ lives.
   `internal` because nothing outside the package should treat it as a UA parser.
 - **Where it's used**: exactly one call site,
   [`Sessions.DescribeDevice`](#sessions)
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/Sessions.razor.cs:181`), whose `switch`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/Sessions.razor.cs:218`), whose `switch`
   covers all four null combinations and falls back to a localized "unknown device" string
   (lines 183-189). Pinned by `UserAgentSummaryTests`
   (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Services/Auth/UserAgentSummaryTests.cs:13`).
@@ -2328,12 +2526,12 @@ lives.
   [ADR-036](https://ivanball.github.io/docs/adr/036-external-oauth-login.html).
 - **Where it's used**: MMCA.ADC registers it with `AddSingleton` (which replaces the framework's
   `TryAddSingleton` default regardless of ordering) on the Blazor Server head
-  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:84`), the WASM client
+  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:85`), the WASM client
   (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Program.cs:38`) and MAUI
   (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:99`, whose comment at line 78 explains that
   the MAUI registration goes before `AddUIShared` because that call `TryAdd`s the default). The
   server head also projects the resolved flags to the WASM client through its `/client-config`
-  endpoint (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:247`).
+  endpoint (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:259`).
 
 ### DefaultOAuthUISettings
 > MMCA.Common.UI · `MMCA.Common.UI.Services.Auth.OAuth` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/OAuth/DefaultOAuthUISettings.cs:7` · Level 1 · class (internal, sealed)
@@ -2354,7 +2552,7 @@ lives.
   to enable specific providers (lines 3-6).
 - **Why it's built this way**: `internal` because nothing outside the package should name it, and a
   semicolon body because the default interface members already say everything. It is registered with
-  `TryAddSingleton` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:158`), so
+  `TryAddSingleton` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:174`), so
   a host that registers first keeps its own, and a host that registers afterwards with `AddSingleton`
   wins the resolution.
 - **Where it's used**: resolved as [`IOAuthUISettings`](#ioauthuisettings) in every host that has not
@@ -2368,45 +2566,48 @@ lives.
   callback returns matches. It is the anti-CSRF half of the flow described by ADR-036.
 - **Depends on**: `ILocalCacheStore` (device-local storage, injected, `OAuthFlowStateStore.cs:20`) for
   persistence, `TimeProvider` (injected, defaulted to `TimeProvider.System`, `OAuthFlowStateStore.cs:20`,
-  `56`) for the expiry check, `System.Security.Cryptography.RandomNumberGenerator` to mint the state
+  `31`) for the expiry check, `System.Security.Cryptography.RandomNumberGenerator` to mint the state
   value, and its own private record [PendingAttempt](#pendingattempt) as the stored shape.
 - **Concept introduced, device-local state binding for a redirect-based flow.** A browser or MAUI OAuth
   challenge leaves the app entirely and comes back on a different navigation, so nothing in memory
   survives the round trip; the only thing that can prove the callback belongs to the request this
   client made is a value written to durable storage before the redirect and checked after it.
   `[Rubric §11, Security]` assesses this exact class of defense: `BeginAsync` mints the value with
-  `RandomNumberGenerator.GetHexString(32, lowercase: true)` (`OAuthFlowStateStore.cs:78`), a
+  `RandomNumberGenerator.GetHexString(32, lowercase: true)` (`OAuthFlowStateStore.cs:53`), a
   cryptographically strong source, not `Guid.NewGuid()` or a counter.
 - **Walkthrough**:
-  - `StorageKey = "auth.oauth-flow"` (`OAuthFlowStateStore.cs:48`) and `AttemptLifetime = 10` minutes
-    (`OAuthFlowStateStore.cs:54`, "comfortably longer than a provider round trip and far shorter than a
+  - `StorageKey = "auth.oauth-flow"` (`OAuthFlowStateStore.cs:23`) and `AttemptLifetime = 10` minutes
+    (`OAuthFlowStateStore.cs:29`, "comfortably longer than a provider round trip and far shorter than a
     session, so an abandoned attempt cannot be revived days later").
-  - `IsEnforced` (`OAuthFlowStateStore.cs:64`) reports `store.IsAvailable`: `false` only on a host that
+  - `IsEnforced` (`OAuthFlowStateStore.cs:39`) reports `store.IsAvailable`: `false` only on a host that
     registered neither the browser nor the native local-storage capability, in which case the caller
     keeps its prior behavior because nothing durable can be written across the redirect.
-  - `BeginAsync` (`OAuthFlowStateStore.cs:71`) returns `null` immediately when storage is unavailable
-    (`73-76`), otherwise mints the state, stores a `PendingAttempt` under `StorageKey`, and returns the
-    state for the caller to append to the challenge URL (`78-83`).
-  - `TryCompleteAsync` (`OAuthFlowStateStore.cs:93`) returns `true` unconditionally when storage is
-    unavailable (`95-98`, matching `BeginAsync`'s no-op), otherwise reads and unconditionally removes the
-    pending attempt (`100-101`, "removed either way, so a value is good for exactly one completion"),
-    fails if there was none or it expired (`103-106`), and otherwise accepts either an exact match or an
-    empty `returnedState` (`108-111`, some redirects cannot carry the parameter back).
+  - `BeginAsync` (`OAuthFlowStateStore.cs:46`) returns `null` immediately when storage is unavailable
+    (`48-51`), otherwise mints the state, stores a `PendingAttempt` under `StorageKey`, and returns the
+    state for the caller to append to the challenge URL (`53-58`).
+  - `TryCompleteAsync` (`OAuthFlowStateStore.cs:70`) returns `true` unconditionally when storage is
+    unavailable (`72-75`, matching `BeginAsync`'s no-op), otherwise reads and unconditionally removes the
+    pending attempt (`77-78`, "removed either way, so a value is good for exactly one completion"),
+    and fails if there was none or it expired (`80-83`). When a pending attempt exists, it accepts only
+    a non-empty `returnedState` that matches exactly, ordinal comparison (`88-89`). An absent or empty
+    value is refused: every legitimate flow round-trips the state, and accepting an omitted parameter
+    would let a pasted link bypass the binding (comment at `85-87`, doc at `61-66`).
 - **Why it's built this way**: ADR-036 (`Website/docs-src/adr/036-external-oauth-login.md`) is the OAuth
-  design this binds into; the single-use, time-boxed local record is what keeps a replayed or stale
-  callback from being accepted after the window in which it could plausibly be legitimate.
+  design this binds into; the single-use, time-boxed local record, together with refusing a completion
+  that omits the state, is what keeps a replayed, stale, or forged callback from being accepted.
 - **Where it's used**: constructed inside
   `MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/Capabilities/Auth/MauiExternalAuthBroker.cs` for
   the native OAuth callback path, and registered in
-  `MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs`. Pinned by
+  `MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:148` (`TryAddScoped`). Pinned by
   `OAuthFlowStateStoreTests`
   (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Services/Auth/OAuthFlowStateStoreTests.cs`).
 
 ### AuthDelegatingHandler
-> MMCA.Common.UI · `MMCA.Common.UI.Services.Auth` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/AuthDelegatingHandler.cs:10` · Level 1 · class (sealed)
+> MMCA.Common.UI · `MMCA.Common.UI.Services.Auth` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/AuthDelegatingHandler.cs:12` · Level 1 · class (sealed)
 
 - **What it is**: the `DelegatingHandler` that attaches the stored JWT as a `Bearer` header on every
-  outgoing API request, so no UI service ever sets an `Authorization` header by hand.
+  outgoing API request, so no UI service ever sets an `Authorization` header by hand. One request can
+  opt out through the `SkipBearer` request option.
 - **Depends on**: [`ITokenStorageService`](#itokenstorageservice) (its only constructor parameter);
   externals `System.Net.Http.Headers.AuthenticationHeaderValue` and `DelegatingHandler`.
 - **Concept introduced, the HTTP message-handler pipeline.** `HttpClient` composes handlers into a
@@ -2418,11 +2619,19 @@ lives.
     registration covers every request.
   - `[Rubric §1, SOLID]` shows in the single responsibility. The handler knows nothing about login,
     refresh, or expiry; it asks storage for whatever token exists and moves on.
-- **Walkthrough**: `SendAsync(request, cancellationToken)` (`AuthDelegatingHandler.cs:14`) awaits
-  `GetAccessTokenAsync()` (line 17), and only when the result is non-blank sets
-  `request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token)` (lines 18-21)
-  before delegating to `base.SendAsync` (line 23). An anonymous call therefore goes out with no header
-  at all rather than an empty one, which matters for the endpoints that are deliberately anonymous.
+- **Walkthrough**:
+  - `SkipBearer` (`AuthDelegatingHandler.cs:20`) is a public static
+    `HttpRequestOptionsKey<bool>` named `"MMCA.Common.UI.Auth.SkipBearer"`. The token refresh POST
+    sets it: that endpoint is anonymous, and reading token storage from inside a refresh would
+    re-enter the very acquisition that is waiting for the request to complete (doc at lines 15-19).
+  - `SendAsync(request, cancellationToken)` (`AuthDelegatingHandler.cs:23`) first checks the option:
+    when it is set to `true` the request passes straight to `base.SendAsync` without touching token
+    storage at all (lines 27-30). Otherwise it awaits `GetAccessTokenAsync()` (line 32), and only
+    when the result is non-blank sets
+    `request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token)` (lines 33-36)
+    before delegating to `base.SendAsync` (line 38). An anonymous call therefore goes out with no
+    header at all rather than an empty one, which matters for the endpoints that are deliberately
+    anonymous.
   Note the freshness work happens inside the token service: by the time this handler sees a token,
   a stale one has already been re-acquired.
 - **Why it's built this way**: a handler rather than a base-class helper, because the pipeline applies
@@ -2431,17 +2640,22 @@ lives.
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:92`), the lifetime
   `AddHttpMessageHandler` expects.
 - **Where it's used**: added to the `"APIClient"` pipeline alongside the culture handler
-  (`DependencyInjection.cs:116-117`, with the intent stated at lines 75-76). One documented bypass
+  (`DependencyInjection.cs:124-125`, with the intent stated at lines 75-76). One documented bypass
   exists: [`AuthenticatedServiceBase`](#authenticatedservicebase) builds a client with the token set
   directly for the cases where the pipeline is not in play
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/AuthenticatedServiceBase.cs:47`). Covered
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/AuthenticatedServiceBase.cs:53`). The
+  `SkipBearer` option is set by [`DirectApiTokenRefresher`](#directapitokenrefresher) on its refresh
+  request (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/Tokens/DirectApiTokenRefresher.cs:46`).
+  On a WebAssembly client of a host running the same-origin proxy,
+  [`SameOriginProxyRequestHandler`](#sameoriginproxyrequesthandler) sits inside this handler and
+  strips whatever header it attached (`DependencyInjection.cs:126-133`). Covered
   by `AuthDelegatingHandlerTests`
   (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Services/Auth/AuthDelegatingHandlerTests.cs:16`)
   and by a DI resolution test that exists because the pipeline must be able to construct it
   (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Services/ApiClientRegistrationTests.cs:29`).
 
 ### JsFetchSessionCookieSync
-> MMCA.Common.UI · `MMCA.Common.UI.Services.Auth` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/JsFetchSessionCookieSync.cs:11` · Level 1 · class (sealed)
+> MMCA.Common.UI · `MMCA.Common.UI.Services.Auth` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/JsFetchSessionCookieSync.cs:13` · Level 1 · class (sealed)
 
 - **What it is**: the [`ISessionCookieSync`](#isessioncookiesync) implementation. It calls two small JS
   helpers that issue a browser-side `fetch`, so the resulting `Set-Cookie` lands in the user's cookie
@@ -2453,29 +2667,33 @@ lives.
   the server, so a server-issued HTTP call would put the cookie in the server's own handler, not the
   user's browser. Routing the call through JS interop makes the browser the one issuing the request,
   which is the only way the `Set-Cookie` reaches the right cookie jar
-  (`JsFetchSessionCookieSync.cs:5-9`).
+  (`JsFetchSessionCookieSync.cs:6-8`).
   - `[Rubric §26, Front-End Security]` again: the tokens transit JS only for this one same-origin POST
     and are never persisted anywhere JS can read afterwards.
   - `[Rubric §29, Resilience & Business Continuity]` assesses degradation. Every interop failure is
-    absorbed, so a prerender pass or a disconnected circuit cannot throw out of a token write.
+    caught and turned into a `false` answer, so a prerender pass or a disconnected circuit cannot throw
+    out of a cookie write, yet the caller still learns the write did not happen.
 - **Walkthrough**:
-  - `IsInteropUnavailable(ex)` (`JsFetchSessionCookieSync.cs:13`) is the shared exception filter,
+  - `IsInteropUnavailable(ex)` (`JsFetchSessionCookieSync.cs:15-16`) is the shared exception filter,
     naming the four types that mean "there is no live JS runtime right now":
     `InvalidOperationException`, `JSDisconnectedException`, `JSException` and
-    `OperationCanceledException` (line 14).
-  - `SyncAsync(accessToken, refreshToken)` (line 16) invokes `mmcaAuthCookie.set` with both tokens
-    (line 20) and swallows an interop failure, the comment noting the cookie will be synced on the
-    next write (lines 22-25).
-  - `ClearAsync()` (line 28) invokes `mmcaAuthCookie.clear` (line 32) under the same filter, the
-    comment noting the cookie will still be cleared when the user next logs in or the token expires
-    (lines 34-37).
+    `OperationCanceledException`.
+  - `SyncAsync(accessToken, refreshToken)` (line 19) returns
+    `InvokeAsync<bool>("mmcaAuthCookie.set", accessToken, refreshToken)` (line 23): the script itself
+    reports whether the endpoint answered 2xx. An interop failure returns `false`, the comment noting
+    nothing was written (lines 25-29).
+  - `ClearAsync()` (line 33) returns `InvokeAsync<bool>("mmcaAuthCookie.clear")` (line 37) under the
+    same filter, and an interop failure again returns `false` because the cookie was not cleared by
+    this call (lines 39-43). The class doc records that the script tries the clear twice
+    (`JsFetchSessionCookieSync.cs:9-11`).
 - **Why it's built this way**: a shared static filter rather than two duplicated `when` clauses keeps
-  the definition of "interop unavailable" in one place, and swallowing rather than rethrowing matches
-  the fact that this is a mirror of state that already exists in memory. The cookie contract itself
+  the definition of "interop unavailable" in one place. Reporting rather than swallowing silently is
+  what lets the token storage services refuse a sign-in whose cookie never landed (see
+  [`ISessionCookieSync`](#isessioncookiesync)). The cookie contract itself
   belongs to [ADR-022](https://ivanball.github.io/docs/adr/022-browser-session-cookie-auth.html).
 - **Where it's used**: `TryAddScoped` behind [`ISessionCookieSync`](#isessioncookiesync) by
   `AddClientAuthSessionCookieSync()`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:195`); consumed by
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:211`); consumed by
   [`WasmTokenStorageService`](#wasmtokenstorageservice) and
   [`ServerTokenStorageService`](#servertokenstorageservice).
 - **Caveats / not-in-source**: the `mmcaAuthCookie.set` / `.clear` JS implementations live in
@@ -2531,6 +2749,38 @@ lives.
   `AuthUIServiceTests` constructs a real one rather than a double, precisely because the type test
   above would not match a mock
   (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Services/Auth/AuthUIServiceTests.cs:67-69`).
+
+### SameOriginProxyRequestHandler
+> MMCA.Common.UI · `MMCA.Common.UI.Services.Auth` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/SameOriginProxyRequestHandler.cs:11` · Level 1 · class (internal, sealed)
+
+- **What it is**: the innermost handler of the `"APIClient"` pipeline on a WebAssembly client whose
+  host runs the same-origin API proxy. It removes any `Authorization` header and stamps the proxy's
+  CSRF header on every request (`SameOriginProxyRequestHandler.cs:3-10`).
+- **Depends on**: [`SameOriginProxyHeaders`](#sameoriginproxyheaders) for the header name and value;
+  external `DelegatingHandler`.
+- **Concept introduced, the browser holds no usable bearer.** Behind the proxy the client only ever
+  holds a claims-only token; the proxy attaches the real bearer server-side from the HttpOnly session
+  cookie. Any `Authorization` header the outer handlers (such as
+  [`AuthDelegatingHandler`](#authdelegatinghandler)) or a service's `DefaultRequestHeaders` attached is
+  therefore noise at best, so this handler clears it rather than trusting every caller to know.
+  - `[Rubric §26, Front-End Security]` assesses whether a usable credential is reachable from browser
+    code. Here it is not, and the transport enforces that for every request.
+- **Walkthrough**: one override. `SendAsync(request, cancellationToken)`
+  (`SameOriginProxyRequestHandler.cs:14`) guards `request` with `ArgumentNullException.ThrowIfNull`
+  (line 16), sets `request.Headers.Authorization = null` (line 18), removes any existing CSRF header
+  and adds exactly one with `TryAddWithoutValidation` (lines 19-20), then delegates to
+  `base.SendAsync` (line 21). Removing first guarantees a single value, which is what the proxy's
+  check demands.
+- **Why it's built this way**: registering it innermost means it sees the request after every other
+  handler and service has had its say, so one place decides what reaches the proxy. It is
+  registered only when `Api:SameOriginApiEndpoint` is configured, so every other client (Blazor
+  Server, MAUI, a WebAssembly client of a host that did not opt in) keeps its pipeline unchanged
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:94-99`). The proxy design is
+  [ADR-131](https://ivanball.github.io/docs/adr/131-same-origin-api-proxy.html).
+- **Where it's used**: `AddTransient` and `AddHttpMessageHandler` inside `AddUIShared()` behind the
+  `usesSameOriginProxy` check (`DependencyInjection.cs:128-133`), after the auth and culture handlers
+  (lines 124-125). The proxy side that reads the CSRF header is
+  [`SameOriginApiProxyEndpoint`](#sameoriginapiproxyendpoint).
 
 ### IEmailConfirmationUIService
 > MMCA.Common.UI · `MMCA.Common.UI.Services.Auth` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/IEmailConfirmationUIService.cs:21` · Level 3 · interface
@@ -2607,8 +2857,8 @@ lives.
 > MMCA.Common.UI · `MMCA.Common.UI.Services.Auth` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/IAuthUIService.cs:18` · Level 5 · interface
 
 - **What it is**: the single client-side authentication contract: login, register, OAuth code
-  exchange, logout, refresh, the three password flows, and the signed-in-devices list with revoke.
-  Every auth page in the framework talks to this and nothing else.
+  exchange, logout, refresh, the three password flows, the signed-in-devices list with revoke, and
+  sign-out of every device. Every auth page in the framework talks to this and nothing else.
 - **Depends on**: [`Result`](group-01-result-error-handling.md#result) and its generic form from
   `MMCA.Common.Shared.Abstractions`; the `MMCA.Common.Shared.Auth` contracts
   [`LoginRequest`](group-08-auth.md#loginrequest),
@@ -2634,33 +2884,39 @@ lives.
   - `LoginAsync(LoginRequest, ct)` and `RegisterAsync(RegisterRequest, ct)` both return
     `Result<AuthenticationResponse>` and both store tokens on success
     (`IAuthUIService.cs:21,24`).
-  - `ExchangeOAuthCodeAsync(code, ct)` (line 29) trades a single-use completion code carried in the
+  - `ExchangeOAuthCodeAsync(code, ct)` (line 31) trades a single-use completion code carried in the
     redirect URL for the token pair through `auth/oauth/exchange`, stores the tokens and notifies auth
     state; the doc's closing sentence names the reason for the indirection, keeping tokens out of the
-    address bar (lines 24-28).
-  - `LogoutAsync()` (line 37) is the deliberate no-`Result` member: it revokes the server-side refresh
+    address bar (lines 26-30).
+  - `LogoutAsync()` (line 39) is the deliberate no-`Result` member: it revokes the server-side refresh
     sessions and clears local storage, and returns nothing because the local sign-out happens whatever
     the server answered. A user who asked to leave must never be kept signed in by a failed network
-    call (lines 31-36).
-  - `TryRefreshTokenAsync(ct)` (line 45) is the deliberate `bool` member: it makes no API call of its
+    call (lines 33-38).
+  - `TryRefreshTokenAsync(ct)` (line 47) is the deliberate `bool` member: it makes no API call of its
     own, since the host's [`ITokenRefresher`](#itokenrefresher) owns the exchange, and its two states
-    ("session still live", "session gone") are not errors to render (lines 39-44).
-  - `ChangePasswordAsync(currentPassword, newPassword, ct)` (line 48) hits `auth/password`.
-  - `RequestPasswordResetAsync(email, ct)` (line 55) hits the anonymous `auth/forgot-password`. The
+    ("session still live", "session gone") are not errors to render (lines 41-46).
+  - `ChangePasswordAsync(currentPassword, newPassword, ct)` (line 50) hits `auth/password`.
+  - `RequestPasswordResetAsync(email, ct)` (line 57) hits the anonymous `auth/forgot-password`. The
     doc pins the semantics: the endpoint answers 202 for every well-formed address as an
     anti-enumeration measure, so a success means "accepted", never "an account exists"
-    (lines 50-54).
-  - `ResetPasswordAsync(email, token, newPassword, ct)` (line 62) completes the reset via the
+    (lines 52-56).
+  - `ResetPasswordAsync(email, token, newPassword, ct)` (line 64) completes the reset via the
     anonymous `auth/reset-password`; an invalid, expired or already-consumed token comes back as a
-    failure carrying the server's generic message (lines 57-61).
-  - `GetSessionsAsync(ct)` (line 70) returns
+    failure carrying the server's generic message (lines 59-63).
+  - `GetSessionsAsync(ct)` (line 72) returns
     `Result<IReadOnlyList<RefreshSessionSummaryResponse>>` from `auth/my-sessions`, newest first, and
     documents that exactly one row can carry `IsCurrent`, resolved server-side from the access token's
-    `sid` claim (lines 64-69).
-  - `RevokeSessionAsync(sessionId, ct)` (line 79) signs one device out via `auth/revoke/{sessionId}`;
+    `sid` claim (lines 66-71).
+  - `RevokeSessionAsync(sessionId, ct)` (line 81) signs one device out via `auth/revoke/{sessionId}`;
     another account's session id (or a nonexistent one) answers 404 and arrives as an
     [`ErrorType`](group-01-result-error-handling.md#errortype)`.NotFound` failure, while revoking an
-    already-revoked session succeeds (lines 72-76).
+    already-revoked session succeeds (lines 74-80).
+  - `RevokeAllSessionsAsync(ct)` (line 91) signs out of every device via `auth/revoke` and, unlike
+    `LogoutAsync`, returns the server's answer as a `Result`. A failed revoke is reported rather than
+    hidden, and the local session is left in place so the caller can say so and let the user retry;
+    on success it also performs the same local sign-out `LogoutAsync` does (lines 83-90). The pair
+    is the clearest statement of the return-shape rule: the same endpoint, two members, because "leave
+    this device" must never fail while "end every session" must never claim success it did not get.
 - **Why it's built this way**: the interface is where the three return shapes are justified, and each
   justification is a behavior rule rather than a style preference. Keeping all eleven operations on
   one contract (rather than splitting sessions or password flows onto their own) matches how they are
@@ -2671,11 +2927,12 @@ lives.
   [ADR-036](https://ivanball.github.io/docs/adr/036-external-oauth-login.html) and
   [ADR-043](https://ivanball.github.io/docs/adr/043-mobile-deep-links-and-native-oauth-callback.html).
 - **Where it's used**: registered `TryAddScoped` against [`AuthUIService`](#authuiservice) by
-  `AddUIShared()` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:124`, the
+  `AddUIShared()` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:140`, the
   comment at line 108 noting `TryAdd` prevents duplicate registration when several hosts call in);
   injected by the shipped auth pages, including `Login`
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/Login.razor`) and
-  [`Sessions`](#sessions).
+  [`Sessions`](#sessions), whose sign-out-everywhere action calls `RevokeAllSessionsAsync`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/Sessions.razor.cs:191`).
 
 ### AuthUIService
 > MMCA.Common.UI · `MMCA.Common.UI.Services.Auth` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/AuthUIService.cs:44` · Level 6 · class (sealed)
@@ -2688,16 +2945,16 @@ lives.
   [Result](group-01-result-error-handling.md#result) carrying the server's own error text, so no page
   has to interpret an `HttpResponseMessage`.
 - **Depends on**: first-party
-  [IAuthUIService](#iauthuiservice) (the contract it implements, `AuthUIService.cs:43`),
+  [IAuthUIService](#iauthuiservice) (the contract it implements, `AuthUIService.cs:51`),
   [ITokenStorageService](#itokenstorageservice) (token persistence, injected at `AuthUIService.cs:46`),
   [ITokenRefresher](#itokenrefresher) (the host-specific renewal path, `AuthUIService.cs:47`),
   [JwtAuthenticationStateProvider](#jwtauthenticationstateprovider) (injected as the framework
   `AuthenticationStateProvider` base type at `AuthUIService.cs:48` and pattern-matched back down),
   [IPushRegistrationService](group-26-device-capability-layer.md#ipushregistrationservice) (native push
   cleanup, `AuthUIService.cs:49`),
-  [IUiReadCache](#iuireadcache) (optional, defaulted to `null` at `AuthUIService.cs:43`),
+  [IUiReadCache](#iuireadcache) (optional, defaulted to `null` at `AuthUIService.cs:50`),
   `ILocalCacheStore` (optional device-local document cache, defaulted to `null`,
-  `AuthUIService.cs:44-51`, wiped on sign-out alongside the read cache),
+  `AuthUIService.cs:51`, wiped on sign-out alongside the read cache),
   [HttpResultExecutor](#httpresultexecutor) (transport-fault translation),
   [ProblemDetailsResultReader](group-08-auth.md#problemdetailsresultreader) (response translation), and
   the shared auth contracts
@@ -2720,13 +2977,16 @@ lives.
   surface in the browser: here the only code that reads or writes tokens is this service plus
   [AuthDelegatingHandler](#authdelegatinghandler), both of them going through
   [ITokenStorageService](#itokenstorageservice) rather than doing JS interop of their own.
-  `[Rubric §11, Security]` assesses the end-to-end auth design: sign-out is deliberately **local-first**,
-  the remote revoke is best effort, and both the server call and the local clear are wrapped so a dropped
-  connection can never strand a user inside a session they asked to leave (`AuthUIService.cs:111-145`).
+  `[Rubric §11, Security]` assesses the end-to-end auth design. There are two sign-outs with opposite
+  failure policies. `LogoutAsync` is deliberately **local-first**: the remote revoke is best effort, and
+  both the server call and the local clear are wrapped so a dropped connection can never strand a user
+  inside a session they asked to leave (`AuthUIService.cs:88-114`, `320-359`). `RevokeAllSessionsAsync`
+  is **server-first**: it reports a failed revoke and only signs out locally once the server confirmed,
+  so "signed out everywhere" is never claimed when it did not happen (`AuthUIService.cs:118-139`).
   `[Rubric §19, State Management]` assesses who owns mutable client state and when it is invalidated:
   this service is the single writer of auth state, and it is also the thing that empties the read cache,
   because on WebAssembly and MAUI the DI scope is the app lifetime, so cached rows would otherwise
-  outlive the account that fetched them (`AuthUIService.cs:33-37`, `124-127`).
+  outlive the account that fetched them (`AuthUIService.cs:33-37`, `349-352`).
   `[Rubric §18, UI Architecture]` sees the same shape the entity services use, a typed service over the
   named `"APIClient"` returning `Result`, so pages render failures with
   [ResultUiExtensions](#resultuiextensions) instead of catching exceptions.
@@ -2741,7 +3001,7 @@ lives.
     carried no access token, which means the response shape drifted. Both are `const string`, so tests
     and pages branch on them without duplicating literals. The private `ApiClientName = "APIClient"`
     (`AuthUIService.cs:65`) names the shared client registered in
-    `MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:95`.
+    `MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:102`.
   - `LoginAsync` and `RegisterAsync` are one-liners over the private `AuthenticateAsync`, differing only
     in the relative URL, `auth/login` and `auth/register` (`AuthUIService.cs:68-73`).
   - `ExchangeOAuthCodeAsync` (`AuthUIService.cs:76`) guards the code client-side first: a blank code
@@ -2751,70 +3011,79 @@ lives.
     (`AuthUIService.cs:84`). The single-use code arrives in the redirect URL, which is what keeps the
     tokens themselves out of the address bar (ADR-036,
     `Website/docs-src/adr/036-external-oauth-login.md`).
-  - `AuthenticateAsync` (`AuthUIService.cs:272`) is the shared body of all three. It posts the credential
+  - `AuthenticateAsync` (`AuthUIService.cs:266`) is the shared body of all three. It posts the credential
     through [HttpResultExecutor](#httpresultexecutor) and reads the response with
-    `ProblemDetailsResultReader.ReadAsync<AuthenticationResponse>` (`AuthUIService.cs:277-284`), returns
-    early on failure (`273-276`), then checks the access token is actually present and fails with
-    `MissingAccessTokenCode` if it is not (`279-283`). Only then does it call
+    `ProblemDetailsResultReader.ReadAsync<AuthenticationResponse>` (`AuthUIService.cs:271-278`), returns
+    early on failure (`280-283`), then checks the access token is actually present and fails with
+    `MissingAccessTokenCode` if it is not (`285-290`). Only then does it call
     `tokenStorageService.SetTokensAsync` inside a `try` that converts an `InvalidOperationException` into
-    a `TokenStorageUnavailableCode` failure carrying the exception message as detail (`285-298`). The
-    point of that branch is that valid credentials nothing can hold are a failure, not a silent no-op.
+    a `TokenStorageUnavailableCode` failure carrying the exception message as detail (`292-305`). The
+    point of that branch is that valid credentials nothing can hold are a failure, not a silent no-op;
+    on browser hosts it also fires when the HttpOnly cookie write reports failure, because the token
+    storage services throw on a `false` from [ISessionCookieSync](#isessioncookiesync).
     Finally it pattern-matches the injected `AuthenticationStateProvider` down to
     [JwtAuthenticationStateProvider](#jwtauthenticationstateprovider) and calls
-    `NotifyUserAuthentication(accessToken)` (`300-303`, and
+    `NotifyUserAuthentication(accessToken)` (`307-310`, and
     `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/JwtAuthenticationStateProvider.cs:60`).
     The `is` test rather than a cast is what lets a host register a different provider without breaking
     sign-in.
-  - `LogoutAsync` (`AuthUIService.cs:88`) runs four steps, each isolated so a failure cannot stop the
-    next. First `pushRegistration.UnregisterAsync()` inside a bare `catch` (`82-91`): the Devices DELETE
-    is authenticated, so it has to happen while the access token is still valid, and it is a no-op on web
-    heads (ADR-044, `Website/docs-src/adr/044-native-push-delivery.md`). Second, if a token can be read,
-    a Bearer header is attached and `auth/revoke` is posted, again inside a `catch` (`93-113`). Third,
-    `tokenStorageService.ClearTokensAsync()` under `catch (InvalidOperationException)` for the
-    interop-unavailable case (`115-122`). Fourth, `readCache?.Clear()` followed by the private
-    `ClearLocalCacheAsync()` (which no-ops when `localCache` is `null` and swallows
-    `InvalidOperationException` the same way the token clear does, `AuthUIService.cs:355-368`), then
-    `NotifyUserLogout()`
-    (`129-132`, and `.../Services/Auth/JwtAuthenticationStateProvider.cs:71`). The two
-    `#pragma warning disable CA1031` blocks (`86-88`, `107-109`) are deliberate and annotated in place:
-    catching everything is the correct policy for a best-effort cleanup step.
-  - `TryRefreshTokenAsync` (`AuthUIService.cs:148`) makes no HTTP call of its own. It asks
-    `tokenRefresher.AcquireAccessTokenAsync` for a token (`141`); browser hosts renew through the
+  - `LogoutAsync` (`AuthUIService.cs:88`) runs three steps, each isolated so a failure cannot stop the
+    next. First the private `UnregisterPushAsync()` (call at line 90). Second, if a token can be read, a
+    Bearer header is attached and `auth/revoke` is posted inside a bare `catch` (`94-111`). Third, the
+    private `SignOutLocallyAsync()` (line 114).
+  - `RevokeAllSessionsAsync` (`AuthUIService.cs:118`) posts the same `auth/revoke` through
+    [HttpResultExecutor](#httpresultexecutor) on an authenticated client, reading it with the
+    non-generic reader (`120-128`). Only when the result is a success does it run `UnregisterPushAsync()`
+    then `SignOutLocallyAsync()`, in the same order as `LogoutAsync` so the push unregister still holds a
+    valid access token (`130-136`); either way it returns the server's `Result` (line 138). A failure
+    leaves the local session intact for the caller to report and retry.
+  - `TryRefreshTokenAsync` (`AuthUIService.cs:142`) makes no HTTP call of its own. It asks
+    `tokenRefresher.AcquireAccessTokenAsync` for a token (`147`); browser hosts renew through the
     same-origin cookie proxy so the refresh token never reaches JS
     ([SameOriginProxyTokenRefresher](#sameoriginproxytokenrefresher)) and MAUI renews straight from
     secure storage ([DirectApiTokenRefresher](#directapitokenrefresher)). A null or blank answer means
     the session is gone, which this method treats exactly like a sign-out: clear tokens, clear the read
     cache and the local cache (also through `ClearLocalCacheAsync()`), notify logout, return `false`
-    (`143-164`). A token that comes back is published with
-    `NotifyUserAuthentication` and answered with `true` (`166-171`). The `bool` return is the honest type
-    here, because neither outcome is an error a page would render (`IAuthUIService.cs:41-47`).
+    (`149-171`). It spells these steps out inline rather than calling `SignOutLocallyAsync()`. A token
+    that comes back is published with `NotifyUserAuthentication` and answered with `true` (`173-178`).
+    The `bool` return is the honest type here, because neither outcome is an error a page would render
+    (`IAuthUIService.cs:41-47`).
   - The password trio all wrap [HttpResultExecutor](#httpresultexecutor).
-    `ChangePasswordAsync` (`175`) is the only one that authenticates: it builds a
+    `ChangePasswordAsync` (`182`) is the only one that authenticates: it builds a
     [ChangePasswordRequest](group-08-auth.md#changepasswordrequest) and `PUT`s it to `auth/password`
-    (`179-188`). `RequestPasswordResetAsync` (`191`) and `ResetPasswordAsync` (`208`) deliberately use
-    the plain factory client with no Bearer header (`197`, `216`), because a reset must not be bound to
-    whatever session happens to be open. The comment at `201-202` records the contract that matters:
-    `auth/forgot-password` answers 202 for every well-formed address, so a success never means "this
-    account exists".
-  - The two session methods back the devices page. `GetSessionsAsync` (`226`) `GET`s `auth/my-sessions`
+    (`189-193`). `RequestPasswordResetAsync` (`198`) and `ResetPasswordAsync` (`215`) deliberately use
+    the plain factory client with no Bearer header (`204`, `223`), because a reset must not be bound to
+    whatever session happens to be open (comment at `202-203`). The comment at `208-209` records the
+    contract that matters: `auth/forgot-password` answers 202 for every well-formed address, so a
+    success never means "this account exists".
+  - The two session methods back the devices page. `GetSessionsAsync` (`233`) `GET`s `auth/my-sessions`
     and reads it with the **generic** reader into `IReadOnlyList<RefreshSessionSummaryResponse>`
-    (`234-235`). `RevokeSessionAsync` (`240`) posts `auth/revoke/{sessionId}` and reads it with the
-    **non-generic** reader (`249-250`), because that endpoint answers 204 and
+    (`241-242`). `RevokeSessionAsync` (`247`) posts `auth/revoke/{sessionId}` and reads it with the
+    **non-generic** reader (`254-257`), because that endpoint answers 204 and
     [ProblemDetailsResultReader](group-08-auth.md#problemdetailsresultreader)'s generic overload turns an
     empty 2xx body into an `EmptyResponseCode` failure
-    (`MMCA.Common/Source/Core/MMCA.Common.Shared/Http/ProblemDetailsResultReader.cs:274-279`). Picking
+    (`MMCA.Common/Source/Core/MMCA.Common.Shared/Http/ProblemDetailsResultReader.cs:276-281`). Picking
     the wrong overload there would turn every successful revoke into an error.
-  - Three private helpers close the class. `CreateAuthenticatedClientAsync` (`314`) creates the APIClient
+  - Five private helpers close the class. `UnregisterPushAsync` (`320`) calls
+    `pushRegistration.UnregisterAsync()` inside a bare `catch` (`322-331`): the Devices DELETE is
+    authenticated, so it has to happen while the access token is still valid, and it is a no-op on web
+    heads (ADR-044, `Website/docs-src/adr/044-native-push-delivery.md`). `SignOutLocallyAsync` (`338`)
+    is the local half of every sign-out: `tokenStorageService.ClearTokensAsync()` under
+    `catch (InvalidOperationException)` for the interop-unavailable case (`340-347`), then
+    `readCache?.Clear()` and `ClearLocalCacheAsync()` (`352-353`), then `NotifyUserLogout()` (`355-358`,
+    and `.../Services/Auth/JwtAuthenticationStateProvider.cs:71`). The two
+    `#pragma warning disable CA1031` blocks (`106-108` in `LogoutAsync`, `326-328` in
+    `UnregisterPushAsync`) are deliberate and annotated in place: catching everything is the correct
+    policy for a best-effort cleanup step. `CreateAuthenticatedClientAsync` (`367`) creates the APIClient
     and sets `DefaultRequestHeaders.Authorization` from the stored token; its doc comment states plainly
     that it mirrors [AuthenticatedServiceBase](#authenticatedservicebase) and cannot inherit it, because
-    this is not an entity service and takes a different dependency set (`308-313`).
-    `ReadAccessTokenAsync` (`327`) swallows `InvalidOperationException` from the store and returns `null`,
+    this is not an entity service and takes a different dependency set (`361-366`).
+    `ReadAccessTokenAsync` (`380`) swallows `InvalidOperationException` from the store and returns `null`,
     so an SSR prerender proceeds tokenless and lets the API answer 401 like any other failure
-    (`333-338`). `ClearLocalCacheAsync` (`AuthUIService.cs:353`) is the newest of the three: it no-ops
-    when `localCache` is `null`, otherwise calls `localCache.ClearAsync()` inside a
-    `catch (InvalidOperationException)` for the same JS-interop-gone case the token clear guards against
-    (`355-368`), and both `LogoutAsync` and `TryRefreshTokenAsync` call it right after `readCache?.Clear()`
-    so a device-local offline snapshot never survives to be read by the next account on the same device.
+    (`386-391`). `ClearLocalCacheAsync` (`AuthUIService.cs:397`) no-ops when `localCache` is `null`,
+    otherwise calls `localCache.ClearAsync()` inside a `catch (InvalidOperationException)` for the same
+    JS-interop-gone case the token clear guards against (`399-411`), so a device-local offline snapshot
+    never survives to be read by the next account on the same device.
 - **Why it's built this way**: ADR-051 (`Website/docs-src/adr/051-client-auth-token-lifecycle.md`) is the
   record behind the split visible in the constructor: storage, renewal and orchestration are three
   different abstractions because each render mode (SSR prerender, Blazor Server, WebAssembly, MAUI) can
@@ -2830,12 +3099,12 @@ lives.
   wording and [ErrorType](group-01-result-error-handling.md#errortype), so the page shows that rather
   than a client-invented message.
 - **Where it's used**: registered `TryAddScoped<IAuthUIService, AuthUIService>()` in
-  `MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:124`, so every host that adds
+  `MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:140`, so every host that adds
   the shared UI gets it. Consumers inside the shared UI are the auth pages
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/Login.razor:204`,
   `Pages/Auth/Register.razor:161`, `Pages/Auth/OAuthComplete.razor:65`,
   `Pages/Auth/ForgotPassword.razor:81`, `Pages/Auth/ResetPassword.razor:122`), the devices page
-  [Sessions](#sessions) (`Pages/Auth/Sessions.razor.cs:79`, `119`, `165`), and both shells
+  [Sessions](#sessions) (`Pages/Auth/Sessions.razor.cs:79`, `119`, `165`, `191`), and both shells
   (`Layout/MainLayout.razor:108`, `Layout/NavMenu.razor:185`, which call `LogoutAsync`). Downstream, the
   ADC and Store profile pages call `ChangePasswordAsync`
   ([Profile](group-24-identity-module.md#profile),
@@ -2853,15 +3122,16 @@ lives.
   [AuthUIServiceTests](group-28-testing-infrastructure.md#per-project-test-rollup) (`AuthUIServiceTests.cs:488`,
   `454`) and the gallery stub. Renewal in a running app happens further down, inside the storage service
   and the refreshers, so this method is a public entry point that nothing currently enters. The
-  `auth/revoke` call in `LogoutAsync` is described in the comment as "fire-and-forget" but is in fact
-  awaited (`AuthUIService.cs:116`); the accurate reading is best-effort-and-ignored, and on a bad network
-  the awaited call can add its full timeout to a sign-out. That same call passes no `CancellationToken`,
-  because `LogoutAsync` takes none by design (`IAuthUIService.cs:39`). Finally,
+  `auth/revoke` call in `LogoutAsync` is described in the comment as "fire-and-forget" (lines 99-101) but
+  is in fact awaited (`AuthUIService.cs:104`); the accurate reading is best-effort-and-ignored, and on a
+  bad network the awaited call can add its full timeout to a sign-out. That same call passes no
+  `CancellationToken`, because `LogoutAsync` takes none by design (`IAuthUIService.cs:39`). Finally,
   `CreateAuthenticatedClientAsync` sets a `DefaultRequestHeaders` Bearer while
   [AuthDelegatingHandler](#authdelegatinghandler) is already attaching one to every APIClient request
-  from the same store (`DependencyInjection.cs:116`, `Services/Auth/AuthDelegatingHandler.cs:17-21`), so
+  from the same store (`DependencyInjection.cs:124`, `Services/Auth/AuthDelegatingHandler.cs:32-36`), so
   the header is computed twice per authenticated call; both values come from the same source, so this is
-  redundancy rather than a defect.
+  redundancy rather than a defect. Behind the same-origin proxy both are then stripped by
+  [SameOriginProxyRequestHandler](#sameoriginproxyrequesthandler).
 
 ### CultureDelegatingHandler
 
@@ -2899,7 +3169,7 @@ lives.
   culture travels on calls made by code that has never heard of localization. It is registered
   transient in [DependencyInjection](#dependencyinjection)
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:93`) and appended to the
-  `"APIClient"` pipeline after the auth handler (`DependencyInjection.cs:116-117`).
+  `"APIClient"` pipeline after the auth handler (`DependencyInjection.cs:124-125`).
 - **Where it's used**: every request through the `"APIClient"` named client, which is every call made
   by [EntityServiceBase<TEntityDTO, TIdentifierType>](#entityservicebasetentitydto-tidentifiertype),
   [ChildEntityServiceBase](#childentityservicebase),
@@ -2988,9 +3258,9 @@ lives.
   `services.AddScoped<ISecureTokenStore, MauiSecureTokenStore>()`
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:99`, with the rationale
   at lines 66-77). Injected into [`DirectApiTokenRefresher`](#directapitokenrefresher)
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/Tokens/DirectApiTokenRefresher.cs:21`) and
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/Tokens/DirectApiTokenRefresher.cs:27`) and
   mocked directly in `DirectApiTokenRefresherTests`
-  (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Services/Auth/DirectApiTokenRefresherTests.cs:31`).
+  (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Services/Auth/DirectApiTokenRefresherTests.cs:32`).
 - **Caveats / not-in-source**: no browser host implements it. Resolving it on a Blazor Server or WASM
   head is a DI failure by design, not an oversight.
 
@@ -3062,7 +3332,7 @@ lives.
   [`AuthUIService`](#authuiservice),
   [`AuthenticatedServiceBase`](#authenticatedservicebase) (which uses it for the direct-token path
   that bypasses the delegating handler,
-  `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/AuthenticatedServiceBase.cs:47`) and
+  `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/AuthenticatedServiceBase.cs:53`) and
   [`NotificationHubService`](#notificationhubservice) for the SignalR access-token provider. Test
   hosts substitute `StubTokenStorageService` and `NullTokenStorageService`
   (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Gallery/Stubs/NullTokenStorageService.cs:8`).
@@ -3126,7 +3396,7 @@ lives.
     land on `Clear()`. The cache is registered scoped, which is one instance per Blazor Server circuit
     but **one per app lifetime** on WebAssembly and MAUI, where the scope outlives a sign-out. The
     contract therefore states that the sign-out path calls `Clear` so one account's reads can never be
-    served to the next (`IUiReadCache.cs:22-26,61-65`).
+    served to the next (`IUiReadCache.cs:22-26,80-84`).
   - `[Rubric §29, Resilience & Business Continuity]` shows in the storage rule: only successful reads
     are stored, so a transient outage cannot pin an error in front of the user (`IUiReadCache.cs:19-20`).
   - **Why the parameter is a `string` and not a `Uri`.** The `CA1054` suppression (lines 28-31) is
@@ -3134,30 +3404,44 @@ lives.
     as a relative URL, it is compared by ordinal prefix and stored verbatim, and `System.Uri` would
     re-encode and re-normalize it, which is exactly what must not happen to a key when the point is
     matching the server's key byte for byte.
-- **Walkthrough**: four members.
-  - `bool TryGetFresh<T>(string url, out T? value)` (line 42) reports a fresh hit; a miss, an expired
+  - **The in-flight read race, and the generation counter that closes it.** A read issued before a
+    write and completing after it would otherwise re-store exactly the value the write just
+    invalidated. `Generation` (line 40) is a counter that moves on every `InvalidatePrefix` and `Clear`;
+    a reader captures it before the GET and hands it back to the three-argument `Set`, which drops the
+    value when an invalidation happened in between (lines 34-39, 61-70). `[Rubric §19, State Management
+    & Data Flow]` assesses exactly this kind of stale-write ordering.
+- **Walkthrough**: six members, two of them default interface members.
+  - `long Generation => 0` (line 40) is the invalidation generation. The default body returns a
+    constant, so an implementation that does not track generations never drops a value.
+  - `bool TryGetFresh<T>(string url, out T? value)` (line 50) reports a fresh hit; a miss, an expired
     entry, or a disabled cache all read as `false`, and the doc notes that a hit stored under a
-    different type also reads as a miss (line 37).
-  - `void Set<T>(string url, T value)` (line 51) stores a successfully read value stamped with the
+    different type also reads as a miss (line 45).
+  - `void Set<T>(string url, T value)` (line 59) stores a successfully read value stamped with the
     current time, and is a no-op when caching is disabled. The doc is explicit that only success values
-    are ever passed here (line 50).
-  - `void InvalidatePrefix(string routePrefix)` (line 59) drops every entry whose key starts with the
+    are ever passed here (line 58).
+  - `void Set<T>(string url, T value, long generation)` (line 70) stores only when no invalidation
+    happened since `generation` was read; its default body forwards to the two-argument `Set` and
+    ignores the generation (lines 61-65, 70).
+  - `void InvalidatePrefix(string routePrefix)` (line 78) drops every entry whose key starts with the
     prefix, ordinally. That is how one endpoint's create, update or delete clears that endpoint's list,
-    paged, lookup and by-id entries in a single call (lines 53-58).
-  - `void Clear()` (line 66) drops everything, for the sign-out case above.
+    paged, lookup and by-id entries in a single call (lines 73-75).
+  - `void Clear()` (line 85) drops everything, for the sign-out case above.
 - **Why it's built this way**: an interface (rather than a concrete helper) is what lets the whole
   feature be optional. Both consumers take `IUiReadCache?` with a `null` default, so a host that
   registers nothing gets exactly the plain GET the read methods issued before a cache existed
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/EntityServiceBase.cs:47`,
-  `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/AuthUIService.cs:43`). Prefix
+  `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/AuthUIService.cs:50`). Prefix
   invalidation rather than per-key invalidation matches how the framework's endpoints are shaped: one
   resource owns one route prefix, so a write knows what it invalidated without enumerating the reads.
+  The two generation members are default interface members, so a host-supplied implementation that
+  does not care about the in-flight race only has to implement the original four.
 - **Where it's used**: registered `TryAddScoped` against [UiReadCache](#uireadcache) by `AddUIShared`
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:63`). Read through by
   [EntityServiceBase<TEntityDTO, TIdentifierType>](#entityservicebasetentitydto-tidentifiertype)'s
-  `GetCachedAsync` (`EntityServiceBase.cs:248-268`) and invalidated by its `InvalidateOnSuccess`
-  (`EntityServiceBase.cs:281-287`); cleared on sign-out and on an unrefreshable session by
-  `AuthUIService` (`AuthUIService.cs:138,168`).
+  `GetCachedAsync` (`EntityServiceBase.cs:241-272`), which captures `Generation` before the GET
+  (`EntityServiceBase.cs:261`) and stores through the three-argument `Set` (`EntityServiceBase.cs:268`),
+  and invalidated by its `InvalidateOnSuccess` (`EntityServiceBase.cs:285-291`); cleared on sign-out and
+  on an unrefreshable session by `AuthUIService` (`AuthUIService.cs:162,352`).
 - **Caveats / not-in-source**: nothing here is shared between users or between tabs. It is an in-memory
   per-scope cache, so a second browser tab on WebAssembly has its own instance and its own entries.
 
@@ -3199,9 +3483,9 @@ lives.
   not-found page, which is exactly why MAUI heads register their own applier after `AddUIShared`.
 - **Where it's used**: registered as the default with
   `TryAddScoped<ICultureApplier, EndpointCultureApplier>()`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:144`), with the
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:160`), with the
   comment above it
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:140-143`) recording that a hybrid head overrides it
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:156-159`) recording that a hybrid head overrides it
   afterwards. The MAUI replacement is
   [MauiCultureApplier](group-26-device-capability-layer.md#mauicultureapplier).
 
@@ -3256,54 +3540,6 @@ lives.
 
 ---
 
-### DirectApiTokenRefresher
-> MMCA.Common.UI · `MMCA.Common.UI.Services.Auth.Tokens` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/Tokens/DirectApiTokenRefresher.cs:19` · Level 1 · class (sealed)
-
-- **What it is**: the MAUI [`ITokenRefresher`](#itokenrefresher). It reads the token pair out of OS
-  SecureStorage, exchanges it against the API's cross-origin `auth/refresh` endpoint, and writes the
-  rotated pair back.
-- **Depends on**: [`ISecureTokenStore`](#isecuretokenstore) (deliberately, not
-  [`ITokenStorageService`](#itokenstorageservice)),
-  [`RefreshTokenRequest`](group-08-auth.md#refreshtokenrequest) and
-  [`AuthenticationResponse`](group-08-auth.md#authenticationresponse) from `MMCA.Common.Shared.Auth`;
-  externals `IHttpClientFactory` and `System.Net.Http.Json`.
-- **Concept introduced, direct token handling where there is no DOM.** The class doc justifies the
-  choice: MAUI has no browser and thus no XSS surface, so holding a refresh token client-side and
-  posting it is acceptable there in a way it is not in a browser
-  (`DirectApiTokenRefresher.cs:7-10`). This is the counterpart to
-  [`SameOriginProxyTokenRefresher`](#sameoriginproxytokenrefresher), and reading the two together is
-  the clearest statement of the framework's per-platform threat model.
-  - `[Rubric §11, Security]` assesses per-platform credential handling, exactly as above.
-  - `[Rubric §1, SOLID]`, dependency direction: the second doc paragraph is unusually explicit
-    (lines 10-16). Every operation it performs is a raw read or write, so it takes the raw store;
-    taking [`ITokenStorageService`](#itokenstorageservice) instead would close the loop and let a
-    refresh re-enter the acquisition that started it.
-- **Walkthrough**: `AcquireAccessTokenAsync(cancellationToken)` (`DirectApiTokenRefresher.cs:25`) is a
-  straight line of early returns, each producing `null` rather than an exception:
-  - read both tokens from the store (lines 26-27), and bail when either is blank (lines 29-32), so a
-    never-logged-in device costs one storage read and no network call;
-  - create the named `"APIClient"` (`ApiClientName`, line 22) and POST a
-    [`RefreshTokenRequest`](group-08-auth.md#refreshtokenrequest) carrying both tokens to the relative
-    `auth/refresh` (lines 34-36);
-  - bail on any non-success status (lines 38-41), which is how a revoked or reused refresh token
-    arrives;
-  - deserialize an [`AuthenticationResponse`](group-08-auth.md#authenticationresponse) and bail when
-    the access token came back blank (lines 43-47);
-  - persist the rotated pair through [`ISecureTokenStore.SetTokensAsync`](#isecuretokenstore) and
-    return the new access token (lines 49-50).
-- **Why it's built this way**: the rotation-on-refresh shape it participates in is
-  [ADR-097](https://ivanball.github.io/docs/adr/097-multi-device-refresh-sessions.html), which made
-  refresh sessions hashed, rotating and per device: writing the returned pair back is not an
-  optimization, it is required, because the old refresh token is dead after the exchange. The
-  `using var httpClient` (line 34) and the relative `Uri` both lean on the named client configured
-  once in `AddUIShared` (`MMCA.Common.UI/DependencyInjection.cs:96-117`).
-- **Where it's used**: registered on the MAUI head,
-  `AddScoped<ITokenRefresher, DirectApiTokenRefresher>()`
-  (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/MauiProgram.cs:97`). Covered by
-  `DirectApiTokenRefresherTests`
-  (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Services/Auth/DirectApiTokenRefresherTests.cs:17`),
-  which mocks the store and the HTTP handler (lines 22-34).
-
 ### SameOriginProxyTokenRefresher
 > MMCA.Common.UI · `MMCA.Common.UI.Services.Auth.Tokens` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/Tokens/SameOriginProxyTokenRefresher.cs:11` · Level 1 · class (sealed)
 
@@ -3319,7 +3555,7 @@ lives.
   server-side, and only the access token comes back over the wire
   (`SameOriginProxyTokenRefresher.cs:5-9`). The server half is
   `SessionCookieEndpoints`, which maps `POST /auth/session/token`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/SessionCookieEndpoints.cs:50`).
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/SessionCookieEndpoints.cs:58`).
   - `[Rubric §26, Front-End Security]` assesses whether a long-lived credential is reachable from
     scripts. It is not: an XSS on this page can steal an access token that expires in minutes, not the
     refresh token behind it.
@@ -3424,24 +3660,32 @@ lives.
     (lines 46-47).
   - `GetRefreshTokenAsync()` (line 59) returns `null` unconditionally, an honest answer rather than a
     stub: in the browser there is nothing to return.
-  - `SetTokensAsync(accessToken, refreshToken)` (line 61) stores the access token in memory and seeds
-    the HttpOnly cookies through [`ISessionCookieSync.SyncAsync`](#isessioncookiesync) (line 66); the
-    comment records that the refresh token transits JS only for that same-origin POST (lines 64-65).
-  - `ClearTokensAsync()` (line 69) nulls the field and clears the cookies (lines 71-72).
-  - `HydrateAsync()` (line 75) is one line of work: call
+  - `SetTokensAsync(accessToken, refreshToken)` (line 61) stores the access token in memory (line 63)
+    and seeds the HttpOnly cookies through [`ISessionCookieSync.SyncAsync`](#isessioncookiesync)
+    (line 68); the comment records that the refresh token transits JS only for that same-origin POST
+    (lines 64-65). A `false` from the cookie write throws `InvalidOperationException` (lines 68-71),
+    after the in-memory token is set, so [`AuthUIService`](#authuiservice) reports
+    `Auth.TokenStorageUnavailable` instead of a login that silently signs out at the first
+    access-token expiry, when no cookie exists to refresh from (lines 65-67).
+  - `ClearTokensAsync()` (line 74) nulls the field and clears the cookies (lines 76, 80). Clearing is
+    best-effort by contract, so a `false` from `ClearAsync` is discarded; the comment points a caller
+    that needs proof the session ended at `IAuthUIService.RevokeAllSessionsAsync` (lines 77-80).
+  - `HydrateAsync()` (line 83) is one line of work: call
     [`ITokenRefresher.AcquireAccessTokenAsync`](#itokenrefresher), store the result, return it
-    (lines 77-78).
+    (lines 85-86).
 - **Why it's built this way**: the class doc records that it was hoisted out of the app WASM clients
   because it carries no app-specific state, and names its Blazor Server sibling
   [`ServerTokenStorageService`](#servertokenstorageservice) in
   MMCA.Common.UI.Web (lines 3-10). The two share the skew constant, the `Lock`, and the same
   single-flight shape; the server one adds an `HttpContext` branch for the prerender pass. The
   cookie-only storage model is [ADR-022](https://ivanball.github.io/docs/adr/022-browser-session-cookie-auth.html).
-- **Where it's used**: registered on the WASM client,
+- **Where it's used**: registered on the WASM clients,
   `AddScoped<ITokenStorageService, WasmTokenStorageService>()`
-  (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web.Client/Program.cs:44`). Covered by
-  `WasmTokenStorageServiceTests`, which drives the concurrency path directly
-  (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Services/Auth/WasmTokenStorageServiceTests.cs:16,104`).
+  (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web.Client/Program.cs:45`,
+  `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Program.cs:48`). Covered by
+  `WasmTokenStorageServiceTests`, which drives the concurrency path directly and pins the failed
+  cookie write as a throw
+  (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Services/Auth/WasmTokenStorageServiceTests.cs:16,168`).
 
 ### UiReadCache
 > MMCA.Common.UI · `MMCA.Common.UI.Services.Caching` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Caching/UiReadCache.cs:18` · Level 1 · class (internal, sealed)
@@ -3466,29 +3710,42 @@ lives.
   - **Ordinal comparison as a correctness requirement.** The comment at lines 22-24 makes the point
     that two URLs differing only in case are two different requests to the server, so they must be two
     different entries here. That is why the default `Dictionary<string, ...>` comparer is left alone
-    and every prefix check passes `StringComparison.Ordinal` explicitly (lines 95, 127).
+    and every prefix check passes `StringComparison.Ordinal` explicitly (lines 137, 170).
+  - **One generation counter for the whole dictionary.** `_generation` moves under `_sync` on every
+    `InvalidatePrefix` and `Clear`, and the comment at lines 29-30 states why it is one counter rather
+    than one per prefix: the cache holds tens of entries, and a global counter also covers `Clear`. The
+    cost is that a write to one endpoint also drops an in-flight read of an unrelated one, which is a
+    wasted store, never a stale one.
   - `[Rubric §14, Testability]` shows in the injected `TimeProvider` (line 16): TTL behavior is
     exercised with a fake clock rather than by sleeping, in `UiReadCacheTests`.
 - **Walkthrough**:
   - Fields: the `Lock _sync` (line 20), the entry dictionary mapping URL to a
     `(object Value, DateTimeOffset StoredAt)` tuple (line 25), the null-guarded `_timeProvider`
-    (line 26), and the eagerly unwrapped `_options` (line 27). Storing the value as `object` is what
-    lets one dictionary hold every read shape the app makes.
-  - `TryGetFresh<T>` (lines 30-67) guards the URL, sets `value = default`, and short-circuits to
-    `false` when `_options.Enabled` is off (lines 36-39). It then takes the lock and applies three
-    exits: no entry (lines 45-48); an entry older than `ResolveTtl(url)`, which is **removed** on the
-    way out (lines 50-54); and an entry whose stored value is not a `T`, which is also removed, because
+    (line 26), the eagerly unwrapped `_options` (line 27), and the `long _generation` counter
+    (line 31). Storing the value as `object` is what lets one dictionary hold every read shape the app
+    makes.
+  - `Generation` (lines 34-43) reads `_generation` under the same lock that guards its increments.
+  - `TryGetFresh<T>` (lines 46-83) guards the URL, sets `value = default`, and short-circuits to
+    `false` when `_options.Enabled` is off (lines 52-55). It then takes the lock and applies three
+    exits: no entry (lines 61-64); an entry older than `ResolveTtl(url)`, which is **removed** on the
+    way out (lines 66-70); and an entry whose stored value is not a `T`, which is also removed, because
     the same URL read back as a different type means the caller changed shape and the stored value can
-    no longer answer the question (lines 56-62). Only then is it a hit (lines 64-65).
-  - `Set<T>` (lines 70-85) is a no-op when caching is disabled **or the value is null** (line 74),
-    stamps `GetUtcNow()` outside the lock, and assigns inside it (lines 79-84).
-  - `InvalidatePrefix` (lines 88-103) materializes the matching keys into a list under the lock before
-    removing them (lines 94-101), because removing while enumerating the same dictionary would throw.
-  - `Clear` (lines 106-112) empties the dictionary under the lock.
-  - `ResolveTtl` (lines 120-135) is the freshness lookup: it starts from
+    no longer answer the question (lines 72-78). Only then is it a hit (lines 80-81).
+  - `Set<T>(url, value)` (lines 86-101) is a no-op when caching is disabled **or the value is null**
+    (line 90), stamps `GetUtcNow()` outside the lock, and assigns inside it (lines 95-100).
+  - `Set<T>(url, value, generation)` (lines 104-126) has the same guards, then, inside the lock,
+    returns without storing when `generation` no longer equals `_generation` (lines 119-122): a write
+    invalidated the endpoint, or a sign-out cleared everything, while the read was in flight, so the
+    value may be exactly what the write made stale (lines 117-118). Otherwise it assigns (line 124).
+  - `InvalidatePrefix` (lines 129-145) increments `_generation` (line 135) and materializes the
+    matching keys into a list under the lock before removing them (lines 136-143), because removing
+    while enumerating the same dictionary would throw.
+  - `Clear` (lines 148-155) increments `_generation` (line 152) and empties the dictionary under the
+    lock.
+  - `ResolveTtl` (lines 163-178) is the freshness lookup: it starts from
     `UiReadCacheOptions.DefaultTtl` and scans every configured route prefix, keeping the TTL of the
-    **longest** prefix the URL starts with (lines 125-132). The doc says why longest-match rather than
-    first-match (lines 114-118): a nested route can state a stricter budget than the endpoint above it,
+    **longest** prefix the URL starts with (lines 168-175). The doc says why longest-match rather than
+    first-match (lines 157-162): a nested route can state a stricter budget than the endpoint above it,
     whatever order the configuration happens to enumerate in.
 - **Why it's built this way**: `internal` because the interface is the supported surface and the DI
   registration is the only supported way to get one
@@ -3503,8 +3760,71 @@ lives.
   stale list corrects itself within one user's attention span.
 - **Where it's used**: resolved as [IUiReadCache](#iuireadcache) by
   [EntityServiceBase<TEntityDTO, TIdentifierType>](#entityservicebasetentitydto-tidentifiertype) and
-  `AuthUIService`; covered by `UiReadCacheTests`
-  (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Services/Caching/UiReadCacheTests.cs:15`).
+  [AuthUIService](#authuiservice); covered by `UiReadCacheTests`
+  (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Services/Caching/UiReadCacheTests.cs:15`),
+  whose generation cases drop a late `Set` after an invalidation and after a `Clear`
+  (`UiReadCacheTests.cs:156,175`).
+
+### DirectApiTokenRefresher
+> MMCA.Common.UI · `MMCA.Common.UI.Services.Auth.Tokens` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/Tokens/DirectApiTokenRefresher.cs:25` · Level 2 · class (sealed)
+
+- **What it is**: the MAUI [`ITokenRefresher`](#itokenrefresher). It reads the token pair out of OS
+  SecureStorage, exchanges it against the API's cross-origin `auth/refresh` endpoint, and writes the
+  rotated pair back.
+- **Depends on**: [`ISecureTokenStore`](#isecuretokenstore) (deliberately, not
+  [`ITokenStorageService`](#itokenstorageservice)),
+  [`AuthDelegatingHandler`](#authdelegatinghandler) (for its `SkipBearer` request option),
+  [`RefreshTokenRequest`](group-08-auth.md#refreshtokenrequest) and
+  [`AuthenticationResponse`](group-08-auth.md#authenticationresponse) from `MMCA.Common.Shared.Auth`;
+  externals `IHttpClientFactory` and `System.Net.Http.Json`.
+- **Concept introduced, direct token handling where there is no DOM.** The class doc justifies the
+  choice: MAUI has no browser and thus no XSS surface, so holding a refresh token client-side and
+  posting it is acceptable there in a way it is not in a browser
+  (`DirectApiTokenRefresher.cs:7-10`). This is the counterpart to
+  [`SameOriginProxyTokenRefresher`](#sameoriginproxytokenrefresher), and reading the two together is
+  the clearest statement of the framework's per-platform threat model.
+  - `[Rubric §11, Security]` assesses per-platform credential handling, exactly as above.
+  - `[Rubric §1, SOLID]`, dependency direction: the second doc paragraph is unusually explicit
+    (lines 10-16). Every operation it performs is a raw read or write, so it takes the raw store;
+    taking [`ITokenStorageService`](#itokenstorageservice) instead would close the loop and let a
+    refresh re-enter the acquisition that started it.
+  - **The same cycle through the HTTP pipeline.** The third doc paragraph (lines 18-23) names the
+    indirect route back into that loop: the `APIClient` carries
+    [`AuthDelegatingHandler`](#authdelegatinghandler), which reads the storage service for a bearer.
+    The refresh POST therefore sets `AuthDelegatingHandler.SkipBearer` (line 46), so the anonymous
+    refresh call never reaches the storage instance that is awaiting it. The handler honors the option
+    by passing the request through untouched
+    (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/AuthDelegatingHandler.cs:20,27`).
+- **Walkthrough**: `AcquireAccessTokenAsync(cancellationToken)` (`DirectApiTokenRefresher.cs:31`) is a
+  straight line of early returns, each producing `null` rather than an exception:
+  - read both tokens from the store (lines 33-34), and bail when either is blank (lines 36-39), so a
+    never-logged-in device costs one storage read and no network call;
+  - create the named `"APIClient"` (`ApiClientName`, line 29), build an `HttpRequestMessage` POSTing a
+    [`RefreshTokenRequest`](group-08-auth.md#refreshtokenrequest) carrying both tokens as
+    `JsonContent` to the relative `auth/refresh` (lines 41-45), mark it `SkipBearer` (line 46), and
+    send it (line 47);
+  - bail on any non-success status (lines 49-52), which is how a revoked or reused refresh token
+    arrives;
+  - deserialize an [`AuthenticationResponse`](group-08-auth.md#authenticationresponse) and bail when
+    the access token came back blank (lines 54-58);
+  - persist the rotated pair through [`ISecureTokenStore.SetTokensAsync`](#isecuretokenstore) and
+    return the new access token (lines 60-61).
+- **Why it's built this way**: the rotation-on-refresh shape it participates in is
+  [ADR-097](https://ivanball.github.io/docs/adr/097-multi-device-refresh-sessions.html), which made
+  refresh sessions hashed, rotating and per device: writing the returned pair back is not an
+  optimization, it is required, because the old refresh token is dead after the exchange. An explicit
+  `HttpRequestMessage` rather than `PostAsJsonAsync` is what gives the call an `Options` bag to carry
+  `SkipBearer`. The `using var httpClient` (line 41) and the relative `Uri` both lean on the named
+  client configured once in `AddUIShared`, which also attaches the delegating handler
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:102,124`).
+- **Where it's used**: registered on the MAUI heads,
+  `AddScoped<ITokenRefresher, DirectApiTokenRefresher>()`
+  (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/MauiProgram.cs:98`,
+  `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:164`). Covered by
+  `DirectApiTokenRefresherTests`
+  (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Services/Auth/DirectApiTokenRefresherTests.cs:18`),
+  which stubs the store and the HTTP handler (lines 25-36) and asserts the `SkipBearer` mark on the
+  refresh POST (line 62).
 
 ### ChannelReferenceCounter
 > MMCA.Common.UI · `MMCA.Common.UI.Services.Notifications` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Notifications/ChannelReferenceCounter.cs:16` · Level 0 · class (internal, sealed)
@@ -3514,7 +3834,7 @@ lives.
   SignalR server to join a group on the first join and to leave it only on the last matching leave.
 - **Depends on**: nothing first-party. It is a `System.Threading.Lock` plus a `Dictionary<string, int>`
   (BCL). It is owned as a private field by [NotificationHubService](#notificationhubservice)
-  (`NotificationHubService.cs:42`), and sits beside (not inside) the separate handler bookkeeping that
+  (`NotificationHubService.cs:51`), and sits beside (not inside) the separate handler bookkeeping that
   [ChannelSubscription](#channelsubscription) unwinds.
 - **Concept introduced, reference-counted group membership.** `[Rubric §19, State Management & Data
   Flow]` assesses how a shared per-circuit resource is owned when more than one component holds it at
@@ -3554,20 +3874,20 @@ lives.
   connection. The ADR says the hub service tracks membership; this class is *how* that tracking is done
   so two concurrent holders cannot evict each other.
 - **Where it's used**: three call sites, all inside [NotificationHubService](#notificationhubservice):
-  `AddRef` in `JoinChannelAsync` (`NotificationHubService.cs:197`, deliberately counted before the
+  `AddRef` in `JoinChannelAsync` (`NotificationHubService.cs:236`, deliberately counted before the
   connection is started so the replay inside `StartAsync` sees it, line 196), `Release` in
   `LeaveChannelAsync` (line 229), and `Snapshot` in `RejoinChannelsAsync` (line 351). Covered directly
   by `ChannelReferenceCounterTests`
-  (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Services/Notifications/NotificationHubServiceTests.cs:320`,
+  (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Services/Notifications/NotificationHubServiceTests.cs:381`,
   whose summary names the H13 regression it locks down, lines 314-319). The two concurrent holders it
   exists for are real: [LiveEventListener](group-22-engagement-module.md#liveeventlistener) and the
   [HappeningNow](group-23-engagement-live-layer.md#happeningnow) page both join the same event
   channel key.
 - **Caveats / not-in-source**: it counts joins only; it knows nothing about handlers. Subscriptions
   live in a separate `_channelSubscriptions` dictionary under a different lock
-  (`NotificationHubService.cs:36,43`), so disposing a [ChannelSubscription](#channelsubscription)
+  (`NotificationHubService.cs:45,52`), so disposing a [ChannelSubscription](#channelsubscription)
   does not decrement the count, and leaving a channel does not remove handlers
-  (`NotificationHubService.cs:221-222` states that pairing requirement).
+  (`NotificationHubService.cs:260-261` states that pairing requirement).
 
 ### INotificationScopeProvider
 > MMCA.Common.UI · `MMCA.Common.UI.Services.Notifications` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Notifications/INotificationScopeProvider.cs:15` · Level 0 · interface
@@ -3694,7 +4014,7 @@ lives.
 - **Where it's used**: injected into [NotificationBell](#notificationbell), which claims the slot with
   `TryRegisterPoller(this)`, listens on `OnPollerSlotFreed` to take over, and gates its navigation
   refresh on `IsStale`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/Notifications/NotificationBell.razor.cs:53,56,107,119,155,173,256`),
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/Notifications/NotificationBell.razor.cs:52,55,118,130,166,184,267`),
   and into [NotificationInbox](#notificationinbox); driven by real-time pushes that arrive over
   [NotificationHubService](#notificationhubservice). Covered by `NotificationStateTests`
   (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Services/Notifications/NotificationStateTests.cs:13`).
@@ -3759,7 +4079,7 @@ lives.
   [MauiBackNavigationBridge](#mauibacknavigationbridge).
 - **Concept introduced, the interop return contract.** This record is also the wire shape of a single
   JS interop call: `nav-interop.js`'s `tryGoBack()` returns an object that deserializes straight into
-  it (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Navigation/MauiBackNavigationBridge.cs:45`),
+  it (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Navigation/MauiBackNavigationBridge.cs:48`),
   so the C# type and the JS return value are one contract.
 - **Walkthrough**: `public sealed record BackNavigationResult(bool Handled, bool AtRoot)`
   (`MauiBackNavigationBridge.cs:19`). `Handled` is `true` when the WebView's history stack contained a
@@ -3886,7 +4206,7 @@ lives.
     (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Services/Navigation/NavigationPublicLinkBuilderTests.cs:21-25`),
     that a query string survives (`:27-29`), and that a blank path throws (`:31-41`).
 - **Why it's built this way**: `AddUIShared` registers this implementation with `TryAddScoped`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:150`), so every head gets a
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:166`), so every head gets a
   working builder without opting in, and the one head that must differ replaces it afterwards:
   `AddCommonMauiPublicLinkBuilder()` registers
   [MauiPublicLinkBuilder](group-26-device-capability-layer.md#mauipubliclinkbuilder) over the
@@ -3921,21 +4241,27 @@ lives.
   renderer thread with access to the WebView's `IJSRuntime` (`MauiBackNavigationBridge.cs:21-27`).
 - **Walkthrough**: `HandleBackPressedAsync(IJSRuntime js)` (line 38) null-checks the runtime
   (`ArgumentNullException.ThrowIfNull`, line 40), dynamically imports
-  `./_content/MMCA.Common.UI/nav-interop.js` (`ModulePath`, line 30) and invokes its `tryGoBack()`
-  helper, deserializing the answer into a [BackNavigationResult](#backnavigationresult)
-  (lines 44-46). Three interop failure modes are caught explicitly and collapse to the same safe value
+  `./_content/MMCA.Common.UI/nav-interop.js` (`ModulePath`, line 30) into an `await using` module
+  reference (line 47) and invokes its `tryGoBack()` helper, deserializing the answer into a
+  [BackNavigationResult](#backnavigationresult) (lines 48-49). The module reference is disposed on
+  every call: the class is static, so nothing else owns it, and re-importing on each back press without
+  disposing would leak one JS object reference per press (comment at lines 44-46). Three interop
+  failure modes are caught explicitly and collapse to the same safe value
   `new BackNavigationResult(Handled: false, AtRoot: true)`: `InvalidOperationException` when Blazor is
-  not yet hydrated (lines 48-52), `JSDisconnectedException` (lines 53-56), and `JSException`
-  (lines 57-60). A not-yet-ready WebView therefore reports "at root, not handled" and the host falls
-  back to its default back behavior.
+  not yet hydrated (lines 51-55), `JSDisconnectedException` (lines 56-59, which also covers a dispose
+  on a torn-down circuit), and `JSException` (lines 60-63). A not-yet-ready WebView therefore reports
+  "at root, not handled" and the host falls back to its default back behavior.
 - **Why it's built this way**: a static helper with no state fits a one-shot interop call, and
-  returning a data record instead of throwing keeps the native handler branch-free. Collapsing the
-  three JS exception types into one safe default means an unhydrated or disconnected circuit never
-  crashes the native back button.
-- **Where it's used**: MAUI host projects call it from their page back-button handler; the returned
-  [BackNavigationResult](#backnavigationresult) tells the host whether to exit the app.
-- **Caveats / not-in-source**: the `nav-interop.js` `tryGoBack()` implementation and the MAUI host
-  wiring live outside this unit; only the C# side of the bridge is visible here.
+  returning a data record instead of throwing keeps the native handler branch-free. Because it holds no
+  state, it also cannot cache the imported module, which is why each call owns and disposes its own
+  reference. Collapsing the three JS exception types into one safe default means an unhydrated or
+  disconnected circuit never crashes the native back button.
+- **Where it's used**: the MAUI host base page in `MMCA.Common.UI.Maui`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/MainPageBase.cs:69`) calls it from its
+  `OnBackButtonPressed` override (`MainPageBase.cs:30`); the returned [BackNavigationResult](#backnavigationresult) tells the host
+  whether to exit the app.
+- **Caveats / not-in-source**: the `nav-interop.js` `tryGoBack()` implementation and the
+  `MainPageBase` dispatch logic live outside this unit; only the C# side of the bridge is visible here.
 
 ### NavigationHistoryService
 > MMCA.Common.UI · `MMCA.Common.UI.Services.Navigation` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Navigation/NavigationHistoryService.cs:12` · Level 1 · class (sealed)
@@ -3983,7 +4309,7 @@ lives.
   [MauiBackNavigationBridge](#mauibacknavigationbridge).
 
 ### ChannelSubscription
-> MMCA.Common.UI · `MMCA.Common.UI.Services.Notifications` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Notifications/NotificationHubService.cs:412` · Level 2 · class (private, sealed, nested)
+> MMCA.Common.UI · `MMCA.Common.UI.Services.Notifications` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Notifications/NotificationHubService.cs:490` · Level 2 · class (private, sealed, nested)
 
 - **What it is**: the disposable handle returned when a caller subscribes to a live channel on
   [NotificationHubService](#notificationhubservice); disposing it removes the handler from the
@@ -3997,7 +4323,7 @@ lives.
   `[Rubric §1, SOLID]` shows in the encapsulation: only the hub service can construct one, and only it
   knows how to remove one, so the bookkeeping has a single owner.
 - **Walkthrough**: a primary-constructor nested class capturing `owner`, `channelKey` and `handler`
-  (`NotificationHubService.cs:412`), exposing `ChannelKey` (line 414) and `Handler` (line 416) as
+  (`NotificationHubService.cs:490`), exposing `ChannelKey` (line 414) and `Handler` (line 416) as
   get-only properties. `Dispose()` (line 418) simply calls `owner.RemoveSubscription(this)`, which
   takes the shared `_channelSync` lock, removes the entry, and prunes the channel's list once it
   empties (lines 373-386). The `Handler` property is what `DispatchChannelEventAsync` invokes on each
@@ -4011,79 +4337,107 @@ lives.
 - **Caveats / not-in-source**: disposing a subscription unregisters the *handler* only. It does not
   release a channel join: those are counted separately by
   [ChannelReferenceCounter](#channelreferencecounter), and the source states the pairing requirement
-  explicitly (`NotificationHubService.cs:221-222`).
+  explicitly (`NotificationHubService.cs:260-261`).
 
 ### NotificationHubService
-> MMCA.Common.UI · `MMCA.Common.UI.Services.Notifications` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Notifications/NotificationHubService.cs:26` · Level 2 · class (sealed, partial)
+> MMCA.Common.UI · `MMCA.Common.UI.Services.Notifications` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Notifications/NotificationHubService.cs:34` · Level 2 · class (sealed, partial)
 
 - **What it is**: the client-side SignalR connection manager. It opens a connection to
   `/hubs/notifications` after login, invokes a callback for received notifications, and carries the
   ephemeral live-channel events that components join and subscribe to.
-- **Depends on**: [ApiSettings](#apisettings) (for the hub URL, via `IOptions<ApiSettings>`) and
-  [ITokenStorageService](#itokenstorageservice) (for the bearer token);
+- **Depends on**: [ApiSettings](#apisettings) (for the hub URL, via `IOptions<ApiSettings>`, reading
+  `SameOriginApiEndpoint` first and `ApiEndpoint` second),
+  [ITokenStorageService](#itokenstorageservice) (for the bearer token on a direct connection) and
+  [SameOriginProxyHeaders](#sameoriginproxyheaders) (the CSRF header on a proxied connection);
   [ChannelReferenceCounter](#channelreferencecounter) (membership counting) and
   [ChannelSubscription](#channelsubscription) (its subscription handle). Externals:
-  `Microsoft.AspNetCore.SignalR.Client` (`HubConnection`, `HubConnectionBuilder`), `ILogger<T>` with
+  `Microsoft.AspNetCore.SignalR.Client` (`HubConnection`, `HubConnectionBuilder`),
+  `Microsoft.AspNetCore.Http.Connections.Client` (`HttpConnectionOptions`), `ILogger<T>` with
   `[LoggerMessage]` source generation, `System.Threading.Lock` and `SemaphoreSlim`; implements
   `IAsyncDisposable`.
 - **Concept introduced, resilient client-side real-time with re-joinable channels.**
   `[Rubric §6, CQRS & Event-Driven]` extends to the browser here: the server pushes notifications and
   channel events over SignalR instead of the client polling for everything.
-  `[Rubric §29, Resilience & Business Continuity]` shows in four distinct mechanisms, each with its
+  `[Rubric §29, Resilience & Business Continuity]` shows in five distinct mechanisms, each with its
   rationale in source:
   - the initial connect retries with exponential backoff up to `MaxRetries = 3` starting at
-    `InitialRetryDelay` of 2 seconds and doubling (lines 28, 71, 145-180), so a token-not-yet-ready or
+    `InitialRetryDelay` of 2 seconds and doubling (lines 36, 92, 184-219), so a token-not-yet-ready or
     API-still-starting race recovers;
-  - `WithAutomaticReconnect()` (line 128) keeps long sessions alive, and because SignalR group
+  - `WithAutomaticReconnect()` (line 163) keeps long sessions alive, and because SignalR group
     membership does not survive a new connection, `Reconnected` re-joins every held channel
-    (lines 141-143, `RejoinChannelsAsync` lines 348-371);
+    (lines 176-178, `RejoinChannelsAsync` lines 423-446);
+  - when that automatic reconnect schedule is exhausted the connection raises `Closed` with an error,
+    and the service runs a fresh serialized `StartAsync` through `RestartAfterCloseAsync`
+    (lines 180-182, 381-394), so live notifications do not stay dead for the rest of the session. A
+    `Closed` with a null error is a deliberate stop or dispose and is never restarted, and a
+    connection that never started raises no `Closed`, so the restart loop is bounded (lines 390-392;
+    class doc lines 27-32);
   - a terminal start failure **discards** the connection object (`DiscardUnstartedConnectionAsync`,
-    lines 310-319) instead of leaving it in the field, because the null guard at line 121 would
-    otherwise make every later `StartAsync` a permanent no-op (the comment at lines 169-171 records
-    exactly this);
-  - `StartAsync` is serialized by a `SemaphoreSlim` (line 40), since two components calling
+    lines 370-379) instead of leaving it in the field, because a connection that never started must
+    not satisfy the guard in `StartCoreAsync`, or every later `StartAsync` (including one reached
+    through `JoinChannelAsync`) would no-op forever (comment at lines 208-210). The guard itself only
+    leaves a connected, connecting or reconnecting connection alone (line 151); a `Disconnected` one
+    is discarded and rebuilt (lines 148-159);
+  - `StartAsync` is serialized by a `SemaphoreSlim` (line 49), since two components calling
     `JoinChannelAsync` at once on Blazor Server (which has no single synchronization context) could
     both see a null connection, both build one, and leak the loser socket with duplicate server
-    registrations (lines 76-83).
+    registrations (lines 103-110).
   `[Rubric §13, Observability & Operability]` applies too: every outcome is a source-generated
-  structured log (lines 388-410), and failures on the channel paths are logged, never thrown.
+  structured log (lines 463-488, including `LogReconnectExhausted` at line 470), and failures on the
+  channel paths are logged, never thrown.
 - **Walkthrough**:
-  - Constants and fields: the four hub method names (lines 29-32), `_channelSync` guarding the
-    subscription dictionary (line 36), `_startSync` guarding start (line 40, a `SemaphoreSlim` rather
-    than a `Lock` because the guarded body awaits, lines 38-39), the
-    [ChannelReferenceCounter](#channelreferencecounter) (line 42), and `_channelSubscriptions` mapping
-    a channel key to its handler list (line 43).
-  - `NotificationCallback` (line 51) is a settable `Func<string, string, Task>?` the host assigns to
-    surface a snackbar; `IsConnected` (line 65) reports the connection state; `InitialRetryDelay`
-    (line 71) is `internal` and settable so a test can exercise the terminal-failure path without
-    waiting out the real multi-second backoff (lines 67-70).
-  - The constructor (lines 53-62) builds `_hubUrl` from `ApiSettings.ApiEndpoint` trimmed of its
-    trailing slash plus `/hubs/notifications` (line 61), throwing if the options are absent (line 60).
-  - `StartAsync` (lines 85-117) bails when disposed (lines 87-90), takes `_startSync`
-    (tolerating `ObjectDisposedException`, lines 92-100), runs `StartCoreAsync`, and releases in a
-    `finally` that tolerates the same disposal race (lines 106-116).
-  - `StartCoreAsync` (lines 119-181) returns immediately when a connection already exists (line 121),
-    builds the `HubConnection` with an `AccessTokenProvider` bound to
-    `ITokenStorageService.GetAccessTokenAsync` (line 127), registers `ReceiveNotification` fanning out
-    to `NotificationCallback` (lines 131-137) and `ReceiveChannelEvent` to `DispatchChannelEventAsync`
-    (line 139), wires the reconnect re-join (line 143), then runs the retry loop, which on success also
-    replays any channel joins requested before the connection came up (line 160).
-  - `JoinChannelAsync(channelKey)` (lines 192-214) counts the join **before** starting the connection
-    so the replay inside `StartAsync` sees it (lines 196-197), then invokes the server `JoinChannel`
-    only on the first join and only when connected (lines 202-213).
-  - `LeaveChannelAsync(channelKey)` (lines 225-244) is the mirror: it invokes `LeaveChannel` only when
-    `Release` reports the last outstanding leave (lines 229-243).
-  - `OnChannelEvent(channelKey, handler)` (lines 255-273) creates a
+  - Constants and fields: the four hub method names (lines 37-40), `_sameOriginProxyEndpoint`
+    (line 43), `_channelSync` guarding the subscription dictionary (line 45), `_startSync` guarding
+    start (line 49, a `SemaphoreSlim` rather than a `Lock` because the guarded body awaits,
+    lines 47-48), the [ChannelReferenceCounter](#channelreferencecounter) (line 51), and
+    `_channelSubscriptions` mapping a channel key to its handler list (line 52).
+  - `NotificationCallback` (line 60) is a settable `Func<string, string, Task>?` the host assigns to
+    surface a snackbar; `IsConnected` (line 86) reports the connection state; `InitialRetryDelay`
+    (line 92) is `internal` and settable so a test can exercise the terminal-failure path without
+    waiting out the real multi-second backoff (lines 88-91); `ConnectionFactory` (line 98) is an
+    `internal` test-only hook that replaces the `HubConnectionBuilder` call so a test can supply a
+    connection over an in-memory transport, and is null in production (lines 94-97).
+  - The constructor (lines 62-77) null-checks the options (line 69), records
+    `ApiSettings.SameOriginApiEndpoint` (line 74), and builds `_hubUrl` from that endpoint, falling
+    back to `ApiSettings.ApiEndpoint` and throwing when neither is set (line 75), trimmed of its
+    trailing slash plus `/hubs/notifications` (line 76). `UsesSameOriginProxy` (line 83) reports which
+    path was taken. The same-origin path serves a WebAssembly client of an opted-in host: the hub is
+    reached through the UI host's `/api` proxy, which attaches the bearer from the HttpOnly session
+    cookie, so the connection carries no client-held token (comment at lines 71-73).
+  - `StartAsync` (lines 112-144) bails when disposed (lines 114-117), takes `_startSync`
+    (tolerating `ObjectDisposedException`, lines 119-127), runs `StartCoreAsync`, and releases in a
+    `finally` that tolerates the same disposal race (lines 133-143).
+  - `StartCoreAsync` (lines 146-220) returns immediately unless the existing connection is null or
+    `Disconnected` (line 151), discards a dead one (lines 156-159), then builds the `HubConnection`
+    from `ConnectionFactory` when set or from a `HubConnectionBuilder` configured by
+    `ConfigureConnection` (lines 161-164). It registers `ReceiveNotification` fanning out to
+    `NotificationCallback` (lines 166-172) and `ReceiveChannelEvent` to `DispatchChannelEventAsync`
+    (line 174), wires the reconnect re-join (line 178) and the exhausted-reconnect restart (line 182),
+    then runs the retry loop, which on success also replays any channel joins requested before the
+    connection came up (line 199).
+  - `ConfigureConnection(options)` (lines 357-368) applies the transport options. On a direct
+    gateway connection it binds `AccessTokenProvider` to `ITokenStorageService.GetAccessTokenAsync`
+    (line 367). Through the same-origin proxy it sends no token at all and adds the
+    [SameOriginProxyHeaders](#sameoriginproxyheaders) CSRF header (line 363): the negotiate call is a
+    POST that the proxy refuses without it, while the WebSocket upgrade (to which the browser cannot
+    add headers) is accepted by the proxy only with the page's own `Origin` (doc at lines 349-356).
+  - `JoinChannelAsync(channelKey)` (lines 231-253) counts the join **before** starting the connection
+    so the replay inside `StartAsync` sees it (lines 235-236), then invokes the server `JoinChannel`
+    only on the first join and only when connected (lines 241-252).
+  - `LeaveChannelAsync(channelKey)` (lines 264-283) is the mirror: it invokes `LeaveChannel` only when
+    `Release` reports the last outstanding leave (lines 268-282).
+  - `OnChannelEvent(channelKey, handler)` (lines 294-312) creates a
     [ChannelSubscription](#channelsubscription) and appends it to the channel's handler list under
     the lock, returning the subscription as the unsubscribe token. Subscribing deliberately does not
-    join the channel; the doc says to call `JoinChannelAsync` as well (lines 249-250).
-  - `DispatchChannelEventAsync` (lines 321-346) snapshots the subscriber list under the lock
-    (line 331), then invokes each handler in isolation, logging (never rethrowing) a failure so one bad
-    subscriber cannot starve the rest (lines 334-345).
-  - `StopAsync` (lines 278-285) disposes and clears the connection; `DisposeAsync` (lines 288-303) sets
-    `_disposed`, stops, and disposes the semaphore. The comment at lines 298-301 records the deliberate
+    join the channel; the doc says to call `JoinChannelAsync` as well (lines 288-289).
+  - `DispatchChannelEventAsync` (lines 396-421) snapshots the subscriber list under the lock
+    (line 406), then invokes each handler in isolation, logging (never rethrowing) a failure so one bad
+    subscriber cannot starve the rest (lines 409-420).
+  - `StopAsync` (lines 317-324) disposes and clears the connection; `DisposeAsync` (lines 327-342) sets
+    `_disposed`, stops, and disposes the semaphore. The comment at lines 337-340 records the deliberate
     choice not to wait for an in-flight start: it can be sitting in a multi-second backoff, and
-    blocking a Blazor circuit teardown on it would be worse.
+    blocking a Blazor circuit teardown on it would be worse. `RestartAfterCloseAsync` also checks
+    `_disposed` first (lines 383-386), so a close during teardown starts nothing.
 - **Why it's built this way**: sealed and scoped per circuit, because a connection and its channel
   membership are per-user-session. Best-effort semantics (join, leave and handler failures are logged,
   not thrown) match the reality that live updates are a convenience layered over the authoritative API,
@@ -4091,7 +4445,11 @@ lives.
   shape is the client half of
   [ADR-039](https://ivanball.github.io/docs/adr/039-live-channel-push.html), with push notifications
   themselves covered by
-  [ADR-024](https://ivanball.github.io/docs/adr/024-push-notifications.html).
+  [ADR-024](https://ivanball.github.io/docs/adr/024-push-notifications.html). Choosing the transport
+  once in the constructor, and keeping the token-or-CSRF decision in `ConfigureConnection`, is what
+  lets the same service run either directly against the gateway or behind the same-origin API proxy of
+  [ADR-131](https://ivanball.github.io/docs/adr/131-same-origin-api-proxy.html) without a client-held
+  token.
 - **Where it's used**: registered as a scoped service by `AddNotificationUI()`
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Notifications/DependencyInjection.cs:36`); started
   after login and stopped on logout; its notification callback drives
@@ -4286,12 +4644,20 @@ lives.
   - The primary constructor passes the resource name `"notifications"` plus the factory and token
     service to [EntityServiceBase](#entityservicebasetentitydto-tidentifiertype) and keeps
     `scopeProvider` (`PushNotificationService.cs:16-22`).
-  - `SendAsync(request, ct)` (lines 23-47) null-guards the request (line 27), then applies scoping
+  - `SendAsync(request, ct)` (lines 23-52) null-guards the request (line 28), then applies scoping
     conditionally: a request that already carries a `ScopeKey` is sent unchanged, and only an unscoped
-    one picks up the ambient key via a `record with` expression (lines 31-39, rationale at lines
-    29-30). It then POSTs through `SendRequestAsync<PushNotificationDTO>` (lines 41-46).
-  - `GetHistoryAsync(pageNumber = 1, pageSize = 10, ct)` (lines 50-59) builds an invariant-culture
-    `pageNumber`/`pageSize` query (line 55) and sends a GET through the same helper (lines 56-58).
+    one picks up the ambient key via a `record with` expression (lines 32-40, rationale at lines
+    30-31). It then POSTs through `SendRequestAsync<PushNotificationDTO>` with a fresh
+    `idempotencyKey: NewIdempotencyKey()` (lines 45-51). The send is retried on a transient failure,
+    so without a key an attempt that reached the server before failing would broadcast twice; the key
+    rides on every attempt so the `[Idempotent]` endpoint collapses the duplicate (comment at
+    lines 42-44). `NewIdempotencyKey()` is a GUID in `N` format
+    (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/AuthenticatedServiceBase.cs:49`), and
+    the base sets it as a default header on the one client that serves every retry attempt
+    (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/EntityServiceBase.cs:384-391`).
+  - `GetHistoryAsync(pageNumber = 1, pageSize = 10, ct)` (lines 54-64) builds an invariant-culture
+    `pageNumber`/`pageSize` query (line 60) and sends a GET through the same helper (lines 61-63),
+    with no idempotency key since a read is safe to repeat.
     Note it does **not** send a scope: history is the admin's full send log.
 - **Why it's built this way**: delegating transport, auth, retry and error translation to
   [EntityServiceBase](#entityservicebasetentitydto-tidentifiertype) keeps this class down to two short
@@ -4336,13 +4702,17 @@ lives.
 
 > MMCA.Common.UI · `MMCA.Common.UI.Theme` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Theme/BrandColors.cs:10` · Level 0 · class (static)
 
-- **What it is**: the single C# source of truth for the brand palette: six hex constants (a primary triad and a secondary triad) that [MMCATheme](#mmcatheme) reads for both its light and dark MudBlazor variants.
-- **Depends on**: nothing first-party. It is mirrored by the CSS custom properties in `wwwroot/app.css` (`--mmca-primary`, `--mmca-primary-dark`, `--mmca-primary-light`, `--mmca-secondary`, `--mmca-secondary-dark`, named in the doc comments at `BrandColors.cs:5-8,12,15,18,22,28`).
-- **Concept introduced, a fitness-tested duplication.** `[Rubric §20, Design System & Theming]` assesses whether visual tokens are centralized rather than scattered as literals; here the palette lives in exactly one C# class. `[Rubric §34, Architecture Governance & Documentation]` assesses whether *necessary* duplication is monitored: C# cannot read CSS at build time, so the same colors must exist in both `BrandColors` and `app.css`, and `BrandColorTokenTests` in MMCA.Common.UI.Tests asserts the two stay in sync so the copy cannot silently drift (`BrandColors.cs:6-8`).
-  - `[Rubric §21, Accessibility]` lands here rather than only in the theme: the `Secondary` constant carries its own contrast math in source, Teal 700 `#00796B` holding about 5.3:1 on light surfaces, replacing the Teal 600 `#00897B` that measured about 4.0:1 and sat under the WCAG 2.1 AA 4.5:1 floor for normal text (`BrandColors.cs:21-26`).
-- **Walkthrough**: six `public const string` fields. The primary triad: `Primary = "#1565C0"` (line 13), `PrimaryDark = "#0D47A1"` (line 16), `PrimaryLight = "#42A5F5"` used for accents and dark-mode contrast (line 19). The secondary triad: `Secondary = "#00796B"` (line 26, with the contrast rationale immediately above it at lines 21-25), `SecondaryDark = "#00695C"` (line 29), and `SecondaryLight = "#4DB6AC"` (line 32).
-- **Why it's built this way**: `const` rather than `static readonly` means the values can appear in contexts that require compile-time constants; the governance is the fitness test, not the language keyword. Keeping the palette in one class means a rebrand touches one file plus the mirrored CSS, and the accessibility reasoning travels with the value it justifies instead of living in a review comment.
-- **Where it's used**: the [MMCATheme](#mmcatheme) light and dark palettes (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Theme/MMCATheme.cs:18-24,60-69`); `BrandColorTokenTests`; any component that references a brand color programmatically.
+- **What it is**: the single C# source of truth for every hex value in the theme. It holds the two brand triads (primary and secondary), the app-chrome colors shared by both modes, and the full light and dark palettes, so every hex value [MMCATheme](#mmcatheme) assigns in either MudBlazor variant is one of these constants (doc comment, `MMCA.Common/Source/Presentation/MMCA.Common.UI/Theme/BrandColors.cs:4-5`).
+- **Depends on**: nothing first-party. Part of it is mirrored by CSS custom properties in `wwwroot/app.css`; the doc comments name `--mmca-primary`, `--mmca-primary-dark`, `--mmca-primary-light`, `--mmca-secondary`, `--mmca-secondary-dark` (`BrandColors.cs:12,15,18,22,28`), plus `--mmca-sidebar-bg` on `ChromeBackground` (line 36) and `--mmca-divider` on `LightDivider` (line 80).
+- **Concept introduced, a fitness-tested duplication.** `[Rubric §20, Design System & Theming]` assesses whether visual tokens are centralized rather than scattered as literals; here the whole palette lives in exactly one C# class, and the theme carries no hex literal of its own. `[Rubric §34, Architecture Governance & Documentation]` assesses whether *necessary* duplication is monitored: C# cannot read CSS at build time, so the brand colors must exist in both `BrandColors` and `app.css`, and `BrandColorTokenTests` in MMCA.Common.UI.Tests asserts the two stay in sync so the copy cannot silently drift (`BrandColors.cs:6-8`). The test pins the five brand tokens, one `InlineData` row each (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Theme/BrandColorTokenTests.cs:35-39`); the `--mmca-sidebar-bg` and `--mmca-divider` mirrors are named in the doc comments but have no row there.
+  - `[Rubric §21, Accessibility]` lands here rather than only in the theme: the `Secondary` constant carries its own contrast math in source, Teal 700 `#00796B` holding about 5.3:1 on light surfaces, replacing the Teal 600 `#00897B` that measured about 4.0:1 and sat under the WCAG 2.1 AA 4.5:1 floor for normal text (`BrandColors.cs:21-26`). The contrast reasoning for `LightWarning` and `DarkError` is deliberately not here: their summaries point at [MMCATheme](#mmcatheme), where the math sits beside the assignment (lines 56, 109).
+- **Walkthrough**: `public const string` fields in four commented groups.
+  - The primary triad: `Primary = "#1565C0"` (line 13), `PrimaryDark = "#0D47A1"` (line 16), `PrimaryLight = "#42A5F5"` used for accents and dark-mode contrast (line 19). The secondary triad: `Secondary = "#00796B"` (line 26, with the contrast rationale immediately above it at lines 21-25), `SecondaryDark = "#00695C"` (line 29), and `SecondaryLight = "#4DB6AC"` (line 32).
+  - Shared chrome, identical in both palettes (line 34): `ChromeBackground = "#1A2035"` for the app bar and sidebar (line 37), `ChromeText = "#FFFFFF"` (line 40), and `ChromeTextMuted = "#FFFFFFB3"`, white at 70% alpha for sidebar text and icons (line 43).
+  - The light palette (lines 45-84): `LightTertiary` Purple 700, `LightInfo` Blue 700, `LightSuccess` Green 800, `LightWarning = "#A85D00"` with `LightWarningContrastText = "#FFFFFF"`, `LightError` Red 800, then `LightBackground = "#FAFBFC"`, `LightSurface`, the two text tones, `LightActionDefault`, and the two dividers.
+  - The dark palette (lines 86-131): `DarkPrimaryLighten` Blue 200, `DarkSecondaryDarken = "#00897B"` (Teal 600, the same value the light `Secondary` was moved off for contrast, line 92), `DarkSecondaryLighten`, `DarkTertiary`, `DarkInfo`, `DarkSuccess`, `DarkWarning` Orange 400, `DarkError = "#FF8A80"` (line 110), then `DarkBackground = "#1A2027"`, `DarkSurface = "#27303A"`, text, action and divider tones. Note `DarkInfo` and `PrimaryLight` share `#42A5F5`, and `DarkTextSecondary` and `DarkActionDefault` share `#B0BEC5`: each keeps its own name so a role can change without dragging the other.
+- **Why it's built this way**: `const` rather than `static readonly` means the values can appear in contexts that require compile-time constants; the governance is the fitness test, not the language keyword. Keeping every palette value in one class means a rebrand or a contrast fix touches one file plus the mirrored CSS, and the theme reads as a mapping of roles to names rather than a wall of hex.
+- **Where it's used**: every palette entry of [MMCATheme](#mmcatheme) that is not an `rgba(...)` literal (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Theme/MMCATheme.cs:18-54,60-110`); `BrandColorTokenTests`; the doc comment of `BrandColorTokenTestsBase`, the per-host stylesheet check that consumer repos subclass (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Ui/BrandColorTokenTestsBase.cs:6-13`); any component that references a brand color programmatically.
 
 ### IModelValidator
 
@@ -4497,7 +4867,7 @@ lives.
   prerender test uses the `get` invocation as proof that the first render ran at all
   (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Theme/MmcaThemeProvidersPrerenderTests.cs:29-33`).
 - **Where it's used**: registered by `AddUIShared` as scoped
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:138`) and consumed by
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:154`) and consumed by
   `MmcaThemeProviders`, which subscribes in `OnInitialized`, initializes on first render and
   unsubscribes on dispose
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Theme/MmcaThemeProviders.razor:28,35,119`), by
@@ -4591,7 +4961,7 @@ lives.
   boolean latch is the deliberate detail (`ApiUserPreferenceWriter.cs:31-36`): a fresh sign-in produces
   a different token, so writing resumes with no reset step and no staleness of its own.
 - **Where it's used**: registered with `TryAddScoped` in [DependencyInjection](#dependencyinjection)
-  (`MMCA.Common.UI/DependencyInjection.cs:153`); resolved optionally by the theme toggle
+  (`MMCA.Common.UI/DependencyInjection.cs:169`); resolved optionally by the theme toggle
   (`ThemeToggle.razor:23-27`) and the culture switcher (`CultureSwitcher.razor:38-42`).
 
 ---
@@ -4627,6 +4997,26 @@ lives.
 
 ---
 
+### LocalizedDataAnnotationsValidator
+
+> MMCA.Common.UI · `MMCA.Common.UI.Validation` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Validation/LocalizedDataAnnotationsValidator.cs:21` · Level 2 · class (sealed, `ComponentBase`, `IDisposable`)
+
+- **What it is**: a drop-in replacement for the stock `<DataAnnotationsValidator />` inside an `EditForm`. It runs the same DataAnnotations rules, but through [DataAnnotationsModelValidator](#dataannotationsmodelvalidator), so every `ErrorMessage` is resolved as a resource key and fields bound with `For` show the translated message; a message that is not a known key passes through unchanged, exactly as with the stock validator (doc comment, `LocalizedDataAnnotationsValidator.cs:9-15`).
+- **Depends on**: [DataAnnotationsModelValidator](#dataannotationsmodelvalidator) (the localizing rule engine it constructs, line 54) and [SharedResource](#sharedresource) (the resource marker behind the injected `IStringLocalizer<SharedResource>`, lines 30-31). Externals: `Microsoft.AspNetCore.Components` (`ComponentBase`, `[CascadingParameter]`, `[Inject]`), `Microsoft.AspNetCore.Components.Forms` (`EditContext`, `ValidationMessageStore`, `FieldIdentifier`, `FieldChangedEventArgs`, `ValidationRequestedEventArgs`), `Microsoft.Extensions.Localization`, `System.Reflection`.
+- **Concept introduced, one localizing path for both form styles.** `[Rubric §27, Internationalization & Localization]` assesses whether user-facing text, validation messages included, resolves per culture from one catalog. The MudForm pages already localize through [ModelValidation](#modelvalidation) and [DataAnnotationsModelValidator](#dataannotationsmodelvalidator); the `EditForm` pages used the stock validator, which renders `ErrorMessage` verbatim, so a model declaring a resource key would show the key. This component closes that gap by feeding the same engine into the `EditContext` instead of a MudBlazor `Validation` delegate (doc comment, lines 11-14). See [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html) for the localization model.
+  - `[Rubric §24, Forms, Validation & UX Safety]` assesses single-declaration rules and consistent feedback timing. The rules stay on the model; this class only decides *when* they run: per field on change, and for every public property on submit (doc comment, lines 16-19).
+- **Walkthrough**
+  - State is three nullable fields, the attached `EditContext`, its `ValidationMessageStore`, and the validator (lines 23-25). `CurrentEditContext` is a private `[CascadingParameter]` (lines 27-28) and the localizer a private `[Inject]` (lines 30-31), so the markup takes no parameters at all: `<LocalizedDataAnnotationsValidator />`.
+  - `OnParametersSet` (lines 37-57) throws `InvalidOperationException` when no cascading `EditContext` exists, naming the fix ("Place it inside an EditForm", lines 39-43). It returns early when the context is the one already attached (lines 45-48); otherwise it detaches from any previous context (line 50), then creates the message store and a `new DataAnnotationsModelValidator(Localizer)` and subscribes to `OnFieldChanged` and `OnValidationRequested` (lines 52-56). Re-attaching on a swapped context is what keeps a form that replaces its model working.
+  - `HandleFieldChanged` (lines 59-70) clears the changed field's messages, adds `_validator.Validate(field.Model, field.FieldName)`, and calls `NotifyValidationStateChanged` (lines 66-69).
+  - `HandleValidationRequested` (lines 72-94) clears every message (line 79), reflects the model's public instance properties, drops indexers, and de-duplicates names ordinally (lines 82-86), then validates each one into its own `FieldIdentifier` (lines 88-91) before notifying once (line 93).
+  - `Detach` (lines 96-109) unsubscribes both handlers, clears the store and nulls all three fields; `Dispose` is exactly `Detach()` (line 34), so the component never leaves a handler on a context that outlives it.
+- **Why it's built this way**: reusing [DataAnnotationsModelValidator](#dataannotationsmodelvalidator) rather than re-implementing resolution means the `EditForm` and MudForm paths cannot disagree about which keys resolve. Injecting `IStringLocalizer<SharedResource>` rather than taking a page localizer as a parameter keeps the drop-in property: swapping the tag is the whole migration, and the auth forms' `Auth.Field.*` keys live in that shared catalog (`MMCA.Common/CHANGELOG.md:36`).
+- **Where it's used**: the four auth `EditForm` pages, Login (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/Login.razor:40`), Register (`Register.razor:33`), ForgotPassword (`ForgotPassword.razor:39`) and ResetPassword (`ResetPassword.razor:43`); their models, [LoginModel](#loginmodel), [RegisterModel](#registermodel), [ForgotPasswordModel](#forgotpasswordmodel) and [ResetPasswordModel](#resetpasswordmodel), name it in their doc comments as the reason their `ErrorMessage` values are keys (`LoginModel.cs:10`, `RegisterModel.cs:11`, `ForgotPasswordModel.cs:10`, `ResetPasswordModel.cs:12`). It is public API of the package (`PublicAPI.Shipped.txt:1193-1195`).
+- **Caveats**: submit validation walks top-level properties only and calls the per-property path, so it does not run class-level attributes or `IValidatableObject.Validate`, which the stock validator's whole-object pass does; a model relying on either loses that check when it switches. Messages always resolve against `SharedResource`, so a key that exists only in a page's own resource file passes through untranslated. No file under `MMCA.Common/Tests` names this type, so its attach, re-attach and submit behavior is unpinned except through whatever the auth-page E2E runs exercise.
+
+---
+
 ### MMCATheme
 
 > MMCA.Common.UI · `MMCA.Common.UI.Theme` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Theme/MMCATheme.cs:9` · Level 2 · class (static)
@@ -4634,21 +5024,21 @@ lives.
 - **What it is**: the single application-wide MudBlazor `MudTheme` instance, defining the brand palette (light and dark), typography, and layout radius, applied once via `MudThemeProvider` in the root layout.
 - **Depends on**: [BrandColors](#brandcolors) (the palette source of truth); MudBlazor (NuGet: `MudTheme`, `PaletteLight`, `PaletteDark`, `Typography`, `LayoutProperties`).
 - **Concept introduced, one theme, accessibility-justified, with contrast math for both text and non-text UI.** `[Rubric §20, Design System & Theming]` assesses whether an app has a single coherent theme rather than per-page overrides; `MMCATheme.Instance` is that one object (line 11). `[Rubric §21, Accessibility]` is unusually visible here, because most non-default color choices carry inline WCAG 2.1 AA/1.4.11 contrast math in a comment immediately above the value:
-  - light `Warning = "#A85D00"` / `WarningContrastText = "#FFFFFF"` (lines 35-36): the palette color is used as text and as a border as often as it is a fill (`Color.Warning` on `MudText`/`MudLink`/`MudIcon` and on outlined chips/buttons), and MudBlazor's default `#F57F17` is only about 2.65:1 on Surface, failing the 4.5:1 floor everywhere it is text; `#A85D00` is 4.96:1 on Surface and 4.79:1 on Background, and is dark enough that white becomes the correct on-color label (comment, lines 29-34);
+  - light `Warning = BrandColors.LightWarning` (`#A85D00`) / `WarningContrastText = BrandColors.LightWarningContrastText` (`#FFFFFF`) (lines 35-36): the palette color is used as text and as a border as often as it is a fill (`Color.Warning` on `MudText`/`MudLink`/`MudIcon` and on outlined chips/buttons), and MudBlazor's default `#F57F17` is only about 2.65:1 on Surface, failing the 4.5:1 floor everywhere it is text; `#A85D00` is 4.96:1 on Surface and 4.79:1 on Background, and is dark enough that white becomes the correct on-color label (comment, lines 29-34);
   - light `LinesInputs = "rgba(0,0,0,0.45)"` (line 42): outlined-field borders answer to the 3:1 non-text floor (WCAG 1.4.11); MudBlazor's default is only 3.03:1/3.01:1, passing with no margin, so any host that darkens Background drops it below (comment, lines 38-41);
-  - dark `PrimaryContrastText = "rgba(0,0,0,0.87)"` (line 66), because white on the lightened dark-mode primary `#42A5F5` is about 2.65:1 fill-on-fill while dark text is about 6.6:1 (lines 62-65);
+  - dark `PrimaryContrastText = "rgba(0,0,0,0.87)"` (line 66), because white on the lightened dark-mode primary `#42A5F5` is about 2.65:1 fill-on-fill while dark text is about 6.6:1 (comment, lines 63-65);
   - dark `SecondaryContrastText`/`TertiaryContrastText`/`InfoContrastText`/`SuccessContrastText` (lines 76, 78, 80, 82): every lightened dark-mode accent takes the same Material treatment, white is 2.36-2.65:1 as a fill across the four colors while `rgba(0,0,0,0.87)` lands at 6.96-7.70:1, and each accent stays legible as text on Surface too (comment, lines 71-75);
   - dark `WarningContrastText` (line 85), white on `#FFA726` being about 2.0:1 against about 10.8:1 (line 84);
-  - dark `Error = "#FF8A80"` / `ErrorContrastText = "rgba(0,0,0,0.87)"` (lines 90, 93): the previous `#EF5350` was only 3.84:1 as text on Surface, below the 4.5:1 floor wherever `Color.Error` is a label rather than a fill (inline validation copy, outlined error chips); `#FF8A80` reads 5.86:1 on Surface, with the white-vs-dark label question resolved the same way as Primary (comments, lines 86-89, 91-92);
+  - dark `Error = BrandColors.DarkError` (`#FF8A80`) / `ErrorContrastText = "rgba(0,0,0,0.87)"` (lines 90, 93): the previous `#EF5350` was only 3.84:1 as text on Surface, below the 4.5:1 floor wherever `Color.Error` is a label rather than a fill (inline validation copy, outlined error chips); `#FF8A80` reads 5.86:1 on Surface, with the white-vs-dark label question resolved the same way as Primary (comments, lines 86-89, 91-92);
   - dark `LinesInputs = "rgba(255,255,255,0.5)"` (line 98): the dark default `rgba(255,255,255,0.3)` is only 2.6:1 on Surface, effectively invisible to a low-vision user, while `0.5` is 4.59:1/5.10:1 (comment, lines 94-97).
 
-  The `Secondary` (light) contrast rationale is deliberately *not* repeated here: line 21 points at [BrandColors](#brandcolors), where the value and its justification live together.
-- **Walkthrough**: a single `static MudTheme Instance { get; }` (line 11) initialized with four blocks.
-  - `PaletteLight` (lines 13-55) reads its primary and secondary triads straight from [BrandColors](#brandcolors) (lines 18-24), sets the semantic colors (`Tertiary`, `Info`, `Success`, `Warning`, `Error`, lines 25-37, including the WCAG-driven `Warning` and `LinesInputs` values above), and then fixes app chrome: appbar `#1A2035`, background `#FAFBFC`, surface white, the drawer tones, text and divider values (lines 43-54).
-  - `PaletteDark` (lines 56-111) lightens the primary for contrast on dark surfaces (`Primary = BrandColors.PrimaryLight`, line 60), keeps the same appbar and drawer chrome so the shell reads identically in both modes, and darkens the surface stack (`Background = "#1A2027"`, `Surface = "#27303A"`) with light text and dark dividers.
+  The `Secondary` (light) contrast rationale is deliberately *not* repeated here: line 21 points at [BrandColors](#brandcolors), where the value and its justification live together. The reverse holds for `Warning` and `Error`: their constants live in [BrandColors](#brandcolors), whose summaries point back here for the math.
+- **Walkthrough**: a single `static MudTheme Instance { get; }` (line 11) initialized with four blocks. Every hex value in both palettes is a [BrandColors](#brandcolors) constant (comment, lines 15-17); the only literals left are the `rgba(...)` on-color labels and input lines, each justified by the contrast comment above it.
+  - `PaletteLight` (lines 13-55) reads its primary and secondary triads from [BrandColors](#brandcolors) (lines 18-24), sets the semantic colors from the `Light*` constants (`Tertiary`, `Info`, `Success`, `Warning`, `Error`, lines 25-37, including the WCAG-driven `Warning` and `LinesInputs` values above), and then fixes app chrome: `AppbarBackground` and `DrawerBackground` from `BrandColors.ChromeBackground`, `DrawerText`/`DrawerIcon` from `ChromeTextMuted`, and background, surface, text, action and divider values from the matching `Light*` constants (lines 43-54).
+  - `PaletteDark` (lines 56-111) lightens the primary for contrast on dark surfaces (`Primary = BrandColors.PrimaryLight`, line 60), takes the same `Chrome*` constants for app bar and drawer so the shell reads identically in both modes (lines 99-105), and darkens the surface stack (`Background = BrandColors.DarkBackground`, `Surface = BrandColors.DarkSurface`, lines 101-102) with the `Dark*` text and divider tones.
   - `Typography` (lines 112-190). `Default` sets the font stack `Inter, Segoe UI, Helvetica Neue, Arial, sans-serif`; the comment above it records that Inter is self-hosted by this RCL (`wwwroot/fonts` plus an `@font-face` block in `wwwroot/app.css`) and that before those faces existed the stack silently fell through to Segoe UI, so the two must stay in step. `H1` through `H4` use display weights 800/800/700/700 with slight negative letter spacing, which the comment explains is how Inter is meant to be set at large sizes; `H5` and `H6` stay at weight 600 with no negative tracking. `Subtitle1`/`Subtitle2` sit at weight 500, `Body1`/`Body2` set line heights 1.6 and 1.5, and `Button` sets `TextTransform = "none"`, because MudBlazor's default uppercasing wrecks localized strings (German compounds, accented capitals) and reads dated; weight 600 keeps the label as prominent as the shouting did.
   - `LayoutProperties` sets `DefaultBorderRadius = "6px"` (lines 191-193).
-- **Why it's built this way**: a static get-only property means the theme is constructed once and shared by every `MudThemeProvider`. Sourcing the brand hues from [BrandColors](#brandcolors) rather than re-typing hex is what lets `BrandColorTokenTests` police C# versus CSS drift, and the per-color contrast comments turn accessibility decisions into reviewable source rather than tribal knowledge, now covering both text-on-fill (4.5:1) and non-text UI like input borders (3:1, WCAG 1.4.11) rather than text alone. The button-casing override is a small but instructive case of `[Rubric §27, Internationalization & Localization]` reaching into theming: a purely visual default became a localization problem.
+- **Why it's built this way**: a static get-only property means the theme is constructed once and shared by every `MudThemeProvider`. Sourcing every hex value from [BrandColors](#brandcolors) rather than re-typing it is what lets `BrandColorTokenTests` police C# versus CSS drift and keeps this class a mapping of roles to named colors, and the per-color contrast comments turn accessibility decisions into reviewable source rather than tribal knowledge, now covering both text-on-fill (4.5:1) and non-text UI like input borders (3:1, WCAG 1.4.11) rather than text alone. The button-casing override is a small but instructive case of `[Rubric §27, Internationalization & Localization]` reaching into theming: a purely visual default became a localization problem.
 - **Where it's used**: applied in the root layout of the Blazor Web and MAUI hosts via `MudThemeProvider Theme="MMCATheme.Instance"`.
 
 ### ModelValidation
@@ -4702,7 +5092,7 @@ lives.
     the anonymous (null) case. Both return `Empty` (line 33).
   - The request itself is three lines: resolve the named `"APIClient"` (line 38), which already carries
     the bearer and `Accept-Language` handlers
-    (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:116-117`), then
+    (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:124-125`), then
     `GetFromJsonAsync<UserPreferences>` against the relative URI `auth/preferences` (lines 39-41).
   - Null-coalescing on the deserialized value (line 42) means a body of literal `null` is the same as
     no preference.
@@ -4715,9 +5105,9 @@ lives.
   returning a shared empty record is what makes the reconciliation safe to await unconditionally in the
   login flow. It is the read half of a pair: [ApiUserPreferenceWriter](#apiuserpreferencewriter) is the
   write half, and the two are registered together
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:153-154`).
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:169-170`).
 - **Where it's used**: registered by `AddUIShared` with `TryAddScoped`
-  (`DependencyInjection.cs:154`) and injected by exactly one page, the framework's login page
+  (`DependencyInjection.cs:170`) and injected by exactly one page, the framework's login page
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/Login.razor:14`). Its
   `ApplyStoredPreferencesAndNavigateAsync` calls `GetAsync`, applies a stored theme through
   [ThemeService](#themeservice), and, when the stored culture differs from the current one, hands the
@@ -4730,6 +5120,273 @@ lives.
   `OperationCanceledException`, which is the opposite of the convention
   [HttpResultExecutor](#httpresultexecutor) enforces elsewhere in this package; the single caller
   passes no token (`Login.razor:230`), so the difference is invisible in current use.
+
+### BlazorCircuitLimitSettings
+
+> MMCA.Common.UI.Web · `MMCA.Common.UI.Web.Hardening` · `MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hardening/BlazorCircuitLimitSettings.cs:17` · Level 0 · class (sealed)
+
+- **What it is**: the bound options type for a Blazor Server host's circuit hardening, three numbers under the `BlazorCircuitLimits` configuration section: a ceiling on concurrently active circuits, a ceiling on disconnected circuits retained for reconnect, and how long a disconnected circuit is retained.
+- **Depends on**: nothing first-party; `System.ComponentModel.DataAnnotations.RangeAttribute` on all three properties (`BlazorCircuitLimitSettings.cs:37`, `:45`, `:56`) is what makes the settings self-validating. The class doc (`:9-15`) states it is deliberately separate from [UiRateLimitingSettings](#uiratelimitingsettings): the rate limiter bounds how fast requests arrive, while a circuit is state that stays resident on the server for as long as the connection lives, so a caller opening circuits slowly enough to stay inside the rate window still accumulates them without this ceiling.
+- **Concept introduced, sizing an abuse ceiling from the container rather than from traffic.** The doc comment on `MaxActiveCircuits` (`:26-36`) derives 200 from the container a Blazor UI host typically runs in (0.25 vCPU, 0.5 GiB): roughly 200 MiB of that half-gibibyte is the runtime, the framework and the static assets the host also serves, leaving on the order of 300 MiB for circuit state, and a MudBlazor page's server-side render tree costs a few hundred kilobytes up to about a megabyte, so 200 fits with headroom on memory and is already generous on the 0.25 vCPU side, where render throughput binds first. It sits far above real demand for a host rendering Interactive Auto, where a returning visitor's session moves to the WebAssembly runtime after the first render and holds no circuit at all: the number is an abuse ceiling, not a capacity plan. [Rubric §29, Resilience & Business Continuity] assesses exactly this: a documented, container-derived ceiling rather than an arbitrary round number. [Rubric §11, Validation] applies through the `[Range]` attributes that fail startup on an out-of-range value (see [BlazorCircuitLimitExtensions](#blazorcircuitlimitextensions)).
+- **Walkthrough**
+  - `SectionName => "BlazorCircuitLimits"` (`:20`) is the configuration section this type binds from.
+  - `MaxActiveCircuits` (`:37-38`), `[Range(1, 100_000)]`, defaults to `200`.
+  - `DisconnectedCircuitMaxRetained` (`:45-46`), `[Range(0, 10_000)]`, defaults to `25`, tighter than the Blazor framework default of 100 because a retained circuit holds the same state an active one does while serving nobody (`:41-43`).
+  - `DisconnectedCircuitRetentionSeconds` (`:56-57`), `[Range(5, 3600)]`, defaults to `60`, tighter than the framework's three minutes: a visitor who really did drop off Wi-Fi reconnects within seconds, and everything beyond that is memory held for someone who is gone (`:49-54`). The doc comment says a host whose audience sits on a flaky shared network (a conference venue, where someone walking between rooms should come back to the state they left) raises this back towards the framework's 180 and leans on `DisconnectedCircuitMaxRetained` to bound the memory.
+- **Why it's built this way**: the three numbers are kept in one bound, validated options type instead of inline literals so the ceiling can be tuned per environment through configuration without a code change, and so an out-of-range value fails fast at startup via [BlazorCircuitLimitExtensions](#blazorcircuitlimitextensions)'s `ValidateOnStart()` rather than silently at runtime. See [ADR-088](https://ivanball.github.io/docs/adr/088-gateway-edge-responsibilities.html) for the edge-hardening posture this settings type is part of.
+- **Where it's used**: bound and registered by [BlazorCircuitLimitExtensions](#blazorcircuitlimitextensions)'s `AddBoundedBlazorCircuits()`; read by [BoundedCircuitHandler](#boundedcircuithandler) for the active-circuit ceiling and by `BlazorCircuitLimitExtensions.RetentionFrom` for the disconnected-circuit settings.
+
+### UiRateLimitingSettings
+
+> MMCA.Common.UI.Web · `MMCA.Common.UI.Web.Hardening` · `MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hardening/UiRateLimitingSettings.cs:33` · Level 0 · class (sealed)
+
+- **What it is**: the bound options type for a Blazor Web host's own edge rate limiting, under the `UiRateLimiting` configuration section: an on/off switch, a per-client-IP request budget and window, and a replica-wide concurrency ceiling.
+- **Depends on**: nothing first-party; `RangeAttribute` on `PermitLimit`, `WindowSeconds`, and `GlobalConcurrencyLimit` (`UiRateLimitingSettings.cs:57`, `:61`, `:75`).
+- **Concept introduced, a Blazor host's own edge limiter because it is a separate origin from the Gateway.** The class doc (`:9-32`) states why a UI host needs one at all: the Blazor UI is a separate externally reachable origin from the Gateway (its own FQDN), so the ADR-088 Gateway edge limiter never sees a request to it, and every page load on this origin opens an interactive Server circuit against a typically 0.25 vCPU / 0.5 GiB container. It is shaped like the Gateway's limiter (same per-IP-plus-global-concurrency pairing, anonymous traffic included) but shipped as a distinct kit rather than referenced from `MMCA.Common.Gateway`, because a Blazor host is not a reverse proxy and its exemptions differ (it serves `/_framework` and `/_content` itself). Both counts are per replica, in memory, the same deliberate trade the Gateway kit makes: an edge limiter answers in microseconds on every request, and a shared counter would put a network round trip in front of the whole site. [Rubric §29, Resilience & Business Continuity] and [Rubric §11, Validation] apply as with [BlazorCircuitLimitSettings](#blazorcircuitlimitsettings): a documented, traffic-shape-derived number behind `[Range]` validation.
+- **Walkthrough**
+  - `SectionName => "UiRateLimiting"` (`:36`).
+  - `Enabled` (`:43`), default `true`; the doc comment (`:39-42`) calls out its escape hatch use, a load or capacity proof driven from one runner IP that the per-IP window cannot tell from a flood.
+  - `PermitLimit` (`:57-58`), `[Range(1, 1_000_000)]`, default `300`, which no real visitor approaches (a page load costs a handful of requests once static assets are exempt, and Interactive Auto hands the session to WebAssembly after the first render). The doc comment (`:48-56`) sets it well above a single visitor on purpose because an office or mobile-carrier NAT presents many visitors as one IP, and tells a host whose audience sits behind one address (a venue's wifi, a single corporate egress) to raise it, since the whole crowd arrives as a single partition key.
+  - `WindowSeconds` (`:61-62`), `[Range(1, 3600)]`, default `60`.
+  - `GlobalConcurrencyLimit` (`:75-76`), `[Range(1, 1_000_000)]`, default `200`: a ceiling rather than a rate, guarding against a slow downstream backing up threads on this replica; excess requests are rejected with 429 immediately rather than queued (`:64-74`), and unlike the per-IP window it needs no widening for a shared-address audience because in-flight concurrency is bounded by what the container can render, not by how many people share an address. The doc comment (`:71-73`) also records that the Blazor circuit transport (`/_blazor`) is excluded from this ceiling: a circuit WebSocket would hold one permit for its whole lifetime, so open circuits are bounded by `BlazorCircuitLimits:MaxActiveCircuits` ([BlazorCircuitLimitSettings](#blazorcircuitlimitsettings)) instead.
+- **Why it's built this way**: same rationale as [BlazorCircuitLimitSettings](#blazorcircuitlimitsettings), a bound, validated, environment-tunable options type rather than inline literals in [UiRateLimitingExtensions](#uiratelimitingextensions). See [ADR-088](https://ivanball.github.io/docs/adr/088-gateway-edge-responsibilities.html) and [ADR-124](https://ivanball.github.io/docs/adr/124-blazor-circuit-ceiling-ui-edge.html) for the split between the request concurrency ceiling and the circuit ceiling.
+- **Where it's used**: bound and read by [UiRateLimitingExtensions](#uiratelimitingextensions)'s `AddUiRateLimiting()`, which closes over a resolved instance rather than `IOptions<T>` per request (see that section).
+
+### BoundedCircuitHandler
+
+> MMCA.Common.UI.Web · `MMCA.Common.UI.Web.Hardening` · `MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hardening/BoundedCircuitHandler.cs:43` · Level 1 · class (sealed, partial, `CircuitHandler`)
+
+- **What it is**: a Blazor `CircuitHandler` that refuses a new circuit once this replica already holds [BlazorCircuitLimitSettings](#blazorcircuitlimitsettings)`.MaxActiveCircuits` active circuits, and counts circuits back down as they close.
+- **Depends on**: `CircuitHandler` (base class), `IOptions<BlazorCircuitLimitSettings>` and `ILogger<BoundedCircuitHandler>` (primary-constructor parameters, `BoundedCircuitHandler.cs:43-45`).
+- **Concept introduced, a singleton counter guarding a per-circuit-scoped hook.** The class doc (`:9-40`) states why a handler rather than `CircuitOptions`: `DisconnectedCircuitMaxRetained` bounds only circuits that already dropped their connection, and since every page load on a public Blazor origin opens one (a host rendering Interactive Auto makes the first render a Server circuit), the handler is the documented extension point that sees a circuit being opened and closed. It also states why the class throws rather than returning a refusal value: `OnCircuitOpenedAsync` returns `Task` with no "refuse" return, so an exception is the only way to stop a circuit starting, one of the few places in the framework where the Result pattern does not apply because the contract belongs to ASP.NET Core. Finally (`:31-39`) it explains the one piece of per-circuit state on a singleton: the set of admitted circuits, keyed by reference, which exists because a refused circuit is still torn down through `OnCircuitClosedAsync`, and without the set that close would release a permit some other circuit holds. [Rubric §29, Resilience & Business Continuity] assesses this directly: an explicit admission-control decision at the point circuits are opened, rather than letting an unbounded flood of circuits exhaust a replica's memory. [Rubric §14, Testability] applies through `ActiveCircuits` (`:55`), a public read-only counter the doc comment (`:51-54`) says exists so a consuming host can assert the ceiling behaves and a diagnostic endpoint can report saturation; `BoundedCircuitHandlerTests` reads it to assert the increment, decrement and floor behavior without inspecting private state.
+- **Walkthrough**
+  - `_admitted` (`:47`): a `ConcurrentDictionary<Circuit, byte>` constructed with `ReferenceEqualityComparer.Instance`, used as a set of the circuits this handler admitted.
+  - `_activeCircuits` (`:49`) and `ActiveCircuits => Volatile.Read(ref _activeCircuits)` (`:55`): the live count, read with `Volatile.Read` because it is written from `Interlocked` calls on possibly-concurrent circuit-open/close callbacks.
+  - `Order => int.MaxValue` (`:61`): runs LAST among registered handlers on the way in, so a refusal happens after cheaper handlers have already done their work rather than in the middle of it (`:57-60`).
+  - `OnCircuitOpenedAsync` (`:64-85`): guards `circuit` against null (`:66`), then increments first and rolls back on refusal (`:70-75`) rather than checking-then-incrementing, because two simultaneous opens could otherwise both observe the last free slot and both take it; over the ceiling it decrements, logs via `LogCircuitRefused`, and returns a faulted `Task` carrying an `InvalidOperationException` telling the caller to retry (`:75-80`). Only an admitted circuit is added to `_admitted` (`:83`).
+  - `OnCircuitClosedAsync` (`:88-109`): guards `circuit` against null (`:90`), then returns without touching the count unless `_admitted.TryRemove` finds the circuit (`:92-98`), because the framework's teardown calls every handler's close unconditionally, including for a circuit this handler refused, and that close must not release a permit another circuit holds. An admitted circuit decrements the count, which then floors at zero (`:100-106`) as a last line of defence against a count driven negative handing out permits forever.
+  - `LogCircuitRefused` (`:111-114`): a `[LoggerMessage]`-generated warning logger, partial method paired with the `partial class` declaration.
+- **Why it's built this way**: see [BlazorCircuitLimitSettings](#blazorcircuitlimitsettings) for why 200 is the number; this handler is the enforcement point for that ceiling. See [ADR-088](https://ivanball.github.io/docs/adr/088-gateway-edge-responsibilities.html) and [ADR-124](https://ivanball.github.io/docs/adr/124-blazor-circuit-ceiling-ui-edge.html).
+- **Where it's used**: registered as a singleton `CircuitHandler` by [BlazorCircuitLimitExtensions](#blazorcircuitlimitextensions)'s `AddBoundedBlazorCircuits()`, called from MMCA.ADC.UI.Web's Blazor Server host composition (`Program.cs`).
+
+### UiRateLimitingExtensions
+
+> MMCA.Common.UI.Web · `MMCA.Common.UI.Web.Hardening` · `MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:22` · Level 1 · class (static)
+
+- **What it is**: the registration and pipeline wiring for a Blazor Web host's edge rate limiter, an `IServiceCollection` extension that builds a chained per-IP-and-global limiter from [UiRateLimitingSettings](#uiratelimitingsettings), and an `IApplicationBuilder` extension that adds it to the pipeline.
+- **Depends on**: [UiRateLimitingSettings](#uiratelimitingsettings); `System.Threading.RateLimiting` (`RateLimitPartition`, `FixedWindowRateLimiterOptions`, `ConcurrencyLimiterOptions`, `PartitionedRateLimiter`); ASP.NET Core's `IServiceCollection`/`AddRateLimiter` and `IApplicationBuilder`/`UseRateLimiter`. The class carries a `[SuppressMessage("Naming", "CA1708", ...)]` attribute (`:18-21`) whose justification records why: with multiple `extension(T)` blocks in one static class, CA1708 flags the compiler-generated grouping members as case-colliding even though no user-visible identifier differs only by case.
+- **Concept introduced, exempting probes and static assets from a per-IP window, and long-lived connections from the concurrency ceiling.** `IsExempt` (`:75-84`) matches two things: a fixed prefix list (`/health`, `/alive`, `/_framework`, `/_content`, `/hubs`, `/api/hubs`, `:52`) matched on whole segments so `/healthz` is not caught by `/health`, and any path whose last segment carries a file extension. The doc comment (`:41-51`) explains the `/hubs` entry mirrors the Gateway's own `GatewayRateLimiting:BypassPathPrefixes` bypass for long-lived SignalR traffic, so a host that ever fronts a hub on this origin is covered by declaration rather than by accident, and that `/api/hubs` is the same hub traffic arriving through the same-origin API proxy at its default prefix ([SameOriginApiProxyEndpoint](#sameoriginapiproxyendpoint)): without it every open hub WebSocket would hold a concurrency lease for its whole lifetime and exhaust the ceiling. `/_blazor` is treated differently on each limiter (`:65-69`): it has no extension and no exemption from the per-IP window, because the negotiate endpoint is exactly what opens a circuit, but `BlazorTransportPrefix` (`:33-39`) keeps it out of the concurrency ceiling, because the same prefix carries the circuit WebSocket, whose lease would otherwise be held for the whole circuit lifetime; open circuits are bounded by [BlazorCircuitLimitSettings](#blazorcircuitlimitsettings) and [BoundedCircuitHandler](#boundedcircuithandler) instead. [Rubric §29, Resilience & Business Continuity] applies to the chained limiter design; [Rubric §1, SOLID] applies to `IsExempt` being the single decision both partitions delegate to, so the shared exemption rule cannot drift between the two limiters, with the concurrency partition adding only the transport prefix on top.
+- **Walkthrough**
+  - `ExemptPartitionKey`, `UnknownIpPartitionKey`, `ConcurrencyPartitionKey` (`:25`, `:28`, `:31`): the three partition keys the limiter buckets requests into.
+  - `BlazorTransportPrefix` (`:39`): `"/_blazor"`, the Blazor circuit transport (negotiate, the circuit WebSocket and its long-polling fallback), excluded from the concurrency ceiling only.
+  - `ExemptPrefixes` (`:52`) and `IsExempt(PathString)` (`:75-84`): the shared exemption rule, detailed above; internal so it is unit-testable via `InternalsVisibleTo` (`:70-73`).
+  - `ClientIpPartition(HttpContext, UiRateLimitingSettings)` (`:94-122`): no limiter for exempt paths, no limiter for an unresolvable client IP (fail open, `:107-112`, so an in-process `TestServer` is never collapsed into one shared bucket), otherwise a `FixedWindowRateLimiter` keyed on the client IP with `QueueLimit = 0` (rejected immediately, not queued, `:114-121`).
+  - `ConcurrencyPartition(HttpContext, UiRateLimitingSettings)` (`:134-150`): the replica-wide `ConcurrencyLimiter`, one bucket for the whole process with `QueueLimit = 0`, exempt for every path `IsExempt` matches plus any path under `BlazorTransportPrefix` (`:141-142`).
+  - `AddUiRateLimiting(IConfiguration)` (`:161-194`), an `IServiceCollection` extension: binds and validates `UiRateLimitingSettings` (`:166-169`), then resolves a plain instance from configuration to close over in the partition callbacks (`:174-175`) rather than resolving `IOptions<T>` per request, because the partition callback runs on the hot path of every request and an out-of-range value has already failed `ValidateOnStart()`. `RejectionStatusCode` is set to 429 (`:179`); when `Enabled` is false the method returns early with no `GlobalLimiter` configured (`:181-184`); otherwise it chains the client-IP and concurrency partitions with `PartitionedRateLimiter.CreateChained` (`:188-192`), so a request must satisfy both.
+  - `UseUiRateLimiting()` (`:203-207`), an `IApplicationBuilder` extension: calls the framework's `UseRateLimiter()`.
+- **Why it's built this way**: see [UiRateLimitingSettings](#uiratelimitingsettings) for the tuning rationale. See [ADR-088](https://ivanball.github.io/docs/adr/088-gateway-edge-responsibilities.html) for the edge-hardening split between this host and the Gateway, [ADR-124](https://ivanball.github.io/docs/adr/124-blazor-circuit-ceiling-ui-edge.html) for why circuits are bounded by their own ceiling rather than by this limiter, and [ADR-131](https://ivanball.github.io/docs/adr/131-same-origin-api-proxy.html) for the same-origin proxy behind the `/api/hubs` exemption.
+- **Where it's used**: `AddUiRateLimiting` and `UseUiRateLimiting` are called from MMCA.ADC.UI.Web's Blazor Server host composition (`Program.cs`); the extension methods live on the `IServiceCollection`/`IApplicationBuilder` extension blocks (`:152`, `:197`).
+
+### BlazorCircuitLimitExtensions
+
+> MMCA.Common.UI.Web · `MMCA.Common.UI.Web.Hardening` · `MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hardening/BlazorCircuitLimitExtensions.cs:19` · Level 2 · class (static)
+
+- **What it is**: the registration wiring for [BlazorCircuitLimitSettings](#blazorcircuitlimitsettings) and [BoundedCircuitHandler](#boundedcircuithandler): an `IServiceCollection` extension that registers the bounded-circuit handler, and a factory method that builds the `CircuitOptions` retention callback from configuration.
+- **Depends on**: [BlazorCircuitLimitSettings](#blazorcircuitlimitsettings), [BoundedCircuitHandler](#boundedcircuithandler); ASP.NET Core's `IServiceCollection`, `IConfiguration`, and Blazor's `CircuitOptions`/`CircuitHandler`.
+- **Concept introduced, a singleton handler counting a state that is really per-circuit.** The class doc (`:12-17`) states why the two halves are deliberately separate calls: the disconnected-circuit retention is `CircuitOptions` on `AddInteractiveServerComponents`, while the active-circuit ceiling is a `CircuitHandler` singleton in the container, and both read the same section so the two numbers cannot drift apart. `AddBoundedBlazorCircuits`'s own doc (`:45-49`) states why registration is `AddSingleton` and not scoped: circuit handlers are resolved from each circuit's own scope, so a scoped registration would count to one and cap nothing. [Rubric §29, Resilience & Business Continuity] applies to the retention tightening described under [BlazorCircuitLimitSettings](#blazorcircuitlimitsettings); [Rubric §1, SOLID] applies to keeping registration wiring separate from both the settings type and the handler's own logic.
+- **Walkthrough**
+  - `RetentionFrom(IConfiguration)` (`:28-41`): reads [BlazorCircuitLimitSettings](#blazorcircuitlimitsettings) from configuration (falling back to `new BlazorCircuitLimitSettings()` if the section is absent), and returns an `Action<CircuitOptions>` that copies `DisconnectedCircuitMaxRetained` and converts `DisconnectedCircuitRetentionSeconds` to a `TimeSpan` for `DisconnectedCircuitRetentionPeriod` (`:37-39`).
+  - `AddBoundedBlazorCircuits()` (`:51-61`), an `IServiceCollection` extension: binds and validates [BlazorCircuitLimitSettings](#blazorcircuitlimitsettings) (`:55-58`), then registers [BoundedCircuitHandler](#boundedcircuithandler) as a singleton `CircuitHandler` (`:60`).
+- **Why it's built this way**: keeps circuit-limit registration next to the retention-callback factory, both consumers of the same [BlazorCircuitLimitSettings](#blazorcircuitlimitsettings), while the enforcement logic itself stays in [BoundedCircuitHandler](#boundedcircuithandler). See [ADR-088](https://ivanball.github.io/docs/adr/088-gateway-edge-responsibilities.html).
+- **Where it's used**: `AddBoundedBlazorCircuits()` and `RetentionFrom` are both called from MMCA.ADC.UI.Web's Blazor Server host composition (`Program.cs`).
+
+### HandoffBody
+> MMCA.Common.UI.Web · `MMCA.Common.UI.Web.SameOriginProxy` · `MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SessionHandoffEndpoints.cs:64` · Level 0 · record
+
+- **What it is**: the JSON body both session-handoff endpoints exchange, `{ "handoff": "..." }`: a single nullable `Handoff` string (`SessionHandoffEndpoints.cs:63-64`). It is a nested `internal sealed record` of [`SessionHandoffEndpoints`](#sessionhandoffendpoints).
+- **Depends on**: nothing first-party.
+- **Concept**: a wire DTO for an opaque, Data-Protection-sealed token; the sealing is taught on [`SessionHandoffProtector`](#sessionhandoffprotector).
+- **Walkthrough**: the token endpoint returns it with a protected access token (`SessionHandoffEndpoints.cs:34`); the cookie endpoint binds it from the request body and unprotects `body.Handoff` (`SessionHandoffEndpoints.cs:42,49`).
+- **Why it's built this way**: the property is nullable so a missing or empty body binds instead of failing model binding; the protector then treats null or whitespace as "no handoff" (`SessionHandoffProtector.cs:59-62`) and the endpoint answers 400 `invalid_handoff` (`SessionHandoffEndpoints.cs:50-53`).
+- **Where it's used**: only inside `SessionHandoffEndpoints.cs`.
+
+### ProxyResponseMode
+> MMCA.Common.UI.Web · `MMCA.Common.UI.Web.SameOriginProxy` · `MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginProxyTransformer.cs:14` · Level 0 · enum
+
+- **What it is**: how the same-origin proxy treats the upstream response of one forwarded request: `Forward` (copy as is), `TokenIssuing` (a sign-in: move the token pair into the session cookies and strip it from the body), `Revoke` (a sign-out: copy, then clear the session cookies) (`SameOriginProxyTransformer.cs:17,20,23`).
+- **Depends on**: nothing first-party.
+- **Concept**: a strategy selector passed into the per-request [`SameOriginProxyTransformer`](#sameoriginproxytransformer); see that section for each mode's mechanism.
+- **Walkthrough**: [`SameOriginApiProxyEndpoint`](#sameoriginapiproxyendpoint) picks the mode in `ResolveMode` (`SameOriginApiProxyEndpoint.cs:291-311`): every non-POST is `Forward`; a POST to the refresh path yields `null` (the proxy answers it itself); a POST to a token-issuing path is `TokenIssuing`; a POST to the revoke path is `Revoke`; any other POST is `Forward`.
+- **Why it's built this way**: the endpoint decides once per request and the transformer branches on it (`SameOriginProxyTransformer.cs:64,84,91`), so the request path matching stays in one class and the body rewriting in another.
+- **Where it's used**: `SameOriginApiProxyEndpoint` and `SameOriginProxyTransformer` only; it is `internal`.
+
+### SameOriginApiProxyMarker
+> MMCA.Common.UI.Web · `MMCA.Common.UI.Web.SameOriginProxy` · `MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxyServiceExtensions.cs:92` · Level 0 · class
+
+- **What it is**: an empty `internal sealed class` registered as a singleton only by `AddCommonSameOriginApiProxy` (`SameOriginApiProxyServiceExtensions.cs:81,92`), so other code can ask the container "did this host opt in to the proxy?".
+- **Depends on**: nothing.
+- **Concept**: a DI marker service: presence in the container is the signal, the instance carries no state.
+- **Walkthrough**: no members.
+- **Why it's built this way**: checking a private marker type is cheaper and more precise than probing for a public service a host could register for other reasons (for example the options type, which binding alone would create).
+- **Where it's used**: [`SameOriginApiProxyEndpointExtensions`](#sameoriginapiproxyendpointextensions) throws when it is absent, naming the missing call (`SameOriginApiProxyEndpointExtensions.cs:38-42`); [`ClientConfigEndpointExtensions`](#clientconfigendpointextensions) reads it to decide whether to publish the proxy's path prefix to the client (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/ClientConfig/ClientConfigEndpointExtensions.cs:93,98`).
+
+### SameOriginApiProxySettings
+> MMCA.Common.UI.Web · `MMCA.Common.UI.Web.SameOriginProxy` · `MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxySettings.cs:21` · Level 0 · class
+
+- **What it is**: the options class for the same-origin API proxy, bound from configuration section `SameOriginApiProxy` (`SameOriginApiProxySettings.cs:24`) and validated at startup.
+- **Depends on**: `SameSiteMode` (ASP.NET Core); first-party only by reference: the gateway address falls back to [`ApiSettings`](#apisettings)'s `ApiEndpoint`.
+- **Concept**: options pattern with fail-fast validation, same shape as the other settings classes in this group (for example [`BlazorCspSettings`](#blazorcspsettings) with [`BlazorCspSettingsValidator`](#blazorcspsettingsvalidator)). `[Rubric §33, Developer Experience]` assesses whether misconfiguration surfaces early and clearly; every knob here has a default, so a host opts in with no configuration at all.
+- **Walkthrough**:
+  - `DefaultTokenIssuingPaths` = `auth/login`, `auth/register`, `auth/oauth/exchange` (`SameOriginApiProxySettings.cs:31`): the endpoints whose successful response carries a token pair.
+  - `PathPrefix` = `/api` (`:38`): a request to `{PathPrefix}/orders/5` is forwarded to `{gateway}/orders/5`.
+  - `GatewayAddress` (`:46`): null by default; `AddCommonSameOriginApiProxy` fills it from `Api:ApiEndpoint` when unset (`SameOriginApiProxyServiceExtensions.cs:57-64`), so an Aspire discovery name such as `https+http://gateway` resolves as it does for the host's API clients.
+  - `AdditionalTokenIssuingPaths` (`:52`): empty; a host adds paths such as `auth/2fa/verify`.
+  - `RefreshPath` = `auth/refresh` (`:59`): answered by the proxy itself from the refresh cookie.
+  - `RevokePath` = `auth/revoke` (`:66`): forwarded, then the cookies are cleared whatever upstream answered.
+  - `SessionCookieSameSite` = `SameSiteMode.Strict` (`:74`); `Lax` is the only other accepted value.
+- **Why it's built this way**: recorded in [ADR-131](https://ivanball.github.io/docs/adr/131-same-origin-api-proxy.html): a WebAssembly client calling the gateway cross-origin cannot carry the HttpOnly session cookie, so tokens end up script-readable; a same-origin proxy on the UI host lets the cookie authenticate data calls instead.
+- **Where it's used**: [`SameOriginApiProxyServiceExtensions`](#sameoriginapiproxyserviceextensions) (binding, and copying `SessionCookieSameSite` onto [`SessionCookieSettings`](group-08-auth.md#sessioncookiesettings), `SameOriginApiProxyServiceExtensions.cs:69-74`), [`SameOriginApiProxySettingsValidator`](#sameoriginapiproxysettingsvalidator), [`SameOriginApiProxyEndpoint`](#sameoriginapiproxyendpoint), [`SameOriginApiProxyEndpointExtensions`](#sameoriginapiproxyendpointextensions) and `ClientConfigEndpointExtensions.cs:98`.
+
+### SameOriginProxyInvoker
+> MMCA.Common.UI.Web · `MMCA.Common.UI.Web.SameOriginProxy` · `MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginProxyInvoker.cs:19` · Level 0 · class
+
+- **What it is**: an `IDisposable` holder for the one `HttpMessageInvoker` YARP's forwarder sends every proxied request through (`SameOriginProxyInvoker.cs:19,37`).
+- **Depends on**: `IServiceDiscoveryHttpMessageHandlerFactory` (Microsoft.Extensions.ServiceDiscovery), `SocketsHttpHandler`, YARP's `ReverseProxyPropagator`.
+- **Concept**: YARP's `IHttpForwarder` expects a long-lived invoker with a transport tuned for proxying, not a pooled `HttpClient`. `[Rubric §12, Performance & Scalability]` assesses connection reuse and resource lifetime: one singleton transport is shared by all requests.
+- **Walkthrough**:
+  - The public ctor resolves the optional discovery factory and builds the handler (`SameOriginProxyInvoker.cs:24-31`); the invoker is created with `disposeHandler: false` and the class keeps `_ownedHandler` to dispose itself (`:22,39-43`).
+  - An `internal` ctor takes a test-supplied handler, for example a TestServer's (`:34-35`); that handler is not owned or disposed.
+  - `CreateHandler` (`:45-69`) configures `SocketsHttpHandler`: `UseProxy = false`, `AllowAutoRedirect = false`, no automatic decompression, `UseCookies = false`, multiple HTTP/2 connections, `ConnectTimeout` 15 s, and a `ReverseProxyPropagator` over `DistributedContextPropagator.Current` (`:50-59`). When discovery is registered it wraps the transport (`:61`) so `https+http://gateway` resolves. The null-out-then-`finally` pattern disposes the transport only if wrapping throws.
+- **Why it's built this way**: redirects, cookies and decompression must pass through to the browser untouched, which is why they are all off; the propagator keeps the trace context flowing to the gateway.
+- **Where it's used**: injected into [`SameOriginApiProxyEndpoint`](#sameoriginapiproxyendpoint) (`SameOriginApiProxyEndpoint.cs:31,342`), registered by `SameOriginApiProxyServiceExtensions.cs:78`, and built from a handler in the test harness `MMCA.Common/Tests/Presentation/MMCA.Common.UI.Web.Tests/SameOriginProxy/ProxyTestHarness.cs`.
+
+### TokenPair
+> MMCA.Common.UI.Web · `MMCA.Common.UI.Web.SameOriginProxy` · `MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SessionHandoffProtector.cs:75` · Level 0 · record
+
+- **What it is**: a private nested record `(AccessToken, RefreshToken)` of [`SessionHandoffProtector`](#sessionhandoffprotector) (`SessionHandoffProtector.cs:75`), the plaintext shape serialized to JSON before it is sealed.
+- **Depends on**: nothing first-party; `System.Text.Json`.
+- **Walkthrough**: serialized in `ProtectTokenPair` (`SessionHandoffProtector.cs:33-34`) and deserialized in `UnprotectTokenPair`, which rejects a null pair or either token blank (`:46-49`).
+- **Where it's used**: only inside `SessionHandoffProtector.cs`; callers see a value tuple instead.
+
+### SameOriginApiProxySettingsValidator
+> MMCA.Common.UI.Web · `MMCA.Common.UI.Web.SameOriginProxy` · `MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxySettingsValidator.cs:14` · Level 1 · class
+
+- **What it is**: the `IValidateOptions<SameOriginApiProxySettings>` that fails the boot on an unusable proxy configuration, collecting every failure into one result (`SameOriginApiProxySettingsValidator.cs:14,19-51`).
+- **Depends on**: [`SameOriginApiProxySettings`](#sameoriginapiproxysettings); `SearchValues<char>`, `ValidateOptionsResult`.
+- **Concept**: startup validation via `ValidateOnStart`, cross-referenced to [`BlazorCspSettingsValidator`](#blazorcspsettingsvalidator). `[Rubric §11, Security]` applies to the `SameSite` check: only `Strict` or `Lax` pass, because the cookie now authenticates data calls (`:40-43`).
+- **Walkthrough**:
+  - `ForbiddenPathCharacters` = `{}*?#\` (`:16`): route syntax, query, fragment and backslash.
+  - `PathPrefix` must pass `IsValidPrefix` (`:26-31,54-60`): non-blank, longer than one char, starts with `/`, does not end with `/`, no whitespace, no forbidden char. It becomes a route pattern, hence the literal-path rule.
+  - `GatewayAddress` must be an absolute URI with a host (`:33-38`); the message names the `Api:ApiEndpoint` fallback.
+  - `RefreshPath`, `RevokePath` and every `AdditionalTokenIssuingPaths` entry must pass `IsValidRelativePath` (`:45-49,62-67`): not blank after trimming `/`, no whitespace, no forbidden char, no `://`.
+- **Why it's built this way**: an invalid prefix would otherwise surface as a route-pattern exception or a silently unmatched route at request time; naming the setting at boot is cheaper to diagnose.
+- **Where it's used**: registered with `TryAddEnumerable` by `SameOriginApiProxyServiceExtensions.cs:66-67`.
+
+### SessionHandoffProtector
+> MMCA.Common.UI.Web · `MMCA.Common.UI.Web.SameOriginProxy` · `MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SessionHandoffProtector.cs:16` · Level 1 · class
+
+- **What it is**: seals tokens with ASP.NET Core Data Protection so the Blazor Server circuit can pass them through browser script without script being able to read or replay them later (`SessionHandoffProtector.cs:16`).
+- **Depends on**: `IDataProtectionProvider` / `ITimeLimitedDataProtector` (Microsoft.AspNetCore.DataProtection); nested [`TokenPair`](#tokenpair).
+- **Concept introduced, the protected handoff.** With the proxy enabled the HttpOnly cookies are the only session store, but a Server circuit runs over a WebSocket where it cannot read cookies on demand, and it may need to seed the cookies after a sign-in. The handoff hops through JS interop carrying an opaque blob that only this server can open, valid for one minute. `[Rubric §26, Front-End Security]` assesses keeping credentials out of script-reachable storage: the browser holds ciphertext with a 1-minute lifetime, never a usable bearer.
+- **Walkthrough**:
+  - `Lifetime` = 1 minute, "one fetch plus one interop hop" (`:19`).
+  - Two purpose-isolated protectors under the root `MMCA.Common.UI.Web.SameOriginProxy.SessionHandoff`, one for `AccessToken`, one for `TokenPair` (`:21-27`), so a blob minted for one cannot be opened as the other.
+  - `ProtectAccessToken` / `UnprotectAccessToken` (`:29,31`); `ProtectTokenPair` serializes a `TokenPair` to JSON (`:33-34`); `UnprotectTokenPair` returns a tuple or null on a missing, blank or malformed pair (`:36-55`).
+  - `TryUnprotect` (`:57-73`) maps null or whitespace input, and `CryptographicException` or `FormatException` (tampered, expired, wrong purpose, retired key), to null.
+- **Why it's built this way**: see [ADR-131](https://ivanball.github.io/docs/adr/131-same-origin-api-proxy.html). Returning null instead of throwing lets each endpoint answer a clean 401 or 400.
+- **Where it's used**: [`SessionHandoffEndpoints`](#sessionhandoffendpoints), [`HandoffTokenRefresher`](#handofftokenrefresher), [`HandoffSessionCookieSync`](#handoffsessioncookiesync); registered as a singleton at `SameOriginApiProxyServiceExtensions.cs:80`; tested in `MMCA.Common/Tests/Presentation/MMCA.Common.UI.Web.Tests/SameOriginProxy/SameOriginApiProxyAuthFlowTests.cs` and `SessionHandoffServicesTests.cs`.
+- **Caveats / not-in-source**: whether the host's Data Protection key ring is persisted and shared across replicas is host configuration; `AddDataProtection()` here (`SameOriginApiProxyServiceExtensions.cs:77`) adds no persistence. Not determinable from this source.
+
+### HandoffSessionCookieSync
+> MMCA.Common.UI.Web · `MMCA.Common.UI.Web.SameOriginProxy` · `MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/HandoffSessionServices.cs:39` · Level 2 · class
+
+- **What it is**: the proxy-mode [`ISessionCookieSync`](#isessioncookiesync) for the Blazor Server circuit: after a sign-in it hands the browser a protected token pair to post back, instead of the raw tokens (`HandoffSessionServices.cs:39`).
+- **Depends on**: `IJSRuntime`, [`SessionHandoffProtector`](#sessionhandoffprotector).
+- **Concept**: cross-reference [`SessionHandoffProtector`](#sessionhandoffprotector); it replaces the default sync (compare [`JsFetchSessionCookieSync`](#jsfetchsessioncookiesync)).
+- **Walkthrough**: `SyncAsync` calls `mmcaAuthHandoff.setCookie` with `ProtectTokenPair(...)` (`:41-51`); the script posts it to `/auth/session-cookie/handoff` (see [`SessionHandoffEndpoints`](#sessionhandoffendpoints)). `ClearAsync` calls `mmcaAuthCookie.clear` (`:53-63`). Both return `false` when interop is unavailable (`InvalidOperationException`, `JSDisconnectedException`, `JSException`, `OperationCanceledException`, `:65-66`).
+- **Where it's used**: registered with `Replace` as scoped (`SameOriginApiProxyServiceExtensions.cs:84`) and verified at map time by [`SameOriginApiProxyEndpointExtensions`](#sameoriginapiproxyendpointextensions).
+- **Caveats / not-in-source**: the `mmcaAuthHandoff` / `mmcaAuthCookie` JavaScript is not in this C# source and was not read.
+
+### HandoffTokenRefresher
+> MMCA.Common.UI.Web · `MMCA.Common.UI.Web.SameOriginProxy` · `MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/HandoffSessionServices.cs:14` · Level 2 · class
+
+- **What it is**: the proxy-mode [`ITokenRefresher`](#itokenrefresher) for the Blazor Server circuit: it gets an access token from the cookie session through a protected handoff (`HandoffSessionServices.cs:14`).
+- **Depends on**: `IJSRuntime`, [`SessionHandoffProtector`](#sessionhandoffprotector).
+- **Concept**: cross-reference [`SessionHandoffProtector`](#sessionhandoffprotector); it replaces the default refresher (compare [`DirectApiTokenRefresher`](#directapitokenrefresher)).
+- **Walkthrough**: `AcquireAccessTokenAsync` calls `mmcaAuthHandoff.getToken` (`:20`), whose script calls `/auth/session/handoff`; the returned blob is unprotected server-side (`:21`). Interop failure during SSR prerender or a disconnected circuit returns null (`:23-28`).
+- **Where it's used**: registered with `Replace` as scoped (`SameOriginApiProxyServiceExtensions.cs:83`); tested in `SessionHandoffServicesTests.cs`.
+- **Caveats / not-in-source**: the JavaScript side is not in this C# source.
+
+### SameOriginProxyTransformer
+> MMCA.Common.UI.Web · `MMCA.Common.UI.Web.SameOriginProxy` · `MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginProxyTransformer.cs:34` · Level 12 · class
+
+- **What it is**: the per-request YARP `HttpTransformer` that rewrites the outbound request (path, bearer, cookies) and treats the response according to its [`ProxyResponseMode`](#proxyresponsemode) (`SameOriginProxyTransformer.cs:34-39`).
+- **Depends on**: [`ISessionCookieStore`](group-08-auth.md#isessioncookiestore), [`SessionCookieEndpoints`](group-08-auth.md#sessioncookieendpoints) (cookie names), [`SessionClaimsToken`](group-08-auth.md#sessionclaimstoken), [`SameOriginProxyHeaders`](#sameoriginproxyheaders); YARP `HttpTransformer` and `RequestUtilities`.
+- **Concept**: `[Rubric §26, Front-End Security]` (credentials kept out of script): the token pair from a sign-in never reaches the browser body, and the cookie jar's token copies never reach the upstream.
+- **Walkthrough**:
+  - `TransformRequestAsync` (`:47-69`): runs YARP's default, strips the prefix to build the destination URI (`:55-58`), sets `Authorization: Bearer` from the session or removes it (`:60`), drops the CSRF header (`:61`), removes the session cookies (`:62`), and in `TokenIssuing` mode clears `Accept-Encoding` so the body arrives as plain JSON (`:64-68`).
+  - `TransformResponseAsync` (`:71-98`): when `captureUnauthorized` is on and upstream answered 401, sets `UnauthorizedCaptured` and copies nothing so the endpoint can replay (`:76-80`); in `Revoke` clears the cookies whatever upstream said (`:84-89`); in `TokenIssuing` on success rewrites the body (`:91-95`).
+  - `RewriteTokenResponseAsync` / `TryMoveTokensToCookies` (`:106-145`): parses the JSON case-insensitively, writes both tokens to the cookie store (`:141`), replaces `accessToken` with its claims-only form and empties `refreshToken` (`:142-143`), and sets `no-store` (`:115-117`). A body without a token pair passes through unchanged.
+  - `RemoveSessionCookies` (`:156-174`): filters only the access and refresh cookie pairs from the `Cookie` header; other cookies pass.
+- **Why it's built this way**: the browser-facing JSON keeps its shape, so a client written for the non-proxy mode still parses a well-formed response (`:100-105`).
+- **Where it's used**: created per request by [`SameOriginApiProxyEndpoint`](#sameoriginapiproxyendpoint) (`SameOriginApiProxyEndpoint.cs:336-337`).
+
+### SameOriginApiProxyEndpoint
+> MMCA.Common.UI.Web · `MMCA.Common.UI.Web.SameOriginProxy` · `MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxyEndpoint.cs:29` · Level 13 · class
+
+- **What it is**: the request handler behind `{PathPrefix}/{**path}`: gates the request, resolves the session from the cookies, forwards to the gateway with a bearer, and refreshes and replays once on an unexpected 401 (`SameOriginApiProxyEndpoint.cs:29-35,60-105`).
+- **Depends on**: YARP `IHttpForwarder`, [`SameOriginProxyInvoker`](#sameoriginproxyinvoker), [`ICookieSessionRefresher`](group-08-auth.md#icookiesessionrefresher) with [`SessionRefreshOutcome`](group-08-auth.md#sessionrefreshoutcome) / [`SessionRefreshStatus`](group-08-auth.md#sessionrefreshstatus), [`ISessionCookieStore`](group-08-auth.md#isessioncookiestore), [`SameOriginApiProxySettings`](#sameoriginapiproxysettings), [`SameOriginProxyTransformer`](#sameoriginproxytransformer), [`SessionClaimsToken`](group-08-auth.md#sessionclaimstoken).
+- **Concept introduced, a Backend-for-Frontend proxy.** The UI host forwards same-origin calls to the gateway, so the browser's cookie authenticates them and the bearer is attached server-side. `[Rubric §26, Front-End Security]` assesses CSRF and origin defenses: a same-origin gate and a CSRF header gate run before anything is forwarded. `[Rubric §29, Resilience & Business Continuity]` assesses graceful degradation: an undecided refresh answers 503 with `Retry-After` and keeps the session.
+- **Walkthrough**:
+  - Config: `RequestConfig` uses a 100 s activity timeout and HTTP/1.1 with `RequestVersionOrLower` (`:43-48`), which lets YARP turn an HTTP/2 WebSocket into an HTTP/1.1 upgrade; `DefaultRetryAfter` 5 s (`:51`); `_tokenIssuingPaths` merges the defaults and additions case-insensitively (`:54-58`).
+  - `InvokeAsync` (`:60-105`): disables status code pages so a proxied empty 401/404 is not replaced by an HTML page (`:66-69`); runs `TryAnswerBeforeForwardingAsync`; resolves the mode, with `null` meaning `RefreshLocallyAsync` (`:76-81`); for non-sign-in requests that carry a session cookie calls `ValidateOrRefreshAsync` and fails via `FailRefreshAsync` when no session results (`:85-96`); forwards with 401 capture on only for a bearer plus a replayable request (`:98-99`); replays on capture (`:101-104`).
+  - Gates, in order (`TryAnswerBeforeForwardingAsync`, `:232-259`): `CrossOriginRejection` (403 `cross_origin_rejected`); `OPTIONS` answered 204 locally, never forwarded, no CORS grant; unsafe methods other than an HTTP/2 WebSocket CONNECT need the CSRF header (403 `csrf_header_required`). `HasCsrfHeader` requires exactly one header value equal to [`SameOriginProxyHeaders`](#sameoriginproxyheaders)'s value (`:110-113`).
+  - `CrossOriginRejection` (`:131-137`): `OriginRejection` refuses a foreign `Origin` and an upgrade with no `Origin` (`:180-188`); `IsOwnOrigin` compares scheme and server against the request as seen after forwarded headers, refusing paths, user info and the `null` origin (`:146-160`); `FetchSiteRejection` allows `same-origin`, and `none` only on a non-upgrade GET or HEAD (`:190-207`). `IsWebSocketExtendedConnect` detects RFC 8441 CONNECT (`:169-172`).
+  - `IsReplayable` (`:215-217`): GET, HEAD or OPTIONS and not an upgrade, so nothing with a body is re-sent.
+  - `FailRefreshAsync` (`:274-285`): `Rejected` ends the session (clear cookies, 401 `session_expired`, `:262-266`); anything else answers 503 `session_refresh_unavailable` with `Retry-After` from upstream or 5 s.
+  - `RefreshAndReplayAsync` (`:318-329`): resets status to 200, forces `RefreshAsync`, forwards again without capture.
+  - `RefreshLocallyAsync` (`:356-374`): rotates from the refresh cookie and answers the sign-in shape with a claims-only access token, empty refresh token and the expiry, `no-store`.
+  - Four `[LoggerMessage]` warnings (`:376-386`); `ForwardAsync` logs a forward error only if the client did not abort (`:339-349`).
+- **Why it's built this way**: [ADR-131](https://ivanball.github.io/docs/adr/131-same-origin-api-proxy.html) records the decision; the gateway stays the API edge and authorizes the forwarded bearer.
+- **Where it's used**: mapped by [`SameOriginApiProxyEndpointExtensions`](#sameoriginapiproxyendpointextensions); its `HasCsrfHeader` is reused by [`SessionHandoffEndpoints`](#sessionhandoffendpoints) (`SessionHandoffEndpoints.cs:26,44`); registered as a singleton at `SameOriginApiProxyServiceExtensions.cs:79`.
+
+### SameOriginApiProxyServiceExtensions
+> MMCA.Common.UI.Web · `MMCA.Common.UI.Web.SameOriginProxy` · `MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxyServiceExtensions.cs:37` · Level 14 · class
+
+- **What it is**: the opt-in registration, `services.AddCommonSameOriginApiProxy(configuration)` (`SameOriginApiProxyServiceExtensions.cs:51`), written as a C# `extension(IServiceCollection)` block (see [C# `extension(T)` types](00-primer.md#c-extensiont-types--read-this-once)).
+- **Depends on**: every proxy type above; [`ApiSettings`](#apisettings), [`SessionCookieSettings`](group-08-auth.md#sessioncookiesettings), [`ITokenRefresher`](#itokenrefresher), [`ISessionCookieSync`](#isessioncookiesync); YARP `AddHttpForwarder`, Data Protection.
+- **Walkthrough**:
+  - Binds [`SameOriginApiProxySettings`](#sameoriginapiproxysettings), post-configures the gateway from `Api:ApiEndpoint` when unset, `ValidateOnStart` (`:55-65`), and adds the validator (`:66-67`).
+  - Configures `SessionCookieSettings`: `SameSite` from the proxy settings and `ClaimsOnlyBrowserTokens = true` (`:69-74`).
+  - `AddHttpForwarder`, `AddDataProtection` (`:76-77`); singletons for the invoker, endpoint, protector and [`SameOriginApiProxyMarker`](#sameoriginapiproxymarker) (`:78-81`).
+  - `Replace`s the scoped `ITokenRefresher` and `ISessionCookieSync` with [`HandoffTokenRefresher`](#handofftokenrefresher) and [`HandoffSessionCookieSync`](#handoffsessioncookiesync) (`:83-84`).
+- **Why it's built this way**: opt-in per host; a host that never calls it is unchanged ([ADR-131](https://ivanball.github.io/docs/adr/131-same-origin-api-proxy.html)). `Replace` means call order matters, which `MapCommonSameOriginApiProxy` checks.
+- **Where it's used**: paired with [`SameOriginApiProxyEndpointExtensions`](#sameoriginapiproxyendpointextensions); exercised in `MMCA.Common/Tests/Presentation/MMCA.Common.UI.Web.Tests/SameOriginProxy/SameOriginApiProxyOptInTests.cs`.
+- **Caveats / not-in-source**: which consumer hosts call it is not determinable from this source (no call site under `MMCA.Common/Source` other than its own pairing).
+
+### SessionHandoffEndpoints
+> MMCA.Common.UI.Web · `MMCA.Common.UI.Web.SameOriginProxy` · `MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SessionHandoffEndpoints.cs:15` · Level 14 · class
+
+- **What it is**: maps the two Blazor Server circuit handoff endpoints, `POST /auth/session/handoff` and `POST /auth/session-cookie/handoff` (`SessionHandoffEndpoints.cs:17-18,20`).
+- **Depends on**: [`ICookieSessionRefresher`](group-08-auth.md#icookiesessionrefresher), [`ISessionCookieStore`](group-08-auth.md#isessioncookiestore), [`SessionHandoffProtector`](#sessionhandoffprotector), [`SameOriginApiProxyEndpoint`](#sameoriginapiproxyendpoint) (`HasCsrfHeader`), [`HandoffBody`](#handoffbody).
+- **Walkthrough**:
+  - Token handoff (`:23-38`): requires the CSRF header (else 403), calls `GetOrRefreshAsync` on the cookie session, answers 401 `no_session` or a `HandoffBody` with a protected access token.
+  - Cookie handoff (`:41-60`): requires the CSRF header, unprotects the token pair (400 `invalid_handoff` on failure), writes the cookies, answers 204.
+  - Both are `ExcludeFromDescription`, `AllowAnonymous`, `DisableAntiforgery`; the CSRF header is the gate.
+- **Where it's used**: called from `MapCommonSameOriginApiProxy` (`SameOriginApiProxyEndpointExtensions.cs:54`); reached from the browser by [`HandoffTokenRefresher`](#handofftokenrefresher) and [`HandoffSessionCookieSync`](#handoffsessioncookiesync) through their JS interop.
+
+### SameOriginApiProxyEndpointExtensions
+> MMCA.Common.UI.Web · `MMCA.Common.UI.Web.SameOriginProxy` · `MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxyEndpointExtensions.cs:15` · Level 15 · class
+
+- **What it is**: `endpoints.MapCommonSameOriginApiProxy()` (`SameOriginApiProxyEndpointExtensions.cs:33`), which maps `{PathPrefix}/{**path}` for every method (WebSocket upgrades included) plus the handoff endpoints, after checking the registrations.
+- **Depends on**: [`SameOriginApiProxyMarker`](#sameoriginapiproxymarker), [`SameOriginApiProxySettings`](#sameoriginapiproxysettings), [`SameOriginApiProxyEndpoint`](#sameoriginapiproxyendpoint), [`SessionHandoffEndpoints`](#sessionhandoffendpoints), [`HandoffTokenRefresher`](#handofftokenrefresher), [`HandoffSessionCookieSync`](#handoffsessioncookiesync).
+- **Concept**: fail-fast wiring checks. `[Rubric §33, Developer Experience]`: a wrong registration order fails the boot with a message naming the fix rather than silently leaking tokens.
+- **Walkthrough**:
+  - Throws `InvalidOperationException` if the marker is absent (`:38-42`).
+  - `VerifyCircuitRegistrations` (`:64-69`) resolves `ITokenRefresher` and `ISessionCookieSync` in a scope; a resolved type other than the handoff implementation throws, telling the host to call `AddCommonSameOriginApiProxy` after every such registration (`:71-92`). A missing dependency such as `IJSRuntime` (no interactive Server circuit) skips the check (`:79-83`).
+  - Maps the proxy route to `proxy.InvokeAsync` as `ExcludeFromDescription`, `AllowAnonymous`, `DisableAntiforgery` (`:49-52`), then `SessionHandoffEndpoints.Map` (`:54`).
+- **Why it's built this way**: a later `ITokenRefresher` registration would put the access token back in the page on every Server-circuit hydration (`:59-63`); the doc comment asks hosts to map it after `UseAuthorization` (`:19-26`).
+- **Where it's used**: by consumer hosts that opted in. Not determinable from this source which hosts do.
 
 ### TrustedCallerHandler
 
@@ -4771,44 +5428,13 @@ lives.
 
 > MMCA.Common.UI.Web · `MMCA.Common.UI.Web.Security` · `MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Security/BlazorCspSettings.cs:18` · Level 0 · class (sealed)
 
-- **What it is**: the bindable options type for an opt-in `frame-src` allowance on the Blazor host's Content-Security-Policy, one string list of origins a page may embed in an `<iframe>` (`BlazorCspSettings.cs:30-42`).
+- **What it is**: the bindable options type for an opt-in `frame-src` allowance on the Blazor host's Content-Security-Policy, one string list of origins a page may embed in an `<iframe>` (`BlazorCspSettings.cs:23-35`).
 - **Depends on**: nothing first-party. It is read by [BlazorCspPolicyProvider](#blazorcsppolicyprovider) through `BuildFrameSrc` and validated at startup by [BlazorCspSettingsValidator](#blazorcspsettingsvalidator). Externals: `Microsoft.Extensions.Options` binding conventions (BCL `IList<string>`).
 - **Concept introduced, an empty default that changes nothing.** `[Rubric §26, Front-End Security]` assesses whether a security-relevant default stays strict until a deployment explicitly opts out. `SectionName = "BlazorCsp"` (line 28) names the configuration section; `FrameSources` (line 42) initializes to an empty list, so an unconfigured host emits no `frame-src` directive at all and the policy stays byte-identical to the pre-existing baseline (comment, lines 30-33). Only a deployment that needs to embed a specific third-party origin (the doc comment's example is a map provider's embed endpoint, lines 30-31) adds entries.
   - The doc comment (lines 33-40) states the origin shape a configured entry must satisfy: an absolute `https` origin with no path, query, fragment, user info, wildcard, quote, semicolon, comma or whitespace, so the field carries the contract [BlazorCspSettingsValidator](#blazorcspsettingsvalidator) enforces rather than leaving it implicit.
 - **Walkthrough**: two members: `SectionName` (line 28, a `public const string`) and `FrameSources` (line 42, `public IList<string>` initialized to `[]`).
 - **Why it's built this way**: a settings class bound through `IOptions<BlazorCspSettings>` fits the same registration and validation pipeline every other options type in the host uses, so adding `frame-src` support did not need a new configuration mechanism, only a new section.
 - **Where it's used**: bound and validated in `MMCA.Common.UI.Web`'s [DependencyInjection](#dependencyinjection-1) (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs`), consumed by [BlazorCspPolicyProvider](#blazorcsppolicyprovider)'s constructor as `IOptions<BlazorCspSettings>`.
-
-### BlazorCircuitLimitSettings
-
-> MMCA.Common.UI.Web · `MMCA.Common.UI.Web.Hardening` · `MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hardening/BlazorCircuitLimitSettings.cs:17` · Level 0 · class (sealed)
-
-- **What it is**: the bound options type for a Blazor Server host's circuit hardening, three numbers under the `BlazorCircuitLimits` configuration section: a ceiling on concurrently active circuits, a ceiling on disconnected circuits retained for reconnect, and how long a disconnected circuit is retained.
-- **Depends on**: nothing first-party; `System.ComponentModel.DataAnnotations.RangeAttribute` on all three properties (`BlazorCircuitLimitSettings.cs:37`, `:45`, `:56`) is what makes the settings self-validating. The class doc (`:9-15`) states it is deliberately separate from [UiRateLimitingSettings](#uiratelimitingsettings): the rate limiter bounds how fast requests arrive, while a circuit is state that stays resident on the server for as long as the connection lives, so a caller opening circuits slowly enough to stay inside the rate window still accumulates them without this ceiling.
-- **Concept introduced, sizing an abuse ceiling from the container rather than from traffic.** The doc comment on `MaxActiveCircuits` (`:26-36`) derives 200 from the container a Blazor UI host typically runs in (0.25 vCPU, 0.5 GiB): roughly 200 MiB of that half-gibibyte is the runtime, the framework and the static assets the host also serves, leaving on the order of 300 MiB for circuit state, and a MudBlazor page's server-side render tree costs a few hundred kilobytes up to about a megabyte, so 200 fits with headroom on memory and is already generous on the 0.25 vCPU side, where render throughput binds first. It sits far above real demand for a host rendering Interactive Auto, where a returning visitor's session moves to the WebAssembly runtime after the first render and holds no circuit at all: the number is an abuse ceiling, not a capacity plan. [Rubric §29, Resilience & Business Continuity] assesses exactly this: a documented, container-derived ceiling rather than an arbitrary round number. [Rubric §11, Validation] applies through the `[Range]` attributes that fail startup on an out-of-range value (see [BlazorCircuitLimitExtensions](#blazorcircuitlimitextensions)).
-- **Walkthrough**
-  - `SectionName => "BlazorCircuitLimits"` (`:20`) is the configuration section this type binds from.
-  - `MaxActiveCircuits` (`:37-38`), `[Range(1, 100_000)]`, defaults to `200`.
-  - `DisconnectedCircuitMaxRetained` (`:45-46`), `[Range(0, 10_000)]`, defaults to `25`, tighter than the Blazor framework default of 100 because a retained circuit holds the same state an active one does while serving nobody (`:41-43`).
-  - `DisconnectedCircuitRetentionSeconds` (`:56-57`), `[Range(5, 3600)]`, defaults to `60`, tighter than the framework's three minutes: a visitor who really did drop off Wi-Fi reconnects within seconds, and everything beyond that is memory held for someone who is gone (`:49-54`). The doc comment says a host whose audience sits on a flaky shared network (a conference venue, where someone walking between rooms should come back to the state they left) raises this back towards the framework's 180 and leans on `DisconnectedCircuitMaxRetained` to bound the memory.
-- **Why it's built this way**: the three numbers are kept in one bound, validated options type instead of inline literals so the ceiling can be tuned per environment through configuration without a code change, and so an out-of-range value fails fast at startup via [BlazorCircuitLimitExtensions](#blazorcircuitlimitextensions)'s `ValidateOnStart()` rather than silently at runtime. See [ADR-088](https://ivanball.github.io/docs/adr/088-gateway-edge-responsibilities.html) for the edge-hardening posture this settings type is part of.
-- **Where it's used**: bound and registered by [BlazorCircuitLimitExtensions](#blazorcircuitlimitextensions)'s `AddBoundedBlazorCircuits()`; read by [BoundedCircuitHandler](#boundedcircuithandler) for the active-circuit ceiling and by `BlazorCircuitLimitExtensions.RetentionFrom` for the disconnected-circuit settings.
-
-### UiRateLimitingSettings
-
-> MMCA.Common.UI.Web · `MMCA.Common.UI.Web.Hardening` · `MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hardening/UiRateLimitingSettings.cs:33` · Level 0 · class (sealed)
-
-- **What it is**: the bound options type for a Blazor Web host's own edge rate limiting, under the `UiRateLimiting` configuration section: an on/off switch, a per-client-IP request budget and window, and a replica-wide concurrency ceiling.
-- **Depends on**: nothing first-party; `RangeAttribute` on `PermitLimit`, `WindowSeconds`, and `GlobalConcurrencyLimit` (`UiRateLimitingSettings.cs:57`, `:61`, `:73`).
-- **Concept introduced, a Blazor host's own edge limiter because it is a separate origin from the Gateway.** The class doc (`:9-32`) states why a UI host needs one at all: the Blazor UI is a separate externally reachable origin from the Gateway (its own FQDN), so the ADR-088 Gateway edge limiter never sees a request to it, and every page load on this origin opens an interactive Server circuit against a typically 0.25 vCPU / 0.5 GiB container. It is shaped like the Gateway's limiter (same per-IP-plus-global-concurrency pairing, anonymous traffic included) but shipped as a distinct kit rather than referenced from `MMCA.Common.Gateway`, because a Blazor host is not a reverse proxy and its exemptions differ (it serves `/_framework` and `/_content` itself). Both counts are per replica, in memory, the same deliberate trade the Gateway kit makes: an edge limiter answers in microseconds on every request, and a shared counter would put a network round trip in front of the whole site. [Rubric §29, Resilience & Business Continuity] and [Rubric §11, Validation] apply as with [BlazorCircuitLimitSettings](#blazorcircuitlimitsettings): a documented, traffic-shape-derived number behind `[Range]` validation.
-- **Walkthrough**
-  - `SectionName => "UiRateLimiting"` (`:36`).
-  - `Enabled` (`:43`), default `true`; the doc comment (`:39-42`) calls out its escape hatch use, a load or capacity proof driven from one runner IP that the per-IP window cannot tell from a flood.
-  - `PermitLimit` (`:57-58`), `[Range(1, 1_000_000)]`, default `300`, which no real visitor approaches (a page load costs a handful of requests once static assets are exempt, and Interactive Auto hands the session to WebAssembly after the first render). The doc comment (`:48-56`) sets it well above a single visitor on purpose because an office or mobile-carrier NAT presents many visitors as one IP, and tells a host whose audience sits behind one address (a venue's wifi, a single corporate egress) to raise it, since the whole crowd arrives as a single partition key.
-  - `WindowSeconds` (`:61-62`), `[Range(1, 3600)]`, default `60`.
-  - `GlobalConcurrencyLimit` (`:73-74`), `[Range(1, 1_000_000)]`, default `200`: a ceiling rather than a rate, guarding against a slow downstream backing up threads on this replica; excess requests are rejected with 429 immediately rather than queued (`:64-72`), and unlike the per-IP window it needs no widening for a shared-address audience because in-flight concurrency is bounded by what the container can render, not by how many people share an address.
-- **Why it's built this way**: same rationale as [BlazorCircuitLimitSettings](#blazorcircuitlimitsettings), a bound, validated, environment-tunable options type rather than inline literals in [UiRateLimitingExtensions](#uiratelimitingextensions). See [ADR-088](https://ivanball.github.io/docs/adr/088-gateway-edge-responsibilities.html).
-- **Where it's used**: bound and read by [UiRateLimitingExtensions](#uiratelimitingextensions)'s `AddUiRateLimiting()`, which closes over a resolved instance rather than `IOptions<T>` per request (see that section).
 
 ### NotificationSendModel
 
@@ -4826,55 +5452,68 @@ lives.
 
 ### BiometricGate
 
-> MMCA.Common.UI · `MMCA.Common.UI.Components.Capabilities` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/Capabilities/BiometricGate.razor.cs:17` · Level 1 · class (partial, component code-behind)
+> MMCA.Common.UI · `MMCA.Common.UI.Components.Capabilities` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/Capabilities/BiometricGate.razor.cs:18` · Level 1 · class (partial, component code-behind)
 
 - **What it is**: a hybrid-head app-lock gate. It locks the UI behind a biometric prompt whenever the
   app returns from the background having sat there longer than `ReLockAfter`, so a device handed to
   someone else, or simply left unattended, does not reopen straight into a signed-in session.
 - **Depends on**: injected services resolved by the component (`AppLifecycle`'s `Resumed` event,
   `Preferences`, `TokenStorage`, `Biometrics`, `Navigation`, `Logger`, the page's localizer `L`);
-  MudBlazor's `MudButton` for the focus target (`_unlockButton`, line 105).
+  MudBlazor's `MudButton` for the focus target (`_unlockButton`, line 30).
 - **Concept introduced, an async-void lifecycle handler that cannot afford to throw.**
   `[Rubric §11, Security]` assesses whether a re-auth control actually re-arms on every qualifying
   event, not just the first one. The class subscribes to `AppLifecycle.Resumed` on first render
   regardless of the current preference, because app lock can be switched on later in the same session
-  (comment, lines 128-129), and every resume re-reads the preference. `[Rubric §18, UI Architecture &
-  Component Design]` covers the handler shape itself: `OnResumed` (line 169) is a plain
+  (comment, lines 53-54), and every resume re-reads the preference. `[Rubric §18, UI Architecture &
+  Component Design]` covers the handler shape itself: `OnResumed` (line 94) is a plain
   `EventHandler<AppResumedEventArgs>`, so it cannot be `async`; it fires `ReLockAsync` with an explicit
-  discard, and the security comment (lines 163-168) states why that discard is safe here, `ReLockAsync`
+  discard, and the security comment (lines 88-93) states why that discard is safe here, `ReLockAsync`
   observes its own failures with a catch-all, and an unobserved exception in a true async-void handler
   would crash a native head's process (VSTHRD100).
+- **Concept introduced, a precondition read that fails open before opt-in and closed after it.**
+  `[Rubric §11, Security]` also assesses which way a control fails when its own inputs are unreadable.
+  The class summary states the rule (lines 15-16) and `ShouldLockAsync` documents both halves
+  (lines 133-138): if the `AppLockEnabled` preference itself cannot be read, nothing says the owner
+  opted in, so the gate stays open rather than forcing a biometric prompt on a device that may have
+  none enrolled; if the preference reads as on but the stored session cannot be read, the session
+  state is unknown and the gate locks. Either way the method never throws, which matters because it
+  runs from both the first render and the resume path.
 - **Walkthrough**
-  - `ReLockAfter` (lines 100-101) is a `[Parameter]` `TimeSpan` defaulting to 30 seconds; the comment
-    (lines 96-98) explains the default is deliberately short, a device handed off is usually away from
+  - `ReLockAfter` (lines 25-26) is a `[Parameter]` `TimeSpan` defaulting to 30 seconds; the comment
+    (lines 20-24) explains the default is deliberately short, a device handed off is usually away from
     its owner longer than a glance at a notification.
-  - `OnAfterRenderAsync(firstRender)` (lines 115-141): first focuses the Unlock button if
-    `_focusUnlockPending` and the button reference now exists (lines 117-121), because that flag can
-    only be acted on once the locked branch has actually rendered. On `firstRender` it subscribes to
-    `AppLifecycle.Resumed` (lines 130-131), then calls `ShouldLockAsync` and, if it returns true, sets
-    `_locked` and awaits `UnlockAsync` (lines 133-140).
-  - `ReLockAsync` (lines 171-206) returns early if already locked or if the background duration was
-    under `ReLockAfter` (line 175), otherwise dispatches the lock-and-unlock sequence through
-    `InvokeAsync` (lines 180-190). It catches `ObjectDisposedException` and `InvalidOperationException`
-    as expected teardown races (lines 192-199), and a general `Exception` last, logged rather than
-    rethrown, with the comment (lines 200-204) recording that this is the exhaustive catch an async-void
+  - `OnAfterRenderAsync(firstRender)` (lines 40-66): first focuses the Unlock button if
+    `_focusUnlockPending` and the button reference now exists (lines 42-46), because that flag can
+    only be acted on once the locked branch has actually rendered (field comment, lines 32-36). On
+    `firstRender` it subscribes to `AppLifecycle.Resumed` (lines 55-56), then calls `ShouldLockAsync`
+    and, if it returns true, sets `_locked` and awaits `UnlockAsync` (lines 58-65).
+  - `ReLockAsync` (lines 96-131) returns early if already locked or if the background duration was
+    under `ReLockAfter` (line 100), otherwise dispatches the lock-and-unlock sequence through
+    `InvokeAsync` (lines 105-115). It catches `ObjectDisposedException` and `InvalidOperationException`
+    as expected teardown races (lines 117-124), and a general `Exception` last, logged rather than
+    rethrown, with the comment (lines 127-128) recording that this is the exhaustive catch an async-void
     handler needs.
-  - `ShouldLockAsync` (lines 208-218) returns false if the `AppLockEnabled` device preference is off,
-    otherwise returns whether a refresh token is still stored, nothing to protect without a session.
-  - `UnlockAsync` (lines 220-234) calls `Biometrics.AuthenticateAsync` with a localized prompt reason;
+  - `ShouldLockAsync` (lines 139-167) wraps the preference read in its own `try` (lines 142-150): a
+    failure is logged as a warning and returns false. A preference that is off also returns false
+    (lines 152-155). Otherwise a second `try` (lines 157-166) returns whether a refresh token is still
+    stored, nothing to protect without a session, and a failure there is logged and returns true
+    (line 165).
+  - `UnlockAsync` (lines 169-183) calls `Biometrics.AuthenticateAsync` with a localized prompt reason;
     success clears `_locked`, failure queues `_focusUnlockPending` for the next render rather than
     focusing immediately, because the button does not exist yet on the very first lock.
-  - `FocusUnlockAsync` (lines 240-254) tolerates `JSDisconnectedException` (circuit gone) and
+  - `FocusUnlockAsync` (lines 189-203) tolerates `JSDisconnectedException` (circuit gone) and
     `InvalidOperationException` (prerendering, or the element already removed).
-  - `SignOutAsync` (lines 256-261) clears tokens, clears `_locked`, and navigates to `/login`.
-  - `Dispose(bool)` (lines 145-154) unsubscribes from `AppLifecycle.Resumed` if subscribed, guarded so
-    it is safe to call more than once; the public `Dispose()` (lines 157-161) forwards to it and
+  - `SignOutAsync` (lines 205-210) clears tokens, clears `_locked`, and navigates to `/login`.
+  - `Dispose(bool)` (lines 70-79) unsubscribes from `AppLifecycle.Resumed` if subscribed, guarded so
+    it is safe to call more than once; the public `Dispose()` (lines 82-86) forwards to it and
     suppresses finalization.
 - **Why it's built this way**: the re-lock decision is driven entirely by wall-clock background
   duration rather than any UI state, so it behaves the same whether the app was backgrounded for a
   phone call or for the rest of the day. Catching broadly inside `ReLockAsync` but narrowly inside
   `FocusUnlockAsync` reflects the difference between an operation whose caller cannot observe a failure
-  at all (the lifecycle event) and one whose failure just means "skip the focus this time".
+  at all (the lifecycle event) and one whose failure just means "skip the focus this time". The two
+  catches inside `ShouldLockAsync` resolve in opposite directions on purpose: before opt-in the safe
+  default is "no lock", after opt-in it is "lock".
 - **Where it's used**: MMCA.ADC's `DeviceUIModule`
   (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/DeviceUIModule.cs`) and `App.xaml.cs`
   (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/App.xaml.cs`); pinned by `BiometricGateTests`
@@ -4896,38 +5535,97 @@ lives.
 - **Why it's built this way**: an explicit character denylist checked before parsing is stricter than trusting `Uri` alone, because `Uri` will happily parse strings a CSP source expression cannot safely contain; failing every bad entry at once (rather than the first) gives a deployment the whole list of what to fix in one pass.
 - **Where it's used**: registered alongside [BlazorCspSettings](#blazorcspsettings) in `MMCA.Common.UI.Web`'s [DependencyInjection](#dependencyinjection-1) (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs`); `ToOrigin` is reused by [BlazorCspPolicyProvider](#blazorcsppolicyprovider)'s `BuildFrameSrc` to canonicalize an already-validated entry.
 
-### BoundedCircuitHandler
+### AuthenticatedServiceBase
 
-> MMCA.Common.UI.Web · `MMCA.Common.UI.Web.Hardening` · `MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hardening/BoundedCircuitHandler.cs:39` · Level 1 · class (sealed, partial, `CircuitHandler`)
+> MMCA.Common.UI · `MMCA.Common.UI.Services.Api` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/AuthenticatedServiceBase.cs:15` · Level 1 · class (abstract)
 
-- **What it is**: a Blazor `CircuitHandler` that refuses a new circuit once this replica already holds [BlazorCircuitLimitSettings](#blazorcircuitlimitsettings)`.MaxActiveCircuits` active circuits, and counts circuits back down as they close.
-- **Depends on**: `CircuitHandler` (base class), `IOptions<BlazorCircuitLimitSettings>` and `ILogger<BoundedCircuitHandler>` (primary-constructor parameters, `BoundedCircuitHandler.cs:39-41`).
-- **Concept introduced, a singleton counter guarding a per-circuit-scoped hook.** The class doc (`:8-36`) states why a handler rather than `CircuitOptions`: `DisconnectedCircuitMaxRetained` bounds only circuits that already dropped their connection, and since every page load on a public Blazor origin opens one (a host rendering Interactive Auto makes the first render a Server circuit), the handler is the documented extension point that sees a circuit being opened and closed. It also states why the class throws rather than returning a refusal value: `OnCircuitOpenedAsync` returns `Task` with no "refuse" return, so an exception is the only way to stop a circuit starting, one of the few places in the framework where the Result pattern does not apply because the contract belongs to ASP.NET Core. [Rubric §29, Resilience & Business Continuity] assesses this directly: an explicit admission-control decision at the point circuits are opened, rather than letting an unbounded flood of circuits exhaust a replica's memory. [Rubric §14, Testability] applies through `ActiveCircuits` (`:49`), an internal-readable counter exposed specifically so `BoundedCircuitHandlerTests` can assert the increment/decrement/floor behavior without inspecting private state.
+- **What it is**: the base class every UI-side HTTP service inherits. It supplies one shared Polly
+  retry policy, two ways to get an `HttpClient` with a bearer token already attached, and the
+  idempotency-key generator that makes those retries safe.
+- **Depends on**: [ITokenStorageService](#itokenstorageservice), imported from the token namespace
+  `MMCA.Common.UI.Services.Auth.Tokens` (`AuthenticatedServiceBase.cs:3`); its documentation also
+  names [AuthDelegatingHandler](#authdelegatinghandler) as the thing it deliberately bypasses and
+  `Auth.Tokens.ITokenRefresher`, that is [ITokenRefresher](#itokenrefresher), as the source of the
+  replay token. Externals: `IHttpClientFactory`, `Polly` and `Polly.Retry`.
+- **Concept introduced, why a base class and not just the handler pipeline.**
+  `[Rubric §29, Resilience & Business Continuity]` assesses whether transient failures are absorbed
+  rather than surfaced; the retry policy is that. The sharper teaching is in the
+  `CreateAuthenticatedClientAsync` doc comment (`AuthenticatedServiceBase.cs:51-56`):
+  `IHttpClientFactory` creates its handlers in a separate DI scope from the Blazor circuit, so a
+  `DelegatingHandler` cannot reach the circuit's `IJSRuntime` to read the in-memory access token. The
+  base class works around that by reading the token from the circuit-scoped storage service itself and
+  setting the header directly. `[Rubric §9, API & Contract Design]` covers the idempotency half:
+  retrying a POST is only safe if the server can recognize the repeat, which is what
+  [ADR-017](https://ivanball.github.io/docs/adr/017-request-idempotency.html) provides.
 - **Walkthrough**
-  - `_activeCircuits` (`:43`) and `ActiveCircuits => Volatile.Read(ref _activeCircuits)` (`:49`): the live count, read with `Volatile.Read` because it is written from `Interlocked` calls on possibly-concurrent circuit-open/close callbacks.
-  - `Order => int.MaxValue` (`:55`): runs LAST among registered handlers on the way in, so a refusal happens after cheaper handlers have already done their work rather than in the middle of it (`:51-54`).
-  - `OnCircuitOpenedAsync` (`:58-76`): increments first, then rolls back on refusal (`:64-67`) rather than checking-then-incrementing, because two simultaneous opens could otherwise both observe the last free slot and both take it; over the ceiling it decrements, logs via `LogCircuitRefused`, and returns a faulted `Task` carrying an `InvalidOperationException` telling the caller to retry (`:67-72`).
-  - `OnCircuitClosedAsync` (`:79-91`): decrements, then floors at zero (`:84-88`) rather than trusting the open/close pairing, because a circuit torn down before this handler ran would otherwise drive the count negative and hand out permits forever.
-  - `LogCircuitRefused` (`:93-96`): a `[LoggerMessage]`-generated warning logger, partial method paired with the `partial class` declaration.
-- **Why it's built this way**: see [BlazorCircuitLimitSettings](#blazorcircuitlimitsettings) for why 200 is the number; this handler is the enforcement point for that ceiling. See [ADR-088](https://ivanball.github.io/docs/adr/088-gateway-edge-responsibilities.html).
-- **Where it's used**: registered as a singleton `CircuitHandler` by [BlazorCircuitLimitExtensions](#blazorcircuitlimitextensions)'s `AddBoundedBlazorCircuits()`, called from MMCA.ADC.UI.Web's Blazor Server host composition (`Program.cs`).
+  - `RetryPolicy` is a `protected static readonly AsyncRetryPolicy<HttpResponseMessage>` built once from
+    the shipped backoff (`AuthenticatedServiceBase.cs:25`), so one policy instance serves the whole app
+    rather than one per service instance per circuit. `ApiClientName` pins the named client to
+    `"APIClient"` (`AuthenticatedServiceBase.cs:27`), and both constructor arguments are null-checked
+    into private fields (`AuthenticatedServiceBase.cs:29-30`).
+  - `SharedRetryPolicy` (`AuthenticatedServiceBase.cs:36`) is an `internal static` getter that returns
+    that same `RetryPolicy` instance. Its doc comment (`AuthenticatedServiceBase.cs:32-35`) names the
+    only reader, [IdempotentReadRetry](#idempotentreadretry), which reuses the exact policy object
+    without inheriting from this class, so the anonymous read path and the authenticated one cannot
+    drift apart.
+  - `NewIdempotencyKey()` (`AuthenticatedServiceBase.cs:49`) returns a compact
+    `Guid.NewGuid().ToString("N")`, and its remarks (`AuthenticatedServiceBase.cs:41-47`) carry the
+    load-bearing rule: the value is generated once per logical operation and reused across every retry
+    attempt, because the server-side idempotency filter keys its cached response off it. Generating a
+    new key per attempt would defeat the dedup entirely and let a retry create a duplicate record.
+  - `CreateAuthenticatedClientAsync()` (`AuthenticatedServiceBase.cs:57`) resolves the `"APIClient"`
+    (`AuthenticatedServiceBase.cs:59`), reads the token (`AuthenticatedServiceBase.cs:63`), sets
+    `Authorization: Bearer` when non-blank (`AuthenticatedServiceBase.cs:64-68`), and catches
+    `InvalidOperationException` to proceed without a token during SSR prerender, when JS interop is
+    unavailable (`AuthenticatedServiceBase.cs:70-73`).
+  - `CreateClientWithToken(string accessToken)` (`AuthenticatedServiceBase.cs:86`) is the replay path.
+    Its doc comment (`AuthenticatedServiceBase.cs:78-84`) explains why it exists: after the API answers
+    `401`, the stored token still looks fresh by the client clock, so re-reading storage would just
+    resend the token the server has already rejected. The caller passes the token it acquired straight
+    from [ITokenRefresher](#itokenrefresher); the method rejects a blank one
+    (`AuthenticatedServiceBase.cs:88`) and stamps the header unconditionally
+    (`AuthenticatedServiceBase.cs:91`).
+  - `IsRetryableResponse` (`AuthenticatedServiceBase.cs:106`) is the retry predicate. It first excludes
+    `501 Not Implemented` and `505 HTTP Version Not Supported` (`AuthenticatedServiceBase.cs:108-111`)
+    because, as the remarks say (`AuthenticatedServiceBase.cs:100-105`), those are permanent verdicts and
+    retrying only burns the budget and delays the error the caller needs to see. It then accepts
+    anything `>= 500` plus `408 Request Timeout` and `429 Too Many Requests`
+    (`AuthenticatedServiceBase.cs:113-114`), the two codes where the server is explicitly inviting a
+    later attempt.
+  - `DefaultBackoff` (`AuthenticatedServiceBase.cs:120-122`) is the shipped schedule: `2^attempt`
+    seconds (2s, 4s, 8s) plus up to one second of random jitter, so a fleet of clients does not
+    re-converge on the same instant. The `S2245`/`CA5394` suppression around it
+    (`AuthenticatedServiceBase.cs:117`) documents that the randomness only spaces retries and feeds no
+    security decision.
+  - `BuildRetryPolicy(Func<int, TimeSpan> backoff)` (`AuthenticatedServiceBase.cs:137-140`) is
+    `internal` and backoff-injectable so a test can exercise the disposal contract without waiting out
+    the real delays. Its `onRetry` disposes the retried attempt's response
+    (`AuthenticatedServiceBase.cs:140`); the remarks (`AuthenticatedServiceBase.cs:129-136`) explain
+    that Polly hands the caller only the final outcome, so without this every intermediate 5xx, 408 or
+    429 response leaks its content buffer and keeps its connection out of the handler pool until
+    finalization, exactly under the sustained backend failure the retries exist to survive. A retried
+    `HttpRequestException` carries no result, hence the null-conditional, and the final response is not
+    disposed here because the caller owns it.
+- **Why it's built this way**: the DI scope mismatch is a real Blazor Server constraint, not a
+  preference, so the workaround has to live somewhere every service shares. The retry ceiling and
+  jitter line up with the resilience posture in
+  [ADR-009](https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html).
+- **Where it's used**: inherited by
+  [EntityServiceBase<TEntityDTO, TIdentifierType>](#entityservicebasetentitydto-tidentifiertype)
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/EntityServiceBase.cs:47`),
+  [ChildEntityServiceBase](#childentityservicebase)
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/ChildEntityServiceBase.cs:22`) and
+  [NotificationInboxService](#notificationinboxservice)
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Notifications/NotificationInboxService.cs:34`),
+  and through them by every module-level UI service in the consumer apps. The members show up as
+  `NewIdempotencyKey()` on writes (`EntityServiceBase.cs:162`), `RetryPolicy.ExecuteAsync` around each
+  call (`EntityServiceBase.cs:342` and `EntityServiceBase.cs:370`) and `CreateClientWithToken` on the
+  401 replay (`NotificationInboxService.cs:148`). The policy itself is also reached without
+  inheritance by [IdempotentReadRetry](#idempotentreadretry)
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/IdempotentReadRetry.cs:24`), which
+  gives anonymous lookup services the same retries on GETs.
 
-### UiRateLimitingExtensions
-
-> MMCA.Common.UI.Web · `MMCA.Common.UI.Web.Hardening` · `MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:22` · Level 1 · class (static)
-
-- **What it is**: the registration and pipeline wiring for a Blazor Web host's edge rate limiter, an `IServiceCollection` extension that builds a chained per-IP-and-global limiter from [UiRateLimitingSettings](#uiratelimitingsettings), and an `IApplicationBuilder` extension that adds it to the pipeline.
-- **Depends on**: [UiRateLimitingSettings](#uiratelimitingsettings); `System.Threading.RateLimiting` (`RateLimitPartition`, `FixedWindowRateLimiterOptions`, `ConcurrencyLimiterOptions`, `PartitionedRateLimiter`); ASP.NET Core's `IServiceCollection`/`AddRateLimiter` and `IApplicationBuilder`/`UseRateLimiter`. The class carries a `[SuppressMessage("Naming", "CA1708", ...)]` attribute (`:18-21`) whose justification records why: with multiple `extension(T)` blocks in one static class, CA1708 flags the compiler-generated grouping members as case-colliding even though no user-visible identifier differs only by case.
-- **Concept introduced, exempting probes and static assets from a per-IP window.** `IsExempt` (`:62-71`) matches two things: a fixed prefix list (`/health`, `/alive`, `/_framework`, `/_content`, `/hubs`, `:42`) matched on whole segments so `/healthz` is not caught by `/health`, and any path whose last segment carries a file extension. The doc comment (`:33-41`) explains the `/hubs` entry mirrors the Gateway's own `GatewayRateLimiting:BypassPathPrefixes` bypass for long-lived SignalR traffic, stated here by declaration even though nothing under `/hubs` is served by this host today. [Rubric §29, Resilience & Business Continuity] applies to the chained limiter design; [Rubric §1, SOLID] applies to `IsExempt` being the single decision both partitions delegate to, so the exemption rule cannot drift between the two limiters.
-- **Walkthrough**
-  - `ExemptPartitionKey`, `UnknownIpPartitionKey`, `ConcurrencyPartitionKey` (`:25`, `:28`, `:31`): the three partition keys the limiter buckets requests into.
-  - `ExemptPrefixes` (`:42`) and `IsExempt(PathString)` (`:62-71`): the shared exemption rule, detailed above.
-  - `ClientIpPartition(HttpContext, UiRateLimitingSettings)` (`:81-109`): no limiter for exempt paths, no limiter for an unresolvable client IP (fail open, `:94-98`, so an in-process `TestServer` is never collapsed into one shared bucket), otherwise a `FixedWindowRateLimiter` keyed on the client IP with `QueueLimit = 0` (rejected immediately, not queued).
-  - `ConcurrencyPartition(HttpContext, UiRateLimitingSettings)` (`:119-134`): the replica-wide `ConcurrencyLimiter`, one bucket for the whole process, exempt for the same paths.
-  - `AddUiRateLimiting(IConfiguration)` (`:145-178`), an `IServiceCollection` extension: binds and validates `UiRateLimitingSettings` (`:150-153`), then resolves a plain instance from configuration to close over in the partition callbacks (`:158-159`) rather than resolving `IOptions<T>` per request, because the partition callback runs on the hot path of every request and an out-of-range value has already failed `ValidateOnStart()`. `RejectionStatusCode` is set to 429 (`:163`); when `Enabled` is false the method returns early with no `GlobalLimiter` configured (`:165-168`); otherwise it chains the client-IP and concurrency partitions with `PartitionedRateLimiter.CreateChained` (`:172-176`), so a request must satisfy both.
-  - `UseUiRateLimiting()` (`:187-191`), an `IApplicationBuilder` extension: calls the framework's `UseRateLimiter()`.
-- **Why it's built this way**: see [UiRateLimitingSettings](#uiratelimitingsettings) for the tuning rationale. See [ADR-088](https://ivanball.github.io/docs/adr/088-gateway-edge-responsibilities.html) for the edge-hardening split between this host and the Gateway.
-- **Where it's used**: `AddUiRateLimiting` and `UseUiRateLimiting` are called from MMCA.ADC.UI.Web's Blazor Server host composition (`Program.cs`); the extension methods live on the `IServiceCollection`/`IApplicationBuilder` extension blocks (`:136`, `:181`).
+---
 
 ### BlazorCspPolicyProvider
 
@@ -4950,273 +5648,52 @@ lives.
 - **Where it's used**: registered by `AddCommonBlazorCsp()` in the `MMCA.Common.UI.Web` [DependencyInjection](#dependencyinjection-1) (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs`); the policy it returns is emitted by [SecurityHeadersMiddleware](group-16-aspire-orchestration.md#securityheadersmiddleware). The class doc notes it was hoisted out of the app Blazor Web hosts where it had been byte-identical (line 21).
 - **Caveats / not-in-source**: the registration method's own XML doc still describes the fallback as a "permissive Report-Only fallback on misconfiguration" (`MMCA.Common.UI.Web/DependencyInjection.cs:39`). The code is the truth: the fallback is enforced and narrowed to `'self'` (line 62). Treat that doc line as stale.
 
-### BlazorCircuitLimitExtensions
+### IdempotentReadRetry
 
-> MMCA.Common.UI.Web · `MMCA.Common.UI.Web.Hardening` · `MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hardening/BlazorCircuitLimitExtensions.cs:19` · Level 2 · class (static)
+> MMCA.Common.UI · `MMCA.Common.UI.Services.Api` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/IdempotentReadRetry.cs:18` · Level 2 · class (static)
 
-- **What it is**: the registration wiring for [BlazorCircuitLimitSettings](#blazorcircuitlimitsettings) and [BoundedCircuitHandler](#boundedcircuithandler): an `IServiceCollection` extension that registers the bounded-circuit handler, and a factory method that builds the `CircuitOptions` retention callback from configuration.
-- **Depends on**: [BlazorCircuitLimitSettings](#blazorcircuitlimitsettings), [BoundedCircuitHandler](#boundedcircuithandler); ASP.NET Core's `IServiceCollection`, `IConfiguration`, and Blazor's `CircuitOptions`/`CircuitHandler`.
-- **Concept introduced, a singleton handler counting a state that is really per-circuit.** The class doc (`:12-17`) states why the two halves are deliberately separate calls: the disconnected-circuit retention is `CircuitOptions` on `AddInteractiveServerComponents`, while the active-circuit ceiling is a `CircuitHandler` singleton in the container, and both read the same section so the two numbers cannot drift apart. `AddBoundedBlazorCircuits`'s own doc (`:45-49`) states why registration is `AddSingleton` and not scoped: circuit handlers are resolved from each circuit's own scope, so a scoped registration would count to one and cap nothing. [Rubric §29, Resilience & Business Continuity] applies to the retention tightening described under [BlazorCircuitLimitSettings](#blazorcircuitlimitsettings); [Rubric §1, SOLID] applies to keeping registration wiring separate from both the settings type and the handler's own logic.
+- **What it is**: the retry that [AuthenticatedServiceBase](#authenticatedservicebase) applies, made
+  reachable without inheriting from it, so a service that makes anonymous reads (a lookup service that
+  creates a plain `APIClient`) gets three retries instead of a single attempt (class summary,
+  lines 5-8).
+- **Depends on**: [AuthenticatedServiceBase](#authenticatedservicebase) for the policy instance, read
+  through its `internal` `SharedRetryPolicy` (line 24,
+  `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/AuthenticatedServiceBase.cs:36`).
+  Externals: `Polly.Retry` (`AsyncRetryPolicy<HttpResponseMessage>`, line 1) and BCL `HttpClient`.
+- **Concept introduced, retry is only safe for an idempotent verb.** `[Rubric §29, Resilience,
+  Reliability & Business Continuity]` assesses whether transient failures are absorbed rather than
+  surfaced on every call path, not just the inherited one. `[Rubric §9, API & Contract Design]`
+  covers the limit: the class remarks (lines 9-16) state that the policy re-sends on an
+  `HttpRequestException`, a 5xx other than 501/505, 408 or 429, up to three times with 2s, 4s, 8s
+  backoff plus jitter, and that re-sending is only safe when doing the operation twice is the same as
+  doing it once. That is why the only entry point is a GET; a write that needs retries goes through
+  [EntityServiceBase<TEntityDTO, TIdentifierType>](#entityservicebasetentitydto-tidentifiertype),
+  whose creates carry an `Idempotency-Key` the server deduplicates on.
 - **Walkthrough**
-  - `RetentionFrom(IConfiguration)` (`:28-41`): reads [BlazorCircuitLimitSettings](#blazorcircuitlimitsettings) from configuration (falling back to `new BlazorCircuitLimitSettings()` if the section is absent), and returns an `Action<CircuitOptions>` that copies `DisconnectedCircuitMaxRetained` and converts `DisconnectedCircuitRetentionSeconds` to a `TimeSpan` for `DisconnectedCircuitRetentionPeriod` (`:37-39`).
-  - `AddBoundedBlazorCircuits()` (`:51-61`), an `IServiceCollection` extension: binds and validates [BlazorCircuitLimitSettings](#blazorcircuitlimitsettings) (`:55-58`), then registers [BoundedCircuitHandler](#boundedcircuithandler) as a singleton `CircuitHandler` (`:60`).
-- **Why it's built this way**: keeps circuit-limit registration next to the retention-callback factory, both consumers of the same [BlazorCircuitLimitSettings](#blazorcircuitlimitsettings), while the enforcement logic itself stays in [BoundedCircuitHandler](#boundedcircuithandler). See [ADR-088](https://ivanball.github.io/docs/adr/088-gateway-edge-responsibilities.html).
-- **Where it's used**: `AddBoundedBlazorCircuits()` and `RetentionFrom` are both called from MMCA.ADC.UI.Web's Blazor Server host composition (`Program.cs`).
-
-### NotificationInbox
-
-> MMCA.Common.UI · `MMCA.Common.UI.Pages.Notifications` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Notifications/NotificationInbox.razor.cs:26` · Level 4 · class (partial, page)
-
-- **What it is**: the code-behind for the per-user notification inbox, routed at both `@page "/notifications/inbox"` and `@page "/notifications/inbox/{Id:int}"` (`NotificationInbox.razor:1-2`). It fetches the signed-in user's notifications a page at a time, renders each as a read or unread card, lets the user mark items read individually or all at once, highlights and scrolls to a deep-linked notification, and reloads the current page when a real-time push asks for a refresh.
-- **Depends on**: first-party: [INotificationInboxUIService](#inotificationinboxuiservice) (the typed read-side HTTP service), [NotificationState](#notificationstate) (the per-circuit unread-count store and refresh signal), [UserNotificationDTO](group-10-notifications.md#usernotificationdto) (the row shape), [IToastService](#itoastservice) (the toast abstraction), [ResultUiExtensions](#resultuiextensions) (the `NotifyOnFailure` helper), and [SharedResource](#sharedresource) (the resx anchor for the localizer). Externals: `MudBlazor` (`IScrollManager`, `ScrollBehavior`, `BreadcrumbItem`, `Icons`), `Microsoft.AspNetCore.Components` (`[Inject]`, `[Parameter]`, `OnInitializedAsync`, `OnParametersSet`, `OnAfterRenderAsync`, `InvokeAsync`, `StateHasChanged`), `Microsoft.Extensions.Localization` (`IStringLocalizer<T>`), BCL `CancellationTokenSource`, `IDisposable`, `Math.Ceiling`, `CultureInfo.InvariantCulture`.
-- **Concept introduced, the Blazor code-behind page pattern (`.razor` plus `.razor.cs` partial class).** The three notification pages in this unit are authored as *partial classes* split across two files: the `.razor` holds declarative MudBlazor markup and the routes, the `.razor.cs` holds the C# (`public partial class NotificationInbox`, line 26), the injected services, the view state, and the handlers. The framework constructs the component, calls `OnInitializedAsync` (line 73) once, and re-renders when a handler mutates a field. Four habits recur across all three pages and are worth learning once here:
-  - **Disposal-safe async with a per-component `CancellationTokenSource`.** A `readonly CancellationTokenSource _cts` (line 45) is created with the component and its token is passed to every service call. `Dispose(bool)` (lines 338-350) cancels and disposes it behind the classic `_disposed` guard (line 336). Every async handler swallows `OperationCanceledException` silently (for example lines 241-244) because that is the *expected* outcome when the user navigates away mid-fetch.
-  - **Result-typed failures, not exceptions.** The service calls return a `Result`, so the page branches on `TryGetValue` (line 220) and routes the failure through `result.NotifyOnFailure(Toast, L)` (line 238). The comment there (lines 236-237) records the rule that makes this safe: one toast, and the list is left as it was rather than blanked, so a transient failure does not erase what is on screen.
-  - **Busy flags gate the UI.** `IsLoading` and `IsSaving` (lines 51-52) are `protected` with private setters; the markup shows progress while loading and sets `Disabled="IsSaving"` on the action controls (`NotificationInbox.razor:18`) so a double click cannot double-post.
-  - **Push-driven refresh via an event subscription.** `OnInitializedAsync` subscribes to `NotificationState.OnRefreshRequested` (line 83) and `Dispose(bool)` unsubscribes (line 344).
-  - `[Rubric §19, State Management & Data Flow]` assesses where state lives; transient view state stays in private fields (`_notifications`, `_currentPage`, `_totalPages`, lines 54-56) while the *shared* unread count is written back into the scoped [NotificationState](#notificationstate) (lines 289, 323) and its refresh signal is read. Local stays local, shared stays shared.
-  - `[Rubric §25, Navigation, Routing & Information Architecture]` assesses route structure. The second `@page` directive is a **typed deep link**: a push payload or an email can point straight at one notification. The class doc (lines 18-24) states the two design rules that follow from it: the `:int` route constraint is the validation boundary, so a malformed id never reaches the component (the router renders `NotFound` instead), and an id that is simply not on the loaded page degrades silently to the plain inbox rather than raising an error the user can do nothing about.
-  - `[Rubric §21, Accessibility]`: the icon-only mark-read control carries an explicit localized `aria-label` (`NotificationInbox.razor:59`).
-  - `[Rubric §27, Internationalization & Localization]`: this page holds no literal English. The injected `IStringLocalizer<SharedResource> L` (line 33) resolves the title (line 47), the breadcrumbs, and every toast (`L["Notif.AllMarkedRead"]`, line 324). The breadcrumb trail is built inside `OnInitializedAsync` (lines 77-81), not in a field initializer, so the injected localizer is available and labels re-resolve per circuit under the active culture (comment, lines 75-76, citing [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)).
-- **Walkthrough**
-  - `PageSize` (line 28) is `const int 20`: fixed-size server-side pagination, not infinite scroll. Injected `InboxService`, `NotificationState`, `Toast`, `L`, and MudBlazor's `ScrollManager` (lines 30-34).
-  - `[Parameter] public int? Id` (line 43) is the deep-link route parameter. The doc (lines 36-42) explains the type choice: `UserNotificationIdentifierType` is an `int` alias, and a route parameter's type must be written out for the `:int` constraint to bind, so the parameter is declared `int?` and converted where it is used.
-  - **Deep-link state is four separate fields, and each exists for a distinct reason** (lines 62-71): `_highlightedId` (found on the loaded page), `_pendingScrollId` (a scroll the next render owes), `_scrolledId` (already scrolled, so a re-render or push-driven reload never scrolls twice), and `_appliedId` (the `Id` the state was last computed for, to detect a re-navigation).
-  - `OnParametersSet` (lines 94-103) clears the `_scrolledId` latch when `_appliedId != Id` and then recomputes the target. The doc (lines 88-93) records the bug this prevents: navigating from `/notifications/inbox/5` to `/notifications/inbox/9` reuses the component instance, so without clearing the latch the second deep link would highlight but never move the viewport.
-  - `OnAfterRenderAsync` (lines 106-118) is the only place a scroll happens. It returns unless a scroll is pending and the component is alive, clears `_pendingScrollId` and sets `_scrolledId` **before** the await (comment, line 113, so a re-entrant render cannot queue the same scroll twice), and calls `ScrollManager.ScrollIntoViewAsync(CardSelector(id), ScrollBehavior.Smooth)` (line 117).
-  - `ApplyDeepLinkTarget` (lines 126-140) matches the route id against what the loaded page actually holds: `Id is not { } id || id <= 0 || !_notifications.Exists(n => n.Id == id)` clears both the highlight and the pending scroll (lines 128-133). The doc (lines 120-125) is the "no toast" decision, a deep link the user cannot act on is not an error they caused.
-  - The card-chrome helpers: `IsDeepLinkTarget` (line 142); `CardElementId` (lines 144-147, formatting `notification-{id}` with `CultureInfo.InvariantCulture` because it becomes a DOM id) and `CardSelector` (line 149); `CardElevation` (lines 152-160, 4 when deep-linked, else 1 for unread and 0 for read); `CardClass` (lines 162-168); and `CardStyle` (lines 175-183), which builds the unread left border and the deep-link ring from MudBlazor palette variables (`var(--mud-palette-primary)`, `var(--mud-palette-secondary)`) rather than literal hex, so both themes stay legible (comment, lines 170-174). `[Rubric §20, Design System & Theming]` shows up here: even inline styles source their colors from the theme's CSS custom properties.
-  - **Push coalescing.** `HandleRefreshRequested` (lines 185-193) is `EventHandler`-shaped so it cannot be `async Task`; it discards into `InvokeAsync(RefreshFromPushAsync)` (line 192). `RefreshFromPushAsync` (lines 195-212) sets `_refreshPending = true` and returns when a load is already in flight (lines 202-208); the comment (lines 204-205) states the invariant, never drop the push, so overlapping pushes coalesce into exactly one trailing reload instead of vanishing.
-  - `LoadNotificationsAsync` (lines 214-258): sets `IsLoading`, calls `GetInboxAsync(_currentPage, PageSize, _cts.Token)` (line 219), and on success materializes `page.Items` (line 222), computes `_totalPages` from `page.PaginationMetadata.TotalItemCount` with `Math.Ceiling` (line 223) clamped to a floor of 1 (lines 224-227) so an empty inbox never renders a zero-page pager, then recomputes the deep-link highlight (line 232, only a successful load can decide whether the id is present). The tail (lines 253-257) drains `_refreshPending` with one more `RefreshFromPushAsync`; the comment (lines 250-252) explains why the recursion is bounded, the flag is cleared first, so a push arriving during *this* reload queues one more and no further.
-  - `OnPageChangedAsync(int page)` (lines 260-264): records the page and reloads.
-  - `MarkReadAsync(UserNotificationDTO)` (lines 266-300): calls `MarkReadAsync(notification.Id, _cts.Token)` (line 271), returns early on failure after a toast (lines 272-276), then **optimistically patches local state**, locating the row with `FindIndex` (line 279) and replacing it via a `record with`-expression, `notification with { IsRead = true, ReadOn = DateTime.UtcNow }` (line 282). It then refetches the authoritative unread count (line 286) and pushes it into `NotificationState.SetUnreadCount` only when the count call succeeded (lines 287-290); a failed count means "unknown", so the badge keeps its value (comment, line 285).
-  - `MarkAllReadAsync` (lines 302-334): one service call (line 307), a loop flipping every unread row in place (lines 315-321), then `SetUnreadCount(0)` (line 323) and a localized success toast (line 324).
-  - Disposal: `_disposed` (line 336), `Dispose(bool)` (lines 338-350) unsubscribing the refresh event and cancelling the `_cts`, `Dispose()` (lines 352-356) with `GC.SuppressFinalize`.
-- **Why it's built this way**: the page is a *thin* view over [INotificationInboxUIService](#inotificationinboxuiservice), so all HTTP and JSON live in the service and the component stays testable against a stub. Patching local state after a mark-read (rather than refetching the page) keeps the interaction snappy while still reconciling the shared badge from the server, and the coalescing refresh keeps the list current when pushes arrive in bursts. The deep-link machinery is worth reading as a case study in idempotent side effects: a scroll is a one-shot action in a component model that re-renders freely, so it needs the "owed" and "already done" flags to be correct under re-render, re-navigation, and disposal.
-- **Where it's used**: rendered at `/notifications/inbox` (and `/notifications/inbox/{Id:int}`) for authenticated users; the route constant and nav entry come from [NotificationRoutePaths](#notificationroutepaths) and [NotificationUIModule](#notificationuimodule). [NotificationBell](#notificationbell) reads the same [NotificationState](#notificationstate) this page writes, and the layout-mounted `NotificationListener` raises the `OnRefreshRequested` signal it consumes. Its admin siblings are [NotificationList](#notificationlist) and [NotificationSend](#notificationsend).
-
-### NotificationList
-
-> MMCA.Common.UI · `MMCA.Common.UI.Pages.Notifications` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Notifications/NotificationList.razor.cs:16` · Level 6 · class (partial, page)
-
-- **What it is**: the code-behind for the **admin/organizer** push-notification history page, routed at `@page "/notifications"` (`NotificationList.razor:1`). It loads previously sent broadcasts and renders them in a status table, with a button onward to the compose page.
-- **Depends on**: first-party: [IPushNotificationUIService](#ipushnotificationuiservice) (the send and history HTTP service), [PushNotificationDTO](group-10-notifications.md#pushnotificationdto) (the row shape, carrying status and recipient count), [NotificationRoutePaths](#notificationroutepaths) (the route constants), [IToastService](#itoastservice), [ResultUiExtensions](#resultuiextensions) (`NotifyOnFailure`), and [SharedResource](#sharedresource). Externals: `MudBlazor` (`BreadcrumbItem`, `Icons`), `Microsoft.AspNetCore.Components` (`NavigationManager`, `[Inject]`), `Microsoft.Extensions.Localization`.
-- **Concept reinforced, the same code-behind shape as [NotificationInbox](#notificationinbox).** Same `[Inject]` service set (lines 18-21), same `readonly CancellationTokenSource _cts` plus dispose pattern (lines 23, 79-98), same `IsLoading` gate (line 29), same cancellation-swallowing load (lines 67-70), same `result.NotifyOnFailure(Toast, L)` failure surface (line 64). It differs only in *what* it loads and *how much* of it.
-  - `[Rubric §25, Navigation, Routing & Information Architecture]` assesses route structure and inter-page flow; navigation goes through [NotificationRoutePaths](#notificationroutepaths) constants (`NavigateToSend` targets `NotificationRoutePaths.NotificationSend`, line 77) rather than a literal URL, so a route change happens in exactly one file.
-  - `[Rubric §27, Internationalization & Localization]` picks up an extra trick here: `DisplayStatus(string status)` (lines 34-38) looks up `L[$"Notif.Status.{status}"]` and falls back to the raw wire value when `localized.ResourceNotFound` (line 37). The *comparison* value stays the untranslated wire string while only the displayed chip text localizes, which keeps transport values and presentation separate and means a newly added server status renders (untranslated) instead of blanking (the comment on line 33 cites [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)). This is the same pass-through-on-unknown-key discipline that [DataAnnotationsModelValidator](#dataannotationsmodelvalidator) applies to error messages.
-- **Walkthrough**
-  - Injected `NotificationService`, `NavigationManager`, `Toast`, `L` (lines 18-21); `Title` reads `L["Notif.List.Title"].Value` (line 25); `_breadcrumbs` (line 27) is built Home to Push Notifications in `OnInitializedAsync` (lines 43-47), with the leaf crumb `disabled: true` to mark the current page (line 46).
-  - `_notifications` is an `IReadOnlyCollection<PushNotificationDTO>` initialized empty (line 31).
-  - `OnInitializedAsync` (lines 40-50) builds the breadcrumbs then awaits `LoadNotificationsAsync`.
-  - `LoadNotificationsAsync` (lines 52-75): calls `GetHistoryAsync(pageNumber: 1, pageSize: 50, _cts.Token)` (line 57) and copies `history.Items` into `_notifications` on success (line 60), otherwise raises the localized failure toast (line 64). This page fetches **one fixed 50-row page** and lets MudBlazor page that buffer client-side; unlike the inbox there is no server round-trip per page.
-  - `NavigateToSend` (line 77) sends the "send new" button to the compose page.
-  - Disposal mirrors the family: `_disposed` (line 79), `Dispose(bool)` cancelling the `_cts` (lines 81-92), `Dispose()` (lines 94-98).
-- **Why it's built this way**: broadcast history is low-volume admin data, so one 50-row fetch with client-side paging is simpler and adequate, and it avoids server-side paging plumbing that would earn nothing. Keeping HTTP behind [IPushNotificationUIService](#ipushnotificationuiservice) mirrors the inbox and keeps the component a thin view. The shared `[Rubric §18, UI Architecture & Component Design]` story is told under [NotificationInbox](#notificationinbox).
-- **Where it's used**: rendered at `/notifications` for organizer and admin roles (the nav entry from [NotificationUIModule](#notificationuimodule) is gated on [RoleNames](group-24-identity-module.md#rolenames)`.Organizer`); it links onward to [NotificationSend](#notificationsend).
-- **Caveats / not-in-source**: the 50-row ceiling is a client-side choice in this file; what the server does when more than 50 broadcasts exist (whether the page silently truncates the history) is not visible here.
-
-### NotificationSend
-
-> MMCA.Common.UI · `MMCA.Common.UI.Pages.Notifications` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Notifications/NotificationSend.razor.cs:20` · Level 6 · class (partial, page)
-
-- **What it is**: the code-behind for the compose-and-broadcast form, routed at `@page "/notifications/send"` (`NotificationSend.razor:1`). It collects a title and a message into [NotificationSendModel](#notificationsendmodel), validates them against that model's own annotations, sends one broadcast through the Notification API, reports the recipient count, and returns to the history page.
-- **Depends on**: first-party: [IPushNotificationUIService](#ipushnotificationuiservice) (the `SendAsync` call), [NotificationSendModel](#notificationsendmodel) (the form model), [ModelValidation](#modelvalidation) + [DataAnnotationsModelValidator](#dataannotationsmodelvalidator) (the validation bridge), [INotificationScopeProvider](#inotificationscopeprovider) (the targeting caption), [SendPushNotificationRequest](group-10-notifications.md#sendpushnotificationrequest) (the wire contract), [PushNotificationDTO](group-10-notifications.md#pushnotificationdto) (the result carrying `RecipientCount`), [Result](group-01-result-error-handling.md#result), [NotificationRoutePaths](#notificationroutepaths), [ErrorMessages](#errormessages), [IToastService](#itoastservice), [ResultUiExtensions](#resultuiextensions), and [SharedResource](#sharedresource). The markup also composes an `UnsavedChangesGuard` bound to `IsDirty` (`NotificationSend.razor:12`). Externals: `MudBlazor` (`MudForm`, `BreadcrumbItem`, `Icons`), `Microsoft.AspNetCore.Components` (`NavigationManager`, `OnInitialized`, `OnInitializedAsync`), `Microsoft.Extensions.Localization`.
-- **Concept introduced, `MudForm` validation driven entirely by the model.** This is the family's *form* page, and it is the worked example of the validation stack in this unit. The markup declares `<MudForm @ref="_form" Model="_model">` with two fields that set `For`, `Validation="@_validate"`, and read their affordances off the same model (`NotificationSend.razor:43-66`). **No rule is declared in markup**: the comment above the form (lines 38-42 of the markup) spells out the division, `Required` drives the asterisk and `aria-required` while its message still comes from the model, `MaxLength` caps the input, and `Counter` shows the budget from the shared request contract so the numbers cannot drift from the server. The C# holds the form by reference (`MudForm? _form`, line 36) and explicitly drives validation before sending: `await _form.ValidateAsync()` then a guard on `_form.IsValid` (lines 98-105). MudForm has no `OnValidSubmit`, so that explicit pass is the gate (comment, lines 96-97).
-  - `[Rubric §24, Forms, Validation & UX Safety]` assesses input validation, double-submit protection, and feedback. All four are present: model-declared rules run through the shared delegate, an `IsSaving` flag (line 33) bound to `Disabled` on both buttons (`NotificationSend.razor:73,80`) so the send cannot be fired twice, a warning toast `ErrorMessages.ValidationError` on a failed gate (line 103), and a success toast naming the recipient count (line 116).
-  - **Two failure surfaces, deliberately not one.** `_sendResult` (line 42) holds the last attempt's outcome and is rendered inline by the shared `ErrorSummary` component (`NotificationSend.razor:36`), while the toast stays the transient cue. The markup comment (lines 31-35) records the design constraint: the summary is deliberately *not* fed `MudForm.Errors`, because every field already renders its own message inline and MudBlazor contributes a generic "Required" of its own that would stack on top of the model's wording. `_sendResult` is nulled at the start of every attempt (line 94), so the summary never shows a stale failure.
-  - `[Rubric §21, Accessibility]` and `[Rubric §18, UI Architecture & Component Design]` meet in the `ErrorSummary`: a failure that only appeared as a toast would time out on a long form and be unrecoverable for a screen-reader user who missed it (comment, lines 121-122).
-  - `[Rubric §27, Internationalization & Localization]`: every string resolves through `IStringLocalizer<SharedResource> L` (line 24), including the success message `L.Plural("Notif.Send.SentTo", sent.RecipientCount, sent.RecipientCount)` (line 117), which passes the count through the shared plural extension so the resource file (not C#) picks the plural form as well as the word order. As with its siblings the breadcrumb trail is built in an initialization hook, here the synchronous `OnInitialized` (lines 55-67, comment citing [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)).
-  - `[Rubric §24, Forms, Validation & UX Safety]` again, for the navigate-away guard: `Sent` (a private bool, set true immediately before the post-send `NavigateTo`) and `IsDirty` (true whenever `Sent` is false and either field is non-blank) feed the markup's `UnsavedChangesGuard`, so leaving with typed-but-unsent text prompts, while the send's own redirect never does. The comment on the `Sent` setter records the ordering: it is set *before* the navigation call, because the guard reads the live accessor.
-- **Walkthrough**
-  - Injected `NotificationService`, `NavigationManager`, `Toast`, `L`, and `ScopeProvider` (lines 21-25); `_cts` (line 27); `Title` (line 29); `_breadcrumbs` (line 31) built Home to Push Notifications to Send (lines 58-63), where the middle crumb is a real link via `NotificationRoutePaths.Notifications` (line 61) and the leaf is `disabled: true` (line 62).
-  - `_model` (line 35) is a `readonly NotificationSendModel` created with the component; `_validate` (line 46) is the single `Func<object, string, IEnumerable<string>>` MudBlazor calls with `(model, member path)`, wired in `OnInitialized` as `ModelValidation.For(_model, new DataAnnotationsModelValidator(L))` (line 66). One delegate serves both fields, and no rule is written twice (comment, lines 44-45).
-  - `OnInitializedAsync` (lines 69-87) resolves the optional scope caption: `ScopeProvider.GetCurrentScopeDisplayNameAsync(_cts.Token)` (line 77), and only when the name is non-blank does it build `_scopeCaption` (lines 78-81). The field doc (lines 48-53) and the async doc (lines 71-74) give the reasoning: a scoped application applies its scope to the send automatically, so without a caption the operator would be composing a broadcast with no visible statement of who receives it, and when there is no scope the page renders no caption at all rather than an empty line. `[Rubric §24, Forms, Validation & UX Safety]` again: making an implicit targeting decision visible is part of a safe destructive-ish action.
-  - `SendNotificationAsync` (lines 89-134): null-guards `_form` (lines 91-92), clears `_sendResult` (line 94), validates and warns on failure (lines 98-105); then under `IsSaving` builds `new SendPushNotificationRequest(_model.Title, _model.Body)` (line 110) and awaits `SendAsync(request, _cts.Token)` (line 111), storing the result for the summary (line 112). On a non-null [PushNotificationDTO](group-10-notifications.md#pushnotificationdto) it raises the success toast with `sent.RecipientCount` (line 117), sets `Sent = true` (line 121), and navigates back to the list; otherwise `result.NotifyOnFailure(Toast, L)` (line 123). The cancellation catch (lines 126-129) additionally names the `InteractiveAuto` render-mode transition, the case where the WebAssembly runtime takes over mid-call; `IsSaving` is cleared in `finally` (lines 130-133).
-  - `NavigateToList` (line 136) is the Cancel button's handler, back to `NotificationRoutePaths.Notifications`.
-  - `Sent` (a private bool property) and `IsDirty` (`!Sent && (Title or Body non-whitespace)`) are declared just after `NavigateToList`, immediately above the disposal members; `Sent` is documented as being set the moment a send has succeeded and the page is about to navigate away on its own, so the unsaved-changes guard does not prompt over work that has just left the building.
-  - Disposal mirrors the family: `_disposed` (line 138), `Dispose(bool)` (lines 140-151), `Dispose()` (lines 153-157).
-- **Why it's built this way**: a deliberately small form that still demonstrates the full pattern. The rules live on [NotificationSendModel](#notificationsendmodel) so the client cap, the client message, and the server invariant all read the same constants; HTTP stays behind [IPushNotificationUIService](#ipushnotificationuiservice) so the component is unit-testable; and the `Sent`/`IsDirty` pair keeps the unsaved-changes guard from firing on the page's own post-send redirect, which is the one navigation on this page that is not the user abandoning work. The send is fire-and-confirm: the server fans out to recipients through the push pipeline (see [Group 10](group-10-notifications.md)) and returns only the aggregate count.
-- **Where it's used**: rendered at `/notifications/send` for organizer and admin roles, reached from the button on [NotificationList](#notificationlist). The server-side validator for [SendPushNotificationRequest](group-10-notifications.md#sendpushnotificationrequest) enforces the same rules a second time, so client validation is a UX affordance rather than the security boundary.
-
-### AuthenticatedServiceBase
-
-> MMCA.Common.UI · `MMCA.Common.UI.Services.Api` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/AuthenticatedServiceBase.cs:15` · Level 1 · class (abstract)
-
-- **What it is**: the base class every UI-side HTTP service inherits. It supplies one shared Polly
-  retry policy, two ways to get an `HttpClient` with a bearer token already attached, and the
-  idempotency-key generator that makes those retries safe.
-- **Depends on**: [ITokenStorageService](#itokenstorageservice), imported from the token namespace
-  `MMCA.Common.UI.Services.Auth.Tokens` (`AuthenticatedServiceBase.cs:3`); its documentation also
-  names [AuthDelegatingHandler](#authdelegatinghandler) as the thing it deliberately bypasses and
-  `Auth.Tokens.ITokenRefresher`, that is [ITokenRefresher](#itokenrefresher), as the source of the
-  replay token. Externals: `IHttpClientFactory`, `Polly` and `Polly.Retry`.
-- **Concept introduced, why a base class and not just the handler pipeline.**
-  `[Rubric §29, Resilience & Business Continuity]` assesses whether transient failures are absorbed
-  rather than surfaced; the retry policy is that. The sharper teaching is in the
-  `CreateAuthenticatedClientAsync` doc comment (`AuthenticatedServiceBase.cs:45-50`):
-  `IHttpClientFactory` creates its handlers in a separate DI scope from the Blazor circuit, so a
-  `DelegatingHandler` cannot reach the circuit's `IJSRuntime` to read the in-memory access token. The
-  base class works around that by reading the token from the circuit-scoped storage service itself and
-  setting the header directly. `[Rubric §9, API & Contract Design]` covers the idempotency half:
-  retrying a POST is only safe if the server can recognize the repeat, which is what
-  [ADR-017](https://ivanball.github.io/docs/adr/017-request-idempotency.html) provides.
-- **Walkthrough**
-  - `RetryPolicy` is a `protected static readonly AsyncRetryPolicy<HttpResponseMessage>` built once from
-    the shipped backoff (`AuthenticatedServiceBase.cs:25`), so one policy instance serves the whole app
-    rather than one per service instance per circuit. `ApiClientName` pins the named client to
-    `"APIClient"` (`AuthenticatedServiceBase.cs:27`), and both constructor arguments are null-checked
-    into private fields (`AuthenticatedServiceBase.cs:29-30`).
-  - `NewIdempotencyKey()` (`AuthenticatedServiceBase.cs:43`) returns a compact
-    `Guid.NewGuid().ToString("N")`, and its remarks (`AuthenticatedServiceBase.cs:35-41`) carry the
-    load-bearing rule: the value is generated once per logical operation and reused across every retry
-    attempt, because the server-side idempotency filter keys its cached response off it. Generating a
-    new key per attempt would defeat the dedup entirely and let a retry create a duplicate record.
-  - `CreateAuthenticatedClientAsync()` (`AuthenticatedServiceBase.cs:51`) resolves the `"APIClient"`
-    (`AuthenticatedServiceBase.cs:53`), reads the token (`AuthenticatedServiceBase.cs:57`), sets
-    `Authorization: Bearer` when non-blank (`AuthenticatedServiceBase.cs:58-62`), and catches
-    `InvalidOperationException` to proceed without a token during SSR prerender, when JS interop is
-    unavailable (`AuthenticatedServiceBase.cs:64-67`).
-  - `CreateClientWithToken(string accessToken)` (`AuthenticatedServiceBase.cs:80`) is the replay path.
-    Its doc comment (`AuthenticatedServiceBase.cs:72-78`) explains why it exists: after the API answers
-    `401`, the stored token still looks fresh by the client clock, so re-reading storage would just
-    resend the token the server has already rejected. The caller passes the token it acquired straight
-    from [ITokenRefresher](#itokenrefresher); the method rejects a blank one
-    (`AuthenticatedServiceBase.cs:82`) and stamps the header unconditionally
-    (`AuthenticatedServiceBase.cs:85`).
-  - `IsRetryableResponse` (`AuthenticatedServiceBase.cs:100`) is the retry predicate. It first excludes
-    `501 Not Implemented` and `505 HTTP Version Not Supported` (`AuthenticatedServiceBase.cs:102-105`)
-    because, as the remarks say (`AuthenticatedServiceBase.cs:94-99`), those are permanent verdicts and
-    retrying only burns the budget and delays the error the caller needs to see. It then accepts
-    anything `>= 500` plus `408 Request Timeout` and `429 Too Many Requests`
-    (`AuthenticatedServiceBase.cs:107-108`), the two codes where the server is explicitly inviting a
-    later attempt.
-  - `DefaultBackoff` (`AuthenticatedServiceBase.cs:114-116`) is the shipped schedule: `2^attempt`
-    seconds (2s, 4s, 8s) plus up to one second of random jitter, so a fleet of clients does not
-    re-converge on the same instant. The `S2245`/`CA5394` suppression around it
-    (`AuthenticatedServiceBase.cs:111`) documents that the randomness only spaces retries and feeds no
-    security decision.
-  - `BuildRetryPolicy(Func<int, TimeSpan> backoff)` (`AuthenticatedServiceBase.cs:131-134`) is
-    `internal` and backoff-injectable so a test can exercise the disposal contract without waiting out
-    the real delays. Its `onRetry` disposes the retried attempt's response
-    (`AuthenticatedServiceBase.cs:134`); the remarks (`AuthenticatedServiceBase.cs:123-130`) explain
-    that Polly hands the caller only the final outcome, so without this every intermediate 5xx, 408 or
-    429 response leaks its content buffer and keeps its connection out of the handler pool until
-    finalization, exactly under the sustained backend failure the retries exist to survive. A retried
-    `HttpRequestException` carries no result, hence the null-conditional, and the final response is not
-    disposed here because the caller owns it.
-- **Why it's built this way**: the DI scope mismatch is a real Blazor Server constraint, not a
-  preference, so the workaround has to live somewhere every service shares. The retry ceiling and
-  jitter line up with the resilience posture in
-  [ADR-009](https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html).
-- **Where it's used**: inherited by
-  [EntityServiceBase<TEntityDTO, TIdentifierType>](#entityservicebasetentitydto-tidentifiertype)
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/EntityServiceBase.cs:47`),
-  [ChildEntityServiceBase](#childentityservicebase)
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/ChildEntityServiceBase.cs:22`) and
-  [NotificationInboxService](#notificationinboxservice)
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Notifications/NotificationInboxService.cs:34`),
-  and through them by every module-level UI service in the consumer apps. The members show up as
-  `NewIdempotencyKey()` on writes (`EntityServiceBase.cs:162`), `RetryPolicy.ExecuteAsync` around each
-  call (`EntityServiceBase.cs:338` and `EntityServiceBase.cs:366`) and `CreateClientWithToken` on the
-  401 replay (`NotificationInboxService.cs:148`).
-
----
-
-### ClientConfigBuilder
-
-> MMCA.Common.UI.Web · `MMCA.Common.UI.Web.ClientConfig` · `MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/ClientConfig/ClientConfigBuilder.cs:17` · Level 2 · class (sealed)
-
-- **What it is**: the accumulator a host's own `extras` delegate writes into when it wants extra data
-  served on the anonymous `/client-config` document, one named section per `Add` call.
-- **Depends on**: [ClientConfigEndpointExtensions](#clientconfigendpointextensions) (its `ApiSectionName`
-  constant, checked as the one reserved name, `ClientConfigBuilder.cs:57`); `Microsoft.AspNetCore.Http`
-  (`HttpContext`, BCL) and `Microsoft.Extensions.DependencyInjection` /
-  `Microsoft.Extensions.Configuration` for the two convenience accessors it republishes.
-- **Concept, a builder with an internal constructor.** `[Rubric §26, Front-End Security]` covers what
-  this type prevents: the constructor is `internal` (line 29), so the only place a `ClientConfigBuilder`
-  can come into existence is inside `MapClientConfigEndpoint`'s own request delegate, which is also the
-  one place a host's `extras` callback runs. A host cannot construct one ahead of time and stash
-  arbitrary state in it outside the request it belongs to.
-- **Walkthrough**
-  - `_sections` (line 27) is a `Dictionary<string, object?>` keyed with `StringComparer.OrdinalIgnoreCase`,
-    so `"OAuth"` and `"oauth"` collide as the same section.
-  - `HttpContext` (line 32) and the two accessors built on it, `Services` (line 35, reads
-    `HttpContext.RequestServices`) and `Configuration` (line 38, resolves `IConfiguration` from those
-    services), let an `extras` delegate reach DI and configuration without the endpoint having to pass
-    them separately.
-  - `Add(string name, object? value)` (line 53) blank-checks `name`
-    (`ArgumentException.ThrowIfNullOrWhiteSpace`, line 55), rejects the reserved
-    `ClientConfigEndpointExtensions.ApiSectionName` case-insensitively (lines 57-62), then adds through
-    `_sections.TryAdd` (line 64) so a second call with the same name throws rather than silently
-    overwriting the first (lines 65-67). It returns `this` for chaining (line 69).
-  - `Sections` (line 40) is `internal`, an `IReadOnlyDictionary<string, object?>` view the endpoint reads
-    back after the delegate returns; nothing outside this package can enumerate a builder's contents.
-- **Why it's built this way**: the reserved-name and duplicate-name guards live on the builder rather
-  than being left to the endpoint's own loop, so every caller of `Add`, present or future, gets the same
-  two checks for free. The internal constructor and internal `Sections` getter keep the type's read side
-  as narrow as its write side: a host can only add, never inspect what a different extras call already
-  added.
-- **Where it's used**: constructed once per request inside
-  [ClientConfigEndpointExtensions](#clientconfigendpointextensions)`.MapClientConfigEndpoint`'s handler
-  and handed to the caller's `extras` delegate
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/ClientConfig/ClientConfigEndpointExtensions.cs:61-62`);
-  its `Sections` are then read back to assemble the response document
-  (`ClientConfigEndpointExtensions.cs:71-74`). Exercised directly by
-  `ClientConfigEndpointTests`
-  (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Web.Tests/ClientConfig/ClientConfigEndpointTests.cs`).
-
-### ClientConfigEndpointExtensions
-
-> MMCA.Common.UI.Web · `MMCA.Common.UI.Web.ClientConfig` · `MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/ClientConfig/ClientConfigEndpointExtensions.cs:15` · Level 2 · class (static)
-
-- **What it is**: the extension that maps `GET /client-config`, the anonymous document a WASM client's
-  bootstrap fetches to learn the browser-reachable API base address before it can hold a session, plus
-  whatever extra sections the host contributes.
-- **Depends on**: [ClientConfigBuilder](#clientconfigbuilder) (constructed per request, line 138) and
-  [ApiSettings](#apisettings) (`IOptions<ApiSettings>`, read for `WasmApiEndpoint`, line 130); externals
-  `Microsoft.AspNetCore.Routing` (`IEndpointRouteBuilder`, `RouteHandlerBuilder`), `System.Text.Json`
-  (`JsonNamingPolicy.CamelCase`), and the ASP.NET Core minimal-API `Results` type.
-- **Concept introduced, fail-closed instead of falling back.** `[Rubric §22, Configuration and Secrets
-  Management]` assesses whether a bad or missing configuration value is caught rather than silently
-  degrading a live host. The endpoint's remarks (lines 108-115) state the rule directly: it serves
-  `Api:WasmApiEndpoint`, the browser-reachable gateway URL, and never falls back to `Api:ApiEndpoint`,
-  the server head's own service-discovery name, because a browser cannot resolve that name and serving
-  it would hand the client a silently broken base address. A host missing the key answers every request
-  with a server error naming the missing key (lines 131-136), which surfaces as a failed client start
-  instead of a client quietly pointed at the wrong API.
-- **Concept introduced, anonymous by declared necessity.** `[Rubric §11, Security]` covers why this
-  endpoint is one of the few that must allow anonymous access on purpose: the WASM client fetches this
-  document before it can hold a session (remarks, lines 116-122), and a host's fallback authorization
-  policy would otherwise gate it like any other endpoint that states nothing. The endpoint therefore
-  declares `AllowAnonymous()` itself (line 155) rather than relying on an ambient default, and the
-  remarks warn that only values the public site renders anyway belong in `extras` (lines 123-125).
-- **Walkthrough**
-  - Two public constants: `ClientConfigPath = "/client-config"` (line 95) and
-    `ApiSectionName = "Api"` (line 98), the one section name [ClientConfigBuilder](#clientconfigbuilder)
-    treats as reserved.
-  - The `extension(IEndpointRouteBuilder endpoints)` block (line 100, see
-    [primer](00-primer.md#c-extensiont-types-read-this-once)) holds the single member
-    `MapClientConfigEndpoint(Action<ClientConfigBuilder>? extras = null)` (line 127).
-  - The handler (lines 128-154) reads `apiSettings.Value.WasmApiEndpoint` (line 130), throws
-    `InvalidOperationException` naming the missing key when it is blank (lines 131-136), builds a
-    [ClientConfigBuilder](#clientconfigbuilder) for the request and invokes `extras` on it (lines
-    138-139), seeds the response with the camelCased `Api` section carrying `ApiEndpoint` (lines 143-146),
-    then overlays every builder section, each name run through the same `JsonNamingPolicy.CamelCase`
-    policy the web JSON defaults apply to members (lines 148-151), so the document's shape matches what
-    an anonymous-object payload would have produced anyway.
-  - The route is finished with `.AllowAnonymous().ExcludeFromDescription()` (lines 155-156): anonymous
-    for the reason above, and excluded from the OpenAPI description because it is not a data endpoint a
-    client integrates against, it is bootstrap plumbing.
-- **Why it's built this way**: putting the base-address selection, the reserved-name policy and the
-  camelCase conversion all in one mapped endpoint means every host that calls
-  `MapClientConfigEndpoint` gets the identical fail-closed contract; a host only supplies the pieces
-  specific to it through `extras`.
-- **Where it's used**: called from a host's endpoint mapping alongside the other framework endpoints;
-  its handler constructs [ClientConfigBuilder](#clientconfigbuilder)
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/ClientConfig/ClientConfigBuilder.cs`, 3 call
-  sites) and is pinned by `ClientConfigEndpointTests`
-  (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Web.Tests/ClientConfig/ClientConfigEndpointTests.cs`, 2
-  call sites).
+  - `Policy` (line 24) is an `internal static` getter returning
+    `AuthenticatedServiceBase.SharedRetryPolicy`. Its doc comment (lines 20-23) stresses that it is the
+    same object, not a copy built from the same settings, so the two paths cannot drift.
+  - `GetAsync(HttpClient httpClient, Uri requestUri, CancellationToken cancellationToken)` (line 35)
+    null-guards both arguments (lines 40-41) and returns
+    `Policy.ExecuteAsync(token => httpClient.GetAsync(requestUri, token), cancellationToken)`
+    (line 43), so the token is honored between attempts and by each send. The doc comment (lines 26-34)
+    sets the ownership rule: every retried response is disposed by the policy, the caller owns and
+    disposes the final one, and `HttpRequestException` escapes only when every attempt failed without a
+    response.
+- **Why it's built this way**: sharing the instance rather than re-declaring the policy keeps one
+  definition of "retryable" and one backoff schedule for the whole UI layer, including the
+  response-disposal behavior of `AuthenticatedServiceBase.BuildRetryPolicy`. Exposing a GET-only
+  surface instead of a general `ExecuteAsync` is the guardrail: the type cannot be used to retry a
+  non-idempotent write by accident.
+- **Where it's used**: ADC lookup services that read anonymously, for example `SpeakerLookupService`
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Services/Speakers/SpeakerLookupService.cs:25`),
+  `EventLookupService` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Services/Events/EventLookupService.cs:83`),
+  `CategoryItemLookupService` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Services/Categories/CategoryItemLookupService.cs:54`),
+  `SessionLookupService` (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Services/Lookups/SessionLookupService.cs:26,57`)
+  and `NowNextService` (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Services/HappeningNow/NowNextService.cs:26`).
+  Several of them pass it as the per-page fetch inside [PagedReadAll](#pagedreadall). Pinned by
+  `IdempotentReadRetryTests`
+  (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Services/Api/IdempotentReadRetryTests.cs`).
 
 ### HttpResultExecutor
 > MMCA.Common.UI · `MMCA.Common.UI.Services.Api` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/HttpResultExecutor.cs:31` · Level 3 · class (static)
@@ -5284,11 +5761,11 @@ lives.
   hierarchy, including a consumer app's hand-written client, adopt the same contract with one call.
 - **Where it's used**: it wraps every dispatch in this package,
   [EntityServiceBase<TEntityDTO, TIdentifierType>](#entityservicebasetentitydto-tidentifiertype)
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/EntityServiceBase.cs:332,362`),
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/EntityServiceBase.cs:336,366`),
   [ChildEntityServiceBase](#childentityservicebase)
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/ChildEntityServiceBase.cs:37,53,71`),
   [AuthUIService](#authuiservice)
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/AuthUIService.cs:192,205,226,241,254,277`)
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/AuthUIService.cs:186,199,220,235,248,271`)
   and [NotificationInboxService](#notificationinboxservice)
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Notifications/NotificationInboxService.cs:43,61,81,98`).
   Outside the framework it is called directly by services that sit outside the base hierarchy: Store's
@@ -5310,72 +5787,96 @@ lives.
   user-facing messages are hard-coded English by design, so a fully localized app still shows them
   untranslated unless the page branches on the code itself.
 
-### IRoleAdminUIService
+### PagedReadAll
 
-> MMCA.Common.UI · `MMCA.Common.UI.Services.Administration` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Administration/IRoleAdminUIService.cs:22` · Level 3 · interface
+> MMCA.Common.UI · `MMCA.Common.UI.Services.Api` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/PagedReadAll.cs:19` · Level 3 · class (static)
 
-- **What it is**: the typed client contract for the role-admin editor: read every role's compiled and
-  stored permissions, read one role, read the catalog an editor renders from, and replace one role's
-  stored permission set.
-- **Depends on**: first-party: [RolePermissionsResponse](group-08-auth.md#rolepermissionsresponse) (the
-  per-role read and write shape), [PermissionCatalogResponse](group-08-auth.md#permissioncatalogresponse)
-  (the closed sets a role editor may choose from), and [Result](group-01-result-error-handling.md#result)
-  / `Result<T>` (`IRoleAdminUIService.cs:30,36,44,54`) for every member's return type. Its sole
-  implementation is [RoleAdminService](#roleadminservice).
-- **Concept**: each member's XML doc names the exact endpoint it calls (`GET Admin/Roles`,
-  `GET Admin/Roles/{role}`, `GET Admin/Roles/catalog`, `PUT Admin/Roles/{role}/permissions`, lines
-  27,32,40,47-48), so the contract doubles as the wire map for the role-admin surface without a
-  separate reference. `[Rubric §1, SOLID Principles]` reads this as a small, role-scoped interface:
-  it names only what a role editor needs and nothing a user editor would, the mirror decision to the
-  split between [IUserAdminActionsUIService](#iuseradminactionsuiservice) and
-  [IUserAdminUIService<TUserDto>](#iuseradminuiservicetuserdto) one member table below.
-- **Walkthrough**: `GetAllAsync` (line 30) and `GetAsync(string role, ...)` (line 36) are the two reads
-  that feed the role list and role-detail pages. `GetCatalogAsync` (line 44) reads the roles-plus-
-  permissions catalog a role editor renders its checkboxes from. `SetStoredPermissionsAsync(role,
-  permissions, ...)` (lines 54-57) replaces the complete stored permission set for one role in a single
-  PUT, not an incremental add/remove, so the caller always sends the full desired set.
-- **Why it's built this way**: this is an ADR-116 opt-in surface
-  ([ADR-116](https://ivanball.github.io/docs/adr/116-identity-completions-opt-in.html)): the admin app
-  can wire role management by registering [RoleAdminService](#roleadminservice) against this contract
-  without the framework hard-wiring an admin UI into every consumer.
-- **Where it's used**: implemented by [RoleAdminService](#roleadminservice) and registered against it in
-  [DependencyInjection](#dependencyinjection) (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs`);
-  consumed by `RoleAdminEdit.razor.cs` and `RoleAdminList.razor.cs`; its ADC identity pages carry the
-  behavior-pinning tests
-  (`MMCA.ADC/Tests/Modules/Identity/MMCA.ADC.Identity.UI.Tests/Pages/Roles/RoleEditTests.cs`,
-  `RoleListTests.cs`).
+- **What it is**: a helper that reads every row of an entity controller's `/paged` endpoint by
+  requesting page after page until the server's reported total is reached, for hand-written services
+  that need the whole set in one list (class summary, lines 8-11).
+- **Depends on**: [Result](group-01-result-error-handling.md#result) and `Result<T>` for the return
+  shape, [PagedCollectionResult<T>](group-01-result-error-handling.md#pagedcollectionresultt) and its
+  [PaginationMetadata](group-01-result-error-handling.md#paginationmetadata) for each page (imported
+  through `MMCA.Common.Shared.Abstractions` and `MMCA.Common.UI.Common`, lines 3-4). Externals: BCL
+  `CultureInfo`, `string.Create`, `System.Diagnostics.CodeAnalysis`.
+- **Concept introduced, a single read truncates silently.** `[Rubric §19, State Management & Data
+  Flow]` assesses whether the data a page holds is the data the server has. The remarks (lines 12-18)
+  record the trap: the API clamps any requested page size to its own maximum
+  (`ApplicationSettings.MaxPageSize`, 500 by default), and the GET-all endpoint ignores `pageSize` and
+  always returns that maximum, so rows past it vanish with nothing to say so. Paging until
+  `PaginationMetadata.TotalItemCount` is reached is the only unbounded route. `[Rubric §29, Resilience,
+  Reliability & Business Continuity]` applies to the loop bound: a server that misreports its total
+  cannot make the client spin forever.
+- **Walkthrough**
+  - `PageSize` (line 22) is a public `const int` of 500, the API's default maximum, so no request is
+    clamped (comment, line 21). `MaxPages` (line 28) is a private `const` of 40, the runaway guard of
+    20,000 rows (comment, lines 24-27).
+  - `LookupPageUrl(string entity, int pageNumber)` (line 43) builds
+    `{entity}/paged?pageNumber=...&pageSize=500&sortColumn=Id&sortDirection=asc&includeFKs=false&includeChildren=false`
+    with `string.Create(CultureInfo.InvariantCulture, ...)` (lines 44-46). Sorting by `Id` ascending
+    keeps consecutive pages from skipping or repeating a row, and the doc comment (lines 30-38) makes
+    the exact text part of a contract: a host that warms its output cache by replaying these URLs must
+    replay them byte for byte. The `CA1055` suppression (lines 39-42) keeps the return a string for
+    that reason, since callers both compose it as text and wrap it as a relative `Uri`.
+  - `ReadAllAsync<T>(Func<int, Task<Result<PagedCollectionResult<T>>>> fetchPage, CancellationToken)`
+    (line 57) null-guards the delegate (line 61) and loops `pageNumber` from 1 to `MaxPages`
+    (line 65). Each iteration checks cancellation first (line 67), fetches the page (line 69), and
+    returns the first failure unchanged as `Result.Failure<List<T>>(result.Errors)` (lines 70-73). An
+    empty page ends the loop (lines 75-79); otherwise the items are accumulated (line 81) and the loop
+    ends once the count reaches `TotalItemCount` (lines 83-86). The method returns
+    `Result.Success(accumulated)` (line 89), so hitting the 40-page guard yields the rows read so far
+    rather than a failure.
+- **Why it's built this way**: the fetch is a delegate rather than an `HttpClient`, so each caller
+  keeps its own transport choice (an authenticated `SendRequestAsync`, or an anonymous
+  [IdempotentReadRetry](#idempotentreadretry) GET) and its own filters, while the paging rule lives
+  once. Returning a `Result` rather than throwing keeps it inside the framework's client contract
+  that a page branches on failures instead of catching them.
+- **Where it's used**: ADC UI services `SpeakerLookupService`
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Services/Speakers/SpeakerLookupService.cs:20`),
+  `EventLookupService` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Services/Events/EventLookupService.cs:78`),
+  `CategoryItemLookupService` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Services/Categories/CategoryItemLookupService.cs:37`)
+  and `OrganizerFeedbackService`
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Services/Feedback/OrganizerFeedbackService.cs:27,82`).
+  The ADC Conference service's `SelfHttpOutputCacheWarmupTask` replays URLs in the
+  `LookupPageUrl` shape
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/SelfHttpOutputCacheWarmupTask.cs:38`). Pinned
+  by `PagedReadAllTests`
+  (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Services/Api/PagedReadAllTests.cs`).
+  `OrganizerFeedbackService` composes its own filtered `/paged` URLs with `PagedReadAll.PageSize`
+  rather than `LookupPageUrl` (`OrganizerFeedbackService.cs:32,87`), since it needs an `EventId` or
+  `SessionId` filter.
 
-### IUserAdminActionsUIService
+### NotificationInbox
 
-> MMCA.Common.UI · `MMCA.Common.UI.Services.Administration` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Administration/IUserAdminActionsUIService.cs:16` · Level 3 · interface
+> MMCA.Common.UI · `MMCA.Common.UI.Pages.Notifications` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Notifications/NotificationInbox.razor.cs:26` · Level 4 · class (partial, page)
 
-- **What it is**: the account-mutation contract for user admin: lock, unlock, and two shapes of
-  role-replacement, a full-set `SetRolesAsync` and a single-role convenience `SetRoleAsync`.
-- **Depends on**: first-party: [SetUserRolesRequest](group-08-auth.md#setuserrolesrequest) (implied wire
-  shape behind `SetRolesAsync`), [Result](group-01-result-error-handling.md#result)
-  (`IUserAdminActionsUIService.cs:22,26,33,41,56,58`); `UserIdentifierType` (the module's identifier
-  alias) names every account parameter. Extended by
-  [IUserAdminUIService<TUserDto>](#iuseradminuiservicetuserdto).
-- **Concept, a member that exists only because a mock cannot proxy a default interface method.** The
-  remarks on `SetRoleAsync` (lines 108-111) give the reasoning directly: the obvious shape would have
-  been a default interface implementation over `SetRolesAsync` that wraps the single role in a
-  one-element list, but a default implementation on an interface is not virtual to a mock proxy, so a
-  test could neither stub nor verify it if it were written that way. Declaring `SetRoleAsync` as its
-  own interface member keeps it mockable at the cost of one more line on the contract.
-  `[Rubric §14, Testability]` is the rubric this decision serves.
-- **Walkthrough**: `LockAsync(userId, ...)` (line 84) and `UnlockAsync(userId, ...)` (line 90) are the
-  two session-revoking actions. `SetRolesAsync(userId, roles, ...)` (lines 97-100) replaces the complete
-  role set an account holds. `SetRoleAsync(userId, role, ...)` (line 116) is documented as sending a
-  one-element set to the same replacement endpoint (lines 102-106), the shape both shipped consumers
-  need because each holds exactly one role per account.
-- **Why it's built this way**: separated from the read/page surface in
-  [IUserAdminUIService<TUserDto>](#iuseradminuiservicetuserdto) so the mutating actions have one
-  narrow, generic-free contract a page or a test can depend on without also depending on the DTO type
-  parameter.
-- **Where it's used**: extended by [IUserAdminUIService<TUserDto>](#iuseradminuiservicetuserdto);
-  implemented by [UserAdminService<TUserDto>](#useradminservicetuserdto); called directly from
-  `UserAdminList.razor.cs` for the lock/unlock/role actions on the user-admin grid, and pinned by
-  `UserListTests.cs` (ADC) and `UserAdminListTests.cs` (Common).
+- **What it is**: the code-behind for the per-user notification inbox, routed at both `@page "/notifications/inbox"` and `@page "/notifications/inbox/{Id:int}"` (`NotificationInbox.razor:1-2`). It fetches the signed-in user's notifications a page at a time, renders each as a read or unread card, lets the user mark items read individually or all at once, highlights and scrolls to a deep-linked notification, and reloads the current page when a real-time push asks for a refresh.
+- **Depends on**: first-party: [INotificationInboxUIService](#inotificationinboxuiservice) (the typed read-side HTTP service), [NotificationState](#notificationstate) (the per-circuit unread-count store and refresh signal), [UserNotificationDTO](group-10-notifications.md#usernotificationdto) (the row shape), [IToastService](#itoastservice) (the toast abstraction), [ResultUiExtensions](#resultuiextensions) (the `NotifyOnFailure` helper), and [SharedResource](#sharedresource) (the resx anchor for the localizer). Externals: `MudBlazor` (`IScrollManager`, `ScrollBehavior`, `BreadcrumbItem`, `Icons`), `Microsoft.AspNetCore.Components` (`[Inject]`, `[Parameter]`, `OnInitializedAsync`, `OnParametersSet`, `OnAfterRenderAsync`, `InvokeAsync`, `StateHasChanged`), `Microsoft.Extensions.Localization` (`IStringLocalizer<T>`), BCL `CancellationTokenSource`, `IDisposable`, `Math.Ceiling`, `CultureInfo.InvariantCulture`.
+- **Concept introduced, the Blazor code-behind page pattern (`.razor` plus `.razor.cs` partial class).** The three notification pages in this unit are authored as *partial classes* split across two files: the `.razor` holds declarative MudBlazor markup and the routes, the `.razor.cs` holds the C# (`public partial class NotificationInbox`, line 26), the injected services, the view state, and the handlers. The framework constructs the component, calls `OnInitializedAsync` (line 73) once, and re-renders when a handler mutates a field. Four habits recur across all three pages and are worth learning once here:
+  - **Disposal-safe async with a per-component `CancellationTokenSource`.** A `readonly CancellationTokenSource _cts` (line 45) is created with the component and its token is passed to every service call. `Dispose(bool)` (lines 338-350) cancels and disposes it behind the classic `_disposed` guard (line 336). Every async handler swallows `OperationCanceledException` silently (for example lines 241-244) because that is the *expected* outcome when the user navigates away mid-fetch.
+  - **Result-typed failures, not exceptions.** The service calls return a `Result`, so the page branches on `TryGetValue` (line 220) and routes the failure through `result.NotifyOnFailure(Toast, L)` (line 238). The comment there (lines 236-237) records the rule that makes this safe: one toast, and the list is left as it was rather than blanked, so a transient failure does not erase what is on screen.
+  - **Busy flags gate the UI.** `IsLoading` and `IsSaving` (lines 51-52) are `protected` with private setters; the markup shows progress while loading and sets `Disabled="IsSaving"` on the action controls (`NotificationInbox.razor:18`) so a double click cannot double-post.
+  - **Push-driven refresh via an event subscription.** `OnInitializedAsync` subscribes to `NotificationState.OnRefreshRequested` (line 83) and `Dispose(bool)` unsubscribes (line 344).
+  - `[Rubric §19, State Management & Data Flow]` assesses where state lives; transient view state stays in private fields (`_notifications`, `_currentPage`, `_totalPages`, lines 54-56) while the *shared* unread count is written back into the scoped [NotificationState](#notificationstate) (lines 289, 323) and its refresh signal is read. Local stays local, shared stays shared.
+  - `[Rubric §25, Navigation, Routing & Information Architecture]` assesses route structure. The second `@page` directive is a **typed deep link**: a push payload or an email can point straight at one notification. The class doc (lines 18-24) states the two design rules that follow from it: the `:int` route constraint is the validation boundary, so a malformed id never reaches the component (the router renders `NotFound` instead), and an id that is simply not on the loaded page degrades silently to the plain inbox rather than raising an error the user can do nothing about.
+  - `[Rubric §21, Accessibility]`: the icon-only mark-read control carries an explicit localized `aria-label` (`NotificationInbox.razor:59`).
+  - `[Rubric §27, Internationalization & Localization]`: this page holds no literal English. The injected `IStringLocalizer<SharedResource> L` (line 33) resolves the title (line 47), the breadcrumbs, and every toast (`L["Notif.AllMarkedRead"]`, line 324). The breadcrumb trail is built inside `OnInitializedAsync` (lines 77-81), not in a field initializer, so the injected localizer is available and labels re-resolve per circuit under the active culture (comment, lines 75-76, citing [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)).
+- **Walkthrough**
+  - `PageSize` (line 28) is `const int 20`: fixed-size server-side pagination, not infinite scroll. Injected `InboxService`, `NotificationState`, `Toast`, `L`, and MudBlazor's `ScrollManager` (lines 30-34).
+  - `[Parameter] public int? Id` (line 43) is the deep-link route parameter. The doc (lines 36-42) explains the type choice: `UserNotificationIdentifierType` is an `int` alias, and a route parameter's type must be written out for the `:int` constraint to bind, so the parameter is declared `int?` and converted where it is used.
+  - **Deep-link state is four separate fields, and each exists for a distinct reason** (lines 62-71): `_highlightedId` (found on the loaded page), `_pendingScrollId` (a scroll the next render owes), `_scrolledId` (already scrolled, so a re-render or push-driven reload never scrolls twice), and `_appliedId` (the `Id` the state was last computed for, to detect a re-navigation).
+  - `OnParametersSet` (lines 94-103) clears the `_scrolledId` latch when `_appliedId != Id` and then recomputes the target. The doc (lines 88-93) records the bug this prevents: navigating from `/notifications/inbox/5` to `/notifications/inbox/9` reuses the component instance, so without clearing the latch the second deep link would highlight but never move the viewport.
+  - `OnAfterRenderAsync` (lines 106-118) is the only place a scroll happens. It returns unless a scroll is pending and the component is alive, clears `_pendingScrollId` and sets `_scrolledId` **before** the await (comment, line 113, so a re-entrant render cannot queue the same scroll twice), and calls `ScrollManager.ScrollIntoViewAsync(CardSelector(id), ScrollBehavior.Smooth)` (line 117).
+  - `ApplyDeepLinkTarget` (lines 126-140) matches the route id against what the loaded page actually holds: `Id is not { } id || id <= 0 || !_notifications.Exists(n => n.Id == id)` clears both the highlight and the pending scroll (lines 128-133). The doc (lines 120-125) is the "no toast" decision, a deep link the user cannot act on is not an error they caused.
+  - The card-chrome helpers: `IsDeepLinkTarget` (line 142); `CardElementId` (lines 144-147, formatting `notification-{id}` with `CultureInfo.InvariantCulture` because it becomes a DOM id) and `CardSelector` (line 149); `CardElevation` (lines 152-160, 4 when deep-linked, else 1 for unread and 0 for read); `CardClass` (lines 162-168); and `CardStyle` (lines 175-183), which builds the unread left border and the deep-link ring from MudBlazor palette variables (`var(--mud-palette-primary)`, `var(--mud-palette-secondary)`) rather than literal hex, so both themes stay legible (comment, lines 170-174). `[Rubric §20, Design System & Theming]` shows up here: even inline styles source their colors from the theme's CSS custom properties.
+  - **Push coalescing.** `HandleRefreshRequested` (lines 185-193) is `EventHandler`-shaped so it cannot be `async Task`; it discards into `InvokeAsync(RefreshFromPushAsync)` (line 192). `RefreshFromPushAsync` (lines 195-212) sets `_refreshPending = true` and returns when a load is already in flight (lines 202-208); the comment (lines 204-205) states the invariant, never drop the push, so overlapping pushes coalesce into exactly one trailing reload instead of vanishing.
+  - `LoadNotificationsAsync` (lines 214-258): sets `IsLoading`, calls `GetInboxAsync(_currentPage, PageSize, _cts.Token)` (line 219), and on success materializes `page.Items` (line 222), computes `_totalPages` from `page.PaginationMetadata.TotalItemCount` with `Math.Ceiling` (line 223) clamped to a floor of 1 (lines 224-227) so an empty inbox never renders a zero-page pager, then recomputes the deep-link highlight (line 232, only a successful load can decide whether the id is present). The tail (lines 253-257) drains `_refreshPending` with one more `RefreshFromPushAsync`; the comment (lines 250-252) explains why the recursion is bounded, the flag is cleared first, so a push arriving during *this* reload queues one more and no further.
+  - `OnPageChangedAsync(int page)` (lines 260-264): records the page and reloads.
+  - `MarkReadAsync(UserNotificationDTO)` (lines 266-300): calls `MarkReadAsync(notification.Id, _cts.Token)` (line 271), returns early on failure after a toast (lines 272-276), then **optimistically patches local state**, locating the row with `FindIndex` (line 279) and replacing it via a `record with`-expression, `notification with { IsRead = true, ReadOn = DateTime.UtcNow }` (line 282). It then refetches the authoritative unread count (line 286) and pushes it into `NotificationState.SetUnreadCount` only when the count call succeeded (lines 287-290); a failed count means "unknown", so the badge keeps its value (comment, line 285).
+  - `MarkAllReadAsync` (lines 302-334): one service call (line 307), a loop flipping every unread row in place (lines 315-321), then `SetUnreadCount(0)` (line 323) and a localized success toast (line 324).
+  - Disposal: `_disposed` (line 336), `Dispose(bool)` (lines 338-350) unsubscribing the refresh event and cancelling the `_cts`, `Dispose()` (lines 352-356) with `GC.SuppressFinalize`.
+- **Why it's built this way**: the page is a *thin* view over [INotificationInboxUIService](#inotificationinboxuiservice), so all HTTP and JSON live in the service and the component stays testable against a stub. Patching local state after a mark-read (rather than refetching the page) keeps the interaction snappy while still reconciling the shared badge from the server, and the coalescing refresh keeps the list current when pushes arrive in bursts. The deep-link machinery is worth reading as a case study in idempotent side effects: a scroll is a one-shot action in a component model that re-renders freely, so it needs the "owed" and "already done" flags to be correct under re-render, re-navigation, and disposal.
+- **Where it's used**: rendered at `/notifications/inbox` (and `/notifications/inbox/{Id:int}`) for authenticated users; the route constant and nav entry come from [NotificationRoutePaths](#notificationroutepaths) and [NotificationUIModule](#notificationuimodule). [NotificationBell](#notificationbell) reads the same [NotificationState](#notificationstate) this page writes, and the layout-mounted `NotificationListener` raises the `OnRefreshRequested` signal it consumes. Its admin siblings are [NotificationList](#notificationlist) and [NotificationSend](#notificationsend).
 
 ### ChildEntityServiceBase
 > MMCA.Common.UI · `MMCA.Common.UI.Services.Api` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/ChildEntityServiceBase.cs:19` · Level 4 · class (abstract)
@@ -5473,30 +5974,30 @@ lives.
   [PaginationMetadata](group-01-result-error-handling.md#paginationmetadata) (lines 73, 116, 125),
   [IUiReadCache](#iuireadcache) (optional constructor parameter, line 47),
   [IConcurrencyAware](group-12-api-hosting-mapping.md#iconcurrencyaware) and
-  [ConcurrencyETag](group-08-auth.md#concurrencyetag) (lines 197-199, 394),
-  [IdempotencyHeaders](group-08-auth.md#idempotencyheaders) (line 386),
-  [ProblemDetailsResultReader](group-08-auth.md#problemdetailsresultreader) (lines 339, 367),
-  [HttpResultExecutor](#httpresultexecutor) (lines 332, 362) and
+  [ConcurrencyETag](group-08-auth.md#concurrencyetag) (lines 197-199, 398),
+  [IdempotencyHeaders](group-08-auth.md#idempotencyheaders) (line 390),
+  [ProblemDetailsResultReader](group-08-auth.md#problemdetailsresultreader) (lines 343, 371),
+  [HttpResultExecutor](#httpresultexecutor) (lines 336, 366) and
   [ITokenStorageService](#itokenstorageservice) (line 46); Polly through the inherited `RetryPolicy`,
   and `System.Net.Http.Json` (BCL).
 - **Concept introduced, one dispatch point for every cross-cutting HTTP concern.**
   `[Rubric §29, Resilience, Reliability & Business Continuity]` assesses whether retry, auth and error handling are applied in
   one place instead of repeated per call: the six public methods contain only URL construction, and the
-  two `SendRequestAsync` overloads (lines 324 and 354) contain all of the policy.
+  two `SendRequestAsync` overloads (lines 328 and 358) contain all of the policy.
   `[Rubric §19, State Management & Data Flow]` applies because components never touch `HttpClient`:
   they inject the typed interface and receive DTOs wrapped in a `Result`.
   `[Rubric §29, Resilience, Reliability & Business Continuity]` applies through the inherited
   three-retry exponential-backoff-with-jitter policy
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/AuthenticatedServiceBase.cs:25`), whose
-  predicate retries 5xx plus 408 and 429 but not 501 or 505 (`AuthenticatedServiceBase.cs:100`).
+  predicate retries 5xx plus 408 and 429 but not 501 or 505 (`AuthenticatedServiceBase.cs:106`).
 - **Concept introduced, retry safety for a non-idempotent verb.** `[Rubric §9, API & Contract Design]`
   assesses whether client and server share an explicit protocol for duplicate writes. A retry policy
   that re-issues a POST is a correctness hazard: if the first attempt reached the server and only the
   response was lost, the retry creates a second record. `AddAsync` is the one method that passes a key
   (line 162), minted by `AuthenticatedServiceBase.NewIdempotencyKey()` as a compact GUID
-  (`AuthenticatedServiceBase.cs:43`). The key is set as a **default request header on the client**
-  (line 386) rather than per request, and that one client instance serves every retry attempt, so all
-  attempts carry the identical value (the comment at lines 382-385 says exactly that). The server side
+  (`AuthenticatedServiceBase.cs:49`). The key is set as a **default request header on the client**
+  (line 390) rather than per request, and that one client instance serves every retry attempt, so all
+  attempts carry the identical value (the comment at lines 386-389 says exactly that). The server side
   is the opt-in [IdempotencyFilter](group-12-api-hosting-mapping.md#idempotencyfilter), and both ends
   read the header name from the shared [IdempotencyHeaders](group-08-auth.md#idempotencyheaders)
   constant. Reads, full-PUT updates and deletes send no key because they are naturally idempotent
@@ -5554,26 +6055,30 @@ lives.
     subclass overrides when the route key is not the DTO's own id.
   - `GetCachedAsync<T>(url, ct, bypassCache)` (line 241) guards the url (line 246), goes straight to the
     network when no cache is registered or the caller asked to bypass (lines 248-251), answers from a
-    fresh entry when there is one (lines 253-256), and otherwise fetches and stores. Only a success
-    with a non-null value is stored (lines 262-265), because caching a failure would pin a transient
+    fresh entry when there is one (lines 253-256), and otherwise fetches and stores. Before the GET it
+    captures `ReadCache.Generation` (line 261), and the store passes that value back as
+    `ReadCache.Set(url, result.Value, generation)` (line 268); the comment (lines 258-260) explains
+    that a write invalidating this endpoint while the read is in flight moves the generation, so the
+    late store is dropped instead of re-caching a value the write just made stale. Only a success
+    with a non-null value is stored (lines 264-269), because caching a failure would pin a transient
     outage in front of the user for the whole TTL and a cached 404 would survive the create that fixed
     it. `bypassCache` exists for a read the user explicitly asked to be current, a refresh button or a
     re-poll after a push (documented at lines 231-235).
-  - `InvalidateOnSuccess` (line 281) drops this endpoint's cached reads by prefix, and only on success
-    (lines 283-286): a rejected write changed nothing, so invalidating there would throw away entries
-    that are still accurate. `AsReadOnlyList` (line 293) presents a deserialized `Items` collection
-    without assuming the JSON reader produced a list (lines 296-298).
-  - `SendRequestAsync<T>` (line 324) and `SendRequestAsync` (line 354) are the center of the class and
-    are structurally identical: null-guard the lambda (lines 330, 360), wrap everything in
-    [HttpResultExecutor](#httpresultexecutor) (lines 332, 362), build a client for this one logical
-    operation (lines 337, 365), execute the caller's lambda through `RetryPolicy` with the cancellation
-    token threaded in so a cancelled operation does not sleep out its backoff (lines 338, 366), and
+  - `InvalidateOnSuccess` (line 285) drops this endpoint's cached reads by prefix, and only on success
+    (lines 287-290): a rejected write changed nothing, so invalidating there would throw away entries
+    that are still accurate. `AsReadOnlyList` (line 297) presents a deserialized `Items` collection
+    without assuming the JSON reader produced a list (lines 298-303).
+  - `SendRequestAsync<T>` (line 328) and `SendRequestAsync` (line 358) are the center of the class and
+    are structurally identical: null-guard the lambda (lines 334, 364), wrap everything in
+    [HttpResultExecutor](#httpresultexecutor) (lines 336, 366), build a client for this one logical
+    operation (lines 341, 369), execute the caller's lambda through `RetryPolicy` with the cancellation
+    token threaded in so a cancelled operation does not sleep out its backoff (lines 342, 370), and
     hand the response to [ProblemDetailsResultReader](group-08-auth.md#problemdetailsresultreader)
-    (lines 339, 367). The generic overload fails a 2xx with no body via the reader's
+    (lines 343, 371). The generic overload fails a 2xx with no body via the reader's
     `EmptyResponseCode`, which is why the body-less overload exists at all (documented at lines
-    319-323). The client is kept in scope across the read on purpose (comment at lines 335-336).
-  - `CreateRequestClientAsync(idempotencyKey, ifMatch)` (line 376) is where both conditional headers are
-    attached (lines 380-395), each with a comment stating the retry property it preserves: the same key
+    323-327). The client is kept in scope across the read on purpose (comment at lines 339-340).
+  - `CreateRequestClientAsync(idempotencyKey, ifMatch)` (line 380) is where both conditional headers are
+    attached (lines 384-399), each with a comment stating the retry property it preserves: the same key
     on every attempt, and the same precondition on every attempt so a write that lost the race fails
     consistently instead of succeeding on a later attempt against a version the caller never saw.
 - **Why it's built this way**: passing the HTTP call as a `Func<HttpClient, Task<HttpResponseMessage>>`
@@ -5599,12 +6104,241 @@ lives.
   [EntityServiceBaseCachingTests](group-28-testing-infrastructure.md#per-project-test-rollup) and
   [EntityServiceBaseIdempotencyRetryTests](group-28-testing-infrastructure.md#per-project-test-rollup),
   which asserts the key is emitted on creates only and stays identical across attempts.
-- **Caveats**: `GetAllAsync` has no page-size bound in source; it asks the "all" endpoint for
-  everything and materializes the result, which is why grids use `GetPagedAsync` instead. The read
+- **Caveats**: `GetAllAsync` sends no page size, but it is not unbounded: the "all" endpoint ignores
+  `pageSize` and returns at most the API's maximum page size (500 by default), so rows past it are
+  silently dropped (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/PagedReadAll.cs:12-18`).
+  A service that needs every row pages with [PagedReadAll](#pagedreadall), and grids use
+  `GetPagedAsync`. The generation guard only works against an [IUiReadCache](#iuireadcache) that
+  implements it: the interface defaults `Generation` to `0` and the three-argument `Set` to the plain
+  `Set` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Caching/IUiReadCache.cs:40,70`),
+  which the shipped [UiReadCache](#uireadcache) overrides
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Caching/UiReadCache.cs:34,104`). The read
   cache is keyed by URL alone and holds nothing about who fetched it, so it is only safe while
   [IUiReadCache](#iuireadcache) stays a per-circuit registration. `GetPagedAsync` accepts a `filters`
   dictionary that the signature does not declare nullable (line 80), yet the body null-checks it
   (line 97): defensive against a caller the signature says cannot exist.
+
+### NotificationList
+
+> MMCA.Common.UI · `MMCA.Common.UI.Pages.Notifications` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Notifications/NotificationList.razor.cs:16` · Level 6 · class (partial, page)
+
+- **What it is**: the code-behind for the **admin/organizer** push-notification history page, routed at `@page "/notifications"` (`NotificationList.razor:1`). It loads previously sent broadcasts and renders them in a status table, with a button onward to the compose page.
+- **Depends on**: first-party: [IPushNotificationUIService](#ipushnotificationuiservice) (the send and history HTTP service), [PushNotificationDTO](group-10-notifications.md#pushnotificationdto) (the row shape, carrying status and recipient count), [NotificationRoutePaths](#notificationroutepaths) (the route constants), [IToastService](#itoastservice), [ResultUiExtensions](#resultuiextensions) (`NotifyOnFailure`), and [SharedResource](#sharedresource). Externals: `MudBlazor` (`BreadcrumbItem`, `Icons`), `Microsoft.AspNetCore.Components` (`NavigationManager`, `[Inject]`), `Microsoft.Extensions.Localization`.
+- **Concept reinforced, the same code-behind shape as [NotificationInbox](#notificationinbox).** Same `[Inject]` service set (lines 18-21), same `readonly CancellationTokenSource _cts` plus dispose pattern (lines 23, 79-98), same `IsLoading` gate (line 29), same cancellation-swallowing load (lines 67-70), same `result.NotifyOnFailure(Toast, L)` failure surface (line 64). It differs only in *what* it loads and *how much* of it.
+  - `[Rubric §25, Navigation, Routing & Information Architecture]` assesses route structure and inter-page flow; navigation goes through [NotificationRoutePaths](#notificationroutepaths) constants (`NavigateToSend` targets `NotificationRoutePaths.NotificationSend`, line 77) rather than a literal URL, so a route change happens in exactly one file.
+  - `[Rubric §27, Internationalization & Localization]` picks up an extra trick here: `DisplayStatus(string status)` (lines 34-38) looks up `L[$"Notif.Status.{status}"]` and falls back to the raw wire value when `localized.ResourceNotFound` (line 37). The *comparison* value stays the untranslated wire string while only the displayed chip text localizes, which keeps transport values and presentation separate and means a newly added server status renders (untranslated) instead of blanking (the comment on line 33 cites [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)). This is the same pass-through-on-unknown-key discipline that [DataAnnotationsModelValidator](#dataannotationsmodelvalidator) applies to error messages.
+- **Walkthrough**
+  - Injected `NotificationService`, `NavigationManager`, `Toast`, `L` (lines 18-21); `Title` reads `L["Notif.List.Title"].Value` (line 25); `_breadcrumbs` (line 27) is built Home to Push Notifications in `OnInitializedAsync` (lines 43-47), with the leaf crumb `disabled: true` to mark the current page (line 46).
+  - `_notifications` is an `IReadOnlyCollection<PushNotificationDTO>` initialized empty (line 31).
+  - `OnInitializedAsync` (lines 40-50) builds the breadcrumbs then awaits `LoadNotificationsAsync`.
+  - `LoadNotificationsAsync` (lines 52-75): calls `GetHistoryAsync(pageNumber: 1, pageSize: 50, _cts.Token)` (line 57) and copies `history.Items` into `_notifications` on success (line 60), otherwise raises the localized failure toast (line 64). This page fetches **one fixed 50-row page** and lets MudBlazor page that buffer client-side; unlike the inbox there is no server round-trip per page.
+  - `NavigateToSend` (line 77) sends the "send new" button to the compose page.
+  - Disposal mirrors the family: `_disposed` (line 79), `Dispose(bool)` cancelling the `_cts` (lines 81-92), `Dispose()` (lines 94-98).
+- **Why it's built this way**: broadcast history is low-volume admin data, so one 50-row fetch with client-side paging is simpler and adequate, and it avoids server-side paging plumbing that would earn nothing. Keeping HTTP behind [IPushNotificationUIService](#ipushnotificationuiservice) mirrors the inbox and keeps the component a thin view. The shared `[Rubric §18, UI Architecture & Component Design]` story is told under [NotificationInbox](#notificationinbox).
+- **Where it's used**: rendered at `/notifications` for organizer and admin roles (the nav entry from [NotificationUIModule](#notificationuimodule) is gated on [RoleNames](group-24-identity-module.md#rolenames)`.Organizer`); it links onward to [NotificationSend](#notificationsend).
+- **Caveats / not-in-source**: the 50-row ceiling is a client-side choice in this file; what the server does when more than 50 broadcasts exist (whether the page silently truncates the history) is not visible here.
+
+### NotificationSend
+
+> MMCA.Common.UI · `MMCA.Common.UI.Pages.Notifications` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Notifications/NotificationSend.razor.cs:20` · Level 6 · class (partial, page)
+
+- **What it is**: the code-behind for the compose-and-broadcast form, routed at `@page "/notifications/send"` (`NotificationSend.razor:1`). It collects a title and a message into [NotificationSendModel](#notificationsendmodel), validates them against that model's own annotations, sends one broadcast through the Notification API, reports the recipient count, and returns to the history page.
+- **Depends on**: first-party: [IPushNotificationUIService](#ipushnotificationuiservice) (the `SendAsync` call), [NotificationSendModel](#notificationsendmodel) (the form model), [ModelValidation](#modelvalidation) + [DataAnnotationsModelValidator](#dataannotationsmodelvalidator) (the validation bridge), [INotificationScopeProvider](#inotificationscopeprovider) (the targeting caption), [SendPushNotificationRequest](group-10-notifications.md#sendpushnotificationrequest) (the wire contract), [PushNotificationDTO](group-10-notifications.md#pushnotificationdto) (the result carrying `RecipientCount`), [Result](group-01-result-error-handling.md#result), [NotificationRoutePaths](#notificationroutepaths), [ErrorMessages](#errormessages), [IToastService](#itoastservice), [ResultUiExtensions](#resultuiextensions), and [SharedResource](#sharedresource). The markup also composes an `UnsavedChangesGuard` bound to `IsDirty` (`NotificationSend.razor:12`). Externals: `MudBlazor` (`MudForm`, `BreadcrumbItem`, `Icons`), `Microsoft.AspNetCore.Components` (`NavigationManager`, `OnInitialized`, `OnInitializedAsync`), `Microsoft.Extensions.Localization`.
+- **Concept introduced, `MudForm` validation driven entirely by the model.** This is the family's *form* page, and it is the worked example of the validation stack in this unit. The markup declares `<MudForm @ref="_form" Model="_model">` with two fields that set `For`, `Validation="@_validate"`, and read their affordances off the same model (`NotificationSend.razor:43-66`). **No rule is declared in markup**: the comment above the form (lines 38-42 of the markup) spells out the division, `Required` drives the asterisk and `aria-required` while its message still comes from the model, `MaxLength` caps the input, and `Counter` shows the budget from the shared request contract so the numbers cannot drift from the server. The C# holds the form by reference (`MudForm? _form`, line 36) and explicitly drives validation before sending: `await _form.ValidateAsync()` then a guard on `_form.IsValid` (lines 98-105). MudForm has no `OnValidSubmit`, so that explicit pass is the gate (comment, lines 96-97).
+  - `[Rubric §24, Forms, Validation & UX Safety]` assesses input validation, double-submit protection, and feedback. All four are present: model-declared rules run through the shared delegate, an `IsSaving` flag (line 33) bound to `Disabled` on both buttons (`NotificationSend.razor:73,80`) so the send cannot be fired twice, a warning toast `ErrorMessages.ValidationError` on a failed gate (line 103), and a success toast naming the recipient count (line 116).
+  - **Two failure surfaces, deliberately not one.** `_sendResult` (line 42) holds the last attempt's outcome and is rendered inline by the shared `ErrorSummary` component (`NotificationSend.razor:36`), while the toast stays the transient cue. The markup comment (lines 31-35) records the design constraint: the summary is deliberately *not* fed `MudForm.Errors`, because every field already renders its own message inline and MudBlazor contributes a generic "Required" of its own that would stack on top of the model's wording. `_sendResult` is nulled at the start of every attempt (line 94), so the summary never shows a stale failure.
+  - `[Rubric §21, Accessibility]` and `[Rubric §18, UI Architecture & Component Design]` meet in the `ErrorSummary`: a failure that only appeared as a toast would time out on a long form and be unrecoverable for a screen-reader user who missed it (comment, lines 121-122).
+  - `[Rubric §27, Internationalization & Localization]`: every string resolves through `IStringLocalizer<SharedResource> L` (line 24), including the success message `L.Plural("Notif.Send.SentTo", sent.RecipientCount, sent.RecipientCount)` (line 117), which passes the count through the shared plural extension so the resource file (not C#) picks the plural form as well as the word order. As with its siblings the breadcrumb trail is built in an initialization hook, here the synchronous `OnInitialized` (lines 55-67, comment citing [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)).
+  - `[Rubric §24, Forms, Validation & UX Safety]` again, for the navigate-away guard: `Sent` (a private bool, set true immediately before the post-send `NavigateTo`) and `IsDirty` (true whenever `Sent` is false and either field is non-blank) feed the markup's `UnsavedChangesGuard`, so leaving with typed-but-unsent text prompts, while the send's own redirect never does. The comment on the `Sent` setter records the ordering: it is set *before* the navigation call, because the guard reads the live accessor.
+- **Walkthrough**
+  - Injected `NotificationService`, `NavigationManager`, `Toast`, `L`, and `ScopeProvider` (lines 21-25); `_cts` (line 27); `Title` (line 29); `_breadcrumbs` (line 31) built Home to Push Notifications to Send (lines 58-63), where the middle crumb is a real link via `NotificationRoutePaths.Notifications` (line 61) and the leaf is `disabled: true` (line 62).
+  - `_model` (line 35) is a `readonly NotificationSendModel` created with the component; `_validate` (line 46) is the single `Func<object, string, IEnumerable<string>>` MudBlazor calls with `(model, member path)`, wired in `OnInitialized` as `ModelValidation.For(_model, new DataAnnotationsModelValidator(L))` (line 66). One delegate serves both fields, and no rule is written twice (comment, lines 44-45).
+  - `OnInitializedAsync` (lines 69-87) resolves the optional scope caption: `ScopeProvider.GetCurrentScopeDisplayNameAsync(_cts.Token)` (line 77), and only when the name is non-blank does it build `_scopeCaption` (lines 78-81). The field doc (lines 48-53) and the async doc (lines 71-74) give the reasoning: a scoped application applies its scope to the send automatically, so without a caption the operator would be composing a broadcast with no visible statement of who receives it, and when there is no scope the page renders no caption at all rather than an empty line. `[Rubric §24, Forms, Validation & UX Safety]` again: making an implicit targeting decision visible is part of a safe destructive-ish action.
+  - `SendNotificationAsync` (lines 89-134): null-guards `_form` (lines 91-92), clears `_sendResult` (line 94), validates and warns on failure (lines 98-105); then under `IsSaving` builds `new SendPushNotificationRequest(_model.Title, _model.Body)` (line 110) and awaits `SendAsync(request, _cts.Token)` (line 111), storing the result for the summary (line 112). On a non-null [PushNotificationDTO](group-10-notifications.md#pushnotificationdto) it raises the success toast with `sent.RecipientCount` (line 117), sets `Sent = true` (line 121), and navigates back to the list; otherwise `result.NotifyOnFailure(Toast, L)` (line 123). The cancellation catch (lines 126-129) additionally names the `InteractiveAuto` render-mode transition, the case where the WebAssembly runtime takes over mid-call; `IsSaving` is cleared in `finally` (lines 130-133).
+  - `NavigateToList` (line 136) is the Cancel button's handler, back to `NotificationRoutePaths.Notifications`.
+  - `Sent` (a private bool property) and `IsDirty` (`!Sent && (Title or Body non-whitespace)`) are declared just after `NavigateToList`, immediately above the disposal members; `Sent` is documented as being set the moment a send has succeeded and the page is about to navigate away on its own, so the unsaved-changes guard does not prompt over work that has just left the building.
+  - Disposal mirrors the family: `_disposed` (line 138), `Dispose(bool)` (lines 140-151), `Dispose()` (lines 153-157).
+- **Why it's built this way**: a deliberately small form that still demonstrates the full pattern. The rules live on [NotificationSendModel](#notificationsendmodel) so the client cap, the client message, and the server invariant all read the same constants; HTTP stays behind [IPushNotificationUIService](#ipushnotificationuiservice) so the component is unit-testable; and the `Sent`/`IsDirty` pair keeps the unsaved-changes guard from firing on the page's own post-send redirect, which is the one navigation on this page that is not the user abandoning work. The send is fire-and-confirm: the server fans out to recipients through the push pipeline (see [Group 10](group-10-notifications.md)) and returns only the aggregate count.
+- **Where it's used**: rendered at `/notifications/send` for organizer and admin roles, reached from the button on [NotificationList](#notificationlist). The server-side validator for [SendPushNotificationRequest](group-10-notifications.md#sendpushnotificationrequest) enforces the same rules a second time, so client validation is a UX affordance rather than the security boundary.
+
+### ClientConfigBuilder
+
+> MMCA.Common.UI.Web · `MMCA.Common.UI.Web.ClientConfig` · `MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/ClientConfig/ClientConfigBuilder.cs:17` · Level 2 · class (sealed)
+
+- **What it is**: the accumulator a host's own `extras` delegate writes into when it wants extra data
+  served on the anonymous `/client-config` document, one named section per `Add` call.
+- **Depends on**: [ClientConfigEndpointExtensions](#clientconfigendpointextensions) (its `ApiSectionName`
+  constant, checked as the one reserved name, `ClientConfigBuilder.cs:57`); `Microsoft.AspNetCore.Http`
+  (`HttpContext`, BCL) and `Microsoft.Extensions.DependencyInjection` /
+  `Microsoft.Extensions.Configuration` for the two convenience accessors it republishes.
+- **Concept, a builder with an internal constructor.** `[Rubric §26, Front-End Security]` covers what
+  this type prevents: the constructor is `internal` (line 29), so the only place a `ClientConfigBuilder`
+  can come into existence is inside `MapClientConfigEndpoint`'s own request delegate, which is also the
+  one place a host's `extras` callback runs. A host cannot construct one ahead of time and stash
+  arbitrary state in it outside the request it belongs to.
+- **Walkthrough**
+  - `_sections` (line 27) is a `Dictionary<string, object?>` keyed with `StringComparer.OrdinalIgnoreCase`,
+    so `"OAuth"` and `"oauth"` collide as the same section.
+  - `HttpContext` (line 32) and the two accessors built on it, `Services` (line 35, reads
+    `HttpContext.RequestServices`) and `Configuration` (line 38, resolves `IConfiguration` from those
+    services), let an `extras` delegate reach DI and configuration without the endpoint having to pass
+    them separately.
+  - `Add(string name, object? value)` (line 53) blank-checks `name`
+    (`ArgumentException.ThrowIfNullOrWhiteSpace`, line 55), rejects the reserved
+    `ClientConfigEndpointExtensions.ApiSectionName` case-insensitively (lines 57-62), then adds through
+    `_sections.TryAdd` (line 64) so a second call with the same name throws rather than silently
+    overwriting the first (lines 65-67). It returns `this` for chaining (line 69).
+  - `Sections` (line 40) is `internal`, an `IReadOnlyDictionary<string, object?>` view the endpoint reads
+    back after the delegate returns; nothing outside this package can enumerate a builder's contents.
+- **Why it's built this way**: the reserved-name and duplicate-name guards live on the builder rather
+  than being left to the endpoint's own loop, so every caller of `Add`, present or future, gets the same
+  two checks for free. The internal constructor and internal `Sections` getter keep the type's read side
+  as narrow as its write side: a host can only add, never inspect what a different extras call already
+  added.
+- **Where it's used**: constructed once per request inside
+  [ClientConfigEndpointExtensions](#clientconfigendpointextensions)`.MapClientConfigEndpoint`'s handler
+  and handed to the caller's `extras` delegate
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/ClientConfig/ClientConfigEndpointExtensions.cs:63-64`);
+  its `Sections` are then read back to assemble the response document
+  (`ClientConfigEndpointExtensions.cs:73-76`). Exercised directly by
+  `ClientConfigEndpointTests`
+  (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Web.Tests/ClientConfig/ClientConfigEndpointTests.cs`).
+
+### ClientConfigEndpointExtensions
+
+> MMCA.Common.UI.Web · `MMCA.Common.UI.Web.ClientConfig` · `MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/ClientConfig/ClientConfigEndpointExtensions.cs:17` · Level 2 · class (static)
+
+- **What it is**: the extension that maps `GET /client-config`, the anonymous document a WASM client's
+  bootstrap fetches to learn the browser-reachable API base address before it can hold a session, plus
+  whatever extra sections the host contributes.
+- **Depends on**: [ClientConfigBuilder](#clientconfigbuilder) (constructed per request, line 63),
+  [ApiSettings](#apisettings) (`IOptions<ApiSettings>`, read for `WasmApiEndpoint`, line 55), and, only
+  in a host running the same-origin API proxy, [SameOriginApiProxyMarker](#sameoriginapiproxymarker)
+  (probed from request services, line 93) and [SameOriginApiProxySettings](#sameoriginapiproxysettings)
+  (read for `PathPrefix`, line 98); externals `Microsoft.AspNetCore.Routing` (`IEndpointRouteBuilder`,
+  `RouteHandlerBuilder`), `Microsoft.AspNetCore.Http` (`HttpContext`), `System.Text.Json`
+  (`JsonNamingPolicy.CamelCase`), and the ASP.NET Core minimal-API `Results` type.
+- **Concept introduced, fail-closed instead of falling back.** `[Rubric §22, Configuration and Secrets
+  Management]` assesses whether a bad or missing configuration value is caught rather than silently
+  degrading a live host. The endpoint's remarks (lines 33-40) state the rule directly: it serves
+  `Api:WasmApiEndpoint`, the browser-reachable gateway URL, and never falls back to `Api:ApiEndpoint`,
+  the server head's own service-discovery name, because a browser cannot resolve that name and serving
+  it would hand the client a silently broken base address. A host missing the key answers every request
+  with a server error naming the missing key (lines 56-61), which surfaces as a failed client start
+  instead of a client quietly pointed at the wrong API.
+- **Concept introduced, anonymous by declared necessity.** `[Rubric §11, Security]` covers why this
+  endpoint is one of the few that must allow anonymous access on purpose: the WASM client fetches this
+  document before it can hold a session (remarks, lines 41-46), and a host's fallback authorization
+  policy would otherwise gate it like any other endpoint that states nothing. The endpoint therefore
+  declares `AllowAnonymous()` itself (line 80) rather than relying on an ambient default, and the
+  remarks warn that only values the public site renders anyway belong in `extras` (lines 44-45).
+- **Concept introduced, an additive key for the same-origin proxy.** A host that runs the same-origin
+  API proxy ([ADR-131](https://ivanball.github.io/docs/adr/131-same-origin-api-proxy.html)) gets one
+  extra member in the `Api` section, `sameOriginApiEndpoint`, the proxy's origin-relative base (for
+  example `/api/`) that the WASM bootstrap resolves against the page's own origin, while `apiEndpoint`
+  stays the gateway for full-page navigations (doc, lines 84-90). The proxy's presence is detected
+  from DI (the marker service), not from configuration, so every host without the proxy serves the
+  section exactly as before and an existing client sees no change.
+- **Walkthrough**
+  - Two public constants: `ClientConfigPath = "/client-config"` (line 20) and
+    `ApiSectionName = "Api"` (line 23), the one section name [ClientConfigBuilder](#clientconfigbuilder)
+    treats as reserved.
+  - The `extension(IEndpointRouteBuilder endpoints)` block (line 25, see
+    [primer](00-primer.md#c-extensiont-types-read-this-once)) holds the single member
+    `MapClientConfigEndpoint(Action<ClientConfigBuilder>? extras = null)` (line 52).
+  - The handler (lines 53-79) takes the request's `HttpContext` plus `IOptions<ApiSettings>`, reads
+    `apiSettings.Value.WasmApiEndpoint` (line 55), throws `InvalidOperationException` naming the missing
+    key when it is blank (lines 56-61), builds a [ClientConfigBuilder](#clientconfigbuilder) for the
+    request and invokes `extras` on it (lines 63-64), seeds the response with the camelCased `Api`
+    section produced by `BuildApiSection(context, wasmApiEndpoint)` (lines 68-71), then overlays every
+    builder section, each name run through the same `JsonNamingPolicy.CamelCase` policy the web JSON
+    defaults apply to members (lines 73-76), so the document's shape matches what an anonymous-object
+    payload would have produced anyway.
+  - The route is finished with `.AllowAnonymous().ExcludeFromDescription()` (lines 80-81): anonymous
+    for the reason above, and excluded from the OpenAPI description because it is not a data endpoint a
+    client integrates against, it is bootstrap plumbing.
+  - The private `BuildApiSection(HttpContext, string)` (lines 91-100) returns `new { ApiEndpoint }` when
+    `GetService<SameOriginApiProxyMarker>()` is null (lines 93-96); otherwise it reads
+    `IOptions<SameOriginApiProxySettings>.Value.PathPrefix` (line 98) and returns
+    `new { ApiEndpoint, SameOriginApiEndpoint = prefix + "/" }` (line 99).
+- **Why it's built this way**: putting the base-address selection, the reserved-name policy and the
+  camelCase conversion all in one mapped endpoint means every host that calls
+  `MapClientConfigEndpoint` gets the identical fail-closed contract; a host only supplies the pieces
+  specific to it through `extras`. The same-origin key is decided here too, from the proxy's own DI
+  marker, so a host that adds the proxy does not have to remember a second client-config change.
+- **Where it's used**: called from a host's endpoint mapping alongside the other framework endpoints;
+  its handler constructs [ClientConfigBuilder](#clientconfigbuilder)
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/ClientConfig/ClientConfigBuilder.cs`, 3 call
+  sites) and is pinned by `ClientConfigEndpointTests`
+  (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Web.Tests/ClientConfig/ClientConfigEndpointTests.cs`, 2
+  call sites).
+
+### IRoleAdminUIService
+
+> MMCA.Common.UI · `MMCA.Common.UI.Services.Administration` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Administration/IRoleAdminUIService.cs:22` · Level 3 · interface
+
+- **What it is**: the typed client contract for the role-admin editor: read every role's compiled and
+  stored permissions, read one role, read the catalog an editor renders from, and replace one role's
+  stored permission set.
+- **Depends on**: first-party: [RolePermissionsResponse](group-08-auth.md#rolepermissionsresponse) (the
+  per-role read and write shape), [PermissionCatalogResponse](group-08-auth.md#permissioncatalogresponse)
+  (the closed sets a role editor may choose from), and [Result](group-01-result-error-handling.md#result)
+  / `Result<T>` (`IRoleAdminUIService.cs:30,36,44,54`) for every member's return type. Its sole
+  implementation is [RoleAdminService](#roleadminservice).
+- **Concept**: each member's XML doc names the exact endpoint it calls (`GET Admin/Roles`,
+  `GET Admin/Roles/{role}`, `GET Admin/Roles/catalog`, `PUT Admin/Roles/{role}/permissions`, lines
+  27,32,40,47-48), so the contract doubles as the wire map for the role-admin surface without a
+  separate reference. `[Rubric §1, SOLID Principles]` reads this as a small, role-scoped interface:
+  it names only what a role editor needs and nothing a user editor would, the mirror decision to the
+  split between [IUserAdminActionsUIService](#iuseradminactionsuiservice) and
+  [IUserAdminUIService<TUserDto>](#iuseradminuiservicetuserdto) one member table below.
+- **Walkthrough**: `GetAllAsync` (line 30) and `GetAsync(string role, ...)` (line 36) are the two reads
+  that feed the role list and role-detail pages. `GetCatalogAsync` (line 44) reads the roles-plus-
+  permissions catalog a role editor renders its checkboxes from. `SetStoredPermissionsAsync(role,
+  permissions, ...)` (lines 54-57) replaces the complete stored permission set for one role in a single
+  PUT, not an incremental add/remove, so the caller always sends the full desired set.
+- **Why it's built this way**: this is an ADR-116 opt-in surface
+  ([ADR-116](https://ivanball.github.io/docs/adr/116-identity-completions-opt-in.html)): the admin app
+  can wire role management by registering [RoleAdminService](#roleadminservice) against this contract
+  without the framework hard-wiring an admin UI into every consumer.
+- **Where it's used**: implemented by [RoleAdminService](#roleadminservice) and registered against it in
+  [DependencyInjection](#dependencyinjection) (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs`);
+  consumed by `RoleAdminEdit.razor.cs` and `RoleAdminList.razor.cs`; its ADC identity pages carry the
+  behavior-pinning tests
+  (`MMCA.ADC/Tests/Modules/Identity/MMCA.ADC.Identity.UI.Tests/Pages/Roles/RoleEditTests.cs`,
+  `RoleListTests.cs`).
+
+### IUserAdminActionsUIService
+
+> MMCA.Common.UI · `MMCA.Common.UI.Services.Administration` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Administration/IUserAdminActionsUIService.cs:16` · Level 3 · interface
+
+- **What it is**: the account-mutation contract for user admin: lock, unlock, and two shapes of
+  role-replacement, a full-set `SetRolesAsync` and a single-role convenience `SetRoleAsync`.
+- **Depends on**: first-party: [SetUserRolesRequest](group-08-auth.md#setuserrolesrequest) (implied wire
+  shape behind `SetRolesAsync`), [Result](group-01-result-error-handling.md#result)
+  (`IUserAdminActionsUIService.cs:22,26,33,41,56,58`); `UserIdentifierType` (the module's identifier
+  alias) names every account parameter. Extended by
+  [IUserAdminUIService<TUserDto>](#iuseradminuiservicetuserdto).
+- **Concept, a member that exists only because a mock cannot proxy a default interface method.** The
+  remarks on `SetRoleAsync` (lines 108-111) give the reasoning directly: the obvious shape would have
+  been a default interface implementation over `SetRolesAsync` that wraps the single role in a
+  one-element list, but a default implementation on an interface is not virtual to a mock proxy, so a
+  test could neither stub nor verify it if it were written that way. Declaring `SetRoleAsync` as its
+  own interface member keeps it mockable at the cost of one more line on the contract.
+  `[Rubric §14, Testability]` is the rubric this decision serves.
+- **Walkthrough**: `LockAsync(userId, ...)` (line 84) and `UnlockAsync(userId, ...)` (line 90) are the
+  two session-revoking actions. `SetRolesAsync(userId, roles, ...)` (lines 97-100) replaces the complete
+  role set an account holds. `SetRoleAsync(userId, role, ...)` (line 116) is documented as sending a
+  one-element set to the same replacement endpoint (lines 102-106), the shape both shipped consumers
+  need because each holds exactly one role per account.
+- **Why it's built this way**: separated from the read/page surface in
+  [IUserAdminUIService<TUserDto>](#iuseradminuiservicetuserdto) so the mutating actions have one
+  narrow, generic-free contract a page or a test can depend on without also depending on the DTO type
+  parameter.
+- **Where it's used**: extended by [IUserAdminUIService<TUserDto>](#iuseradminuiservicetuserdto);
+  implemented by [UserAdminService<TUserDto>](#useradminservicetuserdto); called directly from
+  `UserAdminList.razor.cs` for the lock/unlock/role actions on the user-admin grid, and pinned by
+  `UserListTests.cs` (ADC) and `UserAdminListTests.cs` (Common).
 
 ### IUserAdminUIService<TUserDto>
 
@@ -5679,30 +6413,6 @@ lives.
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs`). See
   [ADR-116](https://ivanball.github.io/docs/adr/116-identity-completions-opt-in.html).
 
-### ServerTokenStorageService
-
-> MMCA.Common.UI.Web · `MMCA.Common.UI.Web.Services` · `MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Services/ServerTokenStorageService.cs:18` · Level 4 · class (sealed)
-
-- **What it is**: the Blazor **Server** implementation of [ITokenStorageService](#itokenstorageservice): a cookie-only token store with no `localStorage`. During SSR prerender it reads the access token from the HttpOnly session cookie; on the live interactive circuit it holds the access token in memory only and re-acquires it from those cookies through a same-origin refresh endpoint. The refresh token is never readable from JavaScript.
-- **Depends on**: first-party: [ITokenStorageService](#itokenstorageservice) (the contract, line 21), [CookieTokenReader](group-08-auth.md#cookietokenreader) (reads the access and refresh cookies off the request), [ISessionCookieSync](#isessioncookiesync) (seeds and clears the HttpOnly cookies), [ITokenRefresher](#itokenrefresher) (acquires a fresh access token from `/auth/session/token`), and [JwtTokenInfo](#jwttokeninfo) (client-side freshness check). Its WASM sibling is [WasmTokenStorageService](#wasmtokenstorageservice) (named in the class doc, line 14). Externals: `Microsoft.AspNetCore.Http` (`IHttpContextAccessor`, `HttpContext`), BCL `Lock`, `Task`, `TimeSpan`.
-- **Concept introduced, the two-world token store (SSR request versus interactive circuit).** A Blazor Web page runs twice: first as a server-side prerender inside a live HTTP request, where an `HttpContext` exists and JS interop does not, and then as a stateful circuit with no `HttpContext`. One store has to serve both worlds, and this class branches on `httpContextAccessor.HttpContext is not null` (line 34) to decide which source of truth applies.
-  - **SSR prerender** (lines 34-37): the request's HttpOnly cookie wins, read via `cookieTokenReader.ReadAccessToken()` (line 36), because the middleware may have just refreshed it in place on this navigation (comment, lines 32-33).
-  - **Interactive circuit** (lines 39-71): the token lives in the `_accessToken` field (line 27). If `JwtTokenInfo.IsFresh(_accessToken, ExpirySkew)` (line 40) says it survives the 30-second skew (line 23), it is returned as is; otherwise it is re-acquired.
-  - `[Rubric §26, Front-End Security]` assesses how credentials are held in the browser. This is a deliberate XSS-hardening design: the long-lived refresh token stays in an HttpOnly cookie unreachable from script, the access token exists only in circuit memory and is never persisted, and the refresh token transits JS exactly once, for the same-origin POST that seeds the cookies at login (`SetTokensAsync`, lines 81-87).
-  - `[Rubric §11, Security]` assesses the wider auth model; this store is one edge of the browser session-cookie design ([ADR-022](https://ivanball.github.io/docs/adr/022-browser-session-cookie-auth.html)), the piece that decides *where* a bearer token is read on each side of the prerender boundary.
-  - `[Rubric §12, Performance & Scalability]` shows up in the single-flight hydrate: a Blazor circuit is genuinely multi-threaded, and several consumers (the delegating handler, the auth-state provider, the SignalR connection) can all miss the cache at once.
-- **Walkthrough**
-  - The primary constructor (lines 17-21) takes `IHttpContextAccessor`, [CookieTokenReader](group-08-auth.md#cookietokenreader), [ISessionCookieSync](#isessioncookiesync), and [ITokenRefresher](#itokenrefresher). The type is `sealed` and carries no app-specific state, which is why it could be hoisted out of both app hosts (class doc, lines 13-15).
-  - Fields: `ExpirySkew` (line 23, a `static readonly TimeSpan` of 30 seconds), the `Lock _hydrateSync` (line 25, the .NET 9+ dedicated lock object), the in-memory `_accessToken` (line 27), and `_hydrateInFlight` (line 28), the shared acquisition task.
-  - `GetAccessTokenAsync` (lines 30-72): the SSR/circuit branch, then the **single-flight** guard. `_hydrateInFlight ??= HydrateAsync()` executes *inside* `lock (_hydrateSync)` (lines 50-54) and the resulting task is copied to a local before the lock is released. The comment on lines 45-48 records exactly why the naive unguarded `??=` was not enough: two callers could each start a hydrate and the later completion would overwrite the other's token; `HydrateAsync` reaches its first await immediately, so nothing slow runs under the lock. The `finally` (lines 60-71) clears `_hydrateInFlight` **only when it is still reference-equal to the task this caller awaited** (line 66), so a newer hydrate started after this one completed is not dropped, which would split the next set of callers again.
-  - `GetRefreshTokenAsync` (lines 74-79): returns `cookieTokenReader.ReadRefreshToken()` during SSR and `null` on the circuit, because the HttpOnly refresh cookie is unreadable there; it wraps the value in `Task.FromResult` rather than being `async` (no await needed).
-  - `SetTokensAsync` (lines 81-87): caches the access token in memory (line 83) and calls `sessionCookieSync.SyncAsync(accessToken, refreshToken)` (line 86) to seed the HttpOnly cookies at login.
-  - `ClearTokensAsync` (lines 89-93): nulls the in-memory token and calls `sessionCookieSync.ClearAsync()` on logout.
-  - `HydrateAsync` (lines 95-99): the private acquisition, `_accessToken = await tokenRefresher.AcquireAccessTokenAsync()` (line 97), caching and returning the new token.
-- **Why it's built this way**: Blazor Server's split lifecycle breaks the naive "read a token from storage" store, which would either fail during prerender (no JS) or leak the refresh token to script if it used `localStorage`. Branching on `HttpContext` presence and keeping the refresh token cookie-only resolves both. The locked single-flight is the correction of a real concurrency defect in the simpler `??=` version, and it is worth reading as a small case study in why "good enough" atomicity on a circuit is not good enough. See [ADR-022](https://ivanball.github.io/docs/adr/022-browser-session-cookie-auth.html).
-- **Where it's used**: registered as the scoped [ITokenStorageService](#itokenstorageservice) by `AddCommonServerTokenStorage()` in the `MMCA.Common.UI.Web` [DependencyInjection](#dependencyinjection-1) (`MMCA.Common.UI.Web/DependencyInjection.cs:32-36`); consumer hosts call that instead of shipping their own copy.
-- **Caveats / not-in-source**: the cookie names, lifetimes, and the `/auth/session/token` endpoint itself are not in this file; they live in the `MMCA.Common.API` session-cookie plumbing referenced by the doc comment (lines 12-15).
-
 ### UserAdminService<TUserDto>
 
 > MMCA.Common.UI · `MMCA.Common.UI.Services.Administration` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Administration/UserAdminService.cs:26` · Level 5 · class (sealed)
@@ -5755,24 +6465,24 @@ lives.
 
 - **What it is**: the code-behind for the app-bar notification bell. It renders an unread badge from the scoped [NotificationState](#notificationstate), and exactly one instance at a time holds the single active-poller slot, so a bell placed in two layout slots never doubles the API traffic.
 - **Depends on**: first-party: [NotificationState](#notificationstate) (badge value, change and refresh events, staleness clock, and the poller slot), [INotificationInboxUIService](#inotificationinboxuiservice) (the unread-count call), [NotificationBellOptions](#notificationbelloptions) (the two intervals), [NotificationRoutePaths](#notificationroutepaths) (the inbox route), and [SharedResource](#sharedresource) (the resx anchor for the injected localizer). Externals: `Microsoft.AspNetCore.Components` (`[Inject]`, `NavigationManager`, `LocationChangedEventArgs`, `OnAfterRenderAsync`, `InvokeAsync`, `StateHasChanged`), `Microsoft.Extensions.Options` (`IOptions<T>`), `Microsoft.Extensions.Localization` (`IStringLocalizer<T>`), BCL `TimeProvider`, `PeriodicTimer`, `CancellationTokenSource`, `IDisposable`.
-- **Concept introduced, a poller slot with symmetric registration and handover.** `[Rubric §19, State Management & Data Flow]` assesses how shared UI state is coordinated. The bell is a component, so a responsive layout can legitimately render it twice at once (desktop app bar and mobile drawer). Without coordination each copy would start its own timer and its own navigation refresh, doubling the unread-count endpoint's load for no user benefit. The design is a *slot* held by an owner object, not a bare counter: `State.TryRegisterPoller(this)` (line 56) takes the slot only when it is free or already this instance's (`NotificationState.cs:111-124`), and `State.UnregisterPoller(this)` releases it only when this instance actually holds it and then raises `OnPollerSlotFreed` (`NotificationState.cs:133-149`).
-  - **Why owner identity matters here.** The class remarks (lines 22-28) name the real scenario: hosts render the bell inside `<AuthorizeView>`, which tears the children down and rebuilds them on every authentication-state change, including a routine access-token refresh. Registration is therefore strictly symmetric (every instance unregisters on dispose, whether or not it was polling, line 256), and the surviving instance claims the freed slot through `OnPollerSlotFreed` (line 53), so the circuit never ends up with a badge that nobody refreshes.
-  - `[Rubric §23, Front-End Performance]` assesses avoidable network work. Two mechanisms cut it. The slot removes an entire duplicate polling stream in dual-placement layouts. And the navigation trigger is throttled by staleness rather than firing per click: `OnLocationChanged` reads only when `State.IsStale(Options.Value.NavigationRefreshMaxAge)` (line 155), because navigation is an ambient trigger, not evidence that the count moved (doc, lines 143-148). The defaults are 30 seconds for both the poll interval and the navigation max age (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/Settings/NotificationBellOptions.cs:22,29`), and both are configuration, not constants.
-  - **The staleness policy has exactly three tiers, and they are deliberate.** The first read and every periodic tick are unconditional; a navigation reads only past the configured window; a real-time push calls `State.MarkStale()` first and then reads regardless (lines 171-175), because the server has just said the data changed, so the age of the number carries no information any more (doc, lines 165-169). That is the one path that must never be throttled.
-  - `[Rubric §14, Testability]` assesses whether time-dependent behavior can be driven deterministically. Both the timer and the age comparison run off the injected `TimeProvider Clock` (line 37), and the `PeriodicTimer` is constructed with the `TimeProvider` overload (line 92) precisely so a test drives the loop instead of waiting out a real interval (comment, lines 90-91).
+- **Concept introduced, a poller slot with symmetric registration and handover.** `[Rubric §19, State Management & Data Flow]` assesses how shared UI state is coordinated. The bell is a component, so a responsive layout can legitimately render it twice at once (desktop app bar and mobile drawer). Without coordination each copy would start its own timer and its own navigation refresh, doubling the unread-count endpoint's load for no user benefit. The design is a *slot* held by an owner object, not a bare counter: `State.TryRegisterPoller(this)` (line 55) takes the slot only when it is free or already this instance's (`NotificationState.cs:111-124`), and `State.UnregisterPoller(this)` releases it only when this instance actually holds it and then raises `OnPollerSlotFreed` (`NotificationState.cs:133-149`).
+  - **Why owner identity matters here.** The class remarks (lines 22-29) name the real scenario: hosts render the bell inside `<AuthorizeView>`, which tears the children down and rebuilds them on every authentication-state change, including a routine access-token refresh. Registration is therefore strictly symmetric (every instance unregisters on dispose, whether or not it was polling, line 267), and the surviving instance claims the freed slot through `OnPollerSlotFreed` (subscribed at line 52), so the circuit never ends up with a badge that nobody refreshes.
+  - `[Rubric §23, Front-End Performance]` assesses avoidable network work. Three mechanisms cut it. The slot removes an entire duplicate polling stream in dual-placement layouts, and it owns **every** refresh trigger, not just the timer: the push-refresh subscription `State.OnRefreshRequested += HandleRefreshRequested` is made inside `BecomeActivePollerAsync` (line 80), next to the navigation hook, because subscribing every bell made each push read the API once per placement (comment, lines 77-79); a takeover runs that method again, so the surviving bell picks the subscription up with the slot. And the navigation trigger is throttled by staleness rather than firing per click: `OnLocationChanged` reads only when `State.IsStale(Options.Value.NavigationRefreshMaxAge)` (line 166), because navigation is an ambient trigger, not evidence that the count moved (doc, lines 154-159). The defaults are 30 seconds for both the poll interval and the navigation max age (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/Settings/NotificationBellOptions.cs:23,30`), and both are configuration, not constants. A zero or negative `PollInterval` switches the periodic backstop off entirely (lines 96-99) while push and navigation refresh keep working; the comment (lines 94-95) records that `PeriodicTimer` rejects such a period and throwing there faulted the circuit.
+  - **The staleness policy has exactly three tiers, and they are deliberate.** The first read and every periodic tick are unconditional; a navigation reads only past the configured window; a real-time push calls `State.MarkStale()` first and then reads regardless (lines 182-186), because the server has just said the data changed, so the age of the number carries no information any more (doc, lines 177-179). That is the one path that must never be throttled.
+  - `[Rubric §14, Testability]` assesses whether time-dependent behavior can be driven deterministically. Both the timer and the age comparison run off the injected `TimeProvider Clock` (line 37), and the `PeriodicTimer` is constructed with the `TimeProvider` overload (line 103) precisely so a test drives the loop instead of waiting out a real interval (comment, lines 101-102).
   - `[Rubric §21, Accessibility]`: the bell button carries an explicit localized `aria-label="@L["Notif.Bell.Aria"]"` in the markup (`NotificationBell.razor:10`), which is what the injected `IStringLocalizer<SharedResource> L` (line 35) is for.
-  - **Fire-and-forget from a synchronous event handler.** `HandlePollerSlotFreed` (lines 98-99), `OnLocationChanged` (lines 153-159), and `HandleRefreshRequested` (lines 171-175) are all `EventHandler`-shaped, so they cannot be `async Task`. Rather than `async void` (which turns an unobserved exception into a process crash, VSTHRD100, per the comments at lines 96-97 and 149-152), they discard the task with `_ =` and rely on the callee observing its own failures.
+  - **Fire-and-forget from a synchronous event handler.** `HandlePollerSlotFreed` (lines 109-110), `OnLocationChanged` (lines 164-170), and `HandleRefreshRequested` (lines 182-186) are all `EventHandler`-shaped, so they cannot be `async Task`. Rather than `async void` (which turns an unobserved exception into a process crash, VSTHRD100, per the comments at lines 107-108 and 160-163), they discard the task with `_ =` and rely on the callee observing its own failures.
 - **Walkthrough**
   - Injected members (lines 32-37): `State`, `InboxService`, `NavigationManager`, `L`, `IOptions<NotificationBellOptions> Options`, and `TimeProvider Clock`. Fields (lines 39-42): a per-component `CancellationTokenSource _cts`, the `PeriodicTimer? _pollTimer`, and the two flags `_isActivePoller` and `_disposed`.
-  - `OnAfterRenderAsync(bool firstRender)` (lines 44-60) returns immediately on subsequent renders (lines 46-49), subscribes to all three state events (lines 51-53), then tries for the slot and, on success, calls `BecomeActivePollerAsync()` (lines 56-59).
-  - `BecomeActivePollerAsync` (lines 68-94) is the double-start-guarded start: it bails on `_disposed || _isActivePoller` (lines 70-73), latches `_isActivePoller`, hooks `LocationChanged` (line 76), does the unconditional first read (line 79), then **re-checks `_disposed` after that await** (lines 85-88). The comment (lines 81-84) explains what that guard prevents: `Dispose` may have run during the read, having already disposed the then-null timer and the token source, so starting the loop now would leak a `PeriodicTimer` nothing disposes and fault the discarded task on a disposed `_cts`. Only then does it create the timer from `Options.Value.PollInterval` and the injected clock (line 92) and launch `PollLoopAsync` with an explicit discard (line 93). The method doc (lines 62-67) notes it always runs on the renderer's synchronization context, which is what makes the simple `_isActivePoller` guard sufficient rather than needing an interlocked operation.
-  - `TryTakeOverPollingAsync` (lines 105-121) is the handover path: it re-checks the guards and claims the slot (line 107), then marshals the actual start onto this component's renderer with `InvokeAsync(BecomeActivePollerAsync)` (line 114), because the event was raised synchronously from the disposing bell's thread (doc, lines 101-104). If that dispatch hits `ObjectDisposedException` it hands the slot straight back (lines 116-120) so another bell can claim it.
-  - `PollLoopAsync` (lines 123-141) awaits `_pollTimer!.WaitForNextTickAsync(_cts.Token)` in a loop (line 127) and refreshes each tick. It catches `OperationCanceledException` (the expected disposal exit) and `ObjectDisposedException` (disposed between timer creation and the first wait, where reading `_cts.Token` throws rather than cancelling, comment lines 137-139).
-  - `RefreshUnreadCountAsync` (lines 177-216) is the one place that touches the network: it bails when `_disposed` (lines 179-182), calls `InboxService.GetUnreadCountAsync(_cts.Token)` (line 186), and **returns without touching the badge when the result is a failure** (lines 187-193). That early return is load-bearing: the comment (lines 189-192) records that zeroing the badge on an unknown count is what used to erase a push increment, and that a failed read is silent by design because the bell has no surface to report it on. On success it re-checks `_disposed` and marshals `State.SetUnreadCount(unread)` plus `StateHasChanged()` back onto the renderer with `InvokeAsync` (lines 195-202). Three catch tiers follow (lines 204-215): cancellation, disposal during the async gap, and a bare `catch` for network or deserialization failures where the badge keeps its last value. That catch-all is what makes the discards above safe.
-  - `HandleStateChanged` (lines 218-219) discards into `RerenderSafeAsync` (lines 221-236), which re-renders through `InvokeAsync(StateHasChanged)` and tolerates a dispose landing between the event firing and the render dispatch.
-  - `NavigateToInbox` (line 238) sends the click to `NotificationRoutePaths.NotificationInbox`.
-  - `Dispose(bool disposing)` (lines 240-261) sets `_disposed` first (line 247), unsubscribes all three state events and `LocationChanged` (lines 248-251), then calls `State.UnregisterPoller(this)` **unconditionally** (line 256). The comment (lines 253-255) states both halves of why that is safe: a bell that claimed the slot but was torn down before it started polling still frees it, and a bell that never held it cannot evict the live poller, because the state object checks owner identity. It then disposes the timer and cancels and disposes the `_cts` (lines 258-260). `Dispose()` (lines 263-267) is the public half with `GC.SuppressFinalize`.
-- **Why it's built this way**: a live unread badge is a genuinely useful affordance, but a naive implementation is a request amplifier (one timer per rendered copy, per circuit) and a fragile one under `<AuthorizeView>` churn. Owner-identity registration plus a freed-slot event keeps the affordance, removes the amplification, and survives the teardown-rebuild cycle that a plain counter would leave stuck. Making both intervals options and both clocks injected turns the polling policy into something a host can tune and a test can drive.
+  - `OnAfterRenderAsync(bool firstRender)` (lines 44-59) returns immediately on subsequent renders (lines 46-49), subscribes every instance to two state events, `OnChange` and `OnPollerSlotFreed` (lines 51-52), then tries for the slot and, on success, calls `BecomeActivePollerAsync()` (lines 55-58).
+  - `BecomeActivePollerAsync` (lines 67-105) is the double-start-guarded start: it bails on `_disposed || _isActivePoller` (lines 69-72), latches `_isActivePoller`, hooks `LocationChanged` (line 75) and `OnRefreshRequested` (line 80), does the unconditional first read (line 83), then **re-checks `_disposed` after that await** (lines 89-92). The comment (lines 85-88) explains what that guard prevents: `Dispose` may have run during the read, having already disposed the then-null timer and the token source, so starting the loop now would leak a `PeriodicTimer` nothing disposes and fault the discarded task on a disposed `_cts`. It then returns without a timer when `PollInterval <= TimeSpan.Zero` (lines 96-99). Only then does it create the timer from `Options.Value.PollInterval` and the injected clock (line 103) and launch `PollLoopAsync` with an explicit discard (line 104). The method doc (lines 61-66) notes it always runs on the renderer's synchronization context, which is what makes the simple `_isActivePoller` guard sufficient rather than needing an interlocked operation.
+  - `TryTakeOverPollingAsync` (lines 116-132) is the handover path: it re-checks the guards and claims the slot (line 118), then marshals the actual start onto this component's renderer with `InvokeAsync(BecomeActivePollerAsync)` (line 125), because the event was raised synchronously from the disposing bell's thread (doc, lines 112-115). If that dispatch hits `ObjectDisposedException` it hands the slot straight back (lines 127-131) so another bell can claim it.
+  - `PollLoopAsync` (lines 134-152) awaits `_pollTimer!.WaitForNextTickAsync(_cts.Token)` in a loop (line 138) and refreshes each tick. It catches `OperationCanceledException` (the expected disposal exit) and `ObjectDisposedException` (disposed between timer creation and the first wait, where reading `_cts.Token` throws rather than cancelling, comment lines 149-150).
+  - `RefreshUnreadCountAsync` (lines 188-227) is the one place that touches the network: it bails when `_disposed` (lines 190-193), calls `InboxService.GetUnreadCountAsync(_cts.Token)` (line 197), and **returns without touching the badge when the result is a failure** (lines 198-204). That early return is load-bearing: the comment (lines 200-202) records that zeroing the badge on an unknown count is what used to erase a push increment, and that a failed read is silent by design because the bell has no surface to report it on. On success it re-checks `_disposed` and marshals `State.SetUnreadCount(unread)` plus `StateHasChanged()` back onto the renderer with `InvokeAsync` (lines 206-213). Three catch tiers follow (lines 215-226): cancellation, disposal during the async gap, and a bare `catch` for network or deserialization failures where the badge keeps its last value. That catch-all is what makes the discards above safe.
+  - `HandleStateChanged` (lines 229-230) discards into `RerenderSafeAsync` (lines 232-247), which re-renders through `InvokeAsync(StateHasChanged)` and tolerates a dispose landing between the event firing and the render dispatch.
+  - `NavigateToInbox` (line 249) sends the click to `NotificationRoutePaths.NotificationInbox`.
+  - `Dispose(bool disposing)` (lines 251-272) sets `_disposed` first (line 258), unsubscribes all three state events and `LocationChanged` (lines 259-262; removing a handler that a non-poller never added is a no-op), then calls `State.UnregisterPoller(this)` **unconditionally** (line 267). The comment (lines 264-266) states both halves of why that is safe: a bell that claimed the slot but was torn down before it started polling still frees it, and a bell that never held it cannot evict the live poller, because the state object checks owner identity. It then disposes the timer and cancels and disposes the `_cts` (lines 269-271). `Dispose()` (lines 274-278) is the public half with `GC.SuppressFinalize`.
+- **Why it's built this way**: a live unread badge is a genuinely useful affordance, but a naive implementation is a request amplifier (one timer and one push read per rendered copy, per circuit) and a fragile one under `<AuthorizeView>` churn. Owner-identity registration plus a freed-slot event keeps the affordance, removes the amplification, and survives the teardown-rebuild cycle that a plain counter would leave stuck. Making both intervals options and both clocks injected turns the polling policy into something a host can tune and a test can drive.
 - **Where it's used**: contributed to the shell as an app-bar component by [NotificationUIModule](#notificationuimodule) (`NotificationUIModule.cs:23`); it reads the same [NotificationState](#notificationstate) that [NotificationInbox](#notificationinbox) writes after a mark-read, so the badge stays consistent with the inbox without either component knowing about the other.
 
 ### NotificationUIModule
@@ -5806,7 +6516,47 @@ lives.
 - **Walkthrough**: inside the extension block (line 14), `AddNotificationUI()` (line 20) registers, in order, [INotificationScopeProvider](#inotificationscopeprovider) to [NullNotificationScopeProvider](#nullnotificationscopeprovider) via `TryAddScoped` (line 24, the default no-op scope consumed by both HTTP services and read for the caption on [NotificationSend](#notificationsend)), [IPushNotificationUIService](#ipushnotificationuiservice) to [PushNotificationService](#pushnotificationservice) (scoped, line 27), [INotificationInboxUIService](#inotificationinboxuiservice) to [NotificationInboxService](#notificationinboxservice) (scoped, line 30), [NotificationState](#notificationstate) as a concrete scoped type (line 33, one unread-count owner per Blazor circuit), [NotificationHubService](#notificationhubservice) (scoped SignalR client, line 36), and finally [NotificationUIModule](#notificationuimodule) as a **singleton** [IUIModule](#iuimodule) (line 39), because the descriptor is immutable shell metadata rather than per-circuit state. It returns `services` for chaining (line 41).
 - **Why it's built this way**: the scoped-versus-singleton split is the load-bearing part. HTTP services, state, and the hub connection are per-circuit (a Blazor circuit is a DI scope, and the unread count belongs to one user's session), while the nav and shell descriptor is process-wide and immutable. Bundling all six behind one extension keeps host startup honest and makes the feature's dependency surface reviewable in one screen.
 - **Where it's used**: called from the `Program.cs` of each consuming host (Blazor Web and MAUI) that opts into the notification UI; it complements the main `MMCA.Common.UI` registration rather than replacing it.
-- **Caveats / not-in-source**: this method does not register [NotificationBellOptions](#notificationbelloptions). The bell injects `IOptions<NotificationBellOptions>` (`NotificationBell.razor.cs:36`) and the options type supplies its own defaults (`NotificationBellOptions.cs:22,29`), so the unconfigured case works, but where a host binds the `NotificationBell` configuration section is not visible from this file.
+- **Caveats / not-in-source**: this method does not register [NotificationBellOptions](#notificationbelloptions). The bell injects `IOptions<NotificationBellOptions>` (`NotificationBell.razor.cs:36`) and the options type supplies its own defaults (`NotificationBellOptions.cs:23,30`), so the unconfigured case works, but where a host binds the `NotificationBell` configuration section is not visible from this file.
+
+### NotificationPageGate
+
+> MMCA.Common.UI · `MMCA.Common.UI.Notifications` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Notifications/NotificationPageGate.cs:12` · Level 8 · class (internal, static)
+
+- **What it is**: the one-method predicate the framework router consults to decide whether a matched notification page should be answered with the not-found page instead, because the host opted in and never registered the notification UI (class doc, lines 7-11).
+- **Depends on**: first-party: [LayoutSettings](#layoutsettings) (the `HideNotificationPagesWhenUnregistered` opt-in, `MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/Settings/LayoutSettings.cs:49`), [IUIModule](#iuimodule) (the registered modules it scans), [NotificationUIModule](#notificationuimodule) (the module whose presence means "registered"), and the three routable pages it guards, [NotificationList](#notificationlist), [NotificationInbox](#notificationinbox) and [NotificationSend](#notificationsend). Externals: BCL `System.Type` and LINQ (`Contains`, `Any`).
+- **Concept introduced, a feature's routes follow its registration.** `[Rubric §25, Navigation, Routing & Information Architecture]` assesses whether what is reachable by URL matches what the host actually composed. The notification pages ship in the `MMCA.Common.UI` assembly itself, so they are routable in every host whether or not it called `AddNotificationUI()`; a host that never registered the feature would serve pages whose services it never registered, which fail at render. The UI module pattern ([ADR-067](https://ivanball.github.io/docs/adr/067-ui-module-shell-composition.html)) already makes the [NotificationUIModule](#notificationuimodule) singleton the evidence of registration, so the gate reads that rather than probing for individual services.
+  - **Opt-in, not a behavior change.** `HideNotificationPagesWhenUnregistered` defaults to `false`, which leaves the routes exactly as they are, and a host that registers the notification UI is unaffected either way (`LayoutSettings.cs:38-49`). Only a host that sets the flag and lacks the module gets the not-found answer.
+- **Walkthrough**
+  - `NotificationPages` (line 15) is a private static `Type[]` of `typeof(NotificationList)`, `typeof(NotificationInbox)` and `typeof(NotificationSend)`, the routable pages that need the services `AddNotificationUI()` registers.
+  - `Hides(Type pageType, LayoutSettings settings, IEnumerable<IUIModule> modules)` (lines 22-25) is a single short-circuiting conjunction: the flag is on (line 23), the matched page is one of the three (line 24), and no registered module `is NotificationUIModule` (line 25). The cheap flag check comes first, so a host that never opts in pays nothing beyond a boolean read per route match.
+- **Why it's built this way**: keeping the decision in a small `internal static` predicate, with the page type, settings and module list passed in, keeps `Routes.razor` to a one-line branch and lets a unit test cover every combination without rendering a router. Answering with the framework's own not-found page inside the main layout gives the user the same experience as any unknown URL instead of a render failure.
+- **Where it's used**: called once per route match from the `<Found>` branch of the framework router, `NotificationPageGate.Hides(routeData.PageType, LayoutOptions.Value, UIModules)` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Routes.razor:16`), which renders `Pages.NotFound` inside `MainLayout` when it returns `true`; pinned by `NotificationPageGateTests` (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Notifications/NotificationPageGateTests.cs`, 4 references).
+- **Caveats / not-in-source**: the `LayoutSettings` doc lists four routes (`/notifications`, `/notifications/inbox`, `/notifications/inbox/{Id}`, `/notifications/send`) while the gate matches three page types, so the inbox detail route is presumably served by one of those three pages; which page carries it is not visible from these files.
+
+### ServerTokenStorageService
+
+> MMCA.Common.UI.Web · `MMCA.Common.UI.Web.Services` · `MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Services/ServerTokenStorageService.cs:18` · Level 13 · class (sealed)
+
+- **What it is**: the Blazor **Server** implementation of [ITokenStorageService](#itokenstorageservice): a cookie-only token store with no `localStorage`. During SSR prerender it reads the access token from the HttpOnly session cookie; on the live interactive circuit it holds the access token in memory only and re-acquires it from those cookies through a same-origin refresh endpoint. The refresh token is never readable from JavaScript.
+- **Depends on**: first-party: [ITokenStorageService](#itokenstorageservice) (the contract, line 22), [CookieTokenReader](group-08-auth.md#cookietokenreader) (reads the access and refresh cookies off the request), [ISessionCookieSync](#isessioncookiesync) (seeds and clears the HttpOnly cookies, and reports whether the write succeeded), [ITokenRefresher](#itokenrefresher) (acquires a fresh access token from `/auth/session/token`), and [JwtTokenInfo](#jwttokeninfo) (client-side freshness check). Its WASM sibling is [WasmTokenStorageService](#wasmtokenstorageservice) (named in the class doc, line 15). Externals: `Microsoft.AspNetCore.Http` (`IHttpContextAccessor`, `HttpContext`), BCL `Lock`, `Task`, `TimeSpan`, `InvalidOperationException`.
+- **Concept introduced, the two-world token store (SSR request versus interactive circuit).** A Blazor Web page runs twice: first as a server-side prerender inside a live HTTP request, where an `HttpContext` exists and JS interop does not, and then as a stateful circuit with no `HttpContext`. One store has to serve both worlds, and this class branches on `httpContextAccessor.HttpContext is not null` (line 35) to decide which source of truth applies.
+  - **SSR prerender** (lines 35-38): the request's HttpOnly cookie wins, read via `cookieTokenReader.ReadAccessToken()` (line 37), because the middleware may have just refreshed it in place on this navigation (comment, lines 33-34).
+  - **Interactive circuit** (lines 40-72): the token lives in the `_accessToken` field (line 28). If `JwtTokenInfo.IsFresh(_accessToken, ExpirySkew)` (line 41) says it survives the 30-second skew (line 24), it is returned as is; otherwise it is re-acquired.
+  - `[Rubric §26, Front-End Security]` assesses how credentials are held in the browser. This is a deliberate XSS-hardening design: the long-lived refresh token stays in an HttpOnly cookie unreachable from script, the access token exists only in circuit memory and is never persisted, and the refresh token transits JS exactly once, for the same-origin POST that seeds the cookies at login (`SetTokensAsync`, lines 82-93).
+  - `[Rubric §11, Security]` assesses the wider auth model; this store is one edge of the browser session-cookie design ([ADR-022](https://ivanball.github.io/docs/adr/022-browser-session-cookie-auth.html)) and of the client token lifecycle ([ADR-051](https://ivanball.github.io/docs/adr/051-client-auth-token-lifecycle.html)), the piece that decides *where* a bearer token is read on each side of the prerender boundary.
+  - **Login fails loudly, logout stays best-effort.** The two cookie writes are deliberately asymmetric. `SetTokensAsync` throws `InvalidOperationException("The session cookie could not be written.")` when `SyncAsync` returns `false` (lines 89-92), after the in-memory token is already set, so [AuthUIService](#authuiservice) reports `Auth.TokenStorageUnavailable` instead of a login that looks successful and then silently signs out at the first access-token expiry, when no cookie exists to refresh from (comment, lines 85-88). `ClearTokensAsync` discards the boolean (`_ = await sessionCookieSync.ClearAsync()`, line 101), because logout is best-effort by contract (`IAuthUIService.LogoutAsync` never fails); a caller that needs proof the session ended uses `IAuthUIService.RevokeAllSessionsAsync` (comment, lines 98-100).
+  - `[Rubric §12, Performance & Scalability]` shows up in the single-flight hydrate: a Blazor circuit is genuinely multi-threaded, and several consumers (the delegating handler, the auth-state provider, the SignalR connection) can all miss the cache at once.
+- **Walkthrough**
+  - The primary constructor (lines 18-22) takes `IHttpContextAccessor`, [CookieTokenReader](group-08-auth.md#cookietokenreader), [ISessionCookieSync](#isessioncookiesync), and [ITokenRefresher](#itokenrefresher). The type is `sealed` and carries no app-specific state, which is why it could be hoisted out of both app hosts (class doc, lines 14-16).
+  - Fields: `ExpirySkew` (line 24, a `static readonly TimeSpan` of 30 seconds), the `Lock _hydrateSync` (line 26, the .NET 9+ dedicated lock object), the in-memory `_accessToken` (line 28), and `_hydrateInFlight` (line 29), the shared acquisition task.
+  - `GetAccessTokenAsync` (lines 31-73): the SSR/circuit branch, then the **single-flight** guard. `_hydrateInFlight ??= HydrateAsync()` executes *inside* `lock (_hydrateSync)` (lines 51-55) and the resulting task is copied to a local before the lock is released. The comment on lines 46-49 records exactly why the naive unguarded `??=` was not enough: two callers could each start a hydrate and the later completion would overwrite the other's token; `HydrateAsync` reaches its first await immediately, so nothing slow runs under the lock. The `finally` (lines 61-72) clears `_hydrateInFlight` **only when it is still reference-equal to the task this caller awaited** (line 67), so a newer hydrate started after this one completed is not dropped, which would split the next set of callers again.
+  - `GetRefreshTokenAsync` (lines 75-80): returns `cookieTokenReader.ReadRefreshToken()` during SSR and `null` on the circuit, because the HttpOnly refresh cookie is unreadable there; it wraps the value in `Task.FromResult` rather than being `async` (no await needed).
+  - `SetTokensAsync` (lines 82-93): caches the access token in memory (line 84), then awaits `sessionCookieSync.SyncAsync(accessToken, refreshToken)` and throws when it reports failure (lines 89-92).
+  - `ClearTokensAsync` (lines 95-102): nulls the in-memory token (line 97) and awaits `sessionCookieSync.ClearAsync()` with its result explicitly discarded (line 101).
+  - `HydrateAsync` (lines 104-108): the private acquisition, `_accessToken = await tokenRefresher.AcquireAccessTokenAsync().ConfigureAwait(false)` (line 106), caching and returning the new token. Both awaits on the hydrate path use `ConfigureAwait(false)` (lines 59, 106), the library posture the cookie-write awaits do not take.
+- **Why it's built this way**: Blazor Server's split lifecycle breaks the naive "read a token from storage" store, which would either fail during prerender (no JS) or leak the refresh token to script if it used `localStorage`. Branching on `HttpContext` presence and keeping the refresh token cookie-only resolves both. The locked single-flight is the correction of a real concurrency defect in the simpler `??=` version, and it is worth reading as a small case study in why "good enough" atomicity on a circuit is not good enough. Surfacing a failed cookie write at login, while tolerating one at logout, puts the failure where the user can still act on it. See [ADR-022](https://ivanball.github.io/docs/adr/022-browser-session-cookie-auth.html).
+- **Where it's used**: registered as the scoped [ITokenStorageService](#itokenstorageservice) by `AddCommonServerTokenStorage()` in the `MMCA.Common.UI.Web` [DependencyInjection](#dependencyinjection-1) (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:32-35`); consumer hosts call that instead of shipping their own copy. Pinned by `ServerTokenStorageServiceTests` (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Web.Tests/Services/ServerTokenStorageServiceTests.cs`).
+- **Caveats / not-in-source**: the cookie names, lifetimes, and the `/auth/session/token` endpoint itself are not in this file; they live in the `MMCA.Common.API` session-cookie plumbing referenced by the doc comment (lines 9-17).
 
 ### DependencyInjection
 

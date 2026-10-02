@@ -36,7 +36,7 @@ are consumed by every downstream application, a regression here propagates to bo
 (`ci.yml:174`), a `ui-e2e` cross-browser matrix for real-browser accessibility and render-smoke testing
 (`ci.yml:245`), a `performance-smoke` benchmark gate (`ci.yml:352`), a `coverage` job that merges the
 coverage tiers and enforces a floor (`ci.yml:399`), three canaries that catch failure modes the
-solution build cannot see: `consumer-source-build` (`ci.yml:469`), `package-consumption`
+solution build cannot see: `consumer-source-build` (`ci.yml:475`), `package-consumption`
 (`ci.yml:669`) and `sample-deployment-validate` (`ci.yml:795`), and three engine-or-orchestrator tiers
 for the components whose behavior only a real server can falsify: `redis-integration` (`ci.yml:813`),
 `postgresql-integration` (`ci.yml:854`) and the advisory `apphost-testing` (`ci.yml:889`).
@@ -116,6 +116,10 @@ One step deliberately escapes the guard, covered next.
 **Runs on:** `ubuntu-latest` (`ci.yml:89`). The Ubuntu runner matters: the Linux file system is
 case-sensitive, so path-casing bugs that Windows masks are caught in CI. This is a deliberate choice
 documented in `MMCA.Common/CLAUDE.md` ("CI runs on Ubuntu, file paths are case-sensitive").
+The job is bounded at `timeout-minutes: 15` (`ci.yml:92`), about twice the slowest of four recent code PR
+runs per the comment (`ci.yml:90-91`), so a hung restore or test host fails the job instead of holding a
+runner for GitHub's 6-hour default. The `coverage` job gets the same treatment at 5 minutes
+(`ci.yml:405-408`).
 
 **Step 1, Checkout with full history** (`ci.yml:91-94`):
 
@@ -452,7 +456,7 @@ backstop on top of the `--minimum-expected-tests` guard.
 The remaining jobs all exist for the same reason: **a green solution build does not prove the framework
 works for anyone who is not the framework.**
 
-**`consumer-source-build`** (`ci.yml:469-657`) is a cross-repo pre-merge canary, and it now proves two
+**`consumer-source-build`** (`ci.yml:475-691`) is a cross-repo pre-merge canary, and it now proves two
 different things. It checks out MMCA.Helpdesk as a sibling directory (`ci.yml:486-525`) and builds and
 tests it against *this PR's* framework source, so a breaking public-API change fails here rather than
 surfacing after a release and a lockstep sweep. Helpdesk is the ideal canary precisely because it is
@@ -471,9 +475,16 @@ against MMCA.Common `main`, so neither repo can adapt first while the canary pin
 mutual deadlock, resolved by letting one PR name its counterpart branch (`ci.yml:493-497`).
 
 Second, the job runs the consumer's **real EF migrations against a real SQL Server**. An ephemeral
-`mcr.microsoft.com/mssql/server:2022-latest` container starts *before* the build so it warms up while the
-solution compiles (`ci.yml:547-555`), `go-sqlcmd` is installed as a single static binary rather than the
-mssql-tools deb (`ci.yml:573-577`), a 30 x 5s poll waits on a real `SELECT 1` rather than on Docker's
+SQL Server container starts *before* the build so it warms up while the solution compiles
+(`ci.yml:557-566`). Its image is the job-level `SQLSERVER_IMAGE`, pinned to one cumulative update,
+`mcr.microsoft.com/mssql/server:2022-CU27-ubuntu-22.04`, rather than `2022-latest` (`ci.yml:490-495`):
+this is a required gate, so a new CU must not change what it runs without a reviewed diff, and the
+comment ties the tag to the `sqlserver-integration` tier, which pins the same one ("bump both").
+`go-sqlcmd` is installed as a single static binary rather than the mssql-tools deb, and is itself pinned
+(`ci.yml:582-601`): a fixed `SQLCMD_VERSION` (`v1.10.0`) is downloaded to `$RUNNER_TEMP` and checked
+against `SQLCMD_SHA256` with `sha256sum -c` before `sudo tar` extracts it, because piping
+`releases/latest` straight into a root `tar` ran whatever the newest upload was, unchecked. Version and
+digest are bumped together. A 30 x 5s poll waits on a real `SELECT 1` rather than on Docker's
 notion of "running" (`ci.yml:581-594`), and `dotnet ef database update` applies the Tickets migrations
 with the same `dotnet-ef 10.0.8` the consumers deploy with (`ci.yml:598-623`). The reason is stated in
 the comment (`ci.yml:602-610`): `migrations add` and the model-drift gate never open a connection, so
@@ -486,8 +497,8 @@ step therefore reads `__EFMigrationsHistory` for at least one row and checks tha
 (`Tickets.Ticket`) and a **framework** table (`dbo.OutboxMessages`) exist. The framework table is the
 half that belongs to MMCA.Common, so a change that stops the framework's own tables reaching a consumer's
 schema fails right here rather than at a consumer's deploy. The job's timeout was raised to 30 minutes to
-pay for the container, the poll and the apply (`ci.yml:473-475`), and the throwaway SA password is inline
-rather than a secret so the gate still runs from a fork (`ci.yml:476-480`).
+pay for the container, the poll and the apply (`ci.yml:479-481`), and the throwaway SA password is inline
+rather than a secret so the gate still runs from a fork (`ci.yml:483-486`).
 
 [Rubric §8, Data Architecture] is served in a way no build-only canary can reach: the framework's
 migration path is exercised end to end, on a real engine, by a real consumer.
@@ -536,45 +547,65 @@ production-proven versions.
 
 ### Job: `redis-integration`
 
-The last job (`ci.yml:813-852`) runs `MMCA.Common.Infrastructure.Redis.Tests` against a real Redis via
+`redis-integration` (`ci.yml:837-879`) runs `MMCA.Common.Infrastructure.Redis.Tests` against a real Redis via
 Testcontainers, which Ubuntu runners support with no extra setup since they ship a Docker daemon. Like the
 E2E and benchmark projects it lives outside `MMCA.Common.slnx` so the fast solution-wide unit loop never
 requires Docker, and is therefore built and run by path.
 
-The comment (`ci.yml:818-822`) states the falsifiability argument better than a summary can:
-`DistributedCacheService` is the one place where the **storage format** matters, and a
+The comment (`ci.yml:842-846`) states the falsifiability argument better than a summary can:
+[`DistributedCacheService`](group-09-caching.md#distributedcacheservice) is the one place where the **storage format** matters, and a
 `Mock<IDistributedCache>` cannot express it. Redis keys are typed, so a counter written as a string and
 read back as a hash round-trips perfectly against a mock and answers `WRONGTYPE` against a server. A test
 that cannot fail against a mock is not a test of the thing you care about.
 
-Its heavy step is code-guarded like every other job (`ci.yml:845-852`) so a docs-only PR does not pull a
+Its heavy step is code-guarded like every other job (`ci.yml:869-879`) so a docs-only PR does not pull a
 Redis image, while the job itself still runs and posts its context green, keeping it safe to add to branch
-protection.
+protection. The test step carries `--minimum-expected-tests 15` (`ci.yml:874-879`), and the comment says
+why the number is exactly 15: it is the `[Fact]` count in the project (5 `DistributedCacheService` plus 10
+`HybridCacheService`), so a tier that silently discovers fewer tests fails, and adding a test means raising
+the floor in the same PR. The same exact-count floor applies to the two database tiers below.
 
-### Jobs: `postgresql-integration` and `apphost-testing`
+### Jobs: `postgresql-integration`, `sqlserver-integration` and `apphost-testing`
 
-`postgresql-integration` (`ci.yml:854-887`) is the Redis argument applied to the second database engine.
+`postgresql-integration` (`ci.yml:881-916`) is the Redis argument applied to the second database engine.
 The PostgreSQL provider is the one place where the SQL the framework *emits* matters, and a model
-assertion cannot express it: the comment is specific about the failure class (`ci.yml:859-864`), a
+assertion cannot express it: the comment is specific about the failure class (`ci.yml:886-891`), a
 partial-index predicate written the SQL Server way (`[ProcessedOn] IS NULL`), a soft-delete predicate
 comparing a boolean to `0`, and a `DateTime` whose `Kind` is not UTC all build a perfectly valid EF model
 and are rejected by the server. The job runs `MMCA.Common.Infrastructure.PostgreSQL.Tests` against a real
-PostgreSQL over Testcontainers (`ci.yml:880-887`), built and run by path for the same reason the Redis
-tier is: the project sits outside `MMCA.Common.slnx` so the fast unit loop never requires Docker.
+PostgreSQL over Testcontainers (`ci.yml:907-916`), built and run by path for the same reason the Redis
+tier is: the project sits outside `MMCA.Common.slnx` so the fast unit loop never requires Docker. Its floor
+is `--minimum-expected-tests 7`, the `[Fact]` count in `PostgreSQLPersistenceTests.cs` (`ci.yml:913-916`).
 
-`apphost-testing` (`ci.yml:889-946`) is the only tier that starts a real orchestrator. It boots the sample
+`sqlserver-integration` (`ci.yml:918-956`) completes the set for the default engine. The comment
+(`ci.yml:925-932`) names what neither a mock nor SQLite can express on SQL Server, which is **session
+state and server-generated values**: `SET IDENTITY_INSERT` holds only on the session that ran it, a
+`rowversion` is issued by the server on every write, and the outbox row must reach the database in the
+same `SaveChanges` as its aggregate. The job runs the shipped
+[`SQLServerDbContext`](group-07-persistence-ef-core.md#sqlserverdbcontext) and
+[`DbContextFactory`](group-07-persistence-ef-core.md#dbcontextfactory) against a real SQL Server over
+Testcontainers. Its timeout is 20 minutes, the PostgreSQL tier's 15 plus headroom for the larger image pull
+and slower engine start (`ci.yml:921-924`), and the image tag is the same pinned `2022-CU27-ubuntu-22.04`
+the `consumer-source-build` canary uses, which is why the canary's comment says to bump both
+(`ci.yml:490-495`). The heavy step is code-guarded with the job still posting green (`ci.yml:948-951`),
+the project is outside `MMCA.Common.slnx` and run by path, and the floor is
+`--minimum-expected-tests 3`, the `[Fact]` count in `SQLServerPersistenceTests.cs` (`ci.yml:952-956`).
+It is **not a required check yet**: the comment records that promoting it is a branch-protection setting,
+not a workflow change (`ci.yml:931-932`).
+
+`apphost-testing` (`ci.yml:958-1015`) is the only tier that starts a real orchestrator. It boots the sample
 AppHost through `Aspire.Hosting.Testing` and closes the one layer nothing else executes, the AppHost
-wiring itself (`ci.yml:899-902`): the solution build never runs an AppHost, and every in-process test tier
+wiring itself (`ci.yml:968-971`): the solution build never runs an AppHost, and every in-process test tier
 boots hosts directly through `WebApplicationFactory`, bypassing the orchestration, so a renamed resource,
 an unresolvable reference or a `WaitFor` cycle is invisible everywhere else. Three properties are worth
-carrying away. It is **advisory**, `continue-on-error: true` (`ci.yml:907`), because it is the slowest
+carrying away. It is **advisory**, `continue-on-error: true` (`ci.yml:976`), because it is the slowest
 thing in the repository per assertion and its failure modes on a shared runner are not proven yet; the
-comment states the exit condition rather than leaving it open (`ci.yml:894-897`), promote it once it has a
+comment states the exit condition rather than leaving it open (`ci.yml:963-966`), promote it once it has a
 green streak, delete it if it proves to be a flake generator. It trusts the ASP.NET Core development
-certificate as an explicit job step (`ci.yml:923-932`), because a resource launched with the `https`
+certificate as an explicit job step (`ci.yml:992-1000`), because a resource launched with the `https`
 profile answers its health probe over TLS terminated by that certificate: untrusted on a fresh runner,
 every probe fails with `UntrustedRoot`, the resource never turns healthy, and every `WaitFor` edge into it
-waits out the budget. And the test step opts in through `MMCA_APPHOST_TESTS` (`ci.yml:933-946`), the
+waits out the budget. And the test step opts in through `MMCA_APPHOST_TESTS` (`ci.yml:1001-1015`), the
 environment gate the fixture reads, so a developer machine and every other CI job skip the collection with
 a named reason instead of paying for an orchestrator.
 
@@ -662,11 +693,15 @@ token only has write access to Packages, not to repo contents, issues, or deploy
 registry is reached with no stored API key at all.
 
 **The `release` environment and the merged-main assertion.** Publishing to nuget.org is irreversible, a
-version can never be withdrawn (ADR-053), so the job declares `environment: release` (`release.yml:11-15`)
+version can never be withdrawn (ADR-053), so the job declares `environment: release` (`release.yml:15-18`)
 and waits on that environment's protection rules (a required reviewer, and a deployment policy limited to
 `v*` tags) before it runs at all. The first step after checkout then refuses to publish a tag that is not
 reachable from `origin/main` (`release.yml:35-46`): it fetches the branch tip and fails unless
-`git merge-base --is-ancestor` places the tagged commit on merged `main`. A `v*` tag is the one ref pushed
+`git merge-base --is-ancestor` places the tagged commit on merged `main`. The job is bounded at
+`timeout-minutes: 15` (`release.yml:12-14`), about twice the slowest recent tag run, so a hung restore,
+test or push fails instead of holding a runner for six hours. `publish-maui` deliberately keeps 40
+minutes (`release.yml:146-149`): it publishes after the main package set is already on nuget.org, so a
+timeout there would leave a half-published release. A `v*` tag is the one ref pushed
 directly, outside the branch-protection pull-request flow, and this workflow re-runs only restore, build,
 test and SBOM, so the ancestry check is what makes the checks that ran on the merged pull request (the
 FACTS drift gate, the vulnerability audit, the Helpdesk consumer canary, the package-consumption canary,
@@ -693,7 +728,7 @@ echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
 `v`, yielding `1.52.0`. This string is then passed to the build and pack steps as an explicit version
 override.
 
-**Step 5, Build with explicit version** (`release.yml:69-70`):
+**Step 5, Build with explicit version** (`release.yml:72-73`):
 ```bash
 dotnet build MMCA.Common.slnx -c Release --no-restore -p:MinVerSkip=true -p:Version=${{ steps.version.outputs.VERSION }}
 ```
@@ -702,15 +737,22 @@ tag-derived version directly. This pattern avoids a subtle race: if MinVer ran h
 version from the tag, which should be the same value, but in edge cases (e.g. detached HEAD, retagged
 commit) the two sources could diverge. Making the version explicit from the start removes the ambiguity.
 
-**Step 6, Test** (`release.yml:72-73`):
-```bash
-dotnet test --solution MMCA.Common.slnx -c Release --no-build
-```
-Tests run again (no `--minimum-expected-tests` floor here, the release workflow is not the primary test
-gate; CI already covered this). This is a belt-and-suspenders pass to ensure the tagged commit is green
-before packaging.
+**Step 5b, Audit dependencies** (`release.yml:75-83`): the same
+`./.github/actions/nuget-vulnerability-audit` composite action that `ci.yml` `build-and-test` runs, with
+the same accept-list (`NuGetAuditSuppress` in `Directory.Build.props`) and the same fail-closed
+behavior, re-run on the tag build. The comment (`release.yml:75-78`) gives the reason: the graph that
+gets packed is restored from the lock files here, and an advisory published between the PR run and the
+tag must stop a nuget.org push that can never be withdrawn.
 
-**Step 7, Pack** (`release.yml:75-76`):
+**Step 6, Test** (`release.yml:85-87`):
+```bash
+dotnet test --solution MMCA.Common.slnx -c Release --no-build --minimum-expected-tests 2000
+```
+Tests run again on the tagged commit, with the same 2000-test floor as `ci.yml` `build-and-test`. The
+comment (`release.yml:86-87`) states why the floor is repeated here: a discovery or filter regression that
+silently drops thousands of tests must fail the release, not publish behind a near-empty green run.
+
+**Step 7, Pack** (`release.yml:89-90`):
 ```bash
 dotnet pack MMCA.Common.slnx -c Release --no-build -o ./nupkgs -p:MinVerSkip=true -p:PackageVersion=${{ steps.version.outputs.VERSION }}
 ```
@@ -2473,11 +2515,18 @@ The two copies have diverged, and each difference is a lesson:
 - **Action pinning.** Both repositories pin the third-party action to a **commit SHA**
   (`MMCA.ADC/.github/workflows/claude-code-review.yml:41-43`,
   `MMCA.ADC/.github/workflows/claude.yml:35-37`,
-  `MMCA.Common/.github/workflows/claude-code-review.yml:41`,
-  `MMCA.Common/.github/workflows/claude.yml:35`), with the comment stating the supply-chain argument: a
+  `MMCA.Common/.github/workflows/claude-code-review.yml:45`,
+  `MMCA.Common/.github/workflows/claude.yml:39`), with the comment stating the supply-chain argument: a
   mutable tag can be repointed at malicious code, a SHA cannot, and Dependabot's `github-actions`
-  ecosystem bumps it. The two sit on different revisions of the same action, the expected steady state
-  when each repository's Dependabot bumps it independently.
+  ecosystem bumps it. Common's pin is annotated `v1.0.235`, ADC's only `v1`: the two sit on different
+  revisions of the same action, the expected steady state when each repository's Dependabot bumps it
+  independently.
+- **Checkout credentials.** Common's checkout step sets `persist-credentials: false`
+  (`MMCA.Common/.github/workflows/claude-code-review.yml:36-40`,
+  `MMCA.Common/.github/workflows/claude.yml:30-34`), and the comment says why nothing is lost: the
+  action removes the checkout token anyway and authenticates git with its own app token, and the workflow
+  token is read-only in any case. That brings the Claude pair in line with every other Common job, none of
+  which leaves a token on disk.
 
 
 [Rubric §34, Architecture Governance & Documentation] is served: with a single maintainer and no second

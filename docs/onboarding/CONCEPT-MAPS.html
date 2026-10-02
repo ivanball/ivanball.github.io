@@ -575,7 +575,12 @@
           <code>CosmosDbContext</code>) over the abstract <code>ApplicationDbContext</code>, <strong>one instance per database</strong>. Each
           entity is engine-agnostic; a single <code>[UseDataSource(engine)]</code> attribute on its config class picks
           SQL Server, PostgreSQL (<a href="https://ivanball.github.io/docs/adr/113-postgresql-as-a-first-class-engine.html" target="_blank" rel="noopener">ADR-113</a>), Cosmos, or SQLite. Cross-source relationships auto-degrade; the outbox
-          is the cross-source consistency mechanism. Each service self-applies its EF migrations at boot
+          is the cross-source consistency mechanism. Engine facts (relational or not, migrations, row-version
+          strategy, explicit-key inserts) come from one internal <code>IDataSourceEngine</code> per engine, looked up
+          through the static <code>DataSourceEngines.For(DataSource)</code> registry, so call sites read capabilities
+          instead of branching on the engine
+          (<a href="https://ivanball.github.io/docs/adr/130-per-engine-data-source-strategy.html" target="_blank" rel="noopener">ADR-130</a>). Each
+          service self-applies its EF migrations at boot
           (<a href="https://ivanball.github.io/docs/adr/030-startup-sole-migrator.html" target="_blank" rel="noopener">ADR-030</a>).</p>
           <pre class="mermaid">flowchart TD
     ENTITY[&quot;Domain entity (plain class, no persistence choice)&quot;]
@@ -585,9 +590,12 @@
 
     subgraph SHIMS[&quot;Engine shim base classes (one token = one engine)&quot;]
         SQL[&quot;…SQLServer&amp;lt;T,Id&amp;gt;&lt;br/&gt;(all prod configs today)&quot;]
+        PG[&quot;...PostgreSQL&amp;lt;T,Id&amp;gt;&lt;br/&gt;(first-class engine, ADR-113, staged)&quot;]
         COS[&quot;…Cosmos&amp;lt;T,Id&amp;gt;&lt;br/&gt;(shipped + tested, staged)&quot;]
         LITE[&quot;…Sqlite&amp;lt;T,Id&amp;gt;&lt;br/&gt;(fast integration tests, staged)&quot;]
     end
+
+    ENG[&quot;DataSourceEngines.For: one internal IDataSourceEngine&lt;br/&gt;per engine, capabilities not branches (ADR-130)&quot;]
 
     subgraph DBS[&quot;Database-per-service (ADR-006)&quot;]
         CTX1[&quot;SQLServerDbContext instance: Conference DB + outbox&quot;]
@@ -600,13 +608,15 @@
     MIG[&quot;Startup sole-migrator: DatabaseInitStrategy=Migrate (ADR-030)&quot;]
 
     ENTITY --&gt; CFG --&gt; ATTR --&gt; REG
-    REG --&gt; SQL &amp; COS &amp; LITE
+    REG --&gt; SQL &amp; PG &amp; COS &amp; LITE
     SQL --&gt; DBS
     DBS --&gt;|&quot;FK dropped across sources → batch loaders&quot;| XSPEC
     MIG -.-&gt; DBS
+    ENG -.-&gt;|&quot;engine facts&quot;| REG
+    ENG -.-&gt; MIG
 
     classDef p fill:#fef7e0,stroke:#f9ab00,color:#111
-    class ENTITY,CFG,ATTR,REG,XSPEC,MIG p</pre>
+    class ENTITY,CFG,ATTR,REG,XSPEC,MIG,ENG p</pre>
           <hr>
           <h2 id="9-authentication--authorization-stack">9. Authentication &amp; Authorization stack</h2>
           <p>The auth concern (G08) spans token validation, session cookies, federated sign-in, password hashing,
@@ -616,11 +626,11 @@
     subgraph AUTHN[&quot;Authentication&quot;]
         JWT[&quot;JWT bearer validation&quot;]
         JWKS[&quot;JWKS discovery + fallback fetch (ADR-004)&quot;]
-        COOKIE[&quot;HttpOnly session cookie + non-validating SSR scheme (ADR-022)&quot;]
+        COOKIE[&quot;HttpOnly session cookie + non-validating SSR scheme (ADR-022);&lt;br/&gt;ISessionCookieStore writes them server-side for the proxy (ADR-131)&quot;]
         HASH[&quot;PBKDF2-HMAC-SHA512, 32-byte salt, 600k iters:&lt;br/&gt;one algorithm, no legacy branch (ADR-102)&quot;]
         LOGIN[&quot;ILoginProtectionService: lockout + per-IP cap (ADR-029)&quot;]
         EXT[&quot;External OAuth: Google / GitHub behind a short-lived&lt;br/&gt;ExternalLogin cookie + single-use code (ADR-036/043)&quot;]
-        ROT[&quot;AuthenticationServiceBase: 15-min access token +&lt;br/&gt;one refresh session per device, SHA-256 at rest,&lt;br/&gt;rotated with reuse detection (ADR-097);&lt;br/&gt;ITokenRefresher per head (ADR-051)&quot;]
+        ROT[&quot;AuthenticationServiceBase decides who is signed in;&lt;br/&gt;IAuthSessionIssuer: 15-min access token +&lt;br/&gt;one refresh session per device, SHA-256 at rest,&lt;br/&gt;rotated with reuse detection (ADR-097);&lt;br/&gt;ITokenRefresher per head (ADR-051)&quot;]
         RESET[&quot;Forgot/reset password: cache-backed single-use&lt;br/&gt;hashed token + email leg (ADR-091)&quot;]
     end
 
@@ -694,7 +704,11 @@
           G26). Culture cookie + <code>IStringLocalizer</code> drive i18n (<a href="https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html" target="_blank" rel="noopener">ADR-027</a>); <code>ThemeService</code>
           drives day/dark (<a href="https://ivanball.github.io/docs/adr/028-dark-theme-mode.html" target="_blank" rel="noopener">ADR-028</a>). Each
           module&#39;s UI plugs into one shared shell by contributing navigation and routes through <code>IUIModule</code>
-          (<a href="https://ivanball.github.io/docs/adr/067-ui-module-shell-composition.html" target="_blank" rel="noopener">ADR-067</a>).</p>
+          (<a href="https://ivanball.github.io/docs/adr/067-ui-module-shell-composition.html" target="_blank" rel="noopener">ADR-067</a>). A Blazor
+          Web host can opt in to the same-origin API proxy in <code>MMCA.Common.UI.Web</code>, which serves <code>/api/**</code> on
+          the UI host&#39;s own origin and forwards to the gateway through YARP with the bearer read from the
+          HttpOnly session cookie
+          (<a href="https://ivanball.github.io/docs/adr/131-same-origin-api-proxy.html" target="_blank" rel="noopener">ADR-131</a>).</p>
           <pre class="mermaid">flowchart TD
     PAGE[&quot;Razor component authored once&lt;br/&gt;(per-module .UI library, e.g. EventList.razor)&quot;]
     COMMONUI[&quot;MMCA.Common.UI: MudBlazor building blocks,&lt;br/&gt;DataGridListPageBase + EntityServiceBase client&lt;br/&gt;data access, common pages/services (G15, ADR-094)&quot;]
@@ -718,6 +732,7 @@
     CSP[&quot;Security headers + pluggable CSP (ADR-023)&quot;]
     RM[&quot;Render mode: InteractiveAuto on the root router,&lt;br/&gt;prerender on (ADR-056)&quot;]
     CAP[&quot;Device capability contracts in MMCA.Common.UI:&lt;br/&gt;browser-JS, inert fallback and MAUI-native adapters&lt;br/&gt;chosen per host at DI time (ADR-042, G26)&quot;]
+    BFF[&quot;Opt-in same-origin API proxy, MMCA.Common.UI.Web:&lt;br/&gt;/api/** forwarded to the gateway via YARP,&lt;br/&gt;bearer from the HttpOnly cookie (ADR-131, G15)&quot;]
 
     PAGE --&gt; COMMONUI
     COMMONUI --&gt; WEB
@@ -732,9 +747,10 @@
     COMMONUI --&gt; CAP
     CAP -.-&gt;|&quot;browser + fallback adapters&quot;| WEB
     CAP -.-&gt;|&quot;MMCA.Common.UI.Maui adapters&quot;| MAUI
+    BFF -.-&gt;|&quot;browser API calls&quot;| WEB
 
     classDef u fill:#f3e8fd,stroke:#a142f4,color:#111
-    class PAGE,COMMONUI,SHELL,WEB,MAUI,CAP u</pre>
+    class PAGE,COMMONUI,SHELL,WEB,MAUI,CAP,BFF u</pre>
           <hr>
           <h2 id="12-adc-business-modules-bounded-contexts-end-to-end">12. ADC business modules, bounded contexts end-to-end</h2>
           <p>Each ADC module is a vertical slice through all layers. Conference is large enough to split across

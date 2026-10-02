@@ -25,7 +25,7 @@ an in-process object or a wire hop.
 **The cast of types in this group is small, and all but one lives in `MMCA.Common.Grpc`**: a
 *transport-only* package that, per Clean Architecture, depends on **`Shared` only** (it must never
 couple to Domain, Application, or Infrastructure; see [primer §1](00-primer.md#1-the-big-picture)).
-There are six: [`DependencyInjection`](#dependencyinjection) (the registration surface,
+There are seven: [`DependencyInjection`](#dependencyinjection) (the registration surface,
 `AddGrpcServiceDefaults()` server-side and `AddTypedGrpcClient<TClient>(serviceName)` client-side, at
 `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:25`),
 [`GrpcResultExceptionInterceptor`](#grpcresultexceptioninterceptor) (server-side: turns a failed
@@ -34,7 +34,9 @@ There are six: [`DependencyInjection`](#dependencyinjection) (the registration s
 caller's bearer token downstream), [`ResultGrpcExtensions`](#resultgrpcextensions) (the whole
 `Result` to `RpcException` mapping, in both directions),
 [`ResultFailureException`](#resultfailureexception) (the in-band carrier between a service method and
-that interceptor), and the lone `MMCA.Common.Shared` marker
+that interceptor), [`GrpcWireFormat`](#grpcwireformat) (the shared string encodings for timestamps
+and money, at `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/GrpcWireFormat.cs:30`), and the lone
+`MMCA.Common.Shared` marker
 [`ServiceContractAttribute`](#servicecontractattribute)
 (`MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/ServiceContractAttribute.cs:21`), which tags
 the wire surface of an extracted service. The concrete `.proto` definitions and the typed clients they
@@ -79,7 +81,7 @@ registered by the module when the peer is disabled. `Replace` wins over both, so
 resolved interface is always the gRPC adapter pointing at the extracted peer. Ordering is not left to
 chance: each host registers these helpers as steps inside
 `services.AddMmcaApplicationPipeline(pipeline => pipeline.Register(moduleHost.RegisterModules).Register(s => s.AddConferenceSessionValidationClient())...)`
-(`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:279-283`), so module discovery runs
+(`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:281-285`), so module discovery runs
 first and the client replacements run after it, in declaration order.
 
 **`Result` over the wire, the outbound half.** The codebase's pervasive
@@ -87,7 +89,7 @@ first and the client replacements run after it, in declaration order.
 [primer §2](00-primer.md#2-architectural-styles-this-codebase-commits-to)) survives the hop intact. On
 the **server**, a gRPC service implementation calls the inner C# service, gets back a `Result`, and
 calls `result.ThrowIfFailure()` (from [`ResultGrpcExtensions`](#resultgrpcextensions),
-`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/ResultGrpcExtensions.cs:69`); see
+`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/ResultGrpcExtensions.cs:70`); see
 `SessionBookmarksGrpcService`
 (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Grpc/SessionBookmarksGrpcService.cs:39`). That
 guard throws a [`ResultFailureException`](#resultfailureexception)
@@ -98,28 +100,33 @@ the [`Error`](group-01-result-error-handling.md#error) list
 `AddGrpcServiceDefaults()` catches it for all four server call shapes (unary, server-, client-, and
 duplex-streaming, at `GrpcResultExceptionInterceptor.cs:22`, `:42`, `:63`, `:83`), logs it through a
 source-generated `LoggerMessage` (`GrpcResultExceptionInterceptor.cs:140`), and rethrows
-`errors.ToRpcException()`. That encoder (`ResultGrpcExtensions.cs:112`) picks the status from the
+`errors.ToRpcException()`. That encoder (`ResultGrpcExtensions.cs:117`) picks the status from the
 **most severe** error rather than the first, via
 [`ErrorTypeSeverity`](group-01-result-error-handling.md#errortypeseverity)`.MostSevere`
-(`ResultGrpcExtensions.cs:117`), so an aggregate built by `Result.Combine` cannot be downgraded by
+(`ResultGrpcExtensions.cs:122`), so an aggregate built by `Result.Combine` cannot be downgraded by
 error ordering; the `ErrorType` to `StatusCode` table itself is a `FrozenDictionary`
-(`ResultGrpcExtensions.cs:35-47`) that *mirrors* the HTTP mapping in
+(`ResultGrpcExtensions.cs:36-48`) that *mirrors* the HTTP mapping in
 [`ErrorHttpMapping`](group-12-api-hosting-mapping.md#errorhttpmapping) used by
 [`ApiControllerBase`](group-12-api-hosting-mapping.md#apicontrollerbase). Every error is then
 serialized into the trailers as `error-{i}-code`, `-message`, `-type`, and (when non-empty) `-source`
-and `-target` entries (`ResultGrpcExtensions.cs:125-140`).
+and `-target` entries (`ResultGrpcExtensions.cs:130-145`). Because gRPC text metadata is printable
+ASCII only, the message, source, and target values are percent-encoded as UTF-8 for every character
+outside that range and for `%` itself (`ResultGrpcExtensions.cs:284-311`), so an accented name or a
+newline in a validation message cannot break the trailer at the transport; a value that is already
+plain printable ASCII goes on the wire unchanged (`ResultGrpcExtensions.cs:286-289`).
 
 **`Result` over the wire, the inbound half.** The same class owns the decoder, so the round trip is
 closed by framework code rather than by hand-rolled parsing in each adapter. `Metadata.ToErrors()`
-(`ResultGrpcExtensions.cs:165`) walks `error-{i}-code` from index zero and stops at the first gap,
-matching the contiguous layout the encoder writes, and an unrecognized `error-{i}-type` falls back to
-`ErrorType.Failure` instead of throwing (`ResultGrpcExtensions.cs:269-272`), so a newer peer that adds
+(`ResultGrpcExtensions.cs:171`) walks `error-{i}-code` from index zero and stops at the first gap,
+matching the contiguous layout the encoder writes, percent-decodes the message, source, and target
+(`ResultGrpcExtensions.cs:189-192`, `:314-315`), and an unrecognized `error-{i}-type` falls back to
+`ErrorType.Failure` instead of throwing (`ResultGrpcExtensions.cs:275-278`), so a newer peer that adds
 an error type cannot break an older client. On top of that, `RpcException.ToResult()` and
-`ToResult<T>()` (`ResultGrpcExtensions.cs:210` and `:234`) hand the caller a failed `Result` directly:
+`ToResult<T>()` (`ResultGrpcExtensions.cs:216` and `:240`) hand the caller a failed `Result` directly:
 structured trailers win when present, and a pure transport fault that carries none (a reset
 connection, an exceeded deadline) degrades to a single `ErrorType.Failure` error coded
 `Grpc.{StatusCode}` and stamped with the calling member's name via `[CallerMemberName]`
-(`ResultGrpcExtensions.cs:285-289`). A client adapter's catch block is therefore one line:
+(`ResultGrpcExtensions.cs:328-332`). A client adapter's catch block is therefore one line:
 `return ex.ToResult();`
 (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Contracts/SessionBookmarkValidationServiceGrpcAdapter.cs:58`).
 That symmetry, one error model over two transports, is the `[Rubric §9, API & Contract Design]` and
@@ -131,22 +138,47 @@ placeholder detail "Unspecified failure"; the interceptor keeps `StatusCode.Inte
 and substitutes the real message (plus any inner exception's message) rather than synthesizing an
 `Error.Failure`, which would map to `InvalidArgument` and wrongly blame the caller.
 
+**Values protobuf has no lossless scalar for.** Errors are not the only thing both ends must agree on
+byte for byte. [`GrpcWireFormat`](#grpcwireformat) is a static class that writes the two encodings
+the hand-written services and adapters share, so the format lives in one place rather than in each
+`.proto` mapping. Timestamps travel as ISO 8601 round-trip (`"O"`) strings: `FormatUtc` stamps
+`DateTimeKind.Utc` before formatting (`GrpcWireFormat.cs:42-43`), because SQL Server hands columns
+back as `Unspecified` and `"O"` would otherwise drop the `Z`, and `ParseUtc` reads either form, with
+or without the marker, as UTC on the same instant through `AssumeUniversal | AdjustToUniversal`
+(`GrpcWireFormat.cs:37`, `:61-62`), which keeps a rolling deploy with an older replica on the other end
+working. An optional timestamp maps "absent" to the empty string, since proto3 has no null string
+(`FormatUtcOrEmpty` / `ParseUtcOrNull`, `GrpcWireFormat.cs:51-52`, `:71-72`). Money travels as an
+invariant-culture decimal string (`GrpcWireFormat.cs:77`, `:83-84`), so a price is never rounded
+through a double and never misread under a comma-decimal locale. The `Parse*` methods throw
+`FormatException` on a corrupt peer payload, treating it as a fault; an adapter that wants to map a
+malformed amount to its own answer uses `TryParseDecimal` instead (`GrpcWireFormat.cs:93-94`). In ADC
+the data-subject export edges are the users: Engagement's server writes `FormatUtc`
+(`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Grpc/UserEngagementExportGrpcService.cs:50`)
+and its adapter reads `ParseUtc`
+(`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Contracts/UserEngagementExportServiceGrpcAdapter.cs:45`),
+and Notification pairs `FormatUtcOrEmpty` with `ParseUtcOrNull` for a notification's read time
+(`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Grpc/UserNotificationExportGrpcService.cs:49`,
+`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Contracts/UserNotificationExportServiceGrpcAdapter.cs:44`).
+
 **Auth and the network shape.** Every typed client wired by `AddTypedGrpcClient<TClient>`
 (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:87`) gets a
 [`JwtForwardingClientInterceptor`](#jwtforwardingclientinterceptor) (`DependencyInjection.cs:93-98`)
 that copies the inbound `Authorization` header off the current `HttpContext` onto the outgoing call's
 metadata, so the caller's JWT rides along to the downstream service and distributed authorization
-works without each handler threading a token by hand. It is a no-op outside an HTTP request, for
-example in a background processor
-(`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Interceptors/JwtForwardingClientInterceptor.cs:82-85`),
-and it refuses to duplicate a header a prior interceptor already set
-(`JwtForwardingClientInterceptor.cs:90-94`). It is the gRPC counterpart of the HTTP
+works without each handler threading a token by hand. When the inbound request authenticated without
+an `Authorization` header (a SignalR hub connection passes its token as `?access_token=`), it
+forwards the token saved on the authentication ticket instead, read as `access_token` and rebuilt as
+a `Bearer` value, while a header that is present always wins
+(`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Interceptors/JwtForwardingClientInterceptor.cs:124-132`).
+It is a no-op outside an HTTP request, for example in a background processor
+(`JwtForwardingClientInterceptor.cs:91-95`, `:119-122`), and it refuses to duplicate a header a prior
+interceptor already set (`JwtForwardingClientInterceptor.cs:100-104`). It is the gRPC counterpart of the HTTP
 [`JwtForwardingDelegatingHandler`](group-12-api-hosting-mapping.md#jwtforwardingdelegatinghandler). The
 downstream service validates that forwarded token against the issuer's **JWKS**, not a shared secret
 ([ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html); see
 [`RsaJwksProvider`](group-08-auth.md#rsajwksprovider) / [`IJwksProvider`](group-08-auth.md#ijwksprovider)).
 The server half also sets `EnableDetailedErrors = false` and adds server reflection
-(`DependencyInjection.cs:43`, `:36`), so tools like grpcurl can introspect the schema without exception
+(`DependencyInjection.cs:43`, `:46`), so tools like grpcurl can introspect the schema without exception
 detail leaking to callers. `[Rubric §11, Security]` is touched three times over here: federated JWT
 validation rather than a shared secret, token forwarding that never widens the caller's authority, and
 detailed errors kept off.
@@ -162,8 +194,12 @@ deliberate `SocketsHttpHandler` override (`DependencyInjection.cs:110-118`) forc
 can defeat HTTP/2 negotiation. On top of that, `AddStandardResilienceHandler` gives every gRPC client
 an explicit Polly pipeline sourced entirely from
 [`GrpcResilienceDefaults`](group-16-aspire-orchestration.md#grpcresiliencedefaults)
-(`DependencyInjection.cs:127-136`): the attempt timeout, total timeout, and retry budget are the same
-values the HTTP defaults use, and the circuit-breaker values are spelled out (`FailureRatio` 0.5,
+(`DependencyInjection.cs:127-142`): the attempt timeout, total timeout, and retry budget are the same
+values the HTTP defaults use, but the retry is narrowed: every gRPC call is a POST, so only a failure
+to reach the peer at all (an `HttpRequestException`, such as DNS or connect during a replica
+rollover) is retried, never a status or an attempt timeout that may already have reached the handler
+and could run the call twice (`DependencyInjection.cs:133-137`). The circuit-breaker values are
+spelled out (`FailureRatio` 0.5,
 `MinimumThroughput` 10, `BreakDuration` 10 seconds, at
 `MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/GrpcResilienceDefaults.cs:27-33`) precisely
 because an east-west gRPC call bypasses the Gateway's active health checks
@@ -189,18 +225,18 @@ prefix selects it.
 `MMCA.ADC/Source/Services/*/Protos/`, each with a generated client, a hand-written adapter, and a
 server-side service class. Reading them as consumer to producer: Engagement to Conference for
 `ISessionBookmarkValidationService` and `IEventLiveValidationService`
-(`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:281-282`), Engagement to Notification
-for the best-effort live-channel push (`Program.cs:283`, replacing the framework's
+(`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:283-284`), Engagement to Notification
+for the best-effort live-channel push (`Program.cs:285`, replacing the framework's
 [`NullLiveChannelPublisher`](group-10-notifications.md#nulllivechannelpublisher) behind
 [`ILiveChannelPublisher`](group-10-notifications.md#ilivechannelpublisher)), Conference to Engagement
 for `IBookmarkCountService` on the speaker dashboard
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:409`), Notification to Identity for
-attendee user ids (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:225`), and
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:411`), Notification to Identity for
+attendee user ids (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:222`), and
 Identity to Engagement plus Identity to Notification for the cross-service data-subject export
-aggregation (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:316-317`). Server sides are
+aggregation (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:315-316`). Server sides are
 mapped in each host with `AddGrpcServiceDefaults()` plus `app.MapGrpcService<...>()`, mostly behind
 `.RequireAuthorization()`
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:421`, `:396-397`).
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:424`, `:396-397`).
 
 **The startup-ordering edge worth knowing.** Conference and Engagement call *each other*, so the
 AppHost gives Engagement a `WithReference(conference).WaitFor(conference)` but the reverse Conference
@@ -240,18 +276,80 @@ executable governance keeping this transport genuinely at the edge
 Quality]`. Generated gRPC client classes need no attribute: they are part of the contract surface by
 virtue of their `.proto`.
 
+### GrpcWireFormat
+> MMCA.Common.Grpc · `MMCA.Common.Grpc` · `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/GrpcWireFormat.cs:30` · Level 0 · class (static)
+
+- **What it is**: the shared string encodings a hand-written gRPC service and its client adapter use
+  for the two values protobuf has no lossless scalar for: UTC timestamps, written as ISO 8601
+  round-trip (`"O"`) strings, and money, written as invariant-culture decimal strings. Both ends of a
+  contract call these helpers, so the wire format is defined once (doc summary,
+  `GrpcWireFormat.cs:4-8`).
+- **Depends on**: `System.Globalization` (`CultureInfo`, `DateTimeStyles`, `NumberStyles`, BCL,
+  `GrpcWireFormat.cs:1`) only. Nothing first-party and nothing from `Grpc.Core`: it is pure string
+  formatting that happens to live in the transport package.
+- **Concept introduced, a single wire encoding for non-scalar values.** `[Rubric §9, API & Contract
+  Design]` (assesses whether a contract has one unambiguous wire shape): the format of a timestamp or an
+  amount is part of the contract, so a producer that writes `"O"` and a consumer that parses with the
+  thread culture would disagree silently; routing both ends through one class removes that choice from
+  every adapter. `[Rubric §29, Resilience & Business Continuity]` (assesses tolerance of partial
+  failure and mixed-version operation): `ParseUtc` accepts a timestamp with or without the `Z` marker
+  because a rolling deploy can leave a replica that still emits the marker-less form on the other end
+  (lines 15-16).
+- **Walkthrough**: one private constant, then format/parse pairs.
+  - `UtcStyles` (`GrpcWireFormat.cs:37`) is `AssumeUniversal | AdjustToUniversal`. The comment above it
+    (lines 32-36) records why: a suffix-less value would otherwise parse as `Unspecified`, and
+    `AssumeUniversal` alone yields `Local`; `RoundtripKind` is deliberately absent because
+    `DateTime.Parse` rejects it alongside either `Assume*` or `AdjustToUniversal`.
+  - `FormatUtc(DateTime)` (line 42) calls `DateTime.SpecifyKind(value, DateTimeKind.Utc)` and formats
+    with `"O"` under `CultureInfo.InvariantCulture`, so the output always ends in `Z`.
+    `FormatUtcOrEmpty(DateTime?)` (line 51) writes the empty string for `null`, because proto3 has no
+    null string.
+  - `ParseUtc(string)` (line 61) is `DateTime.Parse(value, InvariantCulture, UtcStyles)`, yielding
+    `DateTimeKind.Utc` on the same instant whether or not the marker was present.
+    `ParseUtcOrNull(string?)` (line 71) maps the empty string (also what a peer predating the field
+    sends) back to `null`.
+  - `FormatDecimal(decimal)` (line 77) writes `value.ToString(InvariantCulture)`, keeping the scale (for
+    example `1234.50`). `ParseDecimal(string)` (line 83) parses with `NumberStyles.Number` under the
+    invariant culture, and `TryParseDecimal(string?, out decimal)` (line 93) is the non-throwing
+    variant.
+- **Why it's built this way**: the doc remarks (lines 9-28) give three reasons. SQL Server hands
+  `DateTime` columns back as `Unspecified`, and `"O"` omits the `Z` for that kind, so `FormatUtc`
+  stamps `Utc` before formatting: the stored values are already UTC, so a value is relabelled, never
+  converted. A `double` would round a price, and the invariant culture on both ends keeps `"1234.50"`
+  from being read back as a different number under a comma-decimal locale. Finally, `ParseUtc` and
+  `ParseDecimal` throw `FormatException` on a malformed value, treating a corrupt peer payload as a
+  fault; an adapter that wants its own answer for bad input uses `TryParseDecimal` and decides itself.
+- **Where it's used**: the ADC export contracts on both sides of the wire. Server side,
+  [`UserEngagementExportGrpcService`](group-22-engagement-module.md#userengagementexportgrpcservice)
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Grpc/UserEngagementExportGrpcService.cs:50,56,65`)
+  and [`UserNotificationExportGrpcService`](group-10-notifications.md#usernotificationexportgrpcservice)
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Grpc/UserNotificationExportGrpcService.cs:47,49`)
+  call `FormatUtc` / `FormatUtcOrEmpty`; client side, the matching adapters
+  [`UserEngagementExportServiceGrpcAdapter`](group-22-engagement-module.md#userengagementexportservicegrpcadapter)
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Contracts/UserEngagementExportServiceGrpcAdapter.cs:45,51,60`)
+  and [`UserNotificationExportServiceGrpcAdapter`](group-10-notifications.md#usernotificationexportservicegrpcadapter)
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Contracts/UserNotificationExportServiceGrpcAdapter.cs:42,44`)
+  call `ParseUtc` / `ParseUtcOrNull`. Covered by `GrpcWireFormatTests`
+  (`MMCA.Common/Tests/Presentation/MMCA.Common.Grpc.Tests/GrpcWireFormatTests.cs:18`).
+- **Caveats / not-in-source**: none of the usage sites read for this section calls the decimal
+  helpers; their consumers (if any outside ADC) are not determinable from the usage list in hand.
+
 ### JwtForwardingClientInterceptor
-> MMCA.Common.Grpc · `MMCA.Common.Grpc.Interceptors` · `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Interceptors/JwtForwardingClientInterceptor.cs:19` · Level 0 · class (sealed)
+> MMCA.Common.Grpc · `MMCA.Common.Grpc.Interceptors` · `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Interceptors/JwtForwardingClientInterceptor.cs:27` · Level 0 · class (sealed)
 
 - **What it is**: a gRPC **client-side** interceptor that copies the inbound `Authorization` header
   from the current `HttpContext` onto every outgoing gRPC call's metadata, so the caller's JWT bearer
-  token rides along to downstream services. It is the gRPC counterpart of the HTTP
+  token rides along to downstream services. When the request authenticated without that header (a
+  SignalR hub connection passes its token as `?access_token=`), it forwards the token saved on the
+  authentication ticket instead (class remarks, `JwtForwardingClientInterceptor.cs:19-25`). It is the gRPC counterpart of the HTTP
   [`JwtForwardingDelegatingHandler`](group-12-api-hosting-mapping.md#jwtforwardingdelegatinghandler) in
   the API/Infrastructure layer.
 - **Depends on**: `Grpc.Core.Interceptors.Interceptor` (the base class) and `Grpc.Core` call types
   (NuGet, see [primer §3, "Transport"](00-primer.md#3-the-external-stack-bcl--nuget--external-level-0));
   `Microsoft.AspNetCore.Http.IHttpContextAccessor` (ASP.NET Core, injected as a primary-constructor
-  parameter, `JwtForwardingClientInterceptor.cs:19`). Nothing first-party: it lives in
+  parameter, `JwtForwardingClientInterceptor.cs:27`); `IAuthenticateResultFeature` and the
+  `AuthenticationProperties.GetTokenValue` helper (`using Microsoft.AspNetCore.Authentication`,
+  line 3) for the saved-token fallback. Nothing first-party: it lives in
   `MMCA.Common.Grpc`, which by the layer rules depends on **`Shared` only** and is pure transport (see
   [primer §1](00-primer.md#1-the-big-picture)).
 - **Concept introduced, gRPC interceptors and token forwarding across a service mesh.** `[Rubric §7,
@@ -268,30 +366,41 @@ virtue of their `.proto`.
   [`RsaJwksProvider`](group-08-auth.md#rsajwksprovider)).
 - **Walkthrough**: members in execution order.
   - `private const string AuthorizationHeader = "Authorization"`
-    (`JwtForwardingClientInterceptor.cs:21`), the single header name.
-  - The five overrides (`AsyncUnaryCall` line 24, `BlockingUnaryCall` line 35,
-    `AsyncServerStreamingCall` line 46, `AsyncClientStreamingCall` line 57, `AsyncDuplexStreamingCall`
-    line 67) each follow the same three-step shape:
+    (`JwtForwardingClientInterceptor.cs:29`), the single header name, and
+    `private const string AccessTokenName = "access_token"` (line 31), the name under which
+    `JwtBearerOptions.SaveToken` stores the token on the authentication ticket.
+  - The five overrides (`AsyncUnaryCall` line 34, `BlockingUnaryCall` line 45,
+    `AsyncServerStreamingCall` line 56, `AsyncClientStreamingCall` line 67, `AsyncDuplexStreamingCall`
+    line 77) each follow the same three-step shape:
     `ArgumentNullException.ThrowIfNull(continuation)`, build a new context via
     `WithForwardedAuthorization(context)`, then invoke `continuation(...)`. The two streaming variants
-    whose continuation takes no `request` argument call `continuation(newContext)` (lines 63 and 73);
+    whose continuation takes no `request` argument call `continuation(newContext)` (lines 73 and 83);
     the other three pass `(request, newContext)`.
-  - `WithForwardedAuthorization<TRequest, TResponse>` (`JwtForwardingClientInterceptor.cs:76-99`) is the
-    shared helper. It reads `httpContextAccessor.HttpContext?.Request?.Headers.Authorization.ToString()`
-    (line 81); if that is null or empty it returns the context **unchanged** (lines 82-85), the
+  - `WithForwardedAuthorization<TRequest, TResponse>` (`JwtForwardingClientInterceptor.cs:86-109`) is the
+    shared helper. It asks `ResolveAuthorization(httpContextAccessor.HttpContext)` for the value to
+    forward (line 91); if that is null or empty it returns the context **unchanged** (lines 92-95), the
     deliberate **no-op when there is no HTTP request**, for example a background processor or hosted
     service invoking a gRPC client outside a request. Otherwise it takes the call's existing
-    `Options.Headers` (or a fresh `Metadata` via the collection expression `[]`, line 87), then **checks
-    whether `Authorization` is already present** (lines 90-94) and bails out if a prior interceptor or
+    `Options.Headers` (or a fresh `Metadata` via the collection expression `[]`, line 97), then **checks
+    whether `Authorization` is already present** (lines 100-104) and bails out if a prior interceptor or
     the caller already set it, so the header is never duplicated. Only then does it `headers.Add(...)`
-    (line 96), rebuild the call options with `WithHeaders` (line 97), and return a new
-    `ClientInterceptorContext` carrying `context.Method`, `context.Host`, and the new options (line 98).
+    (line 106), rebuild the call options with `WithHeaders` (line 107), and return a new
+    `ClientInterceptorContext` carrying `context.Method`, `context.Host`, and the new options (line 108).
+  - `ResolveAuthorization(HttpContext?)` (`JwtForwardingClientInterceptor.cs:117-133`) picks the value.
+    No `HttpContext` answers `null` (lines 119-122). A non-empty inbound `Authorization` header is
+    returned as-is and **always wins** (lines 124-128). Otherwise it reads
+    `httpContext.Features.Get<IAuthenticateResultFeature>()?.AuthenticateResult?.Properties?.GetTokenValue("access_token")`
+    and, when that is non-empty, answers `$"Bearer {savedToken}"` (lines 130-132). This is what lets a
+    call made from inside a SignalR hub, where the token arrived on the query string rather than in a
+    header, still carry the caller's identity downstream.
 - **Why it's built this way**: sealing the class and overriding all five call shapes makes token
   forwarding total, so there is no call shape that silently drops the credential. Doing it in an
   interceptor rather than at each call site keeps consumer code transport-agnostic, which is exactly the
   extraction boundary [ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html) and
   [ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html) want. The
-  duplicate-header guard means it composes safely with other interceptors.
+  duplicate-header guard means it composes safely with other interceptors. The saved-token fallback
+  forwards the token the request actually authenticated with, and only when no header is present, so
+  it never overrides an explicit `Authorization` value.
 - **Where it's used**: registered automatically by `AddTypedGrpcClient<TClient>` in this group's
   [`DependencyInjection`](#dependencyinjection)
   (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:93,98`), so every typed gRPC
@@ -409,7 +518,7 @@ virtue of their `.proto`.
   `Errors`-carrying constructor is the one used.
 - **Where it's used**: thrown by `ThrowIfFailure()` and `UnwrapOrThrow<T>()` in
   [`ResultGrpcExtensions`](#resultgrpcextensions)
-  (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/ResultGrpcExtensions.cs:74,91`); caught by
+  (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/ResultGrpcExtensions.cs:75,92`); caught by
   [`GrpcResultExceptionInterceptor`](#grpcresultexceptioninterceptor) in all four server-handler shapes.
 - **Caveats / not-in-source**: the three CA1032 constructors produce an instance with **no** errors, and
   that case is not free downstream. The interceptor treats it specially (see
@@ -473,7 +582,7 @@ virtue of their `.proto`.
   (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Grpc/EventLiveValidationGrpcService.cs:38,62,91,115`).
 
 ### ResultGrpcExtensions
-> MMCA.Common.Grpc · `MMCA.Common.Grpc` · `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/ResultGrpcExtensions.cs:29` · Level 3 · class (static)
+> MMCA.Common.Grpc · `MMCA.Common.Grpc` · `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/ResultGrpcExtensions.cs:30` · Level 3 · class (static)
 
 - **What it is**: the extension members that bridge [`Result`](group-01-result-error-handling.md#result)
   and `Result<T>` to gRPC's transport model (`RpcException`, `StatusCode`, `Metadata` trailers). It is
@@ -484,14 +593,15 @@ virtue of their `.proto`.
   [`ErrorType`](group-01-result-error-handling.md#errortype),
   [`ErrorTypeSeverity`](group-01-result-error-handling.md#errortypeseverity),
   [`Result`](group-01-result-error-handling.md#result) and `Result<T>` (all via
-  `using MMCA.Common.Shared.Abstractions`, `ResultGrpcExtensions.cs:7`);
+  `using MMCA.Common.Shared.Abstractions`, `ResultGrpcExtensions.cs:8`);
   [`ResultFailureException`](#resultfailureexception) (Level 2); `Grpc.Core` (NuGet);
-  `System.Collections.Frozen`, `System.Globalization`, and `System.Runtime.CompilerServices` (BCL).
+  `System.Collections.Frozen`, `System.Globalization`, `System.Runtime.CompilerServices`, and
+  `System.Text` (`StringBuilder`, `Rune`, for trailer escaping) (BCL, `ResultGrpcExtensions.cs:1-5`).
 - **Concept introduced, a symmetric wire codec for the Result pattern.** `[Rubric §9, API & Contract
   Design]` (assesses consistent error shapes across protocols) and `[Rubric §7, Microservices Readiness]`
   (the Result pattern behaves identically over HTTP and gRPC). Where
   [`ErrorHttpMapping`](group-12-api-hosting-mapping.md#errorhttpmapping) maps `ErrorType` to HTTP status
-  codes, `ErrorTypeToStatusCode` here (lines 35-47) maps it to gRPC `StatusCode`:
+  codes, `ErrorTypeToStatusCode` here (lines 36-48) maps it to gRPC `StatusCode`:
   `Validation`, `Invariant`, and `Failure` to `InvalidArgument`; `NotFound` to `NotFound`; `Conflict` to
   `Aborted`; `Unauthorized` to `Unauthenticated`; `Forbidden` to `PermissionDenied`;
   `UnprocessableEntity` to `FailedPrecondition`; `Unexpected` to `Internal`. A `FrozenDictionary` is the
@@ -502,46 +612,52 @@ virtue of their `.proto`.
   wire shape has exactly one definition.
 - **Walkthrough**: the class is a set of C# `extension(T)` blocks (see
   [primer §4](00-primer.md#4-c-build-and-code-style-conventions)), which is why it carries a file-level
-  `[SuppressMessage]` for CA1708 (lines 25-28): with multiple extension blocks in one static class the
+  `[SuppressMessage]` for CA1708 (lines 26-29): with multiple extension blocks in one static class the
   analyzer flags the compiler-generated grouping members as case-colliding, a false positive.
-  - `extension(ErrorType errorType)` (line 49) contributes `ToGrpcStatusCode()` (line 56):
+  - `extension(ErrorType errorType)` (line 50) contributes `ToGrpcStatusCode()` (line 57):
     `GetValueOrDefault(errorType, StatusCode.InvalidArgument)`, so an unmapped error type still produces
     a valid status.
-  - `extension(Result result)` (line 60) contributes `ThrowIfFailure()` (line 69), the guard a gRPC
+  - `extension(Result result)` (line 61) contributes `ThrowIfFailure()` (line 70), the guard a gRPC
     service method calls first: null-check, then
-    `if (result.IsFailure) throw new ResultFailureException(result.Errors)` (lines 72-75).
-  - `extension<T>(Result<T> result)` (line 79) contributes `UnwrapOrThrow()` (line 86), the typed
-    variant: throws on failure, otherwise returns `result.Value!` (line 94).
-  - `extension(IReadOnlyList<Error> errors)` (line 98) contributes `ToRpcException()` (line 112), the
+    `if (result.IsFailure) throw new ResultFailureException(result.Errors)` (lines 73-76).
+  - `extension<T>(Result<T> result)` (line 80) contributes `UnwrapOrThrow()` (line 87), the typed
+    variant: throws on failure, otherwise returns `result.Value!` (line 95).
+  - `extension(IReadOnlyList<Error> errors)` (line 99) contributes `ToRpcException()` (line 117), the
     encoder. The status code comes from `ErrorTypeSeverity.MostSevere(errors).Type.ToGrpcStatusCode()`
-    (line 117), falling back to `StatusCode.Internal` for an empty list; the `Status.Detail` is the
-    joined `"Code: Message"` summary or the literal `"Unspecified failure"` (lines 120-122). It then
+    (line 122), falling back to `StatusCode.Internal` for an empty list; the `Status.Detail` is the
+    joined `"Code: Message"` summary or the literal `"Unspecified failure"` (lines 125-127). It then
     walks every error and writes **structured trailing metadata**: `error-{i}-code`, `error-{i}-message`,
-    and `error-{i}-type` always (lines 128-130), plus `error-{i}-source` and `error-{i}-target` only when
-    non-empty (lines 131-139). Every key is built with `CultureInfo.InvariantCulture` so the wire form
-    cannot vary by locale. It returns `new RpcException(new Status(statusCode, detail), trailers)`
-    (line 142).
-  - `extension(Metadata? trailers)` (line 146) contributes `ToErrors()` (line 165), the exact inverse.
-    Null or empty trailers decode to `[]` (lines 167-170). Otherwise it loops from index zero, reading
-    `error-{i}-code` and **stopping at the first missing code** (lines 177-181), which matches the
-    contiguous layout the encoder writes; a missing message decodes to the empty string and a missing
-    source or target to `null` (lines 183-186), mirroring the encoder's omission rule.
-  - `extension(RpcException exception)` (line 196) contributes `ToResult()` (line 210) and
-    `ToResult<T>()` (line 234), which close the round trip. Both decode `exception.Trailers.ToErrors()`
+    and `error-{i}-type` always (lines 133-135), plus `error-{i}-source` and `error-{i}-target` only when
+    non-empty (lines 136-144). Every key is built with `CultureInfo.InvariantCulture` so the wire form
+    cannot vary by locale. The message, source, and target **values** pass through
+    `EscapeTrailerValue` (lines 134, 138, 143); the code and the type name are written raw. It returns
+    `new RpcException(new Status(statusCode, detail), trailers)` (line 147).
+  - `extension(Metadata? trailers)` (line 151) contributes `ToErrors()` (line 171), the exact inverse.
+    Null or empty trailers decode to `[]` (lines 173-176). Otherwise it loops from index zero, reading
+    `error-{i}-code` and **stopping at the first missing code** (lines 183-187), which matches the
+    contiguous layout the encoder writes; message, source, and target are percent-decoded through
+    `Unescape`, a missing message decodes to the empty string, and a missing source or target to `null`
+    (lines 189-192), mirroring the encoder's omission rule.
+  - `extension(RpcException exception)` (line 202) contributes `ToResult()` (line 216) and
+    `ToResult<T>()` (line 240), which close the round trip. Both decode `exception.Trailers.ToErrors()`
     and return `Result.Failure(errors)` when the trailers carried a structured failure, or
-    `Result.Failure(TransportError(exception, source))` when they did not (lines 216-218 and 240-242).
+    `Result.Failure(TransportError(exception, source))` when they did not (lines 222-224 and 246-248).
     Both take a `[CallerMemberName] string source = ""` parameter, so the synthesized transport error is
     stamped with the calling adapter method's name for free.
-  - The private helpers close the file. `ErrorFactories` (lines 251-263) is a second `FrozenDictionary`
-    mapping each `ErrorType` to its `Error` factory method, documented (lines 246-250) as a lookup table
+  - The private helpers close the file. `ErrorFactories` (lines 257-269) is a second `FrozenDictionary`
+    mapping each `ErrorType` to its `Error` factory method, documented (lines 252-256) as a lookup table
     rather than a `switch` so adding an error type stays a one-line entry instead of pushing the decoder
     past the cyclomatic-complexity ceiling `[Rubric §15, Best Practices & Code Quality]`.
-    `ParseErrorType` (line 269) does a case-**sensitive** `Enum.TryParse` and falls back to
-    `ErrorType.Failure`, `BuildError` (line 275) dispatches through the factory table, and
-    `TransportError` (line 285) builds the stand-in error coded `$"Grpc.{exception.StatusCode}"` carrying
-    `exception.Status.Detail`.
-- **Why it's built this way**: three decisions are worth naming.
-  1. **The most severe error picks the status, not the first one** (line 117). The encoder ranks the list
+    `ParseErrorType` (line 275) does a case-**sensitive** `Enum.TryParse` and falls back to
+    `ErrorType.Failure`. `EscapeTrailerValue` (line 284) returns the value unchanged when every
+    character is verbatim-safe, otherwise walks it rune by rune and writes each byte of a non-verbatim
+    rune's UTF-8 encoding as `%XX`; `IsVerbatimTrailerChar` (line 311) defines verbatim-safe as printable
+    ASCII (`' '` to `'~'`) except `%` itself, so the decoder can tell an escape from a literal.
+    `Unescape` (line 314) is `Uri.UnescapeDataString`, with `null` staying `null`. `BuildError`
+    (line 318) dispatches through the factory table, and `TransportError` (line 328) builds the stand-in
+    error coded `$"Grpc.{exception.StatusCode}"` carrying `exception.Status.Detail`.
+- **Why it's built this way**: four decisions are worth naming.
+  1. **The most severe error picks the status, not the first one** (line 122). The encoder ranks the list
      through [`ErrorTypeSeverity`](group-01-result-error-handling.md#errortypeseverity)
      (`MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/ErrorTypeSeverity.cs:69`, ties keep the
      earliest error), the same ranking the HTTP edge uses, so an aggregate built by `Result.Combine`
@@ -549,14 +665,19 @@ virtue of their `.proto`.
      answers `Unauthenticated`. Ranking picks the status only; **all** errors still travel in the
      trailers.
   2. **The decoder degrades rather than throws.** An unrecognized `error-{i}-type` falls back to
-     `ErrorType.Failure` (line 272) instead of raising, so a newer peer that adds an error type cannot
+     `ErrorType.Failure` (line 278) instead of raising, so a newer peer that adds an error type cannot
      break an older client, and an `RpcException` with no structured trailers at all (a reset connection,
      an exceeded deadline) still reaches the caller as a `Result` failure rather than an exception
-     (lines 280-289). That is the `[Rubric §29, Resilience & Business Continuity]` angle: the client-side
+     (lines 323-333). That is the `[Rubric §29, Resilience & Business Continuity]` angle: the client-side
      programming model never changes shape because the network misbehaved.
   3. **Trailers carry the full error list, not a flattened string**, so the client reconstructs real
      `Error` objects with their original `Code`, `Message`, `Type`, `Source`, and `Target`. This is what
      makes the Result pattern survive the hop intact ([ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html)).
+  4. **Trailer values are percent-encoded, not passed raw** (doc comment, lines 110-114). gRPC text
+     metadata is printable ASCII only, so an accented character or a newline in an error message would
+     break the trailer at the transport. Escaping only what needs it means a plain-ASCII value without
+     `%` goes on the wire unchanged, and the decoder's `Unescape` restores the original string exactly,
+     so the round trip holds for any message text.
 - **Where it's used**: `ThrowIfFailure` and `UnwrapOrThrow` are called by the gRPC service
   implementations in each service project, for example
   [`SessionBookmarksGrpcService`](group-20-conference-api-grpc.md#sessionbookmarksgrpcservice)
@@ -612,16 +733,17 @@ virtue of their `.proto`.
     `HttpResilienceDefaults`: `PooledConnectionLifetime` (10 minutes), `PooledConnectionIdleTimeout`
     (5 minutes), `KeepAlivePingDelay` (60 seconds), `KeepAlivePingTimeout` (30 seconds), and
     `KeepAlivePingPolicy = WithActiveRequests`
-    (`MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:34,37,40,43`).
-    Fourth it layers `AddStandardResilienceHandler` back on (lines 127-136), setting every knob from
+    (`MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:36,39,42,45`).
+    Fourth it layers `AddStandardResilienceHandler` back on (lines 127-142), setting every knob from
     [`GrpcResilienceDefaults`](group-16-aspire-orchestration.md#grpcresiliencedefaults): a 30-second
     attempt timeout and 90-second total request timeout re-exposed from the outbound-HTTP path, one
     retry beyond the initial attempt, and an explicit circuit breaker (60-second sampling window,
     `FailureRatio` 0.5, `MinimumThroughput` 10, `BreakDuration` 10 seconds)
-    (`MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/GrpcResilienceDefaults.cs:15-33`). It returns
-    the original `IHttpClientBuilder` (line 137), not the resilience-pipeline builder, so callers can
-    keep chaining.
-- **Why it's built this way**: three deliberate decisions live here, each documented inline and each
+    (`MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/GrpcResilienceDefaults.cs:15-33`). The retry
+    is narrowed by `options.Retry.ShouldHandle = args => ValueTask.FromResult(args.Outcome.Exception is HttpRequestException)`
+    (line 137): only a failure to reach the service is retried. It returns the original
+    `IHttpClientBuilder` (line 143), not the resilience-pipeline builder, so callers can keep chaining.
+- **Why it's built this way**: four deliberate decisions live here, each documented inline and each
   worth reading before changing anything.
   1. **h2c (HTTP/2 cleartext) over `http://{serviceName}`, not HTTPS** (lines 54-62). Aspire's
      project-resource endpoint discovery from `launchSettings.json` does not reliably create a
@@ -641,6 +763,12 @@ virtue of their `.proto`.
      directly and bypasses the Gateway's active health checks, so the breaker is the only thing that
      notices a peer going bad. Timeouts and the retry budget, by contrast, are re-exposed from
      `HttpResilienceDefaults` so the two paths cannot drift.
+  4. **The retry predicate is replaced, not left at the default** (comment at lines 133-136). Every gRPC
+     call is an HTTP POST, so the standard handler's unsafe-method opt-out would switch the retry off
+     entirely. Instead only an `HttpRequestException` (a DNS or connect failure, for example during an
+     ACA replica rollover) is retried; a returned status or an attempt timeout may already have reached
+     the handler, and replaying it could run the call twice. That keeps the single retry safe for
+     non-idempotent calls `[Rubric §29, Resilience & Business Continuity]`.
 
   The doc comment is explicit that application code should **not** consume the generated client
   directly (lines 66-76): register a hand-written adapter implementing the consuming module's own C#
