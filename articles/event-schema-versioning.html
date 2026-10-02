@@ -192,8 +192,8 @@
           <p>An event that carries only <code>MessageId</code> (idempotency) and <code>DateOccurred</code> (when the business action
           happened) has no version signal at all, and a consumer meeting an unfamiliar payload has nothing to
           branch on: it cannot tell a producer that has moved ahead of it from a shape it should refuse, and it
-          certainly cannot upcast. That is the one substantive CQRS and event-driven gap the scorecard names
-          under §6, and ADR-010 is the answer.</p>
+          certainly cannot upcast. ADR-010 is the answer, and the scorecard&#39;s section 6 row cites its <code>SchemaVersion</code>
+          gate and the ADR-090 upcaster pipeline as CQRS and event-driven evidence.</p>
           <h2 id="the-mmca-answer-a-version-on-every-event-and-a-rule-for-changing-it">The MMCA answer: a version on every event, and a rule for changing it</h2>
           <p>The decision has two halves: a signal that is enforced, and a discipline for breaking changes.</p>
           <p><strong>Half one: every integration event carries an explicit <code>SchemaVersion</code>.</strong> The base record exposes it
@@ -229,7 +229,7 @@
           gone, and any consumer mid-deploy or slow to upgrade is reading a contract that no longer exists.
           New-type-for-breaking-change is the only safe option when transport binds by type and consumers deploy
           independently.</p>
-          <p>Since 2026-08-21 the framework ships the wiring for that migration, not only the rule (ADR-090). An
+          <p>The framework ships the wiring for that migration, not only the rule (ADR-090, accepted 2026-08-21). An
           upcaster is one typed class, <code>IEventUpcaster&lt;TOld, TNew&gt;</code>, registered by the module that owns the
           contract:</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Module DI: one line per retired contract.</span>
@@ -247,7 +247,8 @@ x.RegisterUpcastedIntegrationEventConsumer&lt;ProductVariantChanged&gt;(); <span
           the old type is deleting these lines.</p>
           <p><code>SchemaVersion</code> is non-breaking by construction. A virtual get-only default (<code>=&gt; 1</code>) means no existing
           event has to change and no outbox row has to be migrated: System.Text.Json tolerates the missing field
-          on old payloads and the type supplies the default; new rows simply gain <code>&quot;schemaVersion&quot;:1</code>. It lives in
+          on old payloads and the type supplies the default; new rows simply gain <code>&quot;SchemaVersion&quot;:1</code> (the outbox
+          serializer sets no naming policy, so the payload keeps the .NET property name). It lives in
           the framework, and a framework change reaches every consumer in one pass: the lockstep policy (ADR-016)
           bumps every <code>MMCA.Common.*</code> pin in every consumer together, with no phased rollout, so no consumer sits
           on a base record its producers have moved past.</p>
@@ -265,10 +266,9 @@ x.RegisterUpcastedIntegrationEventConsumer&lt;ProductVariantChanged&gt;(); <span
           <p>ADR-010 is candid that the field is a signal, not a complete mechanism.</p>
           <ul>
           <li><strong><code>SchemaVersion</code> by itself does not stop a consumer breaking on a real reshape.</strong> It is a value on
-          the wire, and the load-bearing half is still the discipline: new type plus upcaster. That half is no
-          longer only a discipline. The framework now ships the registration extension point (2026-08-21,
-          ADR-090): a typed <code>IEventUpcaster&lt;TSource, TTarget&gt;</code>, <code>AddEventUpcaster&lt;...&gt;()</code>, a chaining registry
-          that preserves the envelope, a draining broker consumer for the retired queue, and two fitness
+          the wire, and the load-bearing half is the discipline: new type plus upcaster. That half has
+          framework support in the registration extension point (ADR-090): a typed
+          <code>IEventUpcaster&lt;TSource, TTarget&gt;</code>, <code>AddEventUpcaster&lt;...&gt;()</code>, a chaining registry that preserves the envelope, a draining broker consumer for the retired queue, and two fitness
           functions that reject two upcasters claiming one source contract or a target that does not raise
           <code>SchemaVersion</code>. Two gaps stay open and are worth naming: the framework itself still ships no V2 event
           of its own (its one concrete integration event stays at version 1, so the first real consumer
@@ -316,7 +316,7 @@ x.RegisterUpcastedIntegrationEventConsumer&lt;ProductVariantChanged&gt;(); <span
           MMCA.Common puts an enforced <code>SchemaVersion</code> on every event and answers a breaking change with a new
           type plus a registered upcaster that the framework chains and applies on both delivery paths, and how
           that complements the outbox&#39;s at-least-once delivery.</p>
-          <p><strong>Next in the series:</strong> cross-service auth without a shared secret, JWKS dual-fetch and RS256 so an
+          <p><strong>Next in the series:</strong> cross-service auth without a shared secret, JWKS discovery and RS256 so an
           extracted service validates tokens with no shared key.</p>
           <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the 2-minute ADR-010 behind this
           policy, or <code>dotnet add package MMCA.Common.API</code> and try it.</em></p>

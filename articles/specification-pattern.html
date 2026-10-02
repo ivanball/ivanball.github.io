@@ -250,16 +250,20 @@
     <span class="hljs-keyword">public</span> <span class="hljs-keyword">override</span> Expression&lt;Func&lt;Session, <span class="hljs-built_in">bool</span>&gt;&gt; Criteria =&gt; StatusCriteria;
 }
 
-<span class="hljs-comment">// The paged sessions read: the speaker scope (itself a specification, a Session.Id IN (...) filter</span>
-<span class="hljs-comment">// over the SessionSpeaker join) is ANDed with the public rule, never substituted for it.</span>
+<span class="hljs-comment">// The paged sessions read. publicSpecification is the public filter (null for a privileged caller):</span>
+<span class="hljs-comment">// a specification built from StatusCriteria plus a published-event scope. The speaker scope (itself a</span>
+<span class="hljs-comment">// specification, a Session.Id IN (...) filter over the SessionSpeaker join) is ANDed with it, never</span>
+<span class="hljs-comment">// substituted for it.</span>
 <span class="hljs-keyword">return</span> publicSpecification <span class="hljs-keyword">is</span> <span class="hljs-literal">null</span>
     ? speakerResult.Value
     : publicSpecification.And(speakerResult.Value!);</code></pre>
           <p>The leaked-query bug from the opening cannot happen here. Both halves of the composed query are named
           objects, not text someone retypes at every call site: the speaker scope arrives as a specification
-          built by a query handler, and the public visibility rule is a type the controller always ANDs in,
-          because substituting one for the other would leak non-accepted sessions to non-privileged callers (the
-          composing method&#39;s own doc comment says exactly that). The criteria are server-authored, so the client
+          built by a query handler, and the public visibility rule arrives the same way, built by another handler
+          from the same <code>StatusCriteria</code> plus a published-event scope. For every non-privileged caller the
+          controller always ANDs that rule in, because substituting one for the other would leak non-accepted
+          sessions to non-privileged callers (the composing method&#39;s own doc comment says exactly that); a
+          privileged caller (organizer or content editor) gets no public filter at all. The criteria are server-authored, so the client
           cannot tamper with them, and each rule is reusable and testable in isolation. This is a textbook
           Specification with security overtones: the authorization predicate is not something the request can
           override.</p>
@@ -268,16 +272,22 @@
           <code>AuditableBaseEntity&lt;TIdentifierType&gt;</code> rather than an interface, because a member access declared on an
           interface is not guaranteed to map to the entity&#39;s audit column and the criteria has to stay
           EF-translatable. ADC&#39;s question-answer controllers show the intended shape: an organizer gets <code>null</code>
-          (no scoping at all), and everyone else gets that specification bound to their own user id.</p>
+          (no scoping at all), and everyone else gets that specification bound to their own user id. The one
+          other way to get <code>null</code> is a non-organizer whose owner claim cannot be resolved, and that caller is
+          answered with a 403 by a fail-closed gate on the read endpoints, so <code>null</code> means &quot;unscoped&quot; only for
+          the role that is allowed to read everything.</p>
           <h3 id="2-dynamic-filtering-the-untrusted-input">2. Dynamic filtering (the untrusted input)</h3>
           <p>The other half of any list endpoint is user-driven shaping: the <code>?filter=...&amp;sort=...&amp;fields=...</code>
           querystring. This is <em>untrusted</em> and is handled completely separately. Each CLR type gets an
-          <code>IFilterStrategy</code> (<code>StringFilterStrategy</code>, <code>IntFilterStrategy</code>, <code>DateTimeFilterStrategy</code>, and so on)
-          that knows which operators it supports, and a <code>QueryFilterService</code> registry dispatches by type. It runs
-          in two phases: <code>ValidateFilters</code> checks that the property exists on the entity and the operator is
-          legal for its type <em>before</em> the query (so a bad filter is a 400, not a SQL exception), and
-          <code>ApplyFilters</code> builds the <code>.Where()</code> chain. Untrusted input is allow-listed against real entity
-          metadata, never concatenated blindly.</p>
+          <code>IFilterStrategy</code> (<code>StringFilterStrategy</code>, <code>IntFilterStrategy</code>, <code>DateTimeFilterStrategy</code>, and so on,
+          plus one built on first use for a strongly typed identifier column) that knows which operators it
+          supports, and a <code>QueryFilterService</code> registry dispatches by type. It runs in two phases:
+          <code>ValidateFilters</code> checks every key and operator <em>before</em> the query (so a bad filter is a 400, not a SQL
+          exception), and <code>ApplyFilters</code> builds the <code>.Where()</code> chain. Validation checks the response DTO&#39;s field
+          contract before the entity: a key the client wrote must name a field the DTO declares and must not be a
+          navigation path, a server-mapped path is capped in depth, the property must exist on the entity, and
+          the operator must be legal for its type. Untrusted input is allow-listed against the response contract
+          and real entity metadata, never concatenated blindly.</p>
           <p>The separation is deliberate and worth stating plainly: <strong>specifications are trusted and live with the
           domain; dynamic filters are untrusted and are validated, capped, and reflection-cached at the
           application boundary.</strong> Conflating the two is how authorization clauses end up overridable by a query

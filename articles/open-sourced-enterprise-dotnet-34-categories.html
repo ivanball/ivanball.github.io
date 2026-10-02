@@ -175,7 +175,7 @@
           <p>It is called <strong>MMCA.Common</strong> (Modular Monolith Clean Architecture), it targets .NET 10, and this
           article is the front door to a series that teaches it one pattern at a time.</p>
           <h2 id="what-it-is">What it is</h2>
-          <p>MMCA.Common is a set of <strong>nineteen NuGet packages</strong> that give you a DDD + Clean Architecture + CQRS
+          <p>MMCA.Common is a set of <strong>twenty-two NuGet packages</strong> that give you a DDD + Clean Architecture + CQRS
           foundation as a <strong>modular monolith</strong>, plus the extraction boundaries to pull a module out into its own microservice
           later without rewriting application code.</p>
           <p>The packages layer strictly, each one only depending on the layers below it:</p>
@@ -190,23 +190,26 @@ Domain           (entities, aggregates, domain events, specifications)
 Shared           (Result pattern, errors, DTOs, value objects)</code></pre>
           <p>A few packages sit off to the side of that stack rather than on top of it. <code>UI</code> and <code>Grpc</code> depend on
           <code>Shared</code> only: the Blazor <code>UI</code> stays WebAssembly-friendly, and <code>Grpc</code> is pure transport that must not
-          couple to Domain, Application, or Infrastructure. The rest of the UI family builds on <code>UI</code> rather than
-          the layer stack: <code>UI.Web</code> is the web-host UI package, and <code>UI.Maui</code> (the one MAUI-target package)
-          depends on <code>UI</code> plus <code>Shared</code> only (ADR-042).</p>
-          <p>Two more packages sit outside the stack entirely. <code>Gateway</code> is the YARP edge that fronts the service
-          hosts once modules are extracted (ADR-008), and <code>AI</code> is a governed boundary for language-model calls,
-          isolated, versioned, evaluated, observed, and bounded in one package so a second AI feature inherits
-          the rules instead of copying them (ADR-120). The nineteenth package is <code>MMCA.Common</code> itself: a
-          metapackage that ships no assembly, one <code>PackageReference</code> in place of the six a standard application
+          couple to Domain, Application, or Infrastructure. <code>UI.Maui</code> (the one MAUI-target package) depends on
+          <code>UI</code> plus <code>Shared</code> only (ADR-042). <code>UI.Web</code> is the one UI package that sits above the stack instead: it
+          is the Blazor Web host layer, referencing <code>UI</code>, <code>API</code>, and <code>Aspire</code> directly, which is exactly what keeps
+          those server dependencies out of the WebAssembly-safe <code>UI</code>.</p>
+          <p>More packages sit outside the stack entirely. <code>Gateway</code> is the YARP edge that fronts the service
+          hosts once modules are extracted (ADR-008). The <code>AI</code> family is a governed boundary for language-model
+          calls (ADR-120): <code>AI</code> isolates, versions, evaluates, observes, and bounds every call so a second AI
+          feature inherits the rules instead of copying them; <code>AI.Anthropic</code> and <code>AI.OpenAI</code> are provider adapters
+          that each register one provider factory, so the governed package never names a vendor; and <code>AI.Testing</code>
+          ships the replay harness that pins prompt contracts. The twenty-second package is <code>MMCA.Common</code> itself:
+          a metapackage that ships no assembly, one <code>PackageReference</code> in place of the six a standard application
           host always takes (ADR-101).</p>
           <p>Adding it to a solution you already have is one line, and each package transitively pulls the layers
           beneath it:</p>
           <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet add package MMCA.Common.API</code></pre>
           <p><code>API</code> brings <code>Infrastructure</code>, which brings <code>Application</code>, <code>Domain</code>, and <code>Shared</code>. The other packages
-          (<code>Grpc</code>, <code>UI</code>, <code>UI.Web</code>, <code>UI.Maui</code>, <code>Aspire</code>, <code>Aspire.Hosting</code>, <code>Gateway</code>, <code>AI</code>, and five <code>Testing.*</code>
-          packages) are opt-in for the surface you need.</p>
+          (<code>Grpc</code>, <code>UI</code>, <code>UI.Web</code>, <code>UI.Maui</code>, <code>Aspire</code>, <code>Aspire.Hosting</code>, <code>Gateway</code>, the four <code>AI</code> packages, and
+          five <code>Testing.*</code> packages) are opt-in for the surface you need.</p>
           <p>Starting from nothing is a different command, because a package reference is not an application. A
-          solution on this framework is twelve projects and roughly 6,600 lines of plumbing before any business
+          solution on this framework is twelve projects and roughly 9,000 lines of C# and Razor before any business
           logic, so the framework ships a <code>dotnet new</code> pack that writes all of it:</p>
           <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new install MMCA.Templates
 dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal">-n</span> Contoso.Support <span class="hljs-literal">--module</span> Orders <span class="hljs-literal">--aggregate</span> Order</code></pre>
@@ -226,11 +229,12 @@ dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal"
           <li><strong>At runtime</strong>, by NetArchTest fitness functions that assert the same rules against the compiled
           assemblies.</li>
           </ol>
-          <p>Those fitness functions do not live as copy-pasted test code in three repos. They live once, in a
+          <p>Those fitness functions do not live as copy-pasted test code in each repo. They live once, in a
           shipped package, <code>MMCA.Common.Testing.Architecture</code>, which exposes a reusable rule library and abstract
-          test bases (<strong>136 test methods across 53 base classes</strong>). MMCA.Common&#39;s own build runs
-          267 of them; the two consumer apps subclass the same bases and supply their own architecture map,
-          so the rules are literally identical across all three codebases.</p>
+          test bases (<strong>141 test methods across 55 base classes</strong>). MMCA.Common&#39;s own build executes 339 fitness
+          tests built on them. MMCA.ADC and MMCA.Store subclass the same bases and supply their own architecture
+          map, and so does MMCA.Helpdesk, the reference app the templates are staged from, so the rules are
+          literally identical in every codebase that runs them.</p>
           <p>This is the line I care about most: <strong>if a rule matters, it should be a check, not a comment.</strong></p>
           <h2 id="modular-monolith-now-microservices-later-no-rewrite">Modular monolith now, microservices later, no rewrite</h2>
           <p>The other thesis baked into the framework is that &quot;monolith vs microservices&quot; is a false binary. You
@@ -255,31 +259,31 @@ dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal"
           <p>I graded MMCA.Common against a 34-category architecture rubric (backend, front-end, and
           operational/governance categories), scoring each category on two axes: <strong>Maturity</strong> (how well-governed
           the process is) and <strong>Implementation</strong> (how much substance is actually executed). It sits at a
-          <strong>maturity index of 97.0% and an implementation index of 86.0%</strong> across all 34 categories
+          <strong>maturity index of 96.6% and an implementation index of 86.0%</strong> across all 34 categories
           (internationalization ships in the framework as en-US plus Spanish under ADR-027, which supersedes the
           single-locale ADR-011, so it scores on both axes like every other category; nothing is excluded as
           N/A). Then I committed the full evaluation to the repo, with every category&#39;s two scores, the evidence,
           and the honest gaps.</p>
           <p>The rubric itself is versioned. Version 2 (ADR-110) keeps all 34 categories and scores category 10 as
           <strong>Messaging &amp; Integration Architecture</strong> (Maturity 4 / Implementation 9) and category 16 as <strong>AI-Native
-          Application Architecture</strong> (Maturity 3 / Implementation 6), which is where the governed language-model
+          Application Architecture</strong> (Maturity 4 / Implementation 9), which is where the governed language-model
           boundary is graded.</p>
           <p>The pattern in the scores is the same line from earlier: <strong>every category that earned top marks was
           backed by a fitness function or a compile-time guard. Every category capped lower either left the
           design to code review, or has its real proof living downstream in a consumer app.</strong> Clean Architecture,
-          SOLID, microservices readiness, CQRS, and testability all sit at Maturity 4 / Implementation 9, and all
-          of them are enforced automatically.</p>
+          microservices readiness, CQRS, and testability all sit at Maturity 4 / Implementation 9, and all of them
+          are enforced automatically. SOLID sits lower, at Maturity 3 / Implementation 8, for exactly that reason:
+          the principles are applied throughout, but only two of the five are enforced automatically.</p>
           <p>Implementation is the weaker axis on purpose. A framework ships mature, well-governed mechanisms whose
-          full execution often completes in the apps that consume it. Deployment, resilience recovery, and
-          data-migration gating all score higher on maturity than on implementation precisely because the
-          substance they reward (infrastructure-as-code, a drilled restore, a CI migration step) lives in
-          MMCA.ADC and MMCA.Store, not in a library.</p>
+          full execution often completes in the apps that consume it. Deployment and resilience recovery both
+          stop at Implementation 8 precisely because the substance they reward (a real deploy, production
+          recovery targets proven against real cloud backups) lives in the consuming apps, not in a library.</p>
           <p>The headline gap the rubric named was <strong>Compliance and Privacy</strong>: soft-delete everywhere and no
           right-to-erasure path, which is the exact GDPR conflict the rubric names. I wrote that down rather than
           hiding it, and it became ADR-005, a real anonymization extension point, and a PII fitness function that fails the
           build. That is the whole point of scoring yourself in public: the gaps turn into the roadmap.</p>
           <h2 id="it-runs-in-production-on-two-real-apps">It runs in production, on two real apps</h2>
-          <p>MMCA.Common is not a toy. Two deployed apps consume the same nineteen packages:</p>
+          <p>MMCA.Common is not a toy. Two deployed apps are built on it:</p>
           <ul>
           <li><strong>MMCA.ADC</strong>, the Atlanta Developers Conference app, deployed to Azure and used to run a live event.</li>
           <li><strong>MMCA.Store</strong>, an e-commerce app with Catalog, Sales, and Identity modules and Stripe integration.</li>

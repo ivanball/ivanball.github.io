@@ -5,24 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
-  <title>Cross-service auth without a shared secret: JWKS dual-fetch · MMCA · Ivan Ball-llovera</title>
+  <title>Cross-service auth without a shared secret: JWKS discovery · MMCA · Ivan Ball-llovera</title>
   <meta name="description" content="Validate another service&#39;s RS256 tokens via JWKS discovery, with no shared secret crossing a boundary.">
   <link rel="canonical" href="https://ivanball.github.io/articles/jwks-cross-service-auth.html">
   <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
-  <meta property="og:title" content="Cross-service auth without a shared secret: JWKS dual-fetch">
+  <meta property="og:title" content="Cross-service auth without a shared secret: JWKS discovery">
   <meta property="og:description" content="Validate another service&#39;s RS256 tokens via JWKS discovery, with no shared secret crossing a boundary.">
   <meta property="og:url" content="https://ivanball.github.io/articles/jwks-cross-service-auth.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-16.png">
-  <meta property="og:image:alt" content="Cross-service auth without a shared secret: JWKS dual-fetch">
+  <meta property="og:image:alt" content="Cross-service auth without a shared secret: JWKS discovery">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Cross-service auth without a shared secret: JWKS dual-fetch">
+  <meta name="twitter:title" content="Cross-service auth without a shared secret: JWKS discovery">
   <meta name="twitter:description" content="Validate another service&#39;s RS256 tokens via JWKS discovery, with no shared secret crossing a boundary.">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-16.png">
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Cross-service auth without a shared secret: JWKS dual-fetch","description":"Validate another service's RS256 tokens via JWKS discovery, with no shared secret crossing a boundary.","url":"https://ivanball.github.io/articles/jwks-cross-service-auth.html","mainEntityOfPage":"https://ivanball.github.io/articles/jwks-cross-service-auth.html","image":"https://ivanball.github.io/assets/img/articles/article-16.png","datePublished":"2026-07-14T11:17:47Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":16,"sameAs":"https://medium.com/@ivanball76/cross-service-auth-without-a-shared-secret-jwks-dual-fetch-478e6f688c7e"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Cross-service auth without a shared secret: JWKS discovery","description":"Validate another service's RS256 tokens via JWKS discovery, with no shared secret crossing a boundary.","url":"https://ivanball.github.io/articles/jwks-cross-service-auth.html","mainEntityOfPage":"https://ivanball.github.io/articles/jwks-cross-service-auth.html","image":"https://ivanball.github.io/assets/img/articles/article-16.png","datePublished":"2026-07-14T11:17:47Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":16,"sameAs":"https://medium.com/@ivanball76/cross-service-auth-without-a-shared-secret-jwks-dual-fetch-478e6f688c7e"}</script>
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"16 · JWKS cross-service auth","item":"https://ivanball.github.io/articles/jwks-cross-service-auth.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
   <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -158,7 +158,7 @@
     </aside>
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Auth &amp; the edge · No. 16</p>
-          <h1 id="cross-service-auth-without-a-shared-secret-jwks-dual-fetch">Cross-service auth without a shared secret: JWKS dual-fetch</h1>
+          <h1 id="cross-service-auth-without-a-shared-secret-jwks-discovery">Cross-service auth without a shared secret: JWKS discovery</h1>
           <p class="article-meta"><time datetime="2026-07-14T11:17:47Z">July 14, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/cross-service-auth-without-a-shared-secret-jwks-dual-fetch-478e6f688c7e" target="_blank" rel="noopener">Also on Medium ↗</a></p>
           <figure class="article-hero"><img src="../assets/img/articles/article-16.webp" alt="" width="800" height="420" decoding="async"></figure>
           <p class="article-subtitle">When you split a monolith into services, the easy answer is to copy the JWT signing
@@ -214,31 +214,39 @@
 <span class="hljs-function">JsonWebKeySet <span class="hljs-title">GetJsonWebKeySet</span>()</span>;   <span class="hljs-comment">// public parameters only; private key never leaves</span>
 
 <span class="hljs-comment">// Validator side (any extracted service): JwtBearer fetches the issuer&#x27;s JWKS URL</span>
-<span class="hljs-comment">// (routed through the YARP gateway) and validates RS256 tokens against the public keys.</span>
+<span class="hljs-comment">// (through the gateway under the local AppHost, Identity&#x27;s internal ingress when deployed)</span>
+<span class="hljs-comment">// and validates RS256 tokens against the public keys.</span>
 <span class="hljs-comment">// The validator holds NO secret. A leaked public key cannot mint tokens.</span></code></pre>
-          <p>(Source: <code>RsaJwksProvider.cs</code>, <code>IJwksProvider.cs</code>, and the JWKS notes in <code>MMCA.Common/CLAUDE.md</code>&#39;s
+          <p>(Source: <code>RsaJwksProvider.cs</code>, <code>IJwksProvider.cs</code>, and the JWKS notes in <code>MMCA.Common/AGENTS.md</code>&#39;s
           microservices extraction section.)</p>
-          <h2 id="the-dual-fetch-and-the-graceful-empty-set">The dual-fetch, and the graceful empty set</h2>
-          <p>The dual-fetch ADR-004 describes is in the key discovery itself: a validator <strong>discovers</strong> the issuer&#39;s
-          public key from the JWKS endpoint, and the framework <strong>falls back gracefully</strong> when the key is not
-          there. When JWKS publishing is disabled (the default for a monolith) or no key is configured,
-          <code>RsaJwksProvider</code> returns an <strong>empty key set</strong> rather than throwing. The endpoint stays a valid, pollable
-          URL instead of erroring. A monolith that never turns JWKS on still answers <code>/.well-known/jwks.json</code> with
-          an empty document, so flipping a service into extracted mode does not require standing up new endpoints.
-          Discover the key; fall back when it is not there. That is the dual-fetch.</p>
-          <p>A different two-fetch is easy to conflate with this one, so it is worth naming plainly: the shared login
-          flow, <code>AuthenticationServiceBase&lt;TUser&gt;.LoginAsync</code> in <code>MMCA.Common.Application</code>, does an <strong>untracked</strong>
+          <h2 id="discovery-and-the-graceful-empty-set">Discovery, and the graceful empty set</h2>
+          <p>Discovery has two halves, and ADR-004 names both. On the issuer, when JWKS publishing is disabled (the
+          default for a monolith) or no key is configured, <code>RsaJwksProvider</code> returns an <strong>empty key set</strong> rather
+          than throwing. The well-known endpoints are mapped centrally for every host, so the endpoint stays a
+          valid, pollable URL instead of erroring. A monolith that never turns JWKS on still answers
+          <code>/.well-known/jwks.json</code> with an empty document, so flipping a service into extracted mode does not
+          require standing up new endpoints, and only the real issuer advertises a key.</p>
+          <p>On the validator, the question is which URL to fetch from, and the answer depends on where the host
+          runs. Under the local Aspire AppHost, <code>WithJwksDiscovery(identity, gateway)</code> sets each validator&#39;s
+          authority to the <strong>gateway</strong>&#39;s HTTPS origin: the extracted REST services listen HTTP/2-only on
+          cleartext for h2c gRPC (ADR-012), so the default HTTP/1.1 <code>JwtBearer</code> backchannel cannot reach Identity
+          directly, while the gateway terminates TLS, speaks both protocols, and forwards <code>/.well-known/*</code> on to
+          Identity. When no gateway is passed, the helper falls back to Identity&#39;s own HTTPS endpoint. In the
+          deployed ADC and Store environments, the bicep templates point the authority straight at Identity&#39;s
+          internal-ingress URL, with no gateway hop. Either way the validator carries one authority value owned
+          by the host wiring and no key material, and <code>ValidIssuer</code> is deliberately left unpinned: the authority
+          is an internal address while the token&#39;s <code>iss</code> is the public origin, so the issuer is taken from the
+          discovery document.</p>
+          <p>ADR-004&#39;s file name says &quot;dual-fetch&quot;, but the framework&#39;s own doc comments give that name to a
+          different flow, so it is worth naming plainly: the shared login flow,
+          <code>AuthenticationServiceBase&lt;TUser&gt;.LoginAsync</code> in <code>MMCA.Common.Application</code>, does an <strong>untracked</strong>
           read to validate credentials (so the adversarial majority of login traffic, the failed attempts, never
           pays EF Core change-tracking cost), then a <strong>tracked</strong> re-fetch only on success to persist the rotated
           refresh token. The base&#39;s own doc comment names it the &quot;untracked-then-tracked dual-fetch&quot;; the ADC and
           Store Identity modules are thin sealed subclasses that supply the app-specific hooks (the untracked
           lookup, the claim set) and re-label it &quot;dual-fetch pattern&quot; in their class doc comments
-          (<code>AuthenticationService.cs:17</code> in ADC, <code>:16</code> in Store). It is shared framework login code, not a
-          per-app copy, but it is still not part of ADR-004&#39;s cross-service validation design.</p>
-          <p>JWKS discovery is routed through the <strong>YARP gateway</strong>, not pointed at each service&#39;s internal address.
-          The validator asks the gateway for the issuer&#39;s JWKS document, and the gateway forwards it to whichever
-          host currently owns Identity. This keeps the validator&#39;s config stable across topology changes: when
-          Identity moves, redeploys, or scales, the gateway route updates, not every consumer.</p>
+          (<code>AuthenticationService.cs:20</code> in both ADC and Store). It is shared framework login code, not a
+          per-app copy, but it is not part of ADR-004&#39;s cross-service validation design.</p>
           <h2 id="jwt-algorithm-pinning-the-attack-you-would-otherwise-ship">JWT algorithm pinning: the attack you would otherwise ship</h2>
           <p>Switching to asymmetric keys opens a specific, classic attack, and the framework closes it explicitly.</p>
           <p>Once the RSA <strong>public</strong> key is published (which is the entire point of JWKS), an attacker has it. If a
@@ -262,24 +270,47 @@
           <p>The JWKS layer is the right model, but it is not free, and the §11 review of the framework names the
           rough edges.</p>
           <ul>
-          <li><strong>Two round trips on successful login.</strong> The Identity service&#39;s login flow (the shared login
+          <li><p><strong>Two round trips on successful login.</strong> The Identity service&#39;s login flow (the shared login
           dual-fetch above, not the JWKS layer itself) pays a tracked re-fetch, a second query on the success
           path. In practice the first query warms the database buffer pool so the second is near-instantaneous,
           and failed logins (the adversarial majority) pay nothing extra. It is a deliberate trade, not an
-          oversight.</li>
-          <li><strong>A small race window between the two fetches.</strong> A user could be deleted between the untracked
+          oversight.</p>
+          </li>
+          <li><p><strong>A small race window between the two fetches.</strong> A user could be deleted between the untracked
           validation and the tracked re-fetch. The re-fetch then returns NotFound, which is the correct
-          outcome, so the window is acceptable rather than hidden.</li>
-          <li><strong>Plain-HTTP metadata discovery is an explicit, auditable opt-out.</strong> <code>AddForwardedJwtBearer</code>
+          outcome, so the window is acceptable rather than hidden.</p>
+          </li>
+          <li><p><strong>Plain-HTTP metadata discovery is an explicit, auditable opt-out.</strong> <code>AddForwardedJwtBearer</code>
           resolves <code>RequireHttpsMetadata</code> in three steps: explicit argument, then the
           <code>Authentication:JwtBearer:RequireHttpsMetadata</code> config key, then <code>true</code> everywhere except
           Development, and a resolved <code>false</code> outside Development logs one startup warning naming the key. The
           honest residual is that an operator can still set that key to <code>false</code>, and both production
-          deployments do: ADC and Store validate against an internal-ingress cleartext <a href="http://identity" target="_blank" rel="noopener">http://identity</a>, so
-          their bicep sets it explicitly with the justification written beside it. That is a reviewable line in
-          a deployment template rather than a default nobody chose. Permissive dev CORS is a development-only
-          affordance, selected by environment.</li>
-          <li><strong>The invariants in this article fail the build.</strong> Executable tests run the real registration code
+          deployments do: ADC and Store validate against Identity&#39;s cleartext internal-ingress URL, so their
+          bicep sets it explicitly with the justification written beside it. That is a reviewable line in a
+          deployment template rather than a default nobody chose.</p>
+          </li>
+          <li><p><strong>Every dev-only relaxation fails closed on an unknown environment.</strong> The three-step resolution
+          above is one instance of a framework-wide rule (ADR-122): a relaxation applies only when the host
+          positively identifies itself as Development, and an unknown, absent, or unparseable environment
+          gets the production posture. The case that rule exists for is easy to miss: design-time tooling, a
+          directly-constructed test context, and a service collection assembled outside a host builder
+          register no <code>IHostEnvironment</code> at all, so every gate has to decide what &quot;unknown&quot; means.</p>
+          <p>Three gates take a nullable environment and answer &quot;not Development&quot; for null.
+          <code>SensitiveDataLoggingGate.IsEnabled</code> lets EF Core render parameter values into logs only when the
+          setting asks for it AND the environment reports Development, so a configuration file copied into a
+          deployed host cannot put tokens and password hashes into the log sink on its own. SMTP transport
+          security reads the <code>Smtp:EnableSsl</code> key first and otherwise enables TLS unless the environment is
+          positively Development, and a deployed host that turns TLS off logs a startup warning. The AI
+          package scans the service collection for a registered <code>IHostEnvironment</code> and keeps prompt and
+          completion text out of telemetry when it finds none.</p>
+          <p>The residuals are named in the ADR itself. <code>ASPNETCORE_ENVIRONMENT</code> is the trust root, so a host
+          that misreports itself as Development gets every relaxation at once: the rule concentrates the risk
+          on one value instead of removing it. The other environment-conditional relaxations (the permissive
+          dev CORS policy, the cookie <code>Secure</code> flag, HSTS, the pseudo-locale) are plain <code>IsDevelopment()</code>
+          checks against an environment the host always supplies, not fail-closed gates. And the inventory is
+          manual: nothing fails a build when a new environment-conditional branch skips the rule.</p>
+          </li>
+          <li><p><strong>The invariants in this article fail the build.</strong> Executable tests run the real registration code
           and read the produced options back: the forwarded bearer handler&#39;s <code>ValidAlgorithms</code> must stay
           <code>[RsaSha256]</code>, the <code>RequireHttpsMetadata</code> resolution above is asserted step by step (including the
           fail-fast on a cleartext authority with no opt-out), the permissive CORS policy must never support
@@ -289,17 +320,19 @@
           facts: it fails on any <code>[AllowAnonymous]</code> outside an explicit allow-list, on a stale allow-list entry,
           on an empty scan, on an endpoint that declares neither <code>[Authorize]</code> nor <code>[AllowAnonymous]</code> (a
           stricter gate each suite opts into, which the framework turns on for itself), and on a stale entry in
-          that second, undecorated allow-list. The framework&#39;s own allow-list holds 18 entries: ten
+          that second, undecorated allow-list. The framework&#39;s own allow-list holds 19 entries: ten
           credential-exchange actions that cannot require a token because issuing one is what they do (login,
           register, refresh, the OAuth exchange, the three provider challenges and the provider callback,
-          forgot-password and reset-password), the five credential pages, and three landing and outcome pages
-          that render nothing depending on the caller. NetArchTest&#39;s fluent API cannot express this pair, which is why
+          forgot-password and reset-password), six credential pages (the email-confirmation landing among
+          them), and three landing and outcome pages that render nothing depending on the caller. NetArchTest&#39;s
+          fluent API cannot express this pair, which is why
           the rules live as full-name reflection and options-resolution tests instead. Two residuals stay
           honest. Minimal-API endpoints opt out through an <code>.AllowAnonymous()</code> builder call, which is endpoint
           metadata rather than an attribute, so the JWKS and OIDC discovery endpoints themselves sit outside
           the scan&#39;s reach. And the anonymous-endpoint scan is only as complete as the suites that subclass it:
           each consuming repo owns its own allow-list. The framework&#39;s thesis is that a rule that matters
-          should fail the build, and these rules do.</li>
+          should fail the build, and these rules do.</p>
+          </li>
           </ul>
           <p>None of these are reasons to share a symmetric secret across services. They are the reasons to wire the
           asymmetric boundary deliberately.</p>
@@ -312,8 +345,9 @@
           issuer keeps the private key; everyone else gets the public key. A validator should never hold a key
           that can also forge.</li>
           <li><strong>Publish the public key as a JWKS document at <code>/.well-known/jwks.json</code></strong> and let the standard
-          <code>JwtBearer</code> discovery fetch and refresh it. Route discovery through your gateway so topology changes
-          do not ripple into every consumer&#39;s config.</li>
+          <code>JwtBearer</code> discovery fetch and refresh it. Give each validator one authority value owned by the
+          deployment wiring (a gateway origin or the issuer&#39;s internal address), so a topology change is a
+          config edit rather than a key redistribution.</li>
           <li><strong>Pin the algorithm on the validator.</strong> Set the allowed algorithms explicitly and re-check the
           token&#39;s <code>alg</code> against your expectation. Never let the token&#39;s own header choose the verification
           method, or you have shipped the algorithm-confusion attack.</li>
@@ -326,16 +360,17 @@
           <hr>
           <p><strong>What we covered:</strong> why a shared symmetric secret turns one leak into a system-wide forgery, how
           RS256 + a published JWKS document lets extracted services validate against the issuer&#39;s public keys
-          with no secret of their own, how ADR-004&#39;s dual-fetch (discover the key, fall back to an empty set)
-          and gateway-routed discovery keep the boundary stable, and why algorithm pinning closes the key-
-          substitution attack that publishing a public key would otherwise open.</p>
+          with no secret of their own, how discovery (gateway-routed under the local AppHost, direct to
+          Identity&#39;s internal ingress when deployed) and the empty-key-set fallback keep the boundary stable,
+          why algorithm pinning closes the key-substitution attack that publishing a public key would otherwise
+          open, and how ADR-122 makes every dev-only relaxation fail closed when the environment is unknown.</p>
           <p><strong>Next in the series:</strong> password hashing done right: PBKDF2-SHA512, 600k iterations, and timing-safe
           comparison, the credential-at-rest half of the same security story.</p>
           <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the 2-minute ADR-004 behind this
           pattern, or <code>dotnet add package MMCA.Common.API</code> and try it.</em></p>
           <ul>
           <li>⭐ Repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
-          <li>📄 ADR-004 (authentication dual-fetch): <a href="../docs/adr/004-authentication-dual-fetch.html">ADR-004: Cross-Service Token Validation via JWKS / OIDC Discovery</a> in the docs site.</li>
+          <li>📄 ADR-004 (cross-service token validation via JWKS / OIDC discovery): <a href="../docs/adr/004-authentication-dual-fetch.html">ADR-004: Cross-Service Token Validation via JWKS / OIDC Discovery</a> in the docs site.</li>
           </ul>
           <p><em>Tags: .NET, C Sharp, Software Architecture, Microservices, Authentication</em></p>
           
@@ -353,7 +388,7 @@
             <ul>
             <li><a href="#why-it-matters">Why it matters</a></li>
             <li><a href="#the-mmca-answer-publish-the-public-half-as-a-jwks-document">The MMCA answer: publish the public half as a JWKS document</a></li>
-            <li><a href="#the-dual-fetch-and-the-graceful-empty-set">The dual-fetch, and the graceful empty set</a></li>
+            <li><a href="#discovery-and-the-graceful-empty-set">Discovery, and the graceful empty set</a></li>
             <li><a href="#jwt-algorithm-pinning-the-attack-you-would-otherwise-ship">JWT algorithm pinning: the attack you would otherwise ship</a></li>
             <li><a href="#trade-offs-honestly">Trade-offs, honestly</a></li>
             <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>

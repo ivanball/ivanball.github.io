@@ -4,7 +4,9 @@
 > Rubric §7 · ADRs 006/007/008 · Status: grounded in `MMCA.Common/CLAUDE.md` (its microservice
 > extraction-boundaries section), `Website/docs-src/adr/006-database-per-service.md`, `Website/docs-src/adr/007-grpc-extraction.md`,
 > `Website/docs-src/adr/008-service-extraction-topology.md`, and `Website/docs-src/onboarding/group-14-module-system-composition.md`
-> + `group-13-grpc-contracts.md`. No em dashes.
+> + `group-13-grpc-contracts.md`, with source re-read 2026-10-02 at v1.221.0 (`MessageBusSettings.cs`,
+> `ArchitectureRules.Transport.cs`, `ResultGrpcExtensions.cs`, ADC `IBookmarkCountService.cs`,
+> `GetSessionBookmarkCountHandler.cs`, Engagement.Contracts `DependencyInjection.cs`). No em dashes.
 
 **Subtitle:** "Monolith or microservices" is the wrong question. Build the extraction point now, keep it tested,
 and cut the service later, on a boundary you have already proven.
@@ -53,7 +55,7 @@ onto physical connection strings, and `EntityDataSourceRegistry` maps every enti
 startup. The clever part is collapse: a host with no `DataSources` configuration collapses every
 logical name onto a single `Default` source, so it behaves **exactly** like a single-database
 monolith (one context, one change tracker, foreign keys intact). Point one config entry at a separate
-database and that module's data is now physically isolated, with no code change. This is the deep-dive
+database and that module's data is physically isolated, with no code change. This is the deep-dive
 of its own article; the point here is that the data boundary exists from day one and costs nothing
 until you use it.
 
@@ -87,10 +89,13 @@ root just does `services.Replace(...)` to swap one for the other. The calling co
 it got.
 
 The error model survives the hop too. On the server, `GrpcResultExceptionInterceptor` turns a failed
-`Result` (raised as a `ResultFailureException`) into an `RpcException` carrying the errors, and the typed
-client adapter reconstructs `Result.Failure(errors)` from the trailers, so callers keep
-programming against `Result<T>` whether the answer came from an object or a network round-trip. This
-is "Result over the wire," and it is why the wire hop does not poison your error handling.
+`Result` (raised as a `ResultFailureException`) into an `RpcException` carrying the errors as
+structured trailers. On the client, an adapter whose interface returns a `Result` catches that
+`RpcException` and calls `ToResult()` (or `ToResult<T>()`), which rebuilds `Result.Failure(errors)`
+from the trailers and degrades a bare transport fault (a reset connection, a missed deadline) to a
+single failure carrying the RPC detail. Callers keep programming against `Result<T>` whether the
+answer came from an object or a network round-trip. This is "Result over the wire," and it is why
+the wire hop does not poison your error handling.
 
 ### 4. Federated auth, a gateway, and Aspire hosting (ADR-008)
 
@@ -113,11 +118,12 @@ The whole thesis fits in one DI swap. The same handler depends on the same inter
 registration line differs between the two topologies.
 
 ```csharp
-// Application/Domain code depends ONLY on the interface. It never sees the transport.
-public sealed class GetSessionBookmarkCountHandler(IBookmarkCountService counts)
+// Application code depends ONLY on the interface. It never sees the transport.
+public sealed class GetSessionBookmarkCountHandler(
+    IBookmarkCountService bookmarkCountService) : IQueryHandler<GetSessionBookmarkCountQuery, Result<int>>
 {
-    // ... calls counts.GetBookmarkCountForSessionAsync(sessionId), which returns a plain int (Task<int>);
-    // the handler wraps that count as Result.Success(count) and returns Result<int>.
+    // ... var count = await bookmarkCountService.GetBookmarkCountForSessionAsync(query.SessionId, cancellationToken);
+    //     return Result.Success(count);   // the interface returns a plain Task<int>; the handler returns Result<int>
 }
 
 // MONOLITH host: the real in-process implementation is registered (peer module enabled).
@@ -191,48 +197,72 @@ install it and try the split for yourself.*
 
 *Tags: .NET, C Sharp, Software Architecture, Microservices, Modular Monolith*
 
-*Notes: verified type/behavior names: `IMessageBus`, `InProcessMessageBus`, `BrokerMessageBus`,
-`MessageBusSettings`, `MicroserviceExtractionTests`, `DataSourceKey`, `DataSourceResolver`,
-`EntityDataSourceRegistry`, `MMCA.Common.Grpc`, `GrpcResultExceptionInterceptor`,
-`BookmarkCountServiceGrpcAdapter`, `IBookmarkCountService`, the `.Contracts` convention,
-`IJwksProvider`/`RsaJwksProvider`, `JwksEndpointExtensions`, `ModuleLoader`, `Disabled*` stubs,
-`MMCA.Common.Aspire.Hosting`, YARP gateway. `BrokerMessageBus` publishes through MassTransit's
-`IPublishEndpoint` and is transport-neutral; `MessageBusProvider` has three values, `InProcess` (0),
+*Notes: 2026-10-02 re-verify at framework v1.221.0 (`MMCA.Common/FACTS.md:14`); every anchor below was
+re-read in this run. Messaging: `IMessageBus`
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Messaging/IMessageBus.cs:28`), `InProcessMessageBus`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/InProcessMessageBus.cs:19`) and
+`BrokerMessageBus` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/BrokerMessageBus.cs:43`,
+publishing through MassTransit, transport-neutral); `MessageBusProvider` has three values, `InProcess` (0),
 `RabbitMq` (1, dev/test) and `AzureServiceBus` (2, production)
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:236`, the three
-members at :241/:246/:251), so the earlier "over RabbitMQ" wording was corrected.
-`MMCA.Common.Aspire.Hosting` ships four source files (`Extensions.cs`, `H2cHealthCheckExtensions.cs`,
-`H2cEndpointHealthCheck.cs`, `ServiceBusEmulatorResource.cs`); `Extensions.cs` exposes
-`AddMessageBroker` (:160), `WithBroker` (:252, plus a second overload at :280), `WithJwksDiscovery`
-(:309), `WithE2eRsaKeys` (:353) and
-`WithSQLServerDataSource`/`WithPostgreSQLDataSource`/`WithCosmosDataSource`/`WithSqliteDataSource`
-(:483/:513/:542/:567); it has **no** gRPC project-reference API (the only `grpc` mention in the file
-is a prose comment at :322 about h2c prior knowledge), so that claim was corrected too. ADC's
-AppHost wires gRPC peers with stock Aspire `WithReference`
-(`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:269-301`). The transport-leak fitness rule is
-broader than stated in the body: the forbidden set is MassTransit, Grpc **and** Google.Protobuf
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:236`, members at
+:241/:246/:251). Transport-leak fitness rule: the forbidden set is MassTransit, Grpc **and** Google.Protobuf
 (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Layering/ArchitectureRules.Transport.cs:11-16`),
-asserted by `Bases/Layering/MicroserviceExtractionTestsBase.cs:13` and subclassed in Common, ADC,
-Store, Helpdesk and the MMCA.ECommerce sample. The code sample's cross-module call is the real
-interface method
+asserted by `MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Layering/MicroserviceExtractionTestsBase.cs:13`
+and subclassed in Common, ADC, Store, Helpdesk and the MMCA.ECommerce sample. Data sources: `DataSourceKey`
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/DataSourceKey.cs:15`,
+`DefaultName = "Default"` at :18), `DataSourceResolver`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/DataSourceResolver.cs:16`, the
+collapse onto Default described at :191 and :294) and `EntityDataSourceRegistry`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/EntityDataSourceRegistry.cs:21`).
+Modules: `ModuleLoader` (`MMCA.Common/Source/Core/MMCA.Common.Application/Modules/ModuleLoader.cs:16`) and the
+`Disabled*` stubs, e.g. `DisabledBookmarkCountService`
+(`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/UserSessionBookmarks/DisabledBookmarkCountService.cs:7`).
+Auth: `IJwksProvider` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/IJwksProvider.cs:11`, serving
+`/.well-known/jwks.json` per its doc comment at :6), `RsaJwksProvider`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/RsaJwksProvider.cs:14`) and `JwksEndpointExtensions`
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Endpoints/JwksEndpointExtensions.cs:15`). gRPC and
+Result over the wire: `GrpcResultExceptionInterceptor`
+(`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Interceptors/GrpcResultExceptionInterceptor.cs:19`,
+catching `ResultFailureException` at :34 and mapping its errors through `ToRpcException()` in
+`ToTransportException` at :126), `ResultFailureException`
+(`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Exceptions/ResultFailureException.cs:16`), and
+`ResultGrpcExtensions` (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/ResultGrpcExtensions.cs:31`:
+`ToRpcException()` at :119, client-side `ToResult()` at :218 and `ToResult<T>()` at :242, structured
+trailers first, a bare transport fault degrading to one `Grpc.{StatusCode}` failure). Result-returning ADC
+adapters call it, e.g. `ex.ToResult<EventLiveInfo>()`
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Contracts/EventLiveValidationServiceGrpcAdapter.cs:61`) and
+`ex.ToResult()` (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Contracts/SessionBookmarkValidationServiceGrpcAdapter.cs:58`);
+`BookmarkCountServiceGrpcAdapter`
+(`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Contracts/BookmarkCountServiceGrpcAdapter.cs:14`) returns a
+plain count and has no `Result` to rebuild. The `.Contracts` convention:
+`MMCA.Common/Directory.Build.props:153` (the `EndsWith('.Contracts')` item group) with
+`<Protobuf Include="Protos\**\*.proto" GrpcServices="Both" />` at :160. Worked example:
+`IBookmarkCountService` carries `[ServiceContract]` and declares
 `Task<int> GetBookmarkCountForSessionAsync(SessionIdentifierType sessionId, CancellationToken)`
-(`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/UserSessionBookmarks/IBookmarkCountService.cs:19`);
-the earlier `GetCountAsync(...) returns Result<int>` name did not exist. The interface returns a plain
-`Task<int>`; the enclosing `GetSessionBookmarkCountHandler` (a real type,
-`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/UseCases/GetSessionBookmarkCount/GetSessionBookmarkCountHandler.cs:14`,
-implementing `IQueryHandler<GetSessionBookmarkCountQuery, Result<int>>` at :16) is what returns
-`Result<int>`, wrapping the count via `Result.Success(count)` at line 45 after the call at line 43.
-The code sample's `services.Replace(...)` line is **verbatim** source, not a paraphrase
+(`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/UserSessionBookmarks/IBookmarkCountService.cs:10`
+and :19); `GetSessionBookmarkCountHandler`
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/UseCases/GetSessionBookmarkCount/GetSessionBookmarkCountHandler.cs:14`,
+implementing `IQueryHandler<GetSessionBookmarkCountQuery, Result<int>>` at :16) makes the call at :43 and
+returns `Result.Success(count)` at :45; the code sample's `services.Replace(...)` line is verbatim source
 (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Contracts/DependencyInjection.cs:49`, inside
-`AddEngagementBookmarkCountClient` at :43), and the repo URL is confirmed (`ivanball/MMCA.Common` is
-public under Apache-2.0, `MMCA.Common/Directory.Build.props:46-47`). 2026-09-19 re-verify (framework
-v1.205.0, `MMCA.Common/FACTS.md:14`): three cited files moved and their paths are corrected above,
-`MessageBusSettings.cs` (from `Settings/` to `Messaging/`), `ArchitectureRules.Transport.cs` (into
-`Rules/Layering/`) and `MicroserviceExtractionTestsBase.cs` (into `Bases/Layering/`), contents
-unchanged in all three; `Extensions.cs`, the ADC `Program.cs`, `IBookmarkCountService.cs` and
-`Directory.Build.props` each grew, and every line anchor above was re-read at this run. One prior
-honest gap is retired: `ServiceContractAttribute` is adopted, and `IBookmarkCountService` (this
-article's worked example) carries `[ServiceContract]`
-(`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/UserSessionBookmarks/IBookmarkCountService.cs:10`).*
+`AddEngagementBookmarkCountClient` at :43). Aspire hosting: `MMCA.Common.Aspire.Hosting` ships four source
+files (`Extensions.cs`, `H2cHealthCheckExtensions.cs`, `H2cEndpointHealthCheck.cs`,
+`ServiceBusEmulatorResource.cs`); `MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs`
+exposes `AddMessageBroker` (:160), `WithBroker` (:252, second overload :280), `WithJwksDiscovery` (:309),
+`WithE2eRsaKeys` (:353) and
+`WithSQLServerDataSource`/`WithPostgreSQLDataSource`/`WithCosmosDataSource`/`WithSqliteDataSource`
+(:483/:513/:542/:567), and **no** gRPC project-reference API (the only gRPC mention is a prose comment at
+:322). ADC's AppHost wires gRPC peers with stock Aspire `WithReference`
+(`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:269-301`; the Conference to Engagement reference at
+:274 carries no `WaitFor`). Repo and license: `ivanball/MMCA.Common`, Apache-2.0
+(`MMCA.Common/Directory.Build.props:49-50`). Changes this run: the license/URL anchor was re-anchored to
+49-50; the error-model paragraph was corrected (the trailer-to-`Result` rebuild is `ToResult()` in
+`ResultGrpcExtensions`, called by Result-returning adapters, not something the bookmark adapter does); the
+code sample's handler shape now matches source (primary constructor plus `IQueryHandler`); a "now" was
+dropped from section 1. Earlier runs: the 2026-09-19 run corrected three moved paths
+(`MessageBusSettings.cs` to `Messaging/`, `ArchitectureRules.Transport.cs` to `Rules/Layering/`,
+`MicroserviceExtractionTestsBase.cs` to `Bases/Layering/`) and retired the `ServiceContractAttribute` gap;
+before that, "over RabbitMQ" became provider-neutral, an invented Aspire gRPC API was removed, and a
+nonexistent `GetCountAsync(...) returns Result<int>` was replaced with the real interface method.*
 
 - Full series index: https://ivanball.github.io/writing.html

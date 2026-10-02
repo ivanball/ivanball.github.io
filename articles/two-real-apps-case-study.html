@@ -182,7 +182,7 @@
           <ul>
           <li><strong>Identity</strong> (the <code>User</code> aggregate, JWT auth, plus social login via Google and GitHub),</li>
           <li><strong>Conference</strong> (events, sessions, speakers, rooms, categories, questions and answers, social
-          activities, partners and session assets, across eighteen domain REST controllers),</li>
+          activities, partners and session assets, across twenty-two domain REST controllers),</li>
           <li><strong>Engagement</strong> (session bookmarks, event and session feedback, and the conference-day live layer:
           the <code>LivePolls</code> and <code>SessionQuestions</code> aggregates behind Happening Now, the session Live view, and
           the presenter UI),</li>
@@ -214,11 +214,12 @@
           signed with RS256 and validated through JWKS discovery, with no shared secret.</p>
           <p>None of that topology is hand-rolled per app. It comes from the framework:</p>
           <ul>
-          <li><strong>The same packages, at the same number.</strong> MMCA.Common publishes nineteen packages, and each app pins
-          the subset it uses at one identical version literal: ADC pins eighteen <code>MMCA.Common.*</code> entries
-          (<code>.Shared</code>, <code>.Domain</code>, <code>.Application</code>, <code>.Infrastructure</code>, <code>.AI</code>, <code>.API</code>, <code>.Grpc</code>, <code>.Gateway</code>, <code>.UI</code>,
-          <code>.UI.Maui</code>, <code>.UI.Web</code>, <code>.Aspire</code>, <code>.Aspire.Hosting</code>, <code>.Testing</code>, <code>.Testing.Architecture</code>,
-          <code>.Testing.Aspire</code>, <code>.Testing.E2E</code>, <code>.Testing.UI</code>), Store pins seventeen of those, taking no <code>.AI</code>.</li>
+          <li><strong>The same packages, at the same number.</strong> MMCA.Common publishes twenty-two packages, and each app pins
+          the subset it uses at one identical version literal: ADC pins twenty <code>MMCA.Common.*</code> entries
+          (<code>.Shared</code>, <code>.Domain</code>, <code>.Application</code>, <code>.Infrastructure</code>, <code>.AI</code>, <code>.AI.Anthropic</code>, <code>.AI.Testing</code>,
+          <code>.API</code>, <code>.Grpc</code>, <code>.Gateway</code>, <code>.UI</code>, <code>.UI.Maui</code>, <code>.UI.Web</code>, <code>.Aspire</code>, <code>.Aspire.Hosting</code>, <code>.Testing</code>,
+          <code>.Testing.Architecture</code>, <code>.Testing.Aspire</code>, <code>.Testing.E2E</code>, <code>.Testing.UI</code>), Store pins seventeen of
+          those, taking none of the <code>.AI</code> packages.</li>
           <li><strong>The same patterns.</strong> <code>Result&lt;T&gt;</code> for error flow, the CQRS command/query split with the same
           decorator order (commands run FeatureGate then Authorization then Logging then Caching then
           Validating then Timeout then Transactional then the handler; queries run FeatureGate then
@@ -244,10 +245,10 @@
           code reaches them.</strong> There is no phased rollout, no opt-in flag, no per-consumer compatibility shim.</p>
           <p>The release is a lockstep sweep:</p>
           <ol>
-          <li>Tag a new MMCA.Common version (the version comes from the git tag via MinVer). All nineteen packages
+          <li>Tag a new MMCA.Common version (the version comes from the git tag via MinVer). All twenty-two packages
           publish at that same version.</li>
           <li>In each consumer, bump every <code>MMCA.Common.*</code> entry in <code>Directory.Packages.props</code> to the new version
-          in one pass. ADC keeps its eighteen entries and Store its seventeen on the same number.</li>
+          in one pass. ADC keeps its twenty entries and Store its seventeen on the same number.</li>
           <li>Build, run the fitness tests and the rest of the suite, deploy.</li>
           </ol>
           <p>The framework&#39;s versioning policy doc (<code>common-VERSIONING.md</code>, canonical in the published docs
@@ -266,8 +267,9 @@
           real domain and a real deployment. That is the division of labor between MMCA.Common and its consumers.</p>
           <p><strong>ADC proves real bounded contexts and real eventing.</strong> Identity publishing <code>UserRegistered</code> so
           Conference can auto-link a speaker by email match is a genuine cross-context workflow, not a contrived
-          one. Conference calling Engagement&#39;s bookmark-count service over gRPC, with a disabled-module stub
-          standing in when Engagement is not co-hosted, is the extraction boundary working in a running system
+          one. Conference calling Engagement&#39;s bookmark-count service over gRPC, through an adapter that implements
+          the same <code>IBookmarkCountService</code> interface the in-process call uses (each service host loads only its
+          own module, so the gRPC client is what answers), is the extraction boundary working in a running system
           rather than in a unit test. And the deployment is the operability proof: four services plus a gateway
           and a web UI, each
           service owning its own database and its own <code>OutboxMessages</code> table, rolled to Azure Container Apps.</p>
@@ -287,20 +289,21 @@
           <p>Here is the caveat the framework writes about itself. It is not a preamble or a methodology section:
           it is written into the category rows. Because the framework is a library and not a runnable app, a
           few categories can only be judged on the substrate it provides, not on realized behavior. The §4
-          Domain-Driven Design row holds its implementation score at 8 because strategic DDD is &quot;still realized
-          downstream (only Notifications lives here)&quot;, and the §5 Vertical Slice Architecture row holds at 8
-          because &quot;the enforced in-repo slicing surface is still the Notifications family&quot;: the framework ships
-          a second sliced family (the <code>Users</code> use cases, thirteen abstract handler bases across nine folders) and
-          the slice gate does reach abstract bases, but twelve of the thirteen declare their handler contract over
-          a generic parameter and are exempt by design, and every one of them logs through the shared
-          <code>UserUseCaseLog</code> switchboard, so the family deepens the pattern without widening the enforced surface.
+          Domain-Driven Design row holds its implementation score at 8 on two open criteria, the first being that
+          strategic DDD &quot;is realized downstream, since the Domain layer holds one aggregate family
+          (Notifications) plus auth support types&quot;. The §5 Vertical Slice Architecture row holds at 8 because
+          Common &quot;is an SDK with no business use-case slices of its own&quot;, so &quot;slice cohesion is proven in the
+          consumer repos&quot;: the framework ships a second sliced family (the <code>Users</code> use cases, thirteen abstract
+          handler bases across nine folders) and the slice gate does reach abstract bases, but twelve of the
+          thirteen declare their handler contract over a generic parameter and are exempt by design, so the
+          family deepens the pattern without widening the enforced surface.
           <strong>For both, the real surface lives in MMCA.Store and MMCA.ADC.</strong> For performance and
           cost, the framework ships an in-repo BenchmarkDotNet hot-path harness (§12) and a released cost guide
           (§31); only full load/stress data lives in the consumer apps.</p>
           <p>That is not a weakness to hide; it is the reason the two apps exist. The framework supplies the base
           classes, the enforced layering, and the extraction points. The apps supply the proof that those things
           hold up against two different real domains and two different production deployments. The
-          framework&#39;s two-axis evaluation scores it at roughly 97% maturity and 86% implementation (97.0% and 86.0%
+          framework&#39;s two-axis evaluation scores it at roughly 97% maturity and 86% implementation (96.6% and 86.0%
           exactly), with implementation
           the weaker axis precisely because some of the most important &quot;does this actually model a domain well&quot;
           evidence lives downstream, in the consumers, where it should.</p>

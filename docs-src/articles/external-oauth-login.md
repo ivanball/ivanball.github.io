@@ -111,22 +111,26 @@ await HttpContext.SignOutAsync(ExternalLoginScheme);          // the external pr
 // Stash the minted token pair server-side under a short TTL; the redirect carries only the opaque
 // code plus the client's own state, so the client can prove the code belongs to the flow it started.
 var exchangeCode = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
-await cacheService.SetAsync(
-    "oauth-exchange:" + exchangeCode, response, TimeSpan.FromMinutes(2), HttpContext.RequestAborted);
+await cacheService.SetAsync(                                  // prefix "oauth-exchange:", lifetime 2 minutes
+    OAuthExchangeCodePrefix + exchangeCode, response, OAuthExchangeCodeLifetime, HttpContext.RequestAborted);
 // Web target normally; the allow-listed native scheme when mobileReturnUrl is non-null (ADR-043).
 return Redirect(BuildSuccessRedirectUrl(uiBaseUrl, mobileReturnUrl, exchangeCode, returnUrl, clientState));
 
 // OAuthControllerBase.ExchangeAsync (POST, [NonIdempotent], out of band): burn the code on first use.
 if (string.IsNullOrWhiteSpace(request.Code)) { return InvalidCode(); }
-var response = await cacheService.GetAsync<AuthenticationResponse>("oauth-exchange:" + request.Code, ct);
+var cacheKey = OAuthExchangeCodePrefix + request.Code;
+// The shared store, not a local copy: a code burned on another replica must be a miss here.
+var response = await cacheService.GetFromSharedStoreAsync<AuthenticationResponse>(cacheKey, cancellationToken);
 if (string.IsNullOrEmpty(response.AccessToken)) { return InvalidCode(); }  // missing/replayed/expired => 400
-await cacheService.RemoveAsync("oauth-exchange:" + request.Code, ct);      // single-use
+await cacheService.RemoveAsync(cacheKey, cancellationToken);              // single-use
 return Ok(response);
 ```
 
 Read the redirect line again: it carries `code=...`, not `access_token=...`. The access and refresh
 tokens sit in the server-side cache the whole time. They reach the browser only through a same-origin
 POST response body, which history, the `Referer` header, and upstream access logs do not record. The
+exchange reads the code from the shared cache store rather than a per-replica copy, so a code already
+burned on one replica is a miss on every other. The
 code is burned on first read, so a leaked or replayed code buys nothing, and a blank, missing,
 replayed, or expired code returns HTTP 400. The exchange is marked `[NonIdempotent]`, because
 replaying a stored response would defeat the burn.
@@ -190,7 +194,9 @@ An external user is a `User` with an empty password hash and salt, carrying `Log
 complementary question the third guard asks. The linkage is two nullable columns
 (`LoginProvider varchar(50)`, `ProviderKey varchar(256)`) plus a unique index over the pair filtered
 to non-null rows, so two external identities cannot collide onto one account while local (null, null)
-accounts stay unconstrained. Whichever of the three paths runs, the exchange finishes through the
+accounts stay unconstrained. An existing account, whether matched by provider key or linked by email,
+is refused before anything is saved when an administrator has locked it; a brand-new account cannot
+be locked. Whichever of the three paths runs, the exchange finishes through the
 shared `IssueTokensAsync` workflow, which opens a refresh *session* for the device (hashed at rest, a
 per-user cap, a rotation chain) rather than stamping a plaintext refresh token on the aggregate, and
 hands back the same `AuthenticationResponse` shape a password login returns. A brand-new external user
@@ -294,121 +300,113 @@ revoke-on-reuse forced re-login.
 
 *Tags: .NET, C Sharp, OAuth, Security, Software Architecture*
 
-*Notes: re-verified every type, behavior and anchor against source on 2026-09-19 (framework v1.205.0).
-Three behavior changes since the 2026-08-19 pass are reflected above: Apple joined Google and GitHub as
-a third config-gated provider, the by-email link now runs three guards instead of one, and token
-issuance moved to the shared refresh-session workflow. Every anchor in `OAuthControllerBase.cs`,
-`ExternalAuthExtensions.cs`, ADC's `AuthenticationService.cs` / `User.cs` and both ADRs moved; three of
-the cited MMCA.Common.UI file paths gained an `Auth/` or `Auth/OAuth/` folder level, and the MAUI broker
-moved into `Capabilities/Auth/`. Anchors below are this run's.
-`MMCA.Common.API`:
-`OAuthControllerBase` (abstract, primary ctor takes `IAuthenticationService`/`ICacheService`/`IConfiguration`;
-`Source/Presentation/MMCA.Common.API/Controllers/OAuthControllerBase.cs:35-38`), the exchange-code prefix
-`"oauth-exchange:"` (`:45`), the client-state properties key `ClientStateItemKey = "clientState"` (`:49`)
-and the two-minute `OAuthExchangeCodeLifetime` (`:50`). Challenge endpoints `GoogleLogin`
-`[HttpGet("google")]` (`:57-60`), `GitHubLogin` `[HttpGet("github")]` (`:67-70`) and `AppleLogin`
-`[HttpGet("apple")]` (`:80-83`), each taking `[FromQuery] Uri? returnUrl` and `[FromQuery] string? state`.
-`CompleteAsync` `[HttpGet("complete")]` (`:97-100`) authenticates the external cookie (`:103`), reads the
-stashed pair via `ReadChallengeState` (`:115`; method `:151-152`), computes
-`mobileReturnUrl = GetAllowedMobileReturnUrl(returnUrl)` (`:116`), extracts
-`(provider, providerKey, email, firstName, lastName)` (`:118`, `ExtractClaims` `:214-222`), calls
-`ExternalLoginAsync` (`:125-126`), on failure `RedirectError(...)` (`:130`; `GetErrorCode` `:254-255`,
-`RedirectError` `:264-267`, `RedirectToLoginWithError` `:257-258`), `SignOutAsync(ExternalLoginScheme)`
-(`:136`), mints the code via `Convert.ToHexString(RandomNumberGenerator.GetBytes(32))` (`:141`) and
-`cacheService.SetAsync(...)` (`:142-143`), then redirects via
-`BuildSuccessRedirectUrl(uiBaseUrl, mobileReturnUrl, exchangeCode, returnUrl, clientState)` (`:145`;
-five-argument builder `:154-168`, appending `&state=` only when the client supplied one `:161-163`, never
-a token). `ExchangeAsync` `[HttpPost("exchange")]` / `[NonIdempotent]` / `[AllowAnonymous]` (`:177-181`,
-attribute at `:178`) rejects a blank code up front (`:185-188`), detects a cache miss via empty
-`AccessToken` and returns 400 `InvalidCode` (miss check `:195-198`; `InvalidCode` `:206-212`), and burns
-the code via `RemoveAsync` (`:201`). `ChallengeProvider` (`:301-317`) sets
-`RedirectUri = "/auth/oauth/complete"`, stashes `returnUrl`, and stashes the opaque client state under
-`ClientStateItemKey` so the client can prove the code belongs to the flow it started (`:310-313`).
-ADR-043 native-callback: `GetAllowedMobileReturnUrl` returns the stashed URL only when it is an absolute
-URI whose custom scheme is in `OAuth:AllowedReturnUrlSchemes`, and `http`/`https` never match, so no open
-redirect (`:276-290`); a missing or empty section means no allowlist (`:287-288`); `AppendQuery` uses
-`OriginalString` (`:292-299`). ADR-043 record:
-`Website/docs-src/adr/043-mobile-deep-links-and-native-oauth-callback.md` (`## Status` `:3`, Accepted
-2026-07-15 with revisions recorded through 2026-08-31 (`:234`), 2026-09-07 (`:281`) and 2026-09-11
-(`:302`); `## Decision` `:71`, `## Trade-offs` `:119`).
-Native client broker (ADR-043): `IExternalAuthBroker`
-(`Source/Presentation/MMCA.Common.UI/Services/Capabilities/Auth/IExternalAuthBroker.cs:10`) with the MAUI
-`MauiExternalAuthBroker` (`Source/Presentation/MMCA.Common.UI.Maui/Capabilities/Auth/MauiExternalAuthBroker.cs:20`),
-which holds an `OAuthFlowStateStore` (`:24`), begins a per-attempt state because the completion page
-refuses a code that does not belong to an attempt started on this device (`:63-66`), puts it on the
-challenge URL (`:70-71`), runs `WebAuthenticator.Default.AuthenticateAsync` (`:75-81`), pulls `code`
-(`:83-88`) and the returned `state` (`:90`), then `NavigateTo("/auth/oauth-complete?code=...&state=...")`
-(`:94-98`) to hand off to the shared completion page (it does NOT POST `ExchangeAsync` itself); web heads
-get the null default. `Login.razor`
-(`Source/Presentation/MMCA.Common.UI/Pages/Auth/Login.razor`) gates the whole block on
-`_hasExternalProviders` (`:87`, field `:174`, assigned from the three provider flags `:180`), branches per
-provider (`AppleEnabled` `:98`, `GoogleEnabled` `:119`, `GitHubEnabled` `:140`), checks
-`ExternalAuthBroker.IsAvailable` (`:100`, `:121`, `:142`) and calls `SignInWithBrokerAsync` (`:104`,
-`:125`, `:146`). `ExternalAuthExtensions`
-(`Source/Presentation/MMCA.Common.API/Authentication/ExternalAuthExtensions.cs`):
-`ExternalLoginScheme = "ExternalLogin"` (`:28`), `AddExternalAuthProviders(IConfiguration)` (`:38`) reads
-`OAuth:Google:ClientId` / `OAuth:GitHub:ClientId` / `OAuth:Apple:ClientId` (`:40-43`), returns untouched
-when all three are unset (`:47-52`), calls `AddAuthentication()` with no argument (`:56`), adds the
-`ExternalLogin` cookie named `mmca_external_login`, HttpOnly, `SameSite=Lax`, 10-minute `ExpireTimeSpan`
-(`:83-92`), then registers each configured provider (`:60-73`). `AddGoogleProvider` throws on a missing
-`ClientSecret` (`:98-100`), `AddGitHubProvider` throws likewise (`:110-112`) and adds
-`Scope.Add("user:email")` (`:117`), and `AddAppleProvider` (`:121-145`) sets `GenerateClientSecret = true`
-(`:130`) and throws on a missing `Apple:TeamId` (`:131-133`), `Apple:KeyId` (`:134-136`) or
-`Apple:PrivateKeyPem` (`:137-139`).
-`IAuthenticationService.ExternalLoginAsync` default returns `Error.Failure("Auth.ExternalLoginNotSupported", ...)`
-(`Source/Core/MMCA.Common.Application/Auth/IAuthenticationService.cs:139`).
+*Notes: re-verified against source on 2026-10-02 (framework v1.221.0). Body changes in this pass: the
+`ExchangeAsync` half of the code block reads the code through
+`cacheService.GetFromSharedStoreAsync<AuthenticationResponse>(cacheKey, ...)` (it showed a stale
+`GetAsync` call) and the `SetAsync` call names `OAuthExchangeCodePrefix` / `OAuthExchangeCodeLifetime`
+as source does; the paragraph after the block states the shared-store read; and "Finding the local
+user" states the administrator-lock refusal for existing accounts. Every anchor after
+`OAuthControllerBase.cs:190` moved +2, every `Login.razor` anchor moved +1, ADC's
+`AuthenticationService.cs` anchors moved (-1 through the create branch, +12 from the lock check on),
+and the Identity service host and `main.bicep` anchors moved. Anchors below are this run's; those
+marked (audit) carry the 2026-10-02 audit's CONFIRMED verdict and were not re-read in this pass.
+`MMCA.Common.API`: `OAuthControllerBase`
+(`Source/Presentation/MMCA.Common.API/Controllers/OAuthControllerBase.cs`; primary ctor `:35-38`, prefix
+`"oauth-exchange:"` `:45`, `ClientStateItemKey` `:49`, two-minute `OAuthExchangeCodeLifetime` `:50`,
+`GoogleLogin` `:57-60`, `GitHubLogin` `:67-70`, `AppleLogin` `:80-83`, all (audit)). `CompleteAsync`
+`[HttpGet("complete")]` (`:97-100`) authenticates the external cookie (`:103`), reads the stashed pair via
+`ReadChallengeState` (`:115`; method `:151-152`), computes `GetAllowedMobileReturnUrl(returnUrl)` (`:116`),
+extracts `(provider, providerKey, email, firstName, lastName)` (`:118`, `ExtractClaims` `:216-224`),
+redirects `missing_claims` when key or email is absent (`:120-123`), calls `ExternalLoginAsync`
+(`:125-126`), on failure `RedirectError(...)` (`:130`; `GetErrorCode` `:256-257`,
+`RedirectToLoginWithError` `:259-260`, `RedirectError` `:266-269`), `SignOutAsync(ExternalLoginScheme)`
+(`:136`), mints the code via `Convert.ToHexString(RandomNumberGenerator.GetBytes(32))` (`:141`), stashes
+it with `cacheService.SetAsync(OAuthExchangeCodePrefix + exchangeCode, response, OAuthExchangeCodeLifetime, ...)`
+(`:142-143`), then redirects via `BuildSuccessRedirectUrl(uiBaseUrl, mobileReturnUrl, exchangeCode, returnUrl, clientState)`
+(`:145`; builder `:154-168`, `&state=` only when the client supplied one `:161-163`, the web target
+carrying `returnUrl` `:166`, the native target `:167`, never a token). `ExchangeAsync`
+`[HttpPost("exchange")]` / `[NonIdempotent]` / `[AllowAnonymous]` (`:177-181`, `[NonIdempotent]` at `:178`)
+rejects a blank code (`:185-188`), builds the key once (`:190`), reads it with
+`GetFromSharedStoreAsync<AuthenticationResponse>` so a code burned on another replica is a miss (`:196`,
+reasoning `:192-195`), returns 400 `InvalidCode` on an empty `AccessToken` (`:197-200`; `InvalidCode`
+`:208-214`), burns the code via `RemoveAsync` (`:203`) and returns `Ok(response)` (`:205`).
+`ChallengeProvider` (`:303-319`) sets `RedirectUri = "/auth/oauth/complete"` (`:307`), stashes `returnUrl`
+(`:310`) and the opaque client state under `ClientStateItemKey` (`:312-315`).
+ADR-043 native callback: `GetAllowedMobileReturnUrl` (`:278-292`) returns null for a non-absolute URI or
+an `http`/`https` scheme (`:280-285`), reads `OAuth:AllowedReturnUrlSchemes` null-tolerantly so a missing
+or empty section means no allowlist (`:287-290`) and matches the scheme (`:291`); `AppendQuery` uses
+`OriginalString` (`:294-301`). ADR-043 record
+(`Website/docs-src/adr/043-mobile-deep-links-and-native-oauth-callback.md`): `## Status` `:3`,
+`## Decision` `:74`, `## Trade-offs` `:122`, dated revisions from 2026-07-28 (`:144`) through 2026-10-01
+(`:376`), including 2026-08-31 (`:237`), 2026-09-07 (`:284`), 2026-09-11 (`:305`) and 2026-09-25 (`:350`);
+the last two are anchor passes that change no decision.
+Native client broker (ADR-043, all (audit)): `IExternalAuthBroker`
+(`Source/Presentation/MMCA.Common.UI/Services/Capabilities/Auth/IExternalAuthBroker.cs:10`) and
+`MauiExternalAuthBroker` (`Source/Presentation/MMCA.Common.UI.Maui/Capabilities/Auth/MauiExternalAuthBroker.cs:20`;
+`OAuthFlowStateStore` `:24`, per-attempt state `:63-66`, state on the challenge URL `:70-71`,
+`WebAuthenticator.Default.AuthenticateAsync` `:75-81`, `code` `:83-88`, returned `state` `:90`,
+`NavigateTo("/auth/oauth-complete?code=...&state=...")` `:94-98`; it does not POST `ExchangeAsync`
+itself). `Login.razor` (`Source/Presentation/MMCA.Common.UI/Pages/Auth/Login.razor`) gates the block on
+`_hasExternalProviders` (`:88`, field `:175`, assigned from the three provider flags `:181`), branches
+per provider (`AppleEnabled` `:99`, `GoogleEnabled` `:120`, `GitHubEnabled` `:141`), checks
+`ExternalAuthBroker.IsAvailable` (`:101`, `:122`, `:143`) and calls `SignInWithBrokerAsync` (`:105`,
+`:126`, `:147`; method `:219`).
+`ExternalAuthExtensions` (`Source/Presentation/MMCA.Common.API/Authentication/ExternalAuthExtensions.cs`):
+`ExternalLoginScheme = "ExternalLogin"` (`:28`), `AddExternalAuthProviders(IConfiguration)` (`:38`),
+`AddAuthentication()` with no argument (`:56`), cookie `mmca_external_login` (`:86`) with a 10-minute
+`ExpireTimeSpan` (`:91`), Google `ClientSecret` throw (`:99-100`), GitHub `ClientSecret` throw
+(`:111-112`) and `Scope.Add("user:email")` (`:117`), Apple `GenerateClientSecret = true` (`:130`) with
+throws on a missing `Apple:TeamId` (`:131-133`), `Apple:KeyId` (`:134-136`) or `Apple:PrivateKeyPem`
+(`:137-139`); the three `ClientId` reads (`:40-43`), the untouched return (`:47-52`), the provider
+registrations (`:60-73`) and the cookie block (`:83-92`) are (audit).
+`IAuthenticationService.ExternalLoginAsync` default returns `Auth.ExternalLoginNotSupported`
+(`Source/Core/MMCA.Common.Application/Auth/IAuthenticationService.cs:139`, (audit)).
 `OAuthCodeExchangeRequest` (`Source/Core/MMCA.Common.Shared/Auth/Requests/OAuthCodeExchangeRequest.cs`).
-UI button gating `ConfigurationOAuthUISettings`
-(`Source/Presentation/MMCA.Common.UI/Services/Auth/OAuth/ConfigurationOAuthUISettings.cs`): `GoogleEnabled`
-(`:16`), `GitHubEnabled` (`:19`), `AppleEnabled` (`:22`), all read from `OAuth:<Provider>` (`:29-31`).
-ADC adoption: `AuthenticationService.ExternalLoginAsync` overrides the interface default and opens the
-transaction (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:193`,
-`ExecuteInTransactionAsync` `:200-202`); the ctor takes `IExternalLoginEmailVerifier` (`:51`). The body runs
-in `ExternalLoginCoreAsync` (`:205`): lookup by `LoginProvider`+`ProviderKey` where-clause (`:214-215`), the
-provider-supplied email validated with `Email.Create(email)` (`:233`) returning
-`Error.Validation("Auth.ExternalEmailInvalid", ...)` on failure (`:236-239`) before the by-email lookup runs
-(`:243-246`). An email match goes to `TryLinkProviderToExistingAccountAsync` (`:316-366`), which runs three
-guards: `Error.Conflict("Auth.ExternalProviderAlreadyLinked", ...)` when the account is already linked to a
-different provider, checked ahead of the verifier (`:325-331`);
-`externalLoginEmailVerifier.IsCurrentExternalLoginEmailVerifiedAsync()` (`:338-339`) with
-`Error.Unauthorized("Auth.ExternalEmailNotVerified", ...)` when the provider asserted nothing (`:343-346`);
-and the SEC-ADC-01 pre-registration guard `if (existingUser.HasLocalPassword)` returning
-`Error.Conflict("Auth.ExternalLinkRequiresLocalSignIn", ...)` (`:356-362`). Only past all three does
-`existingUser.LinkExternalProvider(...)` run (`:364`). The create branch asks the same verifier (`:265-266`)
-without gating on it and passes the answer to `User.CreateExternal(..., emailVerified)` (`:272-273`,
-`AddAsync` `:280`); new users raise `UserRegistered(..., emailVerified)` (`:294-295`) while the local
-registration path hard-codes `EmailVerified: false` (`:170`, reasoning at `:160-165`), which is why the
-downstream speaker auto-link runs only on a provider-asserted address (`:286-291`). Token issuance is
-`IssueTokensAsync(user, cancellationToken: cancellationToken)` (`:304`), opening a per-device refresh
-session (hash at rest, per-user cap, rotation chain) instead of stamping a plaintext token on the
-aggregate (`:299-303`); no `new AuthenticationResponse(...)` literal remains on this path. The guard
-interface `IExternalLoginEmailVerifier`
+`ConfigurationOAuthUISettings` (`Source/Presentation/MMCA.Common.UI/Services/Auth/OAuth/ConfigurationOAuthUISettings.cs`;
+`GoogleEnabled` `:16`, `GitHubEnabled` `:19`, `AppleEnabled` `:22`, read from `OAuth:<Provider>` `:29-31`, (audit)).
+ADC adoption (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs`):
+the ctor takes `IExternalLoginEmailVerifier` (`:54`); `ExternalLoginAsync` (`:192`) opens the transaction
+(`ExecuteInTransactionAsync` `:199-201`) around `ExternalLoginCoreAsync` (`:204`), which looks up by
+`LoginProvider` + `ProviderKey` (`:213-216`), validates the claim with `Email.Create(email)` (`:232`),
+returns `Auth.ExternalEmailInvalid` on failure (`:235-238`), looks up by the validated email (`:242-245`)
+and sends a match to `TryLinkProviderToExistingAccountAsync` (`:249`; method `:328-378`): the
+one-provider guard `Auth.ExternalProviderAlreadyLinked` ahead of the verifier (`:337-343`), the verifier
+call (`:350-351`) with `Auth.ExternalEmailNotVerified` (`:353-359`), and the SEC-ADC-01 guard
+`if (existingUser.HasLocalPassword)` returning `Auth.ExternalLinkRequiresLocalSignIn` (`:368-374`,
+reasoning `:361-367`) before `existingUser.LinkExternalProvider(...)` (`:376`). The create branch asks the
+same verifier (`:264-265`) without gating on it, passes the answer to `User.CreateExternal(..., emailVerified)`
+(`:271-272`) and adds the user (`:279`). An existing account (matched or linked) is refused when locked
+(`CheckNotLocked`, `:288-295`; a new account cannot be locked). New users raise
+`UserRegistered(..., emailVerified)` (`:306-307`, speaker auto-link reasoning `:299-303`) while local
+registration hard-codes `EmailVerified: false` (`:168-169`, reasoning `:160-163`). Token issuance is
+`IssueTokensAsync(user, cancellationToken: cancellationToken)` (`:316`, refresh-session reasoning
+`:311-315`). `IExternalLoginEmailVerifier`
 (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/IExternalLoginEmailVerifier.cs:11`,
-`IsCurrentExternalLoginEmailVerifiedAsync` `:19`).
-`User.CreateExternal` (empty hash/salt, `UserRole.Attendee` at `:266`, sixth `emailVerified` parameter
-`:253`, `IsEmailConfirmed = emailVerified` `:271`;
-`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:247-275`),
-`LinkExternalProvider` (`:300-304`), `IsExternalLogin => LoginProvider is not null` (`:130`),
+`IsCurrentExternalLoginEmailVerifiedAsync` `:19`, (audit)).
+`User` (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs`): `CreateExternal`
+(`:247`, `bool emailVerified = false` `:253`, `UserRole.Attendee` `:266`, `IsEmailConfirmed = emailVerified`
+`:271`), `LinkExternalProvider` (`:300`), `IsExternalLogin => LoginProvider is not null` (`:130`),
 `HasLocalPassword => PasswordHash.Length > 0` (`:151`), `LoginProvider` (`:102`) / `ProviderKey` (`:105`),
-`Anonymize` clears both (`:494-495`). ADC `OAuthController` sealed subclass with
-`[ApiController][Route("auth/oauth")][ApiVersion("1.0")]`
-(`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Controllers/OAuthController.cs:17-20`). Service host
-`AddExternalAuthProviders(builder.Configuration)` call
-(`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:197`, behind an "External OAuth providers
-(Google / GitHub / Apple)" comment banner at `:189`), ADC allow-lists the `atldevcon` scheme
-(`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:84`). AppHost
-`OAuth__UIBaseUrl = ui HTTPS endpoint` (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:464`; prod
-`infra/main.bicep:1690`, inside the `hasAnyOAuth` branch at `:1689`, the `hasAnyOAuth` variable itself at
-`:169`, which now ORs `hasAppleOAuth`). Store non-adoption unchanged: no `OAuthController`,
-`AddExternalAuthProviders` or `ExternalLoginAsync` override under `MMCA.Store`.
+`Anonymize` clears both (`:494-495`).
+ADC `OAuthController` sealed subclass with `[ApiController][Route("auth/oauth")][ApiVersion("1.0")]`
+(`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Controllers/OAuthController.cs:17-20`, (audit)).
+Service host `services.AddExternalAuthProviders(builder.Configuration)`
+(`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:196`, behind the "External OAuth providers
+(Google / GitHub / Apple)" banner at `:188`); ADC allow-lists `atldevcon`
+(`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:84`, also recorded by ADR-043's
+2026-09-25 revision). AppHost `OAuth__UIBaseUrl` (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:464`,
+(audit)); prod `OAuth__UIBaseUrl` at `MMCA.ADC/infra/main.bicep:1799`, inside the `hasAnyOAuth ? [`
+branch at `:1798`, with the `hasAnyOAuth` variable at `:169` ORing `hasAppleOAuth`.
+Store non-adoption: a Grep over `MMCA.Store/Source` `*.cs` on 2026-10-02 finds no `OAuthControllerBase`,
+`AddExternalAuthProviders`, `ExternalLoginAsync`, `class OAuthController` or `LoginProvider`.
 The single code block is illustrative, trimmed (comments and branches condensed) from
-`OAuthControllerBase.CompleteAsync`/`ExchangeAsync` (`:97-203`) with named calls, argument lists and cache
-keys matching current source. ADR-036
-(`Website/docs-src/adr/036-external-oauth-login.md`) is titled "External OAuth Login (Federated
-Google/GitHub/Apple) with Local-JWT Exchange" (`:1`); its `## Status` spans `:3-13`, including the
-2026-09-07 revision (link-by-email requires both a provider-verified address and an account with no
-password) and the 2026-09-19 revision (Apple as a third provider, three link guards, refresh-session
-issuance, the provider assertion carried into the new account's confirmation state); the
-three-ways-plus-three-guards decision bullet is `:73-118`, the "verified-email guard is ADC-level, not
-framework-provided" trade-off is `:178-193`, and the ADC-only adoption paragraph is `:143-151`.
-Published package count "nineteen" is `MMCA.Common/FACTS.md:19`.*
+`OAuthControllerBase.CompleteAsync`/`ExchangeAsync` (`:97-206`), with named calls, argument lists and
+cache-key constants matching current source.
+ADR-036 (`Website/docs-src/adr/036-external-oauth-login.md`): title "External OAuth Login (Federated
+Google/GitHub/Apple) with Local-JWT Exchange" (`:1`); `## Status` spans `:3-13`, with the 2026-09-07
+revision at `:5` and the 2026-09-19 revision at `:10`; `## Decision` `:32`, the
+three-ways-plus-three-guards bullet `:73-118`, the ADC-only adoption paragraph `:143-152` (Store at
+`:149`); `## Rationale` `:153`; `## Trade-offs` `:172`, the "verified-email guard is ADC-level, not
+framework-provided" bullet `:178-193`; `## Revision (2026-09-07)` `:205`; `## Revision (2026-10-01)` `:255`
+(an anchor refresh only). The body states no package count; FACTS records 22 published packages
+(`MMCA.Common/FACTS.md:19`).*

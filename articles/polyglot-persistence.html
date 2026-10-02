@@ -187,11 +187,11 @@
           <p>Database-per-service (ADR-006) is the <strong>Name axis</strong>: <em>which physical database</em> owns an entity, so that
           the Conference module&#39;s data and the Engagement module&#39;s data sit in separate databases that can be
           deployed and scaled independently. Article 10 covers that axis in full.</p>
-          <p>Polyglot persistence (ADR-018, extended to a fourth engine by ADR-113) is the <strong>Engine axis</strong>: <em>which
-          storage technology</em> backs an entity, SQL Server vs PostgreSQL vs Cosmos DB vs SQLite, independent of
-          which logical database it belongs to. The two compose. An entity has a Name (its database) and an
-          Engine (its technology), and you can change one without touching the other. This article is about the
-          Engine axis.</p>
+          <p>Polyglot persistence (ADR-018, extended to a fourth engine by ADR-113, and organized as one strategy
+          object per engine by ADR-130) is the <strong>Engine axis</strong>: <em>which storage technology</em> backs an entity, SQL
+          Server vs PostgreSQL vs Cosmos DB vs SQLite, independent of which logical database it belongs to. The
+          two compose. An entity has a Name (its database) and an Engine (its technology), and you can change
+          one without touching the other. This article is about the Engine axis.</p>
           <h2 id="the-configuration-hierarchy-where-the-engine-lives">The configuration hierarchy: where the engine lives</h2>
           <p>Every entity in the framework gets an EntityConfiguration class. The relevant inheritance chain is
           short and worth holding in your head.</p>
@@ -200,41 +200,53 @@
           <code>DomainEvents</code> collection so EF never tries to persist it. That is all. It knows nothing about
           engines.</p>
           <p>Above it sits the piece that ADR-018 added: a single, engine-aware
-          <code>EntityTypeConfiguration&lt;TEntity, TIdentifierType&gt;</code> base. This one class carries <em>all</em> the
-          table-versus-container, schema, and key-mapping logic for every engine. Its <code>Configure</code> method reads
-          the <code>[UseDataSource(...)]</code> attribute off the concrete configuration, and if the attribute is absent it
-          throws <code>InvalidOperationException</code> at startup. A configuration with no declared engine is a hard error,
-          not a silent default. Then it dispatches to a <code>protected static ApplyEngineConventions</code> helper that is
-          a <code>switch</code> over the engine, four cases in three branches:</p>
+          <code>EntityTypeConfiguration&lt;TEntity, TIdentifierType&gt;</code> base. Its <code>Configure</code> method reads the
+          <code>[UseDataSource(...)]</code> attribute off the concrete configuration, and if the attribute is absent it
+          throws <code>InvalidOperationException</code> as the model is built. A configuration with no declared engine is
+          a hard error, not a silent default. Then it hands the entity to a <code>protected static ApplyEngineConventions</code> helper, and that helper holds no branching at all. Its body is one call:
+          <code>DataSourceEngines.For(engine).ApplyKeyAndTableMapping&lt;TEntity, TIdentifierType&gt;(builder)</code>.</p>
+          <p>The per-engine knowledge lives one level down, in one strategy class per engine (ADR-130).
+          <code>IDataSourceEngine</code> is the internal contract every engine implements: descriptive facts, a small
+          <code>Capabilities</code> record (is the engine relational, how it migrates, how it stamps the row version), and
+          a handful of behaviour hooks, one of which is the key-and-table mapping. <code>DataSourceEngines</code> is a
+          static registry that holds the four strategies in one array and looks them up by the <code>DataSource</code>
+          enum value. The four mappings:</p>
           <ul>
-          <li><strong>SQL Server and PostgreSQL</strong>, one shared branch deliberately: <code>ToTable(Name, schema)</code> where the
-          schema is the module name derived from the entity&#39;s namespace (the segment before &quot;Domain&quot;),
-          <code>HasKey(Id)</code>, and identity-column key generation. PostgreSQL takes the SQL Server mapping unchanged,
-          module schema and PascalCase identifiers included, so an entity moves between the two engines by
-          changing its configuration base class and nothing else (ADR-113). PostgreSQL house style (snake_case,
-          the public schema) is a consumer&#39;s naming-convention plugin, not a framework decision.</li>
-          <li><strong>SQLite</strong>: <code>ToTable(Name)</code> with no schema, <code>HasKey(Id)</code>, and SQLite identity columns.</li>
+          <li><strong>SQL Server</strong>: <code>ToTable(Name, schema)</code> where the schema is the module name derived from the
+          entity&#39;s namespace (the segment before &quot;Domain&quot;), <code>HasKey(Id)</code>, and <code>ValueGeneratedOnAdd()</code> for a
+          store-generated key.</li>
+          <li><strong>PostgreSQL</strong>: deliberately the same code as SQL Server, module schema and PascalCase identifiers
+          included, so an entity moves between the two engines by changing its configuration base class and
+          nothing else (ADR-113). PostgreSQL house style (snake_case, the public schema) is a consumer&#39;s
+          naming-convention plugin, not a framework decision.</li>
+          <li><strong>SQLite</strong>: <code>ToTable(Name)</code> with no schema, <code>HasKey(Id)</code>, and an identity column
+          (<code>ValueGeneratedOnAdd().UseIdentityColumn(1, 1)</code>).</li>
           <li><strong>Cosmos DB</strong>: <code>ToContainer(moduleName).HasPartitionKey(Id)</code>, one container per module so a module&#39;s
           entities and their relationships co-locate, <code>HasKey(Id)</code>, and a client-side
           <code>CosmosIntIdValueGenerator</code> for keys (Cosmos has no server-side <code>IDENTITY</code>).</li>
-          <li><strong>Anything else</strong>: a <code>default</code> branch that throws <code>InvalidOperationException</code>. An engine with no
-          mapping fails loudly instead of falling through to a relational guess.</li>
+          <li><strong>Anything else</strong>: <code>DataSourceEngines.For</code> throws <code>InvalidOperationException</code> for a value with no
+          registered strategy. An engine with no mapping fails loudly instead of falling through to a
+          relational guess.</li>
           </ul>
-          <p>Key generation is conditional in every branch: the engine&#39;s generator applies only when the entity&#39;s
-          identifier is store-generated (<code>typeof(TEntity).IsIdValueGenerated</code>), and otherwise the key is
-          <code>ValueGeneratedNever()</code>, so an entity that supplies its own ids keeps them on every engine.</p>
-          <p>On top of that single base sit four <strong>thin shims</strong>: <code>EntityTypeConfigurationSQLServer</code>,
+          <p>Key generation is conditional in every strategy: the engine&#39;s generator applies only when the
+          entity&#39;s identifier is store-generated (<code>typeof(TEntity).IsIdValueGenerated</code>), and otherwise the key
+          is <code>ValueGeneratedNever()</code>, so an entity that supplies its own ids keeps them on every engine.</p>
+          <p>The registry is static on purpose: model-building code (this configuration base, the EF conventions,
+          the soft-delete SQL builder) runs where no DI container is reachable, and the engine set is a closed
+          enum only the framework extends. A fifth engine is one strategy class plus one line in the registry.
+          What keeps it that way is a source-scanning fitness test, <code>DataSourceBranchingFitnessTests</code>, which
+          fails the test run on any reference to a concrete engine value outside the strategies and a short,
+          reasoned allow-list, and also fails when an allow-list entry goes stale. A new <code>switch</code> over the
+          engine cannot quietly reappear in a call site.</p>
+          <p>On top of the engine-aware base sit four <strong>thin shims</strong>: <code>EntityTypeConfigurationSQLServer</code>,
           <code>EntityTypeConfigurationPostgreSQL</code>, <code>EntityTypeConfigurationCosmos</code>, and
-          <code>EntityTypeConfigurationSqlite</code>. Each one is a one-line class. Its entire body is the attribute plus an
-          empty derivation. Here is the SQL Server shim, near enough verbatim:</p>
+          <code>EntityTypeConfigurationSqlite</code>. None of them has a body. Each is the attribute plus a
+          semicolon-terminated derivation. Here is the SQL Server shim, verbatim apart from its doc comment:</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs">[<span class="hljs-meta">UseDataSource(DataSource.SQLServer)</span>]
 <span class="hljs-keyword">public</span> <span class="hljs-keyword">abstract</span> <span class="hljs-keyword">class</span> <span class="hljs-title">EntityTypeConfigurationSQLServer</span>&lt;<span class="hljs-title">TEntity</span>, <span class="hljs-title">TIdentifierType</span>&gt;
     : <span class="hljs-title">EntityTypeConfiguration</span>&lt;<span class="hljs-title">TEntity</span>, <span class="hljs-title">TIdentifierType</span>&gt;
     <span class="hljs-keyword">where</span> <span class="hljs-title">TEntity</span> : <span class="hljs-title">AuditableBaseEntity</span>&lt;<span class="hljs-title">TIdentifierType</span>&gt;
-    <span class="hljs-keyword">where</span> <span class="hljs-title">TIdentifierType</span> : <span class="hljs-title">notnull</span>
-{
-    <span class="hljs-comment">// no Configure override; all mapping lives in the engine-aware base</span>
-}</code></pre>
+    <span class="hljs-keyword">where</span> <span class="hljs-title">TIdentifierType</span> : <span class="hljs-title">notnull</span>;</code></pre>
           <p>The PostgreSQL, Cosmos, and SQLite shims are identical except for the attribute value
           (<code>DataSource.PostgreSQL</code>, <code>DataSource.CosmosDB</code>, <code>DataSource.Sqlite</code>). They exist purely so that a
           consumer can express the engine choice by <em>which base class they derive from</em>, without ever typing the
@@ -266,13 +278,21 @@
     }
 }</code></pre>
           <p>The <code>Session</code> entity class does not change. The command handlers do not change. The query handlers do
-          not change. The DTOs and mappers do not change. The engine is resolved once at startup by the
-          <code>EntityDataSourceRegistry</code>, which reflects over the configuration assemblies, reads each config&#39;s
-          <code>[UseDataSource]</code> attribute, and records the engine in a frozen lookup. The right <code>DbContext</code>
+          not change. The DTOs and mappers do not change. Routing is the job of the <code>EntityDataSourceRegistry</code>,
+          a singleton built lazily on first access: it reflects over the configuration assemblies, reads each
+          config&#39;s <code>[UseDataSource]</code> attribute (and its logical database name), resolves the pair through
+          <code>IDataSourceResolver</code> into a <code>DataSourceKey</code>, and records the result in a frozen lookup, rescanning
+          once on a miss so a module assembly loaded later is still found. The right <code>DbContext</code>
           (<code>SQLServerDbContext</code>, <code>PostgreSQLDbContext</code>, <code>CosmosDbContext</code>, or <code>SqliteDbContext</code>, all sealed
           subclasses of the abstract <code>ApplicationDbContext</code>, one class per engine) is then built per data source,
           and the whole save and query pipeline routes through it without any caller knowing which engine
           answered.</p>
+          <p>One nuance keeps that honest. The attribute declares the engine, and the resolver honors it whenever
+          the host configures that engine. A host that does not configure the declared engine (a SQL Server
+          configuration running in a PostgreSQL-only host, say) is served from the engine it does configure,
+          rather than handed an empty connection string. <code>EntityTypeConfiguration</code> exposes that answer as
+          <code>EffectiveEngine</code>, so any hand-written SQL in a configuration body, such as an index filter, targets
+          the engine actually being built.</p>
           <h2 id="when-a-relationship-crosses-an-engine-boundary">When a relationship crosses an engine boundary</h2>
           <p>A document store cannot enforce a foreign key into a SQL table. So the moment <code>Session</code> moves to
           Cosmos while the <code>Event</code> it references stays in SQL Server, the relationship between them spans two
@@ -323,19 +343,23 @@ s =&gt; s.Event.IsPublished</code></pre>
           it resolves published <code>Event</code> ids and filters <code>Session.EventId IN (...)</code>, which is portable across all
           four engines.</p>
           <p>There is even a fitness rule that enforces this discipline: an opt-in
-          <code>SpecificationsDoNotNavigateToOtherEntities</code> test fails the build if a specification navigates across
-          an entity boundary the way the un-translatable version above does.</p>
+          <code>SpecificationsDoNotNavigateToOtherEntities</code> test fails the test run if a specification navigates
+          across an entity boundary the way the un-translatable version above does.</p>
           <h2 id="the-honest-adoption-note">The honest adoption note</h2>
           <p>Here is the part most articles would quietly omit. All of the above is shipped and tested. None of it
           is running in production yet.</p>
-          <p>Today, every current production entity configuration uses the <code>…SQLServer</code> base. ADC runs SQL Server
-          only, across four databases (the Name axis), with no entity on PostgreSQL, Cosmos, or SQLite in
-          production. The SQLite base backs the fast test database in MMCA.Common&#39;s own infrastructure tests;
-          the Cosmos base is exercised by portability tests and a factory test. ADC Conference actually <em>trialed</em> the <code>Session</code>→Cosmos
-          and <code>Room</code>→SQLite move (the worked example throughout this article): it was built and locally tested,
-          then <strong>deliberately reverted to all-SQL-Server</strong>, with every framework extension point kept in place. The unified
-          base, the cross-source degrade convention, the Cosmos-index skip, the SQLite <code>EnsureCreated</code> path, the
-          cross-source specification, and the fitness rule are all in place and green.</p>
+          <p>Today, every current production entity configuration uses the <code>EntityTypeConfigurationSQLServer</code>
+          base. ADC runs SQL Server only, across four databases (the Name axis), with no entity on PostgreSQL,
+          Cosmos, or SQLite in production. The SQLite engine backs the fast test database in MMCA.Common&#39;s own
+          infrastructure tests, and the Cosmos engine path is exercised by a portability test whose
+          configuration declares <code>[UseDataSource(DataSource.CosmosDB)]</code> on the engine-aware base. ADC
+          Conference actually <em>trialed</em> the <code>Session</code>-to-Cosmos and <code>Room</code>-to-SQLite move (the worked example
+          throughout this article): it was built and locally tested, then <strong>deliberately reverted to
+          all-SQL-Server</strong>, with every framework extension point kept in place. The unified base and its four
+          engine strategies, the cross-source degrade convention, the Cosmos-index skip, the <code>EnsureCreated</code>
+          path for a source that names no migrations assembly (always on Cosmos, and on SQLite or PostgreSQL
+          until one is configured), the cross-source specification, and the fitness rule are all in place and
+          green.</p>
           <p>So treat PostgreSQL, Cosmos, and SQLite as supported, exercised extension points rather than dormant
           ones, but do not read this as &quot;ADC is polyglot in production.&quot; It is not. The capability is real and
           has been trialed end to end, but no production entity routes to a non-SQL engine today. Saying so is
@@ -352,16 +376,19 @@ s =&gt; s.Event.IsPublished</code></pre>
           keys and embeds them in the predicate. That is ideal for &quot;published events&quot; or &quot;active tenants,&quot; but
           an unbounded principal set would inline a very large <code>IN</code> list. The class documents this limit
           explicitly; it is a tool for the common bounded shape, not a general join replacement.</li>
-          <li><strong>Concurrency tokens differ by engine.</strong> SQL Server maps <code>RowVersion</code> to a server-generated
-          <code>rowversion</code>; SQLite has no server-generated equivalent, so the same token is application-managed
-          there, and PostgreSQL takes that same application-managed token rather than its native <code>xmin</code>, so it
-          is not the one engine whose entity shape differs (ADR-113). The entity model is one, but the
-          optimistic-concurrency mechanics underneath are not
-          identical across engines, and you should know which you are getting.</li>
-          <li><strong>Cosmos has no durable outbox.</strong> <code>CosmosDbContext</code> overrides <code>SupportsOutbox</code> to <code>false</code>. Domain
-          events from a Cosmos-stored aggregate are dispatched in-process only, with no durable outbox row to
-          replay from. That is a real reliability difference from the relational path, and it is a deliberate
-          consequence of Cosmos having no relational <code>OutboxMessages</code> table.</li>
+          <li><strong>Concurrency tokens differ by engine.</strong> Each strategy declares its row-version strategy. SQL Server
+          maps <code>RowVersion</code> to a server-generated <code>rowversion</code>; SQLite has no server-generated equivalent, so
+          the same token is client-stamped there, and PostgreSQL takes that same client-stamped token rather
+          than its native <code>xmin</code>, so it is not the one engine whose entity shape differs (ADR-113). Cosmos
+          declares no row-version strategy at all, so a Cosmos-stored entity has no optimistic-concurrency
+          token. The entity model is one, but the concurrency mechanics underneath are not identical across
+          engines, and you should know which you are getting.</li>
+          <li><strong>Cosmos has no durable outbox.</strong> The outbox path runs only when the context&#39;s engine reports
+          <code>IsRelational</code> (and the host has the outbox enabled). Cosmos reports <code>IsRelational: false</code>, and
+          <code>CosmosDbContext</code> leaves <code>OutboxMessage</code> out of its model, so domain events from a Cosmos-stored
+          aggregate are dispatched in-process only, with no durable outbox row to replay from. That is a real
+          reliability difference from the relational path, and it is a deliberate consequence of Cosmos having
+          no relational <code>OutboxMessages</code> table.</li>
           <li><strong>Trialed, then reverted, not deployed.</strong> As above: the extension points are built and tested, ADC trialed the
           Cosmos/SQLite move and rolled it back to all-SQL-Server, and no production polyglot entity has shipped.
           Validate the engine behavior you depend on against your own data before you lean on it in production.</li>
@@ -375,8 +402,10 @@ s =&gt; s.Event.IsPublished</code></pre>
           property of the <em>configuration</em>, not the entity.</li>
           <li>Put the engine choice behind a <strong>single attribute or base class</strong>, and make a missing engine a
           <strong>startup error</strong>, never a silent default. Loud beats subtle.</li>
-          <li><strong>Centralize the per-engine mapping</strong> in one place (one <code>switch</code> over the engine), so the four
-          engine shims share identical logic and cannot drift.</li>
+          <li><strong>Give each engine one strategy object</strong> that answers every engine question (mapping, capabilities,
+          dialect), looked up by the engine value, so call sites read engine facts instead of branching on
+          the engine. A new engine is then one class and one registry line, and a text-scan test can keep new
+          branches from creeping back into call sites.</li>
           <li><strong>Degrade cross-engine relationships automatically</strong> at model-build time: drop the impossible
           constraint, keep the scalar FK column, and make it a no-op when everything is on one engine.</li>
           <li>For cross-engine filters, <strong>resolve principal keys first, then filter by <code>foreignKey IN (keys)</code></strong>.
@@ -389,11 +418,12 @@ s =&gt; s.Event.IsPublished</code></pre>
           you do not flip it on day one.</strong></p>
           <hr>
           <p><strong>What we covered:</strong> why welding an entity to a storage engine is an expensive, usually irreversible
-          decision, how MMCA.Common&#39;s engine-aware <code>EntityTypeConfiguration</code> base plus four thin
-          <code>…SQLServer/PostgreSQL/Cosmos/Sqlite</code> shims re-point the same entity to a different engine through one
-          <code>[UseDataSource]</code> attribute, how <code>CrossDataSourceDegradeConvention</code> and <code>CrossSourceSpecification</code> keep
-          cross-engine relationships and predicates working without rewrites, and the honest note that this is
-          shipped and tested but not yet running in ADC production.</p>
+          decision, how MMCA.Common&#39;s engine-aware <code>EntityTypeConfiguration</code> base, its four per-engine
+          strategies, and four thin <code>EntityTypeConfigurationSQLServer/PostgreSQL/Cosmos/Sqlite</code> shims re-point
+          the same entity to a different engine through one <code>[UseDataSource]</code> attribute, how
+          <code>CrossDataSourceDegradeConvention</code> and <code>CrossSourceSpecification</code> keep cross-engine relationships and
+          predicates working without rewrites, and the honest note that this is shipped and tested but not yet
+          running in ADC production.</p>
           <p><strong>Next in the series:</strong> navigation populators, the batch-loader that replaces EF Include chains
           once a relationship crosses a data-source boundary.</p>
           <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the persistence chapter of the

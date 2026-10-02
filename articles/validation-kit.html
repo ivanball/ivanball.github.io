@@ -174,8 +174,8 @@
           sits in the CQRS chain and gates every command before the handler, covered in the decorator-pipeline
           deep-dive. This article is about the <em>other</em> half that no one writes well: the reusable building blocks
           that make each validator a short list of includes rather than a copy-pasted <code>RuleFor</code> wall. MMCA.Common
-          ships that kit in <code>MMCA.Common.Application</code>, so ADC and Store both inherit identical email, password, and
-          address rules without duplicating a single line.</p>
+          ships that kit in <code>MMCA.Common.Application</code>, so a module that composes from it gets the framework&#39;s email,
+          password, and address rules without restating a single chain.</p>
           <h2 id="reusable-rule-fragments-composed-with-include">Reusable rule fragments, composed with Include</h2>
           <p>The core idea is a <em>rule fragment</em>: a tiny <code>AbstractValidator&lt;T&gt;</code> that owns exactly one field&#39;s contract,
           generic over the parent type <code>T</code> and configured with a selector expression. <code>CommonValidationRules.cs</code>
@@ -183,27 +183,37 @@
           <code>AbsoluteUrlRules&lt;T&gt;</code>, <code>PositiveIntRules&lt;T&gt;</code>, <code>PositiveDecimalRules&lt;T&gt;</code>, <code>NonNegativeIntRules&lt;T&gt;</code>,
           <code>RequiredIdRules&lt;T, TId&gt;</code>, <code>OptionalPositiveIdRules&lt;T, TId&gt;</code>, <code>PasswordRules&lt;T&gt;</code>, and
           <code>StrongPasswordRules&lt;T&gt;</code>. Each constructor is a single expression body. <code>EmailRules&lt;T&gt;</code>, for example,
-          chains <code>NotEmpty()</code> + <code>EmailAddress()</code> + <code>MaximumLength(maxLength)</code>. <code>StrongPasswordRules&lt;T&gt;</code> repeats
-          <code>PasswordRules&lt;T&gt;</code>&#39;s non-empty plus 8-to-128 length and adds four <code>Matches(...)</code> regexes for an uppercase
-          letter, a lowercase letter, a digit, and a special character.</p>
+          chains <code>NotEmpty()</code> + <code>EmailAddress()</code> + <code>MaximumLength(maxLength)</code>. <code>StrongPasswordRules&lt;T&gt;</code> declares
+          the same non-empty plus 8-to-128 length as <code>PasswordRules&lt;T&gt;</code> and adds four <code>Matches(...)</code> regexes for an
+          uppercase letter, a lowercase letter, a digit, and a special character. Its lengths and character classes
+          come from <code>PasswordComplexity</code> in <code>MMCA.Common.Shared</code>, the one Unicode-aware definition the client form
+          attribute evaluates too, so the server rule and the form cannot disagree.</p>
           <p>Two design choices make a fragment reusable across unrelated types. First, it is <strong>generic over <code>T</code></strong>, the
           type that contains the field. Second, it takes a <strong>selector expression</strong> (<code>Expression&lt;Func&lt;T, string&gt;&gt;</code>)
-          rather than inheriting from the parent. So the same <code>EmailRules&lt;T&gt;</code> validates a <code>RegisterRequest</code>, a
-          <code>LoginRequest</code>, or a bare value object, with zero inheritance coupling. A concrete validator pulls a
-          fragment in with FluentValidation&#39;s <code>Include(...)</code>:</p>
-          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">CreateSessionRequestValidator</span> : <span class="hljs-title">AbstractValidator</span>&lt;<span class="hljs-title">CreateSessionRequest</span>&gt;
+          rather than inheriting from the parent. So the same <code>EmailRules&lt;T&gt;</code> validates ADC&#39;s <code>RegisterRequest</code>, a
+          speaker&#39;s email, and an event&#39;s organizer contact email, with zero inheritance coupling. A concrete
+          validator pulls fragments in with FluentValidation&#39;s <code>Include(...)</code>. This is ADC&#39;s registration validator:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">RegisterRequestValidator</span> : <span class="hljs-title">AbstractValidator</span>&lt;<span class="hljs-title">RegisterRequest</span>&gt;
 {
-    <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-title">CreateSessionRequestValidator</span>()</span>
+    <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-title">RegisterRequestValidator</span>()</span>
     {
-        Include(<span class="hljs-keyword">new</span> RequiredStringRules&lt;CreateSessionRequest&gt;(r =&gt; r.Title, <span class="hljs-string">&quot;Title&quot;</span>, <span class="hljs-number">200</span>));
-        Include(<span class="hljs-keyword">new</span> EmailRules&lt;CreateSessionRequest&gt;(r =&gt; r.ContactEmail, <span class="hljs-string">&quot;Contact Email&quot;</span>, <span class="hljs-number">256</span>));
+        Include(<span class="hljs-keyword">new</span> EmailRules&lt;RegisterRequest&gt;(x =&gt; x.Email, <span class="hljs-string">&quot;Email&quot;</span>, UserInvariants.EmailMaxLength));
+        Include(<span class="hljs-keyword">new</span> StrongPasswordRules&lt;RegisterRequest&gt;(x =&gt; x.Password));
+        Include(<span class="hljs-keyword">new</span> RequiredStringRules&lt;RegisterRequest&gt;(x =&gt; x.FirstName, <span class="hljs-string">&quot;First name&quot;</span>, UserInvariants.FirstNameMaxLength));
+        Include(<span class="hljs-keyword">new</span> RequiredStringRules&lt;RegisterRequest&gt;(x =&gt; x.LastName, <span class="hljs-string">&quot;Last name&quot;</span>, UserInvariants.LastNameMaxLength));
+
+        RuleFor(x =&gt; x.Address)
+            .SetValidator(<span class="hljs-keyword">new</span> AddressValidator()!)
+            .When(x =&gt; x.Address <span class="hljs-keyword">is</span> <span class="hljs-keyword">not</span> <span class="hljs-literal">null</span>);
     }
 }</code></pre>
-          <p>Read that and the contract is obvious at a glance: a required title capped at 200 characters, a valid
-          contact email capped at 256. No <code>RuleFor</code> chain to re-derive. The &quot;non-empty plus valid format plus max
-          length&quot; logic lives in one place, and a security tweak (tighten the password regex, raise an email length
-          cap) is a one-line edit that propagates to every consumer on the next package bump instead of being missed
-          in some forgotten validator.</p>
+          <p>Read that and the contract is obvious at a glance: a required, well-formed email, a strong password, and
+          required first and last names, each length cap taken from the <code>UserInvariants</code> constants the domain&#39;s own
+          <code>User</code> checks use, plus an optional address handed to the shared <code>AddressValidator</code>. The only <code>RuleFor</code>
+          left is the one that wires the nested validator. The &quot;non-empty plus valid format plus max length&quot; logic
+          lives in one place, and a security tweak (tighten a password character class, raise an email length cap)
+          is a one-line edit that reaches every validator that includes the fragment on the next package bump
+          instead of being missed in some forgotten validator.</p>
           <p>The address family is the worked example of composition all the way up. <code>AddressValidationRules.cs</code> ships
           six field fragments (<code>AddressLine1Rules&lt;T&gt;</code> through <code>CountryRules&lt;T&gt;</code>), and <code>AddressValidator</code> is a
           composite <code>AbstractValidator&lt;Address&gt;</code> whose entire body is six <code>Include(...)</code> calls. It owns <strong>no</strong>
@@ -212,11 +222,14 @@
           invariant and its validator agree by construction. The max length for a city lives in exactly one place
           across the entire solution, and the validator references it.</p>
           <h2 id="one-validator-for-the-request-free-for-the-command">One validator for the request, free for the command</h2>
-          <p>Most commands in this codebase are thin wrappers that carry a request DTO, for example
-          <code>CreateSessionCommand(CreateSessionRequest Request)</code>, and implement <code>ICommandWithRequest&lt;TRequest&gt;</code> (its
-          <code>Request</code> property is the bridge). The naive approach forces you to register a validator for <em>both</em> the
-          request and the command, which means restating the request&#39;s rules at the command level for every single
-          command. That is boilerplate begging to drift.</p>
+          <p>Some commands carry a request DTO rather than being one. The generic update command,
+          <code>UpdateEntityCommand&lt;TEntity, TUpdateRequest, TIdentifierType&gt;(Id, Request, RowVersion)</code>, wraps the request
+          body together with the route id and the concurrency token, and implements <code>ICommandWithRequest&lt;TUpdateRequest&gt;</code>
+          (its <code>Request</code> property is the bridge). The naive approach forces you to register a validator for <em>both</em>
+          the request and the command, which means restating the request&#39;s rules at the command level for every
+          wrapping command. That is boilerplate begging to drift. (A create path often needs no wrapper at all: ADC&#39;s
+          <code>CreateSessionHandler</code> handles <code>SessionCreateRequest</code> itself as the command, so the request&#39;s own
+          validator applies directly.)</p>
           <p><code>CommandRequestValidator&lt;TCommand, TRequest&gt;</code> removes it by convention. It is an auto-registered
           <code>AbstractValidator&lt;TCommand&gt;</code> whose constructor takes <code>IEnumerable&lt;IValidator&lt;TRequest&gt;&gt;</code> by DI and loops
           over the whole collection, de-duplicated by runtime type with <code>DistinctBy(v =&gt; v.GetType())</code>, applying
@@ -233,8 +246,11 @@
           <strong><code>TryAddTransient</code></strong>. That <code>TryAdd</code> is the load-bearing detail: it is a fallback, not an override. If a
           module ships an explicit hand-written <code>IValidator&lt;TCommand&gt;</code>, that wins, and the generic bridge stays out
           of the way. An empty validator collection is not an error either: it just means the request has no rules
-          and the generic validator is a no-op. Convention over configuration, with an escape hatch that never
-          blocks a bespoke case.</p>
+          and the generic validator is a no-op. A command the scan cannot see (a closed generic constructed at
+          registration time rather than declared in the module assembly) gets the same bridge explicitly:
+          <code>AddEntityUpdate&lt;...&gt;()</code> calls <code>AddCommandRequestValidator&lt;TCommand, TRequest&gt;()</code>, which registers the same
+          <code>CommandRequestValidator</code> with the same <code>TryAdd</code> semantics. Convention over configuration, with an escape
+          hatch that never blocks a bespoke case.</p>
           <h2 id="a-validation-failure-is-a-result-and-the-edge-maps-it-to-400">A validation failure is a Result, and the edge maps it to 400</h2>
           <p>A validator that runs is useless unless its output flows into the rest of the system cleanly.
           FluentValidation speaks in <code>ValidationResult</code> and <code>ValidationFailure</code>. The rest of the codebase speaks in
@@ -268,17 +284,19 @@
           than duplicate.</p>
           <p>The validator does <strong>cheap structural checks</strong>: is the string non-empty, is it under the max length, does
           it look like an email, does the password match the complexity regex. These are properties of the request
-          shape alone. They need no database, no other entity, no business context, and they are exactly what you
-          want to reject at the edge with a 400 before opening a transaction.</p>
+          shape alone. The kit&#39;s fragments need no database, no other entity, no business context, and they are
+          exactly what you want to reject at the edge with a 400 before opening a transaction.</p>
           <p>The domain factory enforces <strong>business invariants</strong>: rules that depend on state the validator cannot see.
           &quot;This email is already registered.&quot; &quot;A session cannot be scheduled outside its parent event&#39;s window.&quot; &quot;A
           discount cannot exceed the order total.&quot; Those need other data, so they belong in the domain where that
           data lives, returned as a <code>Result</code> failure from the factory method.</p>
           <p>Put the structural check in the validator and the business invariant in the domain factory, and each lives
           in exactly one place. The anti-pattern is smearing one altitude across both layers: re-doing a regex check
-          inside the factory, or trying to query the database from a validator. The kit&#39;s job is to make the cheap
-          structural layer composable and consistent, so the domain factory is free to focus on the rules only it
-          can enforce.</p>
+          inside the factory, or pulling a business invariant out of the domain into a validator. The pipeline does
+          not forbid the second (the validating decorator runs validators one at a time precisely because a validator
+          may reach the database through a scoped repository), but a rule that needs other data already has a home
+          in the domain factory, next to that data. The kit&#39;s job is to make the cheap structural layer composable
+          and consistent, so the domain factory is free to focus on the rules only it can enforce.</p>
           <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
           <ul>
           <li><strong>It is a FluentValidation dependency.</strong> The kit is a thin composition layer over FluentValidation 12,
@@ -289,6 +307,10 @@
           <code>RequiredStringRules&lt;T&gt;(selector, fieldName, maxLength)</code> is more abstract than a literal
           <code>RuleFor(x =&gt; x.Title).NotEmpty().MaximumLength(200)</code>. The payoff is reuse, but a newcomer meets a small
           generic puzzle (what is <code>T</code>, what does the selector bind) before the first <code>Include</code> reads naturally.</li>
+          <li><strong>Composition is opt-in, so adoption is uneven.</strong> Nothing forces a validator to include a fragment.
+          Store&#39;s registration validator hand-writes its email and password chains with literal lengths (and its
+          password chain carries no complexity regexes), and Common&#39;s own login and forgot-password validators
+          hand-write their email rule. The kit removes the reason to copy; it does not detect a copy.</li>
           <li><strong>This layer is structural only.</strong> A fragment validates shape, never cross-entity or stateful rules.
           That is correct (those belong in the domain factory), but it means the validator is not the whole
           story, and a reviewer must check both altitudes to know a command is fully guarded.</li>

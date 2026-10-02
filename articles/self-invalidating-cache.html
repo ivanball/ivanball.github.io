@@ -193,6 +193,8 @@
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">public</span> <span class="hljs-keyword">interface</span> <span class="hljs-title">ICacheService</span>
 {
     Task&lt;T?&gt; GetAsync&lt;T&gt;(<span class="hljs-built_in">string</span> key, CancellationToken ct);
+    Task&lt;(<span class="hljs-built_in">bool</span> Found, T? Value)&gt; TryGetAsync&lt;T&gt;(<span class="hljs-built_in">string</span> key, CancellationToken ct);   <span class="hljs-comment">// presence, not just value</span>
+    Task&lt;T?&gt; GetFromSharedStoreAsync&lt;T&gt;(<span class="hljs-built_in">string</span> key, CancellationToken ct);           <span class="hljs-comment">// never a local copy</span>
     <span class="hljs-function">Task <span class="hljs-title">SetAsync</span>&lt;<span class="hljs-title">T</span>&gt;(<span class="hljs-params"><span class="hljs-built_in">string</span> key, T <span class="hljs-keyword">value</span>, TimeSpan? expiration = <span class="hljs-literal">null</span>, CancellationToken ct = <span class="hljs-literal">default</span></span>)</span>;
     <span class="hljs-function">Task <span class="hljs-title">RemoveAsync</span>(<span class="hljs-params"><span class="hljs-built_in">string</span> key, CancellationToken ct</span>)</span>;
     <span class="hljs-function">Task <span class="hljs-title">RemoveByPrefixAsync</span>(<span class="hljs-params"><span class="hljs-built_in">string</span> prefix, CancellationToken ct</span>)</span>;   <span class="hljs-comment">// the load-bearing one</span>
@@ -200,18 +202,25 @@
     <span class="hljs-function"><span class="hljs-title">Task</span>&lt;<span class="hljs-title">T</span>&gt; <span class="hljs-title">GetOrCreateAsync</span>&lt;<span class="hljs-title">T</span>&gt;(<span class="hljs-params"><span class="hljs-built_in">string</span> key, Func&lt;CancellationToken, Task&lt;T&gt;&gt; factory,
                                 TimeSpan? expiration = <span class="hljs-literal">null</span>, CancellationToken ct = <span class="hljs-literal">default</span></span>)</span>;
 }</code></pre>
-          <p>Four cache operations, a counter primitive, and one composed read-through helper. <code>RemoveByPrefixAsync</code> is
-          the member that earns its keep. It is what lets a single write evict a whole <em>family</em> of cached reads
+          <p>Four cache operations, two specialized reads, a counter primitive, and one composed read-through helper.
+          <code>RemoveByPrefixAsync</code> is the member that earns its keep. It is what lets a single write evict a whole <em>family</em> of cached reads
           (every paged and filtered view under one prefix) in one call, without enumerating individual keys. It is
           also why the backends had to be hand-built rather than pulled off the shelf: <code>IMemoryCache</code> has no key
-          enumeration, and <code>IDistributedCache</code> has no prefix delete. (<code>IncrementAsync</code> was the first late arrival, a
-          default interface member so no existing implementer broke, added as the single entry point for the
+          enumeration, and <code>IDistributedCache</code> has no prefix delete. Four of the eight are default interface
+          members, so a hand-written implementer keeps compiling when one is added.</p>
+          <p>The two specialized reads each close a gap a plain <code>GetAsync</code> leaves open. <code>TryGetAsync</code> reports
+          presence separately from the value, because for a value type a miss and a cached <code>default</code> (<code>0</code>,
+          <code>false</code>, <code>Guid.Empty</code>) look identical; the shipped stores override it with a real presence check.
+          <code>GetFromSharedStoreAsync</code> reads the shared store and never a process-local copy, for single-use records
+          (an OAuth exchange code, a password-reset or email-confirmation token, the last accepted second-factor
+          time step) whose consumption on one replica must be visible on every other replica at once; the hybrid
+          backend below is the store that overrides it. (<code>IncrementAsync</code> is the single entry point for the
           brute-force and rate-limit counters of ADR-029 instead of a read-then-write pair at each call site. The
           distributed backend overrides it, but with the same read-modify-write shape rather than a Redis <code>INCR</code>,
           because the counter lives in the adapter&#39;s own JSON layout: the override buys one call site, not
           atomicity.)</p>
-          <p><code>GetOrCreateAsync</code> is the second late arrival and the more interesting one, because of who does <em>not</em> use
-          it. It is also a default interface member: get, then take a per-key lock from a process-wide stripe,
+          <p><code>GetOrCreateAsync</code> is the most interesting of the default members, because of who does <em>not</em> use
+          it. It is get, then take a per-key lock from a process-wide stripe,
           double-check, run the factory, store the result. That is the read-through shape the query decorator below
           implements, offered to the callers that are not queries. The decorators still do not route through it, and
           the interface says so in its own remarks: <code>GetOrCreateAsync</code> caches whatever the factory returns,
@@ -236,8 +245,8 @@
           Redis <code>IConnectionMultiplexer</code> is available, prefix eviction reaches past <code>IDistributedCache</code> to the raw
           connection and uses server-side <code>SCAN</code> to find and delete matching keys (that scan lives in a shared
           <code>RedisPrefixScanner</code>, because two backends need it). This is the cache with a Redis
-          backplane the architecture scorecard carries in its §10 row as former Cross-Cutting Concerns evidence,
-          retained for the record now that those facets are scored in §5, §6, §9, §12, §17 and §29, and whose
+          backplane the architecture scorecard carries in its §10 row as related cross-cutting evidence,
+          scored under §5, §6, §9, §12, §17 and §29, and whose
           substrate is recorded in ADR-026: a single-host monolith caches in-process for free, and the
           same code transparently uses a shared Redis once the distributed cache is present, so cached reads stay
           coherent when a module is scaled out or extracted into its own service.</li>
@@ -258,9 +267,11 @@
           writer gets its own.</li>
           </ul>
           <p>Be honest about what &quot;opt-in&quot; means in a deployed system: all seven ADC and Store services call
-          <code>AddCommonHybridCache()</code> inside the same Redis conditional that wires everything else, so the effective
-          Tier-1 substrate in production is the hybrid one, not the distributed adapter, and the memory-or-Redis
-          swap is what a host gets when it does <em>not</em> state a preference. The contract that makes that
+          <code>AddCommonHybridCacheWhenRedisConfigured(builder.Configuration)</code>, a framework helper that registers the
+          hybrid backend only when the Redis connection string is set (with no Redis L2 the hybrid tier would be a
+          plain in-memory cache, which the memory fallback already is). So whenever Redis is configured, the
+          effective Tier-1 substrate in production is the hybrid one, not the distributed adapter, and the
+          memory-or-Redis swap is what a host gets when it does <em>not</em> state a preference. The contract that makes that
           substitution a one-line change is the point. Nothing in any handler, decorator, or query changes.</p>
           <p>A short, conservative default TTL keeps the cache erring toward correctness over hit-rate: 30 seconds.
           The constant sits in one place (<code>CacheOptions.DefaultDuration</code>, a bare <code>TimeSpan</code>) precisely so the
@@ -371,8 +382,9 @@
           </ul>
           <p>The stampede stripe locks the same scoped key, so one tenant never waits on another tenant&#39;s lock. And the
           honest limit: this lives in the decorators, so code that resolves <code>ICacheService</code> directly gets no tenant
-          prefix at all. Today&#39;s direct consumers (login counters, OAuth state, idempotency records) are keyed by
-          subject already, so they are safe by the shape of their keys rather than by a rule that would catch the
+          prefix at all. Today&#39;s direct consumers (login and registration counters, OAuth exchange state,
+          idempotency records, password-reset and email-confirmation tokens, the last accepted second-factor time
+          step, the soft-deleted marker) are keyed by subject already, so they are safe by the shape of their keys rather than by a rule that would catch the
           next one. The rest of the tenancy model (resolution middleware, the named query filter, the write
           interceptor, database-per-tenant routing) is ADR-073&#39;s, and belongs to the multi-tenancy deep-dive.</p>
           <p>The second transformation answers the parameter that is never on the request: who is asking. A query
@@ -414,7 +426,9 @@
           <code>app.UseOutputCache()</code> but ships no policies: each host opts in. A read-heavy public service (ADC&#39;s
           Conference service, Store&#39;s Catalog) declares named short-TTL policies on its <code>[AllowAnonymous]</code> GET
           controllers, so an anonymous agenda or speaker read is served straight from the output cache and never
-          reaches a query handler. Store&#39;s Catalog runs four such policies, all on the 5-minute TTL; ADC&#39;s
+          reaches a query handler. Store&#39;s Catalog runs four such policies, three at 5 minutes and
+          <code>ProductsCache</code> at 60 seconds, because a product payload carries each variant&#39;s effective price, which
+          moves on the clock when a discount window opens or closes with no mutation to evict on; ADC&#39;s
           Conference service runs twelve, ten at 5 minutes and two at 60 seconds where the payload turns over
           faster. This is also the lever ADR-019 leans on: the global rate limiter partitions by authenticated user
           and routes anonymous traffic to a <code>NoLimiter</code> partition, so output caching, not a throttle, is what
@@ -525,7 +539,9 @@
           independent copies until each entry&#39;s TTL reconciles them. That is exactly why the distributed adapter
           exists for scaled-out deployments. The two-level backend narrows the window rather than closing it: an
           eviction clears L2 and the evicting process&#39;s L1, but every other replica&#39;s L1 copy survives until its
-          local expiration, capped at 30 seconds. That is a deliberate trade, and it is the same order of
+          local expiration, capped at 30 seconds by default (<code>Cache:LocalCacheDuration</code> retunes it). Single-use
+          records read through <code>GetFromSharedStoreAsync</code>, and counters, skip L1 entirely, so that window never
+          applies to a token that must not be used twice. That is a deliberate trade, and it is the same order of
           staleness as the delayed second eviction the write path already performs.</li>
           <li><strong>The edge tier trades a data-leak risk for its speed.</strong> <code>PublicEndpointOutputCachePolicy</code> serves one
           cached response verbatim to every later caller, so it is safe only on endpoints that are
@@ -533,8 +549,9 @@
           per-user endpoint must never move onto it, and the bypass-roles overload covers role-shaped variance
           only, never per-user variance. The store behind it is the other thing to get right: <code>AddOutputCache</code>
           defaults to per-replica memory, so under scale-out a tag eviction reaches only the replica that handled
-          the mutation. Both deployed adopters register a Redis-backed output-cache store inside the same Redis
-          conditional that wires the pipeline tier, and ADR-040 makes the shared store the expected posture
+          the mutation. Both deployed adopters call the framework&#39;s <code>builder.AddRedisOutputCaching()</code>, which
+          registers a Redis-backed output-cache store when the Redis connection string is set and no-ops
+          otherwise, and ADR-040 makes the shared store the expected posture
           wherever a service runs more than one replica; the in-memory store is the single-replica case.</li>
           <li><strong>Cross-service tag eviction is a coherence hint, not a guarantee.</strong> The eviction event is what lets a
           payload written by a different service be cleared from this one&#39;s edge cache at all, and that reach

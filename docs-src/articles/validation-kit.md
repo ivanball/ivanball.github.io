@@ -1,7 +1,7 @@
 # Compose validators, don't copy them: a reusable FluentValidation kit
 
 > Series: MMCA.Common · Article #8 (deep-dive) · Pillar P2 · Group G06 · Rubric §24,§33 ·
-> Status: grounded in `Website/docs-src/onboarding/group-06-validation.md`. No em dashes.
+> Status: grounded in `Website/docs-src/onboarding/group-06-validation.md` and `MMCA.Common.Application/Validation/`. No em dashes.
 
 **Subtitle:** "Email must be valid, password must be strong, name is required." Every command re-declares
 those rules, and then they drift. Here is a validation kit where the rules are written once, composed with
@@ -19,8 +19,8 @@ The pipeline question (where does validation *run*) is settled elsewhere: a `Val
 sits in the CQRS chain and gates every command before the handler, covered in the decorator-pipeline
 deep-dive. This article is about the *other* half that no one writes well: the reusable building blocks
 that make each validator a short list of includes rather than a copy-pasted `RuleFor` wall. MMCA.Common
-ships that kit in `MMCA.Common.Application`, so ADC and Store both inherit identical email, password, and
-address rules without duplicating a single line.
+ships that kit in `MMCA.Common.Application`, so a module that composes from it gets the framework's email,
+password, and address rules without restating a single chain.
 
 ## Reusable rule fragments, composed with Include
 
@@ -30,32 +30,42 @@ declares eleven of them: `RequiredStringRules<T>`, `OptionalStringRules<T>`, `Em
 `AbsoluteUrlRules<T>`, `PositiveIntRules<T>`, `PositiveDecimalRules<T>`, `NonNegativeIntRules<T>`,
 `RequiredIdRules<T, TId>`, `OptionalPositiveIdRules<T, TId>`, `PasswordRules<T>`, and
 `StrongPasswordRules<T>`. Each constructor is a single expression body. `EmailRules<T>`, for example,
-chains `NotEmpty()` + `EmailAddress()` + `MaximumLength(maxLength)`. `StrongPasswordRules<T>` repeats
-`PasswordRules<T>`'s non-empty plus 8-to-128 length and adds four `Matches(...)` regexes for an uppercase
-letter, a lowercase letter, a digit, and a special character.
+chains `NotEmpty()` + `EmailAddress()` + `MaximumLength(maxLength)`. `StrongPasswordRules<T>` declares
+the same non-empty plus 8-to-128 length as `PasswordRules<T>` and adds four `Matches(...)` regexes for an
+uppercase letter, a lowercase letter, a digit, and a special character. Its lengths and character classes
+come from `PasswordComplexity` in `MMCA.Common.Shared`, the one Unicode-aware definition the client form
+attribute evaluates too, so the server rule and the form cannot disagree.
 
 Two design choices make a fragment reusable across unrelated types. First, it is **generic over `T`**, the
 type that contains the field. Second, it takes a **selector expression** (`Expression<Func<T, string>>`)
-rather than inheriting from the parent. So the same `EmailRules<T>` validates a `RegisterRequest`, a
-`LoginRequest`, or a bare value object, with zero inheritance coupling. A concrete validator pulls a
-fragment in with FluentValidation's `Include(...)`:
+rather than inheriting from the parent. So the same `EmailRules<T>` validates ADC's `RegisterRequest`, a
+speaker's email, and an event's organizer contact email, with zero inheritance coupling. A concrete
+validator pulls fragments in with FluentValidation's `Include(...)`. This is ADC's registration validator:
 
 ```csharp
-public sealed class CreateSessionRequestValidator : AbstractValidator<CreateSessionRequest>
+public sealed class RegisterRequestValidator : AbstractValidator<RegisterRequest>
 {
-    public CreateSessionRequestValidator()
+    public RegisterRequestValidator()
     {
-        Include(new RequiredStringRules<CreateSessionRequest>(r => r.Title, "Title", 200));
-        Include(new EmailRules<CreateSessionRequest>(r => r.ContactEmail, "Contact Email", 256));
+        Include(new EmailRules<RegisterRequest>(x => x.Email, "Email", UserInvariants.EmailMaxLength));
+        Include(new StrongPasswordRules<RegisterRequest>(x => x.Password));
+        Include(new RequiredStringRules<RegisterRequest>(x => x.FirstName, "First name", UserInvariants.FirstNameMaxLength));
+        Include(new RequiredStringRules<RegisterRequest>(x => x.LastName, "Last name", UserInvariants.LastNameMaxLength));
+
+        RuleFor(x => x.Address)
+            .SetValidator(new AddressValidator()!)
+            .When(x => x.Address is not null);
     }
 }
 ```
 
-Read that and the contract is obvious at a glance: a required title capped at 200 characters, a valid
-contact email capped at 256. No `RuleFor` chain to re-derive. The "non-empty plus valid format plus max
-length" logic lives in one place, and a security tweak (tighten the password regex, raise an email length
-cap) is a one-line edit that propagates to every consumer on the next package bump instead of being missed
-in some forgotten validator.
+Read that and the contract is obvious at a glance: a required, well-formed email, a strong password, and
+required first and last names, each length cap taken from the `UserInvariants` constants the domain's own
+`User` checks use, plus an optional address handed to the shared `AddressValidator`. The only `RuleFor`
+left is the one that wires the nested validator. The "non-empty plus valid format plus max length" logic
+lives in one place, and a security tweak (tighten a password character class, raise an email length cap)
+is a one-line edit that reaches every validator that includes the fragment on the next package bump
+instead of being missed in some forgotten validator.
 
 The address family is the worked example of composition all the way up. `AddressValidationRules.cs` ships
 six field fragments (`AddressLine1Rules<T>` through `CountryRules<T>`), and `AddressValidator` is a
@@ -67,11 +77,14 @@ across the entire solution, and the validator references it.
 
 ## One validator for the request, free for the command
 
-Most commands in this codebase are thin wrappers that carry a request DTO, for example
-`CreateSessionCommand(CreateSessionRequest Request)`, and implement `ICommandWithRequest<TRequest>` (its
-`Request` property is the bridge). The naive approach forces you to register a validator for *both* the
-request and the command, which means restating the request's rules at the command level for every single
-command. That is boilerplate begging to drift.
+Some commands carry a request DTO rather than being one. The generic update command,
+`UpdateEntityCommand<TEntity, TUpdateRequest, TIdentifierType>(Id, Request, RowVersion)`, wraps the request
+body together with the route id and the concurrency token, and implements `ICommandWithRequest<TUpdateRequest>`
+(its `Request` property is the bridge). The naive approach forces you to register a validator for *both*
+the request and the command, which means restating the request's rules at the command level for every
+wrapping command. That is boilerplate begging to drift. (A create path often needs no wrapper at all: ADC's
+`CreateSessionHandler` handles `SessionCreateRequest` itself as the command, so the request's own
+validator applies directly.)
 
 `CommandRequestValidator<TCommand, TRequest>` removes it by convention. It is an auto-registered
 `AbstractValidator<TCommand>` whose constructor takes `IEnumerable<IValidator<TRequest>>` by DI and loops
@@ -90,8 +103,11 @@ closed `CommandRequestValidator<TCommand, TRequest>` type per command, and regis
 **`TryAddTransient`**. That `TryAdd` is the load-bearing detail: it is a fallback, not an override. If a
 module ships an explicit hand-written `IValidator<TCommand>`, that wins, and the generic bridge stays out
 of the way. An empty validator collection is not an error either: it just means the request has no rules
-and the generic validator is a no-op. Convention over configuration, with an escape hatch that never
-blocks a bespoke case.
+and the generic validator is a no-op. A command the scan cannot see (a closed generic constructed at
+registration time rather than declared in the module assembly) gets the same bridge explicitly:
+`AddEntityUpdate<...>()` calls `AddCommandRequestValidator<TCommand, TRequest>()`, which registers the same
+`CommandRequestValidator` with the same `TryAdd` semantics. Convention over configuration, with an escape
+hatch that never blocks a bespoke case.
 
 ## A validation failure is a Result, and the edge maps it to 400
 
@@ -132,8 +148,8 @@ than duplicate.
 
 The validator does **cheap structural checks**: is the string non-empty, is it under the max length, does
 it look like an email, does the password match the complexity regex. These are properties of the request
-shape alone. They need no database, no other entity, no business context, and they are exactly what you
-want to reject at the edge with a 400 before opening a transaction.
+shape alone. The kit's fragments need no database, no other entity, no business context, and they are
+exactly what you want to reject at the edge with a 400 before opening a transaction.
 
 The domain factory enforces **business invariants**: rules that depend on state the validator cannot see.
 "This email is already registered." "A session cannot be scheduled outside its parent event's window." "A
@@ -142,9 +158,11 @@ data lives, returned as a `Result` failure from the factory method.
 
 Put the structural check in the validator and the business invariant in the domain factory, and each lives
 in exactly one place. The anti-pattern is smearing one altitude across both layers: re-doing a regex check
-inside the factory, or trying to query the database from a validator. The kit's job is to make the cheap
-structural layer composable and consistent, so the domain factory is free to focus on the rules only it
-can enforce.
+inside the factory, or pulling a business invariant out of the domain into a validator. The pipeline does
+not forbid the second (the validating decorator runs validators one at a time precisely because a validator
+may reach the database through a scoped repository), but a rule that needs other data already has a home
+in the domain factory, next to that data. The kit's job is to make the cheap structural layer composable
+and consistent, so the domain factory is free to focus on the rules only it can enforce.
 
 ## Trade-offs, honestly
 
@@ -156,6 +174,10 @@ can enforce.
   `RequiredStringRules<T>(selector, fieldName, maxLength)` is more abstract than a literal
   `RuleFor(x => x.Title).NotEmpty().MaximumLength(200)`. The payoff is reuse, but a newcomer meets a small
   generic puzzle (what is `T`, what does the selector bind) before the first `Include` reads naturally.
+- **Composition is opt-in, so adoption is uneven.** Nothing forces a validator to include a fragment.
+  Store's registration validator hand-writes its email and password chains with literal lengths (and its
+  password chain carries no complexity regexes), and Common's own login and forgot-password validators
+  hand-write their email rule. The kit removes the reason to copy; it does not detect a copy.
 - **This layer is structural only.** A fragment validates shape, never cross-entity or stateful rules.
   That is correct (those belong in the domain factory), but it means the validator is not the whole
   story, and a reviewer must check both altitudes to know a command is fully guarded.
@@ -204,43 +226,61 @@ guide, or `dotnet add package MMCA.Common.Application` and try it.*
 
 *Tags: .NET, C Sharp, Validation, Software Architecture, FluentValidation*
 
-*Notes: source-verified 2026-09-19 against MMCA.Common v1.205.0, paths relative to
-`MMCA.Common/Source/Core/MMCA.Common.Application/`. Rule fragments, all eleven, in
-`Validation/CommonValidationRules.cs`: `RequiredStringRules<T>` (:41), `OptionalStringRules<T>` (:53),
-`EmailRules<T>` (:64), `AbsoluteUrlRules<T>` (:85), `PositiveIntRules<T>` (:100),
-`PositiveDecimalRules<T>` (:111), `NonNegativeIntRules<T>` (:122), `RequiredIdRules<T, TId>` (:142),
-`OptionalPositiveIdRules<T, TId>` (:161), `PasswordRules<T>` (:174), `StrongPasswordRules<T>` (:188).
-`EmailRules<T>` chains `NotEmpty()` + `EmailAddress()` + `MaximumLength(maxLength)` (:66-71);
-`StrongPasswordRules<T>` chains `NotEmpty()` + `MinimumLength(8)` + `MaximumLength(128)` plus four
-`Matches(...)` regexes for uppercase, lowercase, digit and special character (:190-198), the same
-non-empty plus 8-to-128 chain `PasswordRules<T>` declares (:176-180). Every fragment constructor carries
-an optional trailing `string? errorCode = null`, so the three-argument
-`RequiredStringRules<T>(selector, fieldName, maxLength)` and `EmailRules<T>(selector, fieldName, maxLength)`
-calls in the illustrative code block compile as written (`:43`, `:66`).
-`CommandRequestValidator<TCommand, TRequest>` (`Validation/CommandRequestValidator.cs:30-41`) runs
-`foreach (var validator in requestValidators.DistinctBy(v => v.GetType())) { RuleFor(c => c.Request).SetValidator(validator); }`,
-and its class doc states that every registered validator for the request type runs, not just the first
-(same file, :12-16). `ScanModuleApplicationServices<TAssemblyMarker>()` (`DependencyInjection.cs:169-171`)
-forwards to the `Assembly`-typed overload (`DependencyInjection.cs:187`), which calls
-`services.AddValidatorsFromAssembly(moduleAssembly)` (`DependencyInjection.cs:258`) and registers each
-closed `CommandRequestValidator<,>` with `services.TryAddTransient(serviceType, validatorType)`
-(`DependencyInjection.cs:275`). Not re-opened this run, and still grounded in
-`Website/docs-src/onboarding/group-06-validation.md`: `AddressLine1Rules<T>` through `CountryRules<T>` and
-`AddressValidator` (`AddressValidationRules.cs`, limits from `AddressInvariants`);
-`ICommandWithRequest<TRequest>`; `ValidationFailureExtensions.ToErrors(string source)` producing
-`Error.Validation(code, message, source, target)` tagged `ErrorType.Validation`; and
-`ValidatingCommandDecorator<TCommand, TResult>` calling `ToErrors(typeof(TCommand).Name)`.
-FluentValidation 12 is the underlying library. The `CreateSessionRequestValidator` code block is an
-illustrative composition in the documented fragment idiom, not a verbatim copy of a specific module file;
-the per-module validators (ADC `SessionCreateRequestValidator`, Identity `RegisterRequestValidator`, etc.)
-live in their module chapters and were not read line-by-line for this article. There is no dedicated ADR
-for validation; it is governed by the CQRS-decorator ADRs and the layering fitness tests. Change history:
-the 2026-06-30 evidence-audit note cited the `EmailRules<T>` constructor at `CommonValidationRules.cs:38`
-as a three-parameter method; the class sits at :64 and its four-parameter constructor at :66 after an
-internal `OptionalErrorCodeExtensions` helper (:19) was inserted above the fragments, which shifted every
-subsequent line. This run also corrected the fragment count from eight to eleven, the
-`CommandRequestValidator` description from picking the first registered validator to applying every one of
-them, and the discovery call from `AddValidatorsFromAssemblyContaining<TAssemblyMarker>` to
-`AddValidatorsFromAssembly(moduleAssembly)`, each against the anchors cited above.*
+*Notes: source-verified 2026-10-02 against MMCA.Common v1.221.0 (per `MMCA.Common/FACTS.md`), paths
+relative to `MMCA.Common/Source/Core/MMCA.Common.Application/` unless prefixed. Rule fragments, all
+eleven, in `Validation/CommonValidationRules.cs`: `RequiredStringRules<T>` (:42), `OptionalStringRules<T>`
+(:54), `EmailRules<T>` (:65), `AbsoluteUrlRules<T>` (:86), `PositiveIntRules<T>` (:101),
+`PositiveDecimalRules<T>` (:112), `NonNegativeIntRules<T>` (:123), `RequiredIdRules<T, TId>` (:143),
+`OptionalPositiveIdRules<T, TId>` (:162), `PasswordRules<T>` (:175), `StrongPasswordRules<T>` (:191);
+internal `OptionalErrorCodeExtensions` helper at :20. `EmailRules<T>` ctor :67, chain :68-71;
+`RequiredStringRules<T>` ctor :44; every fragment ctor ends in an optional `string? errorCode = null`.
+`PasswordRules<T>` chains literal `MinimumLength(8)` / `MaximumLength(128)` (:179-181);
+`StrongPasswordRules<T>` chains `MinimumLength(PasswordComplexity.MinimumLength)`,
+`MaximumLength(PasswordComplexity.MaximumLength)` and four `Matches(PasswordComplexity.Uppercase/
+Lowercase/Digit/SpecialCharacter)` (:195-201), with the shared-with-the-client-form-attribute statement in
+its class doc (:187-188); `MMCA.Common.Shared/Auth/PasswordComplexity.cs` declares `MinimumLength = 8`
+(:21), `MaximumLength = 128` (:24) and the four Unicode-category regexes (:28, :32, :36, :43). The code
+block is verbatim from `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/Validation/
+RegisterRequestValidator.cs:12-25` (includes :16-19); its caps come from
+`MMCA.ADC.Identity.Domain/Users/UserInvariants.cs:12,15,18`, which the domain's own email check uses
+(:29). Other `EmailRules` users: ADC `SpeakerValidationRules.cs:46`, `EventValidationRules.cs:67`;
+`StrongPasswordRules` also in ADC `ChangePasswordRequestValidator.cs:18`. Uneven adoption: Store
+`MMCA.Store.Identity.Application/Users/Validation/RegisterRequestValidator.cs:17-20` (email, literal 100)
+and :22-25 (password, 8/128, no `Matches`), composing only `AddressValidator` (:35-37); Common
+`Auth/Validation/LoginRequestValidator.cs:15` and `ForgotPasswordRequestValidator.cs:14` hand-write
+`RuleFor(x => x.Email)`. Address family: `Validation/AddressValidationRules.cs`, `AddressValidator` :13
+with six `Include` calls :17-22, fragments :31-88 reading `AddressInvariants`
+(`MMCA.Common.Shared/ValueObjects/Contact/AddressInvariants.cs:9`). Command bridge:
+`UpdateEntityCommand<TEntity, TUpdateRequest, TIdentifierType>(Id, Request, RowVersion)` implements
+`ICommandWithRequest<TUpdateRequest>` (`UseCases/Crud/UpdateEntityCommand.cs:48-52`);
+`ICommandWithRequest<TRequest>.Request` (`UseCases/Contracts/ICommandWithRequest.cs:14-17`); create path:
+ADC `Sessions/UseCases/Create/CreateSessionHandler.cs:29` derives `CreateEntityHandlerBase<SessionCreateRequest, ...>`,
+which is `ICommandHandler<TCreateRequest, Result<TEntityDTO>>` (`UseCases/Crud/CreateEntityHandlerBase.cs:42-46`).
+`CommandRequestValidator<TCommand, TRequest>` (`Validation/CommandRequestValidator.cs:30-31`, ctor :33,
+`DistinctBy` loop :37-40, every-validator doc :12-16). `ScanModuleApplicationServices<TAssemblyMarker>()`
+(`DependencyInjection.ModuleScanning.cs:28-30`) forwards to the `Assembly` overload (:46), which calls
+`AddValidatorsFromAssembly(moduleAssembly)` (:117) and reflects over `ICommandWithRequest<>` (:121-135),
+registering via `TryAddTransient(serviceType, validatorType)` (:134). Explicit form:
+`AddCommandRequestValidator<TCommand, TRequest>()` (`DependencyInjection.Crud.cs:220-226`, `TryAddTransient`
+:223), called from `AddEntityUpdate` (:199). `ValidationFailureExtensions.ToErrors(string source)`
+(`Extensions/ValidationFailureExtensions.cs:11,19-21`) builds `Error.Validation(code, message, source,
+target)` (`MMCA.Common.Shared/Abstractions/Error.cs:37-38`). `ValidatingCommandDecorator` calls
+`ToErrors(typeof(TCommand).Name)` (`UseCases/Decorators/ValidatingCommandDecorator.cs:83`) and returns a
+failure without calling the inner handler (:86-94); its comment that a validator may reach the database
+through a scoped repository is at :70-72. Decorator order: `DependencyInjection.cs:134` Transactional
+(innermost), :135 Timeout, :136 Validating. `ErrorType.Validation` -> 400 at
+`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ErrorHttpMapping.cs:22`. FluentValidation 12:
+`MMCA.Common/Directory.Packages.props:30` (`FluentValidation.DependencyInjectionExtensions` 12.1.1). There
+is no dedicated ADR for validation; it is governed by the CQRS-decorator ADRs (ADR-014) and the layering
+fitness tests. Change history (2026-10-02): re-anchored every Common cite after the `DependencyInjection`
+partial split (scan moved to `DependencyInjection.ModuleScanning.cs`) and a one-to-three-line shift in
+`CommonValidationRules.cs`; replaced the illustrative `CreateSessionRequestValidator` block (no such type)
+with ADC's real `RegisterRequestValidator`; replaced the nonexistent `CreateSessionCommand` example with
+`UpdateEntityCommand` and "most commands" with "some"; narrowed "ADC and Store both inherit identical
+rules" (Store hand-writes them) and "the same EmailRules validates a LoginRequest" (Common's login
+validator does not use it) and added the uneven-adoption trade-off; reconciled the validator-database
+stance with the decorator comment; added `PasswordComplexity` and `AddCommandRequestValidator`. Earlier
+runs corrected the fragment count from eight to eleven, the `CommandRequestValidator` description to apply
+every registered validator, and the discovery call to `AddValidatorsFromAssembly(moduleAssembly)`.*
 
 - Full series index: https://ivanball.github.io/writing.html

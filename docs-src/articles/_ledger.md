@@ -21,18 +21,18 @@ Working file for `/update-medium` (underscore-prefixed, so the site build skips 
 **Anchor facts (current state, verify before publishing)**
 - .NET 10, C# preview (extension types), Apache-2.0, repo `https://github.com/ivanball/MMCA.Common`
   (confirmed via git remote).
-- Framework version **v1.205.0**, tracked in lockstep by every consumer (per `MMCA.Common/FACTS.md`).
-- 19 NuGet packages released in lockstep; **125 ADRs (001-125)** (per `Website/docs-src/adr/README.md`).
-- `MMCA.Common.Testing.Architecture` defines 136 test methods across 53 base classes;
-  Common's own build runs 267, plus a compile-time MSBuild layer guard (per `FACTS.md`).
-- Two-axis architecture index (current per-repo scorecards): Common **Maturity 97.0% (318/328),
+- Framework version **v1.221.0**, tracked in lockstep by every consumer (per `MMCA.Common/FACTS.md`).
+- 22 NuGet packages released in lockstep; **131 ADRs (001-131)** (per `Website/docs-src/adr/README.md`).
+- `MMCA.Common.Testing.Architecture` defines 141 test methods across 55 base classes;
+  Common's own build runs 339, plus a compile-time MSBuild layer guard (per `FACTS.md`).
+- Two-axis architecture index (current per-repo scorecards): Common **Maturity 96.6% (317/328),
   Implementation 86.0% (705/820)** across all 34 categories (none N/A now: §27 i18n is scored after
-  ADR-027 superseded the single-locale ADR-011); ADC **Maturity 98.5% (319/324), Implementation 86.2% (698/810)**.
+  ADR-027 superseded the single-locale ADR-011); ADC **Maturity 96.9% (314/324), Implementation 86.0% (697/810)**; Store **Maturity 97.5% (308/316), Implementation 83.4% (659/790)**.
 - ~2,254 fast tests, no Docker. Two real consumer apps: MMCA.ADC (conference, Azure Container Apps) and
-  MMCA.Store (e-commerce, Stripe). Both consumers are pinned at 1.205.0 in lockstep.
+  MMCA.Store (e-commerce, Stripe). Both consumers are pinned at 1.221.0 in lockstep.
 
 > **Note on the scorecard:** the repo's committed `Website/docs-src/governance/common-ArchitectureScorecard.md` is now the
-> canonical **two-axis** scorecard (Maturity 97.0% (318/328) / Implementation 86.0% (705/820),
+> canonical **two-axis** scorecard (Maturity 96.6% (317/328) / Implementation 86.0% (705/820) as of the 2026-10-01 re-score at v1.218.0;
 > re-scored clean-tree at v1.101.0, then moved by the fifteenth-wave i18n completion train 2026-07-03,
 > the sixteenth-wave clean-tree re-score at v1.106.0 2026-07-06, which lifted §14 Testability
 > Implementation 8 to 9, the seventeenth-wave re-score at v1.108.0 2026-07-09, which recalibrated
@@ -73,19 +73,17 @@ Working file for `/update-medium` (underscore-prefixed, so the site build skips 
 > applicable categories, "eleven packages"), which survives in git history as the historical baseline
 > (MMCA.Common commit `f518099`, `ArchitectureScorecard.md:3`: "80% (218 of 272 weighted points across
 > 28 applicable categories; 6 N/A categories excluded)").
-> ADC's two-axis scorecard is `Website/docs-src/governance/adc-ArchitectureScorecard.md` (Maturity 97.2% (311/320) / Implementation
-> 85.6% (685/800) as of the twenty-fourth-cycle re-score 2026-07-28, which corrected §15 Implementation
-> 8 to 7 on suppression hygiene drift plus the MAUI project sitting outside the CI-audited graph; the
-> previously stated 85.9% (687/800) is now stale). Store's is
-> `Website/docs-src/governance/store-ArchitectureScorecard.md` (Maturity 97.8% (313/320) / Implementation
-> 83.9% (671/800)). The cornerstone articles
+> ADC's two-axis scorecard is `Website/docs-src/governance/adc-ArchitectureScorecard.md` (Maturity 96.9% (314/324) / Implementation
+> 86.0% (697/810) as of the 2026-10-01 re-score). Store's is
+> `Website/docs-src/governance/store-ArchitectureScorecard.md` (Maturity 97.5% (308/316) / Implementation
+> 83.4% (659/790) as of the 2026-10-01 re-score). The cornerstone articles
 > frame proof as "scored, published, then fixed, then re-scored": the 80% snapshot predated several
 > remediations (the 13th package, lock files, the SBOM-gated release, `DependencyVersionTests`, the
 > ADR-005 erasure pathway), and the two-axis re-verification re-scored after they landed. The former
 > workspace eval files (`Docs/Architecture/ArchitectureEvaluation-MMCA.*.md`) are now pointer stubs, so
 > cite the in-repo scorecards. Re-derive numbers before publishing.
 
-> **Note on ADRs:** the set has grown to **125 (001-125)**. Each ADR maps to an article or is a recorded
+> **Note on ADRs:** the set has grown to **131 (001-131)**. Each ADR maps to an article or is a recorded
 > scope-out. Shared homes: ADR-017 (request idempotency) and ADR-021 (consumer-side inbox idempotency) are
 > both taught in **Article 18**; ADR-018 (polyglot persistence) is **Article 11**; ADR-001 (manual DTO
 > mapping) is **Article 23**; ADR-026 (two-tier caching) is **Article 19**; ADR-024 (two-channel
@@ -342,6 +340,25 @@ Working file for `/update-medium` (underscore-prefixed, so the site build skips 
 > as shipped-but-unadopted, and **ADR-112** (catalog-owned effective pricing) as Store per-module
 > internals, extending the G17-G22/G24 group-axis scope-out to Store module internals. Every ADR in
 > 001-125 and every functional group in G01-G28 now has an article cell or a recorded scope-out.
+>
+> **2026-10-02 coverage audit** (full sweep at v1.221.0, against the grown ADR set 126-131 plus a
+> re-inversion of the whole matrix): no new article; every newly found gap closes as a section of an
+> existing piece. **ADR-131** (the same-origin API proxy: the UI host forwards `/api/**` to the gateway
+> server-side, adopted by both apps) regrounds **Article 25**; **ADR-130** (per-engine data source
+> strategy, `IDataSourceEngine`) regrounds **Article 11**; **ADR-095** (`SoftDeleteUniqueIndexConvention`)
+> is a new section of **Article 36**; **ADR-125** (parameterized SQL only, `IRawSqlQueryExecutor`) is a
+> new section of **Article 28** with its `RawSqlConventionTestsBase` gate in **Article 34**; **ADR-128**
+> (time as an input) adds its `ClockReadTestsBase` gate to **Article 34**; and **ADR-122** (dev-only
+> relaxations fail closed) is a new trade-off in **Article 16**. The group cells of Articles 34 and 35
+> move to **G25** (Testing and Quality Infrastructure; group IDs and onboarding file numbers differ, see
+> `Website/docs-src/onboarding/00-group-taxonomy.md:78-83`), and Article 48 drops its §31 cell so the
+> standing §31 FinOps scope-out holds on the rubric axis. Recorded as taught in passing rather than given
+> a cell: **ADR-106** (C# extension members as the DI surface) and the public-API baseline gate
+> (`PublicAPI.Shipped.txt`, no dedicated ADR). **ADR-129** (the tactical aggregate contract, gated by
+> `EntityConventionTestsBase`) is a new section of **Article 5**. Scope-outs recorded: **ADR-126** (event
+> sourcing) and **ADR-127** (the actor model) are documented rejections that ship nothing, so neither
+> needs an article. Every ADR in 001-131 and every functional group in G01-G28 now has an article cell or a
+> recorded scope-out.
 
 **Coverage history**
 

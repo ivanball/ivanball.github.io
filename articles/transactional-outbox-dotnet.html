@@ -203,7 +203,8 @@ AddDomainEvent(<span class="hljs-keyword">new</span> ProductVariantChanged(Id, n
           <p><code>AddDomainEvent</code> lives on the aggregate base (<code>AuditableAggregateRootEntity</code>), so any aggregate can
           raise events. The interesting work happens in <code>SaveChangesAsync</code>, which runs a fixed sequence:</p>
           <blockquote>
-          <p>stamp audit fields -&gt; capture domain events from the aggregates -&gt; serialize them to <code>OutboxMessage</code>
+          <p>stamp audit fields -&gt; stamp the tenant (when the host registers a tenant interceptor) -&gt; capture
+          domain events from the aggregates -&gt; serialize them to <code>OutboxMessage</code>
           rows -&gt; <code>base.SaveChangesAsync()</code> commits <strong>data + outbox in the same transaction</strong> -&gt; dispatch the
           local domain events in-process -&gt; mark their outbox rows processed.</p>
           </blockquote>
@@ -219,20 +220,22 @@ AddDomainEvent(<span class="hljs-keyword">new</span> ProductVariantChanged(Id, n
           answer what changed, because the stamp is a single overwrite: a row edited nine times carries the
           ninth editor and nothing else. <strong>ADR-075</strong> adds the missing half, and it belongs in this article
           because it does not invent a mechanic, it reuses this one.</p>
-          <p><code>AuditTrailSaveChangesInterceptor</code> is a third <code>SaveChangesInterceptor</code>, registered after the
-          audit-stamp interceptor and after the domain-event interceptor that writes the outbox rows. The
-          order is load-bearing: running last is what makes the diff it captures see the final stamped values
+          <p><code>AuditTrailSaveChangesInterceptor</code> is one more <code>SaveChangesInterceptor</code>, registered last: after the
+          audit-stamp interceptor, after the tenant interceptor when a host registers one, and after the
+          domain-event interceptor that writes the outbox rows. The order is load-bearing: running last is what makes the diff it captures see the final stamped values
           rather than a half-populated entity. It walks the change tracker, compares each modified property&#39;s
           original value against its current one, and adds one <code>AuditTrailEntry</code> row per changed property into
           the same <code>SaveChanges</code> call. The history therefore commits or rolls back with the data it describes,
           same transaction, same database. That is the outbox guarantee applied to a different payload: a
           trail that can be committed without its data, or lost to a crash in the window after the commit, is
           a hint rather than a record.</p>
-          <p>It is opt-in twice over, which is what keeps the cost proportional to the value. A host has to call
-          <code>AddAuditTrail(configuration)</code>, and an entity has to carry the <code>IAuditedEntity</code> marker. A host that
-          never calls it resolves the interceptor as null (<code>GetService</code>, not <code>GetRequiredService</code>), so nothing
-          joins the pipeline and the feature costs nothing. Seven service hosts across the reference apps opt
-          in today, among them Store&#39;s Sales service, ADC&#39;s Identity service, and Helpdesk&#39;s web host.</p>
+          <p>It is opt-in three times over, which is what keeps the cost proportional to the value. A host has
+          to call <code>AddAuditTrail(configuration)</code>, it has to set <code>AuditTrail:Enabled</code> (default <code>false</code>, and the
+          single switch for both recording and whether the <code>AuditTrailEntries</code> table is mapped into the model
+          at all), and an entity has to carry the <code>IAuditedEntity</code> marker. A host that never calls
+          <code>AddAuditTrail</code> resolves the interceptor as null (<code>GetService</code>, not <code>GetRequiredService</code>), so nothing
+          joins the pipeline and the feature costs nothing. Seven hosts across the reference apps call it
+          today, among them Store&#39;s Sales service, ADC&#39;s Identity service, and Helpdesk&#39;s web host.</p>
           <p>Two details follow from what a change history is. A property marked <code>[Pii]</code> records
           <code>PiiRedactor.RedactedToken</code> on both sides of the change rather than the values, redacted at capture
           and never at read, since a store that by construction outlives the row it describes would otherwise
@@ -240,7 +243,9 @@ AddDomainEvent(<span class="hljs-keyword">new</span> ProductVariantChanged(Id, n
           deliberately not an <code>IAuditableEntity</code>, exactly like <code>OutboxMessage</code>: no audit stamps of its own
           (stamping is itself a change, so it would recurse) and no soft-delete flag (a soft-deleted audit row
           is rewritten history that a query filter quietly hides). Rows are append-only and leave only through
-          a scheduled retention purge.</p>
+          the scheduled <code>AuditTrailCleanupJob</code> (<code>AuditTrail:RetentionDays</code>, default 90), and that job runs only
+          when the host also calls <code>AddScheduledJobs(configuration)</code> and sets <code>Scheduler:Enabled</code>. Without the
+          scheduler the trail keeps recording, nothing purges it, and the retention setting is inert.</p>
           <p>The honest cost is that this one sits on the caller&#39;s latency path. An audited entity with twenty
           changed properties writes twenty extra rows inside your transaction, which is exactly not the
           beside-the-request work that the outbox drain is.</p>
@@ -282,13 +287,16 @@ AddDomainEvent(<span class="hljs-keyword">new</span> ProductVariantChanged(Id, n
           <code>UnitOfWork</code> forwards straight to <code>DbContextFactory.ExecuteInTransactionAsync</code>, and the CQRS
           pipeline&#39;s <code>TransactionalCommandDecorator</code> calls it for any command carrying <code>ITransactional</code>.
           Running the delegate inside SQL Server&#39;s retrying execution strategy (<code>EnableRetryOnFailure</code>, five
-          attempts, a ten-second maximum delay) decides four things. The whole delegate is the retriable unit,
+          attempts, a ten-second maximum delay) decides five things. The whole delegate is the retriable unit,
           so anything computed outside it but committed inside it is silently wrong on a second attempt. Every
           attempt after the first starts from <code>ResetForRetry</code>, which calls <code>ChangeTracker.Clear()</code> on every
           context, because the failed attempt&#39;s entities are still <code>Added</code> and would otherwise be inserted a
           second time with a duplicate outbox row per event. A returned failed <code>Result</code> rolls back exactly like
-          a thrown exception, which is what a framework that mandates <code>Result</code> over exceptions owes itself. And
-          the deferred in-process dispatch is flushed only after the commit succeeds (<code>FlushDeferredAsync</code>) and
+          a thrown exception, which is what a framework that mandates <code>Result</code> over exceptions owes itself. On
+          a successful result, <code>FlushEnrolledCommandsBeforeCommitAsync</code> runs just before the commit: it saves
+          internal-command rows enrolled after the handler&#39;s last save, so they commit with the caller&#39;s
+          change, and it throws on any other unsaved tracked change, which rolls the unit back rather than
+          committing while silently discarding that change. And the deferred in-process dispatch is flushed only after the commit succeeds (<code>FlushDeferredAsync</code>) and
           dropped on every other path (<code>DropDeferred</code>), so an in-process handler only ever sees durable state
           while the outbox carries everything that crosses a process boundary. A re-entrant call joins the
           ambient transaction instead of nesting, and a Cosmos context is never enlisted at all, since
@@ -340,17 +348,17 @@ AddDomainEvent(<span class="hljs-keyword">new</span> ProductVariantChanged(Id, n
           has exactly three values (<code>InProcess</code>, <code>RabbitMq</code>, <code>AzureServiceBus</code>), chosen at the deployment edge
           (the Aspire AppHost locally, Bicep environment variables in production) rather than anywhere in
           application code, and both broker branches are configured from one settings object with the same
-          exponential retry, so the two products stay substitutable. It also records the honest gap: the
-          production-only Azure Service Bus binding is exercised by a dedicated emulator test tier that runs
-          nightly and non-gating, so it is evidence that the binding works, not a check that blocks a
-          regression.</p>
+          exponential retry, so the two products stay substitutable. It also records the honest residual: the
+          production-only Azure Service Bus binding is exercised by a dedicated emulator test tier that runs on
+          the weekday nightly and gates deployment in both ADC and Store, so a Service-Bus-only regression
+          blocks the next deploy, though not the merge that introduced it.</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// One abstraction, two transports. Application code depends only on IMessageBus.</span>
 <span class="hljs-comment">// InProcessMessageBus  -&gt; in-monolith, method-call delivery</span>
 <span class="hljs-comment">// BrokerMessageBus     -&gt; extracted service, MassTransit broker (RabbitMQ dev / Azure Service Bus prod)</span></code></pre>
           <p>Whether there is an outbox at all is resolved from that same mode. <code>MessageBus:EnableOutbox</code> is a
           <code>bool?</code> that defaults to unset, and <code>MessageBusSettings.IsOutboxEnabled</code> reads
           <code>EnableOutbox ?? Provider != MessageBusProvider.InProcess</code>, character for character the rule
-          <code>IsInboxEnabled</code> uses one property above it. <code>AddInfrastructure</code> resolves that posture once, at
+          <code>IsInboxEnabled</code> uses two properties above it. <code>AddInfrastructure</code> resolves that posture once, at
           registration: on the enabled path it registers <code>OutboxProcessor</code> and <code>OutboxCleanupService</code>, and on
           the disabled path it registers neither and adds <code>OutboxDisabledNoticeService</code>, which logs one startup
           line naming exactly what is not running. The one combination that cannot work is refused rather than
@@ -418,8 +426,16 @@ AddDomainEvent(<span class="hljs-keyword">new</span> ProductVariantChanged(Id, n
 <span class="hljs-comment">// modification audit fields here unless the caller assigned them explicitly.</span>
 <span class="hljs-keyword">if</span> (!builder.SetsProperty(<span class="hljs-keyword">nameof</span>(IAuditableEntity.LastModifiedOn)))
 {
-    <span class="hljs-keyword">var</span> now = (timeProvider ?? TimeProvider.System).GetUtcNow().UtcDateTime;
+    <span class="hljs-keyword">var</span> now = timeProvider.GetUtcNow().UtcDateTime;
     builder.Set(e =&gt; e.LastModifiedOn, (DateTime?)now);
+}
+
+<span class="hljs-comment">// With no current user (a background or system scope) the editor is the default sentinel,</span>
+<span class="hljs-comment">// exactly as the save pipeline attributes a system save; leaving the column alone would keep</span>
+<span class="hljs-comment">// crediting the change to the previous human editor.</span>
+<span class="hljs-keyword">if</span> (!builder.SetsProperty(<span class="hljs-keyword">nameof</span>(IAuditableEntity.LastModifiedBy)))
+{
+    builder.Set(e =&gt; e.LastModifiedBy, currentUserService?.UserId ?? <span class="hljs-literal">default</span>);
 }</code></pre>
           <p>The mechanism that makes this possible is small and reusable: rather than handing EF&#39;s setter builder
           straight to the caller, the repository collects the assignments into an <code>UpdatePropertySetterBuilder</code>
@@ -440,13 +456,17 @@ AddDomainEvent(<span class="hljs-keyword">new</span> ProductVariantChanged(Id, n
           <ul>
           <li><strong>At-least-once means duplicates are possible.</strong> A consumer can receive the same event twice (publish
           succeeded, the &quot;mark processed&quot; step did not). The framework does not just
-          document this, it ships an opt-in consumer-side inbox: <code>IInboxStore</code> (<code>EfInboxStore</code> records processed
-          messages in an <code>InboxMessages</code> table, <code>NoOpInboxStore</code> is the default no-op) dedups by <code>MessageId</code>,
-          switched on with <code>MessageBus:EnableInbox</code>, and the generic <code>IntegrationEventConsumer</code> checks before
-          handling and records only after every handler succeeds (<strong>ADR-021</strong>, enabled in production on five
-          service hosts). The honest residual is narrower: the inbox is opt-in per service, and it narrows the
-          duplicate window rather than closing it, so a crash between a handler committing and the inbox write
-          reprocesses the event once more. Handlers must still be idempotent for that window.</li>
+          document this, it ships a consumer-side inbox that is on by default for a broker transport:
+          <code>IInboxStore</code> (<code>EfInboxStore</code> records processed messages in an <code>InboxMessages</code> table) dedups by
+          <code>MessageId</code>, and <code>MessageBus:EnableInbox</code> is a <code>bool?</code> that resolves ON for RabbitMQ and Azure
+          Service Bus when unset. <code>NoOpInboxStore</code> is reached only through an explicit <code>EnableInbox=false</code>,
+          and that opt-out logs a startup Warning rather than staying silent. The generic
+          <code>IntegrationEventConsumer</code> stages the inbox row in the scope&#39;s unit of work before the handlers
+          run and abandons it when a handler throws, so a handler that saves to the same source commits the
+          inbox row in its own transaction (<strong>ADR-021</strong>; every deployed service host also sets
+          <code>EnableInbox: true</code> explicitly, four in ADC and three in Store). The honest residual is narrower:
+          the duplicate window stays open for a handler that writes nothing or writes to a different source,
+          so handlers must still be idempotent for that case.</li>
           <li><strong>The table grows, but it self-purges.</strong> Processed outbox rows accumulate, and the serialized
           payloads can contain PII, so the framework ships an automatic <code>OutboxCleanupService</code> that sweeps every
           relational source and deletes processed rows whose <code>ProcessedOn</code> is older than <code>Outbox:RetentionDays</code>

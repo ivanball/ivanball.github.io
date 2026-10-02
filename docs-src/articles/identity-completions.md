@@ -7,12 +7,13 @@
 > `.../Application/Auth/EmailConfirmation/EmailConfirmationSettings.cs`,
 > `.../Application/Auth/Permissions/PermissionGrantSettings.cs`,
 > `.../Shared/Auth/AuthClaimTypes.cs`,
-> `.../Infrastructure/DependencyInjection.cs`,
+> `.../Infrastructure/DependencyInjection.Auth.cs`,
 > `.../Infrastructure/Auth/Administration/StoredPermissionRoleAdministrationService.cs`,
 > `.../Infrastructure/Persistence/Auth/PermissionGrantModelGate.cs`,
 > `.../Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs`,
 > `.../API/Controllers/Administration/RolesAdminControllerBase.cs`,
-> `.../API/Controllers/Administration/UsersAdminControllerBase.cs`, the two consumers' Identity
+> `.../API/Controllers/Administration/UsersAdminControllerBase.cs`,
+> `.../UI/Pages/Auth/ConfirmEmail.razor`, the two consumers' Identity
 > service hosts, and the §11 row of `Website/docs-src/governance/common-ArchitectureScorecard.md`.
 > No em dashes.
 
@@ -49,8 +50,8 @@ what it costs to extend those without breaking them.
 Rubric §11 (Security) is a weight-3 category asking that authentication be centralized and identity
 flows documented, that authorization be enforced at the right layer rather than in the UI, and that
 permissions follow least privilege, with "over-broad permissions (admin everywhere), no least
-privilege" as a named red flag (`ArchitectureEvaluationCriteria.md:353-380`). MMCA.Common's §11 row
-sits at Maturity 4 and Implementation 8 (`common-ArchitectureScorecard.md:91`), and the two
+privilege" as a named red flag (`ArchitectureEvaluationCriteria.md:353-376`). MMCA.Common's §11 row
+sits at Maturity 4 and Implementation 8 (`common-ArchitectureScorecard.md:75`), and the two
 capabilities most often missing from the band above it are exactly a step-up factor and an
 authorization model that can be adjusted without a release.
 
@@ -59,39 +60,46 @@ is a system with users who cannot review your diff. Adding a mandatory query to 
 not a feature in a library, it is a behavior change in somebody else's production, delivered by a
 version bump. The framework's own history is the argument: the 1.188.0 release needed an
 `UPGRADING.md` section with eight items, one of which (a fallback authorization policy) broke
-unannotated endpoints (`ADR-116:39-42`).
+unannotated endpoints (`ADR-116:42-46`).
 
 So the question is not "how do I implement TOTP." It is "how do I ship TOTP so that the app which
 does not want it cannot possibly be affected by it."
 
 ## The MMCA answer: the unadopted path is unreachable, not merely disabled
 
-`AuthenticationServiceBase<TUser>` gained two constructor parameters, both optional and both
-defaulted to null: `ITwoFactorAuthenticator? twoFactor = null` and
+`AuthenticationServiceBase<TUser>` takes the two new collaborators as constructor parameters, both
+optional and both defaulted to null: `ITwoFactorAuthenticator? twoFactor = null` and
 `IOptions<EmailConfirmationSettings>? emailConfirmationSettings = null`
-(`AuthenticationServiceBase.cs:83-84`). Every existing subclass keeps compiling, because it simply
+(`AuthenticationServiceBase.cs:69-70`). Every existing subclass keeps compiling, because it simply
 passes fewer arguments, and the documentation on those parameters says what null means: "while it is
-null the sign-in flow has no second-factor step at all" (`:63-69`).
+null the sign-in flow has no second-factor step at all" (`:52-62`).
 
 That is not the same as a configuration flag, and the difference is the whole point.
 `ChallengeSecondFactorAsync` is a two-line expression body: with no authenticator injected it
 returns `TwoFactorOutcome.NotEnrolled` outright, and only otherwise delegates to
-`twoFactor.ChallengeAsync` (`:665-672`). An unadopted consumer pays no query, no branch and no
+`twoFactor.ChallengeAsync` (`:504-510`). An unadopted consumer pays no query, no branch and no
 allocation. A disabled feature has a code path that runs and decides to do nothing; an absent
 collaborator has no code path at all. Only the second one is safe to ship to a system you cannot
 test.
 
 The email gate is built the same way. `CheckEmailConfirmed` returns success immediately unless the
 host supplied settings with `RequireConfirmedEmail` set, and even then refuses only a user whose type
-implements `IEmailConfirmableUser` and reports `IsEmailConfirmed: false` (`:641-652`). Two
+implements `IEmailConfirmableUser` and reports `IsEmailConfirmed: false` (`:480-490`). Two
 independent conditions, both off by default, one of them a type test the app controls.
 
 **Where the two gates sit in the login sequence is a decision, not an accident.** Both run after the
-password has been proved: `CheckEmailConfirmed` at `:215`, `ChallengeSecondFactorAsync` at `:221`,
-under a comment that gives the reason (`:210-213`). They return distinct, actionable errors ("confirm
+password has been proved: `CheckEmailConfirmed` at `:164`, the second-factor challenge at `:170`,
+under a comment that gives the reason (`:160-163`). They return distinct, actionable errors ("confirm
 your address", "send a code"), and an actionable error is an information leak if an anonymous caller
 can trigger it. Reaching either gate proves the caller owns the account, so neither is readable by
 somebody sweeping addresses.
+
+Login reaches the challenge through a private wrapper, `ChallengeSecondFactorCountingFailuresAsync`
+(`:522-535`), which counts a wrong code against the account exactly like a wrong password, so the
+same lockout that throttles password guessing throttles code guessing per account. A missing code is
+the ordinary first leg of the challenge and is not counted (`:512-516`). For an app with no
+authenticator the wrapper costs nothing either: the inner call answers `NotEnrolled`, which is not a
+failure, and no counter is touched.
 
 ## The step-up assertion is a claim, and presence is the whole test
 
@@ -103,13 +111,14 @@ time-based code (`:65`) or `recovery` for a single-use recovery code (`:68`).
 Three details make this cheap to adopt.
 
 **The claim is stamped without the app's hook participating.** `LoginAsync` arms a private field with
-the outcome (`AuthenticationServiceBase.cs:242`) and clears it in a `finally` (`:249`); the token is
-minted through a wrapper that appends the claim to whatever claim set the app's `CreateAccessToken`
-returned (`:619-632`, the arming at `:621`). No subclass signature changed, so no consumer edits a
-method to start emitting `mfa`.
+the outcome (`AuthenticationServiceBase.cs:191`) and clears it in a `finally` (`:198`); the token is
+minted through `CreateAccessTokenForSession`, which hands that field to the session issuer's
+`MintForSession`, and the issuer appends the claim to whatever claim set the app's `CreateAccessToken`
+returned (`:457-462`, `:469-470`). No subclass signature changed, so no consumer edits a method to
+start emitting `mfa`.
 
 **A rotation does not silently drop it.** `RefreshTokenAsync` reads the method back off the presented
-token (`:398`) and carries it into the new one, then clears the field (`:411`). Without that, a
+token (`:332`) and carries it into the new one, then clears the field (`:347`). Without that, a
 step-up would quietly expire at the next refresh and a user who did present a second factor would
 look like one who never had.
 
@@ -122,13 +131,13 @@ a suggestion.
 One more small thing worth stealing. The map from outcome to claim value has a default case that
 returns null with a comment explaining it: an outcome the map has not been taught about means the
 enum grew and this method did not, and it must not silently mint an `mfa` claim
-(`AuthenticationServiceBase.cs:679-691`). A switch over an enum whose unknown arm asserts an identity
+(`AuthenticationServiceBase.cs:543-552`). A switch over an enum whose unknown arm asserts an identity
 fact is a vulnerability waiting for its next contributor.
 
 ```csharp
 // Illustrative of the documented shape: the two gates and the optional collaborator.
 public abstract class AuthenticationServiceBase<TUser>(
-    // ... the eight collaborators every consumer already passes ...
+    // ... the five collaborators every consumer already passes ...
     ITwoFactorAuthenticator? twoFactor = null,
     IOptions<EmailConfirmationSettings>? emailConfirmationSettings = null) : IAuthenticationService
 {
@@ -138,8 +147,8 @@ public abstract class AuthenticationServiceBase<TUser>(
     if (confirmationResult.IsFailure)
         return Result.Failure<AuthenticationResponse>(confirmationResult.Errors);
 
-    var secondFactor = await ChallengeSecondFactorAsync(
-        untracked.Id, request.TwoFactorCode, cancellationToken);
+    var secondFactor = await ChallengeSecondFactorCountingFailuresAsync(
+        untracked.Id, request, cancellationToken);
     if (secondFactor.IsFailure)
         return Result.Failure<AuthenticationResponse>(secondFactor.Errors);
 
@@ -149,6 +158,17 @@ public abstract class AuthenticationServiceBase<TUser>(
         twoFactor is null
             ? Task.FromResult(Result.Success(TwoFactorOutcome.NotEnrolled))
             : twoFactor.ChallengeAsync(userId, code, cancellationToken);
+
+    // A wrong code counts toward lockout like a wrong password; a missing code does not.
+    private async Task<Result<TwoFactorOutcome>> ChallengeSecondFactorCountingFailuresAsync(
+        UserIdentifierType userId, LoginRequest request, CancellationToken cancellationToken)
+    {
+        var secondFactor = await ChallengeSecondFactorAsync(userId, request.TwoFactorCode, cancellationToken);
+        if (secondFactor.IsFailure && secondFactor.Errors.Any(e => e.Code == TwoFactorErrors.TwoFactorInvalidCode))
+            await loginProtection.IncrementFailedAttemptsAsync(request.Email, cancellationToken);
+
+        return secondFactor;
+    }
 
     // Off unless the host set RequireConfirmedEmail AND the app's User implements the contract.
     protected virtual Result CheckEmailConfirmed(TUser untrackedUser)
@@ -169,12 +189,12 @@ public abstract class AuthenticationServiceBase<TUser>(
 window, recovery codes. `ITwoFactorStore` is the persistence, and the consumer writes it, over its
 own `User` aggregate. The DI call is explicit about the split: it "deliberately registers no
 `ITwoFactorStore`", because the account's secret and recovery hashes belong to the app's own
-aggregate (`Infrastructure/DependencyInjection.cs:459-464`).
+aggregate (`Infrastructure/DependencyInjection.Auth.cs:28-32`).
 
 This is the same trade the framework already made for password material and for user lookups, and
 ADR-116 states the reason plainly: the two deployed apps model users differently, and a
 framework-owned user table would either be too thin to use or force columns an app has no place for
-(`ADR-116:31-38`). Every consumer that wants two-factor writes one class. That is deliberate
+(`ADR-116:35-40`). Every consumer that wants two-factor writes one class. That is deliberate
 duplication, bought on purpose.
 
 The settings carry the RFC 6238 defaults every authenticator app assumes: six digits, a thirty-second
@@ -186,7 +206,7 @@ against one period cannot read codes minted with another (`:9-14`).
 
 Email confirmation reuses the password-reset design rather than inventing one, down to the record
 shape, the hashing, the attempt cap and the throttle, under its own key prefix so issuing a
-confirmation link cannot invalidate an outstanding reset link (`ADR-116:66-77`). And
+confirmation link cannot invalidate an outstanding reset link (`ADR-116:90-101`). And
 `RequireConfirmedEmail` defaults to false, with the reason written next to it: turning it on locks
 out every existing account whose address was never confirmed, so a host backfills its rows as
 confirmed first and flips the flag afterwards (`EmailConfirmationSettings.cs:47-55`). With it off the
@@ -207,21 +227,22 @@ Changing who can do what is a deploy.
 
 Stored grants layer over it. `LayeredPermissionRegistry` decorates whatever `IPermissionRegistry` the
 host already registered and **unions** the stored set with the compiled one
-(`Infrastructure/DependencyInjection.cs:535-580`, the `TryDecorate` call and its order-tolerant
-fallback at `:566-580`). The union is the security property: **there is no deny row.** A stored edit
+(`Infrastructure/DependencyInjection.Auth.cs:108-153`, the `TryDecorate` call and its order-tolerant
+fallback at `:135-150`). The union is the security property: **there is no deny row.** A stored edit
 can only widen a role, so the effective permission set never depends on evaluation order, and a data
 change can never disable an endpoint the code guarantees. Removing a compiled capability stays a code
-change (`ADR-116:212-215`).
+change (`ADR-116:261-263`).
 
 Two more decisions hold this up.
 
 **The opt-in is a marker type, and it is what maps the table.** `PermissionGrantModelGate` is an
 empty sealed class that is never injected anywhere
-(`PermissionGrantModelGate.cs:19`). `ApplicationDbContext` resolves it from the root provider with
+(`PermissionGrantModelGate.cs:19`), registered by `AddStoredPermissionGrants`
+(`DependencyInjection.Auth.cs:116`). `ApplicationDbContext` resolves it from the root provider with
 `GetService`, so its absence reads as "this host did not opt in" rather than failing every context
-construction (`ApplicationDbContext.cs:911`), and applies the grant configuration only then, and only
-in the context instance whose physical source matches the configured `DataSourceName`
-(`:940`, default `"Default"` at `PermissionGrantSettings.cs:31`). A host that never calls
+construction (`ApplicationDbContext.cs:913-918`), and applies the grant configuration only then, and
+only in the context instance whose physical source matches the configured `DataSourceName`
+(`:943`, default `"Default"` at `PermissionGrantSettings.cs:33`). A host that never calls
 `AddStoredPermissionGrants` keeps a byte-identical model, and an opted-in host gets the table in
 exactly one of its databases.
 
@@ -230,9 +251,9 @@ exactly one of its databases.
 role on demand inside it means blocking I/O on every such request, so the grants are held as a
 per-role in-memory snapshot, rebuilt on a timer and immediately after an edit by an invalidator that
 is the same instance as the cache, "so an edit and the reads that follow it cannot end up looking at
-two different snapshots" (`Infrastructure/DependencyInjection.cs:555-560`). `CacheSeconds` defaults
-to 300, documented as exactly what it is: the bound on how stale another replica may be after an
-edit, because invalidation is per process (`PermissionGrantSettings.cs:14-23`).
+two different snapshots" (`Infrastructure/DependencyInjection.Auth.cs:120-126`). `CacheSeconds`
+defaults to 300 (`PermissionGrantSettings.cs:25`), documented as exactly what it is: the bound on how
+stale another replica may be after an edit, because invalidation is per process (`:14-23`).
 
 A cold cache grants nothing, which is the safe direction, and the compiled layer answers from the
 first request either way.
@@ -261,8 +282,10 @@ silently inert" is the difference between a user error and a support ticket six 
 
 Everything else about the write is deliberately boring, which is the compliment: a set is a diff
 rather than a truncate-and-insert, so only changed permissions are written, an unchanged submission
-writes nothing, and the `GrantedAt` stamps of untouched rows survive (`:32-37`, writes at `:162-186`).
-The snapshot is invalidated once, after the writes (`:187`).
+writes nothing, and the `GrantedAt` stamps of untouched rows survive (`:32-37`, writes at `:162-190`).
+The snapshot is invalidated once, in a `finally` after the writes. Each grant and revoke commits on
+its own, so a failure part-way through leaves earlier rows written, and the invalidation therefore
+runs on every exit rather than only on success (`:165-167`, `:191-194`).
 
 ```csharp
 // Illustrative of the documented shape: the two refusals on a set.
@@ -287,13 +310,27 @@ if (unknown.Count > 0)
         nameof(IRoleAdministrationService), role));
 
 // A set is a diff, not a truncate-and-insert: unchanged rows keep their GrantedAt stamp.
-foreach (var permission in desired.Except(existing, StringComparer.Ordinal))
-    await store.GrantAsync(role, permission, changedBy, cancellationToken);
+// Each write commits on its own, so the invalidation runs on every exit.
+try
+{
+    foreach (var permission in desired.Except(existing, StringComparer.Ordinal))
+    {
+        var granted = await store.GrantAsync(role, permission, changedBy, cancellationToken);
+        if (granted.IsFailure)
+            return Result.Failure<RolePermissionsResponse>(granted.Errors);
+    }
 
-foreach (var permission in existing.Except(desired, StringComparer.Ordinal))
-    await store.RevokeAsync(role, permission, cancellationToken);
-
-await invalidator.InvalidateAsync(role, cancellationToken);
+    foreach (var permission in existing.Except(desired, StringComparer.Ordinal))
+    {
+        var revoked = await store.RevokeAsync(role, permission, cancellationToken);
+        if (revoked.IsFailure)
+            return Result.Failure<RolePermissionsResponse>(revoked.Errors);
+    }
+}
+finally
+{
+    await invalidator.InvalidateAsync(role, cancellationToken);
+}
 ```
 
 ## The administration API is two bases, gated on capabilities
@@ -324,39 +361,42 @@ above is a safety net rather than the primary defense.
   implementation of `ITwoFactorStore` in either MMCA.ADC or MMCA.Store. The capability is framework
   code with handler bases, settings, a claim and a challenge, waiting for its first adopter. Email
   confirmation and stored grants, by contrast, are both live: ADC's Identity service calls
-  `AddEmailConfirmation` (`Program.cs:231`) and `AddStoredPermissionGrants` (`:277`), Store's calls
+  `AddEmailConfirmation` (`Program.cs:230`) and `AddStoredPermissionGrants` (`:276`), Store's calls
   the same two (`Program.cs:183`, `:220`), both apps' `User` implements `IEmailConfirmableUser`
   (`ADC User.cs:35`, `Store User.cs:30`), and both route the two controller bases
   (`ADC AdminRolesController.cs:37`, `UsersAdminController.cs:26`; `Store AdminRolesController.cs:36`,
   `AdminUsersController.cs:28`).
 - **Registering a service is not the same as changing behavior, and that is a documentation burden.**
   Adopting two-factor takes two steps, not one: the DI call, and then the app passing the resolved
-  `ITwoFactorAuthenticator` to its base constructor (`Infrastructure/DependencyInjection.cs:465-468`).
+  `ITwoFactorAuthenticator` to its base constructor (`Infrastructure/DependencyInjection.Auth.cs:34-37`).
   Adopting confirmation takes three: the DI call, `RequireConfirmedEmail`, and the `User` implementing
   the contract. Every one of those gaps is a place where somebody believes a feature is on and it is
   not. The safety is real and the confusion is real, and they are the same property.
 - **Optional constructor parameters are a one-way widening.** The pattern that makes this
   source-compatible also means the base constructor's parameter list grows with every optional
-  collaborator, and it is now at ten. This scales to a few more and not to a dozen; at some point the
-  honest refactor is an options object, and that one will not be source-compatible.
+  collaborator. It stands at seven: five required collaborators plus the two optional ones
+  (`AuthenticationServiceBase.cs:63-70`). This scales to a few more and not to a dozen; at some point
+  the honest refactor is an options object, and that one will not be source-compatible.
 - **Stored grants are per-process cached, so a replica can be stale.** An edit is live immediately on
   the replica that served it and reaches the others within `CacheSeconds`
-  (`PermissionGrantSettings.cs:23`). A cross-replica push would put a broker on the authorization
+  (`PermissionGrantSettings.cs:18-19`). A cross-replica push would put a broker on the authorization
   path. The window it would close is a grant taking effect a few seconds late, never a revoked grant
   outliving the interval, because the layer can only widen.
 - **A stored grant reaches another service only through a token claim.** Where modules run as separate
   services, the host that mints tokens is the one that holds the grants, so a permission granted by a
-  row lands on the holder's next sign-in rather than within `CacheSeconds` (`ADR-116:289-303`). That
+  row lands on the holder's next sign-in rather than within `CacheSeconds` (`ADR-116:296-299`). That
   is the same latency a role change has always had, and it is the price of keeping the grant table in
   one host instead of replicating it.
 - **Adopting the table is a migration in the consumer, and it joins the hard-delete allowlist.** The
   grant store hard-deletes a revoked grant, which makes it an exception to the framework's
   soft-delete default, and consumers running the same fitness rule have to add the type to their own
-  allowlist when they upgrade (`ADR-116:339-344`).
-- **No pages ship.** Enrollment (with its QR code and its show-recovery-codes-once screen) and
-  confirmation stay with the consumers; what ships is routeless administration components the app
-  routes, authorizes and links for itself (`ADR-116:246-274`). Two consumers have not yet wanted the
-  same enrollment page, and the rule is that a component gets promoted when they do.
+  allowlist when they upgrade (`ADR-116:287-290`).
+- **No enrollment page ships.** Two-factor enrollment (with its QR code and its show-recovery-codes-once
+  screen) stays with the consumers. The email confirmation landing page is the one page of the four
+  completions that `MMCA.Common.UI` ships, anonymous at `/confirm-email` (`ConfirmEmail.razor:1-3`),
+  and the administration surface ships as routeless components the app routes, authorizes and links
+  for itself (`ADR-116:173-201`). Two consumers have not yet wanted the same enrollment page, and the
+  rule is that a component gets promoted when they do.
 
 ## Apply this even without MMCA
 
@@ -418,42 +458,56 @@ Next: Article 53, the series index, "The MMCA series: every pattern, one place."
 
 *Tags: .NET, C Sharp, Authentication, Security, Software Architecture*
 
-*Notes: verified type/behavior names with path:line (all re-read this run). Both code blocks are
+*Notes: verified 2026-10-02 against MMCA.Common v1.221.0; every type/behavior name below re-read with
+path:line this run. Changes this run: constructor anchors and counts (seven parameters, five required
+plus two optional, not ten), the login gate lines, the wrong-code lockout wrapper
+`ChallengeSecondFactorCountingFailuresAsync` added to the gate section and the first code block, the
+token-wrapper description (the issuer's `MintForSession` appends the claim), the three `Add*` calls
+re-anchored to `DependencyInjection.Auth.cs`, the grant invalidation moved into a `finally` (body and
+second code block), the pages trade-off narrowed (the email confirmation page ships in
+`MMCA.Common.UI`), every ADR-116 cite re-anchored after its 2026-10-01 revision, the scorecard, rubric
+and taxonomy lines, the ADC host lines, and the FACTS version and package count. Both code blocks are
 illustrative of the documented shape rather than compilable extracts: the first splices
-`AuthenticationServiceBase`'s constructor header (`:83-84`), the two login-gate call sites
-(`:210-224`) and the two protected methods (`:641-652`, `:665-672`) into one class body, which the
-source of course does not do; the second condenses
-`StoredPermissionRoleAdministrationService.SetStoredPermissionsAsync` (`:120-187`) with the null and
-whitespace guards dropped and the two error messages shortened from the source strings at `:143` and
-`:157`. Control flow, member names and refusal codes are faithful.*
+`AuthenticationServiceBase`'s constructor header (`:63-70`), the two login-gate call sites
+(`:160-175`) and three of its methods (`:480-490`, `:504-510`, `:522-535`) into one class body, which
+the source of course does not do; the second condenses
+`StoredPermissionRoleAdministrationService.SetStoredPermissionsAsync` (`:120-199`) with the null and
+whitespace guards and `ConfigureAwait` calls dropped and the two error messages shortened from the
+source strings at `:143` and `:157`. Control flow, member names and refusal codes are faithful.*
 - *ADR-116 (`Website/docs-src/adr/116-identity-completions-opt-in.md`), Accepted 2026-09-09, revised
-  2026-09-19 (`:3-9`): the four missing capabilities and why each consumer would otherwise have
-  written its own (`:22-27`); the three reasons a framework-feature shape is wrong here, the app-owned
-  user row (`:31-38`), the sign-in chain no consumer can afford to have changed under it with the
-  1.188.0 `UPGRADING.md` precedent (`:39-46`) and pages being where apps diverge most (`:47-52`); the
-  decision statement that a consumer adopting none of them observes no change (`:54-59`); two-factor
-  as contract plus challenge (`:61-68`); the optional-constructor-argument hook (`:70-76`); the claim
-  and its presence-is-the-test rule (`:78-89`); email confirmation mirroring the password-reset design
-  under its own key prefix (`:91-104`); stored grants unioning with the compiled registry with no deny
-  row (`:106-130`); the synchronous-read cache contract (`:132-142`); the two controller bases
-  (`:144-166`); the three separate DI calls (`:168-176`); the single new package `Otp.NET` in
-  Infrastructure only (`:178-184`); pages staying with the consumers and the routeless administration
-  components (`:186-213`); the closed catalog and the two refusals (`:215-231`); the token carrying
-  permissions so a service that never sees the grants still honours them (`:233-250`); the six
-  rejected shapes (`:252-277`); and the trade-offs restated here (`:279-305`).*
+  2026-09-19 and 2026-10-01 (`:3-10`, Revision section `:301-313`): the four missing capabilities and
+  why each consumer would otherwise have written its own (`:26-29`); the three reasons a
+  framework-feature shape is wrong here, the app-owned user row (`:35-40`), the sign-in chain no
+  consumer can afford to have changed under it with the 1.188.0 `UPGRADING.md` precedent (`:42-46`)
+  and pages being where apps diverge most (`:48-51`); the decision statement that a consumer adopting
+  none of them observes no change (`:54-58`); two-factor as contract plus challenge (`:60-67`); the
+  optional-constructor-argument hook (`:69-76`); the claim and its presence-is-the-test rule
+  (`:78-88`); email confirmation mirroring the password-reset design under its own key prefix
+  (`:90-101`); stored grants unioning with the compiled registry with no deny row (`:103-121`); the
+  synchronous-read cache contract (`:123-131`); the two controller bases (`:133-154`); the three
+  separate DI calls (`:156-164`); the single new package `Otp.NET` in Infrastructure only
+  (`:166-171`); pages staying with the consumers, the email confirmation page as the one promoted
+  page, and the routeless administration components (`:173-201`); the closed catalog and the two
+  refusals (`:203-221`); the token carrying permissions so a service that never sees the grants still
+  honours them (`:223-244`); the six rejected shapes, including "let a stored grant deny"
+  (`:246-269`, that one `:261-263`); and the trade-offs restated here (`:271-299`, hard-delete
+  allowlist `:287-290`, next-sign-in latency `:296-299`).*
 - *`AuthenticationServiceBase<TUser>`
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs`): the two
-  optional constructor parameters `ITwoFactorAuthenticator? twoFactor = null` and
-  `IOptions<EmailConfirmationSettings>? emailConfirmationSettings = null` `:83-84`, with the
-  "while it is null the sign-in flow has no second-factor step at all" documentation `:63-69` and the
-  confirmation-parameter documentation `:70-74`; the `_multiFactorMethod` field `:105`; in
-  `LoginAsync`, the after-the-password-check comment `:210-213`, `CheckEmailConfirmed` call `:215`,
-  `ChallengeSecondFactorAsync` call `:221`, arming `:242` and the `finally` clear `:249`;
-  `RefreshTokenAsync` carrying the method over from the presented token `:398` and clearing it `:411`;
-  `CreateAccessTokenForSession` `:619-632` with the multi-factor arming `:621`; `CheckEmailConfirmed`
-  `:641-652`; `ChallengeSecondFactorAsync` `:665-672` (null authenticator answers
-  `TwoFactorOutcome.NotEnrolled`); `MultiFactorMethodFor` `:679-691` with the unknown-outcome arm
-  returning null `:687-690`.*
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs`): primary
+  constructor `:63-70` (five required parameters `:64-68`), the two optional parameters
+  `ITwoFactorAuthenticator? twoFactor = null` and
+  `IOptions<EmailConfirmationSettings>? emailConfirmationSettings = null` `:69-70`, with the
+  "while it is null the sign-in flow has no second-factor step at all" documentation `:52-57` and the
+  confirmation-parameter documentation `:58-62`; the `_multiFactorMethod` field `:83`; in
+  `LoginAsync`, the after-the-password-check comment `:160-163`, `CheckEmailConfirmed` call `:164`,
+  `ChallengeSecondFactorCountingFailuresAsync` call `:170`, arming `:191` and the `finally` clear
+  `:198`; `RefreshTokenAsync` carrying the method over from the presented token `:332` and clearing it
+  `:347`; `CreateAccessTokenForSession` `:469-470` passing the field to
+  `IAuthSessionIssuer.MintForSession`, with the claim-stamping remark `:457-462`; `CheckEmailConfirmed`
+  `:480-490`; `ChallengeSecondFactorAsync` `:504-510` (null authenticator answers
+  `TwoFactorOutcome.NotEnrolled`); `ChallengeSecondFactorCountingFailuresAsync` `:522-535` (counts
+  only `TwoFactorErrors.TwoFactorInvalidCode`, `:529-532`, remark `:512-516`); `MultiFactorMethodFor`
+  `:543-552` with the unknown-outcome arm returning null `:549-551`.*
 - *`AuthClaimTypes` (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/AuthClaimTypes.cs`):
   `Permission = "permission"` `:24`; `MultiFactor = "mfa"` `:62` with the presence-is-the-assertion
   documentation `:50-61`; `MultiFactorMethodTotp = "otp"` `:65`; `MultiFactorMethodRecoveryCode =
@@ -466,39 +520,42 @@ whitespace guards dropped and the two error messages shortened from the source s
   `EmailConfirmation/EmailConfirmationSettings.cs` section `Authentication:EmailConfirmation` `:13`,
   `RequireConfirmedEmail` defaulting false with the "that default is load-bearing" remark `:47-55`;
   `Permissions/PermissionGrantSettings.cs` section `Authentication:PermissionGrants` `:12`,
-  `CacheSeconds` 300 with the per-process staleness-bound remark `:14-23`, `DataSourceName` defaulting
-  `"Default"` `:31`.*
+  `CacheSeconds` 300 `:25` with the per-process staleness-bound remark `:14-23` (bound sentence
+  `:18-19`), `DataSourceName` defaulting `"Default"` `:33`.*
 - *Handler bases (paths rooted at
   `MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/`):
   `TwoFactor/ConfirmTwoFactorEnrollmentHandlerBase.cs:29`, `TwoFactor/DisableTwoFactorHandlerBase.cs:29`,
   `TwoFactor/RegenerateRecoveryCodesHandlerBase.cs:30`,
   `EmailConfirmation/SendEmailConfirmationHandlerBase.cs:40`,
   `EmailConfirmation/ConfirmEmailHandlerBase.cs:33`.*
-- *DI (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs`):
-  `AddTwoFactorAuthentication(IConfiguration)` `:470` with the "deliberately registers no
-  `ITwoFactorStore`" remark `:459-464` and the "calling this alone changes nothing about sign-in"
-  remark `:465-468`; `AddEmailConfirmation(IConfiguration)` `:498` with its "registering it does not
-  gate sign-in" remark `:487-492`; `AddStoredPermissionGrants(IConfiguration)` `:535`, its
-  call-after-`AddAuthorizationPolicies` remark `:514-520` and its this-call-is-what-maps-the-table
-  remark `:521-529`, the single cache instance answering as both reader and invalidator `:555-560`,
-  the scoped `IRoleAdministrationService` registration `:562`, the hosted refresh service registered
-  through `TryAddEnumerable` `:564-567`, and the `TryDecorate<IPermissionRegistry,
-  LayeredPermissionRegistry>` call with its order-tolerant empty-compiled fallback `:569-582`.*
+- *DI (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Auth.cs`):
+  `AddTwoFactorAuthentication(IConfiguration)` `:39` with the "deliberately registers no
+  `ITwoFactorStore`" remark `:28-32` and the "calling this alone changes nothing about sign-in"
+  remark `:34-37`; `AddEmailConfirmation(IConfiguration)` `:67` with its "registering it does not
+  gate sign-in" remark `:61-66`; `AddStoredPermissionGrants(IConfiguration)` `:108-153`, its
+  call-after-`AddAuthorizationPolicies` remark `:94-97` and its this-call-is-what-maps-the-table
+  remark `:100-105`, the `PermissionGrantModelGate` registration through `TryAddSingleton` `:116`,
+  the single cache instance answering as both reader and invalidator `:120-126`, the scoped
+  `IRoleAdministrationService` registration `:128`, the hosted refresh service registered through
+  `TryAddEnumerable` `:130-133`, and the `TryDecorate<IPermissionRegistry,
+  LayeredPermissionRegistry>` call with its order-tolerant empty-compiled fallback `:135-150`.*
 - *`StoredPermissionRoleAdministrationService`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/Administration/StoredPermissionRoleAdministrationService.cs`):
   declaration `:45-52`, the "every half is framework-owned" remark `:16-21`, the two-refusals remark
   `:23-31`, the set-is-a-diff remark `:32-37`; `SetStoredPermissionsAsync` `:120`, the
   checked-before-the-catalog-test comment `:137-138`, the `ManageRoles` refusal
   (`PermissionGrant.ManageRolesMustBeCompiled`) `:139-146`, the catalog refusal
-  (`PermissionGrant.UnknownPermission`) `:148-160`, the grant/revoke diff `:162-186` and the single
-  invalidation `:187`.*
+  (`PermissionGrant.UnknownPermission`) `:148-160`, the each-write-commits-on-its-own comment
+  `:165-167`, the grant/revoke diff `:168-190` (grant `:173`, revoke `:184`) and the single
+  invalidation in the `finally` `:191-194` (call `:193`).*
 - *`PermissionGrantModelGate`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Auth/PermissionGrantModelGate.cs:19`),
   an empty `internal sealed class` with no state and no injection site (its remarks `:15-18`);
-  resolved with `GetService` in
-  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:911`
-  (the "whole opt-in" comment `:109`), with `modelBuilder.ApplyPermissionGrantConfiguration()` applied
-  at `:940` (its documentation `:928`).*
+  resolved with `GetService` in `ResolvePermissionGrantGate`,
+  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:913-918`
+  (gate lookup `:914`, the "whole opt-in" documentation `:120-124`), with
+  `modelBuilder.ApplyPermissionGrantConfiguration()` applied in `ConfigurePermissionGrants` at `:943`
+  (its documentation `:920-934`).*
 - *Controller bases (paths rooted at
   `MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Administration/`):
   `RolesAdminControllerBase.cs` capability gate `[HasPermission(AdministrationPermissions.ManageRoles)]`
@@ -507,9 +564,12 @@ whitespace guards dropped and the two error messages shortened from the source s
   the takes-precedence-over-`{role}` remark `:90-93`;
   `UsersAdminControllerBase.cs` capability gate `[HasPermission(AdministrationPermissions.ManageUsers)]`
   `:48`, declaration `:49`, `MaxPageSize = 100` `:53`.*
+- *Email confirmation page:
+  `MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/ConfirmEmail.razor:1-3`
+  (`@page "/confirm-email"`, `[AllowAnonymous]`).*
 - *Consumer adoption, from a search across both `Source/` trees this run. Live: ADC
-  `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:231` (`AddEmailConfirmation`) and
-  `:277` (`AddStoredPermissionGrants`); Store
+  `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:230` (`AddEmailConfirmation`) and
+  `:276` (`AddStoredPermissionGrants`); Store
   `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:183` and `:220`;
   `IEmailConfirmableUser` on
   `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:35` and
@@ -521,13 +581,13 @@ whitespace guards dropped and the two error messages shortened from the source s
   Not adopted: the same search returns no `AddTwoFactorAuthentication` call and no `ITwoFactorStore`
   implementation in either consumer.*
 - *Rubric: §11 Security criteria and red flags
-  (`Website/docs-src/governance/ArchitectureEvaluationCriteria.md:353-380`, default weight 3 at
-  `:379`); MMCA.Common's §11 row at Weight 3 / Maturity 4 / Implementation 8
-  (`Website/docs-src/governance/common-ArchitectureScorecard.md:91`, column header `:79`). Group G08
+  (`Website/docs-src/governance/ArchitectureEvaluationCriteria.md:353-376`, default weight 3 at
+  `:376`); MMCA.Common's §11 row at Weight 3 / Maturity 4 / Implementation 8
+  (`Website/docs-src/governance/common-ArchitectureScorecard.md:75`, column header `:63`). Group G08
   Authentication and Authorization (`Website/docs-src/onboarding/00-group-taxonomy.md:63`), which is
-  where `ITwoFactorAuthenticator` (`:636`), `IEmailConfirmationTokenService` (`:631`),
-  `StoredPermissionRoleAdministrationService` (`:666`) and `PermissionGrantModelGate` (`:387`) are
-  inventoried. Framework v1.205.0 (`MMCA.Common/FACTS.md:14`) / 19 published packages (`:19`) this
+  where `ITwoFactorAuthenticator` (`:652`), `IEmailConfirmationTokenService` (`:647`),
+  `StoredPermissionRoleAdministrationService` (`:676`) and `PermissionGrantModelGate` (`:390`) are
+  inventoried. Framework v1.221.0 (`MMCA.Common/FACTS.md:14`) / 22 published packages (`:19`) this
   run; not recounted here.*
 
 - Full series index: https://ivanball.github.io/writing.html

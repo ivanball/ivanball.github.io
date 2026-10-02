@@ -2,8 +2,8 @@
 
 > Series: MMCA.Common · Article #24 (deep-dive) · Pillar P2/P4 · Group G08 · Rubric §11 · ADR-020 ·
 > Status: grounded in `Website/docs-src/adr/020-permission-based-authorization.md`, the
-> `MMCA.Common.Shared/Auth/Permissions` + `MMCA.Common.API/Authorization` source, and the ADC and
-> Store adoption. No em dashes.
+> `MMCA.Common.Shared/Auth/Permissions` + `MMCA.Common.API/Authorization` source, the framework
+> `TokenService` permission claims, and the ADC and Store adoption. No em dashes.
 
 **Subtitle:** `[Authorize(Roles = "Organizer")]` couples every endpoint to a role name. The day you need
 a role that can do *most* of what an organizer does but not all of it, you are editing attributes across
@@ -17,7 +17,7 @@ Clean enough. You add `RequireAttendee`, `RequireAdmin`, `RequireAuthenticated`,
 mapping from "who is allowed" to "which attribute" is obvious.
 
 Then the requirement arrives that role checks cannot express cleanly. You need a *content editor*: someone
-who may curate the session catalog but must not manage events, rooms, the question queue, or the organizer
+who may curate the session catalog but must not manage events, rooms, feedback questions, or the organizer
 session-selection workflow. An organizer can do all of those. The new role can do exactly one slice of them.
 
 Now look at your options with role-name checks. You can add `ContentEditor` to every
@@ -60,9 +60,8 @@ capability? The implementation, `PermissionRegistry`, holds an immutable
 `FrozenDictionary<string, FrozenSet<string>>` from role name to its granted permissions. Role keys are
 compared case-insensitively (`OrdinalIgnoreCase`); permission values are compared ordinally. The same
 class is also the host's `IPermissionCatalog`, exposing the closed set of roles and permissions the code
-compiled in, so an administration screen enumerates a projection of the map that authorizes rather than a
-second list that can drift from it. It is the one place that knows the role-to-capability mapping, so
-endpoints never name a role.
+compiled in, so an administration screen enumerates the compiled map itself rather than a hand-kept second
+list. It is the one place that knows the role-to-capability mapping, so endpoints never name a role.
 
 **Modules declare grants additively.** `AddPermissions(...)` accumulates into a shared
 `PermissionRegistryBuilder`. Each `Grant(string role, params string[] permissions)` unions the new
@@ -112,11 +111,14 @@ if (context.User.HasPermissionClaim(requirement.Permission)
 ```
 
 Both reads are framework-wide definitions rather than local helpers. `GetRoleValues()` gathers roles from
-`ClaimTypes.Role`, `"role"`, and `"roles"`, so it works whether or not inbound-claim mapping is on, and it
-is the framework's single definition of "the caller's roles", so no other reader can disagree with the
-handler about who is privileged. `HasPermissionClaim(...)` is the single definition of "the token itself
-grants this". Baking a `permission` claim into the token is therefore optional: role-derived resolution is
-the default, and a token that already carries explicit permissions short-circuits the registry lookup.
+`ClaimTypes.Role`, `"role"`, and `"roles"`, so it works whether or not inbound-claim mapping is on; the
+CQRS gate reads the same three claim types through `ICurrentUserService.Roles`. `HasPermissionClaim(...)`
+is the single definition of "the token itself grants this", and both gates call it. The framework's
+`TokenService` writes that claim at sign-in: every access token carries one `permission` claim for each
+permission the minting host's registry grants the account's role. Both apps' Identity hosts apply every
+module's grant map before minting (`AddTokenPermissionGrants()`), so a service that does not own a
+module's grant map, the CQRS gate in that service, and the Blazor navigation all read the capability from
+the token rather than from a registry they do not hold.
 
 **The same registry gates use cases, not just routes.** A command or query that implements
 `IRequiresPermission` is checked by `AuthorizationGate.Evaluate` inside the CQRS decorator pipeline,
@@ -128,8 +130,8 @@ matters for a handler reachable from more than one entry point.
 
 The piece that makes this safe to add to a framework everyone consumes is that wiring it confers nothing
 until a host grants something. `AddAuthorizationPolicies()` always registers the handler (via
-`TryAddEnumerable`), the policy provider (via `Replace`), and an empty registry, which is bound as both
-`IPermissionRegistry` and `IPermissionCatalog` so the two contracts can never answer from different maps.
+`TryAddEnumerable`), the policy provider (via `Replace`), and an empty registry, with `IPermissionRegistry`
+and `IPermissionCatalog` both forwarding to that one built instance.
 The same call also installs a fail-closed fallback policy, so an endpoint that declares no authorization
 metadata at all requires an authenticated caller and a deliberate anonymous route says so with
 `[AllowAnonymous]`. The capability mechanism itself still confers nothing beyond explicit claims until a
@@ -143,8 +145,10 @@ framework's own `notifications:manage` to `Organizer`; and its Identity module d
 alias the framework-owned `users:manage` and `roles:manage` from `AdministrationPermissions` so the shared
 administration controller bases can carry their own `[HasPermission]`. MMCA.Store defines eleven of its own
 across Catalog, Sales and Identity, each module granting its whole set to its own `Admin` role from its own
-`AddPermissions(...)` call. The role vocabulary stays the application's throughout: MMCA.Common declares no
-role names at all. The registry, the catalog, the handler and the policy provider carry nineteen unit tests
+`AddPermissions(...)` call. Both apps' Identity hosts also call `AddStoredPermissionGrants(...)`, which
+decorates `IPermissionRegistry` with a `LayeredPermissionRegistry` (the compiled grants plus stored ones,
+union only) while `IPermissionCatalog` keeps enumerating the compiled set. The role vocabulary stays the
+application's throughout: MMCA.Common declares no role names at all. The registry, the catalog, the handler and the policy provider carry nineteen unit tests
 between them (`PermissionRegistryTests`, `PermissionCatalogTests`, `PermissionAuthorizationHandlerTests`,
 `PermissionPolicyProviderTests`), and the ADC grant maps carry dedicated grant tests of their own.
 
@@ -188,8 +192,9 @@ The pattern is portable to any policy-based authorization stack:
    `perm:{name}` policy lazily means you never hand-register one policy per permission, and it can fall
    through to the default provider so any policy you do register by hand survives.
 4. **Accept two grant sources.** Honor an explicit permission claim if the token carries one, and fall
-   back to role-derived resolution if it does not. That keeps tokens small by default and lets you push
-   permissions into the token later without changing endpoints.
+   back to role-derived resolution if it does not. Whether you emit permission claims at sign-in is then a
+   minting decision, not an endpoint change, and emitting them lets a service that holds no grant table
+   still answer the question.
 5. **Make it inert until used.** Register the mechanism with an empty registry so the feature is free to
    ship and confers nothing until a module actually grants a capability.
 
@@ -217,68 +222,49 @@ pattern, or `dotnet add package MMCA.Common.API` and try it.*
 
 *Tags: .NET, C Sharp, Software Architecture, Security, Authorization*
 
-*Notes: re-verified against source this run (MMCA.Common v1.205.0, `FACTS.md:14`). 2026-09-19 audit pass:
-the permission types moved into `MMCA.Common.Shared.Auth.Permissions`, the registry gained a second
-contract, a second gate reads it, and both real apps adopt it, so the section heading, the registry
-paragraph, the registration code block, the handler code block, the inert-until-adopted paragraph, the
-adoption paragraph, the test count and three trade-off bullets were rewritten; the `RoleNames` and
-`GetRoles` citations were wrong and are replaced. Verified names and anchors: `IPermissionRegistry`
-(interface at `Source/Core/MMCA.Common.Shared/Auth/Permissions/IPermissionRegistry.cs:14`,
-`GetPermissions(string)` at `:21`, `HasPermission(IEnumerable<string>, string)` at `:29`),
-`PermissionRegistry : IPermissionRegistry, IPermissionCatalog` (`Auth/Permissions/PermissionRegistry.cs:16`)
-with the `FrozenDictionary<string, FrozenSet<string>>` field at `:20`, built `OrdinalIgnoreCase` over
-ordinal sets at `:33-36`; `IPermissionCatalog.Roles` / `.Permissions`
-(`Auth/Permissions/IPermissionCatalog.cs:24,27,30`); `PermissionRegistryBuilder.Grant(string, params string[])`
-unioning via `HashSet.UnionWith` (`Auth/Permissions/PermissionRegistryBuilder.cs:8,25,34`);
-`AdministrationPermissions.ManageUsers = "users:manage"` and `ManageRoles = "roles:manage"`
-(`Auth/Permissions/AdministrationPermissions.cs:15,18,21`); `HasPermissionAttribute : AuthorizeAttribute`
-with `Permission` (`MMCA.Common.API/Authorization/HasPermissionAttribute.cs:13,21`);
-`PermissionPolicy.Prefix = "perm:"` + `NameFor` (`PermissionPolicy.cs:12,17`);
-`PermissionPolicyProvider.GetPolicyAsync` (`:31`), non-`perm:` fall-through to
-`DefaultAuthorizationPolicyProvider` (`:35-38`), on-demand `RequireAuthenticatedUser` +
-`PermissionRequirement` build (`:41-45`); `PermissionRequirement.Permission`
-(`PermissionRequirement.cs:10,21`); `PermissionAuthorizationHandler` (`:13`) with the two-source body at
-`:24-33` (`context.User.HasPermissionClaim(...)` OR
-`permissionRegistry.HasPermission(context.User.GetRoleValues(), ...)`): the file is 37 lines and has no
-`GetRoles` member. `ClaimsPrincipalExtensions.GetRoleValues()` reads `ClaimTypes.Role` / `"role"` /
-`"roles"` and is documented as the framework's one definition of the caller's roles
-(`MMCA.Common.Shared/Auth/ClaimsPrincipalExtensions.cs:59-67`); `HasPermissionClaim` is the one definition
-of an explicit grant (`:94-97`). CQRS gate: `AuthorizationGate.Evaluate`
-(`MMCA.Common.Application/UseCases/Decorators/AuthorizationGate.cs:40`) checks `IRequiresPermission`
-against the same registry and claim read at `:46-48`, returning `Error.Forbidden` at `:52-55`; marker at
-`UseCases/Markers/IRequiresPermission.cs:34,41`. Registration:
-`AddAuthorizationPolicies(Action<FallbackAuthorizationOptions>?)`
-(`MMCA.Common.API/Authorization/AuthorizationExtensions.cs:60`) registers the handler via
-`TryAddEnumerable`, the provider via `Replace` and the shared registry at `:68-72`, then the fallback
-handler and the fail-closed `AuthorizationOptions.FallbackPolicy` at `:74-91`; `EnsurePermissionRegistry`
-binds both `IPermissionRegistry` and `IPermissionCatalog` to the one built instance at `:133-134`; the
-"permissions are the one authorization model" statement is at `:20-22`. Adoption: `ConferencePermissions`
-carries eleven constants at `:12-47`, enumerated in `All` at `:50-63`, with the seven-member
-`ContentManagement` subset (sessions, speakers, categories, sponsors, partners, activities, session assets)
-at `:70-79` (`MMCA.ADC.Conference.Shared/Authorization/ConferencePermissions.cs`); granted by
-`ConferencePermissionGrants.Apply`, Organizer gets `All` at `:47` and ContentEditor gets
-`ContentManagement` at `:48`, registered as `services.AddPermissions(ConferencePermissionGrants.Apply)`
-(`MMCA.ADC.Conference.API/DependencyInjection.cs:43`). `RoleNames` is ADC-owned and holds only `Organizer`,
-`Attendee` and `ContentEditor` (`MMCA.ADC.Identity.Shared/Authorization/RoleNames.cs:23,26,33`): there is
-no `Admin` role in ADC and no `RoleNames` type in MMCA.Common. `EngagementPermissionGrants.Apply` grants
-`Organizer` the three Engagement capabilities (`EngagementPermissionGrants.cs:37`, registered at
-`MMCA.ADC.Engagement.API/DependencyInjection.cs:61`); `NotificationPermissionGrants.Apply` grants
-`Organizer` `NotificationPermissions.Manage` (`NotificationPermissionGrants.cs:38`); ADC
-`IdentityPermissions` defines three, `UsersRead = "identity:users:read"` at `:13` plus `UsersManage` and
-`RolesManage` aliasing `AdministrationPermissions` at `:25,38`, enumerated in `All` at `:41-46`
-(`MMCA.ADC.Identity.Shared/Authorization/IdentityPermissions.cs`). Store has adopted the layer:
-`services.AddPermissions(CatalogPermissionGrants.Apply)`
-(`MMCA.Store.Catalog.API/DependencyInjection.cs:45`) and
-`services.AddPermissions(SalesPermissionGrants.Apply)` (`MMCA.Store.Sales.API/DependencyInjection.cs:52`);
-`Website/docs-src/adr/020-permission-based-authorization.md:70-86` records the eleven Store permissions
-across three modules and the dedicated ADC grant tests, and `:63-68` the framework-owned endpoints that
-carry `[HasPermission]` themselves. Nineteen unit tests re-counted this run: 6 `[Fact]` in
-`Tests/Core/MMCA.Common.Shared.Tests/Auth/Permissions/PermissionRegistryTests.cs`, 6 in
-`PermissionCatalogTests.cs` beside it, 4 in
-`Tests/Presentation/MMCA.Common.API.Tests/Authorization/PermissionAuthorizationHandlerTests.cs` and 3 in
-`PermissionPolicyProviderTests.cs`. RBAC-not-ABAC framing per
-`Website/docs-src/governance/common-ArchitectureScorecard.md:91` §11 (Weight 3, Maturity 4, Impl 8, 12/24).
-Published package count per `MMCA.Common/FACTS.md:19`. The registration block is the real ADC shape; the
-handler block is verbatim from `PermissionAuthorizationHandler.cs:24-33`.*
+*Notes: re-verified against source 2026-10-02 (MMCA.Common v1.221.0, `FACTS.md:14`). This run's
+changes: the token paragraph said baking a `permission` claim into the token was optional and role-derived
+resolution the default; the framework `TokenService` emits one claim per granted permission into every
+access token (`MMCA.Common.Infrastructure/Auth/TokenService.cs:129-141`, registry field at `:30`), and both
+Identity hosts apply every module's grant map before minting (ADC
+`MMCA.ADC.Identity.Service/Program.cs:269`, the map at `Authorization/TokenPermissionGrants.cs:16-24,44-45`;
+Store `MMCA.Store.Identity.Service/Program.cs:213`), so the paragraph and Apply-this step 4 ("keeps tokens
+small by default") were rewritten. The claim that `GetRoleValues` is the only role reader was narrowed: the
+CQRS gate reads `ICurrentUserService.Roles`
+(`MMCA.Common.Application/Interfaces/Infrastructure/Auth/ICurrentUserService.cs:45-62`), a separate
+default member over the same three claim types with a single-`Role` fallback. The claim that the registry
+and catalog "can never answer from different maps" was narrowed to the base wiring, because both Identity
+hosts call `AddStoredPermissionGrants` (ADC `Program.cs:276`, Store `Program.cs:220`), which decorates
+`IPermissionRegistry` with `LayeredPermissionRegistry` while the catalog stays compiled
+(`MMCA.Common.Infrastructure/DependencyInjection.Auth.cs:139-149`; union-only at
+`MMCA.Common.Application/Auth/Permissions/LayeredPermissionRegistry.cs:12,30,49`). "The question queue"
+became "feedback questions" to match `QuestionsManage` (`ConferencePermissions.cs:26`). Anchors re-read
+this run: `GetRoleValues` (`MMCA.Common.Shared/Auth/ClaimsPrincipalExtensions.cs:59-67`), `HasRole`
+(`:75-77`), `HasPermissionClaim` (`:94-97`); `AuthorizationGate.Evaluate`
+(`MMCA.Common.Application/UseCases/Decorators/AuthorizationGate.cs:40`) checks the registry then the claim
+at `:46-48` and returns `Error.Forbidden` at `:52-55`; `AddAuthorizationPolicies` "one authorization model"
+statement at `MMCA.Common.API/Authorization/AuthorizationExtensions.cs:20-22`, with both contracts
+forwarding to one built `PermissionRegistry` at `:133-134`; ADC `IdentityPermissions`
+(`MMCA.ADC.Identity.Shared/Authorization/IdentityPermissions.cs`): `UsersRead` at `:13`, the
+`UsersManage` / `RolesManage` aliases at `:26,41`, `All` at `:49-52` holding only `UsersRead` (the aliases
+are granted by name in `IdentityPermissionGrants.cs:36-38`). Confirmed by the 2026-10-02 audit and carried:
+`IPermissionRegistry.HasPermission` (`MMCA.Common.Shared/Auth/Permissions/IPermissionRegistry.cs:29`);
+`PermissionRegistry : IPermissionRegistry, IPermissionCatalog` (`PermissionRegistry.cs:16`);
+`PermissionRegistryBuilder.Grant` unioning via `HashSet.UnionWith` (`PermissionRegistryBuilder.cs:34`);
+`PermissionPolicyProvider` non-`perm:` fall-through (`MMCA.Common.API/Authorization/PermissionPolicyProvider.cs:35`);
+`PermissionAuthorizationHandler` two-source body at `PermissionAuthorizationHandler.cs:24-33` (the handler
+block is verbatim); handler and provider registration at `AuthorizationExtensions.cs:68`;
+`ConferencePermissionGrants.Apply` (Organizer `All` at `:47`, ContentEditor `ContentManagement` at `:48`),
+`ConferencePermissions` eleven constants with the seven-member `ContentManagement` subset at `:70`;
+`EngagementPermissionGrants.cs:37`; `NotificationPermissionGrants.cs:38`; Store `AddPermissions` in all
+three modules (`MMCA.Store.Identity.API/DependencyInjection.cs:66`, Catalog `:45`, Sales `:52`) and its
+eleven permissions; no role names in MMCA.Common. ADR context:
+`Website/docs-src/adr/020-permission-based-authorization.md` records the Store permissions at `:90-97`, the
+ADC grant tests at `:100-103` and the framework-owned endpoints at `:67-73`; its `:60-61` still calls the
+token claim optional (ADR drift, not edited here). Nineteen unit tests (6 `PermissionRegistryTests`, 6
+`PermissionCatalogTests`, 4 `PermissionAuthorizationHandlerTests`, 3 `PermissionPolicyProviderTests`, all
+`[Fact]`), per the audit. RBAC-not-ABAC framing per
+`Website/docs-src/governance/common-ArchitectureScorecard.md:75` section 11 (Weight 3, Maturity 4, Impl 8, 12/24);
+that row's own test count is stale against the nineteen. The registration block is the real ADC shape.*
 
 - Full series index: https://ivanball.github.io/writing.html

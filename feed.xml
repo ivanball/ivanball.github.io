@@ -253,7 +253,7 @@
       <pubDate>Mon, 27 Jul 2026 10:27:05 GMT</pubDate>
       <description>A short-lived JWT plus one server-stored refresh token that rotates on every use, with reuse detection that makes a stolen token end its own session.</description>
       <category>Auth &amp; the edge</category>
-      <category>ADR 050</category>
+      <category>ADR 097</category>
     </item>
     <item>
       <title>External OAuth login behind your own JWTs</title>
@@ -344,7 +344,7 @@
       <pubDate>Wed, 15 Jul 2026 12:22:21 GMT</pubDate>
       <description>The non-negotiables of password storage in .NET, done correctly and tested.</description>
       <category>Auth &amp; the edge</category>
-      <category>ADR 032</category>
+      <category>ADR 102</category>
     </item>
     <item>
       <title>JWKS cross-service auth</title>

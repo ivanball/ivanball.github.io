@@ -2,7 +2,7 @@
 
 > Series: MMCA.Common · Article #7 (deep-dive) · Pillar P2 · Group G05 · Rubric §1,§6,§10 ·
 > ADR-014, ADR-079 · Status: grounded in `Website/docs-src/adr/014-cqrs-decorator-pipeline.md`,
-> `Website/docs-src/adr/079-shared-http-middleware-pipeline.md`, `MMCA.Common/CLAUDE.md`
+> `Website/docs-src/adr/079-shared-http-middleware-pipeline.md`, `MMCA.Common/AGENTS.md`
 > (the "CQRS Decorator Pipeline" and "DI Registration Sequence" sections), and
 > `Website/docs-src/onboarding/group-05-cqrs-pipeline.md`. No em dashes.
 
@@ -120,9 +120,11 @@ Each position is a deliberate cost-and-correctness argument:
 - **Caching sits outside validation** so the cache is only touched after a valid, committed mutation. A
   validation failure or a rollback leaves the cache intact.
 - **Validation sits outside the transaction** so a malformed command never opens a database transaction.
-  The validating decorator resolves the registered `IValidator<TCommand>` and, on failure, returns a
-  `Result` failure tagged `ErrorType.Validation` (which the API edge maps to HTTP 400) *without ever
-  calling the handler*. Those validators are composed from reusable rule fragments rather than copy-pasted
+  The validating decorator takes every registered `IValidator<TCommand>`, runs them one after another
+  (sequentially on purpose, since a validator may reach the database through a scoped repository and a
+  `DbContext` is not thread-safe), and, when any of them fails, returns one `Result` failure carrying the
+  union of their errors, each tagged `ErrorType.Validation` (which the API edge maps to HTTP 400),
+  *without ever calling the handler*. Those validators are composed from reusable rule fragments rather than copy-pasted
   per command, a validation kit that gets its own deep-dive later in the series. On the query side the
   same concern sits one layer deeper, *inside* caching, for a deliberate reason: a cached entry can only
   exist because the same query already passed validation when that entry was produced, so re-validating
@@ -302,11 +304,15 @@ fake. Cleartext HTTP/2 is exactly the gRPC-over-plaintext case that a 307 would 
 browser-reachable request is HTTP/1.1 or HTTP/2 over TLS, so it keeps being redirected instead of being
 served plaintext on the strength of a forged header.
 
-The conditional pieces are registered unconditionally and made inert by configuration: tenant
-resolution and the soft-deleted-user check (which sits between the limiter and authorization so a
-revoked account is rejected before any endpoint gets to authorize it) are always in the chain, each
-gated by its own settings. That keeps the edge literally one shape on every host rather than a per-host permutation, so a diff
-between two hosts' pipelines is empty by construction. Every REST and gRPC service host in both
+The pieces that only some hosts need are registered unconditionally too. Tenant resolution is
+always in the chain and stays inert unless the host called `AddMultiTenancy` and set
+`Tenancy:Enabled`. The soft-deleted-user check (which sits between the limiter and authorization so a
+revoked account is rejected before any endpoint gets to authorize it) has no setting at all: on every
+host it answers an authenticated request with a 401 when the shared cache carries that user's
+deleted marker, and only a host that registers an `ISoftDeletedUserValidator` (the one hosting
+Identity) falls back to the database on a cache miss, while every other host passes the request
+through. That keeps the edge literally one shape on every host rather than a per-host permutation, so
+a diff between two hosts' pipelines is empty by construction. Every REST and gRPC service host in both
 production applications calls the method, and so does the reference app.
 
 The edge carries the same two defenses as the decorator chain it mirrors. First, **the order is
@@ -332,9 +338,9 @@ The pipeline is not free, and ADR-014 names the rough edges:
   a seal on the service collection that every later registration method has to check.
 - **A new concern means a new decorator at the correct depth.** Inserting it at the wrong position can
   silently change semantics, as with validating inside the transaction. Adding to the pipeline requires
-  understanding the ordering argument, not just appending a class. That warning stopped being
-  hypothetical the day authorization and timeout went in: both were inserted *between* existing
-  neighbours, and getting either one wrong would have been a correctness bug rather than a style choice.
+  understanding the ordering argument, not just appending a class. Authorization and
+  timeout show why: both sit *between* other decorators, and placing either one wrong is a
+  correctness bug rather than a style choice.
 - **The chain is deep.** Every command walks seven decorators and every query six, even when it declares
   none of the markers, because each one is registered unconditionally and decides at runtime whether it
   has work to do. The pass-through cost of an `is`-check is small, but it is not zero, and it grows every
@@ -391,132 +397,114 @@ pattern, or `dotnet add package MMCA.Common.API` and try it.*
 
 *Tags: .NET, C Sharp, Software Architecture, CQRS, Design Patterns*
 
-*Notes: 2026-09-19 structural re-verify against MMCA.Common v1.205.0. Every anchor in this block was
-re-read against current source this run; the previous ledger was replaced rather than appended to,
-because three of its claims had inverted and most of its line numbers had moved.
-**The query chain gained a decorator.** `ValidatingQueryDecorator` is registered between
-`CachingQueryDecorator` and `TimeoutQueryDecorator`, so queries run FeatureGate -> Authorization ->
-Logging -> Caching -> Validating -> Timeout -> Handler: six decorators, not five. Read off the literal
-registration sequence in `AddApplicationDecorators`
-(`MMCA.Common.Application/DependencyInjection.cs:117-156`; commands `:137-143`, queries `:146-151`,
-remembering that Scrutor's `TryDecorate` applies in reverse, so `TimeoutQueryDecorator` at `:146` is
-innermost and `FeatureGateQueryDecorator` at `:151` is outermost). The method's XML doc carries ASCII
-nesting diagrams of both chains (`:63-75` commands, `:76-87` queries) and the per-position rationale
-list (`:88-113`), including the query-side placement argument at `:99-103` ("On the query side it sits
-INSIDE caching for a deliberate reason: a cached entry can only exist because the same query already
-passed validation when that entry was first produced") and the business-failure sentence at `:110-111`
-("the transaction is rolled back (atomicity over partial persistence) and cache invalidation is
-skipped"). ADR-014 records the insertion in a Revision (2026-08-26) that supersedes the previous query
-line and states both current chains (`Website/docs-src/adr/014-cqrs-decorator-pipeline.md:194-201`),
-and `MMCA.Common/CLAUDE.md:79-81` carries the same two lines. The order is pinned by
-`DecoratorPipelineOrderTestsBase`
+*Notes: 2026-10-02 refresh against MMCA.Common v1.221.0. Every anchor below was re-read against
+current source this run unless marked otherwise; the 2026-09-19 ledger is replaced rather than appended to, because most of
+its line numbers had moved and `DependencyInjection.cs` is now split into three partial files.
+**Three body corrections this run.** (1) Header: `MMCA.Common/CLAUDE.md` is a five-line `@AGENTS.md`
+import, so the header cites `MMCA.Common/AGENTS.md`, where "DI Registration Sequence" is at `:72`,
+"CQRS Decorator Pipeline" at `:76` and the two chain lines at `:81-82`. (2) Validation: the body said
+the decorator "resolves the registered `IValidator<TCommand>`" (singular).
+`ValidatingCommandDecorator` takes `IEnumerable<IValidator<TCommand>> validators`
+(`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/ValidatingCommandDecorator.cs:34`),
+loops over every one sequentially (`:74-84`, with the DbContext-not-thread-safe reason in the comment
+at `:70-72`), accumulates the errors (`:83`) and returns one failure carrying the union (`:94`).
+ADR-014 records this as the 2026-08-31 correction (`Website/docs-src/adr/014-cqrs-decorator-pipeline.md:11-12`).
+The `ErrorType.Validation` and HTTP 400 parts hold: `Error.Validation(...)` at
+`MMCA.Common.Application/Extensions/ValidationFailureExtensions.cs:21`, and
+`[ErrorType.Validation] = StatusCodes.Status400BadRequest` at
+`MMCA.Common.API/Middleware/ErrorHttpMapping.cs:22`. (3) Edge conditionals: the body said tenant
+resolution and the soft-deleted-user check are each "gated by its own settings". Only tenant
+resolution is: its step comment (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Pipeline/MiddlewarePipelineBuilder.cs:111-112`)
+says it is inert unless the host called `AddMultiTenancy` and set `Tenancy:Enabled`.
+`SoftDeletedUserMiddleware` (`MMCA.Common.API/Middleware/SoftDeletedUserMiddleware.cs:33`) has no
+options: an unauthenticated request (no `UserId`) passes through (`:74-80`), a cached deleted marker
+answers 401 on every host (`:102-108`), and the database fallback runs only when
+`GetService<ISoftDeletedUserValidator>()` resolves (`:111`), otherwise the request passes through
+(`:112-118`). The paragraph is rewritten to say exactly that.
+**Decorator chain (unchanged behavior, re-anchored).** `AddApplicationDecorators` is at
+`MMCA.Common.Application/DependencyInjection.cs:114-153`: commands registered `:134-140`
+(`TransactionalCommandDecorator` innermost at `:134`, `FeatureGateCommandDecorator` outermost at
+`:140`), queries `:143-148` (`TimeoutQueryDecorator` innermost at `:143`, `FeatureGateQueryDecorator`
+outermost at `:148`), `SealPipeline(services)` at `:150`. The XML doc carries the command diagram from
+`:61`, the query diagram from `:74`, and the rationale list from `:86` to `:110`, including the
+query-side validation placement at `:96-100` ("On the query side it sits INSIDE caching", `:98`) and
+the business-failure sentence at `:107-108`. Optional profiling: `AddApplicationProfiling()` registers
+`ProfilingCommandDecorator` and `ProfilingQueryDecorator` at `:162-163`. ADR-014 states both current
+chains in its Revision (2026-08-26) at `:221-228`, records the shared authorization gate in its
+Revision (2026-09-19) from `:367` (`Evaluate` at `:376`), and states the decorators-last scope at
+`:75-76`. Order pinned by `DecoratorPipelineOrderTestsBase`
 (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/Conformance/DecoratorPipelineOrderTestsBase.cs:38`),
-whose `protected virtual` expected sequences list commands at `:49-58` and queries at `:61-69` with
-`ValidatingQueryDecorator` at `:67`; the framework subclasses it without overriding either list
-(`MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Tests/Conformance/DecoratorPipelineOrderTests.cs`).
-Both files sit under a `Conformance/` sub-folder that the previous citation predates.
-**Authorization is one shared gate with two checks.** `AuthorizationCommandDecorator` asks
-`AuthorizationGate.Evaluate(command, currentUser, permissionRegistry, typeof(TCommand).Name)` for a
-denial and runs the inner handler when the answer is `null`
-(`UseCases/Decorators/AuthorizationCommandDecorator.cs:62`); no `HasPermission` call remains in the
-decorator itself. The gate (`UseCases/Decorators/AuthorizationGate.cs:19`, `Evaluate` at `:40`) grants
-an `IRequiresPermission` request when `permissionRegistry.HasPermission(currentUser.Roles, ...)` or
-`currentUser.User.HasPermissionClaim(...)` succeeds and otherwise returns
-`Error.Forbidden("Authorization.PermissionDenied", ...)` (`:46-56`), then applies the second gate: a
-request marked `IRequiresMfa` (`UseCases/Markers/IRequiresMfa.cs:28`) whose principal fails
-`HasMultiFactor()` is denied with `Error.Forbidden("Authorization.MultiFactorRequired", ...)`
-(`:60-68`), and the comment at `:58-59` gives the capability-first ordering reason. ADR-014 records the
-same move at `:347-352`. The article's bullet previously described only the roles check and is
-rewritten. **Violating the DI ordering rule is a startup exception, not a silent loss.**
-`AddApplicationDecorators()` calls `SealPipeline(services)` at `DependencyInjection.cs:153`, and
-`ScanModuleApplicationServices` calls `ThrowIfPipelineSealed` at `:190`; the `InvalidOperationException`
-message is at `:727-731` ("anything registered now would run completely undecorated. Move this call
-before AddApplicationDecorators(), or compose the whole sequence with AddMmcaApplicationPipeline(...)").
-`AddMmcaApplicationPipeline(Action<MmcaApplicationPipelineBuilder>?)` at `:620` runs `AddApplication()`,
-invokes the configure delegate, and returns `AddApplicationDecorators()`; the `ScanModule` / `Register`
-snippet in the article is that method's own XML doc example (`:613-617`). The old "silent loss of every
-cross-cutting guarantee" wording in the body and the "the failure mode is quiet" trade-off bullet were
-both false against this source and are corrected. Verified names and members: `ICommandHandler<TCommand,
-TResult>` and `IQueryHandler<TQuery, TResult>`, both with the defaulted token
-(`UseCases/Contracts/ICommandHandler.cs:17`, `UseCases/Contracts/IQueryHandler.cs:17`),
-`ITransactional` (`UseCases/Markers/ITransactional.cs:6`), `ICacheInvalidating` with `CachePrefix`
-(`UseCases/Markers/ICacheInvalidating.cs:8,14`), `IQueryCacheable` with `CacheKey` and `CacheDuration`
-(`UseCases/Markers/IQueryCacheable.cs:23,28`), `IRequiresPermission` with `Permission`
-(`UseCases/Markers/IRequiresPermission.cs:34,41`), and `IHasTimeout` with `Timeout`
-(`UseCases/Markers/IHasTimeout.cs:14,21`); the contracts sit under `Contracts/` and the five markers
-under `Markers/`, both sub-folders newer than the previous citation. The optional `Profiling` pair is a
-separate `AddApplicationProfiling()` call registering both `ProfilingCommandDecorator` and
-`ProfilingQueryDecorator` (`DependencyInjection.cs:573-576`). Decorator behavior re-anchored:
-`FeatureGateCommandDecorator` short-circuits with `Error.NotFoundError(...)` at `:57`;
-`LoggingCommandDecorator` uses the static `Stopwatch.GetTimestamp()` (`:39`) and
-`Stopwatch.GetElapsedTime()` (`:43`) APIs rather than a `Stopwatch` instance and calls `RecordDuration`
-on three outcome paths, `failed` at `:49`, `completed` at `:54`, `exception` at `:76`, with the helper
-at `:97`; `TimeoutCommandDecorator` (class at `:35`) treats a budget `<= TimeSpan.Zero` as "no budget"
-(`:65`), cancels after the budget (`:69`), invokes the inner handler with `budget.Token` (`:73`), and
-converts only its own expiry into `Error.Failure("Request.TimedOut", ...)` (`:82`) behind the filter at
-`:75`; `TransactionalCommandDecorator` (class at `:20`) passes non-`ITransactional` commands through
-(`:28`) and otherwise calls `unitOfWork.ExecuteInTransactionAsync` (`:31`). The transactional path is
-`DbContextFactory.ExecuteInTransactionAsync`
-(`MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:518`), which delegates
-each attempt to `RunTransactionalAttemptAsync` (`:573`): the business-failure check rolls back at
-`:587`, only a success reaches `TryCommit()` (called at `:591`, declared at `:640`, with
-`context.Database.CommitTransaction()` at `:659`), and deferred domain events flush post-commit through
-`FlushDeferredAsync` at `:600`. The behavior the article describes is unchanged; every line number in
-the previous citation had moved. Cache invalidation runs only on success and outside the transaction
-(`UseCases/Decorators/CachingCommandDecorator.cs:61-63`, gated on `command is ICacheInvalidating
-cacheInvalidating && !string.IsNullOrWhiteSpace(cacheInvalidating.CachePrefix) && !IsFailure(result)`,
-the `IsFailure` helper at `:126-127`); the internal `ReInvalidationDelay` is at `:45` and the
-primary-constructor class declaration spans `:33-37` with `ICacheService` at `:35` and an optional
-`ITenantContext?` at `:37`. A previous note in this block pinned a logger-less source-compat constructor
-to `CachingCommandDecorator.cs:49-52`; a direct read of `:38-66` this run finds no such constructor
-there, so that claim is dropped rather than re-anchored. The one real host still puts
-`AddApplicationDecorators()` last: `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:132`, after
-`AddApplication()` at `:78`, `AddInfrastructure(builder.Configuration)` at `:79`,
-`AddAPI(modulesSettings)` at `:101`, `moduleLoader.DiscoverAndRegister(...)` at `:116` and
-`AddBrokerMessaging(...)` at `:130`, with the fixed-sequence comment at `:77`; ADR-014 states the scope
-of the constraint at `:65-69` ("Only that decorators-last ordering is load-bearing; the relative
-position of `AddInfrastructure`/`AddAPI` is not").
-HTTP-edge section: the pipeline body lives in `MiddlewarePipelineBuilder.CreateDefault()`
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Pipeline/MiddlewarePipelineBuilder.cs:32-162`),
-and `WebApplicationExtensions.cs` holds only the `extension(WebApplication app)` block (`:37`), the
-zero-argument `UseCommonMiddlewarePipeline()` (`:48`), the
-`UseCommonMiddlewarePipeline(Action<MiddlewarePipelineBuilder>)` overload (`:60`) and the private
-`ApplyPipeline` both overloads route through (`:140`). Step anchors in the builder: exception handler
-`:35-38`, correlation id `:39-42`, request localization `:43-48`, pre-forwarded capture `:50-63`,
-forwarded headers `:65-81` (with `KnownProxies` and `KnownIPNetworks` cleared at `:77-78`), HTTPS
-redirect `:83-99`, response compression `:101-103`, routing `:106`, CORS `:110`, authentication `:116`,
-tenant resolution `:120`, rate limiting `:128`, soft-deleted-user filter `:136`, authorization `:140`,
-output cache `:144`, JWKS `:148`, OIDC discovery `:157`, controllers `:161`. The pre-forwarded capture
-step was missing from the article's order block and is added; its own comment (`:51-57`) gives the
-`jwks_uri` reason. `Build()` enforces exactly four invariants and names the reason for each in the
-exception it throws: pre-forwarded capture immediately before forwarded headers (`:266-269`),
-authentication immediately before tenant resolution (`:271-274`), authentication precedes rate limiting
-(`:276-279`, ADR-019), and forwarded headers precede the HTTPS redirect (`:281-284`, "the redirect
-decision must see the proxy-reported scheme from X-Forwarded-Proto"). The article's earlier bullet
-"forwarded headers ahead of anything that reads the client IP" is not one of those invariants and is
-corrected: the client-IP framing belongs to the cleared proxy allow-lists at `:77-78`. The gRPC
-exemption is a step predicate, `UseWhen(ctx => !MiddlewarePipelineBuilder.IsCleartextHttp2(ctx), ...)`
-at `:96-98`, and the SEC-Common-44 comment at `:91-96` states it is keyed on the negotiated protocol
-"not on the request's Content-Type ... which no header can fake"; the article's "matched on the request
-content type" was inverted and is corrected. ADR-079 carries both the freezing and the protocol-keyed
-exemption in its header (`Website/docs-src/adr/079-shared-http-middleware-pipeline.md:6-10`). The order
-is frozen by `MiddlewarePipelineOrderTestsBase`
-(`MMCA.Common/Source/Hosting/MMCA.Common.Testing/Conformance/MiddlewarePipelineOrderTestsBase.cs:29`),
-whose `ExpectedStepNames` list (`:38-58`) carries `PreForwardedCapture` at `:43`. The previous ledger's
-"nothing freezes this order" admission and its "the method takes no parameters" note were both inverted
-by that base class and the configure overload, so both are dropped, along with the out-of-scope note
-about ADR-079 citing `WebApplicationBuilderExtensions.cs:399`: that anchor no longer appears in the ADR.
-Adopters re-read this run: `MMCA.ADC.Conference.Service/Program.cs:419`,
-`MMCA.ADC.Identity.Service/Program.cs:341`, `MMCA.ADC.Engagement.Service/Program.cs:313`,
-`MMCA.ADC.Notification.Service/Program.cs:260`, `MMCA.Store.Sales.Service/Program.cs:294`,
-`MMCA.Store.Identity.Service/Program.cs:294`, `MMCA.Store.Catalog.Service/Program.cs:305`, and
-`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:142`: all eight hosts, so the body claim that
-every REST and gRPC service host in both production applications plus the reference app calls the
-method still holds. Rubric mapping re-anchored: `ArchitectureEvaluationCriteria.md:122` opens section 1
-(SOLID Principles), with the OCP criterion at `:128` and DIP at `:131`. The About-the-author package
-figure is the published count in `MMCA.Common/FACTS.md:19` (19 packages). The marker-interface consumer
-examples that earlier revisions of this block cited (`LinkUserToSpeakerCommand`,
-`BulkSetInventoryCommand`, `CheckOutCommand`) were not re-read this run, so their anchors are dropped
-rather than restated; the body prose they supported is generic and makes no per-file claim.*
+`protected virtual` lists at `:49` (commands) and `:61` (queries, `ValidatingQueryDecorator` at
+`:67`); the framework subclass
+(`MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Tests/Conformance/DecoratorPipelineOrderTests.cs:23`)
+overrides only `ConfigureServices` (`:26`).
+**Per-decorator behavior.** `FeatureGateCommandDecorator` short-circuits with `Error.NotFoundError(...)`
+(`UseCases/Decorators/FeatureGateCommandDecorator.cs:57`). Both authorization decorators call
+`AuthorizationGate.Evaluate` (`AuthorizationCommandDecorator.cs:62`, `AuthorizationQueryDecorator.cs:57`);
+the gate is at `AuthorizationGate.cs:40`, with the permission check at `:46-56`, the MFA step-up at
+`:60-68` and the capability-first comment at `:58-59` (audit-file anchors; only the `Evaluate` line
+was re-read this run). `LoggingCommandDecorator` uses `Stopwatch.GetTimestamp()` (`:39`) and
+`Stopwatch.GetElapsedTime()` (`:43`) and records `failed` (`:49`), `completed` (`:54`) and
+`exception` (`:76`) through `RecordDuration` (`:97`). `TimeoutCommandDecorator` (`:35`) passes a
+budget `<= TimeSpan.Zero` through (`:65`), calls `CancelAfter` (`:69`), runs the inner handler on
+`budget.Token` (`:73`) and maps its own expiry to `Request.TimedOut` (`:82`).
+`CachingCommandDecorator` (`:33`, `ICacheService` at `:35`, optional `ITenantContext?` at `:37`,
+`ReInvalidationDelay` at `:45`) invalidates only when `command is ICacheInvalidating` and the result is
+not a failure (`:61-63`, `IsFailure` at `:126`). `TransactionalCommandDecorator` (`:22`) passes
+non-`ITransactional` commands through (`:30`) and otherwise calls
+`unitOfWork.ExecuteInTransactionAsync` (`:33`).
+**Transactional path.** `DbContextFactory.ExecuteInTransactionAsync`
+(`MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:544`) runs each
+attempt through `RunTransactionalAttemptAsync` (`:599`): the quoted business-failure snippet is
+`:608-614` (rollback at `:613`), then `FlushEnrolledCommandsBeforeCommitAsync` (`:618`, declared
+`:674`) saves enrolled internal-command rows and throws on any other unsaved tracked change, then
+`TryCommit()` (called `:620`, declared `:712`, `context.Database.CommitTransaction()` at `:731`), and
+deferred domain events flush post-commit through `FlushDeferredAsync` (`:634`). The pre-commit flush
+is not described in the body: it does not change the three outcomes the article lists.
+**DI sequence.** The pipeline-sealed guard: `ThrowIfPipelineSealed` in
+`DependencyInjection.ModuleScanning.cs:49` (module scan) and `DependencyInjection.Crud.cs:80,142,193`
+(CRUD helpers); the quoted `InvalidOperationException` message is at `DependencyInjection.cs:314-318`.
+`AddMmcaApplicationPipeline(Action<MmcaApplicationPipelineBuilder>?)` is at `:207` and its XML doc
+example (the article's `ScanModule` / `Register` snippet) at `:200-203`. The seal guards only the
+framework registration methods; `VerifyDecoratorPipeline()` (`:244`) is the opt-in fitness check, and
+the body's scoping ("every registration method that could add handlers afterwards") stays accurate.
+Helpdesk wires the sequence by hand with `AddApplicationDecorators()` last:
+`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:132`, after `AddApplication()` `:78`,
+`AddInfrastructure` `:79`, `AddAPI` `:101`, `DiscoverAndRegister` `:116`, `AddBrokerMessaging` `:130`.
+Markers: `Markers/` holds eight interfaces (`ICacheInvalidating`, `IFeatureGated`, `IHasTimeout`,
+`IQueryCacheable`, `IRequiresMfa`, `IRequiresPermission`, `ISharedQueryCache`, `ITransactional`); the
+ones the body names are `ITransactional.cs:6`, `ICacheInvalidating.cs:8,14`, `IQueryCacheable.cs:23,28`,
+`IRequiresPermission.cs:34,41`, `IHasTimeout.cs:14,21`, `IRequiresMfa.cs:28`. Handler contracts:
+`UseCases/Contracts/ICommandHandler.cs:17`, `UseCases/Contracts/IQueryHandler.cs:17`.
+**HTTP edge.** `MiddlewarePipelineBuilder.CreateDefault()` spans `:31-151`. Step anchors: exception
+handler `:35`, correlation id `:39`, request localization `:43`, pre-forwarded capture `:50`, forwarded
+headers `:65` (options from `CommonForwardedHeaders.Create()` at `:69`; `KnownProxies` and
+`KnownIPNetworks` cleared at `MMCA.Common.API/Startup/CommonForwardedHeaders.cs:49-50`), HTTPS redirect
+`:72` (SEC-Common-44 protocol comment `:79-84`, `UseWhen(... IsCleartextHttp2 ...)` `:85-87`, the
+predicate declared `:350`), response compression `:90`, routing `:94`, CORS `:98`, authentication
+`:104`, tenant resolution `:108`, rate limiting `:116`, soft-deleted-user filter `:124`, authorization
+`:128`, output cache `:132`, JWKS `:136`, OIDC discovery `:145`, controllers `:149`. `Build()` (`:252`)
+enforces the four invariants at `:254-257` (capture immediately before forwarded headers), `:259-262`
+(authentication immediately before tenant resolution), `:264-267` (authentication precedes rate
+limiting, ADR-019) and `:269-272` (forwarded headers precede the HTTPS redirect).
+`WebApplicationExtensions.cs` holds the `extension(WebApplication app)` block (`:37`), both
+`UseCommonMiddlewarePipeline` overloads (`:48`, `:60`) and the private `ApplyPipeline` they route
+through (`:168`), alongside `UseCommonRequestLocalization` (`:73`), two `MapCultureEndpoint` overloads
+(`:102`, `:115`) and `IsLocalRedirectTarget` (`:158`). The order is frozen by
+`MiddlewarePipelineOrderTestsBase` (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/Conformance/MiddlewarePipelineOrderTestsBase.cs:29`),
+`ExpectedStepNames` at `:38` with `PreForwardedCapture` at `:43`. ADR-079's header records the
+protocol-keyed exemption and the `CommonForwardedHeaders.Create()` factory
+(`Website/docs-src/adr/079-shared-http-middleware-pipeline.md:9-16`). Adopters re-read this run:
+`MMCA.ADC.Conference.Service/Program.cs:442`, `MMCA.ADC.Identity.Service/Program.cs:345`,
+`MMCA.ADC.Engagement.Service/Program.cs:320`, `MMCA.ADC.Notification.Service/Program.cs:262`,
+`MMCA.Store.Sales.Service/Program.cs:299`, `MMCA.Store.Identity.Service/Program.cs:299`,
+`MMCA.Store.Catalog.Service/Program.cs:320`, `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:142`.
+**Mapping.** Rubric sections re-anchored in `Website/docs-src/governance/ArchitectureEvaluationCriteria.md`:
+section 1 (SOLID) `:122`, section 6 (CQRS and event-driven) `:229`, section 10 (Messaging and
+integration) `:329`. Section 10 matches the README mapping row but the body carries no messaging
+content; the ADR cell lists 014 and 079 while the README row (`Website/docs-src/articles/README.md:17`)
+lists 014/031/079. Both cells are left unchanged this run and raised for an owner decision. Dropped
+from the previous ledger: the About-the-author package note (`FACTS.md:19` reads 22 packages, and the
+body has no About-the-author section) and the "five markers" count (eight today).*
 
 - Full series index: https://ivanball.github.io/writing.html

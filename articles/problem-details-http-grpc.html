@@ -196,7 +196,8 @@
           <p>MMCA.Common&#39;s whole error story starts from one decision recorded across the codebase: expected
           failures are <em>values</em>, not exceptions. Handlers return <code>Result&lt;T&gt;</code> carrying an <code>Error</code> list, each error
           typed by an <code>ErrorType</code>. The edge&#39;s only job is to translate that value into the right wire shape.</p>
-          <p>On the <strong>HTTP</strong> side, every controller derives from <code>ApiControllerBase</code>, whose single job is
+          <p>On the <strong>HTTP</strong> side, the framework&#39;s result-returning controller bases (<code>EntityControllerBase</code> among
+          them) derive from <code>ApiControllerBase</code>, whose single job is
           <code>HandleFailure(IEnumerable&lt;Error&gt;)</code>. It produces an <code>ObjectResult</code> whose status belongs to the <em>most
           severe</em> <code>ErrorType</code> present, deliberately not the first error&#39;s, so an aggregate built by
           <code>Result.Combine</code> cannot be downgraded by error ordering: a 403 or a 500 travelling alongside a
@@ -214,11 +215,12 @@
 <span class="hljs-comment">//   UnprocessableEntity-&gt; 422</span>
 <span class="hljs-comment">//   Failure            -&gt; 400</span>
 <span class="hljs-comment">//   Unexpected         -&gt; 500</span>
+<span class="hljs-comment">//   TooManyRequests    -&gt; 429</span>
 <span class="hljs-comment">//</span>
 <span class="hljs-comment">// A multi-error failure is ranked, not indexed: GetStatusCode(errors) asks</span>
 <span class="hljs-comment">// ErrorTypeSeverity.MostSevere which type wins, most to least severe:</span>
-<span class="hljs-comment">//   Unexpected &gt; Unauthorized &gt; Forbidden &gt; Conflict &gt; NotFound</span>
-<span class="hljs-comment">//              &gt; UnprocessableEntity &gt; Invariant / Validation / Failure</span>
+<span class="hljs-comment">//   Unexpected &gt; Unauthorized &gt; Forbidden &gt; TooManyRequests &gt; Conflict</span>
+<span class="hljs-comment">//              &gt; NotFound &gt; UnprocessableEntity &gt; Invariant / Validation / Failure</span>
 <span class="hljs-comment">//</span>
 <span class="hljs-comment">// Centralizing the map is what keeps every endpoint&#x27;s error shape identical.</span></code></pre>
           <p>Thrown exceptions get folded into the <em>same</em> Problem Details shape by an ordered, most-specific-first
@@ -239,10 +241,13 @@
           calls the inner C# service, gets a <code>Result</code>, and calls <code>result.ThrowIfFailure()</code>. That throws a
           <code>ResultFailureException</code> carrying the <code>Error</code> list. <code>GrpcResultExceptionInterceptor</code>, registered by
           <code>AddGrpcServiceDefaults()</code>, catches it for all four call shapes (unary and the three streaming kinds),
-          logs it, and rethrows <code>errors.ToRpcException()</code>: an <code>RpcException</code> whose <code>StatusCode</code> comes from a
+          logs it, and rethrows <code>errors.ToRpcException()</code> (or a plain <code>Internal</code> status carrying the exception
+          message when the exception holds no errors): an <code>RpcException</code> whose <code>StatusCode</code> comes from a
           <code>FrozenDictionary&lt;ErrorType, StatusCode&gt;</code> that <em>mirrors</em> the HTTP table, picked from the most severe
           error by the same <code>ErrorTypeSeverity</code> ranking the HTTP edge uses, and whose trailing metadata carries
-          every error as <code>error-{i}-code/-message/-type/-source/-target</code> entries.</p>
+          every error as <code>error-{i}-code/-message/-type/-source/-target</code> entries. The message, source and target
+          values are percent-encoded wherever they fall outside printable ASCII, because gRPC text metadata
+          accepts nothing else.</p>
           <p>Both halves of that round trip ship in the framework, in the same file. <code>errors.ToRpcException()</code> lives
           in MMCA.Common&#39;s gRPC package (<code>ResultGrpcExtensions</code>), so every extracted service emits the same
           structured trailers for free, and <code>Metadata.ToErrors()</code> is the exact inverse: it walks the
@@ -253,11 +258,12 @@
           connection, an exceeded deadline) to a single <code>Failure</code> error coded <code>Grpc.{StatusCode}</code> rather than
           letting an exception escape. A consumer&#39;s client adapter is then a two-line <code>catch</code>: ADC&#39;s
           <code>SessionBookmarkValidationServiceGrpcAdapter</code> and <code>EventLiveValidationServiceGrpcAdapter</code> catch
-          <code>RpcException</code> and <code>return ex.ToResult&lt;T&gt;()</code>, and the caller sees the same <code>Result</code> it would have seen
-          in-process.</p>
+          <code>RpcException</code> and <code>return ex.ToResult()</code> or <code>ex.ToResult&lt;T&gt;()</code>, and the caller sees the same <code>Result</code>
+          it would have seen in-process.</p>
           <p>That status-mapping symmetry is the point. The <code>ErrorType -&gt; status</code> decision is made once per transport in a frozen
           table, the translation is a pipeline concern written once in an interceptor, and a <code>NotFound</code> is a 404
-          over HTTP and a <code>NotFound</code> <code>RpcException</code> over gRPC because both tables agree.</p>
+          over HTTP and a <code>NotFound</code> <code>RpcException</code> over gRPC because both tables agree. The same holds for a
+          temporary refusal: <code>TooManyRequests</code> is a 429 over HTTP and <code>ResourceExhausted</code> over gRPC.</p>
           <h2 id="the-rest-of-the-9-contract">The rest of the §9 contract</h2>
           <p>The same edge standardizes the things that drift if left to each endpoint:</p>
           <ul>
@@ -279,11 +285,13 @@
           it lives.</p>
           <ul>
           <li><strong>The contract snapshot is guarded at two levels, on purpose.</strong> The framework generates an OpenAPI
-          document: <code>AddCommonOpenApi()</code> calls ASP.NET Core&#39;s built-in <code>AddOpenApi()</code>, <code>MapCommonOpenApi()</code>
-          serves <code>/openapi/v1.json</code> outside Production, and an opt-in <code>MapCommonScalarUi()</code> renders the Scalar
-          reference UI from that document. <code>OpenApiBaselineTests</code> closes the loop in the framework&#39;s own CI: it
-          boots an in-memory host over that exact registration path (<code>AddCommonApiVersioning()</code> +
-          <code>AddCommonOpenApi()</code> + <code>MapCommonOpenApi()</code>), fetches <code>/openapi/v1.json</code>, normalizes it (the
+          document: the host registers it with ASP.NET Core&#39;s built-in <code>AddOpenApi()</code>, <code>AddCommonOpenApi()</code>
+          layers the framework&#39;s transformers onto every registered document, <code>MapCommonOpenApi()</code> serves
+          <code>/openapi/v1.json</code> outside Production (and fails at startup when no <code>v1</code> document is registered), and
+          an opt-in <code>MapCommonScalarUi()</code> renders the Scalar reference UI from that document.
+          <code>OpenApiBaselineTests</code> closes the loop in the framework&#39;s own CI: it boots an in-memory host over that
+          exact registration path (<code>AddCommonApiVersioning()</code> + <code>AddOpenApi()</code> + <code>AddCommonOpenApi()</code> +
+          <code>MapCommonOpenApi()</code>), fetches <code>/openapi/v1.json</code>, normalizes it (the
           host-assigned <code>servers</code> block is dropped, object properties are ordered ordinally so generator
           ordering is not mistaken for drift, array order is preserved because it is contractual), and diffs the
           result against a committed <code>openapi-baseline.v1.json</code>. A change to the generated surface fails the

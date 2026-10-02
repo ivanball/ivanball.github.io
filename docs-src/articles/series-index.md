@@ -1,9 +1,10 @@
 # The MMCA series: every pattern, one place
 
 > Series: MMCA.Common · Article #53 (index / hub) · Pillar P6 · Rubric: all ·
-> Status: grounded in the 53 `Article-NN-*` files in this folder (each article's own H1 and number).
-> No em dashes. Articles 1 to 49 and this index carry their live Medium URLs; Articles 50, 51 and 52
-> are listed without a link because they are not published yet.
+> Status: grounded in the 53 slug-named article files in this folder (each article's own H1 and
+> `Article #N` header) and `Website/assets/data/articles.js` (one row per article, `n` 1 to 53).
+> No em dashes. Every entry links to the article's site page, the canonical copy; articles 1 to 49 and
+> this index also have a Medium copy, while articles 50, 51 and 52 are published on the site only.
 
 **Subtitle:** A single map of the whole series. Start at the top if MMCA.Common is new to you, or jump
 straight to the pattern you came for.
@@ -53,7 +54,7 @@ become its own service later without a rewrite.
 - 10 · [Database-per-service inside a monolith (and why)](database-per-service.md)
 - 11 · [One entity model, four databases: polyglot persistence behind a single attribute](polyglot-persistence.md)
 - 12 · [EF Core Include chains are a trap: navigation populators decouple eager loading](navigation-populators.md)
-- 13 · [Optimistic concurrency you cannot opt out of: RowVersion from the database to a required If-Match](optimistic-concurrency-rowversion.md)
+- 13 · [Optimistic concurrency with a required If-Match: RowVersion from the database to a 412](optimistic-concurrency-rowversion.md)
 - 14 · [Self-ordering modules: discovered, Kahn-ordered, and extractable](self-ordering-modules.md)
 - 15 · [Event-schema versioning: never silently reshape an event](event-schema-versioning.md)
 
@@ -65,7 +66,7 @@ notifications, DTO mapping, browser session auth, the generic REST surface, defe
 encrypting PII columns at rest, the hardened response headers every host stamps, and the optional
 second factor, email-confirmation gate and stored permission grants that complete the identity story.
 
-- 16 · [Cross-service auth without a shared secret: JWKS dual-fetch](jwks-cross-service-auth.md)
+- 16 · [Cross-service auth without a shared secret: JWKS discovery](jwks-cross-service-auth.md)
 - 17 · [Password hashing done right: PBKDF2-SHA512, 600k iterations, timing-safe](password-hashing.md)
 - 18 · [Idempotency in one attribute: safe retries for HTTP APIs](idempotency-attribute.md)
 - 19 · [The self-invalidating cache that lives in the pipeline, not your handlers](self-invalidating-cache.md)
@@ -139,36 +140,42 @@ then monthly evergreen.*
 
 *Tags: .NET, Software Architecture, C Sharp, Microservices, Programming*
 
-*Notes: article numbers and titles match the 53 `Article-NN-*` files in this folder (each article's own
-H1 and `Article #N` header), not the strategic calendar in `Medium-Campaign-Plan.md` (which runs a
-different, shorter order). The 2026-09-19 refresh grew the series from 50 files to 53 and moved this hub
-from 50 to 53: the governed LLM boundary
-(`Personal/Medium/Articles/Article-50-governed-llm-boundary.md:1`) joined "Run, extract, and harden",
-durable internal commands (`Article-51-durable-internal-commands.md:1`) joined "Core patterns", and the
-identity completions (`Article-52-identity-completions.md:1`) joined "Auth, the API edge, and
-cross-cutting"; all three are appends, so no earlier article renumbered. The same pass re-read every
-`Article-NN-*.md` H1 in this folder and set each link text to it verbatim, which rewrote 29 of them
-(articles 05 to 15, 17 to 21, 23, 26 to 28, 30, 31, 33 to 38 and 41). Four of those titles had changed
-in their own articles that same day: 11 (`Article-11-polyglot-persistence.md:1`, three databases to
-four), 13 (`Article-13-optimistic-concurrency-rowversion.md:1`, naming the required If-Match), 26
-(`Article-26-external-oauth-login.md:1`, Apple added) and 27
-(`Article-27-jwt-refresh-token-rotation.md:1`, per-device rotation). Article 35's link text carries the
-2,254-test figure from its H1 (`Article-35-test-pyramid.md:1`); its Medium slug spells the figure the
-story was published under and a published URL cannot be edited, so the URL is left alone. The
-2026-07-25 coverage audit appended the saga-compensation deep-dive (ADR-054), Article 49, and moved this
-hub from 49 to 50. The 2026-07-23 coverage audit appended four dedicated articles, promoting
-patterns previously covered only in passing: feature flags in the CQRS pipeline (ADR-031), Article 45;
-field-level encryption (ADR-037), Article 46; security headers + CSP (ADR-023), Article 47; and
-observability (ADR-041), Article 48; this hub moved from 45 to 49. The 2026-07-21 coverage audit
-inserted Article 27 (the JWT rotating refresh token, a deep-dive on ADR-050) into the auth cluster right
-after external OAuth login, renumbering every later article +1 and moving this hub from 44 to 45; the
-reading-order groups and the "Where to go next" pointers were reconciled to the new numbering. Earlier
-growth: the 2026-07-15 audit added the device-capability deep-dive (ADR-042 + the G26 device-capability
-group), now Article 42, and the 2026-07-17 audit added managed file storage (ADR-045), now Article 43,
-and HTTP API versioning (ADR-046), now Article 44. Articles 1 to 49 were filled with their live Medium
-URLs on 2026-08-19 and this index published 2026-08-20
-(`Website/assets/data/articles.js:88`, non-empty url and date); Articles 50, 51 and 52 have no row in
-that file and no Medium URL yet, so they are listed here without a link. Re-check the file set before
-publishing in case the running order shifts.*
+*Notes: 2026-10-02 refresh (framework v1.221.0, 131 ADRs 001-131; no new article this run, ADR-131
+was folded into Article 25, so the series stays at 53). Evidence read this run: the folder holds 53
+slug-named article files plus `README.md` (no `Article-NN-*` files; the number lives only in each
+file's line-3 `Article #N` header), and a scripted pass compared all 52 list entries against their
+targets: every link resolves to an existing slug, every link text equals the target's line-1 H1 verbatim,
+and every list number equals the target's `Article #N`. `Website/assets/data/articles.js` has 53 rows
+ending at n:53 (`articles.js:92`, this index: date 2026-08-20, Medium url set); rows n:1 to n:49 carry a
+Medium url (n:49 at `articles.js:88`), and rows n:50, n:51 and n:52 (`articles.js:89`, `:90`, `:91`)
+carry the site date 2026-09-24 and an empty Medium url, so the header now says those three are
+site-only rather than unpublished, and the earlier "listed without a link" wording is gone (all 52
+entries link to their site page). `README.md:7` heads "The series (53 articles)". Body facts re-checked:
+Apache-2.0 (`MMCA.Common/Directory.Build.props:49`), .NET 10 (`Directory.Build.props:3`), repo URL
+(`Directory.Build.props:50`), the 34-category rubric (last category at
+`Website/docs-src/governance/ArchitectureEvaluationCriteria.md:890`), `dotnet new mmca-app`
+(`MMCA.Helpdesk/.template.config/template.json:7`), `MMCA.Common.API` (`MMCA.Common/FACTS.md:29`), the
+three `Website/docs-src/governance/*-ArchitectureScorecard.md` files and `Website/writing.html` exist.
+Article 35's link text carries the 2,254-test figure only because it reproduces that article's H1
+(`test-pyramid.md:1`); this hub asserts no test count of its own, and the figure is owned and verified
+by Article 35 (FACTS.md carries no total test count). `Personal/Medium/` (including
+`Medium-Campaign-Plan.md`) is retired (`Personal/Medium/README.md:3`), so this hub no longer measures
+its order against that calendar. History: the 2026-09-19 refresh grew the series from 50 to 53 and moved
+this hub from 50 to 53: the governed LLM boundary (`governed-llm-boundary.md`) joined "Run, extract, and
+harden", durable internal commands (`durable-internal-commands.md`) joined "Core patterns", and the
+identity completions (`identity-completions.md`) joined "Auth, the API edge, and cross-cutting"; all
+three are appends, so no earlier article renumbered. That pass also re-set 29 link texts to their H1s
+(articles 05 to 15, 17 to 21, 23, 26 to 28, 30, 31, 33 to 38 and 41), four of them retitled that day:
+11 (three databases to four), 13 (naming the required If-Match), 26 (Apple added) and 27 (per-device
+rotation). The 2026-07-25 coverage audit appended the saga-compensation deep-dive (ADR-054), Article 49,
+and moved this hub from 49 to 50. The 2026-07-23 coverage audit appended feature flags in the CQRS
+pipeline (ADR-031), Article 45; field-level encryption (ADR-037), Article 46; security headers + CSP
+(ADR-023), Article 47; and observability (ADR-041), Article 48; this hub moved from 45 to 49. The
+2026-07-21 coverage audit inserted Article 27 (the JWT rotating refresh token, ADR-050) right after
+external OAuth login, renumbering every later article +1 and moving this hub from 44 to 45. Earlier
+growth: the 2026-07-15 audit added the device-capability deep-dive (ADR-042, G26), now Article 42, and
+the 2026-07-17 audit added managed file storage (ADR-045), now Article 43, and HTTP API versioning
+(ADR-046), now Article 44. Articles 1 to 49 gained Medium copies by 2026-08-19 and this index on
+2026-08-20. Re-check the file set and `articles.js` before publishing in case the running order shifts.*
 
 - Full series index: https://ivanball.github.io/writing.html

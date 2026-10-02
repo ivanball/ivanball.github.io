@@ -1,10 +1,12 @@
 # Self-ordering modules: discovered, Kahn-ordered, and extractable
 
 > Series: MMCA.Common · Article #14 (deep-dive) · Pillar P2 · Group G14 · Rubric §7 ·
-> Status: grounded in `MMCA.Common/CLAUDE.md` ("Module System" + "DI Registration Sequence"),
-> `MMCA.Common.Application/Modules/*` + `.../DependencyInjection.cs` and
-> `MMCA.Common.API/Startup/ModuleHostExtensions.cs` source, the reference hosts
-> `MMCA.ADC.Conference.Service/Program.cs`, `MMCA.ADC/CLAUDE.md`, `MMCA.Helpdesk/CLAUDE.md`, and
+> Status: grounded in `MMCA.Common/AGENTS.md` ("Module System"),
+> `MMCA.Common.Application/Modules/*`, `.../Settings/ModulesSettings.cs`, `.../DependencyInjection.cs` and
+> `.../DependencyInjection.ModuleScanning.cs`, `MMCA.Common.API/Startup/ModuleHostExtensions.cs` and
+> `ModuleHostContext.cs` source, the reference hosts `MMCA.ADC.{Conference,Engagement,Identity,Notification}.Service/Program.cs`,
+> `MMCA.ADC.Engagement.API/EngagementModule.cs`, `MMCA.ADC.Engagement.Contracts/DependencyInjection.cs`,
+> `MMCA.ADC/AGENTS.md`, `MMCA.Helpdesk/AGENTS.md`, and
 > ADR-059 (the `IModule` contract and reflection-based module composition). No em dashes.
 
 **Subtitle:** A module declares its name and its dependencies. The framework discovers every module,
@@ -91,12 +93,14 @@ come out of the sort than went in, the leftovers form a **dependency cycle**, an
 the offending module names. A circular dependency between modules becomes a loud, named startup failure
 instead of a subtle runtime surprise.
 
-The scan is also defensive. Each `GetTypes()` call sits inside a try/catch (a
-`ReflectionTypeLoadException` raised by a missing transitive reference is the case it exists for), so a
-broken assembly contributes no types and logs why instead of aborting discovery of the rest. And every
-step emits a structured `[LoggerMessage]`-generated log line, so the startup log tells you precisely
-which modules loaded, in what order, and how long each took. When something is wrong, you read it, you
-do not guess it.
+The scan is also defensive. Each `GetTypes()` call sits inside a guard with two catches. A
+`ReflectionTypeLoadException` (the shape a missing transitive reference produces) still carries every
+type that did load, so the loader keeps those and the assembly's loadable modules still register; any
+other exception drops that one assembly. Both paths log at Error, because a module that silently fails
+to register is an outage that looks like a configuration choice, and neither aborts discovery of the
+rest. And every step emits a structured `[LoggerMessage]`-generated log line, so the startup log tells
+you precisely which modules loaded, in what order, and how long each took. When something is wrong, you
+read it, you do not guess it.
 
 ```csharp
 // In each host's Program.cs. AddModuleHost binds and validates ApplicationSettings and
@@ -128,7 +132,8 @@ user).
 Here is the part that turns this from a tidy registration trick into an extraction mechanism. A host can
 disable a module through configuration. `ModulesSettings` binds the `"Modules"` config section (it is a
 `Dictionary<string, ModuleSettings>`), and `ModuleSettings` carries a per-module `Enabled` flag
-(default `true`) plus a `RemoteDependencies` list.
+(default `true`) plus a `RemoteDependencies` list. A module the section does not list at all counts as
+disabled, so enabling a module is always an explicit line of configuration.
 
 ```json
 {
@@ -142,9 +147,10 @@ disable a module through configuration. `ModulesSettings` binds the `"Modules"` 
 When the loader reaches a disabled module it does not skip it. It calls that module's
 `RegisterDisabledStubs(services)` and records the name in `DisabledModuleNames`. This is the crux. A
 disabled Engagement module still contributes stub registrations for the cross-module interfaces other
-modules depend on. So when Conference's `GetSessionBookmarkCountHandler` asks the container for
-Engagement's `IBookmarkCountService`, resolution still succeeds, because the disabled module left a
-`Disabled*` stub behind.
+modules depend on: `EngagementModule` registers `DisabledBookmarkCountService` as its
+`IBookmarkCountService`. So in a host that names the Engagement assembly but disables the module,
+Conference's `GetSessionBookmarkCountsHandler` still resolves `IBookmarkCountService`, because the
+disabled module left a `Disabled*` stub behind.
 
 That is a clean strategy plus null-object pairing (real service, disabled stub, or remote client) rather
 than `if (moduleEnabled)` checks scattered through the call sites. The handler does not know or care
@@ -153,10 +159,13 @@ which of the three it got.
 Dependency validation is microservice-aware to match. A dependency that is disabled in-process but
 listed in this host's `ModuleSettings.RemoteDependencies` is treated as satisfied remotely (the host
 will wire a typed gRPC client to the extracted peer), and only a module with `RequiresDependencies =
-true` and a genuinely unsatisfied dependency throws at startup. The loader also loads per-module
-configuration by convention: before calling `module.Register(...)` it adds `modules.{name}.json` (and
-the environment-specific variant) to the configuration builder, so a module can ship its own config
-file.
+true` and a genuinely unsatisfied dependency throws at startup. Because a remote declaration is
+configuration the loader takes on trust, it also offers `ValidateRemoteDependencies(IServiceProvider)`,
+an opt-in check a host runs against the built provider: every service type a remote-declared
+dependency's disabled stubs registered must resolve (a miss throws), and one that still resolves to the
+stub logs a warning. The loader also loads per-module configuration by convention: before calling
+`module.Register(...)` it adds `modules.{name}.json` (and the environment-specific variant) to the
+configuration builder, so a module can ship its own config file.
 
 ## Convention scanning: what a module's Register actually wires
 
@@ -208,12 +217,15 @@ and the same self-ordering `ModuleLoader` registration runs at both ends of it. 
 enables every module and cross-module calls are in-process method calls: MMCA.Helpdesk is the framework's
 monolith-first reference app, a single `Tickets` module exercised end to end through all five layers to
 demonstrate the "build the monolith now, extract a service later" path. As a fleet, each service host
-runs the same `ModuleLoader` with only its own module enabled (`Modules:{Module}:Enabled=true`); the
-disabled peers contribute their stubs, and the host then replaces a stub with a typed gRPC client pointed
-at the real, extracted peer process. MMCA.ADC runs this way today: four single-module service hosts
-(Identity, Conference, Engagement, Notification) behind a YARP gateway, with no combined monolith host at
-all. The Domain, Application, and Shared code is identical in both topologies. The transport choice lives
-entirely at the composition edge (ADR-008).
+names only its own module assembly to `ModuleLoader`, so its peers are never discovered and contribute
+no stubs; the host instead registers a typed gRPC client adapter for each cross-module interface it
+consumes, pointed at the real, extracted peer process. MMCA.ADC runs this way: four single-module
+service hosts (Identity, Conference, Engagement, Notification) behind a YARP gateway, with no combined
+monolith host at all. In its Conference host, `IBookmarkCountService` resolves to a
+`BookmarkCountServiceGrpcAdapter` that calls the Engagement service. The disabled-stub path serves the
+other shape: a host that names a peer's assembly and switches the module off. The Domain, Application,
+and Shared code is identical in every topology. The transport choice lives entirely at the composition
+edge (ADR-008).
 
 That is the payoff of declaring intent instead of position: the same self-ordering registration that
 makes the monolith correct is what makes the split reversible. Nothing in Helpdesk's `TicketsModule` or
@@ -230,8 +242,9 @@ ADC's `ConferenceModule` changes when it moves from one host to its own process.
   cost: the order is not visible as a list of lines. The structured startup log is the mitigation, but a
   developer used to reading the order off `Program.cs` has to learn to read it off the log instead.
 - **Stubs must be maintained.** `RegisterDisabledStubs` is a real obligation. Add a cross-module
-  interface and forget to register a stub for it, and a host that disables that module fails to resolve.
-  This is caught at startup rather than in production, but it is a discipline the contract assumes.
+  interface and forget to register a stub for it, and a host that names that module's assembly but
+  disables it fails to resolve the interface the first time something asks for it. The loader does not
+  check stub coverage, so this is a discipline the contract assumes.
 - **Cycles are rejected, not resolved.** A dependency cycle is a hard startup failure by design. That is
   the correct behavior, but it means you cannot lean on lazy resolution to paper over a genuine circular
   design between modules.
@@ -275,76 +288,71 @@ or `dotnet add package MMCA.Common.API` and try it.*
 
 *Tags: .NET, C Sharp, Software Architecture, Modular Monolith, Microservices*
 
-*Notes: re-verified against source this run (2026-09-19 audit pass, MMCA.Common v1.205.0 at commit
-90ffa7a). Three claims changed meaning, all in the discovery mechanism. (1) The article described
-`DiscoverAndRegister` as scanning every loaded assembly via `AppDomain.CurrentDomain.GetAssemblies()`.
-There is no `AppDomain` path in `ModuleLoader.cs` at all: the signature is six parameters,
-`DiscoverAndRegister(services, configurationBuilder, applicationSettings, modulesSettings, string?
-environmentName, IEnumerable<Assembly> moduleAssemblies)` at `ModuleLoader.cs:58-64`, with
-`environmentName` carrying no default and `moduleAssemblies` required. The XML doc at
-`ModuleLoader.cs:48-53` gives the reason the article states: an `AppDomain` scan only sees assemblies
-already loaded, so a referenced-but-untouched module assembly would be silently absent. The guarded
-`moduleAssemblies.SelectMany(a => a.GetTypes())` scan is `ModuleLoader.cs:71-84`, and its guard is a
-broad `catch (Exception ex)` at `:78` that logs through `LogAssemblyScanFailed` and returns no types
-(the XML comment at `:69-70` names `ReflectionTypeLoadException` as the case it exists for, so the
-article says "the case it exists for" rather than claiming a typed catch); `IModule` and `IModuleSeeder`
-instantiation is `:86-94`, and `TopologicalSort(allModules)` is called at `:97`.
-(2) The host snippet no longer matched any host and would not compile against the six-parameter
-signature. The real shape is `builder.AddModuleHost([typeof(ConferenceModule).Assembly],
-loggerFactory.CreateLogger<ModuleLoader>())` (`MMCA.Common.API/Startup/ModuleHostExtensions.cs:51-53`,
-public API at `MMCA.Common.API/PublicAPI.Unshipped.txt:75`), which binds and validates
-`ApplicationSettings` and `ModulesSettings` (`:61-75`), builds the loader with or without the passed
-logger and calls `services.AddSingleton(moduleLoader)` (`:77-82`), and returns a `ModuleHostContext`
-(`:84-90`). (3) Discovery therefore runs as a pipeline step, not as a host line:
-`ModuleHostContext.RegisterModules(IServiceCollection)` (`ModuleHostContext.cs:66-78`) is the delegate
-that calls `DiscoverAndRegister` with the six captured arguments, and the ADC Conference host registers
-it at `MMCA.ADC.Conference.Service/Program.cs:391` inside
-`services.AddMmcaApplicationPipeline(...)` (`:390-395`). The host's own comments state both points:
-`AddModuleHost` "deliberately does NOT run discovery" (`Program.cs:341-344`) and "there is no AppDomain
-scan to fall back on" (`Program.cs:346-348`), with the `AddModuleHost` call itself at `:349-352`.
-`IModule` members (`Name`, `Dependencies` default `[]`, `RequiresDependencies` default `false`,
-`Register(IServiceCollection, IConfigurationBuilder, ApplicationSettings)`, `RegisterDisabledStubs`
-default empty body) at `MMCA.Common.Application/Modules/IModule.cs:12,17,23,28,34`. `ModuleLoader` is a
-`sealed partial class` (`ModuleLoader.cs:15`) with `Logger { get; init; } =
-NullLogger<ModuleLoader>.Instance` (`:33`) and `DisabledModuleNames` (`:27`);
-`SeedAllAsync(IServiceProvider, CancellationToken)` at `ModuleLoader.cs:255` (the former `:270` anchor is
-now an XML `<exception>` tag on `TopologicalSort`); `IModuleSeeder.ModuleName`/`SeedAsync(...)` at
-`IModuleSeeder.cs:13,18`. `ModulesSettings : Dictionary<string, ModuleSettings>`, `SectionName =
-"Modules"` at `Settings/ModulesSettings.cs:7,10`; `ModuleSettings.Enabled` (init, default `true`) +
-`RemoteDependencies` (`List<string>`, default `[]`) at `Settings/ModuleSettings.cs:9,38`.
-`ScanModuleApplicationServices<TAssemblyMarker>()` is at
-`MMCA.Common.Application/DependencyInjection.cs:169-171` and forwards to the `Assembly` overload at
-`:187-279`, which runs nine Scrutor scans plus FluentValidation's assembly scan: domain event handlers
-(singleton, `:193-197`), integration event handlers (singleton, `:200-204`), `IEntityDTOMapper<,,>`
-(scoped, `:206-210`), `IEntityDTOProjector<,,>` (scoped, `:215-219`, optional and opt-in per entity),
-`IEntityRequestMapper<,,>` (scoped, `:221-225`), `IEntityUpdateApplier<,,>` (scoped, `:231-235`),
-`IEntityUpdateCommandApplier<,,,>` (scoped, `:240-244`), `ICommandHandler<,>` (scoped, `:246-250`),
-`IQueryHandler<,>` (scoped, `:252-256`), then `services.AddValidatorsFromAssembly(moduleAssembly)` at
-`:258` (the module scan does not use `AddValidatorsFromAssemblyContaining`, which appears only in the
-framework-level `AddApplication` block at `:51`) plus `CommandRequestValidator` auto-registration for
-`ICommandWithRequest<>` (block `:262-276`, `TryAddTransient` at `:275`). The two update-applier scans and
-the appliers bullet in the body are added this run; the method also opens with
-`ThrowIfPipelineSealed(services, nameof(ScanModuleApplicationServices))` at `:190`.
-`AddMmcaApplicationPipeline(Action<MmcaApplicationPipelineBuilder>?)` at `DependencyInjection.cs:620-629`
-runs `services.AddApplication()` (`:624`), invokes the callback (`:626`) and returns
-`services.AddApplicationDecorators()` (`:628`); its remarks at `:598-610` state that non-handler
-registrations (infrastructure, API, telemetry, options) may stay outside the call.
-`ThrowIfPipelineSealed` (`:723-733`) is what throws on a late registration, naming the caller, and
-`VerifyDecoratorPipeline()` (`:657`) is the fitness-test hook. The canonical sequence and the sealing
-requirement are the "DI Registration Sequence" section of `MMCA.Common/CLAUDE.md` (heading `:70`,
-sequence text `:72`). In the real host, `services.AddInfrastructure(builder.Configuration);` is at
-`MMCA.ADC.Conference.Service/Program.cs:325` and `services.AddAPI(moduleHost.ModulesSettings);` at
-`:354`; `AddApplication()` and `AddApplicationDecorators()` are not host lines at all, they are the two
-ends of the `AddMmcaApplicationPipeline` call at `:390-395`, which the host comment at `:359-364`
-describes. The five host anchors carried by the previous ledger (`:302`, `:303`, `:323`, `:333`, `:369`)
-are all replaced; the "decorators genuinely last" claim survives, the evidence for it did not.
-Topology examples: ADC runs fleet-only, four single-module service hosts
-(Identity/Conference/Engagement/Notification) behind a YARP gateway, its former combined
-`MMCA.ADC.WebAPI` host deleted (`MMCA.ADC/CLAUDE.md:7`); MMCA.Helpdesk is the monolith-first reference
-app, one `Tickets` module built to demonstrate "build the monolith now, extract a service later"
-(`MMCA.Helpdesk/CLAUDE.md:7-16`). ADR-059 records the `IModule` composition contract itself (five
-members, three defaulted; reflection discovery; Kahn ordering; stub-not-absence for a disabled module)
-as its own decision, since ADR-008 and ADR-006 treat `ModuleLoader` as pre-existing context rather than
-deciding it (`Website/docs-src/adr/059-module-contract-and-composition.md:22-25`). Code blocks in this
-article are illustrative of the documented shape: the host snippet mirrors `Program.cs:349-352` and
-`:390-391` with the ADC-specific pipeline steps elided.*
+*Notes: re-verified against source this run (2026-10-02 apply pass, MMCA.Common v1.221.0). Four claims
+changed meaning. (1) Scan guard: `DiscoverAndRegister` scans `moduleAssemblies` at
+`MMCA.Common.Application/Modules/ModuleLoader.cs:74-95` with TWO catches, a typed
+`catch (ReflectionTypeLoadException ex)` at `:81-88` that keeps the loaded types
+(`ex.Types.OfType<Type>()` at `:87`) and logs at Error through `LogAssemblyPartiallyLoaded`
+(`:352-353`), and a broad `catch (Exception ex)` at `:89-93` that returns no types and logs at Error
+through `LogAssemblyScanFailed` (`:349-350`); the rationale comment is `:69-73`. The body previously said
+a broken assembly contributes no types, which holds only for the broad catch. (2) Fleet topology: every
+ADC service host names ONLY its own module assembly (`MMCA.ADC.Conference.Service/Program.cs:366`,
+`MMCA.ADC.Engagement.Service/Program.cs:211`, `MMCA.ADC.Identity.Service/Program.cs:255`,
+`MMCA.ADC.Notification.Service/Program.cs:189`; `MMCA.ADC/AGENTS.md:43`), so peers are never discovered
+and no disabled stub is registered there, even though Conference's appsettings disables Engagement
+(`MMCA.ADC.Conference.Service/appsettings.json:21,24`). `AddEngagementBookmarkCountClient` is a
+pipeline step at `Program.cs:412` and calls
+`services.Replace(ServiceDescriptor.Scoped<IBookmarkCountService, BookmarkCountServiceGrpcAdapter>())` at
+`MMCA.ADC.Engagement.Contracts/DependencyInjection.cs:49`; the host comments at `Program.cs:34-39` and
+`:385-389` state that no Engagement stub exists in this host. The body previously said the host
+replaces a stub with a gRPC client; it now says the host adds the adapter and frames the stub path as the
+name-and-disable shape. (3) Disabled-module example: the handler is
+`GetSessionBookmarkCountsHandler` (plural, `Conference.Application/Speakers/UseCases/GetSessionBookmarkCounts/GetSessionBookmarkCountsHandler.cs:17`,
+`IBookmarkCountService` parameter `:19`); the stub is real (`EngagementModule.cs:30-33`, registering
+`DisabledBookmarkCountService` at `:32`) and the example is now framed for a host that names the
+Engagement assembly and disables it. The Conference host comments still spell the handler singular
+(`Program.cs:34`, `:385`); the article follows the class. (4) "A forgotten stub is caught at startup"
+was UNVERIFIABLE and is removed: no `ValidateOnBuild` appears in Common or ADC source and the loader does
+not check stub coverage. Added instead: `ValidateRemoteDependencies(IServiceProvider)` at
+`ModuleLoader.cs:212` (doc `:198-211`, stub capture `:118-120`, throw `:244-249`, still-stub warning
+`:251-255`/`:355-356`), stated as opt-in because no ADC host calls it. Also added: a module absent from
+the `Modules` section is disabled (`Settings/ModulesSettings.cs:13-19`).
+Other anchors re-verified this run: `ModuleLoader` `sealed partial class` `:16`, `DisabledModuleNames`
+`:28`, `Logger` (default `NullLogger`) `:34`, `moduleAssemblies` XML doc `:49-54` (the `AppDomain`
+rationale), `DiscoverAndRegister` six-parameter signature `:59-65`, `IModule`/`IModuleSeeder`
+instantiation `:97-105`, `TopologicalSort(allModules)` call `:108`, disabled branch `:112-123`
+(`RegisterDisabledStubs` `:119`, name recorded `:122`), `ValidateModuleDependencies` `:136-169`
+(remote-satisfied comment `:138-141`, throw `:150-158`), `modules.{name}.json` `:185` and the
+environment variant `:188`, `SeedAllAsync` `:266`, Kahn `TopologicalSort` `:282-332` (zero-in-degree seed
+`:306-307`, decrement and enqueue `:316-320`, cycle throw `:324-329`), `[LoggerMessage]` declarations
+`:334-356`. `IModule` members at `IModule.cs:12,17,23,28,34`; `IModuleSeeder.ModuleName`/`SeedAsync` at
+`IModuleSeeder.cs:13,18`. `ModulesSettings : Dictionary<string, ModuleSettings>` and `SectionName =
+"Modules"` at `ModulesSettings.cs:7,10`; `ModuleSettings.Enabled` (default `true`) and
+`RemoteDependencies` at `ModuleSettings.cs:9,38`. `AddModuleHost` at
+`MMCA.Common.API/Startup/ModuleHostExtensions.cs:51` binds and validates both settings (`:62-64`,
+`:70-72`), registers the loader (`:82`) and returns the `ModuleHostContext` (`:84`); it is shipped API
+(`MMCA.Common.API/PublicAPI.Shipped.txt:398,564`, no longer in Unshipped).
+`ModuleHostContext.RegisterModules` at `ModuleHostContext.cs:66`. The convention scan lives in
+`MMCA.Common.Application/DependencyInjection.ModuleScanning.cs`: generic `:28`, `Assembly` overload `:46`,
+`ThrowIfPipelineSealed` `:49`, domain event handlers `:54`, integration event handlers `:61`,
+`IEntityDTOMapper<,,>` `:67`, `IEntityDTOProjector<,,>` `:76`, `IEntityRequestMapper<,,>` `:82`,
+`IEntityUpdateApplier<,,>` `:92`, `IEntityUpdateCommandApplier<,,,>` `:101`, `ICommandHandler<,>` `:107`,
+`IQueryHandler<,>` `:113`, `AddValidatorsFromAssembly` `:117`, `ICommandWithRequest<>` block `:119-134`
+(`TryAddTransient` `:134`); `AddValidatorsFromAssemblyContaining` appears only in `AddApplication` at
+`DependencyInjection.cs:48`. `AddMmcaApplicationPipeline` at `DependencyInjection.cs:207-216`
+(`AddApplication()` `:211`, callback `:213`, `AddApplicationDecorators()` `:215`), remarks `:185-206` with
+the non-handler note at `:195-196`, `VerifyDecoratorPipeline()` `:244`, `ThrowIfPipelineSealed` `:310`
+(also called from `DependencyInjection.Crud.cs:80` for `AddEntityCrud` and `:193` for
+`AddEntityUpdate`). Conference host: `AddInfrastructure` `Program.cs:340`, "deliberately does NOT run
+discovery" `:356-359`, "no AppDomain scan" `:361-363`, `AddModuleHost` `:364-367`, `AddAPI` `:369`,
+pipeline comment `:374-409`, `AddMmcaApplicationPipeline` `:410-413` with `RegisterModules` at `:411`;
+the snippets mirror `:364-367` and `:410-411` with ADC-specific steps elided. `EngagementModule`
+`Dependencies => ["Conference"]` `:20`, `RequiresDependencies => true` `:23`. Topology: ADC four
+single-module hosts behind YARP, no single WebAPI host (`MMCA.ADC/AGENTS.md:7`); Helpdesk monolith-first,
+one `Tickets` module, "build the monolith now, extract a service later" (`MMCA.Helpdesk/AGENTS.md:7`).
+Both repos' `CLAUDE.md` are `@AGENTS.md` imports, so the grounding cites `AGENTS.md`. The header no
+longer cites the "DI Registration Sequence" section of `MMCA.Common/AGENTS.md`: its text says
+`AddMmcaApplicationPipeline` runs `AddInfrastructure` and `AddAPI`, which `DependencyInjection.cs:211-215`
+does not; the body follows the code (source-doc drift, not fixed here). ADR-059 Decision
+(`Website/docs-src/adr/059-module-contract-and-composition.md:22-25`) and the `ConferenceModule` shape are
+carried as CONFIRMED by this cycle's audit, not re-read in the apply pass.*

@@ -2,9 +2,9 @@
 
 > Series: MMCA.Common · Article #44 · P2/P3 · Group G12,G13 · Rubric §9 · ADR-046 ·
 > Status: grounded in `Website/docs-src/adr/046-http-api-versioning.md`,
-> `WebApplicationBuilderExtensions.cs` (`AddCommonApiVersioning`), `ServiceInfoControllerBase.cs`,
-> `ServiceInfoVersioningContractTestsBase.cs`, and the per-host `ServiceInfoController` subclasses in
-> ADC and Store. No em dashes.
+> `WebApplicationBuilderExtensions.cs` (`AddCommonApiVersioning`), `OpenApiEndpointExtensions.cs`
+> (`MapCommonOpenApi`), `ServiceInfoControllerBase.cs`, `ServiceInfoVersioningContractTestsBase.cs`, and
+> the per-host `ServiceInfoController` subclasses in ADC and Store. No em dashes.
 
 **Subtitle:** Most APIs "support versioning" by shipping v1.0 and never a second version. Here is a
 header-based setup that introduces versioning without breaking a single caller, and a fitness contract
@@ -57,7 +57,7 @@ host through one call, and keeps it exercised by a shared contract test that pro
 coexist.
 
 **One registration wires the whole policy.** `AddCommonApiVersioning`
-(`WebApplicationBuilderExtensions.cs:334`) is the entire decision, in one place: the reader, the
+(`WebApplicationBuilderExtensions.cs:37`) is the entire decision, in one place: the reader, the
 default behavior, the reporting, and the one guard that keeps document generation from tripping over
 any of it.
 
@@ -74,7 +74,7 @@ public IServiceCollection AddCommonApiVersioning()
     }).AddMvc()
     .AddApiExplorer(options =>
     {
-        options.GroupNameFormat = "'v'VVV";                      // feeds the versioned OpenAPI group
+        options.GroupNameFormat = "'v'VVV";                      // names each version's explorer group
         options.SubstituteApiVersionInUrl = true;
     });
 
@@ -85,11 +85,11 @@ public IServiceCollection AddCommonApiVersioning()
 ```
 
 Three of those lines carry the design. The reader is a `HeaderApiVersionReader("api-version")`
-(`WebApplicationBuilderExtensions.cs:343`), so routes and query strings stay version-free: a caller
+(`WebApplicationBuilderExtensions.cs:46`), so routes and query strings stay version-free: a caller
 opts into a newer shape by adding one header, not by rewriting the URL. `AssumeDefaultVersionWhenUnspecified`
-(`WebApplicationBuilderExtensions.cs:341`) means a client that never sends the header keeps getting
+(`WebApplicationBuilderExtensions.cs:44`) means a client that never sends the header keeps getting
 `1.0`, so introducing versioning was not a breaking change for any existing caller. And
-`ReportApiVersions` (`WebApplicationBuilderExtensions.cs:342`) means every response carries the
+`ReportApiVersions` (`WebApplicationBuilderExtensions.cs:45`) means every response carries the
 supported and deprecated version lists in its headers, so a client can see which versions a service
 still honors and which are on the way out without reading a changelog.
 
@@ -97,16 +97,19 @@ Two more details in that block carry less design and more hard-won experience, a
 a line that is not there. `1.0` is the default because the `Asp.Versioning` library already defaults to
 it, so the registration says nothing at all: setting `DefaultApiVersion` explicitly, in either the
 versioning options or the explorer options that inherit them, trips the library's own analyzers
-(AV0011/AV0024), and the comment standing in its place (`WebApplicationBuilderExtensions.cs:336-338`)
+(AV0011/AV0024), and the comment standing in its place (`WebApplicationBuilderExtensions.cs:39-41`)
 exists so the next reader does not "fix" the omission. And `AddApiParameterDescriptorBackfill`
-(`WebApplicationBuilderExtensions.cs:351`) installs `ApiParameterDescriptorBackfillProvider`, added in
+(`WebApplicationBuilderExtensions.cs:54`) installs `ApiParameterDescriptorBackfillProvider`, added in
 v1.146.0 after a real failure: MVC leaves `ApiParameterDescription.ParameterDescriptor` null for a route
-token with no matching action parameter, and `Asp.Versioning.OpenApi` dereferences it without a null
-check, so a host that routes `api/v{version:apiVersion}/...` returned a `500` from
-`GET /openapi/{documentName}.json`. The guard fills a placeholder only where one is missing and never
-replaces a descriptor MVC supplied (`ApiParameterDescriptorBackfillProvider.cs:65`). Because this
-framework's reader is the header, no current host was hit either way, which is exactly why that failure
-could ship unnoticed (ADR-046).
+token with no matching action parameter, and `Asp.Versioning.OpenApi`, the document pipeline in use when
+the guard shipped, dereferenced it without a null check, so a host that routed `api/v{version:apiVersion}/...`
+got a `500` from `GET /openapi/{documentName}.json`. The guard fills a placeholder only where one is
+missing and never replaces a descriptor MVC supplied (`ApiParameterDescriptorBackfillProvider.cs:65`).
+Because this framework's reader is the header, no host was hit either way, which is exactly why that
+failure could ship unnoticed. MMCA.Common references only `Asp.Versioning.Mvc` and
+`Asp.Versioning.Mvc.ApiExplorer` (`MMCA.Common/Directory.Packages.props:14`, `:20`), not
+`Asp.Versioning.OpenApi`; the guard stays because it costs nothing and protects any other consumer of
+the API descriptions from the same null (ADR-046).
 
 **A shipped exemplar proves two versions coexist.** This is the part most "we support versioning"
 stories skip. `ServiceInfoControllerBase` (`ServiceInfoControllerBase.cs:30`) serves the same
@@ -146,9 +149,9 @@ check, and the same invariant-over-discipline posture the framework prefers (ADR
 working version, everything above would be asserted rather than proven.
 
 **Every REST host adopts it the same way.** The extracted services call `AddCommonApiVersioning` in
-their startup: ADC's Conference (`MMCA.ADC.Conference.Service/Program.cs:203`), Identity (`:152`),
-Engagement (`:148`), and Notification (`:140`) hosts, Store's Catalog (`:141`), Sales (`:148`), and
-Identity (`:135`) hosts, and the monolith reference host
+their startup: ADC's Conference (`MMCA.ADC.Conference.Service/Program.cs:217`), Identity (`:150`),
+Engagement (`:147`), and Notification (`:136`) hosts, Store's Catalog (`:140`), Sales (`:147`), and
+Identity (`:134`) hosts, and the monolith reference host
 (`MMCA.Helpdesk.Web/Program.cs:35`). One call per host, and the reader, default, and reporting choices
 cannot drift apart between services. The discovery exemplar is narrower than the registration: only ADC's
 Conference and Store's Catalog hosts ship a `ServiceInfoController` subclass today.
@@ -170,17 +173,24 @@ things are worth naming, and none of them is a bug.
   `/ServiceInfo` discovery endpoint to keep the versioning path honest, not because any business
   resource has yet needed to evolve its shape. The point of the exemplar is that when a real resource
   does need a `2.0`, the machinery it plugs into has been proven to work, not merely configured.
-- **Header versioning is less discoverable than a URL segment, and the OpenAPI documents are dev/CI
-  only.** A version chosen by header does not show up in a copied URL or a browser address bar, so the
-  version in play is only visible to a caller that reads request and response headers. The generated
-  contract does follow the versioning axis: `MapCommonOpenApi` applies
-  `MapOpenApi().WithDocumentPerVersion()` (`Startup/Endpoints/OpenApiEndpointExtensions.cs:38`), so the
-  route resolves one document per discovered API version, named by the explorer's `GroupNameFormat`
-  (`v1.0` is the `v1` document). But the whole endpoint is a no-op in Production
-  (`Startup/Endpoints/OpenApiEndpointExtensions.cs:36`), and the only document any host's contract test
-  pins is `/openapi/v1.json` (`Conformance/OpenApiContractTestsBase.cs:31`), so the machine-readable
-  surface is a development and CI artifact, not something a client can browse in production and not a
-  place the `2.0` shape is currently asserted.
+- **Header versioning is less discoverable than a URL segment, and the OpenAPI document is one
+  dev/CI-only `v1`.** A version chosen by header does not show up in a copied URL or a browser address
+  bar, so the version in play is only visible to a caller that reads request and response headers. The
+  generated contract does not follow the versioning axis either. Each host registers the plain `v1`
+  document itself with `services.AddOpenApi()`, next to `AddCommonOpenApi`, which registers no document
+  and only configures the ones present (`WebApplicationBuilderExtensions.cs:95`). `MapCommonOpenApi`
+  then maps that single document with `app.MapOpenApi().AllowAnonymous()`
+  (`Startup/Endpoints/OpenApiEndpointExtensions.cs:74`, document name `v1` at `:28`), throws at startup
+  when no `v1` document was registered (`:65-71`), and is a no-op in Production (`:62`). So the `2.0`
+  `ServiceInfo` action is served and exercised by the fitness contract above but appears in no
+  generated document, and the only document any host's contract test pins is `/openapi/v1.json`
+  (`Conformance/OpenApiContractTestsBase.cs:31`). ADC and Store also write that document to disk at
+  build time and commit it per service host (four in ADC, three in Store, for example
+  `MMCA.ADC.Conference.Service/openapi/MMCA.ADC.Conference.Service.json`), and an "OpenAPI documents are
+  current" CI step fails a PR whose document changed without being committed (`MMCA.ADC/.github/workflows/deploy.yml:305`,
+  `MMCA.Store/.github/workflows/deploy.yml:287`). That makes the contract diffable in review, but it
+  stays a development and CI artifact: never served in production, and not a place the `2.0` shape is
+  asserted (the committed Conference document carries `/ServiceInfo` and no `ServiceInfoV2Response`).
 
 The trade the framework makes is clear: stable, version-free URLs and a non-breaking rollout, paid for
 with a version that lives in headers rather than the path, and a proof-of-life second version on the
@@ -214,8 +224,8 @@ assume-default-when-unspecified, report-versions, `api-version` reader, plus the
 backfill that keeps OpenAPI generation from failing) in one call, how `ServiceInfoControllerBase` ships a
 real deprecated `1.0` alongside a `2.0` so `ServiceInfoVersioningContractTestsBase` can prove two versions
 coexist rather than assert it, and the honest current-reality caveats (only the discovery endpoint has
-a `2.0`, adoption is per host, the attributes are repeated per subclass, and the OpenAPI documents are
-dev/CI only).
+a `2.0`, adoption is per host, the attributes are repeated per subclass, and the OpenAPI contract is a
+single dev/CI-only `v1` document that does not show the `2.0` shape).
 
 **Next in the series:** Article 45, "Feature Flags in the CQRS Pipeline: Gate Commands, Not Code," on
 gating a command in the pipeline instead of branching the code that runs it.
@@ -231,15 +241,16 @@ gating a command in the pipeline instead of branching the code that runs it.
 
 *Tags: .NET, C Sharp, Software Architecture, API Design, REST APIs*
 
-*Notes: verified type/behavior names with path:line (re-read this run):*
-- *`AddCommonApiVersioning` (`Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:334`, inside the `extension(IServiceCollection services)` block opening at `:327`); the body is `:335-354`. `DefaultApiVersion` is NOT SET: `:336-338` is a comment recording that the omission is deliberate (`1.0` is already the framework default and the API explorer inherits both it and `AssumeDefaultVersionWhenUnspecified` from the versioning options below; restating either one trips AV0011/AV0024). `AssumeDefaultVersionWhenUnspecified = true` (`:341`), `ReportApiVersions = true` (`:342`), `new HeaderApiVersionReader("api-version")` (`:343`), `.AddMvc()` (`:344`), `.AddApiExplorer(...)` (`:345-349`) setting only `GroupNameFormat = "'v'VVV"` (`:347`) and `SubstituteApiVersionInUrl = true` (`:348`), then `services.AddApiParameterDescriptorBackfill();` (`:351`) and `return services;` (`:353`). The method's own contents are unchanged; the extension block sits about 100 lines lower in the file than the `:2xx` anchors this ledger carried before, so every anchor above was re-read on 2026-09-19.*
-- *`ApiParameterDescriptorBackfillProvider` (`Source/Presentation/MMCA.Common.API/OpenApi/ApiParameterDescriptorBackfillProvider.cs:43`, `IApiDescriptionProvider`), fills a placeholder only where MVC left `ParameterDescriptor` null via `??=` (`:65`), never replacing an existing descriptor. `AddApiParameterDescriptorBackfill()` is called from both `AddCommonApiVersioning` (`WebApplicationBuilderExtensions.cs:351`) and `AddCommonOpenApi` (`:496`; method at `:493`, doc at `:483-492`), both delegating to the shared private helper at `:518-520`. Added in v1.146.0; the 500-from-`/openapi/{documentName}.json` rationale and the "no current host was affected, which is why it could ship unnoticed" note are ADR-046 material (`Website/docs-src/adr/046-http-api-versioning.md:97-107`, amendment recorded at `:8-9`).*
-- *`ServiceInfoControllerBase` (`Source/Presentation/MMCA.Common.API/Controllers/ServiceInfoControllerBase.cs:30`); `Supported`/`Deprecated` arrays (`:32-33`); `GetV1` `[MapToApiVersion("1.0")]` (`:40`) returning `ServiceInfoResponse` (record `:51`); `GetV2` `[MapToApiVersion("2.0")]` (`:46`) returning the `ServiceInfoV2Response` superset (record `:54`). Read-only: both actions are `[HttpGet]` (`:39`, `:45`), no write verb. The base carries NO `[AllowAnonymous]` (the only occurrence of the attribute in the file is the sample subclass inside the XML `<code>` block at `:21`); anonymity is granted per subclass. ADR-046 records this in its 2026-08-01 revision note (`Website/docs-src/adr/046-http-api-versioning.md:4-7`), with the anonymity sentence at `:73`; that ADR also carries a 2026-08-12 amendment (`:8-9`), a 2026-08-14 revision (`:10-11`) and a 2026-09-11 revision (`:12-15`, re-anchored citations and a corrected OpenAPI trade-off).*
-- *`ServiceInfoVersioningContractTestsBase<TFixture>` (`Source/Hosting/MMCA.Common.Testing/Conformance/ServiceInfoVersioningContractTestsBase.cs:20`, namespace `MMCA.Common.Testing.Conformance`); v1.0 asserts `api-deprecated-versions` (`:39-41`); v2.0 asserts `api-supported-versions` (`:55-57`); reads `/ServiceInfo` with the `api-version` header (`:63-64`). Subclassed on exactly two hosts, one per repo: `MMCA.ADC/Tests/Integration/MMCA.ADC.Conference.IntegrationTests/Contract/ApiVersioningTests.cs:15` and `MMCA.Store/Tests/Integration/MMCA.Store.Catalog.IntegrationTests/Contract/ApiVersioningTests.cs:16` (the declarations span `:14-15` and `:15-16` respectively; no other subclass in either repo). ADR-058 counts seven contract bases, one per runtime contract, all under `Source/Hosting/MMCA.Common.Testing/Conformance/` (`Website/docs-src/adr/058-runtime-conformance-suites-as-a-package.md:27`); this one is taught in depth here and pointed to from Article 35.*
-- *Per-host subclasses: ADC `ServiceInfoController` `[AllowAnonymous]` (`:17`), `[ApiVersion("1.0", Deprecated = true)]` / `[ApiVersion("2.0")]`, `ServiceName => "Conference"` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/ServiceInfoController.cs:17,18,19,23`); Store mirror `[AllowAnonymous]` (`:17`), `ServiceName => "Catalog"` (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ServiceInfoController.cs:17,18,23`).*
-- *The non-inheritance caveat is recorded by ADR-036 only, for ADC's sealed `OAuthController` (`Website/docs-src/adr/036-external-oauth-login.md:144-146`). ADR-034 takes the opposite shape: `[ApiController]` / `[Route("[controller]")]` / `[ApiVersion("1.0")]` sit on the generic base itself (`Website/docs-src/adr/034-generic-entity-query-layer.md:42`, `EntityControllerBase.cs:33-35`, class declaration at `:36`), so the earlier joint attribution to ADR-034 was wrong and is corrected here and in ADR-046 (`046-http-api-versioning.md:5-6`, with the "application controllers declare `1.0` today" paragraph at `:117-119`, the non-inheritance trade-off at `:140-142`, and the ADR-034 correction in Related at `:165-168`).*
-- *Host adoption of `AddCommonApiVersioning`, all eight call sites re-read on 2026-09-19: ADC Conference (`Source/Services/MMCA.ADC.Conference.Service/Program.cs:203`), Identity (`Source/Services/MMCA.ADC.Identity.Service/Program.cs:152`), Engagement (`Source/Services/MMCA.ADC.Engagement.Service/Program.cs:148`), Notification (`Source/Services/MMCA.ADC.Notification.Service/Program.cs:140`); Store Catalog (`Source/Services/MMCA.Store.Catalog.Service/Program.cs:141`), Sales (`Source/Services/MMCA.Store.Sales.Service/Program.cs:148`), Identity (`Source/Services/MMCA.Store.Identity.Service/Program.cs:135`); Helpdesk (`Source/Hosts/MMCA.Helpdesk.Web/Program.cs:35`). The inventory is still eight hosts; six of the eight anchors moved since the previous ledger.*
-- *`MapCommonOpenApi` (`Source/Presentation/MMCA.Common.API/Startup/Endpoints/Startup/Endpoints/OpenApiEndpointExtensions.cs:38`, XML doc at `:26-33`) is a no-op in Production (the `!app.Environment.IsProduction()` guard at `:36`) and maps `app.MapOpenApi().WithDocumentPerVersion()` (`:38`), documented at `:29-31` as resolving one document per discovered API version; `AddCommonOpenApi`'s doc says the same (`WebApplicationBuilderExtensions.cs:483-492`, method at `:493`). Nothing pins the document set beyond `v1`: `OpenApiContractTestsBase`'s default document path is `/openapi/v1.json` (`Source/Hosting/MMCA.Common.Testing/Conformance/OpenApiContractTestsBase.cs:31`) and the framework baseline fetches that same single document (`MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/OpenApi/OpenApiBaselineTests.cs:54`), which is the trade-off ADR-046 records at `:149-157`.*
-- *The code block above is condensed from `WebApplicationBuilderExtensions.cs:334-354` (comments shortened, body faithful, not byte-for-byte). Anchor facts (125 accepted ADRs 001-125, framework v1.205.0, 19 published packages, §9 scorecard) per `MMCA.Common/FACTS.md:4,14,19` and `Website/docs-src/adr/README.md:6` this run.*
+*Notes: verified type/behavior names with path:line (re-read this run, 2026-10-02, framework v1.221.0):*
+- *`AddCommonApiVersioning` (`Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:37`, inside the `extension(IServiceCollection services)` block opening at `:30`); the body is `:38-57`. `DefaultApiVersion` is NOT SET: `:39-41` is a comment recording that the omission is deliberate (`1.0` is already the framework default and the API explorer inherits both it and `AssumeDefaultVersionWhenUnspecified`; restating either one trips AV0011/AV0024). `services.AddApiVersioning(...)` (`:42`), `AssumeDefaultVersionWhenUnspecified = true` (`:44`), `ReportApiVersions = true` (`:45`), `new HeaderApiVersionReader("api-version")` (`:46`), `.AddMvc()` (`:47`), `.AddApiExplorer(...)` (`:48-52`) setting only `GroupNameFormat = "'v'VVV"` (`:50`) and `SubstituteApiVersionInUrl = true` (`:51`), then `services.AddApiParameterDescriptorBackfill();` (`:54`) and `return services;` (`:56`). The 2026-09-19 ledger anchors (`:327`, `:334-354`, `:336-338`, `:341-343`, `:351`) all moved about 300 lines up; contents unchanged. The code-block comment on `GroupNameFormat` was changed from "feeds the versioned OpenAPI group" to "names each version's explorer group", because no per-version OpenAPI document set exists at v1.221.0.*
+- *`ApiParameterDescriptorBackfillProvider` (`Source/Presentation/MMCA.Common.API/OpenApi/ApiParameterDescriptorBackfillProvider.cs:43`, `IApiDescriptionProvider`), fills a placeholder only where MVC left `ParameterDescriptor` null via `??=` (`:65`). `AddApiParameterDescriptorBackfill()` is called from both `AddCommonApiVersioning` (`WebApplicationBuilderExtensions.cs:54`) and `AddCommonOpenApi` (`:97`; method at `:95`, doc at `:81-94`), both delegating to the private `TryAddEnumerable` helper at `:118-120`. Added in v1.146.0; the 500-from-`/openapi/{documentName}.json` rationale is ADR-046 (`Website/docs-src/adr/046-http-api-versioning.md:105-115`), and the "Since v1.217.0 MMCA.Common no longer references `Asp.Versioning.OpenApi`; the guard stays" sentence is at `:116-117`. Package proof: `MMCA.Common/Directory.Packages.props:14` (`Asp.Versioning.Mvc`) and `:20` (`Asp.Versioning.Mvc.ApiExplorer`), no `Asp.Versioning.OpenApi` entry. The article body was changed this run so the dereference is told as the past failure it is, not as a current dependency.*
+- *`MapCommonOpenApi` (`Source/Presentation/MMCA.Common.API/Startup/Endpoints/OpenApiEndpointExtensions.cs:60`; the previous ledger's doubled `Startup/Endpoints/Startup/Endpoints/` path does not exist): `DefaultDocumentName = "v1"` (`:28`), the `!app.Environment.IsProduction()` guard (`:62`), the throw when no keyed `IOpenApiDocumentProvider` named `v1` is registered (`:65-71`), and `app.MapOpenApi().AllowAnonymous()` (`:74`); the AV0030 "Missing WithDocumentPerVersion" suppression is at `:56-59` with the justification that `Asp.Versioning.OpenApi` is not referenced. `AddCommonOpenApi` registers no document and only configures the host-registered ones (doc `WebApplicationBuilderExtensions.cs:81-94`, method `:95`, ADR-115 transformers `:102-106`). Host pairing example: ADC Conference `services.AddOpenApi()` / `services.AddCommonOpenApi()` / `app.MapCommonOpenApi()` at `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:315`, `:316`, `:449`; Store Catalog at `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:193`, `:194`, `:327`. ADR-046 records this as its 2026-10-01 v1.217.0 revision (`046-http-api-versioning.md:19-21`, body `:231-260`) and the trade-off "The OpenAPI document is dev/CI only, and there is one: `v1`" at `:159-168`. The earlier article claim (`MapOpenApi().WithDocumentPerVersion()`, one document per discovered version) was DRIFTED and is replaced in the fourth trade-off bullet and in "What we covered".*
+- *Committed build-time documents (UNVERIFIABLE in the audit, now proven and added): ADC commits four (`MMCA.ADC/Source/Services/{Conference,Engagement,Identity,Notification}.Service/openapi/<host>.json`, generated by the `MmcaGenerateOpenApiDocument` target at `MMCA.ADC/Directory.Build.props:200`), Store commits three (`MMCA.Store/Source/Services/{Catalog,Identity,Sales}.Service/openapi/<host>.json`); the "OpenAPI documents are current" step is `MMCA.ADC/.github/workflows/deploy.yml:305` (prints "All 4" at `:320`) and `MMCA.Store/.github/workflows/deploy.yml:287` ("All 3" at `:303`). ADR-046 revisions 2026-09-22 and 2026-09-25 at `:16-18`, body from `:170`. The committed Conference document has `"/ServiceInfo"` at line 8 and zero `ServiceInfoV2Response` occurrences (Catalog likewise zero), which is the basis for "not a place the `2.0` shape is asserted". Nothing pins the document set beyond `v1`: `OpenApiContractTestsBase.OpenApiDocumentPath` defaults to `/openapi/v1.json` (`Source/Hosting/MMCA.Common.Testing/Conformance/OpenApiContractTestsBase.cs:31`) and the framework baseline fetches that same document (`MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/OpenApi/OpenApiBaselineTests.cs:54`).*
+- *`ServiceInfoControllerBase` (`Source/Presentation/MMCA.Common.API/Controllers/ServiceInfoControllerBase.cs:30`); `Supported`/`Deprecated` arrays (`:32-33`); `GetV1` `[MapToApiVersion("1.0")]` (`:40`) returning `ServiceInfoResponse` (record `:51`); `GetV2` `[MapToApiVersion("2.0")]` (`:46`) returning the `ServiceInfoV2Response` superset (record `:54`). Read-only: both actions are `[HttpGet]` (`:39`, `:45`), no write verb; the base carries no `[AllowAnonymous]`. ADR-046 anonymity sentence at `:81-82`.*
+- *`ServiceInfoVersioningContractTestsBase<TFixture>` (`Source/Hosting/MMCA.Common.Testing/Conformance/ServiceInfoVersioningContractTestsBase.cs:20`); v1.0 asserts `api-deprecated-versions` (`:39-41`); v2.0 asserts `api-supported-versions` (`:55-57`); reads `/ServiceInfo` with the `api-version` header (`:63-64`). Subclassed on exactly two hosts: `MMCA.ADC/Tests/Integration/MMCA.ADC.Conference.IntegrationTests/Contract/ApiVersioningTests.cs:14-15` and `MMCA.Store/Tests/Integration/MMCA.Store.Catalog.IntegrationTests/Contract/ApiVersioningTests.cs:15-16`. ADR-058 counts seven contract bases (`Website/docs-src/adr/058-runtime-conformance-suites-as-a-package.md:29`).*
+- *Per-host subclasses: ADC `ServiceInfoController` `[AllowAnonymous]` (`:17`), `[ApiVersion("1.0", Deprecated = true)]` (`:18`), `[ApiVersion("2.0")]` (`:19`), `ServiceName => "Conference"` (`:23`) in `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/ServiceInfoController.cs`; Store mirror `MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ServiceInfoController.cs:17,18,19,23` with `"Catalog"`. `EntityControllerBase` declares `[ApiVersion("1.0")]` at `MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:33`.*
+- *The non-inheritance caveat is recorded by ADR-036 for ADC's sealed `OAuthController` (`Website/docs-src/adr/036-external-oauth-login.md:144-146`); ADR-046 carries it at `:150-152`, the "application controllers declare `1.0` today" paragraph at `:127-129`, the host-adoption bullet at `:118-125`, ADR-015 posture at `:143-144`.*
+- *Host adoption of `AddCommonApiVersioning`, all eight call sites re-read on 2026-10-02 (Grep per repo): ADC Conference (`Source/Services/MMCA.ADC.Conference.Service/Program.cs:217`), Identity (`MMCA.ADC.Identity.Service/Program.cs:150`), Engagement (`MMCA.ADC.Engagement.Service/Program.cs:147`), Notification (`MMCA.ADC.Notification.Service/Program.cs:136`); Store Catalog (`MMCA.Store.Catalog.Service/Program.cs:140`), Sales (`MMCA.Store.Sales.Service/Program.cs:147`), Identity (`MMCA.Store.Identity.Service/Program.cs:134`); Helpdesk (`Source/Hosts/MMCA.Helpdesk.Web/Program.cs:35`). Seven of the eight anchors moved since 2026-09-19 (was 203/152/148/140/141/148/135); still eight hosts. ADR-046's own host anchors (`:118-125`, for example Conference `:218`) are off by one or two from these; that is ADR drift, not edited here.*
+- *The code block is condensed from `WebApplicationBuilderExtensions.cs:37-57` (comments shortened, body faithful, not byte-for-byte). Anchor facts: 131 accepted ADRs 001-131 (`Website/docs-src/adr/README.md:6`), framework v1.221.0 (`MMCA.Common/FACTS.md:4,14`), 22 published packages (`MMCA.Common/FACTS.md:19`); the article body states none of these counts. Was 125/001-125, v1.205.0, 19 in the 2026-09-19 ledger.*
 
 - Full series index: https://ivanball.github.io/writing.html

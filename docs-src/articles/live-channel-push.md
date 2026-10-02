@@ -1,6 +1,6 @@
 # Ephemeral by design: sub-second live channels over one SignalR hub
 
-> Series: MMCA.Common · Article #22 (deep-dive) · Pillar P2/P3 · Group G10,G23 · Rubric §5,§7 ·
+> Series: MMCA.Common · Article #22 (deep-dive) · Pillar P2/P3 · Group G10,G26 · Rubric §5,§7 ·
 > ADR-039, ADR-052, ADR-074 ·
 > Status: grounded in `Website/docs-src/adr/039-live-channel-push.md`,
 > `Website/docs-src/adr/074-recurring-job-scheduler.md` and the framework source
@@ -411,230 +411,122 @@ pattern, or `dotnet add package MMCA.Common.Infrastructure` and try it.*
 
 *Tags: .NET, C Sharp, SignalR, Real Time, Software Architecture*
 
-*Notes: 2026-09-19 audit pass (MMCA.Common v1.205.0). Three substantive changes this pass. (1) The
-"expensive work" worked example was re-based: `SessionScoringQueue.cs` and `SessionScoringWorkItem` no
-longer exist anywhere in `MMCA.ADC/Source` (Grep for both, zero matches), because that case is a durable
-internal command, `ScoreEventSessionsInternalCommand` (ADR-114), whose own remarks state it "replaces an
-in-process channel plus a five-minute recovery sweep ... A row in the database survives all three, and
-the framework owns the claim lease, the retry backoff and the dead-letter"
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsInternalCommand.cs:14-18`,
-record `:26`, name attribute `:25`); its handler takes the per-event claim with a zero wait and skips
-rather than waits on the loser (`ScoreEventSessionsInternalCommandHandler.cs:60` `ClaimWait =
-TimeSpan.Zero` with the "waiting for it would only mean paying for the same pass twice" rationale
-`:56-59`, `TryAcquireAsync` `:75-77`, skip branch `:79-83`, `ClaimTimeToLive` 15 minutes `:53`). The body
-now states that mechanism in two sentences and cross-references Article 51 for it; ADR-052's own text
-still names the deleted `SessionScoringQueue`/`SessionScoringProcessor` as its example
-(`Website/docs-src/adr/052-background-job-execution.md:83`), which is a repo-side follow-up for
-`/update-adrs`, not article drift. The live-publish queue is the only `Channel.CreateBounded` call in
-MMCA.Common and both consumer applications (Grep for `CreateBounded`/`BoundedChannelOptions`:
-`MMCA.Common/Source` zero, `MMCA.Store/Source` zero, `MMCA.ADC/Source` one file), which is what the body
-claims. (2) MMCA.Common's notification files moved into `Notifications/`, `Notifications/Live/`,
-`Notifications/Push/` and `Interfaces/Infrastructure/Notifications/` in a folder-width reorganization;
-every framework anchor below is re-pinned to those paths. (3) `NotificationHub` carries an
-`IChannelJoinAuthorizer` entitlement hook and a per-user connection cap that the article did not
-describe, both now in the body. Carried forward from the 2026-08-20 pass and unchanged on the merits:
-every best-effort swallow on the Engagement live path runs through MMCA.Common's shared
-`BestEffort.ExecuteAsync` helper instead of a hand-rolled `catch` with a justified `CA1031` suppression.
-`LivePollVoteChangedHandler`, `SessionQuestionUpvoteChangedHandler`, `SubmitQuestionHandler`,
-`ModerateQuestionHandler` and the drain worker `LiveChannelPublishProcessor` carry no `CA1031`
-suppression and no per-file failure `LoggerMessage` any more; the helper emits one Warning
-("Best-effort operation '{Operation}' failed and was swallowed; the caller's outcome is unaffected")
-and increments `besteffort.dispatch.failed`, tagged by a low-cardinality `operation` name, on the
-`MMCA.Common.BestEffort` meter, and rethrows the caller's own cancellation rather than recording it as a
-failure (`MMCA.Common/Source/Core/MMCA.Common.Application/Services/BestEffort.cs:45-72`, meter/tag
-contract `:18-23`, Warning `:81-84`). The body paragraph that used to say "the two that still keep a
-`try`/`catch`" was rewritten for that, and every affected anchor below is re-pinned. The section
-"The sibling contract: work a clock owns" is unchanged on the merits; the previous note's withdrawal of
-the onboarding-chapter drift finding is now only half right and is restated below.
-The section "The queue is where you say what the work is worth" carries ADR-052's
-background-job execution contract, which has no other home article. Its one code block is line-for-line
-from source with the declarations pulled adjacent: the file does not have them contiguous, and the doc
-comments are dropped. The `FullMode = BoundedChannelFullMode.Wait` plus non-blocking `TryWrite` pairing
-described in prose beside it is the documented behaviour of `BoundedChannelFullMode` rather than a
-quotation: no `Wait`-mode channel exists in MMCA.Common or either consumer application this pass, which
-is why it is prose and not a second block.
-The permissive end is `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/Live/LiveChannelPublishQueue.cs`:
-`Capacity = 1024` (`:18`), the `CreateBounded` call carrying `FullMode = BoundedChannelFullMode.DropOldest`,
-`SingleReader = true`, `SingleWriter = false` and `itemDropped: OnItemDropped` (`:33-40`), the
-always-true `TryWrite` documented at `:49-59`, and the `itemDropped` callback as the
-only observable drop signal (`:30-32`) feeding the discarded-broadcast counter (`:47`) and the
-running-total warning (`:61-70`), plus the class's own "the request path must never block" and
-`SingleReader`-gives-FIFO rationale (`:6-13`) and the capacity comment sizing 1024 against the observed
-conference-day load (`:16-17`). Framework (MMCA.Common):
-`ILiveChannelPublisher.PublishAsync(channelKey, eventName, payloadJson, ct)`
-(`Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Notifications/ILiveChannelPublisher.cs:17`,
-with the "not persisted, clients not connected at publish time never see them" contract stated `:3-8`);
-`NullLiveChannelPublisher` no-op default (`Source/Core/MMCA.Common.Infrastructure/Notifications/Live/NullLiveChannelPublisher.cs:11-16`);
-`SignalRLiveChannelPublisher` group-sends `ReceiveChannelEvent` via `IHubContext<NotificationHub>`
-(`Source/Core/MMCA.Common.Infrastructure/Notifications/Live/SignalRLiveChannelPublisher.cs:11-19`, nine lines).
-`NotificationHub`
-declares the four method-name constants `ReceiveNotificationMethod`/`ReceiveChannelEventMethod`/`JoinChannelMethod`/`LeaveChannelMethod`
-(`Source/Core/MMCA.Common.Infrastructure/Notifications/NotificationHub.cs:30,33,36,39`), `JoinChannelAsync`/`LeaveChannelAsync`
-(`:119,:136`), which both call the private `EnsureValidChannelKey` (`:166`), validating the key against
-`ChannelKeyPattern` and throwing `HubException` on a miss (`:174`), with the regex cached and a 1s match
-timeout (`:41-44`). The entitlement hook is the optional, defaulted `IChannelJoinAuthorizer` constructor
-parameter (`:27`, whose doc states the shape pattern alone lets any authenticated caller subscribe to any
-well-formed key, `:18-23`), consulted by `EnsureAuthorizedForChannelAsync` (`:149-164`, refusal
-`HubException` `:162`, the "shape is not entitlement" comment `:145-148`) after the pattern check and
-before `Groups.AddToGroupAsync` (`:126-127`). The per-user connection cap is `ConnectionsPerUser`
-(`:46-51`, "per replica, like the in-memory rate limiters") enforced in `OnConnectedAsync` (`:54-72`, cap
-read `:56`, over-cap `HubException` `:67`, the give-the-slot-straight-back comment `:64-66`).
+*Notes: 2026-10-02 audit pass (MMCA.Common v1.221.0). Body prose is unchanged this pass: the audit
+confirmed every body claim (hub constants, join/leave, the key pattern, the 1s match timeout, the
+per-user cap of 20, `IChannelJoinAuthorizer`, the `DropOldest`/1024/`SingleReader`/`itemDropped` queue,
+the nine-line SignalR publisher, the 2s gRPC deadline, the mixed Kestrel profile, the 5s outbox delay,
+the 30s/300s scheduler defaults, the 1s `MinimumWait`, Cronos, the single `CreateBounded` across the
+three repos, and every Engagement handler enqueueing with `BestEffort` and no CA1031). All drift was in
+this ledger's anchors, which are re-pinned below from source read in this run. Change history: the
+2026-09-19 pass re-based the "expensive work" example onto the durable internal command
+`ScoreEventSessionsInternalCommand` (ADR-114, Article 51), re-pinned the framework notification files
+into `Notifications/`, `Notifications/Live/` and `Notifications/Push/`, and added the channel-join
+authorizer and per-user cap to the body; the 2026-08-20 pass moved every Engagement swallow onto the
+shared `BestEffort.ExecuteAsync` helper (`MMCA.Common/Source/Core/MMCA.Common.Application/Services/BestEffort.cs`,
+one Warning plus `besteffort.dispatch.failed` on the `MMCA.Common.BestEffort` meter, not re-pinned this
+run). This pass: `AddPushNotifications` moved out of `DependencyInjection.cs` into the
+`DependencyInjection.Notifications.cs` partial; `OutboxSettings` moved to
+`Persistence/Outbox/Administration/`; `SchedulerSettings` moved to `Scheduling/`; ADR-039 gained a second
+revision (2026-09-07) and a re-anchor note (2026-09-25); `CastVoteHandler`'s constructor grew two
+dependencies, still with no queue and no publisher.
+Framework (MMCA.Common). `NotificationHub` anchors were confirmed by this pass's audit and are carried:
+method-name constants (`Source/Core/MMCA.Common.Infrastructure/Notifications/NotificationHub.cs:30,33,36,39`),
+optional `IChannelJoinAuthorizer` constructor parameter (`:27`), regex cache with 1s timeout (`:41`),
+per-user cap read in `OnConnectedAsync` (`:56`), `JoinChannelAsync`/`LeaveChannelAsync` (`:119`, `:136`),
+`EnsureValidChannelKey` (`:166`) throwing `HubException` on a miss (`:174`).
 `PushNotificationSettings.ChannelKeyPattern` defaults to `NotificationScopeKey.Pattern`
 (`Source/Core/MMCA.Common.Infrastructure/Notifications/Push/PushNotificationSettings.cs:29`), which is
 `^(event|session):[0-9]+$` (`Source/Core/MMCA.Common.Shared/Notifications/NotificationScopeKey.cs:32`);
-`MaxConnectionsPerUser` defaults to 20 (`PushNotificationSettings.cs:42`).
-DI: `NullLiveChannelPublisher` is the `TryAddTransient` default (`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:736`);
-`AddPushNotifications` (declared `:820`) swaps in `SignalRLiveChannelPublisher` (`:845`) and wires the Redis
-backplane when a `redis` connection string is present (`:829-841`, with the SEC-Common-53 per-application
-channel prefix `:832-841`). UI `NotificationHubService`: `JoinChannelAsync`/`LeaveChannelAsync`
-track membership (`Source/Presentation/MMCA.Common.UI/Services/Notifications/NotificationHubService.cs:192,225`),
-`OnChannelEvent` is multicast (`:255-273`, the per-channel subscription list `:260-269`), re-join on
-`Reconnected` (`:143`, `RejoinChannelsAsync` at `:348`), single-subscriber
-`NotificationCallback` (`:51`). ADR: one hub + two publisher paths, durable-vs-ephemeral at the publisher boundary, string-JSON
-payload, ephemeral-is-lossy, single-subscriber callback, backplane-for-multi-replica trade-offs all in
-`Website/docs-src/adr/039-live-channel-push.md:22-73`. `Outbox:ProcessingDelaySeconds` is named (with ADR-003)
-at ADR-039 `:14-15`, which states no value; the 5s default is `Source/Core/MMCA.Common.Infrastructure/Settings/OutboxSettings.cs:40`
-(also in `MMCA.Common/CLAUDE.md` "Outbox Pattern"). ADR-039 carries a **Revision (2026-07-24)** (`:75-96`):
-(1) the `CastVoteHandler`/`ToggleUpvoteHandler` broadcasts moved to domain-event handlers because the
-in-handler enqueue ran with the ADR-014 transaction still open (`:78-89`), and (2) `DropOldest` makes
-`TryWrite` always return true, so the caller's "if the enqueue failed, log it" branch was unreachable and
-drops now surface via `itemDropped`/`DroppedCount` plus a running-total warning (`:91-96`).
-ADC adoption (Engagement live path, anchors from the 2026-08-20 pass, not re-read this pass and not
-flagged by this pass's audit): the queue port returns nothing, no command handler publishes inline, and
-the failure posture is the shared `BestEffort` helper described at the top of these notes. The port is
-`void Enqueue(LiveChannelPublishWorkItem workItem)`
-(`.../Engagement.Application/Live/ILiveChannelPublishQueue.cs:30`; interface `:21`, work-item record `:10`),
-whose doc states the queue never rejects an item and "there is nothing for a caller to
-branch on" (`:24-26`). Only the private `_channel.Writer.TryWrite` is always-true
-(`.../Live/LiveChannelPublishQueue.cs:55-59`, remarks `:49-54`; class `:14`). No `TryEnqueue` remains on
-this port.
-`CastVoteHandler`'s primary constructor
-is `(IUnitOfWork, LivePollResultsBuilder, TimeProvider, ILogger)` with **no queue and no publisher**
-(`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/LivePolls/UseCases/CastVote/CastVoteHandler.cs:19-23`);
-it saves at `:86` and its comment at `:90-92` states the `poll.results-changed` broadcast is raised as a
-domain event and enqueued post-commit by `LivePollVoteChangedHandler`; the file is 126 lines and enqueues
-nothing. `LivePollVoteChangedHandler` (`.../LivePolls/DomainEventHandlers/LivePollVoteChangedHandler.cs:38`)
-is a singleton whose whole body is one `BestEffort.ExecuteAsync(BroadcastOperation, logger, ...)` call
-(`:51`, operation constant `"livepoll-results-broadcast"` `:44`, the "rather than a hand-rolled catch"
-rationale `:26-29`); inside it, it opens its own scope (`:53-55`), rebuilds results with `userId: null` so
-`MyVoteOptionId` stays null (`:73`), resolves the channel key (`:75-77`), and calls
-`Enqueue(new LiveChannelPublishWorkItem(...))` with `JsonSerializer.Serialize(results, JsonSerializerOptions.Web)`
-(`:79-82`). The upvote path mirrors it in `SessionQuestionUpvoteChangedHandler` (`.../SessionQuestions/DomainEventHandlers/SessionQuestionUpvoteChangedHandler.cs:39`,
-`BestEffort.ExecuteAsync` `:52` with operation constant `"session-question-upvote-broadcast"` `:45` and the
-same rationale `:27-30`, enqueue `:80-83`). Neither file contains a `CA1031` suppression or a failure
-`LoggerMessage` any more. All four lower-frequency command handlers enqueue as well, which is
-what closes the gap this article previously recorded as deliberate. `CloseLivePollHandler` injects
-`ILiveChannelPublishQueue` (`.../UseCases/Close/CloseLivePollHandler.cs:22`) and its `EnqueueClosed`
-(`:85-97`) ends in a plain `Enqueue` (`:95-96`) with no reject branch: the file is 101 lines and its only
-`LoggerMessage` is the Information "Live poll {PollId} closed for Event {EventId}" (`:99-100`).
-`OpenLivePollHandler` injects the queue (`.../UseCases/Open/OpenLivePollHandler.cs:23`) and `EnqueueOpened`
-(`:100-112`) enqueues at `:110-111`, with no `PublishAsync` and no CA1031 suppression anywhere in its 116
-lines. `SubmitQuestionHandler` injects the queue (`.../SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs:29`)
-and enqueues on both branches (`:142-143` approved, `:157-158` pending-count); its guard is
-`BestEffort.ExecuteAsync` (`:131`, rationale `:120-127`, which also records why the caller's token is
-deliberately not passed: the question is already committed, so the broadcast must outlive an abandoned
-request), and what it covers is the fresh Pending-count read (`:148-151`), not a publish.
-`ModerateQuestionHandler` injects the queue (`.../SessionQuestions/UseCases/Moderate/ModerateQuestionHandler.cs:26`)
-and enqueues at `:138` and `:152-153`, with `BestEffort.ExecuteAsync` at `:136` (rationale `:96-101`)
-around the same shape (count read `:143-146`); the payload switch is built deliberately OUTSIDE the guard
-so an unknown `ModerationAction` faults loudly instead of being swallowed as a missed broadcast
-(`:111-134`). Neither file carries a CA1031 suppression.
-Engagement's own composition root states the rule in a comment: no command handler awaits that publish,
-each enqueues onto the module's `ILiveChannelPublishQueue` instead
-(`.../Engagement.Service/Program.cs:239-241`).
-Single-reader hosted drain
-`LiveChannelPublishProcessor` (`.../Engagement.Infrastructure/Live/LiveChannelPublishProcessor.cs:30-33`)
-resolves the publisher per item and forwards in FIFO order, swallowing every failure through
-`BestEffort.ExecuteAsync` (`ExecuteAsync` `:39-67`, the helper call `:45-58` with the per-item scope
-resolving `ILiveChannelPublisher` at `:50-51`, operation-name prefix `"live-channel-publish:"` completed
-by the work item's event name `:36`, the "rather than a hand-rolled catch, so a peer that has quietly
-stopped accepting broadcasts is countable" rationale `:21-28`, and a shutdown-only
-`catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)` at `:60-65`); there is
-no CA1031 suppression and no `LoggerMessage` in the file. Registered
-`AddHostedService` (`.../Engagement.Infrastructure/DependencyInjection.cs:21`), queue registered as one
-concrete singleton exposed via the interface (`.../Engagement.Application/DependencyInjection.cs:55-56`,
-rationale comment `:51-54`);
-`LivePollChannel` keys/event-names (`.../Engagement.Shared/LivePolls/LivePollChannel.cs:14,17,20,24,29`).
-gRPC ingress: `LiveChannelPublisherGrpcAdapter` implements `ILiveChannelPublisher` over gRPC, 2s deadline,
-swallows failures (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Contracts/LiveChannelPublisherGrpcAdapter.cs:20-53`,
-`:26` deadline, `:43-48` CA1031), invoked by Engagement's drain worker off the request path;
-`AddNotificationLiveChannelClient` `Replace`s the port with the adapter,
-default service name `_grpc.notification` (`.../Notification.Contracts/DependencyInjection.cs:42-51`),
-registered by Engagement at `.../Engagement.Service/Program.cs:283`;
-`LiveChannelGrpcService` delegates to the host's `ILiveChannelPublisher` (SignalR here)
-(`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Grpc/LiveChannelGrpcService.cs:22`, delegation
-`:33-35`); mixed-endpoint
-profile (default `Http1AndHttp2` for WebSockets + dedicated `Http2`-only `grpc` endpoint) at
-`.../Notification.Service/Program.cs:56-70` (SignalR hub mapped `:275`).
-Standing of the onboarding chapter
-`Website/docs-src/onboarding/group-23-engagement-live-layer.md`, as recorded in the 2026-08-20 pass and
-carried forward unchanged. Half of that withdrawal holds: the chapter does NOT teach the retired
-`TryEnqueue` shape (Grep for `TryEnqueue` in that file, zero matches) and it correctly describes all four
-lower-frequency command handlers enqueueing through `ILiveChannelPublishQueue.Enqueue` with no rejection
-branch (`:102-114`). The other half no longer holds. The chapter still tells the pre-`BestEffort` story:
-it says both domain-event handlers "swallow-and-log any failure behind a justified `CA1031` suppression"
-(`:98-100`) and that the two question handlers "still wrap that block in a `CA1031`-suppressed
-swallow-and-log catch (`SubmitQuestionHandler.cs:149-154`, `ModerateQuestionHandler.cs:143-148`)"
-(`:115-118`). All four route through `BestEffort.ExecuteAsync` today and none carries a CA1031
-suppression, and the chapter's line anchors for those handlers are stale in exactly the same way this
-article's were before this pass. That is a repo-side follow-up for `/update-onboarding` in the Website
-repo, not article drift: the article's own text is re-pinned above.
-Recurring job scheduler (the section "The sibling contract: work a clock owns"), grounded in
-`Website/docs-src/adr/074-recurring-job-scheduler.md` (status line "Accepted (2026-08-13; revised
-2026-08-14, 2026-08-18)", `:4-6`;
-opt-in, no table and no runner until a host calls `AddScheduledJobs` and sets `Scheduler:Enabled`) plus
-MMCA.Common source. The two rejected instincts are the ADR's own Context and Decision: an interval is not
-a time of day and an interval-driven hosted service runs on every replica (`:17-20`), and Hangfire /
-Quartz.NET are declined for the schema, storage abstraction, dashboard and per-host upgrade obligation
-they bring (`:37-42`), the conclusion being that "the missing piece was a cron expression, not a
-product" (`:42`). The contract is
-`IScheduledJob` with exactly `Name`, `CronExpression` and `ExecuteAsync(CancellationToken)`
-(`Source/Core/MMCA.Common.Application/Interfaces/IScheduledJob.cs:36`, members `:44`, `:68`, `:78`), whose
-own doc states jobs are resolved **scoped, in a fresh DI scope created for each execution, exactly like a
-request** (`:9-14`), that the cron is five-field and UTC-only (`:47-49`, `:57-62`), and that
-`Scheduler:Jobs:{Name}:Cron` overrides the code default (`:63-66`). The scope is real:
-`InvokeJobAsync` opens `scopeFactory.CreateScope()` per run and resolves the job out of it
-(`Source/Core/MMCA.Common.Infrastructure/Scheduling/ScheduledJobRunner.cs:523-525`); the runner itself is
-a `BackgroundService` (`:39-44`) taking `TimeProvider` (`:47`). The claim quoted in the code block is
-verbatim from `:427-437` (`ExecuteUpdateAsync` setting `LockedUntil` + `LockToken` over a `Where` that
-admits only rows whose `NextRunOn` has passed and whose lease is null or expired), the same idiom the
-outbox uses (ADR-074 `:30-35`); the due-row read is `:409-416`, and the outcome stamp is guarded by the
-same token so a replica whose lease expired mid-run matches nothing and drops its stale result
-(`:489-503`). Smart wait: `RunCycleAsync` returns the earliest `NextRunOn` across the store (`:222-227`)
-and `ComputeWaitTime` sleeps until it, capped at the polling interval and floored at one second
-(`:138-152`, `MinimumWait` `:72`); `SchedulerSettings.PollingIntervalSeconds` defaults to 30 and
-`LeaseSeconds` to 300 (`Source/Core/MMCA.Common.Infrastructure/Settings/SchedulerSettings.cs:34`, `:43`).
-Missed schedules: the next occurrence is computed from the instant the run finished, not from the missed
-occurrence, "so a schedule that elapsed many times while the host was down advances past the present in
-one step instead of replaying the backlog" (`ScheduledJobRunner.cs:476-480`); the artifact-per-window and
-time-lease-not-a-fence costs are the ADR's own Trade-offs ("Run-once-then-advance silently drops
-occurrences ... wrong for a job that must produce an artifact per window",
-`074-recurring-job-scheduler.md:177-180`; "The lease is a time lease, not a fence", `:164-167`). Cronos is the bought piece: pinned in `MMCA.Common/Directory.Packages.props:71` (0.13.0) and
-called through `CronSchedule.Parse(...).GetNextOccurrence(afterUtc, inclusive: false)`
-(`ScheduledJobRunner.cs:187`, alias `:12`). The store is `ScheduledJobEntry` with `JobName` as the primary
-key (`Source/Core/MMCA.Common.Infrastructure/Scheduling/ScheduledJobEntry.cs:20`, `:26`) plus
-`CronExpression` (`:34`), `NextRunOn` (`:40`), `LastRunOn` (`:43`), `LastOutcome` (`:50`),
-`LastDurationMs` (`:60`), `LockedUntil` (`:67`) and `LockToken` (`:74`), host-scoped to the **Default**
-source only, unlike the per-source outbox (`:16-17`, and ADR-074 `:67-71`). The opt-in claim is a test,
-not a promise: `Model_SchedulerDisabled_DoesNotContainTheJobTable` asserts the real
-`ApplicationDbContext` model has no `ScheduledJobEntry` entity type for a host that never opted in
-(`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Scheduling/SchedulerModelGateTests.cs:29-35`;
-siblings cover no-settings-at-all `:38-45`, enabled-on-Default `:48-56`, and enabled-on-a-non-Default
-source `:59-65`). Adoption verified this pass by grep for `AddScheduledJobs`: all three Store services
-(`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:229`,
-`.../MMCA.Store.Sales.Service/Program.cs:209`, `.../MMCA.Store.Identity.Service/Program.cs:196`), three
-ADC services (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:235`,
-`.../MMCA.ADC.Engagement.Service/Program.cs:194`, `.../MMCA.ADC.Conference.Service/Program.cs:329`) and
-the Helpdesk web host (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:91`). The Engagement
-observation in the article is that same file: `AddScheduledJobs` at `:194`, earlier than
-`AddNotificationLiveChannelClient()` at `:283`.
+`MaxConnectionsPerUser` defaults to 20 (`PushNotificationSettings.cs:42`). `SignalRLiveChannelPublisher`
+(`Source/Core/MMCA.Common.Infrastructure/Notifications/Live/SignalRLiveChannelPublisher.cs:11-19`, nine lines).
+DI, re-read this run: `NullLiveChannelPublisher` is the `TryAddTransient` default
+(`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:326`); `AddPushNotifications` is declared in
+the partial `Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:41`, wires the
+Redis backplane only when a `redis` connection string is present (`:50-62`) with the SEC-Common-53
+per-application channel prefix (`:53-61`, `ApplicationNamespace.Resolve` `:59`), and swaps in
+`SignalRLiveChannelPublisher` with a plain `AddTransient` (`:66`).
+UI `NotificationHubService` (`Source/Presentation/MMCA.Common.UI/Services/Notifications/NotificationHubService.cs`),
+re-read this run: single-subscriber `NotificationCallback` (`:60`), `Reconnected` re-joins via
+`RejoinChannelsAsync` (`:178`, method `:423`), `JoinChannelAsync` (`:231`), `LeaveChannelAsync` (`:264`),
+multicast `OnChannelEvent` (`:294`).
+Outbox delay: `Outbox:ProcessingDelaySeconds` default 5 at
+`Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxSettings.cs:40`; ADR-039
+names the setting without a value (`Website/docs-src/adr/039-live-channel-push.md:19`).
+ADR-039, re-read this run: status `:3-10` (Accepted 2026-07-09, revised 2026-09-07 and 2026-09-25);
+Context `:11`, Decision `:24`, Rationale `:53`, Trade-offs `:65-77` (lossy, type safety by convention,
+single-subscriber callback, backplane for multi-replica). **Revision (2026-07-24)** `:79-100`: (1)
+post-commit enqueue via domain-event handlers on `LivePollVoteChanged`/`SessionQuestionUpvoteChanged`
+(`:82-93`), (2) `DropOldest` makes `TryWrite` always true, so drops surface via
+`itemDropped`/`DroppedCount` (`:95-100`). **Revision (2026-09-07)** `:102-133`: optional
+`IChannelJoinAuthorizer` (`:107-114`), per-user connection cap default 20 (`:115-119`), per-application
+backplane prefix (`:120-123`), and ADC's live-poll read scope (`:124-133`, ADC-side, outside this
+article's scope).
+ADC Engagement live path, re-read this run. Queue `.../Engagement.Application/Live/LiveChannelPublishQueue.cs`:
+`Capacity = 1024` (`:18`), the itemDropped comment (`:30`), `CreateBounded` with `DropOldest`,
+`SingleReader = true`, `SingleWriter = false`, `itemDropped: OnItemDropped` (`:33-40`), `DroppedCount`
+(`:47`), the never-fails remarks (`:52-53`), the private `_channel.Writer.TryWrite` (`:58`),
+`OnItemDropped` (`:61`). `CreateBounded` appears in that one ADC file only (zero in MMCA.Common and
+MMCA.Store, per this pass's audit). The queue is registered as one concrete singleton exposed through the
+interface (`.../Engagement.Application/DependencyInjection.cs:53-54`).
+`CastVoteHandler` (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/LivePolls/UseCases/CastVote/CastVoteHandler.cs`)
+takes `(IUnitOfWork, IEventLiveValidationService, LivePollResultsBuilder, TimeProvider,
+IUniqueConstraintViolationDetector, ILogger)` (`:20-26`), no queue and no publisher; it saves at `:56`,
+states the post-commit broadcast rule at `:68-70`, and builds the caller's results at `:71`.
+`LivePollVoteChangedHandler` (`.../LivePolls/DomainEventHandlers/LivePollVoteChangedHandler.cs`): queue
+parameter `:40`, operation constant `"livepoll-results-broadcast"` `:44`, `BestEffort.ExecuteAsync` `:51`,
+`BuildAsync(poll, userId: null, ...)` `:73`, channel key `:76-77`, `Enqueue` `:79`.
+`SessionQuestionUpvoteChangedHandler` (`.../SessionQuestions/DomainEventHandlers/SessionQuestionUpvoteChangedHandler.cs`):
+queue `:41`, operation constant `:45`, `BestEffort.ExecuteAsync` `:52`, `Enqueue` `:80`.
+`CloseLivePollHandler` queue `:22`, `Enqueue` `:94`; `OpenLivePollHandler` queue `:23`, `Enqueue` `:109`.
+`SubmitQuestionHandler` (`.../SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs`): queue `:36`,
+save `:184`, rationale (the count read is what the guard covers; the caller's token is deliberately not
+passed) `:190-203`, `EnqueueSubmittedAsync` `:205` with `BestEffort.ExecuteAsync` `:206`, approved enqueue
+`:217`, Pending count read `:223-226`, count enqueue `:232`. `ModerateQuestionHandler`
+(`.../SessionQuestions/UseCases/Moderate/ModerateQuestionHandler.cs`): queue `:26`, rationale `:94-104`,
+payload switch built OUTSIDE the guard so an unknown action faults loudly (`:113-136`),
+`BestEffort.ExecuteAsync` `:138`, enqueue `:140`, count read `:145-148`, count enqueue `:154`.
+Drain worker `LiveChannelPublishProcessor` (`.../Engagement.Infrastructure/Live/LiveChannelPublishProcessor.cs`):
+class `:30-33` (a `BackgroundService`), rationale `:22`, operation prefix `"live-channel-publish:"` `:36`,
+`BestEffort.ExecuteAsync` `:45`, per-item `ILiveChannelPublisher` resolution `:51`, shutdown-only
+`OperationCanceledException` catch `:60`; registered `AddHostedService`
+(`.../Engagement.Infrastructure/DependencyInjection.cs:21`).
+Engagement's composition root states the no-await rule in a comment
+(`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:239-243`) and registers
+`AddNotificationLiveChannelClient()` at `:285`, after `AddScheduledJobs` at `:194`.
+gRPC ingress, re-read this run: `AddNotificationLiveChannelClient` defaults to `_grpc.notification` and
+`Replace`s the port with the adapter (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Contracts/DependencyInjection.cs:42`,
+`:48`); `LiveChannelPublisherGrpcAdapter` (`.../Notification.Contracts/LiveChannelPublisherGrpcAdapter.cs:20`,
+2s `PushDeadline` `:26`); `LiveChannelGrpcService` takes the host's `ILiveChannelPublisher`
+(`.../Notification.Service/Grpc/LiveChannelGrpcService.cs:31`). Notification's Kestrel profile:
+mixed-endpoint comment `.../Notification.Service/Program.cs:58-60` and default `Http1AndHttp2` endpoint
+`:73`. Not re-pinned this run (carried from the 2026-09-19 pass and not flagged by this pass's audit):
+the adapter's failure-swallow lines, the gRPC service's delegation line, the dedicated `Http2` `grpc`
+endpoint line, and the hub mapping line.
+Recurring job scheduler, grounded in `Website/docs-src/adr/074-recurring-job-scheduler.md` (not re-read
+this run; its anchors `:17-20`, `:30-35`, `:37-42`, `:67-71`, `:164-167`, `:177-180` are carried from
+2026-09-19) plus MMCA.Common source re-read this run. `ScheduledJobRunner`
+(`Source/Core/MMCA.Common.Infrastructure/Scheduling/ScheduledJobRunner.cs`): Cronos alias `:12`, class
+`:39-44` (a `BackgroundService` taking an optional `TimeProvider`, `:44`), `MinimumWait` 1s `:72`, cycle
+loop feeding `earliestNextRun` into `ComputeWaitTime` `:104-122`, `ComputeWaitTime` `:146` (doc
+`:138-142`), `CronSchedule.Parse(...).GetNextOccurrence(afterUtc, inclusive: false)` `:195`,
+`RunCycleAsync` returning the earliest upcoming occurrence `:208-213`, due-row read `:417-424`, the claim
+quoted in the code block (comment and statement verbatim, `.ConfigureAwait(false)` dropped) `:435-445`,
+missed-run policy comment `:484-486`, token-guarded outcome stamp `:497-512`, `InvokeJobAsync` `:528`
+opening a fresh scope per run `:532`. `SchedulerSettings.PollingIntervalSeconds` defaults to 30 and
+`LeaseSeconds` to 300 (`Source/Core/MMCA.Common.Infrastructure/Scheduling/SchedulerSettings.cs:34`,
+`:43`). `IScheduledJob` members, `ScheduledJobEntry` columns, `SchedulerModelGateTests` and the Cronos
+package pin are carried from the 2026-09-19 pass, not re-read this run. Adoption by grep for
+`AddScheduledJobs(` this run: Store Catalog (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:234`),
+Sales (`.../MMCA.Store.Sales.Service/Program.cs:209`), Identity (`.../MMCA.Store.Identity.Service/Program.cs:196`);
+ADC Identity (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:234`), Engagement
+(`.../MMCA.ADC.Engagement.Service/Program.cs:194`), Conference (`.../MMCA.ADC.Conference.Service/Program.cs:344`);
+Helpdesk web host (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:91`).
 Illustrative-of-documented-shape: the scheduler code block pairs the three `IScheduledJob` member
-signatures (verbatim from `IScheduledJob.cs:44`, `:68`, `:78`, with the surrounding XML docs replaced by
-short inline comments) with the verbatim claim statement from `ScheduledJobRunner.cs:427-437`; the two are
-adjacent in neither file. The live-channel code block is a condensed reconstruction of two real files,
-`CastVoteHandler.cs:86-95` (commit, build results for the caller, return) and
-`LivePollVoteChangedHandler.cs:73-82` (post-commit rebuild with `userId: null`, channel key, `Enqueue`);
-it mirrors the real `SaveChangesAsync`, `resultsBuilder.BuildAsync`, `LivePollChannel.ForSession/ForEvent`
-and `Enqueue(new LiveChannelPublishWorkItem(...))` shapes but simplifies names, elides the scope creation
-and the enclosing `BestEffort.ExecuteAsync` call, and drops the surrounding vote-resolution branches for
-readability.*
+signatures (inline comments replace the XML docs) with the claim from `ScheduledJobRunner.cs:435-445`.
+The live-channel code block condenses `CastVoteHandler.cs:56-73` (commit, build results for the caller,
+return) and `LivePollVoteChangedHandler.cs:73-82` (rebuild with `userId: null`, channel key, `Enqueue`),
+eliding the scope creation, the enclosing `BestEffort.ExecuteAsync` call, the unique-constraint catch and
+the vote-resolution branches. The `FullMode = BoundedChannelFullMode.Wait` plus `TryWrite` pairing is
+prose, not a block: it is documented `BoundedChannelFullMode` behaviour, and no `Wait`-mode channel
+exists in MMCA.Common, MMCA.Store or MMCA.ADC. The onboarding chapter
+`Website/docs-src/onboarding/group-23-engagement-live-layer.md` was not re-read this run.*

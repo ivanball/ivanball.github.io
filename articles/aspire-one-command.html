@@ -215,8 +215,8 @@ dotnet run <span class="hljs-literal">--project</span> Source/Hosting/MMCA.ADC.A
           control-plane init. Run it interactively in a terminal you can watch.</p>
           </blockquote>
           <p>Once it is up, the dashboard (the URL is printed in the console) is your control panel: every resource,
-          its health, its logs, its traces, and links to the RabbitMQ management UI (<a href="http://localhost:15672" target="_blank" rel="noopener">http://localhost:15672</a>)
-          and the MailDev inbox (<a href="http://localhost:1080" target="_blank" rel="noopener">http://localhost:1080</a>).</p>
+          its health, its logs, its traces, and the endpoint links for the RabbitMQ management UI and the MailDev
+          inbox (<a href="http://localhost:1080" target="_blank" rel="noopener">http://localhost:1080</a>).</p>
           <h2 id="step-2-understand-what-addservicedefaults-configured">Step 2: understand what <code>AddServiceDefaults()</code> configured</h2>
           <p>Each service host calls one method first in its <code>Program.cs</code>, before anything app-specific:</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// In each service&#x27;s Program.cs (representative shape)</span>
@@ -230,13 +230,14 @@ app.MapDefaultEndpoints();      <span class="hljs-comment">// health + liveness 
           three things you would otherwise hand-roll:</p>
           <ol>
           <li><strong>OpenTelemetry</strong> for logging, metrics, and tracing. Logs include the formatted message and scopes;
-          metrics always cover ASP.NET Core, and cover <code>HttpClient</code> and the .NET runtime unless a host turns
-          those cost knobs off (Step 6); tracing instruments ASP.NET Core and <code>HttpClient</code> and subscribes
+          metrics cover ASP.NET Core, <code>HttpClient</code>, and the .NET runtime unless a host turns those cost knobs
+          off (Step 6); tracing instruments ASP.NET Core and <code>HttpClient</code> and subscribes
           four activity sources: the application&#39;s own, <code>MMCA.Common.Outbox</code>,
           <code>MMCA.Common.InternalCommands</code>, and <code>MMCA.Common.AI</code>. It also registers nine MMCA-specific meters
           by literal name: <code>MMCA.Common.Outbox</code> (a dead-letter counter, a processed counter, a dispatch-lag
-          histogram, and a pending-depth gauge), <code>MMCA.Common.Cqrs</code> (RED histograms for command and query
-          handlers, plus query cache hit and miss), <code>MMCA.Common.Idempotency</code> (the idempotency filter&#39;s
+          histogram, a pending-depth gauge, and an oldest-pending-age gauge), <code>MMCA.Common.Cqrs</code> (RED
+          histograms for command and query handlers, query cache hit and miss counters, and the
+          authorization-denied and timeout counters), <code>MMCA.Common.Idempotency</code> (the idempotency filter&#39;s
           replay, conflict, and degraded counters), <code>MMCA.Common.Scheduler</code> (the recurring scheduler&#39;s run
           outcomes, duration, and schedule lag, inert in a host that never turns <code>Scheduler:Enabled</code> on),
           <code>MMCA.Common.Broker</code> (the broker transport&#39;s consumer faults plus outbox circuit-breaker openings,
@@ -283,7 +284,7 @@ app.MapDefaultEndpoints();      <span class="hljs-comment">// health + liveness 
           <h2 id="step-4-see-how-the-apphost-wires-the-distributed-app">Step 4: see how the AppHost wires the distributed app</h2>
           <p>The AppHost <code>Program.cs</code> does not start anything immediately. It builds a <em>resource model</em>: a graph of
           containers, databases, services, the gateway, and the UI, with their dependency edges. The cross-cutting
-          wiring vocabulary lives in <code>MMCA.Common.Aspire.Hosting</code> as twelve fluent helpers (thirteen methods,
+          wiring vocabulary lives in <code>MMCA.Common.Aspire.Hosting</code> as thirteen fluent helpers (fourteen methods,
           because <code>WithBroker</code> has one overload per broker resource). Here is the shape of a service declaration
           (representative, condensed from ADC&#39;s AppHost):</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Representative: one service host, fully wired</span>
@@ -310,13 +311,18 @@ builder.AddProject&lt;Projects.MMCA_ADC_Conference_Service&gt;(<span class="hljs
           <li><strong><code>WithSQLServerDataSource(db, &quot;Conference&quot;)</code></strong> is the AppHost face of database-per-service (ADR-006).
           (The package also ships <code>WithPostgreSQLDataSource</code>, <code>WithCosmosDataSource</code>, and
           <code>WithSqliteDataSource</code> for the polyglot engines in ADR-018.) In one
-          chain it references the database, waits for it to be healthy, and injects exactly one
-          connection-string environment variable, the multi-source routing layer&#39;s
-          <code>DataSources__Conference__SQLServerConnectionString</code>. That one entry is the whole configuration:
+          chain it references the database, waits for it to be healthy, and injects the multi-source routing
+          layer&#39;s connection-string environment variable, <code>DataSources__Conference__SQLServerConnectionString</code>.
+          That entry is what the framework&#39;s routing reads:
           with no top-level connection string, the single database a host declares this way also becomes its
           <code>Default</code> source, so the framework&#39;s own tables and the readiness health check land on it too, and
           each service runs as a clean single-database monolith with one change tracker and one migration set,
           while still owning its own <code>OutboxMessages</code> table.</li>
+          <li><strong><code>WithH2cHealthCheck()</code></strong> gives the AppHost its own health check on a service: a GET to a probe path
+          over the service&#39;s HTTP/2 cleartext endpoint, so a resource that waits on that service waits for a
+          verified answer. An endpoint name the resource never declares is not an error at wiring time; it
+          surfaces as a permanently unhealthy check, which keeps dependents waiting instead of letting them
+          start against a service nobody verified.</li>
           </ul>
           <h2 id="step-5-wire-the-extraction-points-grpc-and-jwks">Step 5: wire the extraction points (gRPC and JWKS)</h2>
           <p>The same AppHost wires the extraction boundaries that make the modular monolith behave like real microservices: typed
@@ -344,16 +350,18 @@ conferenceService.WithJwksDiscovery(identityService, gateway);</code></pre>
           <h2 id="step-6-make-the-telemetry-coherent-and-keep-the-bill-down">Step 6: make the telemetry coherent, and keep the bill down</h2>
           <p>There are a few more pieces worth knowing, because they shape what you see in the dashboard, and what
           you pay for it. Start with the noise. The <code>OutboxProcessor</code> background service polls every relational
-          outbox table on a recurring cycle (high in production, for example 300 seconds, to cut idle work). Each
-          idle poll would otherwise generate an <code>OutboxPoll</code> span, plus, under the Azure Monitor distro, a child
-          <code>SqlClient</code> dependency span. At scale, those idle spans would dominate ingestion and clutter the
-          dashboard.</p>
+          outbox table on a recurring cycle (high in production, for example 300 seconds, to cut idle work), and
+          the <code>InternalCommandProcessor</code> polls every internal-command queue table the same way. Each idle poll
+          would otherwise generate a poll span, plus, under the Azure Monitor distro, a child <code>SqlClient</code>
+          dependency span. At scale, those idle spans would dominate ingestion and clutter the dashboard.</p>
           <p><code>OutboxPollFilterProcessor</code> (in the Aspire package) is an OpenTelemetry <code>BaseProcessor&lt;Activity&gt;</code> that
-          walks each ending span&#39;s parent chain and, for anything descended from the recurring <code>OutboxPoll</code>
-          activity, clears the <code>Recorded</code> flag so the batch exporters skip it. It is registered before the
-          exporters so its <code>OnEnd</code> runs first. Real per-message <code>OutboxProcess</code> spans use restored parent
-          contexts and are never poll descendants, so genuine outbox telemetry survives. The net effect: your
-          traces show real work, not idle polling, and your observability bill reflects that.</p>
+          walks each ending span&#39;s parent chain and, for anything descended from a recurring poll activity
+          (<code>OutboxPoll</code> on the <code>MMCA.Common.Outbox</code> source, <code>InternalCommandPoll</code> on
+          <code>MMCA.Common.InternalCommands</code>), clears the <code>Recorded</code> flag so the batch exporters skip it. It is
+          registered before the exporters so its <code>OnEnd</code> runs first. Real per-message <code>OutboxProcess</code> spans and
+          per-command <code>InternalCommandExecute</code> spans use restored parent contexts and are never poll descendants,
+          so genuine outbox and internal-command telemetry survives. The net effect: your traces show real work,
+          not idle polling, and your observability bill reflects that.</p>
           <p>Idle polling is not the only chatter worth refusing. Health probes are the other, and they are bigger:
           Container Apps liveness and readiness probes, the gateway&#39;s downstream aggregate probes, YARP active
           health checks, and the availability web test account for the whole <code>AppRequests</code> stream in both
@@ -362,12 +370,14 @@ conferenceService.WithJwksDiscovery(identityService, gateway);</code></pre>
           on by default, so <code>ProbeTelemetryFilter</code> refuses those request and outgoing spans at the
           instrumentation options and <code>ProbeTelemetryFilterProcessor</code> un-records the dependency children that
           were sampled independently. Metrics are left untouched on purpose, so probe traffic still shows up on
-          dashboards, just not in the trace bill. Three metric knobs sit next to it:
-          <code>Telemetry:DisableHttpClientMetrics</code> and <code>Telemetry:DisableRuntimeMetrics</code> each drop a whole meter
-          family through a View (a View, rather than simply skipping the instrumentation, because the Azure
-          Monitor distro adds those meters itself, which makes the toggle authoritative instead of advisory), and
-          <code>Telemetry:EnablePollyDurationMetrics</code> runs the other way: Polly&#39;s two duration histograms stay dropped
-          unless a host opts in, while its retry and circuit-breaker event counter always ships.</p>
+          dashboards, just not in the trace bill. Four metric knobs sit next to it:
+          <code>Telemetry:DisableAspNetCoreMetrics</code>, <code>Telemetry:DisableHttpClientMetrics</code> and
+          <code>Telemetry:DisableRuntimeMetrics</code> each drop a whole meter family through a View (the ASP.NET Core one
+          matches every meter under the <code>Microsoft.AspNetCore.</code> prefix; a View, rather than simply skipping the
+          instrumentation, because the Azure Monitor distro adds those meters itself, which makes the toggle
+          authoritative instead of advisory), and <code>Telemetry:EnablePollyDurationMetrics</code> runs the other way:
+          Polly&#39;s two duration histograms stay dropped unless a host opts in, while its retry and circuit-breaker
+          event counter always ships.</p>
           <p>That filtering only matters because of where the telemetry actually flows, and the framework decides
           that by environment, not by code. <code>AddServiceDefaults()</code> enables the OTLP exporter when
           <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> is set, which is exactly the variable the Aspire dashboard injects into
@@ -377,8 +387,9 @@ conferenceService.WithJwksDiscovery(identityService, gateway);</code></pre>
           once, each shipping its own copy, so the same pipeline feeds the local dashboard and the cloud with no
           code change between them.</p>
           <p>A dashboard is only as readable as the trail through it, and one id ties that trail together.
-          <code>CorrelationIdMiddleware</code> reads an <code>X-Correlation-ID</code> header off each request; when the client sends
-          none, it falls back to the current W3C trace id, then to ASP.NET Core&#39;s <code>TraceIdentifier</code>. It sets that
+          <code>CorrelationIdMiddleware</code> reads an <code>X-Correlation-ID</code> header off each request, cut to 64 characters (the
+          width of the persisted correlation columns); when the client sends none, it falls back to the current
+          W3C trace id, then to ASP.NET Core&#39;s <code>TraceIdentifier</code>. It sets that
           id on a scoped <code>ICorrelationContext</code> and echoes it on the response header, and the CQRS logging
           decorators stamp the same id into every log scope they open. So one id lines up a request&#39;s logs, its
           response header, and its distributed trace: the first thing you reach for when a call that crossed the
@@ -397,9 +408,9 @@ conferenceService.WithJwksDiscovery(identityService, gateway);</code></pre>
           <p>First, <strong>security headers at the host edge.</strong> Instead of each host independently setting <code>X-Frame-Options</code>,
           <code>Referrer-Policy</code>, <code>Permissions-Policy</code>, HSTS, and a Content-Security-Policy (and slowly disagreeing as
           they do), the framework ships the pair a host wires in two lines. <code>AddCommonSecurityHeaders</code> binds the
-          <code>&quot;SecurityHeaders&quot;</code> config section and registers the default CSP provider; <code>UseCommonSecurityHeaders</code>
-          inserts the <code>SecurityHeadersMiddleware</code> into the pipeline. Call both and a new host inherits hardened
-          defaults automatically, with per-host overrides through that config section.
+          <code>&quot;SecurityHeaders&quot;</code> config section (when the host passes its configuration) and registers the default CSP
+          provider; <code>UseCommonSecurityHeaders</code> inserts the <code>SecurityHeadersMiddleware</code> into the pipeline. Call both
+          and a new host inherits hardened defaults automatically, with per-host overrides through that config section.
           The CSP comes from an <code>ICspPolicyProvider</code>: the framework ships a <code>StaticCspPolicyProvider</code>, and a host
           that needs a dynamic policy (the Blazor web host does) registers its own. The policy travels as a
           <code>CspPolicy(Value, Enforce)</code> record, so a provider can emit <code>Content-Security-Policy</code> to enforce, or
@@ -416,18 +427,24 @@ conferenceService.WithJwksDiscovery(identityService, gateway);</code></pre>
           first password-reset mail and an unparseable outbox interval becomes a background loop that never drains,
           both on a replica that already passed its readiness probe and is taking live traffic. Or at <strong>boot</strong>, where
           the host refuses to start and the platform never routes to it. The framework picks boot (ADR-070).</p>
-          <p>Every settings section binds through one chain, and it is textually the same everywhere:</p>
+          <p>The framework&#39;s validated settings sections bind through one shape of chain:</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs">services.AddOptions&lt;ConnectionStringSettings&gt;()
     .Bind(configuration.GetSection(ConnectionStringSettings.SectionName))
     .ValidateDataAnnotations()
     .ValidateOnStart();</code></pre>
           <p><code>ValidateOnStart()</code> is the load-bearing link. <code>ValidateDataAnnotations()</code> on its own defers evaluation to
           the first resolution, which for a section only a background service reads can be minutes after the replica
-          started taking traffic; pairing the two converts &quot;configured wrong&quot; into &quot;did not start&quot;. Twenty-three
-          framework sections bind this way (connection strings, SMTP, persistence, outbox, login protection, password
-          reset, refresh sessions, message bus, JWKS, cache, query-cache pipeline, scheduler, two-factor, email
-          confirmation, permission grants, audit trail, tenancy, push notifications, internal commands, idempotency,
-          JWT, the UI&#39;s API settings, and the Blazor host&#39;s CSP settings), including the ones behind opt-in features.
+          started taking traffic; pairing the two converts &quot;configured wrong&quot; into &quot;did not start&quot;. Thirty
+          framework sections bind with both links: the nineteen Infrastructure sections (connection strings, SMTP,
+          persistence, outbox, login protection, password reset, refresh sessions, message bus, JWKS, tenancy, cache,
+          query-cache pipeline, scheduler, audit trail, internal commands, two-factor, email confirmation, permission
+          grants, push notifications), plus idempotency, JWT, API rate limiting, the UI&#39;s API settings, UI rate
+          limiting, the Blazor circuit limit, the health-report cache, the gateway settings, gateway rate limiting,
+          and the optional AI package&#39;s settings and content policy, including the ones behind opt-in features. Two
+          of them, UI rate limiting and the Blazor circuit limit, bind through <code>BindConfiguration(...)</code> instead of
+          <code>Bind(GetSection(...))</code>. Two Blazor-host sections, the CSP settings and the same-origin API proxy settings,
+          call <code>ValidateOnStart()</code> without <code>ValidateDataAnnotations()</code> (the proxy section also runs a <code>PostConfigure</code>
+          that fills its gateway address from the API settings).
           The two sections every host needs, <code>ApplicationSettings</code> and <code>ModulesSettings</code>, bind on the identical chain
           inside the framework&#39;s module-host wiring, so a consuming app inherits them instead of repeating them and
           adds only its module-level sections, such as Store&#39;s Stripe configuration.</p>
@@ -436,14 +453,16 @@ conferenceService.WithJwksDiscovery(identityService, gateway);</code></pre>
           conditionally on the selected algorithm: HS256 demands a secret of at least 32 characters, RS256 demands an
           RSA private key. So a host configured for RS256 with no private key fails to boot rather than failing to
           sign its first token.</p>
-          <p>The second half of the contract is uniformity. A section binds in exactly one place, on that one chain, and
-          is read through <code>Microsoft.Extensions.Options</code> at the point of consumption, so there is no second path by
-          which an unvalidated section can reach a handler. The exceptions are deliberate and say so at the call site.
+          <p>The second half of the contract is uniformity. A section binds in exactly one place and is read through
+          <code>Microsoft.Extensions.Options</code> at the point of consumption, so there is no second path by which an
+          unvalidated section can reach a handler. The exceptions are deliberate.
           <code>OwnerOrAdminFilterOptions</code> validates data annotations but skips <code>ValidateOnStart</code>, because its required
           <code>BypassRole</code> has no default the framework could know (the framework knows no role names), so validating it
           at startup would fail every host that never applies the filter; validating on first resolve puts the message
-          in front of the host that actually uses it. A small set of optional sections, the hybrid cache options,
-          native push, and file storage, binds without the validation chain for the same class of reason.</p>
+          in front of the host that actually uses it, and the call site says so. A set of optional sections binds
+          without the validation chain: the hybrid cache options, native push, file storage, the cache-key prefix, the
+          host-edge security headers, and the UI&#39;s layout, read-cache and notification-bell options (where the call
+          site notes that an absent section leaves the compiled-in defaults).</p>
           <h2 id="trade-offs-and-gotchas-honestly">Trade-offs and gotchas, honestly</h2>
           <p>A single-command stack is a force multiplier, but it has edges worth naming:</p>
           <ul>
@@ -456,8 +475,8 @@ conferenceService.WithJwksDiscovery(identityService, gateway);</code></pre>
           Bus emulator in locally through <code>AddServiceBusEmulatorBroker</code>. That costs a second container and a
           warm-up, which is why the everyday inner loop still runs on RabbitMQ.</li>
           <li><strong>MailDev is not a real SMTP relay.</strong> The mail interceptor is a local convenience; production uses a
-          real relay and is not provisioned by Aspire. This is the one deliberate gap between local and cloud
-          topology.</li>
+          real relay and is not provisioned by Aspire. Alongside the broker above, this is a deliberate gap
+          between local and cloud topology.</li>
           <li><strong>Persistent containers keep state across runs.</strong> Aspire marks SQL, Redis, and RabbitMQ as persistent
           so you are not re-seeding on every restart. That is a feature, but it also means stale local data can
           outlive a schema change; reset the container when a migration changes shape.</li>
@@ -496,13 +515,13 @@ conferenceService.WithJwksDiscovery(identityService, gateway);</code></pre>
           <code>/health/ready</code>); how the AppHost wires the broker, per-service databases, gRPC references, and JWKS
           discovery through the <code>MMCA.Common.Aspire.Hosting</code> helpers; how <code>OutboxPollFilterProcessor</code> and the
           probe-telemetry filter keep idle poll spans and health-probe traffic out of telemetry while
-          <code>Telemetry:TracesSampleRatio</code> and the three metric knobs cap ingestion cost with fail-safe defaults;
+          <code>Telemetry:TracesSampleRatio</code> and the four metric knobs cap ingestion cost with fail-safe defaults;
           how <code>CorrelationIdMiddleware</code> ties a request&#39;s logs to its trace and the dual OTLP
           plus Azure Monitor exporters feed the local dashboard and workspace-based Application Insights; how
           <code>AddCommonSecurityHeaders</code> plus <code>UseCommonSecurityHeaders</code> and a tuned <code>SocketsHttpHandler</code> harden
           responses and reuse connections from the same shared baseline; and how the fail-fast configuration
-          contract binds every settings section with <code>ValidateDataAnnotations().ValidateOnStart()</code> so a
-          misconfigured host refuses to boot instead of failing on its first request.</p>
+          contract binds the framework&#39;s settings sections with <code>ValidateOnStart()</code> so a misconfigured host
+          refuses to boot instead of failing on its first request.</p>
           <p><strong>Next in the series:</strong> extracting a module out of the monolith into its own gRPC service, live, using
           the AppHost wiring you just met.</p>
           <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the Aspire chapter, or

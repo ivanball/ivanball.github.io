@@ -1,10 +1,12 @@
-# Optimistic concurrency you cannot opt out of: RowVersion from the database to a required If-Match
+# Optimistic concurrency with a required If-Match: RowVersion from the database to a 412
 
 > Series: MMCA.Common · Article #13 (deep-dive) · Pillar P2/P3 · Group G07 · Rubric §8 · ADR-035 ·
 > Status: grounded in `Website/docs-src/adr/035-optimistic-concurrency.md`, `MMCA.Common.Shared/DTOs/IConcurrencyAware.cs`,
 > `MMCA.Common.Domain/Entities/AuditableBaseEntity.cs`, `MMCA.Common.Application/.../Persistence/IRepository.cs`,
 > `MMCA.Common.Infrastructure/.../EFRepository.cs`, `MMCA.Common.Application/.../MutateEntityHandlerBase.cs`,
-> `ApplicationDbContext.cs` (`ConfigureConcurrencyTokens`), `MMCA.Common.API/Middleware/DbUpdateExceptionHandler.cs`,
+> `ApplicationDbContext.cs` (`ConfigureConcurrencyTokens`), `DataSources/Engines/RowVersionStrategy.cs` and the four
+> engine capability declarations, `CosmosDbContext.cs`, `AuditSaveChangesInterceptor.cs`,
+> `MMCA.Common.API/Middleware/DbUpdateExceptionHandler.cs`,
 > `MMCA.Common.API/Concurrency/SupportsIfMatchAttribute.cs`, `MMCA.Common.Shared/Http/ConcurrencyETag.cs`,
 > `MMCA.Common.Testing.Architecture/Rules/Governance/ArchitectureRules.Governance.cs`, and the ADC/Store adopters. No em dashes.
 
@@ -46,8 +48,8 @@ one effect; concurrency control keeps two genuine edits from silently clobbering
 
 The mechanism is a concurrency token that the database manages, the read model exposes, the client states
 back in the `If-Match` header, and the persistence layer plants as EF's *original* value so a stale update
-fails inside the UPDATE statement itself. There is exactly one transport for it, and no way past it: a
-conditional write that states no precondition never reaches the action.
+fails inside the UPDATE statement itself. There is exactly one transport for it, and on a guarded action
+no way past it: a conditional write that states no precondition never reaches the action.
 
 It rests on four members.
 
@@ -114,10 +116,14 @@ as part of the write. If the row's current token no longer matches (someone else
 read), the UPDATE affects zero rows and EF raises `DbUpdateConcurrencyException`. There is no window. The
 check and the write are the same statement.
 
-`ConfigureConcurrencyTokens` wires this for every non-owned `IAuditableEntity` in the model, uniformly.
-On SQL Server the property is configured with `IsRowVersion` (server-generated). On other relational
-providers it falls back to `IsConcurrencyToken` over the same `byte[]`, application-managed. One
-configuration, every table, no per-entity boilerplate.
+`ConfigureConcurrencyTokens` wires this for every non-owned `IAuditableEntity` in a relational context's
+model, uniformly, and the engine decides how. Each data source engine declares a `RowVersionStrategy` in
+its capabilities. SQL Server declares `StoreGenerated`, so the property is configured with `IsRowVersion`
+(server-generated). PostgreSQL and SQLite declare `ClientStamped`: the property falls back to
+`IsConcurrencyToken` over the same `byte[]`, and `AuditSaveChangesInterceptor` writes a fresh value on
+every insert and every update, so the next stale writer's `WHERE` clause misses. Cosmos declares `None`,
+and its context never calls `ConfigureConcurrencyTokens`. One configuration, every auditable table on a
+relational engine, no per-entity boilerplate.
 
 ## From exception to a status at the edge
 
@@ -125,11 +131,14 @@ configuration, every table, no per-entity boilerplate.
 that whole family. `DbUpdateExceptionHandler` translates any `DbUpdateException` into an RFC 9457
 `409 Conflict` ProblemDetails, logs the full exception, and returns a deliberately generic detail message
 ("A data conflict occurred. Please retry or contact support.") so the database schema never leaks to the
-client. This is the same edge that already returns 409 for unique-constraint and foreign-key violations,
-so a concurrency conflict inherits its translation, logging, and schema-safe message with no new
-middleware. On a guarded action the conflict never reaches the client as a 409: the filter rewrites the
-outcome to 412 after the action, keeping the problem-details body exactly as it was built. Either way the
-caller gets a status it can act on: reload, show the fresh values, let the human decide.
+client. This is the same edge that returns 409 for unique-constraint and foreign-key violations, so on an
+unguarded endpoint a concurrency conflict inherits its translation, logging, and schema-safe message with
+no new middleware. On a guarded action the concurrency conflict never reaches that handler: the filter
+catches the `DbUpdateConcurrencyException` itself and answers `412` with its own problem details (title
+"Precondition failed", stable error code `Concurrency.PreconditionFailed`). A unique or foreign-key
+`DbUpdateException` thrown on the same action is not caught there and still reaches the client as the
+generic 409. Either way the caller gets a status it can act on: reload, show the fresh values, let the
+human decide.
 
 ## The transport: a weak ETag out, a required If-Match back
 
@@ -153,10 +162,11 @@ header and `*` both count, because the wildcard names no particular version), a 
 `400` short-circuit because the server cannot tell what the caller meant, and only a decodable tag lets
 the action run.
 
-Then the status changes. After the action, `RewriteConflictToPreconditionFailed` turns the conflict
-outcome, both a `DbUpdateConcurrencyException` and an already-built 409 result, into
-`412 Precondition Failed`. It does so unconditionally, because every request that reached the action
-stated a precondition. RFC 9110 reserves 412 for a precondition the client stated in a conditional request
+Then the status changes. After the action, `RewriteConflictToPreconditionFailed` turns two conflict
+outcomes into `412 Precondition Failed`: a thrown `DbUpdateConcurrencyException` gets a fresh 412 problem
+response, and a 409 result the action itself returned keeps its problem-details body and has only its
+status relabeled. It does so unconditionally, because every request that reached the action stated a
+precondition. RFC 9110 reserves 412 for a precondition the client stated in a conditional request
 header, which is exactly what `If-Match` is; 409 stays the answer on the unconditional endpoints, for a
 conflict the client never conditioned on.
 
@@ -175,12 +185,14 @@ If-Match: W/"AAAAAAAAB9E="
 ```
 
 The generic `UpdateAsync` on `CrudEntityControllerBase` carries the attribute, so every CRUD `PUT`
-inherits the precondition without anyone remembering it. Beyond that it is applied by hand, on 40 actions
-across 18 controllers today: 24 across seven controllers in Store (five in Sales' `OrdersController`,
-five in `ProductsController`, four in `ProductVariantsController`, three each in `CustomersController`
-and `ReviewsController`, two each in `CategoriesController` and `InventoryItemsController`) and 16 across
-eleven in ADC (three in Conference's `EventsController`, three in Engagement's `SessionQuestionsController`,
-two in its `LivePollsController`, and one each in eight more Conference controllers). Nothing here decides
+inherits the precondition without anyone remembering it. Beyond that it is applied by hand, on 41 actions
+across 23 controllers today: 25 across eleven controllers in Store (in Sales, two in `OrdersController`,
+three in `OrderFulfillmentController` and two in `InventoryItemsController`; in Catalog, four each in
+`ProductAttributesController` and `ProductVariantsController`, two each in `CategoriesController` and
+`ReviewModerationController`, and one each in `ProductsController`, `ProductImagesController` and
+`ReviewsController`; in Identity, three in `CustomersController`) and 16 across twelve in ADC (three in
+Engagement's `SessionQuestionsController`, two in its `LivePollsController`, two in Conference's
+`EventLifecycleController`, and one each in nine more Conference controllers). Nothing here decides
 conditional GET. The tag exists to be stated back on the next write, and there is no `If-None-Match`
 handling and no 304 path.
 
@@ -194,7 +206,9 @@ assemblies for every type whose simple name ends in `UpdateRequest` and flags an
 `UpdateRequests_ShouldNotImplement_IConcurrencyAware`, and both consumers subclass it: ADC and Store each
 supply their own `IArchitectureMap`. A module with no mutable aggregate is legitimately vacuous. This is
 invariant-over-discipline (ADR-015), and it is the type-level half of the rule; the 428 is the caller-level
-half, so neither a request model nor a client can quietly reintroduce last-write-wins.
+half, so on a guarded action neither a request model nor a client can quietly reintroduce
+last-write-wins. Which actions are guarded is a separate question that no rule answers: the attribute is
+opt-in per action, and an unguarded write is still last-write-wins.
 
 Both apps have adopted the pattern end to end. In ADC, `UpdateSessionHandler` overrides `RowVersion` to
 report the token that arrived on `UpdateSessionCommand`, `SessionDTO` implements `IConcurrencyAware`, and
@@ -202,29 +216,39 @@ report the token that arrived on `UpdateSessionCommand`, `SessionDTO` implements
 modules: Catalog and Identity edits are appliers over the shared handler base (changing a customer's
 email, changing a product's brand), and the Sales order transitions (`PayOrderHandler`,
 `DeliverOrderHandler`, `CancelOrderHandler`, `ShipOrderHandler`, `UpdateShipmentHandler`) each report the
-command's token the same way. Both apps run one database per service (ADR-006), so each per-service
-database is created with the `RowVersion` column on every table by its own module's `InitialCreate`
-migration, and the token is present from the first row.
+command's token the same way. Both apps run one database per service (ADR-006), and every table mapped
+from an auditable entity carries the `RowVersion` column from the migration that creates it: Store's
+Catalog `InitialCreate` adds it to the aggregate tables (its inbox and outbox tables carry none), and the
+later `AddProductReviews` migration adds it with the review tables.
 
 ## Trade-offs, honestly
 
-- **The precondition is mandatory, and that is a real constraint.** A caller that has not read the
-  resource cannot write it. There is no null token, no wildcard escape, no legacy-client path: a write
-  with no `If-Match` is a 428 and stops there. Scripts and generic REST tools have to do a GET first, and
-  a client that drops the header sees an immediate error instead of a silent overwrite. That is the
-  trade the framework makes, deliberately.
-- **The 409 is coarse, and the 412 inherits it.** All `DbUpdateException`s map to one 409 with a generic
-  message, so from the status and body alone a client cannot tell a concurrency conflict from a
-  unique-constraint or foreign-key violation. That is deliberate (no schema leak), but it means retry logic
-  treats the three the same. The rewrite keys on the conflict *outcome*, not its cause, so on a guarded
-  action all three come back as 412, and one of them then wears a status naming a precondition the client
-  did not actually violate.
+- **On a guarded action the precondition is mandatory, and that is a real constraint.** A caller that
+  has not read the resource cannot write it. There is no null token, no wildcard escape, no legacy-client
+  path: a write with no `If-Match` is a 428 and stops there. Scripts and generic REST tools have to do a
+  GET first, and a client that drops the header sees an immediate error instead of a silent overwrite.
+  That is the trade the framework makes, deliberately.
+- **Opt-in per action.** `[SupportsIfMatch]` has to be applied, and no fitness rule requires it anywhere,
+  so a conditional write exists exactly where someone annotated one. The handler base's `RowVersion`
+  override defaults to no token, and with no token it skips the stamp, so an endpoint nobody guarded is
+  last-write-wins with no error. The fitness rule covers what an update request must not carry, not which
+  actions are guarded.
+- **The 409 is coarse, and only the guarded concurrency path escapes it.** Every `DbUpdateException`
+  that reaches the global handler maps to one 409 with a generic message, so on an unguarded endpoint a
+  client cannot tell a concurrency conflict from a unique-constraint or foreign-key violation. That is
+  deliberate (no schema leak), but it means retry logic treats the three the same. On a guarded action the
+  concurrency conflict is a 412 with its own error code, and a thrown unique or foreign-key violation
+  stays a 409. The relabel of a returned 409 keys on the conflict *outcome*, not its cause, so an action
+  whose own `Error.Conflict` result means a duplicate key reports it as a 412, error codes intact, under a
+  status naming a precondition the client did not actually violate.
 - **It does not merge.** Optimistic concurrency detects the collision and refuses the stale write. It does
   not reconcile the two edits for you. What to do on a 412 (reload and retry, or surface a diff to the
   human) is the caller's decision, not the framework's.
-- **Cross-engine asymmetry.** SQL Server gets a server-generated `rowversion`; SQLite and other relational
-  providers get an application-managed `IsConcurrencyToken` over the same `byte[]`. Cosmos has its own
-  ETag mechanism that is not routed through this property.
+- **Cross-engine asymmetry.** SQL Server gets a server-generated `rowversion`; PostgreSQL and SQLite get
+  an application-managed `IsConcurrencyToken` over the same `byte[]`, re-stamped by the audit interceptor
+  on every insert and update. Cosmos gets no framework concurrency token at all: its engine declares
+  `RowVersionStrategy.None` and its context skips `ConfigureConcurrencyTokens`, so `[SupportsIfMatch]`
+  over a Cosmos-mapped entity stamps an original value on a property EF does not compare.
 - **A child-level precondition costs a second field.** `If-Match` names exactly one version, and that slot
   belongs to the aggregate root, so a write that needs to condition on a child row states that second
   precondition in the body: Store's `ProductVariantChangePriceRequest` carries a required
@@ -236,8 +260,9 @@ migration, and the token is present from the first row.
   so the precondition is actually evaluated, which means a conditional write always emits a root UPDATE and
   always advances the root's token, even when only a child row changed. Correctness over a spared
   statement: the cost is that every other editor holding that aggregate's tag now has a stale one.
-- **Adoption is a per-database migration.** A new database, or a table added later, must carry the
-  `RowVersion` column for the token to exist there.
+- **Adoption is a schema step per database.** Every auditable table needs the `RowVersion` column for the
+  token to exist there, so a new database, or a table added later, has no version to condition on until
+  its migration carries the column.
 
 None of these are reasons to keep last-write-wins. They are the reasons to state the precondition
 explicitly and to decide, per endpoint, what a conflict means to your user.
@@ -271,12 +296,12 @@ an overwrite nobody notices.**
 ---
 
 **What we covered:** why a load-modify-save handler silently loses the first of two concurrent edits, how
-MMCA.Common gives every auditable entity a database-managed `RowVersion`, renders it on the read as a weak
-`ETag` through `IConcurrencyAware`, requires it back in `If-Match` so a write with no precondition is a
-`428 Precondition Required`, plants it as EF's original value via `SetOriginalRowVersion` (and touches the
-root so the comparison always runs) to detect the conflict atomically inside the UPDATE, rewrites that
-conflict to `412 Precondition Failed` at the edge, and keeps the token out of every request body with a
-build-wide fitness function.
+MMCA.Common gives every auditable entity on a relational engine a `RowVersion` token whose mapping each
+engine declares, renders it on the read as a weak `ETag` through `IConcurrencyAware`, requires it back in
+`If-Match` on a guarded action so a write with no precondition is a `428 Precondition Required`, plants it
+as EF's original value via `SetOriginalRowVersion` (and touches the root so the comparison always runs) to
+detect the conflict atomically inside the UPDATE, answers that conflict with `412 Precondition Failed` at
+the edge, and keeps the token out of every request body with a build-wide fitness function.
 
 **Next in the series:** self-ordering modules, discovered and Kahn-sorted so a dependency is always
 registered before the modules that need it.
@@ -289,55 +314,71 @@ registered before the modules that need it.
 
 *Tags: .NET, C Sharp, Software Architecture, Entity Framework, Concurrency*
 
-*Notes: verified type/behavior names with path:line at MMCA.Common v1.205.0 (`FACTS.md:14`).
+*Notes: 2026-10-02 refresh, verified at MMCA.Common v1.221.0 (`FACTS.md:14`). Anchors re-read in this run
+are marked (re-read); the rest were CONFIRMED by the same-day audit
+(`Reports/update-medium/2026-10-02/13-optimistic-concurrency-rowversion.json`).
 `IConcurrencyAware` at `Source/Core/MMCA.Common.Shared/DTOs/IConcurrencyAware.cs:15` declares a
 non-nullable `byte[] RowVersion { get; init; }` at `:19`; the remarks at `:10-13` state that the token is
 never optional and that "Update requests carry no token: the precondition travels in the header alone".
 `RowVersion` private-setter property on the audit base at
 `Source/Core/MMCA.Common.Domain/Entities/AuditableBaseEntity.cs:53` (the base implements `IRowVersioned`
 at `:13`). `IWriteRepository` lives at
-`Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IRepository.cs`: the root
-overload `void SetOriginalRowVersion(TEntity entity, byte[] rowVersion)` at `:406`, the child overload
-`SetOriginalRowVersion(Domain.Interfaces.IRowVersioned childEntity, byte[] rowVersion)` at `:417` (doc
-`:408-416`), and `TouchConcurrencyToken(TEntity entity)` as a default no-op at `:440` (doc `:419-439`,
+`Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IRepository.cs` (re-read): the
+root overload `void SetOriginalRowVersion(TEntity entity, byte[] rowVersion)` at `:408`, the child overload
+`SetOriginalRowVersion(Domain.Interfaces.IRowVersioned childEntity, byte[] rowVersion)` at `:419` (doc
+`:410-418`), and `TouchConcurrencyToken(TEntity entity)` as a default no-op at `:442` (doc `:421-441`,
 SEC-Common-77). EF implementations at
 `Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFRepository.cs`: root `:75-83`
-(`OriginalValue` write `:80-82`), child `:86-94`, `TouchConcurrencyToken` `:97`; both overloads reject a
-null token with `ArgumentNullException.ThrowIfNull` (`:78`, `:89`), so no value means skip the check
-(ADR-035 `:113-114`). The shared write pipeline stamps the token at
-`Source/Core/MMCA.Common.Application/UseCases/Crud/MutateEntityHandlerBase.cs:292-296` (from the handler's
-`RowVersion(command)` override) and calls `TouchConcurrencyToken` at `:313-314` when the write was
-conditional (comment `:307-312`).
-`ConfigureConcurrencyTokens` (every non-owned `IAuditableEntity`; SQL Server `IsRowVersion` `:595`, else
-`IsConcurrencyToken` `:599`) at
-`Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:582`, called from
-`OnModelCreating` at `:415`.
+(`OriginalValue` write `:80-82`), child `:86-94`, `TouchConcurrencyToken` `:97` (re-read); both overloads
+reject a null token with `ArgumentNullException.ThrowIfNull` (`:78`, `:89`), so there is no value that
+means skip the check. The shared write pipeline
+`Source/Core/MMCA.Common.Application/UseCases/Crud/MutateEntityHandlerBase.cs` (re-read) declares
+`protected virtual byte[]? RowVersion(TCommand command) => null` at `:91` (doc `:84`), stamps only when the
+override reports a non-empty token (`:292`, `SetOriginalRowVersion` `:294`), and calls
+`TouchConcurrencyToken` at `:314`; the opt-in trade-off is ADR-035 `:193-195`.
+Per-engine mapping (re-read): `ConfigureConcurrencyTokens` at
+`Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:588` (doc
+`:576-587`), keyed on `Engine.Capabilities.RowVersion == RowVersionStrategy.StoreGenerated` at `:591`,
+`IsRowVersion` `:601`, else `IsConcurrencyToken` `:605`, called from `OnModelCreating` (`:416`) at `:420`.
+`RowVersionStrategy` (`None`, `StoreGenerated`, `ClientStamped`) at
+`.../Persistence/DataSources/Engines/RowVersionStrategy.cs:8-18`; declarations at
+`SQLServerDataSourceEngine.cs:46` (`StoreGenerated`), `PostgreSQLDataSourceEngine.cs:44` and
+`SqliteDataSourceEngine.cs:43` (`ClientStamped`), `CosmosDataSourceEngine.cs:46` (`None`).
+`AuditSaveChangesInterceptor.cs` stamps `Guid.NewGuid().ToByteArray()` when `ClientStamped` (`:59`,
+`:74`, `:83`, `:103`). `CosmosDbContext.OnModelCreating` at `.../DbContexts/CosmosDbContext.cs:119-146`
+calls neither `base.OnModelCreating` nor `ConfigureConcurrencyTokens` (comment `:139-143`).
 `DbUpdateExceptionHandler` maps any `DbUpdateException` to `409 Conflict` with a generic detail plus a
 full log at `Source/Presentation/MMCA.Common.API/Middleware/DbUpdateExceptionHandler.cs:28-51`
 (status set `:33`).
 HTTP transport: `ConcurrencyETag` at `Source/Core/MMCA.Common.Shared/Http/ConcurrencyETag.cs:24` formats
 the weak tag `W/"<base64>"` at `:40-45` (`If-Match` header name `:27`, `ETag` `:30`, wildcard `:33`); the
-class sits in the Shared package so the UI can format the header too (`CHANGELOG.md:1636`). The read side
-emits it from `Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs`: `SetConcurrencyETag`
-called at `:436`, emitter at `:471`. The write side is
-`Source/Presentation/MMCA.Common.API/Concurrency/SupportsIfMatchAttribute.cs`: sealed
+class sits in the Shared package so the UI can format the header too (`CHANGELOG.md:2263`). The read side
+emits it from `Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs` (re-read):
+`SetConcurrencyETag` called at `:382`, emitter at `:417`, which finds a public `byte[]` property named
+`RowVersion` by reflection (`:391-395`) and reads the shaped dictionary under `fields=` (`:440`). The write
+side is `Source/Presentation/MMCA.Common.API/Concurrency/SupportsIfMatchAttribute.cs` (re-read): sealed
 `Attribute, IAsyncActionFilter` at `:49`, `TokenItemKey` (`"MMCA.Common.API.Concurrency.IfMatchToken"`)
 at `:57`, `RequiredToken(HttpContext)` at `:68-76`, the decode into `HttpContext.Items` at `:122`, no
 precondition (blank or `*`) short-circuited to `428 Precondition Required` at `:109-114` (result `:162-171`),
-a malformed tag to `400` at `:116-120` (result `:174-180`), and the unconditional
-`RewriteConflictToPreconditionFailed` at `:92` and `:130-159` ("every request reaching the action stated a
-precondition", `:127`). No bound argument is written to and no request model may carry a token (`:51-56`).
+a malformed tag to `400` at `:116-120` (result `:174-180`), and `RewriteConflictToPreconditionFailed` at
+`:92` and `:130-159` ("every request reaching the action stated a precondition", `:127`): the exception
+branch matches only `DbUpdateConcurrencyException` (`:132`) and answers with `PreconditionFailedResult`
+(`:186-195`, code `Concurrency.PreconditionFailed`), while a returned 409 has only its status relabeled
+(`:141-158`; outcome-keyed remark `:36-40`). No bound argument is written to and no request model may carry
+a token (`:51-56`).
 The generic conditional `PUT` is `CrudEntityControllerBase.UpdateAsync`: `[SupportsIfMatch]` at
 `Source/Presentation/MMCA.Common.API/Controllers/CrudEntityControllerBase.cs:90`, `RequiredToken` read at
 `:103`, with 409/412/428 `ProducesResponseType` at `:94-96`.
-Explicit `[SupportsIfMatch]` adoption is 40 actions across 18 controllers: 24 across seven in
-`MMCA.Store/Source` (`MMCA.Store.Sales.API/Controllers/OrdersController.cs` 5, e.g. `:298`, `:330`, `:363`,
-`:409`, `:478`; `ProductsController` 5; `ProductVariantsController` 4; `CustomersController` 3;
-`ReviewsController` 3; `CategoriesController` 2; `InventoryItemsController` 2) and 16 across eleven in
-`MMCA.ADC/Source` (`Conference.API/Controllers/Events/EventsController.cs` 3;
-`Engagement.API/Controllers/SessionQuestionsController.cs` 3; `.../LivePollsController.cs` 2; and one each
-in `Sponsors`, `Speakers`, `Sessions`, `SessionAssets`, `Questions`, `Partners`, `Categories` and
-`Activities` Conference controllers).
+Explicit `[SupportsIfMatch]` adoption (re-read, Grep count over `*.cs`) is 41 actions across 23
+controllers: 25 across eleven in `MMCA.Store/Source` (Sales `OrdersController.cs` 2 at `:297`, `:357`;
+`OrderFulfillmentController.cs` 3 at `:55`, `:88`, `:134`; `InventoryItemsController` 2; Catalog
+`ProductAttributesController` 4, `ProductVariantsController` 4, `CategoriesController` 2,
+`ReviewModerationController` 2, `ProductsController` 1, `ProductImagesController` 1, `ReviewsController` 1;
+Identity `CustomersController` 3) and 16 across twelve in `MMCA.ADC/Source`
+(`Engagement.API/Controllers/SessionQuestionsController.cs` 3, `LivePollsController.cs` 2;
+`Conference.API/Controllers/Events/EventLifecycleController.cs` 2; one each in the `Events`, `Sponsors`,
+`Speakers`, `Sessions`, `SessionAssets`, `Questions`, `Partners`, `ConferenceCategories` and `Activities`
+Conference controllers).
 Fitness rule `UpdateRequestsAreNotConcurrencyAware` at
 `Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Governance/ArchitectureRules.Governance.cs:24-35`
 (the `must not implement` violation message `:30-34`); single `[Fact]` base
@@ -345,30 +386,36 @@ Fitness rule `UpdateRequestsAreNotConcurrencyAware` at
 `.../Bases/Domain/ConcurrencyConventionTestsBase.cs:14`; both consumers subclass it.
 ADC adoption: `UpdateSessionHandler.cs:35` overrides `RowVersion(command) => command.RowVersion`;
 `UpdateSessionCommand.cs:16` declares `byte[] RowVersion` on the command (doc `:11-15`: "read from the
-request's `If-Match` header ... It is required"); `SessionDTO.cs:15` implements `IConcurrencyAware` with
-`byte[] RowVersion { get; init; } = []` at `:42`; `SessionUpdateRequest.cs:6` implements only
-`ISessionFieldsRequest`. Store adoption: Sales transitions override the same template method
-(`PayOrderHandler.cs:33`, `DeliverOrderHandler.cs:38`, `CancelOrderHandler.cs:46`, `ShipOrderHandler.cs:31`,
-`UpdateShipmentHandler.cs:23`); Catalog and Identity edits are appliers over the shared base
+request's `If-Match` header ... It is required"); `SessionDTO.cs:15` implements `IConcurrencyAware`;
+`SessionUpdateRequest.cs:6` implements only `ISessionFieldsRequest`. Store adoption (re-read): Sales
+transitions override the same template method with `command.RowVersion` (`PayOrderHandler.cs:44`,
+`DeliverOrderHandler.cs:39`, `CancelOrderHandler.cs:46`, `ShipOrderHandler.cs:32`,
+`UpdateShipmentHandler.cs:24`); Catalog and Identity edits are appliers over the shared base
 (`CustomerChangeEmailApplier.cs`, `ProductChangeBrandApplier.cs`);
 `ProductVariantChangePriceRequest.cs:15` implements nothing and carries a single
 `public required byte[] VariantRowVersion { get; init; }` at `:24`, documented at `:7-13` as the second,
 child-level precondition the single-valued header has no room for, stamped by
 `ChangeVariantPriceHandler.cs:47` through the child overload (guarded by `trackedVariant is not null`
 `:43`).
-Current shape is database-per-service (ADR-006): each per-service database is born with the `RowVersion`
-column on every table via its own module's `InitialCreate` (e.g.
-`MMCA.Store/Source/Hosting/MMCA.Store.Migrations.SqlServer.Catalog/Migrations/20260621192800_InitialCreate.cs`);
-`MMCA.ADC/Source/Hosting` and `MMCA.Store/Source/Hosting` hold only the per-module migration projects.
-Rubric §8 = "Data Architecture" (`Website/docs-src/governance/ArchitectureEvaluationCriteria.md:260`); Group G07
+Schema (re-read): in
+`MMCA.Store/Source/Hosting/MMCA.Store.Migrations.SqlServer.Catalog/Migrations/20260621192800_InitialCreate.cs`
+the aggregate tables carry a `rowversion` column (`:34`, `:98`, `:128`, `:158`, `:184`) and
+`InboxMessages` (`:48`) and `OutboxMessages` (`:63`) carry none; the review tables get theirs from
+`20260906030347_AddProductReviews.cs` (`:52`, `:77`).
+The HTTP block is an illustrative exchange over the real `[HttpPut("{id}/pay")]` (`OrdersController.cs:296`)
++ `[SupportsIfMatch]` (`:297`) action; `OrdersController` emits the ETag at `:182`.
+Rubric §8 = "Data Architecture" (`Website/docs-src/governance/ArchitectureEvaluationCriteria.md:276`); Group G07
 persistence covers both `SetOriginalRowVersion` overloads under its `IWriteRepository` section
 (`Website/docs-src/onboarding/group-07-persistence-ef-core.md`). Design in
-`Website/docs-src/adr/035-optimistic-concurrency.md` (Accepted 2026-07-02, revised 2026-09-07, status
-`:3-7`): the required header and the three status codes at `:79-86`, the two overloads and the
-no-skip-value rule at `:108-114`, the fitness function at `:115-118`, and the 2026-09-07 revision
-(`TouchConcurrencyToken`, SEC-Common-77) at `:201-215`. The header-only transport landed in Common
-v1.173.0, which deleted the body transport (`CHANGELOG.md:1630-1638`). The C# code block is illustrative of
-the documented shape (composed from the real `SessionDTO`, `SessionUpdateRequest`, `UpdateSessionCommand`,
-`UpdateSessionHandler` and `CrudEntityControllerBase`), and the HTTP block is an illustrative exchange over
-the real `[HttpPut("{id}/pay")]` + `[SupportsIfMatch]` action (`OrdersController.cs:298`); neither is a
-verbatim copy of one file.*
+`Website/docs-src/adr/035-optimistic-concurrency.md` (Accepted 2026-07-02, revised 2026-09-07 and
+2026-10-01, status `:3-7`): the fitness function at `:115-118`, the trade-offs at `:193-211` (opt-in,
+cross-engine, Cosmos), the 2026-09-07 revision (`TouchConcurrencyToken`, SEC-Common-77) at `:213-227`,
+and the 2026-10-01 current-state corrections at `:240-254`. The header-only transport landed in Common
+v1.173.0 (`CHANGELOG.md:2247`), which deleted the body transport (`:2257-2265`). The C# code block is
+illustrative of the documented shape (composed from the real `SessionDTO`, `SessionUpdateRequest`,
+`UpdateSessionCommand`, `UpdateSessionHandler` and `CrudEntityControllerBase`); neither block is a
+verbatim copy of one file. Changed this run: adoption counts 40/18 (Store 24/7, ADC 16/11) to 41/23
+(Store 25/11, ADC 16/12); the guarded-action conflict path (filter builds its own 412; thrown unique/FK
+stays 409); Cosmos (no token, `RowVersionStrategy.None`, not an ETag mechanism); per-engine mapping via
+`RowVersionStrategy`; `RowVersion` only on auditable tables; opt-in-per-action trade-off and the
+narrowed invariant; all moved anchors.*
