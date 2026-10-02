@@ -1208,15 +1208,15 @@ live in later groups; this chapter is the engine those endpoints call into.
   records the audit that produced the current application sites).
 - **Where it's used**: honored by [`OwnerOrAdminFilter`](#owneroradminfilter) through endpoint
   metadata. In MMCA.Store it marks four actions on
-  `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/Controllers/ShoppingCartsController.cs:98,113,142,178`
-  and five on
-  `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.API/Controllers/CustomersController.cs:49,61,78,110,131`,
+  `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/Controllers/ShoppingCartsController.cs:92,107,136,172`
+  and six on
+  `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.API/Controllers/CustomersController.cs:53,65,82,114,135,150`,
   both controllers naming the replacing guard in an inline comment next to the attribute
-  (`ShoppingCartsController.cs:93-97`, `CustomersController.cs:48`).
+  (`ShoppingCartsController.cs:87-92`, `CustomersController.cs:51-53`).
 - **Caveats / not-in-source**: nothing enforces the assertion. No analyzer or compile-time rule checks
   that an action carrying this attribute really is guarded another way; the guarantee is a review
   convention. Store closes the specific gap it opens with a hand-written `RequireResolvableOwner()` gate
-  on the collection reads (`ShoppingCartsController.cs:80-90`), but that gate is per-controller code,
+  on the collection reads (`ShoppingCartsController.cs:79-84`), but that gate is per-controller code,
   not something the attribute demands.
 
 ### FallbackAuthorizationOptions
