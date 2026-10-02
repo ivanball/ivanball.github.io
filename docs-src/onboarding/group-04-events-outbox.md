@@ -2069,8 +2069,8 @@ edge) are the primary references.
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Speakers/IntegrationEventHandlers/SpeakerUnlinkedFromUserHandler.cs:30`),
   the Engagement points handlers (`AttendeeCheckedInPointsHandler`,
   `EventFeedbackSubmittedPointsHandler`, `SessionFeedbackSubmittedPointsHandler`,
-  `UserDeletedPointsHandler`), and Store's `ProductVariantAddedHandler`
-  (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Inventory/DomainEventHandlers/ProductVariantAddedHandler.cs:33`).
+  `UserDeletedPointsHandler`), and Store's `CustomerErasedHandler`
+  (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Reviews/IntegrationEventHandlers/CustomerErasedHandler.cs:48`).
   Its behaviour is pinned by
   [`ScopedIntegrationEventHandlerBaseTests`](group-28-testing-infrastructure.md#per-project-test-rollup).
   At runtime the subclasses are reached either through

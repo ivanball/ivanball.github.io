@@ -634,22 +634,26 @@ environment, and a shared, optionally vault-encrypted DataProtection key ring ke
 portable across replicas. Both are single calls in the framework, so every consumer opts in the same
 way rather than inventing its own.
 
-One more per-service extension point is worth noting because it is ADC's, not the framework's:
-Conference registers its own OpenTelemetry meter, `"MMCA.ADC.Conference.Scoring"`, on top of the
-MMCA.Common meters `AddServiceDefaults` already registers (Conference.Service/Program.cs:119-120). It
-carries `scoring.run.failed.terminal`, emitted when a background AI scoring run exhausts its retries and
-is abandoned: nothing on the request path reports that failure, so without the counter an incomplete run
-is invisible until an organizer notices missing scores (Conference.Service/Program.cs:113-118, the counter
-itself at
-`Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/SessionScoringProcessor.cs:96-97`). Two
-paid-call cost counters ride that same meter name rather than a second meter: `scoring.tokens.input` and
-`scoring.tokens.output`, each tagged with the model id and the prompt version
-(`.../Sessions/Scoring/AnthropicScoringService.cs:344` and `349`). Reusing the name is the point: a host
-that exports one instrument exports all of them, so no second `AddMeter` call is needed. The two tags are
-the ones that move spend, a model swap changes the per-token price and a prompt revision changes the
-token count, which is why the per-session usage log stays forensics while these counters are the
-aggregate a budget alert queries (AnthropicScoringService.cs:381-387). Like the framework meters, the
-name is a literal (`SessionScoringProcessor.cs:59`) so the host's startup wiring does not have to
+One more AI signal is worth noting because ADC's session scorer is its only producer. Conference
+subscribes its host to the `"MMCA.Common.AI"` meter and activity source explicitly
+(Conference.Service/Program.cs:172-174), a name `AddServiceDefaults` also registers
+(`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.Telemetry.cs:86` and `:315`). It carries the
+paid-call cost counters `mmca.ai.input_tokens` and `mmca.ai.output_tokens`, emitted by the governed chat
+client rather than by ADC code and tagged with `model`, `prompt_name`, `prompt_version` and `provider`
+(`MMCA.Common/Source/Core/MMCA.Common.AI/Observability/AiUsageMeter.cs:26-32`, tags at `:161-164`).
+They replace the former per-service `MMCA.ADC.Conference.Scoring` meter and its `scoring.tokens.*`
+counters, and the AI spend alert queries the new names (Conference.Service/Program.cs:156-165). Reusing
+the one name is the point: it is also the governed client's `ActivitySource`, so one name turns on both
+the token metrics and the per-call spans. The tags that move spend are the model (a swap changes the
+per-token price) and the prompt version (a revision changes the token count), which is why these
+counters are the aggregate a budget alert queries. A background scoring run that exhausts its retries is
+no longer counted on a Conference meter: it runs as an internal command
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsInternalCommand.cs:39`),
+so the framework's `internal_commands.dead_letter.count`, tagged `reason` `attempts_exhausted`, reports
+it
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Processing/InternalCommandMetrics.cs:52-58`).
+Like the framework meters, the name is a literal (Conference.Service/Program.cs:164-165) so the host's
+startup wiring does not have to
 reference an Infrastructure type.
 
 ---

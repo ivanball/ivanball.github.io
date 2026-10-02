@@ -675,7 +675,7 @@
           <span class="cite"><span><code>.../Pages/Session/SessionDetail.razor.cs:104</code></span></span>, <span class="cite"><span><code>.../Pages/Event/EventDetail.razor.cs:86</code></span></span>, and
           <span class="cite"><span><code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/Feedback/EventFeedback.razor.cs:284</code></span></span>;
           Store&#39;s detail pages import the same namespace (for example
-          <span class="cite"><span><code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.UI/Pages/Product/ProductDetail.razor.cs:4</code></span></span>).
+          <span class="cite"><span><code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.UI/Pages/Products/ProductDetail.razor.cs:4</code></span></span>).
           Unit-covered by <code>DomainHelperTests</code>
           (<code>MMCA.Common/Tests/Core/MMCA.Common.Shared.Tests/Extensions/DomainHelperTests.cs</code>, G25).</li>
           <li><strong>Caveats / not-in-source</strong>: supported target types are exactly those enumerated; anything else
@@ -1178,7 +1178,7 @@
           <span class="cite"><span><code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/PiiConventionTests.cs:20</code></span></span> (the <em>scan</em>
           is structurally vacuous today, the framework Domain ships no data-subject type),
           <span class="cite"><span><code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Governance/PiiConventionTests.cs:3</code></span></span>, and
-          <span class="cite"><span><code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/PiiConventionTests.cs:3</code></span></span>. The framework
+          <span class="cite"><span><code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Governance/PiiConventionTests.cs:29</code></span></span>. The framework
           closes that vacuity gap with a non-vacuous companion, <code>PiiErasureContractFitnessTests</code><span class="cite"><span>
           (<code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/PiiErasureContractFitnessTests.cs:19</code>)</span></span>,
           which forces a representative <code>[Pii]</code>-carrying sample through both halves end to end (recognized and
@@ -1639,13 +1639,13 @@
           </li>
           <li><strong>Why it&#39;s built this way</strong>: EF Core stores <code>Address</code> as an <strong>owned type</strong> via <code>OwnsOne</code>, stated in
           the remarks<span class="cite"><span> (<code>Address.cs:12-14</code>)</span></span> and done for real in
-          <span class="cite"><span><code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Infrastructure/Persistence/EntityConfiguration/CustomerConfiguration.cs:43</code></span></span>,
+          <span class="cite"><span><code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Infrastructure/Persistence/EntityConfiguration/CustomerConfiguration.cs:42</code></span></span>,
           which flattens the six properties into <code>AddressLine1</code>, <code>AddressLine2</code>, <code>AddressCity</code>,
           <code>AddressState</code>, <code>AddressZipCode</code>, <code>AddressCountry</code> columns on the <code>Customer</code> table rather than a
           child table. Owned types have value semantics at the persistence level, which is exactly the
           domain semantic.</li>
           <li><strong>Where it&#39;s used</strong>: the Store Identity <code>Customer</code> aggregate owns one (configuration cited above,
-          with every <code>HasMaxLength</code> reading an <code>AddressInvariants</code> constant, <span class="cite"><span><code>CustomerConfiguration.cs:47-73</code></span></span>);
+          through Common&#39;s <code>OwnsAddress</code>, where every <code>HasMaxLength</code> reads an <code>AddressInvariants</code> constant, <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeBuilderExtensions.cs:138-164</code></span></span>, with a second <code>OwnsOne</code> overriding only the unicode facet, <span class="cite"><span><code>CustomerConfiguration.cs:42-55</code></span></span>);
           <a href="group-08-auth.html#registerrequest"><code>RegisterRequest</code></a> carries an optional <code>Address? Address = null</code><span class="cite"><span>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/Requests/RegisterRequest.cs:18</code>)</span></span>; the
           <a href="group-06-validation.html#addressline1rulest-addressline2rulest-cityrulest-countryrulest"><code>AddressLine1Rules&lt;T&gt;</code></a> family and
@@ -1685,8 +1685,10 @@
           reference <code>AddressInvariants.AddressLine1MaxLength</code> without depending on <code>Address</code> itself, keeping
           the Infrastructure-to-Shared coupling thin. <code>[Rubric §3, Clean Architecture]</code>.</li>
           <li><strong>Where it&#39;s used</strong>: called from <code>Address.Create</code><span class="cite"><span> (<code>Address.cs:78</code>)</span></span>; every max-length constant is
-          read by <code>CustomerConfiguration</code> in Store Identity<span class="cite"><span>
-          (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Infrastructure/Persistence/EntityConfiguration/CustomerConfiguration.cs:47-73</code>)</span></span>
+          read by Common&#39;s <code>OwnsAddress</code><span class="cite"><span>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeBuilderExtensions.cs:138-164</code>)</span></span>,
+          which <code>CustomerConfiguration</code> in Store Identity calls<span class="cite"><span>
+          (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Infrastructure/Persistence/EntityConfiguration/CustomerConfiguration.cs:42</code>)</span></span>
           and by the <a href="group-06-validation.html#addressline1rulest-addressline2rulest-cityrulest-countryrulest"><code>AddressLine1Rules&lt;T&gt;</code></a> family in the
           Application layer.</li>
           </ul>
@@ -2034,9 +2036,9 @@
           (<code>.../EmailValueConverter.cs:60</code>)</span></span> for an optional <code>Email?</code>.</li>
           <li><strong>Where it&#39;s used</strong>: the Store Identity <code>Customer</code> aggregate holds <code>public Email Email</code><span class="cite"><span>
           (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Domain/Customers/Customer.cs:36</code>)</span></span> and
-          builds it through <code>Email.Create</code> in both <code>Create</code><span class="cite"><span> (<code>Customer.cs:77</code>)</span></span> and <code>ChangeEmail</code><span class="cite"><span>
-          (<code>Customer.cs:153</code>)</span></span>; its EF configuration applies <code>.HasConversion(new EmailValueConverter())</code><span class="cite"><span>
-          (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Infrastructure/Persistence/EntityConfiguration/CustomerConfiguration.cs:36</code>)</span></span>.
+          builds it through <code>Email.Create</code> in both <code>Create</code><span class="cite"><span> (<code>Customer.cs:78</code>)</span></span> and <code>ChangeEmail</code><span class="cite"><span>
+          (<code>Customer.cs:154</code>)</span></span>; its EF configuration applies <code>.HasConversion(new EmailValueConverter())</code><span class="cite"><span>
+          (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Infrastructure/Persistence/EntityConfiguration/CustomerConfiguration.cs:33</code>)</span></span>.
           Note the layering: <code>RegisterRequest</code> still carries a raw <code>string Email</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/RegisterRequest.cs</code>), and the conversion into the
           value object happens inside the domain factory. <code>[Rubric §9, API &amp; Contract Design]</code>.</li>

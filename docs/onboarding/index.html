@@ -288,19 +288,19 @@ Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pr
           <td>7</td>
           <td><a href="group-07-persistence-ef-core.html">Persistence &amp; EF Core</a></td>
           <td>177</td>
-          <td><code>SQLServerDbContext</code> over abstract <code>ApplicationDbContext</code>, interceptors (incl. the deferred-dispatch record), repositories, engine-aware entity config, data-source routing, conventions (incl. the soft-delete unique-index convention), factories, and the persistence/audit-trail/connection-string/data-source/tenancy settings classes (regrouped here from the module-system chapter on 2026-09-05)</td>
+          <td><code>SQLServerDbContext</code> over abstract <code>ApplicationDbContext</code>, interceptors (incl. the deferred-dispatch record), repositories, engine-aware entity config, data-source routing, the per-engine <code>IDataSourceEngine</code> strategy behind the <code>DataSourceEngines</code> registry (<a href="https://ivanball.github.io/docs/adr/130-per-engine-data-source-strategy.html" target="_blank" rel="noopener">ADR-130</a>), conventions (incl. the soft-delete unique-index convention), factories, and the persistence/audit-trail/connection-string/data-source/tenancy settings classes (regrouped here from the module-system chapter on 2026-09-05)</td>
           </tr>
           <tr>
           <td>8</td>
           <td><a href="group-08-auth.html">Authentication &amp; Authorization</a></td>
           <td>162</td>
-          <td>JWT/JWKS dual-fetch, the shared <code>AuthenticationServiceBase&lt;TUser&gt;</code> login/refresh workflow (<code>IAuthUser</code>), current-user/claims, password hashing, cookie sessions, role policies + the permission-based authorization mechanism (registry, <code>[HasPermission]</code>), the <code>RoleValue</code> base, the external-auth-broker contract (<a href="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html" target="_blank" rel="noopener">ADR-042</a>/043), the JWT/JWKS settings (<code>JwtSettings</code>, <code>JwksSettings</code>, <code>JwtSigningAlgorithm</code>)</td>
+          <td>JWT/JWKS dual-fetch, the shared <code>AuthenticationServiceBase&lt;TUser&gt;</code> login workflow (<code>IAuthUser</code>) with refresh-session issue, rotation and reuse detection in <code>AuthSessionIssuer</code>, current-user/claims, password hashing + the shared <code>PasswordComplexity</code> rules, cookie sessions + the <code>ISessionCookieStore</code> family behind the same-origin proxy, role policies + the permission-based authorization mechanism (registry, <code>[HasPermission]</code>), the <code>RoleValue</code> base, the external-auth-broker contract (<a href="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html" target="_blank" rel="noopener">ADR-042</a>/043), the JWT/JWKS settings (<code>JwtSettings</code>, <code>JwksSettings</code>, <code>JwtSigningAlgorithm</code>)</td>
           </tr>
           <tr>
           <td>9</td>
           <td><a href="group-09-caching.html">Caching</a></td>
           <td>9</td>
-          <td>The cache abstraction + its invalidation-aware decorator integration, <code>CacheSettings</code></td>
+          <td>The cache abstraction (incl. the shared-store read that skips the local tier for single-use auth records) + its invalidation-aware decorator integration, <code>CacheSettings</code></td>
           </tr>
           <tr>
           <td>10</td>
@@ -324,7 +324,7 @@ Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pr
           <td>13</td>
           <td><a href="group-13-grpc-contracts.html">gRPC &amp; Inter-Service Contracts</a></td>
           <td>7</td>
-          <td>Typed gRPC clients/servers, interceptors, Result-over-the-wire (<a href="https://ivanball.github.io/docs/adr/007-grpc-extraction.html" target="_blank" rel="noopener">ADR-007</a>)</td>
+          <td>Typed gRPC clients/servers, interceptors, the <code>GrpcWireFormat</code> UTC/decimal wire helpers, Result-over-the-wire (<a href="https://ivanball.github.io/docs/adr/007-grpc-extraction.html" target="_blank" rel="noopener">ADR-007</a>)</td>
           </tr>
           <tr>
           <td>14</td>
@@ -336,7 +336,7 @@ Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pr
           <td>15</td>
           <td><a href="group-15-common-ui-framework.html">Common UI Framework</a></td>
           <td>174</td>
-          <td>Reusable MudBlazor building blocks: data-grid list page base, theme, common pages/services, the Blazor Server UI-host hardening kit (circuit limits + UI rate limiting), i18n culture bootstrap + day/dark <code>ThemeService</code>, user-preference readers/writers, pseudo-localization gate, OAuth UI settings + token storage (Web/WASM), hub-channel subscriptions (<a href="https://ivanball.github.io/docs/adr/039-live-channel-push.html" target="_blank" rel="noopener">ADR-039</a>), the shared <code>DetailPageBase</code>, the email-confirmation page + UI service and the client-config endpoint (extracted from ADC in v1.211.0)</td>
+          <td>Reusable MudBlazor building blocks: data-grid list page base, theme, common pages/services, the Blazor Server UI-host hardening kit (circuit limits + UI rate limiting), i18n culture bootstrap + day/dark <code>ThemeService</code>, user-preference readers/writers, pseudo-localization gate, OAuth UI settings + token storage (Web/WASM), hub-channel subscriptions (<a href="https://ivanball.github.io/docs/adr/039-live-channel-push.html" target="_blank" rel="noopener">ADR-039</a>), the shared <code>DetailPageBase</code>, the email-confirmation page + UI service and the client-config endpoint (extracted from ADC in v1.211.0), the same-origin API proxy + session handoff in MMCA.Common.UI.Web (<a href="https://ivanball.github.io/docs/adr/131-same-origin-api-proxy.html" target="_blank" rel="noopener">ADR-131</a>)</td>
           </tr>
           <tr>
           <td>16</td>
@@ -414,7 +414,7 @@ Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pr
           <td>28</td>
           <td><a href="group-28-testing-infrastructure.html">Testing &amp; Quality Infrastructure</a></td>
           <td>2,923</td>
-          <td>All test projects + reusable Testing/Testing.E2E/Testing.UI/<strong>Testing.Architecture</strong> bases (incl. the handler + decorator-pipeline test bases, the shared production-host/graceful-shutdown bases, the observability-convention fitness base, and the Gallery auth stubs) + architecture-fitness tests + Gallery + the BenchmarkDotNet perf-smoke suite</td>
+          <td>All test projects + reusable Testing/Testing.E2E/Testing.UI/<strong>Testing.Architecture</strong> bases (incl. the handler + decorator-pipeline test bases, the shared production-host/graceful-shutdown bases, the observability-convention fitness base, and the Gallery auth stubs) + architecture-fitness tests + Gallery + the BenchmarkDotNet perf-smoke suite + the weekly <code>MMCA.Common.LoadTests</code> load tier</td>
           </tr>
           </tbody></table></div>
           <h3 id="devops--operations-chapters">DevOps &amp; operations chapters</h3>
