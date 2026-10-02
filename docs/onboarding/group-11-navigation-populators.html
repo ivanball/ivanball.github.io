@@ -327,13 +327,13 @@
           subsystem is <em>why</em> the database-per-service split is feasible without rewriting query code
           (<code>[Rubric §7, Microservices Readiness]</code>): when a relationship&#39;s ends move to different sources, the EF
           model&#39;s <a href="group-07-persistence-ef-core.html#crossdatasourcedegradeconvention"><code>CrossDataSourceDegradeConvention</code></a><span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Conventions/CrossDataSourceDegradeConvention.cs:33</code>)</span></span>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Conventions/CrossDataSourceDegradeConvention.cs:34</code>)</span></span>
           drops the relationship and ignores the CLR navigation members, routing runtime navigation &quot;through the
           existing <code>INavigationPopulator</code> batch-loading machinery instead&quot;<span class="cite"><span>
-          (<code>CrossDataSourceDegradeConvention.cs:15-17</code>)</span></span>, the metadata provider starts reporting that navigation
+          (<code>CrossDataSourceDegradeConvention.cs:16-18</code>)</span></span>, the metadata provider starts reporting that navigation
           as unsupported, and the populator path picks it up automatically. The application code that issued the
           query never changes, and when every entity resolves to the same physical source the convention is a
-          structural no-op<span class="cite"><span> (<code>CrossDataSourceDegradeConvention.cs:25-29</code>)</span></span>. Second, the design is a clean
+          structural no-op<span class="cite"><span> (<code>CrossDataSourceDegradeConvention.cs:26-30</code>)</span></span>. Second, the design is a clean
           illustration of keeping policy out of the domain: the <em>what</em> (a <code>[Navigation]</code> marker) lives in
           Domain, the <em>whether</em> (supported versus unsupported) is computed in Application from an Infrastructure
           capability check, and the <em>how</em> (batch SQL) is a static helper. Three responsibilities, three layers,

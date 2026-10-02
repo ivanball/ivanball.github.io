@@ -209,7 +209,7 @@
           rest of the framework follows
           (<a href="https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html" target="_blank" rel="noopener">ADR-070</a>).
           <code>[Rubric section 11, Security]</code> is in play at <code>ApiKey</code>: the property is documented as binding from Key
-          Vault in production and from user secrets locally<span class="cite"><span> (<code>AiSettings.cs:62-67</code>)</span></span>, so the package itself never
+          Vault in production and from user secrets locally<span class="cite"><span> (<code>AiSettings.cs:69-74</code>)</span></span>, so the package itself never
           decides where the secret comes from.</p>
           <h2 id="the-provider-is-a-registered-factory-not-a-type-the-package-names">The provider is a registered factory, not a type the package names</h2>
           <p><a href="#iaiproviderfactory">IAiProviderFactory</a><span class="cite"><span>
@@ -326,7 +326,7 @@
           tool marked consequential must also be confirmed by the caller for this request<span class="cite"><span> (<code>:259-262</code>)</span></span>, and the
           confirmation never overrides a policy that denied it<span class="cite"><span> (<code>:256-258</code>)</span></span>. Both markers are plain string keys
           on the property bags Microsoft.Extensions.AI already carries, published by the static
-          <a href="#chattoolpolicy">ChatToolPolicy</a><span class="cite"><span> (<code>ChatToolPolicy.cs:23</code>)</span></span>: <code>mmca.tool.consequential</code> on the tool<span class="cite"><span>
+          <a href="#chattoolpolicy">ChatToolPolicy</a><span class="cite"><span> (<code>ChatToolPolicy.cs:24</code>)</span></span>: <code>mmca.tool.consequential</code> on the tool<span class="cite"><span>
           (<code>:29</code>)</span></span> and <code>mmca.tool.confirmed</code> on the options<span class="cite"><span> (<code>:40</code>)</span></span>, so any tool factory and any caller can
           participate without referencing this package<span class="cite"><span> (<code>:10-14</code>)</span></span>. The distinction they encode is reading
           versus writing: a lookup can be offered on a policy decided once, while a tool that sends, moves money
@@ -353,7 +353,7 @@
           <h2 id="the-middle-layer-what-the-call-may-say-and-what-it-may-answer">The middle layer: what the call may say, and what it may answer</h2>
           <p>Bounds are configuration, so the framework can decide them. Content is not, so it does not.
           <a href="#ichatguardrail">IChatGuardrail</a><span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.AI/Chat/IChatGuardrail.cs:20</code>)</span></span> is the extension point an
+          (<code>MMCA.Common/Source/Core/MMCA.Common.AI/Chat/IChatGuardrail.cs:21</code>)</span></span> is the extension point an
           application implements to inspect an outgoing request (<code>InspectRequestAsync</code>, <span class="cite"><span><code>:27-30</code></span></span>), a
           completed response (<code>InspectResponseAsync</code>, <span class="cite"><span><code>:37-40</code></span></span>) and, through a default-interface member that
           allows unless overridden, each streamed update (<code>InspectStreamedUpdateAsync</code>, <span class="cite"><span><code>:56-59</code></span></span>), and the
@@ -533,14 +533,14 @@
           <h2 id="where-it-runs-today-and-how-it-is-tested">Where it runs today, and how it is tested</h2>
           <p>Exactly one feature in the workspace calls a model: ADC&#39;s organizer-facing session scoring. The
           Conference service host reads one secret, <code>Ai:ApiKey</code>, and derives <code>Ai:Enabled</code> from its presence<span class="cite"><span>
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:129-134</code>)</span></span>; the infrastructure
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:131-136</code>)</span></span>; the infrastructure
           template writes the Key Vault secret into the container app under that same key and local
-          development keeps it in user secrets<span class="cite"><span> (<code>Program.cs:123-125</code>)</span></span>, so a host with no key starts with
+          development keeps it in user secrets<span class="cite"><span> (<code>Program.cs:125-127</code>)</span></span>, so a host with no key starts with
           scoring unavailable rather than failing validation. It then registers the Anthropic adapter with
-          <code>AddAnthropicAiProvider()</code><span class="cite"><span> (<code>Program.cs:139</code>)</span></span>, its guardrails with <code>AddConferenceAiGuardrails</code><span class="cite"><span>
-          (<code>Program.cs:150</code>)</span></span> and the governed client with <code>AddMmcaChatClient(builder.Configuration)</code><span class="cite"><span>
-          (<code>Program.cs:152</code>)</span></span>, in that order because the last call reads the guardrail descriptors, and
-          subscribes the framework meter and activity source by literal name<span class="cite"><span> (<code>Program.cs:171-172</code>)</span></span>.
+          <code>AddAnthropicAiProvider()</code><span class="cite"><span> (<code>Program.cs:141</code>)</span></span>, its guardrails with <code>AddConferenceAiGuardrails</code><span class="cite"><span>
+          (<code>Program.cs:152</code>)</span></span> and the governed client with <code>AddMmcaChatClient(builder.Configuration)</code><span class="cite"><span>
+          (<code>Program.cs:154</code>)</span></span>, in that order because the last call reads the guardrail descriptors, and
+          subscribes the framework meter and activity source by literal name<span class="cite"><span> (<code>Program.cs:173-174</code>)</span></span>.
           <code>AddConferenceAiGuardrails</code><span class="cite"><span>
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:85</code>)</span></span>
           composes both framework policies, <code>AddPiiRedactionGuardrail()</code> and <code>AddContentPolicyGuardrail</code><span class="cite"><span>
@@ -599,55 +599,66 @@
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the bound, validated <code>Ai</code> configuration section (<code>SectionName = &quot;Ai&quot;</code>,
-          <span class="cite"><span><code>AiSettings.cs:217</code></span></span>) that gates and configures the entire AI integration: whether it is on at all
-          (<code>Enabled</code>, <span class="cite"><span><code>AiSettings.cs:231</code></span></span>), which provider and model to call
-          (<code>Provider</code>/<code>Model</code>, <span class="cite"><span><code>AiSettings.cs:234,242</code></span></span>), the API key, an optional endpoint override, the
-          output-token ceiling, the per-call timeout, and opt-ins (<code>AllowTools</code>, <code>RequireGuardrail</code>,
-          <code>EnableCache</code>) plus an optional input-token pre-flight budget.</li>
+          <span class="cite"><span><code>AiSettings.cs:25</code></span></span>) that gates and configures the entire AI integration: whether it is on at all
+          (<code>Enabled</code>, <span class="cite"><span><code>AiSettings.cs:46</code></span></span>), which provider and model to call
+          (<code>Provider</code>/<code>Model</code>, <span class="cite"><span><code>AiSettings.cs:55,65</code></span></span>), the API key, an optional endpoint override, the
+          output-token ceiling, the per-call timeout (capped by <code>MaxTimeout</code>), and opt-ins (<code>AllowTools</code>,
+          <code>RequireGuardrail</code>, <code>EnableCache</code>) plus an optional input-token pre-flight budget.</li>
           <li><strong>Depends on</strong>: <code>System.ComponentModel.DataAnnotations</code> (<code>IValidatableObject</code>, <code>[Range]</code>); no
-          first-party dependency of its own, though its doc comments name <code>AddCommonKeyVaultConfiguration</code> and
-          <code>Persistence:EnableSensitiveDataLogging</code> as sibling conventions elsewhere in Common.</li>
+          first-party dependency of its own, though its doc comments name <code>AddCommonKeyVaultConfiguration</code> as
+          the sibling convention elsewhere in Common that supplies <code>ApiKey</code> in production<span class="cite"><span> (<code>AiSettings.cs:67-76</code>)</span></span>.</li>
           <li><strong>Concept introduced, an off-by-default dependency with conditional validation.</strong>
           <code>[Rubric §16, AI-Native Application Architecture]</code> (assesses whether an LLM dependency is safe to ship
           in every environment): <code>Enabled</code> defaults to <code>false</code>, and when it is false <code>AddMmcaChatClient</code>
           registers no <code>IChatClient</code> at all, so resolving one yields <code>null</code> and a consumer gates on the service
-          being present rather than reading a flag itself<span class="cite"><span> (<code>AiSettings.cs:225-231</code>)</span></span>. <code>Provider</code> is no longer a
+          being present rather than reading a flag itself<span class="cite"><span> (<code>AiSettings.cs:40-46</code>)</span></span>. <code>Provider</code> is a string, not a
           closed enum: it is matched case-insensitively against the registered
           <a href="#iaiproviderfactory"><code>IAiProviderFactory</code></a><code>.Name</code> of whatever provider packages the host
           referenced (<code>MMCA.Common.AI.Anthropic</code> and <code>MMCA.Common.AI.OpenAI</code> each ship one), so the provider
           switch lives in the host&#39;s package references and its configuration value, not in this framework&#39;s
-          source<span class="cite"><span> (<code>AiSettings.cs:194-201</code>)</span></span>. <code>[Rubric §11, Security]</code> (assesses secret handling): <code>ApiKey</code> is
-          required only when <code>Enabled</code>, and its doc comment records that production binds it from Key Vault via
-          <code>AddCommonKeyVaultConfiguration</code>, never from a checked-in settings file<span class="cite"><span> (<code>AiSettings.cs:214-223</code>)</span></span>.</li>
-          <li><strong>Walkthrough</strong>: two constants, <code>DefaultMaxOutputTokens = 1024</code><span class="cite"><span> (<code>AiSettings.cs:220</code>)</span></span> and
-          <code>DefaultTimeout = TimeSpan.FromSeconds(30)</code><span class="cite"><span> (<code>AiSettings.cs:223</code>)</span></span>, back the two settings that ship with
-          a value even when the section is silent. <code>Provider</code><span class="cite"><span> (<code>AiSettings.cs:202</code>)</span></span> is required when <code>Enabled</code>
-          and names a registered provider by string, e.g. <code>Anthropic</code> or <code>OpenAI</code>; an unknown name fails at
-          startup naming the registered ones. <code>Model</code> is required when <code>Enabled</code> because it is part of the
-          prompt contract, hashed into <code>PromptContract.Hash</code>, so an implicit provider default would silently
-          change evaluated behavior on the provider&#39;s own schedule rather than on a reviewed version bump, and
-          it is also a bound: <a href="#boundedchatclient"><code>BoundedChatClient</code></a> refuses a request that names a different
-          model<span class="cite"><span> (<code>AiSettings.cs:204-211</code>)</span></span>. <code>Endpoint</code><span class="cite"><span> (<code>AiSettings.cs:225-230</code>)</span></span> is an optional absolute URI to
-          route through an AI gateway, a regional endpoint or an OpenAI-compatible server; each adapter passes it
-          to its SDK&#39;s base-address option. <code>MaxOutputTokens</code> (<code>[Range(1, 1_000_000)]</code>, <span class="cite"><span><code>AiSettings.cs:236</code></span></span>) is
-          the hard ceiling <code>BoundedChatClient.Bound</code> clamps every call down to. <code>Timeout</code><span class="cite"><span> (<code>AiSettings.cs:243</code>)</span></span>
-          is enforced with a token linked to the caller&#39;s own, so a caller cancelling early still wins.
-          <code>RequireGuardrail</code><span class="cite"><span> (<code>AiSettings.cs:252-264</code>)</span></span> defaults to <code>true</code>: an enabled host that registers no
-          guardrail and no redactor fails at startup rather than shipping an uninspected model call; a host that
-          deliberately wants none sets it <code>false</code>, which is a reviewable line rather than an absence nobody can
-          see. <code>PerCallInputTokenBudget</code> (<code>[Range(1, int.MaxValue)]</code>, <span class="cite"><span><code>AiSettings.cs:277-278</code></span></span>) is <code>null</code> by
-          default, leaving input unbounded, and is an ESTIMATE never a billing figure. <code>Validate</code><span class="cite"><span>
-          (<code>AiSettings.cs:287-330</code>)</span></span> is the conditional half: it <code>yield break</code>s immediately when <code>!Enabled</code><span class="cite"><span>
-          (<code>AiSettings.cs:289-292</code>)</span></span>, so a host that leaves AI off is valid with nothing else set, which is what
+          source<span class="cite"><span> (<code>AiSettings.cs:15-19</code>, <code>AiSettings.cs:48-55</code>)</span></span>. <code>[Rubric §11, Security]</code> (assesses secret
+          handling): <code>ApiKey</code> is required only when <code>Enabled</code>, and its doc comment records that production binds
+          it from Key Vault via <code>AddCommonKeyVaultConfiguration</code>, never from a checked-in settings file<span class="cite"><span>
+          (<code>AiSettings.cs:67-76</code>)</span></span>.</li>
+          <li><strong>Walkthrough</strong>: two defaults, <code>DefaultMaxOutputTokens = 1024</code><span class="cite"><span> (<code>AiSettings.cs:28</code>)</span></span> and
+          <code>DefaultTimeout = TimeSpan.FromSeconds(30)</code><span class="cite"><span> (<code>AiSettings.cs:31</code>)</span></span>, back the two settings that ship with
+          a value even when the section is silent; a third static, <code>MaxTimeout = TimeSpan.FromHours(1)</code><span class="cite"><span>
+          (<code>AiSettings.cs:33-38</code>)</span></span>, is the largest per-call timeout validation accepts. <code>Provider</code><span class="cite"><span>
+          (<code>AiSettings.cs:55</code>)</span></span> is required when <code>Enabled</code> and names a registered provider by string, e.g.
+          <code>Anthropic</code> or <code>OpenAI</code>; an unknown name fails at startup naming the registered ones. <code>Model</code><span class="cite"><span>
+          (<code>AiSettings.cs:57-65</code>)</span></span> is required when <code>Enabled</code> because it is part of the prompt contract, hashed
+          into <code>PromptContract.Hash</code>, so an implicit provider default would silently change evaluated behavior on
+          the provider&#39;s own schedule rather than on a reviewed version bump, and it is also a bound:
+          <a href="#boundedchatclient"><code>BoundedChatClient</code></a> refuses a request that names a different model.
+          <code>Endpoint</code><span class="cite"><span> (<code>AiSettings.cs:78-83</code>)</span></span> is an optional absolute URI to route through an AI gateway, a
+          regional endpoint or an OpenAI-compatible server; each adapter passes it to its SDK&#39;s base-address
+          option. <code>MaxOutputTokens</code> (<code>[Range(1, 1_000_000)]</code>, <span class="cite"><span><code>AiSettings.cs:89-90</code></span></span>) is the hard ceiling
+          <code>BoundedChatClient.Bound</code> clamps every call down to. <code>Timeout</code><span class="cite"><span> (<code>AiSettings.cs:92-96</code>)</span></span> is enforced with
+          a token linked to the caller&#39;s own, so a caller cancelling early still wins. <code>AllowTools</code><span class="cite"><span>
+          (<code>AiSettings.cs:98-103</code>)</span></span> is <code>false</code> by default, and while it is false any tools on a request are
+          stripped before the call. <code>RequireGuardrail</code><span class="cite"><span> (<code>AiSettings.cs:105-117</code>)</span></span> defaults to <code>true</code>: an enabled
+          host that registers no guardrail fails at startup rather than shipping an uninspected model call, and
+          the message names the one-line fix (<code>AddPiiRedactionGuardrail()</code>); a host that deliberately wants none
+          sets it <code>false</code>, which is a reviewable line rather than an absence nobody can see. <code>EnableCache</code><span class="cite"><span>
+          (<code>AiSettings.cs:119-123</code>)</span></span> is off by default and stays off when no <code>IDistributedCache</code> is registered.
+          <code>PerCallInputTokenBudget</code> (<code>[Range(1, int.MaxValue)]</code>, <span class="cite"><span><code>AiSettings.cs:130-131</code></span></span>) is <code>null</code> by default,
+          leaving input unbounded, and is an ESTIMATE never a billing figure. <code>Validate</code><span class="cite"><span>
+          (<code>AiSettings.cs:140-190</code>)</span></span> is the conditional half: it <code>yield break</code>s immediately when <code>!Enabled</code><span class="cite"><span>
+          (<code>AiSettings.cs:142-145</code>)</span></span>, so a host that leaves AI off is valid with nothing else set, which is what
           lets the section ship in every <code>appsettings</code> file; when enabled it requires <code>Provider</code>, <code>Model</code>,
-          <code>ApiKey</code>, an absolute <code>Endpoint</code> when one is set, and a positive <code>Timeout</code><span class="cite"><span>
-          (<code>AiSettings.cs:294-329</code>)</span></span>.</li>
+          <code>ApiKey</code>, an absolute <code>Endpoint</code> when one is set, a positive <code>Timeout</code>, and a <code>Timeout</code> no greater than
+          <code>MaxTimeout</code><span class="cite"><span> (<code>AiSettings.cs:147-189</code>)</span></span>. That last check exists because a bare number in configuration
+          binds as DAYS, and a value above roughly 49.7 days makes every call throw where the timeout is armed;
+          the one-hour cap rejects every bare-number value while leaving any plausible per-call budget alone,
+          and its message points at the <code>00:00:30</code> form<span class="cite"><span> (<code>AiSettings.cs:184-189</code>)</span></span>.</li>
           <li><strong>Why it&#39;s built this way</strong>: <code>IValidatableObject.Validate</code> runs through
           <code>.ValidateDataAnnotations().ValidateOnStart()</code> in <code>AiServiceCollectionExtensions.AddMmcaChatClient</code><span class="cite"><span>
           (<code>MMCA.Common/Source/Core/MMCA.Common.AI/DependencyInjection.cs:123-126</code>)</span></span>, so a misconfigured <code>Ai</code>
-          section fails at host startup, not on the first call. <code>Provider</code> became a string, not an enum, so a new
-          vendor is a new adapter package registering a factory, never a change to this framework&#39;s source. See
-          <a href="https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html" target="_blank" rel="noopener"><code>ADR-120</code></a>.</li>
+          section, including a <code>Timeout</code> mistyped as a bare number, fails at host startup, not on the first call.
+          <code>Provider</code> is a string, not an enum, so a new vendor is a new adapter package registering a factory,
+          never a change to this framework&#39;s source. See
+          <a href="https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html" target="_blank" rel="noopener"><code>ADR-120</code></a> and
+          <a href="https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html" target="_blank" rel="noopener"><code>ADR-070</code></a>.</li>
           <li><strong>Where it&#39;s used</strong>: bound and consumed by <a href="#aiservicecollectionextensions"><code>AiServiceCollectionExtensions</code></a>,
           enforced by <a href="#boundedchatclient"><code>BoundedChatClient</code></a>, and its <code>Provider</code> value is threaded into
           <a href="#usagerecordingchatclient"><code>UsageRecordingChatClient</code></a> as the fallback tag when the resolved client
@@ -666,10 +677,10 @@
           <li><strong>Concept introduced, a closed allow/block gate.</strong> <code>[Rubric §11, Security]</code> (assesses whether content
           passing through an AI dependency is inspected and the inspection outcome cannot be misconstructed): the
           constructor is <code>private</code>, so the only way to produce a blocking verdict is <code>Block(string reason)</code>, which
-          throws on a null or whitespace reason<span class="cite"><span> (<code>GuardrailVerdict.cs:51-56</code>)</span></span>; a caller cannot construct a blocked
+          throws on a null or whitespace reason<span class="cite"><span> (<code>GuardrailVerdict.cs:39-44</code>)</span></span>; a caller cannot construct a blocked
           verdict that silently carries no explanation.</li>
           <li><strong>Walkthrough</strong>: <code>Allow</code><span class="cite"><span> (<code>GuardrailVerdict.cs:37</code>)</span></span> is a static property returning
-          <code>new(isAllowed: true, reason: null)</code>. <code>Block(reason)</code><span class="cite"><span> (<code>GuardrailVerdict.cs:51-56</code>)</span></span> validates the reason
+          <code>new(isAllowed: true, reason: null)</code>. <code>Block(reason)</code><span class="cite"><span> (<code>GuardrailVerdict.cs:39-44</code>)</span></span> validates the reason
           with <code>ArgumentException.ThrowIfNullOrWhiteSpace</code> before constructing <code>isAllowed: false</code>. The constant
           <code>UnspecifiedReason</code><span class="cite"><span> (<code>GuardrailVerdict.cs:28</code>)</span></span> exists for the struct&#39;s own <code>default</code> value, whose <code>Reason</code>
           is <code>null</code> because it went through neither factory.</li>
@@ -689,7 +700,7 @@
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: a one-method extension point for estimating how many input tokens a piece of prompt
-          text will cost: <code>int EstimateTokenCount(string text)</code><span class="cite"><span> (<code>IAiTokenEstimator.cs:57</code>)</span></span>.</li>
+          text will cost: <code>int EstimateTokenCount(string text)</code><span class="cite"><span> (<code>IAiTokenEstimator.cs:19</code>)</span></span>.</li>
           <li><strong>Depends on</strong>: nothing first-party beyond the caller that resolves it.</li>
           <li><strong>Concept introduced, a pluggable estimator behind a cheap built-in default.</strong>
           <code>[Rubric §1, SOLID]</code> (assesses whether a dependency is inverted behind an abstraction rather than
@@ -699,7 +710,7 @@
           (<code>BoundedChatClient.EstimateInputTokens</code>, <span class="cite"><span><code>BoundedChatClient.cs:179</code></span></span>), so a host that wants
           provider-accurate tokenization can register a real tokenizer without changing the bounding logic.</li>
           <li><strong>Walkthrough</strong>: the interface has no other members; the contract is the single method plus its two
-          doc-comment lines describing the parameter and return value<span class="cite"><span> (<code>IAiTokenEstimator.cs:54-56</code>)</span></span>.</li>
+          doc-comment lines describing the parameter and return value<span class="cite"><span> (<code>IAiTokenEstimator.cs:17-18</code>)</span></span>.</li>
           <li><strong>Why it&#39;s built this way</strong>: <code>BoundedChatClient.EstimateInputTokens</code> is <code>public static</code> precisely so a
           caller (or the estimator implementation itself) can reproduce the same estimate the budget check uses<span class="cite"><span>
           (<code>BoundedChatClient.cs:155-179</code>)</span></span>, and it deliberately rounds up with a cheap four-characters-per-token
@@ -720,14 +731,14 @@
           <ul>
           <li><strong>What it is</strong>: an immutable, hashable identity for one prompt: <code>Name</code>, <code>Version</code>, <code>Model</code>,
           <code>SystemPrompt</code><span class="cite"><span> (<code>PromptContract.cs:78</code>)</span></span>. It both builds the <code>ChatOptions</code> a call needs
-          (<code>ToChatOptions</code>, <span class="cite"><span><code>PromptContract.cs:108-109</code></span></span>) and stamps its own identity onto telemetry so every
+          (<code>ToChatOptions</code>, <span class="cite"><span><code>PromptContract.cs:53-54</code></span></span>) and stamps its own identity onto telemetry so every
           call can be traced back to the exact prompt that produced it.</li>
           <li><strong>Depends on</strong>: <code>ChatOptions</code> (Microsoft.Extensions.AI), <code>System.Security.Cryptography.SHA256</code>, and
           <code>System.Text.Encoding</code>.</li>
           <li><strong>Concept introduced, prompt-as-versioned-contract.</strong> <code>[Rubric §16, AI-Native Application Architecture]</code> (assesses whether prompts are governed, versioned artifacts rather than inline
           strings): the record&#39;s <code>Hash</code> property<span class="cite"><span> (<code>PromptContract.cs:101</code>)</span></span> is a lowercase hex SHA-256 of
           <code>Name|Version|Model|SystemPrompt</code>, with every component&#39;s line endings normalized to LF first
-          (<code>NormalizeLineEndings</code>, <span class="cite"><span><code>PromptContract.cs:157-158</code></span></span>) so the same prompt checked out on Windows and on
+          (<code>NormalizeLineEndings</code>, <span class="cite"><span><code>PromptContract.cs:102-103</code></span></span>) so the same prompt checked out on Windows and on
           Linux hashes identically and a CI gate cannot be tripped by <code>core.autocrlf</code><span class="cite"><span> (<code>PromptContract.cs:90-93</code>)</span></span>.
           The three identity values are stamped onto <code>ChatOptions.AdditionalProperties</code> under fixed keys
           (<code>NamePropertyKey</code>/<code>VersionPropertyKey</code>/<code>HashPropertyKey</code>, <span class="cite"><span><code>PromptContract.cs:81-87</code></span></span>), so a request
@@ -735,12 +746,12 @@
           <li><strong>Walkthrough</strong>: <code>Hash</code><span class="cite"><span> (<code>PromptContract.cs:101</code>)</span></span> is computed on every read, deliberately not cached in
           a field, because a record&#39;s generated copy constructor copies fields verbatim and a cached hash would
           survive a <code>with</code> expression describing the prompt the copy was made FROM (<span class="cite"><span><code>PromptContract.cs:96-100</code></span></span>,
-          exactly the drift the type exists to prevent). <code>ToChatOptions</code><span class="cite"><span> (<code>PromptContract.cs:108-109</code>)</span></span> builds a
+          exactly the drift the type exists to prevent). <code>ToChatOptions</code><span class="cite"><span> (<code>PromptContract.cs:53-54</code>)</span></span> builds a
           fresh <code>ChatOptions</code> with <code>ModelId</code> and <code>Instructions</code> set, then delegates to <code>Apply</code>. <code>Apply</code><span class="cite"><span>
-          (<code>PromptContract.cs:117-127</code>)</span></span> stamps <code>Name</code>, <code>Version</code>, and <code>Hash</code> onto an existing <code>ChatOptions</code> in
+          (<code>PromptContract.cs:62-72</code>)</span></span> stamps <code>Name</code>, <code>Version</code>, and <code>Hash</code> onto an existing <code>ChatOptions</code> in
           place and returns it for chaining, for a caller that already built options and needs its own
           temperature or response format alongside the prompt identity. <code>ReadName</code>/<code>ReadVersion</code><span class="cite"><span>
-          (<code>PromptContract.cs:132,137</code>)</span></span> and the private <code>ReadProperty</code><span class="cite"><span> (<code>PromptContract.cs:139-143</code>)</span></span> reverse the
+          (<code>PromptContract.cs:77,82</code>)</span></span> and the private <code>ReadProperty</code><span class="cite"><span> (<code>PromptContract.cs:84-88</code>)</span></span> reverse the
           stamp, reading back whatever <code>Apply</code> wrote (or <code>null</code> when nothing was stamped).</li>
           <li><strong>Why it&#39;s built this way</strong>: hashing four short strings on every read is cheap enough that correctness
           wins outright over caching<span class="cite"><span> (<code>PromptContract.cs:96-100</code>)</span></span>. See
@@ -780,13 +791,13 @@
           <hr>
           <h3 id="ichatguardrail">IChatGuardrail</h3>
           <blockquote>
-          <p>MMCA.Common.AI.Chat · <code>MMCA.Common.AI.Chat</code> · <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.AI/Chat/IChatGuardrail.cs:20</code></span></span> · Level 1 · interface</p>
+          <p>MMCA.Common.AI.Chat · <code>MMCA.Common.AI.Chat</code> · <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.AI/Chat/IChatGuardrail.cs:21</code></span></span> · Level 1 · interface</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the extension point a host implements to inspect chat traffic: <code>InspectRequestAsync</code>
           before the model is called, <code>InspectResponseAsync</code> after a completed response, and
           <code>InspectStreamedUpdateAsync</code> for one streamed update, each returning a
-          <a href="#guardrailverdict"><code>GuardrailVerdict</code></a><span class="cite"><span> (<code>IChatGuardrail.cs:27-30,37-40,56-59</code>)</span></span>. The streamed member
+          <a href="#guardrailverdict"><code>GuardrailVerdict</code></a><span class="cite"><span> (<code>IChatGuardrail.cs:28-31,38-41,57-60</code>)</span></span>. The streamed member
           is a default interface member that allows by default, so a guardrail written before it existed keeps
           compiling and keeps its streaming behavior.</li>
           <li><strong>Depends on</strong>: <a href="#guardrailverdict"><code>GuardrailVerdict</code></a>,
@@ -798,12 +809,12 @@
           registers neither a guardrail nor a redactor pays no cost, see
           <a href="#aiservicecollectionextensions"><code>AiServiceCollectionExtensions</code></a>&#39;s descriptor check, and an enabled
           host with <code>RequireGuardrail</code> true (the default) fails at startup instead.</li>
-          <li><strong>Walkthrough</strong>: <code>InspectRequestAsync</code><span class="cite"><span> (<code>IChatGuardrail.cs:27-30</code>)</span></span> takes the materialized (and, if any
+          <li><strong>Walkthrough</strong>: <code>InspectRequestAsync</code><span class="cite"><span> (<code>IChatGuardrail.cs:28-31</code>)</span></span> takes the materialized (and, if any
           redactor ran, already-redacted) message list and the call&#39;s options, returning a verdict; a block here
-          stops the call before the provider is reached. <code>InspectResponseAsync</code><span class="cite"><span> (<code>IChatGuardrail.cs:37-40</code>)</span></span> takes
+          stops the call before the provider is reached. <code>InspectResponseAsync</code><span class="cite"><span> (<code>IChatGuardrail.cs:38-41</code>)</span></span> takes
           the completed <code>ChatResponse</code> and the same options; a block here stops the response from reaching the
           caller after the provider call already ran. <code>InspectStreamedUpdateAsync</code><span class="cite"><span>
-          (<code>IChatGuardrail.cs:56-59</code>)</span></span> takes one <code>ChatResponseUpdate</code> fragment; a rule that needs the whole answer
+          (<code>IChatGuardrail.cs:57-60</code>)</span></span> takes one <code>ChatResponseUpdate</code> fragment; a rule that needs the whole answer
           has to accumulate it itself, and a block ends the stream from that update on, though the caller has
           already seen every update yielded before it.</li>
           <li><strong>Why it&#39;s built this way</strong>: separate inspection points let an implementation block on
@@ -1153,26 +1164,33 @@
           <hr>
           <h3 id="chattoolpolicy">ChatToolPolicy</h3>
           <blockquote>
-          <p>MMCA.Common.AI.Guardrails · <code>MMCA.Common.AI.Guardrails</code> · <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/ChatToolPolicy.cs:23</code></span></span> · Level 0 · class</p>
+          <p>MMCA.Common.AI.Guardrails · <code>MMCA.Common.AI.Guardrails</code> · <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/ChatToolPolicy.cs:24</code></span></span> · Level 0 · class</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: a static helper reading two <code>AdditionalProperties</code> conventions the tool-calling
           boundary shares: whether a tool declares itself consequential, and which tool names the caller
           confirmed for the current request.</li>
-          <li><strong>Depends on</strong>: <code>Microsoft.Extensions.AI</code> (<code>AITool</code>, <code>ChatOptions</code>).</li>
+          <li><strong>Depends on</strong>: <code>Microsoft.Extensions.AI</code> (<code>AITool</code>, <code>ChatOptions</code>), <code>System.Text.Json</code>
+          (<code>JsonElement</code>).</li>
           <li><strong>Concept introduced, per-request confirmation via <code>AdditionalProperties</code>.</strong> <code>[Rubric §16, AI-Native Application Architecture]</code> (assesses tool-calling safety patterns): a confirmation is carried as a
           key in <code>ChatOptions.AdditionalProperties</code>, never as a typed property, so it composes with any
           <code>ChatOptions</code> without a wrapper type. <code>[Rubric §11, Security]</code>: the confirmation is scoped to ONE
-          request by design (<span class="cite"><span><code>ChatToolPolicy.cs:33</code></span></span> remark), because a confirmation that outlived the request
-          it was given for would be a standing grant, exactly what a confirmation step exists to avoid.</li>
-          <li><strong>Walkthrough</strong>: <code>ConsequentialPropertyKey = &quot;mmca.tool.consequential&quot;</code><span class="cite"><span> (<code>ChatToolPolicy.cs:26</code>)</span></span>
+          request by design (<span class="cite"><span><code>ChatToolPolicy.cs:37-40</code></span></span> remark), because a confirmation that outlived the
+          request it was given for would be a standing grant, exactly what a confirmation step exists to avoid.
+          The consequential marker, by contrast, fails closed: it is the whole write-safety gate, so only a
+          definite false reads as harmless<span class="cite"><span> (<code>ChatToolPolicy.cs:56-59</code>)</span></span>.</li>
+          <li><strong>Walkthrough</strong>: <code>ConsequentialPropertyKey = &quot;mmca.tool.consequential&quot;</code><span class="cite"><span> (<code>ChatToolPolicy.cs:30</code>)</span></span>
           marks an <code>AITool</code> as doing something that cannot be undone by not reading the answer.
-          <code>ConfirmedToolsPropertyKey = &quot;mmca.tool.confirmed&quot;</code><span class="cite"><span> (<code>ChatToolPolicy.cs:31</code>)</span></span> holds the confirmed
-          names for the current request. <code>IsConsequential</code><span class="cite"><span> (<code>ChatToolPolicy.cs:40-55</code>)</span></span> reads the tool&#39;s
-          <code>AdditionalProperties</code>: a missing key is <code>false</code>; a <code>bool</code> value is used as-is; a <code>string</code> value is
-          parsed with <code>bool.TryParse</code> (configuration and JSON both hand a boolean over as text, and a tool
-          declared consequential in a settings file must not read as harmless because of that); anything else
-          is <code>false</code>. <code>ReadConfirmedTools</code><span class="cite"><span> (<code>ChatToolPolicy.cs:58-78</code>)</span></span> reads the confirmed names off
+          <code>ConfirmedToolsPropertyKey = &quot;mmca.tool.confirmed&quot;</code><span class="cite"><span> (<code>ChatToolPolicy.cs:41</code>)</span></span> holds the confirmed
+          names for the current request. <code>IsConsequential</code><span class="cite"><span> (<code>ChatToolPolicy.cs:49-68</code>)</span></span> reads the tool&#39;s
+          <code>AdditionalProperties</code>: a missing key is <code>false</code>; a <code>bool</code> value is used as-is; a <code>string</code> value
+          goes through the private <code>ParsedOrConsequential</code><span class="cite"><span> (<code>ChatToolPolicy.cs:70-71</code>)</span></span>, which returns <code>false</code>
+          only for text that parses as <code>false</code> and <code>true</code> for anything else, unparseable text included
+          (configuration hands a boolean over as text, and a tool declared consequential in a settings file
+          must not read as harmless because of that); a <code>JsonElement</code> of kind <code>False</code> is <code>false</code>, a
+          <code>JsonElement</code> of kind <code>String</code> goes through the same <code>ParsedOrConsequential</code> (a JSON-bound bag
+          hands values over as <code>JsonElement</code>); and a marker present in any other shape reads as <code>true</code><span class="cite"><span>
+          (<code>ChatToolPolicy.cs:60-67</code>)</span></span>. <code>ReadConfirmedTools</code><span class="cite"><span> (<code>ChatToolPolicy.cs:76-97</code>)</span></span> reads the confirmed names off
           <code>ChatOptions.AdditionalProperties</code>, accepting a single <code>string</code>, an <code>IEnumerable&lt;string&gt;</code>, or a
           non-generic <code>IEnumerable</code> (a JSON array bound as <code>object[]</code>), converting each element with
           <code>Convert.ToString</code> and dropping empties; anything else returns none.</li>
@@ -1279,17 +1297,21 @@
           (assesses whether behavior that depends on an external, non-deterministic dependency can be exercised
           deterministically): rather than calling a live model, a test replays a recorded transcript, so the
           assertion exercises the consumer&#39;s parsing and handling code without network variance.</li>
-          <li><strong>Walkthrough</strong>: two constructors<span class="cite"><span> (<code>ReplayChatClient.cs:22-27,29-38</code>)</span></span>, one for a single response, one
+          <li><strong>Walkthrough</strong>: two constructors<span class="cite"><span> (<code>ReplayChatClient.cs:26-29,37-47</code>)</span></span>, one for a single response, one
           for an ordered list (rejecting an empty list, since a replay client needs at least one recorded
-          answer). <code>LastOptions</code>, <code>LastMessages</code>, <code>CallCount</code><span class="cite"><span> (<code>ReplayChatClient.cs:41-49</code>)</span></span> record what the
+          answer). <code>LastOptions</code>, <code>LastMessages</code>, <code>CallCount</code><span class="cite"><span> (<code>ReplayChatClient.cs:50-56</code>)</span></span> record what the
           client was last called with, for assertions. <code>GetResponseAsync</code> and <code>GetStreamingResponseAsync</code><span class="cite"><span>
-          (<code>ReplayChatClient.cs:57-86</code>)</span></span> both funnel through the private <code>Record</code>, with the streaming path
+          (<code>ReplayChatClient.cs:65-94</code>)</span></span> both funnel through the private <code>Record</code>, with the streaming path
           projecting the SAME recorded response onto the streaming shape via the abstraction&#39;s own
           <code>ToChatResponseUpdates()</code> conversion, so a test asserting the streamed answer exercises the same
           corpus as the buffered path rather than a second, hand-built approximation of it. <code>Record</code><span class="cite"><span>
-          (<code>ReplayChatClient.cs:98-109</code>)</span></span> advances through the recorded list and repeats the LAST response once
+          (<code>ReplayChatClient.cs:104-122</code>)</span></span> advances through the recorded list and repeats the LAST response once
           exhausted, so a test calling once more than it recorded gets a stable answer rather than an exception
-          from the harness pretending to be a failure in the code under test. <code>Dispose</code> is a no-op: the replay
+          from the harness pretending to be a failure in the code under test. It snapshots the messages
+          outside the lock, then takes one <code>Lock</code> (<code>_sync</code>, <span class="cite"><span><code>ReplayChatClient.cs:20</code></span></span>) over the index read, the
+          <code>CallCount</code> increment and the <code>LastMessages</code>/<code>LastOptions</code> writes<span class="cite"><span> (<code>ReplayChatClient.cs:112-121</code>)</span></span>,
+          so concurrent calls neither lose a count nor pair one call&#39;s messages with another call&#39;s options.
+          <code>Dispose</code> is a no-op: the replay
           client holds no transport. <code>GetService</code> returns itself only when asked for its own type.</li>
           <li><strong>Where it&#39;s used</strong>: <a href="#goldenreplaytestsbase"><code>GoldenReplayTestsBase.RunCaseAsync</code></a> constructs one per
           case; <code>ReplayChatClientTests</code>, ADC&#39;s <code>GoldenReplayTests</code>, and <code>ReferenceGoldenReplayTests</code>.</li>
@@ -1413,28 +1435,28 @@
           (<code>InspectStreamedUpdateAsync</code>) checks each fragment rather than the whole answer, so a pattern that
           spans two streamed updates is missed by design; a host that needs whole-answer certainty uses the
           buffered path. <code>[Rubric §16, AI-Native Application Architecture]</code>.</li>
-          <li><strong>Walkthrough</strong>: <code>ConfiguredPatternOptions</code> (<span class="cite"><span><code>ContentPolicyGuardrail.cs:919</code></span></span>,
+          <li><strong>Walkthrough</strong>: <code>ConfiguredPatternOptions</code> (<span class="cite"><span><code>ContentPolicyGuardrail.cs:67</code></span></span>,
           <code>IgnoreCase | CultureInvariant</code>) is what every CONFIGURED pattern compiles with; <code>MatchTimeout</code>
-          (<span class="cite"><span><code>ContentPolicyGuardrail.cs:922</code></span></span>, 1 second) bounds a single match so a pathological pattern cannot
+          (<span class="cite"><span><code>ContentPolicyGuardrail.cs:70</code></span></span>, 1 second) bounds a single match so a pathological pattern cannot
           hang a request; <code>BuiltInPatternOptions</code> adds <code>ExplicitCapture</code> on the BUILT-INS ONLY<span class="cite"><span>
-          (<code>ContentPolicyGuardrail.cs:924-927</code>)</span></span>, because turning that off under a host would silently change
+          (<code>ContentPolicyGuardrail.cs:72-75</code>)</span></span>, because turning that off under a host would silently change
           what a configured pattern&#39;s own backreferences mean. <code>BuiltInMarkers</code><span class="cite"><span>
-          (<code>ContentPolicyGuardrail.cs:929-939</code>)</span></span> pairs eight labeled <code>[GeneratedRegex]</code> patterns
+          (<code>ContentPolicyGuardrail.cs:77-87</code>)</span></span> pairs eight labeled <code>[GeneratedRegex]</code> patterns
           (ignore-previous-instructions, disregard-system-prompt, role-reassignment, new-instructions,
           reveal-system-prompt, act-as-unrestricted, developer-mode, do-anything-now), each with a 1-second
-          generated-regex timeout. The constructor<span class="cite"><span> (<code>ContentPolicyGuardrail.cs:952-959</code>)</span></span> compiles every
+          generated-regex timeout. The constructor<span class="cite"><span> (<code>ContentPolicyGuardrail.cs:100-107</code>)</span></span> compiles every
           configured pattern ONCE, at resolve time; a pattern that does not compile has already failed
           <code>ContentPolicySettings.Validate</code> at startup, so this constructor is not where a typo is discovered.
-          <code>Redact</code><span class="cite"><span> (<code>ContentPolicyGuardrail.cs:967-987</code>)</span></span> rewrites only when <code>InjectionMode</code> is <code>Redact</code>: Block
+          <code>Redact</code><span class="cite"><span> (<code>ContentPolicyGuardrail.cs:115-135</code>)</span></span> rewrites only when <code>InjectionMode</code> is <code>Redact</code>: Block
           mode must inspect what the caller supplied, so rewriting there would hide the marker from the check
           that is supposed to refuse it; Off mode does neither. <code>InspectRequestAsync</code><span class="cite"><span>
-          (<code>ContentPolicyGuardrail.cs:995-1013</code>)</span></span> allows in every mode except <code>Block</code>, because in <code>Redact</code> mode
+          (<code>ContentPolicyGuardrail.cs:143-161</code>)</span></span> allows in every mode except <code>Block</code>, because in <code>Redact</code> mode
           the redactor has already run and there is nothing left to refuse. <code>InspectResponseAsync</code>/
-          <code>InspectStreamedUpdateAsync</code><span class="cite"><span> (<code>ContentPolicyGuardrail.cs:1016-1041</code>)</span></span> both funnel through
+          <code>InspectStreamedUpdateAsync</code><span class="cite"><span> (<code>ContentPolicyGuardrail.cs:164-189</code>)</span></span> both funnel through
           <code>InspectAnswerText</code>, which matches against <code>BlockedResponsePatterns</code> and returns a block reason
           naming the pattern&#39;s INDEX, never the matched text: the reason reaches the caller, and the point of
           the rule was that the text should not. <code>RedactMessage</code>/<code>RedactText</code><span class="cite"><span>
-          (<code>ContentPolicyGuardrail.cs:1180-1215</code>)</span></span> rewrite only <code>TextContent</code>, passing images, function calls,
+          (<code>ContentPolicyGuardrail.cs:328-363</code>)</span></span> rewrite only <code>TextContent</code>, passing images, function calls,
           and provider-specific content through untouched: a guardrail that silently dropped content it does
           not understand would be a far worse failure than leaving it alone.</li>
           <li><strong>Why it&#39;s built this way</strong>: matches the ADR-120 governed pipeline&#39;s split between redaction (silent,
@@ -1463,15 +1485,15 @@
           pattern, not the first user who trips it, is the one who sees it.</li>
           <li><strong>Walkthrough</strong>: <code>SectionName = &quot;Ai:ContentPolicy&quot;</code><span class="cite"><span> (<code>ContentPolicySettings.cs:26</code>)</span></span>;
           <code>DefaultRedactionPlaceholder = &quot;[redacted-instruction]&quot;</code><span class="cite"><span> (<code>ContentPolicySettings.cs:29</code>)</span></span>, a VISIBLE
-          placeholder on purpose (<span class="cite"><span><code>ContentPolicySettings.cs:1276-1280</code></span></span> remark) so the model can tell something
+          placeholder on purpose (<span class="cite"><span><code>ContentPolicySettings.cs:63-67</code></span></span> remark) so the model can tell something
           was removed and a trace reviewer can tell a redaction from a sentence the user never wrote.
-          <code>InjectionMode</code> defaults <code>Redact</code><span class="cite"><span> (<code>ContentPolicySettings.cs:1248</code>)</span></span>.
-          <code>AdditionalRequestPatterns</code>/<code>BlockedResponsePatterns</code><span class="cite"><span> (<code>ContentPolicySettings.cs:1258,1270</code>)</span></span> default
+          <code>InjectionMode</code> defaults <code>Redact</code><span class="cite"><span> (<code>ContentPolicySettings.cs:35</code>)</span></span>.
+          <code>AdditionalRequestPatterns</code>/<code>BlockedResponsePatterns</code><span class="cite"><span> (<code>ContentPolicySettings.cs:45,57</code>)</span></span> default
           to empty; an empty <code>BlockedResponsePatterns</code> switches the response half of the policy off entirely,
           because a model that has already said the thing cannot unsay it, so the only available response-side
-          answer is a refusal. <code>RedactionPlaceholder</code> is <code>[Required]</code><span class="cite"><span> (<code>ContentPolicySettings.cs:1281</code>)</span></span>.
-          <code>Validate</code><span class="cite"><span> (<code>ContentPolicySettings.cs:1295-1306</code>)</span></span> runs <code>ValidatePatterns</code> over both lists, which calls
-          <code>DescribeFailure</code><span class="cite"><span> (<code>ContentPolicySettings.cs:1329-1345</code>)</span></span> per pattern: an empty-or-whitespace pattern
+          answer is a refusal. <code>RedactionPlaceholder</code> is <code>[Required]</code><span class="cite"><span> (<code>ContentPolicySettings.cs:68</code>)</span></span>.
+          <code>Validate</code><span class="cite"><span> (<code>ContentPolicySettings.cs:82-93</code>)</span></span> runs <code>ValidatePatterns</code> over both lists, which calls
+          <code>DescribeFailure</code><span class="cite"><span> (<code>ContentPolicySettings.cs:116-132</code>)</span></span> per pattern: an empty-or-whitespace pattern
           is rejected outright (it would match everything, &quot;never what a policy meant&quot;), otherwise the pattern
           is compiled with <code>ContentPolicyGuardrail.ConfiguredPatternOptions</code>/<code>MatchTimeout</code> and any
           <code>ArgumentException</code> message is surfaced against <code>SectionName:memberName[index]</code>.</li>
@@ -1484,29 +1506,36 @@
           <hr>
           <h3 id="piiredactionguardrail">PiiRedactionGuardrail</h3>
           <blockquote>
-          <p>MMCA.Common.AI.Guardrails · <code>MMCA.Common.AI.Guardrails</code> · <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/PiiRedactionGuardrail.cs:39</code></span></span> · Level 2 · class</p>
+          <p>MMCA.Common.AI.Guardrails · <code>MMCA.Common.AI.Guardrails</code> · <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/PiiRedactionGuardrail.cs:39</code></span></span> · Level 3 · class</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the sealed partial class implementing
           <a href="#ichatrequestredactor"><code>IChatRequestRedactor</code></a> and <code>IChatGuardrail</code> that strips emails and phone
-          numbers from outgoing message text. The guardrail half is a pass-through (always <code>Allow</code>): this type
+          numbers from the text carried by outgoing messages, tool calls and tool results included. The guardrail half is a pass-through (always <code>Allow</code>): this type
           only redacts, it never blocks.</li>
           <li><strong>Depends on</strong>: <a href="#ichatrequestredactor"><code>IChatRequestRedactor</code></a>/<code>IChatGuardrail</code>/<code>GuardrailVerdict</code>,
           <code>System.Text.RegularExpressions</code>.</li>
           <li><strong>Concept introduced, configuration-free, unconditional redaction.</strong> Contrasts with
           <a href="#contentpolicyguardrail"><code>ContentPolicyGuardrail</code></a>: <code>PiiRedactionGuardrail</code> has no configurable
           options and applies to every outgoing message unconditionally.</li>
-          <li><strong>Walkthrough</strong>: <code>EmailPattern</code>/<code>PhonePattern</code><span class="cite"><span> (<code>PiiRedactionGuardrail.cs:1397-1407</code>)</span></span> are
+          <li><strong>Walkthrough</strong>: <code>EmailPattern</code>/<code>PhonePattern</code><span class="cite"><span> (<code>PiiRedactionGuardrail.cs:70-80</code>)</span></span> are
           <code>[GeneratedRegex]</code> source-generated matchers with a 1-second timeout (email: a standard
           local-part@domain shape; phone: an optional leading country code plus a 10-digit US-shaped number,
           guarded by negative lookaround so it does not clip a longer digit run). <code>Redact</code><span class="cite"><span>
-          (<code>PiiRedactionGuardrail.cs:1372-1383</code>)</span></span> rewrites EVERY message, not only <code>ChatRole.User</code> (unlike
+          (<code>PiiRedactionGuardrail.cs:45-56</code>)</span></span> rewrites EVERY message, not only <code>ChatRole.User</code> (unlike
           <code>ContentPolicyGuardrail</code>), via the private <code>RedactMessage</code><span class="cite"><span>
-          (<code>PiiRedactionGuardrail.cs:1409-1435</code>)</span></span>, which replaces email matches then phone matches in
-          <code>TextContent</code> only, passing other content types through untouched for the same reason
-          <code>ContentPolicyGuardrail</code> does (a guardrail that silently dropped content it does not understand would
-          be worse than leaving it alone). <code>InspectRequestAsync</code>/<code>InspectResponseAsync</code><span class="cite"><span>
-          (<code>PiiRedactionGuardrail.cs:1386-1395</code>)</span></span> both unconditionally return <code>GuardrailVerdict.Allow</code>.</li>
+          (<code>PiiRedactionGuardrail.cs:82-98</code>)</span></span>, which rebuilds each message (keeping role, <code>AuthorName</code>,
+          <code>MessageId</code> and <code>AdditionalProperties</code>) and hands every content item to <code>RedactContent</code><span class="cite"><span>
+          (<code>PiiRedactionGuardrail.cs:105-123</code>)</span></span>. That switch rewrites non-empty <code>TextContent</code> and
+          <code>TextReasoningContent</code>, a <code>FunctionResultContent</code> whose result is a <code>string</code>, and the <code>string</code>
+          argument values of a <code>FunctionCallContent</code> (other argument values kept as-is), because a tool&#39;s
+          output is exactly where contact details turn up (a customer lookup, a directory search). Each
+          rewrite goes through <code>RedactText</code><span class="cite"><span> (<code>PiiRedactionGuardrail.cs:125-126</code>)</span></span>, which replaces email
+          matches then phone matches. Binary and other non-text content (images, non-string tool results,
+          provider-specific items) passes through untouched for the same reason <code>ContentPolicyGuardrail</code> gives
+          (a guardrail that silently dropped content it does not understand would be worse than leaving it
+          alone). <code>InspectRequestAsync</code>/<code>InspectResponseAsync</code><span class="cite"><span>
+          (<code>PiiRedactionGuardrail.cs:59-68</code>)</span></span> both unconditionally return <code>GuardrailVerdict.Allow</code>.</li>
           <li><strong>Why it&#39;s built this way</strong>: unconditional redaction with zero configuration lets the guardrail
           satisfy <code>AiSettings.RequireGuardrail</code> with no setup. See
           <a href="https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html" target="_blank" rel="noopener"><code>ADR-120</code></a> and
@@ -1535,10 +1564,10 @@
           a host that later gives the type state would otherwise get two copies of it. Registration uses C#
           extension members as the idiom, not static extension methods.</li>
           <li><strong>Walkthrough</strong>: <code>AddPiiRedactionGuardrail</code><span class="cite"><span>
-          (<code>GuardrailServiceCollectionExtensions.cs:1475-1486</code>)</span></span> registers <code>PiiRedactionGuardrail</code> once via
+          (<code>GuardrailServiceCollectionExtensions.cs:33-44</code>)</span></span> registers <code>PiiRedactionGuardrail</code> once via
           <code>TryAddSingleton</code>, then <code>TryAddEnumerable</code>-registers it under both <code>IChatGuardrail</code> and
           <code>IChatRequestRedactor</code>. <code>AddContentPolicyGuardrail</code><span class="cite"><span>
-          (<code>GuardrailServiceCollectionExtensions.cs:1504-1521</code>)</span></span> additionally binds <code>ContentPolicySettings</code> from
+          (<code>GuardrailServiceCollectionExtensions.cs:62-79</code>)</span></span> additionally binds <code>ContentPolicySettings</code> from
           <code>Ai:ContentPolicy</code> with <code>.ValidateDataAnnotations().ValidateOnStart()</code> (so a bad pattern fails the
           deployment, not a user&#39;s request) before registering <code>ContentPolicyGuardrail</code> the same two-contract
           way. Both methods&#39; doc remarks state they must be called BEFORE <code>AddMmcaChatClient</code>, which reads the
@@ -1556,10 +1585,10 @@
           <ul>
           <li><strong>What it is</strong>: the boundary a vendor SDK adapter implements to plug into <code>AddMmcaChatClient</code>&#39;s
           provider selection. <code>Name</code><span class="cite"><span> (<code>IAiProviderFactory.cs:31</code>)</span></span> is the case-insensitive string a config file&#39;s
-          <code>Ai:Provider</code> selects it by; <code>Create</code><span class="cite"><span> (<code>IAiProviderFactory.cs:39</code>)</span></span> builds the ungoverned
+          <code>Ai:Provider</code> selects it by; <code>Create</code><span class="cite"><span> (<code>IAiProviderFactory.cs:34</code>)</span></span> builds the ungoverned
           <code>IChatClient</code> for already-validated <a href="#aisettings"><code>AiSettings</code></a>.</li>
           <li><strong>Depends on</strong>: <a href="#aisettings"><code>AiSettings</code></a> (the bound <code>Ai</code> section it receives), <code>Microsoft.Extensions.AI.IChatClient</code>
-          and <code>IServiceProvider</code> (both external), both parameters of <code>Create</code><span class="cite"><span> (<code>IAiProviderFactory.cs:39</code>)</span></span>.</li>
+          and <code>IServiceProvider</code> (both external), both parameters of <code>Create</code><span class="cite"><span> (<code>IAiProviderFactory.cs:34</code>)</span></span>.</li>
           <li><strong>Concept introduced, the provider-factory boundary.</strong> <code>[Rubric §1, SOLID]</code> (assesses dependency
           inversion and substitutability): <code>AddMmcaChatClient</code> and <a href="#aiprovidervalidator"><code>AiProviderValidator</code></a> depend only on this
           interface, never on a concrete vendor SDK type, so a new provider (a third LLM vendor) is one new
@@ -1568,13 +1597,13 @@
           first-class, swappable concern rather than hard-wired code): this interface is the entire swap point,
           recorded in <a href="https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html" target="_blank" rel="noopener">ADR-120</a>.</li>
           <li><strong>Walkthrough</strong>: two members only, <code>Name</code> (<span class="cite"><span><code>IAiProviderFactory.cs:31</code></span></span>, a <code>string</code> getter) and
-          <code>Create(AiSettings settings, IServiceProvider serviceProvider)</code> (<span class="cite"><span><code>IAiProviderFactory.cs:39</code></span></span>, returns
-          <code>IChatClient</code>). The doc comment on <code>Create</code><span class="cite"><span> (<code>IAiProviderFactory.cs:38</code>)</span></span> records that ownership of the
+          <code>Create(AiSettings settings, IServiceProvider serviceProvider)</code> (<span class="cite"><span><code>IAiProviderFactory.cs:34</code></span></span>, returns
+          <code>IChatClient</code>). The doc comment on <code>Create</code><span class="cite"><span> (<code>IAiProviderFactory.cs:33</code>)</span></span> records that ownership of the
           returned client passes to the governed pipeline that wraps it, i.e. the factory itself never disposes
           what it builds.</li>
           <li><strong>Why it&#39;s built this way</strong>: <code>serviceProvider</code> is passed alongside <code>settings</code> so an adapter that needs
           a logger or a named <code>HttpClient</code> factory can resolve one without the interface growing a parameter per
-          future need<span class="cite"><span> (<code>IAiProviderFactory.cs:37</code>)</span></span>. The instances that implement it, <a href="#anthropicaiproviderfactory"><code>AnthropicAiProviderFactory</code></a>
+          future need<span class="cite"><span> (<code>IAiProviderFactory.cs:32</code>)</span></span>. The instances that implement it, <a href="#anthropicaiproviderfactory"><code>AnthropicAiProviderFactory</code></a>
           and <a href="#openaiproviderfactory"><code>OpenAiProviderFactory</code></a>, are registered as <code>IEnumerable&lt;IAiProviderFactory&gt;</code> so <code>AddMmcaChatClient</code> and
           <a href="#aiprovidervalidator"><code>AiProviderValidator</code></a> can enumerate every adapter package the host actually referenced, never a fixed list.</li>
           <li><strong>Where it&#39;s used</strong>: <code>DependencyInjection.cs</code> in <code>MMCA.Common.AI</code> resolves the matching factory to
@@ -1603,17 +1632,17 @@
           the chat client.</li>
           <li><strong>Walkthrough</strong>: the constructor captures the injected factories into a fixed array
           (<span class="cite"><span><code>AiProviderValidator.cs:18</code></span></span>, <code>_factories = [.. factories]</code>). <code>Validate</code><span class="cite"><span> (<code>AiProviderValidator.cs:65</code>)</span></span>
-          first short-circuits when <code>Enabled</code> is false or <code>Provider</code> is blank (<span class="cite"><span><code>AiProviderValidator.cs:71</code></span></span>,
+          first short-circuits when <code>Enabled</code> is false or <code>Provider</code> is blank (<span class="cite"><span><code>AiProviderValidator.cs:27</code></span></span>,
           deferring to the data-annotation validator so the blank case is reported exactly once, not twice).
-          Otherwise it calls the static helper <code>Match</code><span class="cite"><span> (<code>AiProviderValidator.cs:85</code>)</span></span>, which does a case-insensitive
+          Otherwise it calls the static helper <code>Match</code><span class="cite"><span> (<code>AiProviderValidator.cs:41</code>)</span></span>, which does a case-insensitive
           <code>FirstOrDefault</code> over the factories&#39; <code>Name</code>; a hit returns <code>Success</code>, a miss calls <code>DescribeMismatch</code><span class="cite"><span>
-          (<code>AiProviderValidator.cs:92</code>)</span></span> to build the failure text. <code>DescribeMismatch</code> branches on whether any
-          factory is registered at all<span class="cite"><span> (<code>AiProviderValidator.cs:96</code>)</span></span>: zero factories means no adapter package is
+          (<code>AiProviderValidator.cs:48</code>)</span></span> to build the failure text. <code>DescribeMismatch</code> branches on whether any
+          factory is registered at all<span class="cite"><span> (<code>AiProviderValidator.cs:52</code>)</span></span>: zero factories means no adapter package is
           referenced, so the message names both adapter packages and their registration calls
           (<code>AddAnthropicAiProvider()</code>, <code>AddOpenAiProvider()</code>) plus the manual <code>AddMmcaChatClient</code> overload<span class="cite"><span>
-          (<code>AiProviderValidator.cs:98-101</code>)</span></span>; one or more factories means the name is simply wrong, so the message
-          lists the registered provider names, sorted case-insensitively<span class="cite"><span> (<code>AiProviderValidator.cs:104,106</code>)</span></span>.</li>
-          <li><strong>Why it&#39;s built this way</strong>: <code>Match</code> and <code>DescribeMismatch</code> are <code>internal static</code><span class="cite"><span> (<code>AiProviderValidator.cs:85,92</code>)</span></span>
+          (<code>AiProviderValidator.cs:54-57</code>)</span></span>; one or more factories means the name is simply wrong, so the message
+          lists the registered provider names, sorted case-insensitively<span class="cite"><span> (<code>AiProviderValidator.cs:60,62</code>)</span></span>.</li>
+          <li><strong>Why it&#39;s built this way</strong>: <code>Match</code> and <code>DescribeMismatch</code> are <code>internal static</code><span class="cite"><span> (<code>AiProviderValidator.cs:41,48</code>)</span></span>
           so the unit tests can exercise the matching and message-building logic directly without standing up
           the full options pipeline. The class itself is <code>internal sealed</code><span class="cite"><span> (<code>AiProviderValidator.cs:16</code>)</span></span>: it is
           wiring, registered by <code>MMCA.Common.AI</code>&#39;s own <code>DependencyInjection.cs</code>, not a public extension point.</li>
@@ -1630,23 +1659,23 @@
           equals <code>Anthropic</code> (<code>ProviderName</code>, <span class="cite"><span><code>AnthropicAiProviderFactory.cs:16</code></span></span>).</li>
           <li><strong>Depends on</strong>: <a href="#iaiproviderfactory"><code>IAiProviderFactory</code></a>, <a href="#aisettings"><code>AiSettings</code></a>; externally, the Anthropic SDK&#39;s <code>AnthropicClient</code>
           and <code>ClientOptions</code>, and <code>Microsoft.Extensions.AI</code>&#39;s <code>AsIChatClient</code> adapter extension<span class="cite"><span>
-          (<code>AnthropicAiProviderFactory.cs:164</code>)</span></span>.</li>
+          (<code>AnthropicAiProviderFactory.cs:48</code>)</span></span>.</li>
           <li><strong>Concept</strong>: first concrete example of the factory boundary <a href="#iaiproviderfactory"><code>IAiProviderFactory</code></a> introduces; see that
           section for the swap-point rationale. Introduces one new idea of its own: <code>AsIChatClient</code> is the SDK&#39;s
           own <code>Microsoft.Extensions.AI</code> adapter, so this factory never hand-rolls the Messages API over
-          <code>HttpClient</code><span class="cite"><span> (<code>AnthropicAiProviderFactory.cs:140-144</code>)</span></span>.</li>
-          <li><strong>Walkthrough</strong>: <code>Name</code> returns the <code>const string ProviderName = &quot;Anthropic&quot;</code><span class="cite"><span> (<code>AnthropicAiProviderFactory.cs:133,136</code>)</span></span>.
-          <code>Create</code><span class="cite"><span> (<code>AnthropicAiProviderFactory.cs:149</code>)</span></span> null-checks <code>settings</code>, builds an SDK <code>ClientOptions</code>
-          from <code>ApiKey</code> and <code>Timeout</code><span class="cite"><span> (<code>AnthropicAiProviderFactory.cs:153-157</code>)</span></span>, and, when <code>settings.Endpoint</code>
-          is set, overrides <code>BaseUrl</code><span class="cite"><span> (<code>AnthropicAiProviderFactory.cs:159-162</code>)</span></span>. It then constructs
+          <code>HttpClient</code><span class="cite"><span> (<code>AnthropicAiProviderFactory.cs:24-25</code>)</span></span>.</li>
+          <li><strong>Walkthrough</strong>: <code>Name</code> returns the <code>const string ProviderName = &quot;Anthropic&quot;</code><span class="cite"><span> (<code>AnthropicAiProviderFactory.cs:17,20</code>)</span></span>.
+          <code>Create</code><span class="cite"><span> (<code>AnthropicAiProviderFactory.cs:33</code>)</span></span> null-checks <code>settings</code>, builds an SDK <code>ClientOptions</code>
+          from <code>ApiKey</code> and <code>Timeout</code><span class="cite"><span> (<code>AnthropicAiProviderFactory.cs:37-41</code>)</span></span>, and, when <code>settings.Endpoint</code>
+          is set, overrides <code>BaseUrl</code><span class="cite"><span> (<code>AnthropicAiProviderFactory.cs:43-46</code>)</span></span>. It then constructs
           <code>new AnthropicClient(options).AsIChatClient(settings.Model, settings.MaxOutputTokens)</code><span class="cite"><span>
-          (<code>AnthropicAiProviderFactory.cs:164</code>)</span></span>, passing the model and output ceiling as the client&#39;s defaults.</li>
+          (<code>AnthropicAiProviderFactory.cs:48</code>)</span></span>, passing the model and output ceiling as the client&#39;s defaults.</li>
           <li><strong>Why it&#39;s built this way</strong>: a <code>[SuppressMessage(&quot;Reliability&quot;, &quot;CA2000&quot;, ...)]</code> on <code>Create</code><span class="cite"><span>
-          (<code>AnthropicAiProviderFactory.cs:145-148</code>)</span></span> documents why the built client is not disposed here: ownership
+          (<code>AnthropicAiProviderFactory.cs:29-32</code>)</span></span> documents why the built client is not disposed here: ownership
           passes to the <code>IChatClient</code> the pipeline wraps (see <a href="#boundedchatclient"><code>BoundedChatClient</code></a>), and the DI
           container disposes it with the singleton; disposing in the factory would close the transport before the
           first call. The model and output ceiling passed as SDK defaults are not the last word: <code>BoundedChatClient</code>
-          still pins and clamps per call<span class="cite"><span> (<code>AnthropicAiProviderFactory.cs:141-143</code>)</span></span>, because a default is a
+          still pins and clamps per call<span class="cite"><span> (<code>AnthropicAiProviderFactory.cs:26-27</code>)</span></span>, because a default is a
           suggestion and a bound is not. Recorded in <a href="https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html" target="_blank" rel="noopener">ADR-120</a>.</li>
           <li><strong>Where it&#39;s used</strong>: registered by <a href="#anthropicaiservicecollectionextensions-openaiservicecollectionextensions"><code>AnthropicAiServiceCollectionExtensions</code></a>.<code>AddAnthropicAiProvider()</code>; exercised by
           <code>MMCA.Common/Tests/Core/MMCA.Common.AI.Tests/Providers/AdapterFactoryTests.cs</code>.</li>
@@ -1660,21 +1689,21 @@
           equals <code>OpenAI</code> (<code>ProviderName</code>, <span class="cite"><span><code>OpenAiProviderFactory.cs:20</code></span></span>).</li>
           <li><strong>Depends on</strong>: <a href="#iaiproviderfactory"><code>IAiProviderFactory</code></a>, <a href="#aisettings"><code>AiSettings</code></a>; externally, <code>OpenAI</code>&#39;s <code>OpenAIClient</code>,
           <code>OpenAIClientOptions</code>, <code>System.ClientModel.ApiKeyCredential</code>, and <code>Microsoft.Extensions.AI</code>&#39;s
-          <code>AsIChatClient</code><span class="cite"><span> (<code>OpenAiProviderFactory.cs:217-219</code>)</span></span>.</li>
+          <code>AsIChatClient</code><span class="cite"><span> (<code>OpenAiProviderFactory.cs:49-51</code>)</span></span>.</li>
           <li><strong>Concept</strong>: same factory-boundary role as <a href="#anthropicaiproviderfactory"><code>AnthropicAiProviderFactory</code></a> (see <a href="#iaiproviderfactory"><code>IAiProviderFactory</code></a> for the
           shared rationale). Differs in one behavior worth flagging on its own: the OpenAI client binds its
-          model at construction time, not per call<span class="cite"><span> (<code>OpenAiProviderFactory.cs:196-199</code>)</span></span>.</li>
-          <li><strong>Walkthrough</strong>: <code>Name</code> returns the <code>const string ProviderName = &quot;OpenAI&quot;</code><span class="cite"><span> (<code>OpenAiProviderFactory.cs:189,192</code>)</span></span>.
-          <code>Create</code><span class="cite"><span> (<code>OpenAiProviderFactory.cs:201</code>)</span></span> null-checks <code>settings</code>, then requires both <code>Model</code><span class="cite"><span>
-          (<code>OpenAiProviderFactory.cs:205-206</code>)</span></span> and <code>ApiKey</code><span class="cite"><span> (<code>OpenAiProviderFactory.cs:207-208</code>)</span></span> with an
+          model at construction time, not per call<span class="cite"><span> (<code>OpenAiProviderFactory.cs:28-31</code>)</span></span>.</li>
+          <li><strong>Walkthrough</strong>: <code>Name</code> returns the <code>const string ProviderName = &quot;OpenAI&quot;</code><span class="cite"><span> (<code>OpenAiProviderFactory.cs:21,24</code>)</span></span>.
+          <code>Create</code><span class="cite"><span> (<code>OpenAiProviderFactory.cs:33</code>)</span></span> null-checks <code>settings</code>, then requires both <code>Model</code><span class="cite"><span>
+          (<code>OpenAiProviderFactory.cs:37-38</code>)</span></span> and <code>ApiKey</code><span class="cite"><span> (<code>OpenAiProviderFactory.cs:39-40</code>)</span></span> with an
           <code>InvalidOperationException</code> naming the missing <code>Ai:</code> setting when either is absent, unlike Anthropic&#39;s
           factory, which tolerates a null model. It builds <code>OpenAIClientOptions</code> from <code>Timeout</code><span class="cite"><span>
-          (<code>OpenAiProviderFactory.cs:210</code>)</span></span>, applies <code>Endpoint</code> when set<span class="cite"><span> (<code>OpenAiProviderFactory.cs:212-215</code>)</span></span>, and
+          (<code>OpenAiProviderFactory.cs:42</code>)</span></span>, applies <code>Endpoint</code> when set<span class="cite"><span> (<code>OpenAiProviderFactory.cs:44-47</code>)</span></span>, and
           returns <code>new OpenAIClient(new ApiKeyCredential(apiKey), options).GetChatClient(model).AsIChatClient()</code><span class="cite"><span>
-          (<code>OpenAiProviderFactory.cs:217-219</code>)</span></span>.</li>
+          (<code>OpenAiProviderFactory.cs:49-51</code>)</span></span>.</li>
           <li><strong>Why it&#39;s built this way</strong>: because the SDK binds the model at construction, the pinned model is the
           only one every request can go to; <a href="#boundedchatclient"><code>BoundedChatClient</code></a> refuses a request naming any other model<span class="cite"><span>
-          (<code>OpenAiProviderFactory.cs:196-199</code>)</span></span>, which keeps a <a href="#promptcontract"><code>PromptContract</code></a>&#39;s model assertion meaningful here the
+          (<code>OpenAiProviderFactory.cs:28-31</code>)</span></span>, which keeps a <a href="#promptcontract"><code>PromptContract</code></a>&#39;s model assertion meaningful here the
           same way it is on adapters (Anthropic&#39;s) that honor a per-request override. The eager
           <code>InvalidOperationException</code> on a missing model or key fails at first <code>Create</code> call rather than deeper
           inside the SDK. Recorded in <a href="https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html" target="_blank" rel="noopener">ADR-120</a>.</li>

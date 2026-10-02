@@ -31,7 +31,7 @@ by every host without per-platform reimplementation. There are three host projec
 interactive Server circuit), `MMCA.ADC.UI.Web.Client` (the Blazor **WebAssembly** client, compiled
 to run in the browser), and `MMCA.ADC.UI` (the **.NET MAUI** host, which packages the same
 components into a native app and renders them in a `BlazorWebView`). Read the three composition
-roots side by side (`MMCA.ADC.UI.Web/Program.cs:34-178`, `MMCA.ADC.UI.Web.Client/Program.cs:23-76`,
+roots side by side (`MMCA.ADC.UI.Web/Program.cs:35-190`, `MMCA.ADC.UI.Web.Client/Program.cs:23-76`,
 `MMCA.ADC.UI/MauiProgram.cs:53-198`) and the family resemblance is obvious: the same MudBlazor
 registration, the same `AddUIShared(builder.Configuration)`, the same four conditional module
 registrations, then a short tail of host-specific adapters. `[Rubric §18, UI Architecture]` assesses
@@ -51,25 +51,25 @@ library defines the contracts, the host supplies the adapters, and the framework
 host-specific. **Home-page content**:
 [`IHomePageContent`](group-15-common-ui-framework.md#ihomepagecontent) lets the shared `/` route
 render an app-specific landing page, and each head registers its own
-[`ADCHomePageContent`](#adchomepagecontent) (web `MMCA.ADC.UI.Web/Program.cs:92` and
+[`ADCHomePageContent`](#adchomepagecontent) (web `MMCA.ADC.UI.Web/Program.cs:93` and
 `MMCA.ADC.UI.Web.Client/Program.cs:45`, MAUI `MMCA.ADC.UI/MauiProgram.cs:124`). **Token storage**:
 [`ITokenStorageService`](group-15-common-ui-framework.md#itokenstorageservice) abstracts where JWTs
 live, and each head picks its implementation in one line: `AddCommonMauiTokenStorage()` on MAUI
 (`MMCA.ADC.UI/MauiProgram.cs:163`, backed by the framework's
 [`MauiTokenStorageService`](group-26-device-capability-layer.md#mauitokenstorageservice)),
-`AddCommonServerTokenStorage()` on the Server head (`MMCA.ADC.UI.Web/Program.cs:144`, backed by
+`AddCommonServerTokenStorage()` on the Server head (`MMCA.ADC.UI.Web/Program.cs:145`, backed by
 [`ServerTokenStorageService`](group-15-common-ui-framework.md#servertokenstorageservice)), and an
 explicit [`WasmTokenStorageService`](group-15-common-ui-framework.md#wasmtokenstorageservice)
 registration in the browser client (`MMCA.ADC.UI.Web.Client/Program.cs:48`). The refresher behind
 [`ITokenRefresher`](group-15-common-ui-framework.md#itokenrefresher) splits the same way: the two
 browser heads use
 [`SameOriginProxyTokenRefresher`](group-15-common-ui-framework.md#sameoriginproxytokenrefresher)
-(`MMCA.ADC.UI.Web/Program.cs:145`, `MMCA.ADC.UI.Web.Client/Program.cs:49`) while MAUI, which has no
+(`MMCA.ADC.UI.Web/Program.cs:146`, `MMCA.ADC.UI.Web.Client/Program.cs:49`) while MAUI, which has no
 same-origin proxy to lean on, uses
 [`DirectApiTokenRefresher`](group-15-common-ui-framework.md#directapitokenrefresher)
 (`MMCA.ADC.UI/MauiProgram.cs:164`). **Form factor** is the same story in three registration lines:
 `AddCommonWebFormFactor()`, `AddWasmFormFactor()`, and `AddMauiFormFactor()`
-(`MMCA.ADC.UI.Web/Program.cs:164`, `MMCA.ADC.UI.Web.Client/Program.cs:76`,
+(`MMCA.ADC.UI.Web/Program.cs:176`, `MMCA.ADC.UI.Web.Client/Program.cs:76`,
 `MMCA.ADC.UI/MauiProgram.cs:169`), all satisfying the same
 [`IFormFactor`](group-26-device-capability-layer.md#iformfactor) contract. OAuth button availability
 ([`IOAuthUISettings`](group-15-common-ui-framework.md#ioauthuisettings), satisfied by
@@ -89,14 +89,14 @@ above the registration sequence, so the per-call comments can stay short
 [`IOAuthUISettings`](group-15-common-ui-framework.md#ioauthuisettings) is registered **before**
 `AddUIShared` on every head, because a `TryAdd` already satisfied by an earlier plain `Add` is a
 no-op, and that is what makes the head's implementation win and the social-login buttons appear
-(`MMCA.ADC.UI/MauiProgram.cs:99,101`, `MMCA.ADC.UI.Web/Program.cs:84-85`,
+(`MMCA.ADC.UI/MauiProgram.cs:99,101`, `MMCA.ADC.UI.Web/Program.cs:85-86`,
 `MMCA.ADC.UI.Web.Client/Program.cs:38-39`). Direction two: everything that overrides a shared
 null/neutral default goes **after** it, which covers `UseMauiDeviceCapabilities()`
 (`MauiProgram.cs:104`), the push token providers `AddMauiPushDeviceTokenProvider()`
 ([ADR-044](https://ivanball.github.io/docs/adr/044-native-push-delivery.html),
 `MauiProgram.cs:120`), `UseCommonBarcodeScanner(...)` for badge-check-in QR scanning
 (`MauiProgram.cs:151-153`), and `AddBrowserDeviceCapabilities()` on the web heads
-(`MMCA.ADC.UI.Web/Program.cs:90`, `MMCA.ADC.UI.Web.Client/Program.cs:43`). Direction three: a module
+(`MMCA.ADC.UI.Web/Program.cs:91`, `MMCA.ADC.UI.Web.Client/Program.cs:43`). Direction three: a module
 that registers its own default with a plain `Add` must be beaten the same way, which is why
 `AddCommonMauiPublicLinkBuilder()` (the framework's MAUI
 [`IPublicLinkBuilder`](group-15-common-ui-framework.md#ipubliclinkbuilder), so a copied link points
@@ -105,7 +105,7 @@ at the public web site rather than at the WebView origin) stays after every modu
 provider: `AddCommonBlazorCsp()`, backed by
 [`BlazorCspPolicyProvider`](group-15-common-ui-framework.md#blazorcsppolicyprovider), is registered
 *before* `AddCommonSecurityHeaders(...)` so it wins over the static default
-(`MMCA.ADC.UI.Web/Program.cs:177-178`), feeding the framework's
+(`MMCA.ADC.UI.Web/Program.cs:189-190`), feeding the framework's
 [`SecurityHeadersMiddleware`](group-16-aspire-orchestration.md#securityheadersmiddleware) over the
 [`ICspPolicyProvider`](group-16-aspire-orchestration.md#icsppolicyprovider) boundary. The MAUI
 comment block also records the one ordering-insensitive call in the sequence,
@@ -117,7 +117,7 @@ an uncaught managed exception is logged rather than silently killing the app: a 
 **Which modules are in the build is configuration, not code.** All three heads gate every module UI
 behind
 [`UIModuleConfiguration`](group-15-common-ui-framework.md#uimoduleconfiguration)`.IsModuleEnabled`
-(`MMCA.ADC.UI/MauiProgram.cs:127-137`, `MMCA.ADC.UI.Web/Program.cs:150-160`,
+(`MMCA.ADC.UI/MauiProgram.cs:127-137`, `MMCA.ADC.UI.Web/Program.cs:162-172`,
 `MMCA.ADC.UI.Web.Client/Program.cs:55-65`), reading the `Modules` section (all four enabled in the
 MAUI head's embedded settings, `MMCA.ADC.UI/appsettings.json:8-13`), so a deployment can ship
 Conference-only, or Conference plus Engagement, without touching source. That is the client-side
@@ -127,7 +127,7 @@ and the shell composes nav items, routable assemblies, and layout components fro
 registered. On the web host the composition is explicit at the end of `Program.cs`: every registered
 `IUIModule`'s `Assembly` is concatenated with the three shared UI assemblies, deduplicated, and
 handed to `MapRazorComponents<App>().AddAdditionalAssemblies(...)`
-(`MMCA.ADC.UI.Web/Program.cs:287-301`). This is the group's cleanest
+(`MMCA.ADC.UI.Web/Program.cs:300-314`). This is the group's cleanest
 `[Rubric §15, Best Practices & Code Quality]` and `[Rubric §25, Navigation, Routing & IA]` moment: routes and
 navigation are *discovered* from the enabled module set rather than maintained in a central list.
 
@@ -219,7 +219,7 @@ own widget (`MainActivity.cs:80-91`). Its `OnResume`
 and `OnNewIntent` overrides also forward to `EssentialsPlatform` so a cold-start shortcut tap
 actually raises `OnAppAction` (`MainActivity.cs:49-55,61`). [`AppDelegate`](#appdelegate) does the
 equivalent for iOS Universal Links in `ContinueUserActivity`
-(`MMCA.ADC.UI/Platforms/iOS/AppDelegate.cs:26-44`), forwards shortcut taps to Essentials in
+(`MMCA.ADC.UI/Platforms/iOS/AppDelegate.cs:26-49`), forwards shortcut taps to Essentials in
 `PerformActionForShortcutItem` (`AppDelegate.cs:63-67`), and carries the two fixed UIKit selectors
 that publish the APNs device token (or a null on failure) into the framework's `ApnsTokenBridge`
 (`AppDelegate.cs:52-59`,
@@ -247,7 +247,7 @@ failure (`NowNextWidgetProvider.cs:57-62`), which with the widget's own 8-second
 (`NowNextWidgetProvider.cs:119`) is a compact `[Rubric §29, Resilience]` statement about an optional
 surface. The web side of the link association is served by the Blazor host, which maps the App Links
 and Universal Links association documents from configuration
-(`MMCA.ADC.UI.Web/Program.cs:266-277`), and the applinks components mirror the same Blazor routes
+(`MMCA.ADC.UI.Web/Program.cs:279-290`), and the applinks components mirror the same Blazor routes
 the app uses: identical URLs on web and device, no route translation table.
 
 **Testability of a head that has no test project.** No MAUI target framework in this workspace has a
@@ -270,12 +270,12 @@ logic out of an untestable host so it can be asserted where a test runner exists
 **Host security: platform-appropriate token handling.** The token-storage choices are a compact
 study in secret handling matched to the threat model. On the browser heads the high-value *refresh*
 token is never exposed to JavaScript: it stays in an HttpOnly cookie and is exchanged through a
-same-origin proxy refresher (`MMCA.ADC.UI.Web/Program.cs:145`,
+same-origin proxy refresher (`MMCA.ADC.UI.Web/Program.cs:146`,
 `MMCA.ADC.UI.Web.Client/Program.cs:49`), and the Server head additionally runs a cookie-backed SSR
 authentication scheme,
 [`SessionCookieAuthenticationHandler`](group-08-auth.md#sessioncookieauthenticationhandler), plus an
 SSR validate-or-refresh step ahead of authentication, so `[Authorize]` component routes survive F5
-and open-in-new-tab (`MMCA.ADC.UI.Web/Program.cs:98-103,234-237`). On MAUI, which has no DOM and
+and open-in-new-tab (`MMCA.ADC.UI.Web/Program.cs:99-104,246-249`). On MAUI, which has no DOM and
 therefore no XSS surface, the framework's
 [`MauiTokenStorageService`](group-26-device-capability-layer.md#mauitokenstorageservice) stores both
 tokens in OS SecureStorage, the platform secure enclave (Android Keystore, iOS Keychain, Windows
@@ -305,11 +305,11 @@ first ceiling is an edge rate limiter:
 [`UiRateLimitingExtensions`](group-15-common-ui-framework.md#uiratelimitingextensions) chains a
 per-client-IP fixed window with a replica-wide concurrency ceiling so a request must satisfy both, and
 rejects with `429` without queuing
-(`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:105,131,163,172`).
+(`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:118,147,179,188`).
 The framework defaults in
 [`UiRateLimitingSettings`](group-15-common-ui-framework.md#uiratelimitingsettings) are 300 requests
 per IP per 60-second window and 200 in flight per replica, and the type's own remarks tell a host
-whose audience sits behind one address to raise the window (`UiRateLimitingSettings.cs:45-74`). ADC
+whose audience sits behind one address to raise the window (`UiRateLimitingSettings.cs:45-76`). ADC
 does exactly that: 1200 requests per IP per 60-second window, four times the storefront's figure,
 because on conference day the whole venue sits behind one NAT and presents to the limiter as a
 *single* client IP, while the in-flight ceiling stays at 200
@@ -317,16 +317,16 @@ because on conference day the whole venue sits behind one NAT and presents to th
 is multiplied by the replica count, the same deliberate trade the Gateway kit documents: an edge
 limiter answers on every request and a shared counter would put a network round trip in front of the
 whole site (`UiRateLimitingSettings.cs:26-31`). The section is bound, data-annotation validated, and
-validated on start (`UiRateLimitingExtensions.cs:151-153`). The exemptions are the interesting part:
+validated on start (`UiRateLimitingExtensions.cs:167-169`). The exemptions are the interesting part:
 the liveness and readiness probes, `/_framework`, `/_content`, and `/hubs` take the no-limiter
 partition, so the static assets a single page load pulls never throttle the first attendee, while
 `/_blazor` is deliberately left unexempt because the negotiate endpoint is exactly what opens a
 circuit (`UiRateLimitingExtensions.cs:42,55`); an unresolvable client IP fails open rather than
-collapsing every unattributable request into one shared bucket (`UiRateLimitingExtensions.cs:27,94`).
-The host registers it in one call (`MMCA.ADC.UI.Web/Program.cs:142`), and in the pipeline the
+collapsing every unattributable request into one shared bucket (`UiRateLimitingExtensions.cs:27,107`).
+The host registers it in one call (`MMCA.ADC.UI.Web/Program.cs:143`), and in the pipeline the
 middleware sits after `UseForwardedHeaders`, so the partition key is the caller's address and not the
 ingress's, and before anything that renders a page or opens a circuit
-(`MMCA.ADC.UI.Web/Program.cs:192,203`).
+(`MMCA.ADC.UI.Web/Program.cs:204,215`).
 
 **Bounding circuits, not just arrival rate.** The second ceiling bounds resident *state*. Because
 the app renders Interactive Auto, every first page load opens a Blazor Server circuit, and a circuit
@@ -347,10 +347,10 @@ so two simultaneous opens cannot both observe the last free slot, and it returns
 because `OnCircuitOpenedAsync` has no "refuse" return value: the one place in this codebase where the
 [Result pattern](00-primer.md#2-architectural-styles-this-codebase-commits-to) gives way to an
 exception, because the contract being implemented belongs to ASP.NET Core
-(`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hardening/BoundedCircuitHandler.cs:58-75`,
-rationale at `BoundedCircuitHandler.cs:23`). Closes floor at zero, so a teardown that was never
-counted cannot hand out permits forever (`BoundedCircuitHandler.cs:79-90`), and the refusal is logged
-through a source-generated `LoggerMessage` (`BoundedCircuitHandler.cs:93`).
+(`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hardening/BoundedCircuitHandler.cs:64-84`,
+rationale at `BoundedCircuitHandler.cs:24`). Closes floor at zero, so a teardown that was never
+counted cannot hand out permits forever (`BoundedCircuitHandler.cs:88-108`), and the refusal is logged
+through a source-generated `LoggerMessage` (`BoundedCircuitHandler.cs:111`).
 [`BlazorCircuitLimitExtensions`](group-15-common-ui-framework.md#blazorcircuitlimitextensions) wires
 both halves from that one configuration section, deliberately as two calls because they attach to
 different builders: `RetentionFrom(...)` supplies the `CircuitOptions` callback for
@@ -358,7 +358,7 @@ different builders: `RetentionFrom(...)` supplies the `CircuitOptions` callback 
 **singleton**, since circuit handlers resolve from each circuit's own scope and a scoped registration
 would count to one and cap nothing
 (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hardening/BlazorCircuitLimitExtensions.cs:28-40,46-60`,
-host wiring at `MMCA.ADC.UI.Web/Program.cs:67-77`). The retention numbers are where this host departs
+host wiring at `MMCA.ADC.UI.Web/Program.cs:68-78`). The retention numbers are where this host departs
 from the framework defaults: 25 retained disconnected circuits (the framework kit's own default,
 against ASP.NET Core's 100), but a retention period of 180 seconds instead of the kit's 60, because
 the kit's remarks name a conference venue's flaky shared network as exactly the case that raises it
@@ -379,7 +379,7 @@ container survives a flood instead of OOM-restarting under it.
 [ADR-028](https://ivanball.github.io/docs/adr/028-dark-theme-mode.html)).** All three heads share one
 localization stance and each implements its own half of it. The Blazor Server host sets
 `CurrentUICulture` from the culture cookie *before* SSR prerender and exposes a culture-switch
-endpoint (`MMCA.ADC.UI.Web/Program.cs:220,258`); the WASM client mirrors the same cookie into the
+endpoint (`MMCA.ADC.UI.Web/Program.cs:232,271`); the WASM client mirrors the same cookie into the
 browser thread culture through
 [`MmcaCultureBootstrap`](group-15-common-ui-framework.md#mmcaculturebootstrap) before the app runs,
 so there is no locale flash or prerender/hydration mismatch
@@ -403,7 +403,7 @@ nothing flashes white before the WebView renders (`MMCA.ADC.UI/MainPage.xaml:8,1
 
 **How it all fits at runtime.** A request to the Blazor Web host passes forwarded headers, the
 shared security-header middleware and this origin's own edge limiter
-(`MMCA.ADC.UI.Web/Program.cs:192,198,203`), then renders the shared layout from
+(`MMCA.ADC.UI.Web/Program.cs:204,210,215`), then renders the shared layout from
 [`MMCA.Common.UI`](group-15-common-ui-framework.md); the navbar is composed from each enabled
 module's `IUIModule` descriptor, and `/` renders the Conference landing page through
 [`ADCHomePageContent`](#adchomepagecontent). After prerender, the interactive Server circuit or the
@@ -412,7 +412,7 @@ downloaded WASM runtime takes over; auth state flows through
 reading whichever [`ITokenStorageService`](group-15-common-ui-framework.md#itokenstorageservice) the
 host registered, and the WASM client discovers its API endpoint at startup from the Server host's
 `/client-config` endpoint instead of having it baked into the static bundle
-(`MMCA.ADC.UI.Web/Program.cs:247-253`, `MMCA.ADC.UI.Web.Client/Program.cs:30-31`), with exactly one
+(`MMCA.ADC.UI.Web/Program.cs:259-265`, `MMCA.ADC.UI.Web.Client/Program.cs:30-31`), with exactly one
 retry on a cold start and a loud failure after that through the framework's
 [`MmcaClientConfigBootstrap`](group-15-common-ui-framework.md#mmcaclientconfigbootstrap)
 (`MMCA.ADC.UI.Web.Client/Program.cs:25-31`), and a discarded
@@ -543,7 +543,7 @@ pushed behind a Common interface.**
 
 > MMCA.ADC.UI · `MMCA.ADC.UI` · `MMCA.ADC.UI/Platforms/Android/NowNextWidgetProvider.cs:22` · Level 10 · class (sealed)
 
-- **What it is**: the Android home-screen `AppWidgetProvider` ([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html) Wave 8) that renders a "Now / Next" card. On each update it fetches the anonymous, cached `GET Events/now-next` snapshot (the id-less form, where the server picks the live-or-next published event) and renders one "Now" and one "Next" line. It never throws: a failed fetch leaves the previous `RemoteViews` in place (class summary, `MMCA.ADC.UI/Platforms/Android/NowNextWidgetProvider.cs:11-18`). The endpoint it calls is `[AllowAnonymous]` and output-cached under the `NowNextCache` policy (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Events/EventsController.cs:180-182`).
+- **What it is**: the Android home-screen `AppWidgetProvider` ([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html) Wave 8) that renders a "Now / Next" card. On each update it fetches the anonymous, cached `GET Events/now-next` snapshot (the id-less form, where the server picks the live-or-next published event) and renders one "Now" and one "Next" line. It never throws: a failed fetch leaves the previous `RemoteViews` in place (class summary, `MMCA.ADC.UI/Platforms/Android/NowNextWidgetProvider.cs:11-18`). The endpoint it calls is `[AllowAnonymous]` and output-cached under the `NowNextCache` policy (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Events/EventsController.cs:187-189`).
 - **Depends on**: [NowNextSnapshot](#nownextsnapshot) and [NowNextSession](#nownextsession) (its private records), [MainActivity](#mainactivity) (the tap target, `:88`), `IConfiguration` resolved from `IPlatformApplication.Current.Services` (`:112`), `System.Net.Http.HttpClient`, `System.Text.Json`, and the Android widget SDK.
 - **Concept introduced, best-effort background rendering under a platform time budget.** `OnUpdate` (`:24-35`) must return fast, so after null-guarding its three arguments (`:26-29`) it calls `GoAsync()` (`:33`) to keep the broadcast alive while the snapshot downloads, then starts `UpdateWidgetsAsync` without awaiting it (`:34`); the comment at `:31-32` records that the platform budget is roughly 10s, far above one cached GET. `UpdateWidgetsAsync` (`:37-66`) wraps the whole flow in a `try`/`catch` that swallows every exception, with the `CA1031` suppression justified inline (`:56-58`: a widget update is best-effort and the last rendering stays), and always calls `pendingResult?.Finish()` in `finally` (`:62-65`). [Rubric §29, Resilience & Business Continuity] assesses graceful degradation: a network or parse failure degrades to the stale card rather than to a visible error. [Rubric §23, Front-End Performance] is engaged by leaning on the server's output cache and a short client timeout instead of any local polling loop.
 - **Walkthrough**: `BuildViews` (`:67-98`) inflates the `nownext_widget` layout (`:69`), sets the event-name text (`:70`), reads three localized strings from Android resources (`:72-74`), and fills the Now/Next lines through `FormatRow`, showing the "nothing scheduled" string when `Now` is empty and an empty string when `Next` is empty (`:76-81`). It then builds an **explicit** tap intent targeting [MainActivity](#mainactivity) with `ActionView` and the app-internal `https://app.internal/happening-now` URI (`:86-91`); the `S1075` hardcoded-URI suppression is justified because this is an app-internal route rather than an external address, and only the URI *path* is consumed by the deep-link publisher, which makes the host part a placeholder (`:83-85`). The `PendingIntent` is created `UpdateCurrent | Immutable` (`:92-93`) and attached to the widget root (`:94`). `FormatRow` (`:100-107`) does the invariant `HH:mm` formatting described under [NowNextSession](#nownextsession). `FetchSnapshotAsync` (`:109-127`) reads `Api:ApiEndpoint` from configuration (`:112`, whose value is the gateway base URL at `MMCA.ADC.UI/appsettings.json:19`), returns `null` when it is missing (`:113-116`), builds a short-lived `HttpClient` with an 8s timeout (`:118`), GETs the relative `Events/now-next` (`:119`), returns `null` on a non-success status (`:120-123`), and otherwise deserializes with `JsonSerializerOptions.Web` (`:126`).
@@ -568,7 +568,7 @@ Two same-named classes, one per head family, both implementing [IHomePageContent
 - **Concept introduced, app-supplied content for a shared shell.** The framework ships one generic home shell; each host app registers a single `IHomePageContent` that hands the shell a `ComponentType` and a `PageTitle`. The dependency is inverted: the shared shell never references an ADC page. [Rubric §18, UI Architecture] assesses how a reusable shell is specialized per app, and here the entire specialization is two properties. [Rubric §2, Design Patterns] applies as well, since this is a minimal strategy/adapter sitting at a UI boundary.
 - **Walkthrough**: both classes are two expression-bodied properties and no state. `ComponentType` selects the landing component (`MMCA.ADC.UI.Web.Client/Pages/ADCHomePageContent.cs:13`, `MMCA.ADC.UI/Pages/ADCHomePageContent.cs:10`); `PageTitle => "Atlanta Developers Conference"` is identical on both (`:15` and `:12` respectively) and carries an explicit `i18n: allow` marker because the conference brand name is deliberately not localized. The web class summary notes that the shared component's default image base path already matches the web head's site-root assets (`MMCA.ADC.UI.Web.Client/Pages/ADCHomePageContent.cs:6-10`), so no parameters are passed. The MAUI wrapper exists for the mirror-image reason: its comment records that both heads serve speaker images from their own site root, the MAUI head carrying its copy under `wwwroot/images/speakers`, and that the shared component carries the Web head's countdown fence (the self-ticking `HomeCountdown` child) for both heads, so no base-path override is needed there either (`MMCA.ADC.UI/Pages/ADCHome.razor:1-5`).
 - **Why it's built this way**: pointing at the Conference module's component instead of duplicating a landing page means the web and MAUI heads render the same marketing surface, and a change to the conference home lands everywhere at once. The MAUI head keeps its one-line wrapper so head-specific editorial assets stay in ADC rather than migrating into the shared `MMCA.Common.UI` RCL.
-- **Where it's used**: registered as a singleton `IHomePageContent` by all three heads: the WebAssembly client (`MMCA.ADC.UI.Web.Client/Program.cs:45`), the Blazor Server host (`MMCA.ADC.UI.Web/Program.cs:92`), and [MauiProgram](#mauiprogram) (`MMCA.ADC.UI/MauiProgram.cs:124`, resolving the `MMCA.ADC.UI.Pages` class imported at `:20`).
+- **Where it's used**: registered as a singleton `IHomePageContent` by all three heads: the WebAssembly client (`MMCA.ADC.UI.Web.Client/Program.cs:45`), the Blazor Server host (`MMCA.ADC.UI.Web/Program.cs:93`), and [MauiProgram](#mauiprogram) (`MMCA.ADC.UI/MauiProgram.cs:124`, resolving the `MMCA.ADC.UI.Pages` class imported at `:20`).
 
 ### MauiProgram
 
@@ -601,10 +601,10 @@ Two same-named classes, one per head family, both implementing [IHomePageContent
 > MMCA.ADC.UI · `MMCA.ADC.UI` · `MMCA.ADC.UI/Platforms/iOS/AppDelegate.cs:20` · Level 12 · class
 
 - **What it is**: the iOS application delegate. It boots MAUI by returning [MauiProgram](#mauiprogram)'s app, receives Universal Links ([ADR-043](https://ivanball.github.io/docs/adr/043-mobile-deep-links-and-native-oauth-callback.html)), carries the two APNs registration callbacks ([ADR-044](https://ivanball.github.io/docs/adr/044-native-push-delivery.html)), and forwards home-screen quick-action taps to Essentials.
-- **Depends on**: [MauiProgram](#mauiprogram), [IDeepLinkDispatcher](group-26-device-capability-layer.md#ideeplinkdispatcher), the framework's `ApnsTokenBridge` from `MMCA.Common.UI.Maui.Capabilities.Notifications` (`MMCA.ADC.UI/Platforms/iOS/AppDelegate.cs:2`), MAUI's `MauiUIApplicationDelegate` and the `Microsoft.Maui.ApplicationModel.Platform` Essentials helper aliased as `EssentialsPlatform` (`:5`), and `Foundation`/`UIKit`.
-- **Concept introduced, iOS Universal Links next to Android App Links.** The product concept matches [MainActivity](#mainactivity)'s App Links but the plumbing differs: iOS delivers the tapped web URL as an `NSUserActivity` of type `BrowsingWeb`, and the app must carry the associated-domains entitlement plus a live `apple-app-site-association` file on that host (class summary, `:11-15`). A second concept lands here too, **the fixed-selector native callback**: `RegisteredForRemoteNotifications` and `FailedToRegisterForRemoteNotifications` (`:52-59`) are bound by the Objective-C registrar to *this instance* through their `[Export]` selectors, so they cannot be static and their signatures are dictated by UIKit, which is why the `CA1822` "make static" analyzer is suppressed around exactly those two members (`:50`, `:60`). [Rubric §25, Navigation & IA] applies because deep links resolve to in-app routes on iOS exactly as on Android, through the same dispatcher. [Rubric §3, Clean Architecture] applies to the push split: only these two platform hooks stay app-side, and everything downstream of them lives in the framework (`:46-49`).
-- **Walkthrough**: `CreateMauiApp` (`:23`) delegates to `MauiProgram.CreateMauiApp()`. `ContinueUserActivity` (`:26-44`) checks for a `BrowsingWeb` activity with a non-null `WebPageUrl` (`:31-32`), reassembles `path` plus optional `?query` (`:35`), and when the result is non-blank publishes it through [IDeepLinkDispatcher](group-26-device-capability-layer.md#ideeplinkdispatcher) and returns `true` (`:36-40`); every other case defers to the base implementation (`:43`). The two APNs hooks publish into the framework's `ApnsTokenBridge`: success hands over the device token as a lowercase hex string (`:53-54`), failure publishes `null` (`:57-59`) so the framework's `ApnsPushDeviceTokenProvider`, which awaits that rendezvous, is unblocked rather than left hanging when there is no entitlement or no network. `PerformActionForShortcutItem` (`:63-67`) forwards to `EssentialsPlatform.PerformActionForShortcutItem`; without that override the app opens on a shortcut tap but `OnAppAction` never fires and no navigation happens (`:15-17`). The `[Register("AppDelegate")]` attribute (`:19`) is what makes the type visible to the Objective-C runtime.
-- **Why it's built this way**: mirroring the Android deep-link path through one shared dispatcher means the in-app navigation logic is written once in the shared `DeepLinkListener`, and each platform delegate only translates its native event into a route string. The same principle governs push: the delegate publishes a token into a bridge and the framework owns everything after that, so the app-side surface is two one-line methods.
+- **Depends on**: [MauiProgram](#mauiprogram), [IDeepLinkDispatcher](group-26-device-capability-layer.md#ideeplinkdispatcher) and the static [DeepLinkDispatcher](group-26-device-capability-layer.md#deeplinkdispatcher)`.IsAppRelativeRoute` shape check (`MMCA.Common.UI.Services.Capabilities.Navigation`, `MMCA.ADC.UI/Platforms/iOS/AppDelegate.cs:3`), the framework's `ApnsTokenBridge` from `MMCA.Common.UI.Maui.Capabilities.Notifications` (`:2`), MAUI's `MauiUIApplicationDelegate` and the `Microsoft.Maui.ApplicationModel.Platform` Essentials helper aliased as `EssentialsPlatform` (`:5`), and `Foundation`/`UIKit`.
+- **Concept introduced, iOS Universal Links next to Android App Links.** The product concept matches [MainActivity](#mainactivity)'s App Links but the plumbing differs: iOS delivers the tapped web URL as an `NSUserActivity` of type `BrowsingWeb`, and the app must carry the associated-domains entitlement plus a live `apple-app-site-association` file on that host (class summary, `:11-15`). A second concept lands here too, **the fixed-selector native callback**: `RegisteredForRemoteNotifications` and `FailedToRegisterForRemoteNotifications` (`:57-64`) are bound by the Objective-C registrar to *this instance* through their `[Export]` selectors, so they cannot be static and their signatures are dictated by UIKit, which is why the `CA1822` "make static" analyzer is suppressed around exactly those two members (`:55`, `:65`). A third concept is **ask before you publish**: `IDeepLinkDispatcher.Publish` throws `ArgumentException` on a route that is not app-relative (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Capabilities/Navigation/DeepLinkDispatcher.cs:104-113`), and an exception escaping a UIKit delegate callback terminates the app, so the delegate runs the same static shape check first, as [MainActivity](#mainactivity) does, and a crafted universal link is dropped instead of crashing the app on tap (`:36-41`). [Rubric §25, Navigation & IA] applies because deep links resolve to in-app routes on iOS exactly as on Android, through the same dispatcher. [Rubric §3, Clean Architecture] applies to the push split: only these two platform hooks stay app-side, and everything downstream of them lives in the framework (`:51-54`).
+- **Walkthrough**: `CreateMauiApp` (`:23`) delegates to `MauiProgram.CreateMauiApp()`. `ContinueUserActivity` (`:26-49`) checks for a `BrowsingWeb` activity with a non-null `WebPageUrl` (`:31-32`) and reassembles `path` plus optional `?query` (`:35`). It then asks `DeepLinkDispatcher.IsAppRelativeRoute` (`:41`), which accepts only a non-blank value with exactly one leading slash and no backslash, control character or scheme (`DeepLinkDispatcher.cs:49-72`); when the route passes, the delegate publishes it through [IDeepLinkDispatcher](group-26-device-capability-layer.md#ideeplinkdispatcher) and returns `true` (`:42-45`). Every other case, including a rejected route, defers to the base implementation (`:48`). The two APNs hooks publish into the framework's `ApnsTokenBridge`: success hands over the device token as a lowercase hex string (`:58-59`), failure publishes `null` (`:62-64`) so the framework's `ApnsPushDeviceTokenProvider`, which awaits that rendezvous, is unblocked rather than left hanging when there is no entitlement or no network. `PerformActionForShortcutItem` (`:68-72`) forwards to `EssentialsPlatform.PerformActionForShortcutItem`; without that override the app opens on a shortcut tap but `OnAppAction` never fires and no navigation happens (`:15-17`). The `[Register("AppDelegate")]` attribute (`:19`) is what makes the type visible to the Objective-C runtime.
+- **Why it's built this way**: mirroring the Android deep-link path through one shared dispatcher means the in-app navigation logic is written once in the shared `DeepLinkListener`, and each platform delegate only translates its native event into a route string. The dispatcher enforces the route shape at `Publish` so no head can forget it, while each head asks the same predicate first so that enforcement never surfaces as a crash. The same principle governs push: the delegate publishes a token into a bridge and the framework owns everything after that, so the app-side surface is two one-line methods.
 - **Where it's used**: [Program](#program) passes this type to `UIApplication.Main` (`MMCA.ADC.UI/Platforms/iOS/Program.cs:11`). MacCatalyst compiles a separate same-named delegate under `MMCA.ADC.UI/Platforms/MacCatalyst/AppDelegate.cs:12` that forwards `CreateMauiApp` (`:14`) and `PerformActionForShortcutItem` (`:17-21`) but does **not** handle Universal Links or APNs, so those two paths taught here are iOS-only.
 
 ### MainApplication

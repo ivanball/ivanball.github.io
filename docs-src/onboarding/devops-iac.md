@@ -379,7 +379,7 @@ that exists only for the duration of the workflow run.
 `main.bicep` declares every application-layer Azure resource: Application Insights, five SLO
 scheduled query rules (one of them the AI-scoring token ceiling, `main.bicep:420-432`) and their
 action group, three operational scheduled query rules, a log-ingestion-cap rule, a Gateway
-availability web test and its severity-1 alert, a saved SLO workbook (`main.bicep:704-724`), the
+availability web test and its severity-1 alert, a saved SLO workbook (`main.bicep:721-742`), the
 monthly cost budget, SQL Server with the four per-service databases, Service Bus, references to the
 manually provisioned Notification Hub, the blob storage account with its two declared containers
 (public avatars and the private DataProtection key ring), an Azure Managed Redis instance, the
@@ -511,47 +511,66 @@ var is what Azure Monitor maps to the Cloud Role Name, without it, all services 
 framework automatically routes OpenTelemetry spans, logs, and metrics to Azure Monitor in
 production with no service-level code change.
 
-Five more shared env entries ride along with the connection string on every app, and all of them
-are cost controls on a pay-per-GB workspace:
+Seven more shared env entries ride along with the connection string on every app, and all of them
+are cost controls, six on the pay-per-GB workspace and one on the Container Apps compute bill:
 
-- `Telemetry__TracesSampleRatio: '0.25'` (`main.bicep:230-233`), head-based trace sampling that keeps
+- `Telemetry__TracesSampleRatio: '0.25'` (`main.bicep:252-255`), head-based trace sampling that keeps
   25% of traces. `ParentBased` sampling in `MMCA.Common.Aspire` keeps a sampled-in trace intact
   across service boundaries, so a kept trace is still end-to-end rather than a fragment.
-- `Logging__OpenTelemetry__LogLevel__Default: 'Warning'` (`main.bicep:241-244`), the floor for what the
+- `Logging__OpenTelemetry__LogLevel__Default: 'Warning'` (`main.bicep:263-266`), the floor for what the
   OpenTelemetry logging provider ships to Azure Monitor. Serilog still writes Information to stdout
   (container logs), but only Warning and above bills against the workspace. The value is set
   explicitly because `OpenTelemetry` is the `ProviderAlias` of `OpenTelemetryLoggerProvider`, so the
   key gates that provider only, and because the service hosts register Serilog as one provider
   alongside OpenTelemetry instead of calling `UseSerilog()`, which would replace the
   `ILoggerFactory` and drop every application log line before it could reach App Insights.
-- `Telemetry__DisableHttpClientMetrics: 'true'` (`main.bicep:252-255`) and
-  `Telemetry__DisableRuntimeMetrics: 'true'` (`main.bicep:256-259`), which drop the two
+- `Telemetry__DisableHttpClientMetrics: 'true'` (`main.bicep:284-287`) and
+  `Telemetry__DisableRuntimeMetrics: 'true'` (`main.bicep:288-291`), which drop the two
   highest-volume instrument groups from the `AppMetrics` stream. The comment records the
-  measurement that motivated them (`main.bicep:246-251`): the `http.client.*` connection gauges
+  measurement that motivated them (`main.bicep:278-283`): the `http.client.*` connection gauges
   plus the `dotnet.*` runtime instruments were about 65% of AppMetrics ingestion between
   2026-08-03 and 2026-08-09, roughly 290 MB/day of a roughly 500 MB/day stream, while
   `http.server.request.duration` and the MMCA.Common meters carry the operational signal. Both
   keys are read by `MMCA.Common.Aspire`'s `ConfigureOpenTelemetry`, and the outbound-dependency
   latency the client metrics would have shown is still captured as (sampled) `AppDependencies`
   traces, so this trims volume rather than visibility.
-- `OTEL_METRIC_EXPORT_INTERVAL: '300000'` (`main.bicep:267-270`) is the second stage of the same
-  cost control, and it works on cadence rather than on instrument selection. AppMetrics remained
+- `Telemetry__DisableAspNetCoreMetrics: 'true'` (`main.bicep:297-300`) drops a third instrument
+  group, and the largest one: the ASP.NET Core meter family (`http.server.*`, `kestrel.*`,
+  `aspnetcore.*`, `signalr.server.*`) was 73% of workspace ingestion between 2026-09-22 and
+  2026-09-28, and no alert reads it (`main.bicep:293-296`). Request latency and failure alerting
+  queries `AppRequests`, the request telemetry rather than the metric stream, so this trims volume
+  without blinding an alert; it does mean the `http.server.request.duration` histogram named in the
+  bullet above no longer ships either. The key is read by `MMCA.Common.Aspire`'s cost knob, which
+  drops the whole `Microsoft.AspNetCore.*` meter family through a View
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.Telemetry.cs:344-354`).
+- `AzureMonitor__EnableLiveMetrics: 'false'` (`main.bicep:307-310`) is the one entry aimed at
+  compute rather than ingestion. Live Metrics is on by default in the Azure Monitor distro and keeps
+  every replica talking to the Live Metrics service whether or not anyone has the blade open. On
+  Container Apps that chatter decides the bill (`main.bicep:302-306`): measured on 2026-09-28, every
+  app sat right on the idle-billing line (about 0.011 cores against the 0.01 threshold, about 950 B/s
+  inbound against 1,000), so 64% of vCPU-seconds billed at the active rate, eight times the idle
+  rate. The key lives under `AzureMonitor`, not `Telemetry`, because the distro binds its own
+  `AzureMonitor` configuration section, and MMCA.Common pins that the key actually reaches it
+  (`MMCA.Common/Tests/Hosting/MMCA.Common.Aspire.Tests/Telemetry/LiveMetricsConfigurationTests.cs:20`),
+  so a distro change that stopped honoring it fails a test instead of silently restoring the chatter.
+- `OTEL_METRIC_EXPORT_INTERVAL: '300000'` (`main.bicep:318-321`) is the second stage of the
+  AppMetrics cost control, and it works on cadence rather than on instrument selection. AppMetrics remained
   about 63% of workspace ingestion after the two instrument groups above were dropped (measured
-  2026-08-01 to 2026-08-22, `main.bicep:261-266`). The exporter ships **cumulative** aggregates, so
+  2026-08-01 to 2026-08-22, `main.bicep:311-316`). The exporter ships **cumulative** aggregates, so
   stretching the export interval from the SDK default of 60s to 300s drops roughly 80% of the
   remaining datapoints without losing the signal: every alert rule in this template evaluates over a
   15-minute window, so a 5-minute export cadence still lands datapoints in every window.
   This is the standard OpenTelemetry SDK env var, read by the periodic exporting metric reader
   rather than by any MMCA.Common code.
 
-Every one of the six apps gets all five: Identity (`main.bicep:1651-1656`), Conference
-(`:1878-1883`), Engagement (`:2016-2021`), Notification (`:2162-2167`), Gateway (`:2338-2344`),
-UI (`:2471-2476`). They are declared once as Bicep variables and spliced into each `env` array by
+Every one of the six apps gets all seven: Identity (`main.bicep:1671-1677`), Conference
+(`:1900-1906`), Engagement (`:2040-2046`), Notification (`:2188-2194`), Gateway (`:2366-2373`),
+UI (`:2507-2513`). They are declared once as Bicep variables and spliced into each `env` array by
 name, which is what keeps a cost decision from being applied to five apps and forgotten on the
 sixth.
 
 The Gateway carries one more, and it is the only per-host entry in the set:
-`Logging__LogLevel__Yarp: 'Warning'` (`yarpLogLevelEnv`, `main.bicep:267-276`, spliced at `:2341`).
+`Logging__LogLevel__Yarp: 'Warning'` (`yarpLogLevelEnv`, `main.bicep:267-276`, spliced at `:2368`).
 YARP writes two Information lines per proxied request (`HttpForwarder` events 9 and 56) to stdout,
 which Container Apps ships to Log Analytics as `ContainerAppConsoleLogs_CL`. The comment records the
 measurement behind it: about 177k lines and 77 MB per week between 2026-09-13 and 2026-09-19, the
@@ -660,7 +679,7 @@ Each SLO alert is paired with a same-severity triage section in `MMCA.ADC/infra/
 (`OPERATIONS.md:17`, `:31`, `:50`, `:63`, `:111`), and that pairing is enforced by a framework fitness test rather
 than by discipline: `ObservabilityConventionTestsBase` parses this template between the literal
 anchors `var sloAlertSpecs` and `resource sloAlerts`
-(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/ObservabilityConventionTestsBase.cs:109-110`)
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/ObservabilityConventionTestsBase.cs:135-136`)
 and fails the build in both directions. ADC raises the base class's floor of three discovered specs
 (`ObservabilityConventionTestsBase.cs:39`) to five
 (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Governance/ObservabilityConventionTests.cs:14`),
@@ -828,13 +847,31 @@ subscription spend, `cost-guard.yml` bounds a surge left un-reverted, and this b
 that neither of them can see, with the envelope itself expressed as a reviewable Bicep parameter
 rather than as an assumption inside the scoring code.
 
-### SLO workbook (`main.bicep:704-724`)
+### SLO workbook (`main.bicep:721-742`)
 
 A saved Azure Monitor workbook renders the same three SLO signals plus exceptions, grouped per
 service by `AppRoleName` (which is the `OTEL_SERVICE_NAME` value). It is bound to the Log Analytics
 workspace and embeds `workbooks/adc-slo-workbook.json` at **compile time** via `loadTextContent`
-(`main.bicep:620`), so the visualization cannot diverge from the alerts by being maintained
-somewhere else, and the JSON stays independently validatable as a file.
+(`main.bicep:739`), so the visualization cannot diverge from the alerts by being maintained
+somewhere else, and the JSON stays independently validatable as a file. No test holds it in place,
+though: ADC's `ObservabilityConventionTests` subclass raises only the spec floor and does not opt
+into the base class's `RequireWorkbook` switch (`ObservabilityConventionTestsBase.cs:58`,
+`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Governance/ObservabilityConventionTests.cs:7-15`),
+so deleting this resource would not fail the build.
+
+MMCA.Common's reference sample reaches the same goal by another route
+(`MMCA.Common/samples/deployment/main.bicep:286-351`): it has no workbook JSON file at all and
+generates the workbook from its own `sloAlertSpecs`, one KQL table tile per spec that runs that
+spec's own query against the workspace the rules scope to (`:290-305`), behind a time-range
+parameter defaulting to the 15-minute window the rules evaluate (`:323`). Adding an alert therefore
+adds its tile, and a tile cannot drift from the query that pages (`:286-289`). The resource name is a
+GUID derived from the resource group and prefix (`:339-340`), because a workbook's name must be a
+GUID and deriving it keeps redeploys updating the same workbook. Unlike ADC, the sample's
+architecture test opts into `RequireWorkbook`
+(`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/SampleDeploymentObservabilityTests.cs:24`),
+so `MonitoringWorkbookOrDashboard_IsProvisioned_WhenRequired` (`ObservabilityConventionTestsBase.cs:66-77`)
+fails if the sample stops declaring a `Microsoft.Insights/workbooks` or `Microsoft.Portal/dashboards`
+resource.
 
 ### Cost budget (`main.bicep:725-757`)
 
@@ -1647,27 +1684,40 @@ Kestrel in HTTP/2 prior-knowledge mode rejects the platform's HTTP/1.1 `httpGet`
 `GOAWAY HTTP_1_1_REQUIRED`, which would fail the liveness check and cause a reboot loop. Rather than
 degrading the three h2c services to port-only `tcpSocket` probes, each service opens a
 **dedicated HTTP/1.1 probe listener** that is not exposed via ingress: `HealthProbe__Port: '8081'`
-on Identity, Conference and Engagement (`main.bicep:1212`, `:1419`, `:1542`) and `'8082'` on
-Notification (`main.bicep:1688`, because 8080 and 8081 are already the ADR-012 pair). ACA probes may
+on Identity, Conference and Engagement (`main.bicep:1682`, `:1909`, `:2049`) and `'8082'` on
+Notification (`main.bicep:2201`, because 8080 and 8081 are already the ADR-012 pair). ACA probes may
 target a port that ingress does not publish, so all six apps use `httpGet` probes and all six carry
-the same three (`main.bicep:1326-1351` Identity, `:1460-1485` Conference, `:1587-1612` Engagement,
-`:1742-1767` Notification, `:1861-1886` Gateway, `:1983-2008` UI):
+the same three (`main.bicep:1817-1833` Identity, `:1968-1984` Conference, `:2101-2117` Engagement,
+`:2266-2282` Notification, `:2409-2432` Gateway, `:2558-2574` UI), with one deliberate difference in
+where the Gateway's readiness probe points:
 
 | Probe | Path | Cadence | Semantics |
 |---|---|---|---|
 | `startup` | `/alive` | `initialDelaySeconds: 5`, `periodSeconds: 5`, `failureThreshold: 30` | up to 150s for a cold container to answer at all |
 | `liveness` | `/alive` | `periodSeconds: 30`, `failureThreshold: 3` | self-only, so a SQL outage never restarts the container |
-| `readiness` | `/health/ready` | `initialDelaySeconds: 3`, `periodSeconds: 30`, `failureThreshold: 3` | warmup gate plus the DB-aware `AddSqlServer` check |
+| `readiness` | `/health/ready` (Gateway: `/alive`) | `initialDelaySeconds: 3`, `periodSeconds: 30`, `failureThreshold: 3` | warmup gate plus the DB-aware `AddSqlServer` check (Gateway: self-only, see below) |
 
-The liveness/readiness split is the load-bearing part (`main.bicep:1313-1319`): `/alive` checks the
+The liveness/readiness split is the load-bearing part (`main.bicep:1806-1808`): `/alive` checks the
 process only, so a database outage does not trigger a restart loop, while `/health/ready` fails when
 a replica cannot reach its database, pulling it out of rotation instead of letting it serve 500s.
 Readiness is also gated on `WarmupHostedService` completing (OIDC discovery fetched), so ACA holds
-back user traffic until the replica is warm. Gateway and UI probe their own 8080 (`main.bicep:1861-1886`,
-`:1983-2008`) because their Kestrel accepts HTTP/1.1 directly.
+back user traffic until the replica is warm. Gateway and UI probe their own 8080 (`main.bicep:2409-2432`,
+`:2558-2574`) because their Kestrel accepts HTTP/1.1 directly.
+
+**The Gateway's readiness probe targets `/alive`, not `/health/ready`** (`main.bicep:2423-2432`).
+On the Gateway, `/health/ready` is an aggregate that fans out to every downstream's `/alive`
+(`AddGatewayDownstreamHealthChecks`), so probing it every 30 seconds put an HTTP request on every
+service every 30 seconds. The comment records two costs of that. On the bill, a request every 30
+seconds is on its own enough to keep an otherwise idle downstream replica off the Container Apps
+idle rate (the same idle-line problem the Live Metrics switch above addresses). On availability, one
+failed downstream marked the only Gateway replica unready and took the whole site down, healthy
+routes included. The switch costs no cold-revision protection: the Gateway registers no JwtBearer
+scheme, so the only warm-up task `AddServiceDefaults` gives it (OIDC metadata) has nothing to wait
+for. The full downstream aggregate is still served on `/health`, which is what the availability web
+test and its alert probe.
 
 **Readiness runs every 30 seconds, not every 10, and that is a telemetry-cost decision**
-(`main.bicep:1320-1325`). The DB-aware readiness check issues a SQL `SELECT 1` per probe, and
+(`main.bicep:1809-1814`). The DB-aware readiness check issues a SQL `SELECT 1` per probe, and
 neither the probe request nor its dependency row is sampled, so a 10-second period cost 360 request
 rows plus 360 dependency rows per app per hour of App Insights ingestion, on six apps, forever.
 `failureThreshold` stays at 3, so the honest trade is stated in the comment: an unhealthy replica
@@ -1710,7 +1760,7 @@ The same service names work locally because the AppHost's `WithReference` inject
 `AddHttpForwarderWithServiceDiscovery()` or `AddTypedGrpcClient<T>(serviceName)` in both
 environments and resolves the endpoint from that env var key.
 
-#### Identity Service specifics (`main.bicep:1603-1827`)
+#### Identity Service specifics (`main.bicep:1624-1850`)
 
 Identity is the JWT issuer and JWKS endpoint. Its JWT configuration (`main.bicep:1233-1237`):
 
@@ -1778,7 +1828,7 @@ the post-login redirect target is provider-independent.
 Identity is sized at 0.25 CPU / 0.5 Gi (`main.bicep:1198`). JWT operations are CPU-cheap once the
 key is loaded; the bottleneck is typically network I/O to SQL.
 
-#### Conference Service specifics (`main.bicep:1828-1976`)
+#### Conference Service specifics (`main.bicep:1851-2001`)
 
 Conference carries the heaviest surface of the four services: seventeen API controllers
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/`), an AI scoring path
@@ -1809,7 +1859,7 @@ This is the `union()` + conditional array pattern used throughout `main.bicep` t
 secrets and env vars out of the resource definition when not configured, rather than passing empty
 strings to the container.
 
-#### Notification Service specifics (`main.bicep:2108-2280`)
+#### Notification Service specifics (`main.bicep:2135-2313`)
 
 Notification differs from the other three back-end services in four ways:
 
@@ -1831,40 +1881,50 @@ it, SignalR connections made during warmup would fail because the JWT validator 
 initialized. Its replica cap is no longer the outlier it once was: see the shared scale discussion
 above.
 
-#### Gateway specifics (`main.bicep:2281-2427`)
+#### Gateway specifics (`main.bicep:2314-2465`)
 
 Gateway is the sole externally-reachable back-end entry point (`external: true`,
-`allowInsecure: false`, `main.bicep:1806-1811`). It is a pure YARP reverse proxy: no DbContext, no
-JWT issuing, no module. Its env configuration is service-discovery entries, CORS, and one optional
-rate-limiter key:
+`allowInsecure: false`, `main.bicep:2328-2333`). It is a pure YARP reverse proxy: no DbContext, no
+JWT issuing, no module. Its env configuration is service-discovery entries, CORS, the vault
+reference, and two optional rate-limiter keys:
 
 ```bicep
 { name: 'Cors__AllowedOrigins__0', value: 'https://${prefix}-ui.${...defaultDomain}' }
 ```
 
-CORS is scoped to exactly the UI's FQDN (`main.bicep:1843`), not a wildcard. Gateway was right-sized
-alongside Conference on 2026-09-02 and now runs at 0.25 CPU / 0.5 Gi (`main.bicep:2334`); its
-comment records the easier half of that decision (`main.bicep:1824-1830`), a 190 to 235 MB working
-set comfortably inside the new limit because pure YARP forwarding holds no DbContext. It uses the
-readiness gate at `main.bicep:1878-1885` because its warmup involves establishing connections to all
-back-end services. It is also the target of the availability web test described above, and the only
-app with no `KeyVault__Uri`.
+CORS is scoped to exactly the UI's FQDN (`main.bicep:2375`), not a wildcard. Gateway was right-sized
+alongside Conference on 2026-09-02 and now runs at 0.25 CPU / 0.5 Gi (`main.bicep:2361`); its
+comment records the easier half of that decision (`main.bicep:2354-2360`), a 190 to 235 MB working
+set comfortably inside the new limit because pure YARP forwarding holds no DbContext. Its readiness
+probe is the one exception to the fleet's `/health/ready` convention: it targets `/alive`
+(`main.bicep:2423-2432`), for the cost and blast-radius reasons given in the probe section above. It
+is also the target of the availability web test described above, which is where the full downstream
+aggregate on `/health` is still checked. Like the other five deployables it reads Key Vault
+configuration at startup through `KeyVault__Uri` plus `AZURE_CLIENT_ID` (`main.bicep:2385-2391`); the
+client id is there because the app carries only the user-assigned identity and the ACA identity
+endpoint needs it named, or `DefaultAzureCredential` would fail the startup vault read.
 
-Its one conditional secret is the ADR-088 synthetic-traffic bypass. When
-`hasSyntheticTrafficSecret` is true the app declares a `synthetic-traffic-secret` Key Vault
-reference (`main.bicep:1815-1817`) and receives
-`GatewayRateLimiting__SyntheticTrafficSecret` as a `secretRef` (`main.bicep:1858`). A request
+Its two conditional secrets are both rate-limiter keys, unioned rather than kept as one conditional
+array because either can be present on its own (`main.bicep:2335-2347`). The first is the ADR-088
+synthetic-traffic bypass. When `hasSyntheticTrafficSecret` is true the app declares a
+`synthetic-traffic-secret` Key Vault reference (`main.bicep:2339-2341`) and receives
+`GatewayRateLimiting__SyntheticTrafficSecret` as a `secretRef` (`main.bicep:2397`). A request
 presenting that value in the `X-Synthetic-Traffic-Key` header skips both chained edge limiters, so
-the monthly k6 run measures backend capacity instead of the per-IP window. Absent, the bypass is
-off and every request stays rate limited, which is the correct default for a public entry point.
+the monthly k6 run measures backend capacity instead of the per-IP window. The second is the
+trusted-internal-caller exemption (`main.bicep:2344-2346`, env at `:2404`): a request carrying that
+value in the `X-Internal-Caller-Key` header takes the no-limiter partition on both chained edge
+limiters (`main.bicep:2398-2403`). It exists for the UI host, whose server-side token refresh calls
+all leave from one container address, which the per-IP window would otherwise collapse into a single
+partition and throttle for the whole site. Absent, each key's exemption is off and every request
+stays rate limited, which is the correct default for a public entry point.
 
-The template also records the transport contract the Gateway holds up (`main.bicep:1843-1846`):
+The template also records the transport contract the Gateway holds up (`main.bicep:2376-2379`):
 `ForwardHttp2` defaults to true in the gateway code and YARP uses `VersionPolicy=RequestVersionExact`,
 so it sends the HTTP/2 preface to the three h2c-prior-knowledge backends whose ACA ingress is
 `transport: http2`. That pairing is why the ingress choice on those three services and the forwarder
 policy here cannot be changed independently.
 
-#### UI specifics (`main.bicep:2428-2567`)
+#### UI specifics (`main.bicep:2466-2604`)
 
 UI is the other externally-reachable app (`external: true`, `main.bicep:1928`), the one app with
 `secrets: []` (`main.bicep:1938`) and sized at 0.25 CPU / 0.5 Gi (`main.bicep:1945`). Three
@@ -1903,7 +1963,7 @@ The UI receives only the OAuth **client ids** when a provider is configured, one
 including Apple (`main.bicep:1971-1979`); every client secret stays on Identity, which is the app
 that completes the exchange.
 
-### Outputs (`main.bicep:2568-2573`)
+### Outputs (`main.bicep:2605-2610`)
 
 ```bicep
 output acrLoginServer     string = acr.properties.loginServer

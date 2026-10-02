@@ -475,7 +475,12 @@ One sealed context class per engine (`SQLServerDbContext`, `PostgreSQLDbContext`
 `CosmosDbContext`) over the abstract `ApplicationDbContext`, **one instance per database**. Each
 entity is engine-agnostic; a single `[UseDataSource(engine)]` attribute on its config class picks
 SQL Server, PostgreSQL ([ADR-113](https://ivanball.github.io/docs/adr/113-postgresql-as-a-first-class-engine.html)), Cosmos, or SQLite. Cross-source relationships auto-degrade; the outbox
-is the cross-source consistency mechanism. Each service self-applies its EF migrations at boot
+is the cross-source consistency mechanism. Engine facts (relational or not, migrations, row-version
+strategy, explicit-key inserts) come from one internal `IDataSourceEngine` per engine, looked up
+through the static `DataSourceEngines.For(DataSource)` registry, so call sites read capabilities
+instead of branching on the engine
+([ADR-130](https://ivanball.github.io/docs/adr/130-per-engine-data-source-strategy.html)). Each
+service self-applies its EF migrations at boot
 ([ADR-030](https://ivanball.github.io/docs/adr/030-startup-sole-migrator.html)).
 
 ```mermaid
@@ -487,9 +492,12 @@ flowchart TD
 
     subgraph SHIMS["Engine shim base classes (one token = one engine)"]
         SQL["…SQLServer&lt;T,Id&gt;<br/>(all prod configs today)"]
+        PG["...PostgreSQL&lt;T,Id&gt;<br/>(first-class engine, ADR-113, staged)"]
         COS["…Cosmos&lt;T,Id&gt;<br/>(shipped + tested, staged)"]
         LITE["…Sqlite&lt;T,Id&gt;<br/>(fast integration tests, staged)"]
     end
+
+    ENG["DataSourceEngines.For: one internal IDataSourceEngine<br/>per engine, capabilities not branches (ADR-130)"]
 
     subgraph DBS["Database-per-service (ADR-006)"]
         CTX1["SQLServerDbContext instance: Conference DB + outbox"]
@@ -502,13 +510,15 @@ flowchart TD
     MIG["Startup sole-migrator: DatabaseInitStrategy=Migrate (ADR-030)"]
 
     ENTITY --> CFG --> ATTR --> REG
-    REG --> SQL & COS & LITE
+    REG --> SQL & PG & COS & LITE
     SQL --> DBS
     DBS -->|"FK dropped across sources → batch loaders"| XSPEC
     MIG -.-> DBS
+    ENG -.->|"engine facts"| REG
+    ENG -.-> MIG
 
     classDef p fill:#fef7e0,stroke:#f9ab00,color:#111
-    class ENTITY,CFG,ATTR,REG,XSPEC,MIG p
+    class ENTITY,CFG,ATTR,REG,XSPEC,MIG,ENG p
 ```
 
 ---
@@ -524,11 +534,11 @@ flowchart TD
     subgraph AUTHN["Authentication"]
         JWT["JWT bearer validation"]
         JWKS["JWKS discovery + fallback fetch (ADR-004)"]
-        COOKIE["HttpOnly session cookie + non-validating SSR scheme (ADR-022)"]
+        COOKIE["HttpOnly session cookie + non-validating SSR scheme (ADR-022);<br/>ISessionCookieStore writes them server-side for the proxy (ADR-131)"]
         HASH["PBKDF2-HMAC-SHA512, 32-byte salt, 600k iters:<br/>one algorithm, no legacy branch (ADR-102)"]
         LOGIN["ILoginProtectionService: lockout + per-IP cap (ADR-029)"]
         EXT["External OAuth: Google / GitHub behind a short-lived<br/>ExternalLogin cookie + single-use code (ADR-036/043)"]
-        ROT["AuthenticationServiceBase: 15-min access token +<br/>one refresh session per device, SHA-256 at rest,<br/>rotated with reuse detection (ADR-097);<br/>ITokenRefresher per head (ADR-051)"]
+        ROT["AuthenticationServiceBase decides who is signed in;<br/>IAuthSessionIssuer: 15-min access token +<br/>one refresh session per device, SHA-256 at rest,<br/>rotated with reuse detection (ADR-097);<br/>ITokenRefresher per head (ADR-051)"]
         RESET["Forgot/reset password: cache-backed single-use<br/>hashed token + email leg (ADR-091)"]
     end
 
@@ -612,7 +622,11 @@ time ([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstra
 G26). Culture cookie + `IStringLocalizer` drive i18n ([ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)); `ThemeService`
 drives day/dark ([ADR-028](https://ivanball.github.io/docs/adr/028-dark-theme-mode.html)). Each
 module's UI plugs into one shared shell by contributing navigation and routes through `IUIModule`
-([ADR-067](https://ivanball.github.io/docs/adr/067-ui-module-shell-composition.html)).
+([ADR-067](https://ivanball.github.io/docs/adr/067-ui-module-shell-composition.html)). A Blazor
+Web host can opt in to the same-origin API proxy in `MMCA.Common.UI.Web`, which serves `/api/**` on
+the UI host's own origin and forwards to the gateway through YARP with the bearer read from the
+HttpOnly session cookie
+([ADR-131](https://ivanball.github.io/docs/adr/131-same-origin-api-proxy.html)).
 
 ```mermaid
 flowchart TD
@@ -638,6 +652,7 @@ flowchart TD
     CSP["Security headers + pluggable CSP (ADR-023)"]
     RM["Render mode: InteractiveAuto on the root router,<br/>prerender on (ADR-056)"]
     CAP["Device capability contracts in MMCA.Common.UI:<br/>browser-JS, inert fallback and MAUI-native adapters<br/>chosen per host at DI time (ADR-042, G26)"]
+    BFF["Opt-in same-origin API proxy, MMCA.Common.UI.Web:<br/>/api/** forwarded to the gateway via YARP,<br/>bearer from the HttpOnly cookie (ADR-131, G15)"]
 
     PAGE --> COMMONUI
     COMMONUI --> WEB
@@ -652,9 +667,10 @@ flowchart TD
     COMMONUI --> CAP
     CAP -.->|"browser + fallback adapters"| WEB
     CAP -.->|"MMCA.Common.UI.Maui adapters"| MAUI
+    BFF -.->|"browser API calls"| WEB
 
     classDef u fill:#f3e8fd,stroke:#a142f4,color:#111
-    class PAGE,COMMONUI,SHELL,WEB,MAUI,CAP u
+    class PAGE,COMMONUI,SHELL,WEB,MAUI,CAP,BFF u
 ```
 
 ---

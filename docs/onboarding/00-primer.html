@@ -1009,6 +1009,26 @@ Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           <td>The actor model is not adopted: per-entity state stays in the owning module&#39;s database behind optimistic concurrency, read pressure stays on the caching tiers, and live fan-out stays on the notification hub, with no actor runtime as a hosting layer</td>
           <td><a href="group-07-persistence-ef-core.html">g07</a>/<a href="group-09-caching.html">g09</a>/<a href="group-10-notifications.html">g10</a></td>
           </tr>
+          <tr>
+          <td>128</td>
+          <td>Time as an input: Domain and Application code never reads the ambient clock (<code>DateTime.UtcNow</code>, <code>Now</code>, <code>Today</code>, <code>DateTimeOffset.UtcNow</code>, <code>Now</code>); handlers inject <code>TimeProvider</code> and pass the instant into the domain, <code>BaseDomainEvent.DateOccurred</code> is the single exemption, and an IL-scanning fitness base (<code>ClockReadTestsBase</code>) enforces it</td>
+          <td><a href="group-28-testing-infrastructure.html">g28</a></td>
+          </tr>
+          <tr>
+          <td>129</td>
+          <td>The tactical aggregate contract: entities are sealed classes over <code>BaseEntity</code> / <code>AuditableBaseEntity</code> / <code>AuditableAggregateRootEntity</code>, built only through a <code>Create</code> returning <code>Result&lt;T&gt;</code>, with private setters, child access through the root and invariants in static <code>*Invariants</code> classes; <code>EntityConventionTestsBase</code> gates construction, encapsulation and placement</td>
+          <td><a href="group-28-testing-infrastructure.html">g28</a></td>
+          </tr>
+          <tr>
+          <td>130</td>
+          <td>Per-engine data source strategy: one internal <code>IDataSourceEngine</code> per engine (SQL Server, PostgreSQL, SQLite, Cosmos DB) behind the static <code>DataSourceEngines.For(DataSource)</code> registry, so call sites read engine facts instead of branching on the <code>DataSource</code> enum, with <code>DataSourceBranchingFitnessTests</code> as the gate</td>
+          <td><a href="group-07-persistence-ef-core.html">g07</a>/<a href="group-28-testing-infrastructure.html">g28</a></td>
+          </tr>
+          <tr>
+          <td>131</td>
+          <td>Same-origin API proxy (backend-for-frontend): an opt-in <code>AddCommonSameOriginApiProxy</code> plus <code>MapCommonSameOriginApiProxy</code> serves <code>/api/**</code> on the UI host&#39;s own origin and forwards to the gateway through YARP, attaching the bearer from the HttpOnly session cookie so no browser script ever holds an API token</td>
+          <td><a href="group-15-common-ui-framework.html">g15</a>/<a href="group-08-auth.html">g08</a>/<a href="group-12-api-hosting-mapping.html">g12</a></td>
+          </tr>
           </tbody></table></div>
           <p>The canonical index for the full set can be found at <a href="https://ivanball.github.io/docs/adr/" target="_blank" rel="noopener">https://ivanball.github.io/docs/adr/</a>.</p>
           <hr>

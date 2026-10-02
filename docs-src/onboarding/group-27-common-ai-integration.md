@@ -67,7 +67,7 @@ fails at startup rather than on the first user request: the same fail-fast confi
 rest of the framework follows
 ([ADR-070](https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html)).
 `[Rubric section 11, Security]` is in play at `ApiKey`: the property is documented as binding from Key
-Vault in production and from user secrets locally (`AiSettings.cs:62-67`), so the package itself never
+Vault in production and from user secrets locally (`AiSettings.cs:69-74`), so the package itself never
 decides where the secret comes from.
 
 ## The provider is a registered factory, not a type the package names
@@ -196,7 +196,7 @@ closed, and a missing policy costs a capability rather than granting one. On top
 tool marked consequential must also be confirmed by the caller for this request (`:259-262`), and the
 confirmation never overrides a policy that denied it (`:256-258`). Both markers are plain string keys
 on the property bags Microsoft.Extensions.AI already carries, published by the static
-[ChatToolPolicy](#chattoolpolicy) (`ChatToolPolicy.cs:23`): `mmca.tool.consequential` on the tool
+[ChatToolPolicy](#chattoolpolicy) (`ChatToolPolicy.cs:24`): `mmca.tool.consequential` on the tool
 (`:29`) and `mmca.tool.confirmed` on the options (`:40`), so any tool factory and any caller can
 participate without referencing this package (`:10-14`). The distinction they encode is reading
 versus writing: a lookup can be offered on a policy decided once, while a tool that sends, moves money
@@ -226,7 +226,7 @@ not when somebody starts reading the stream.
 
 Bounds are configuration, so the framework can decide them. Content is not, so it does not.
 [IChatGuardrail](#ichatguardrail)
-(`MMCA.Common/Source/Core/MMCA.Common.AI/Chat/IChatGuardrail.cs:20`) is the extension point an
+(`MMCA.Common/Source/Core/MMCA.Common.AI/Chat/IChatGuardrail.cs:21`) is the extension point an
 application implements to inspect an outgoing request (`InspectRequestAsync`, `:27-30`), a
 completed response (`InspectResponseAsync`, `:37-40`) and, through a default-interface member that
 allows unless overridden, each streamed update (`InspectStreamedUpdateAsync`, `:56-59`), and the
@@ -423,14 +423,14 @@ gate, `SessionScoringPromptContractPinTests : PromptContractPinTestsBase`
 
 Exactly one feature in the workspace calls a model: ADC's organizer-facing session scoring. The
 Conference service host reads one secret, `Ai:ApiKey`, and derives `Ai:Enabled` from its presence
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:129-134`); the infrastructure
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:131-136`); the infrastructure
 template writes the Key Vault secret into the container app under that same key and local
-development keeps it in user secrets (`Program.cs:123-125`), so a host with no key starts with
+development keeps it in user secrets (`Program.cs:125-127`), so a host with no key starts with
 scoring unavailable rather than failing validation. It then registers the Anthropic adapter with
-`AddAnthropicAiProvider()` (`Program.cs:139`), its guardrails with `AddConferenceAiGuardrails`
-(`Program.cs:150`) and the governed client with `AddMmcaChatClient(builder.Configuration)`
-(`Program.cs:152`), in that order because the last call reads the guardrail descriptors, and
-subscribes the framework meter and activity source by literal name (`Program.cs:171-172`).
+`AddAnthropicAiProvider()` (`Program.cs:141`), its guardrails with `AddConferenceAiGuardrails`
+(`Program.cs:152`) and the governed client with `AddMmcaChatClient(builder.Configuration)`
+(`Program.cs:154`), in that order because the last call reads the guardrail descriptors, and
+subscribes the framework meter and activity source by literal name (`Program.cs:173-174`).
 `AddConferenceAiGuardrails`
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:85`)
 composes both framework policies, `AddPiiRedactionGuardrail()` and `AddContentPolicyGuardrail`
@@ -491,55 +491,66 @@ clients, policies, validator and provider factories, then the Level 3 registrati
 > MMCA.Common.AI · `MMCA.Common.AI` · `MMCA.Common/Source/Core/MMCA.Common.AI/AiSettings.cs:22` · Level 0 · class
 
 - **What it is**: the bound, validated `Ai` configuration section (`SectionName = "Ai"`,
-  `AiSettings.cs:217`) that gates and configures the entire AI integration: whether it is on at all
-  (`Enabled`, `AiSettings.cs:231`), which provider and model to call
-  (`Provider`/`Model`, `AiSettings.cs:234,242`), the API key, an optional endpoint override, the
-  output-token ceiling, the per-call timeout, and opt-ins (`AllowTools`, `RequireGuardrail`,
-  `EnableCache`) plus an optional input-token pre-flight budget.
+  `AiSettings.cs:25`) that gates and configures the entire AI integration: whether it is on at all
+  (`Enabled`, `AiSettings.cs:46`), which provider and model to call
+  (`Provider`/`Model`, `AiSettings.cs:55,65`), the API key, an optional endpoint override, the
+  output-token ceiling, the per-call timeout (capped by `MaxTimeout`), and opt-ins (`AllowTools`,
+  `RequireGuardrail`, `EnableCache`) plus an optional input-token pre-flight budget.
 - **Depends on**: `System.ComponentModel.DataAnnotations` (`IValidatableObject`, `[Range]`); no
-  first-party dependency of its own, though its doc comments name `AddCommonKeyVaultConfiguration` and
-  `Persistence:EnableSensitiveDataLogging` as sibling conventions elsewhere in Common.
+  first-party dependency of its own, though its doc comments name `AddCommonKeyVaultConfiguration` as
+  the sibling convention elsewhere in Common that supplies `ApiKey` in production (`AiSettings.cs:67-76`).
 - **Concept introduced, an off-by-default dependency with conditional validation.**
   `[Rubric §16, AI-Native Application Architecture]` (assesses whether an LLM dependency is safe to ship
   in every environment): `Enabled` defaults to `false`, and when it is false `AddMmcaChatClient`
   registers no `IChatClient` at all, so resolving one yields `null` and a consumer gates on the service
-  being present rather than reading a flag itself (`AiSettings.cs:225-231`). `Provider` is no longer a
+  being present rather than reading a flag itself (`AiSettings.cs:40-46`). `Provider` is a string, not a
   closed enum: it is matched case-insensitively against the registered
   [`IAiProviderFactory`](#iaiproviderfactory)`.Name` of whatever provider packages the host
   referenced (`MMCA.Common.AI.Anthropic` and `MMCA.Common.AI.OpenAI` each ship one), so the provider
   switch lives in the host's package references and its configuration value, not in this framework's
-  source (`AiSettings.cs:194-201`). `[Rubric §11, Security]` (assesses secret handling): `ApiKey` is
-  required only when `Enabled`, and its doc comment records that production binds it from Key Vault via
-  `AddCommonKeyVaultConfiguration`, never from a checked-in settings file (`AiSettings.cs:214-223`).
-- **Walkthrough**: two constants, `DefaultMaxOutputTokens = 1024` (`AiSettings.cs:220`) and
-  `DefaultTimeout = TimeSpan.FromSeconds(30)` (`AiSettings.cs:223`), back the two settings that ship with
-  a value even when the section is silent. `Provider` (`AiSettings.cs:202`) is required when `Enabled`
-  and names a registered provider by string, e.g. `Anthropic` or `OpenAI`; an unknown name fails at
-  startup naming the registered ones. `Model` is required when `Enabled` because it is part of the
-  prompt contract, hashed into `PromptContract.Hash`, so an implicit provider default would silently
-  change evaluated behavior on the provider's own schedule rather than on a reviewed version bump, and
-  it is also a bound: [`BoundedChatClient`](#boundedchatclient) refuses a request that names a different
-  model (`AiSettings.cs:204-211`). `Endpoint` (`AiSettings.cs:225-230`) is an optional absolute URI to
-  route through an AI gateway, a regional endpoint or an OpenAI-compatible server; each adapter passes it
-  to its SDK's base-address option. `MaxOutputTokens` (`[Range(1, 1_000_000)]`, `AiSettings.cs:236`) is
-  the hard ceiling `BoundedChatClient.Bound` clamps every call down to. `Timeout` (`AiSettings.cs:243`)
-  is enforced with a token linked to the caller's own, so a caller cancelling early still wins.
-  `RequireGuardrail` (`AiSettings.cs:252-264`) defaults to `true`: an enabled host that registers no
-  guardrail and no redactor fails at startup rather than shipping an uninspected model call; a host that
-  deliberately wants none sets it `false`, which is a reviewable line rather than an absence nobody can
-  see. `PerCallInputTokenBudget` (`[Range(1, int.MaxValue)]`, `AiSettings.cs:277-278`) is `null` by
-  default, leaving input unbounded, and is an ESTIMATE never a billing figure. `Validate`
-  (`AiSettings.cs:287-330`) is the conditional half: it `yield break`s immediately when `!Enabled`
-  (`AiSettings.cs:289-292`), so a host that leaves AI off is valid with nothing else set, which is what
+  source (`AiSettings.cs:15-19`, `AiSettings.cs:48-55`). `[Rubric §11, Security]` (assesses secret
+  handling): `ApiKey` is required only when `Enabled`, and its doc comment records that production binds
+  it from Key Vault via `AddCommonKeyVaultConfiguration`, never from a checked-in settings file
+  (`AiSettings.cs:67-76`).
+- **Walkthrough**: two defaults, `DefaultMaxOutputTokens = 1024` (`AiSettings.cs:28`) and
+  `DefaultTimeout = TimeSpan.FromSeconds(30)` (`AiSettings.cs:31`), back the two settings that ship with
+  a value even when the section is silent; a third static, `MaxTimeout = TimeSpan.FromHours(1)`
+  (`AiSettings.cs:33-38`), is the largest per-call timeout validation accepts. `Provider`
+  (`AiSettings.cs:55`) is required when `Enabled` and names a registered provider by string, e.g.
+  `Anthropic` or `OpenAI`; an unknown name fails at startup naming the registered ones. `Model`
+  (`AiSettings.cs:57-65`) is required when `Enabled` because it is part of the prompt contract, hashed
+  into `PromptContract.Hash`, so an implicit provider default would silently change evaluated behavior on
+  the provider's own schedule rather than on a reviewed version bump, and it is also a bound:
+  [`BoundedChatClient`](#boundedchatclient) refuses a request that names a different model.
+  `Endpoint` (`AiSettings.cs:78-83`) is an optional absolute URI to route through an AI gateway, a
+  regional endpoint or an OpenAI-compatible server; each adapter passes it to its SDK's base-address
+  option. `MaxOutputTokens` (`[Range(1, 1_000_000)]`, `AiSettings.cs:89-90`) is the hard ceiling
+  `BoundedChatClient.Bound` clamps every call down to. `Timeout` (`AiSettings.cs:92-96`) is enforced with
+  a token linked to the caller's own, so a caller cancelling early still wins. `AllowTools`
+  (`AiSettings.cs:98-103`) is `false` by default, and while it is false any tools on a request are
+  stripped before the call. `RequireGuardrail` (`AiSettings.cs:105-117`) defaults to `true`: an enabled
+  host that registers no guardrail fails at startup rather than shipping an uninspected model call, and
+  the message names the one-line fix (`AddPiiRedactionGuardrail()`); a host that deliberately wants none
+  sets it `false`, which is a reviewable line rather than an absence nobody can see. `EnableCache`
+  (`AiSettings.cs:119-123`) is off by default and stays off when no `IDistributedCache` is registered.
+  `PerCallInputTokenBudget` (`[Range(1, int.MaxValue)]`, `AiSettings.cs:130-131`) is `null` by default,
+  leaving input unbounded, and is an ESTIMATE never a billing figure. `Validate`
+  (`AiSettings.cs:140-190`) is the conditional half: it `yield break`s immediately when `!Enabled`
+  (`AiSettings.cs:142-145`), so a host that leaves AI off is valid with nothing else set, which is what
   lets the section ship in every `appsettings` file; when enabled it requires `Provider`, `Model`,
-  `ApiKey`, an absolute `Endpoint` when one is set, and a positive `Timeout`
-  (`AiSettings.cs:294-329`).
+  `ApiKey`, an absolute `Endpoint` when one is set, a positive `Timeout`, and a `Timeout` no greater than
+  `MaxTimeout` (`AiSettings.cs:147-189`). That last check exists because a bare number in configuration
+  binds as DAYS, and a value above roughly 49.7 days makes every call throw where the timeout is armed;
+  the one-hour cap rejects every bare-number value while leaving any plausible per-call budget alone,
+  and its message points at the `00:00:30` form (`AiSettings.cs:184-189`).
 - **Why it's built this way**: `IValidatableObject.Validate` runs through
   `.ValidateDataAnnotations().ValidateOnStart()` in `AiServiceCollectionExtensions.AddMmcaChatClient`
   (`MMCA.Common/Source/Core/MMCA.Common.AI/DependencyInjection.cs:123-126`), so a misconfigured `Ai`
-  section fails at host startup, not on the first call. `Provider` became a string, not an enum, so a new
-  vendor is a new adapter package registering a factory, never a change to this framework's source. See
-  [`ADR-120`](https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html).
+  section, including a `Timeout` mistyped as a bare number, fails at host startup, not on the first call.
+  `Provider` is a string, not an enum, so a new vendor is a new adapter package registering a factory,
+  never a change to this framework's source. See
+  [`ADR-120`](https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html) and
+  [`ADR-070`](https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html).
 - **Where it's used**: bound and consumed by [`AiServiceCollectionExtensions`](#aiservicecollectionextensions),
   enforced by [`BoundedChatClient`](#boundedchatclient), and its `Provider` value is threaded into
   [`UsageRecordingChatClient`](#usagerecordingchatclient) as the fallback tag when the resolved client
@@ -557,10 +568,10 @@ clients, policies, validator and provider factories, then the Level 3 registrati
 - **Concept introduced, a closed allow/block gate.** `[Rubric §11, Security]` (assesses whether content
   passing through an AI dependency is inspected and the inspection outcome cannot be misconstructed): the
   constructor is `private`, so the only way to produce a blocking verdict is `Block(string reason)`, which
-  throws on a null or whitespace reason (`GuardrailVerdict.cs:51-56`); a caller cannot construct a blocked
+  throws on a null or whitespace reason (`GuardrailVerdict.cs:39-44`); a caller cannot construct a blocked
   verdict that silently carries no explanation.
 - **Walkthrough**: `Allow` (`GuardrailVerdict.cs:37`) is a static property returning
-  `new(isAllowed: true, reason: null)`. `Block(reason)` (`GuardrailVerdict.cs:51-56`) validates the reason
+  `new(isAllowed: true, reason: null)`. `Block(reason)` (`GuardrailVerdict.cs:39-44`) validates the reason
   with `ArgumentException.ThrowIfNullOrWhiteSpace` before constructing `isAllowed: false`. The constant
   `UnspecifiedReason` (`GuardrailVerdict.cs:28`) exists for the struct's own `default` value, whose `Reason`
   is `null` because it went through neither factory.
@@ -579,7 +590,7 @@ clients, policies, validator and provider factories, then the Level 3 registrati
 > MMCA.Common.AI.Chat · `MMCA.Common.AI.Chat` · `MMCA.Common/Source/Core/MMCA.Common.AI/Chat/IAiTokenEstimator.cs:14` · Level 0 · interface
 
 - **What it is**: a one-method extension point for estimating how many input tokens a piece of prompt
-  text will cost: `int EstimateTokenCount(string text)` (`IAiTokenEstimator.cs:57`).
+  text will cost: `int EstimateTokenCount(string text)` (`IAiTokenEstimator.cs:19`).
 - **Depends on**: nothing first-party beyond the caller that resolves it.
 - **Concept introduced, a pluggable estimator behind a cheap built-in default.**
   `[Rubric §1, SOLID]` (assesses whether a dependency is inverted behind an abstraction rather than
@@ -589,7 +600,7 @@ clients, policies, validator and provider factories, then the Level 3 registrati
   (`BoundedChatClient.EstimateInputTokens`, `BoundedChatClient.cs:179`), so a host that wants
   provider-accurate tokenization can register a real tokenizer without changing the bounding logic.
 - **Walkthrough**: the interface has no other members; the contract is the single method plus its two
-  doc-comment lines describing the parameter and return value (`IAiTokenEstimator.cs:54-56`).
+  doc-comment lines describing the parameter and return value (`IAiTokenEstimator.cs:17-18`).
 - **Why it's built this way**: `BoundedChatClient.EstimateInputTokens` is `public static` precisely so a
   caller (or the estimator implementation itself) can reproduce the same estimate the budget check uses
   (`BoundedChatClient.cs:155-179`), and it deliberately rounds up with a cheap four-characters-per-token
@@ -609,7 +620,7 @@ clients, policies, validator and provider factories, then the Level 3 registrati
 
 - **What it is**: an immutable, hashable identity for one prompt: `Name`, `Version`, `Model`,
   `SystemPrompt` (`PromptContract.cs:78`). It both builds the `ChatOptions` a call needs
-  (`ToChatOptions`, `PromptContract.cs:108-109`) and stamps its own identity onto telemetry so every
+  (`ToChatOptions`, `PromptContract.cs:53-54`) and stamps its own identity onto telemetry so every
   call can be traced back to the exact prompt that produced it.
 - **Depends on**: `ChatOptions` (Microsoft.Extensions.AI), `System.Security.Cryptography.SHA256`, and
   `System.Text.Encoding`.
@@ -617,7 +628,7 @@ clients, policies, validator and provider factories, then the Level 3 registrati
   Architecture]` (assesses whether prompts are governed, versioned artifacts rather than inline
   strings): the record's `Hash` property (`PromptContract.cs:101`) is a lowercase hex SHA-256 of
   `Name|Version|Model|SystemPrompt`, with every component's line endings normalized to LF first
-  (`NormalizeLineEndings`, `PromptContract.cs:157-158`) so the same prompt checked out on Windows and on
+  (`NormalizeLineEndings`, `PromptContract.cs:102-103`) so the same prompt checked out on Windows and on
   Linux hashes identically and a CI gate cannot be tripped by `core.autocrlf` (`PromptContract.cs:90-93`).
   The three identity values are stamped onto `ChatOptions.AdditionalProperties` under fixed keys
   (`NamePropertyKey`/`VersionPropertyKey`/`HashPropertyKey`, `PromptContract.cs:81-87`), so a request
@@ -625,12 +636,12 @@ clients, policies, validator and provider factories, then the Level 3 registrati
 - **Walkthrough**: `Hash` (`PromptContract.cs:101`) is computed on every read, deliberately not cached in
   a field, because a record's generated copy constructor copies fields verbatim and a cached hash would
   survive a `with` expression describing the prompt the copy was made FROM (`PromptContract.cs:96-100`,
-  exactly the drift the type exists to prevent). `ToChatOptions` (`PromptContract.cs:108-109`) builds a
+  exactly the drift the type exists to prevent). `ToChatOptions` (`PromptContract.cs:53-54`) builds a
   fresh `ChatOptions` with `ModelId` and `Instructions` set, then delegates to `Apply`. `Apply`
-  (`PromptContract.cs:117-127`) stamps `Name`, `Version`, and `Hash` onto an existing `ChatOptions` in
+  (`PromptContract.cs:62-72`) stamps `Name`, `Version`, and `Hash` onto an existing `ChatOptions` in
   place and returns it for chaining, for a caller that already built options and needs its own
   temperature or response format alongside the prompt identity. `ReadName`/`ReadVersion`
-  (`PromptContract.cs:132,137`) and the private `ReadProperty` (`PromptContract.cs:139-143`) reverse the
+  (`PromptContract.cs:77,82`) and the private `ReadProperty` (`PromptContract.cs:84-88`) reverse the
   stamp, reading back whatever `Apply` wrote (or `null` when nothing was stamped).
 - **Why it's built this way**: hashing four short strings on every read is cheap enough that correctness
   wins outright over caching (`PromptContract.cs:96-100`). See
@@ -670,12 +681,12 @@ clients, policies, validator and provider factories, then the Level 3 registrati
 ---
 
 ### IChatGuardrail
-> MMCA.Common.AI.Chat · `MMCA.Common.AI.Chat` · `MMCA.Common/Source/Core/MMCA.Common.AI/Chat/IChatGuardrail.cs:20` · Level 1 · interface
+> MMCA.Common.AI.Chat · `MMCA.Common.AI.Chat` · `MMCA.Common/Source/Core/MMCA.Common.AI/Chat/IChatGuardrail.cs:21` · Level 1 · interface
 
 - **What it is**: the extension point a host implements to inspect chat traffic: `InspectRequestAsync`
   before the model is called, `InspectResponseAsync` after a completed response, and
   `InspectStreamedUpdateAsync` for one streamed update, each returning a
-  [`GuardrailVerdict`](#guardrailverdict) (`IChatGuardrail.cs:27-30,37-40,56-59`). The streamed member
+  [`GuardrailVerdict`](#guardrailverdict) (`IChatGuardrail.cs:28-31,38-41,57-60`). The streamed member
   is a default interface member that allows by default, so a guardrail written before it existed keeps
   compiling and keeps its streaming behavior.
 - **Depends on**: [`GuardrailVerdict`](#guardrailverdict),
@@ -687,12 +698,12 @@ clients, policies, validator and provider factories, then the Level 3 registrati
   registers neither a guardrail nor a redactor pays no cost, see
   [`AiServiceCollectionExtensions`](#aiservicecollectionextensions)'s descriptor check, and an enabled
   host with `RequireGuardrail` true (the default) fails at startup instead.
-- **Walkthrough**: `InspectRequestAsync` (`IChatGuardrail.cs:27-30`) takes the materialized (and, if any
+- **Walkthrough**: `InspectRequestAsync` (`IChatGuardrail.cs:28-31`) takes the materialized (and, if any
   redactor ran, already-redacted) message list and the call's options, returning a verdict; a block here
-  stops the call before the provider is reached. `InspectResponseAsync` (`IChatGuardrail.cs:37-40`) takes
+  stops the call before the provider is reached. `InspectResponseAsync` (`IChatGuardrail.cs:38-41`) takes
   the completed `ChatResponse` and the same options; a block here stops the response from reaching the
   caller after the provider call already ran. `InspectStreamedUpdateAsync`
-  (`IChatGuardrail.cs:56-59`) takes one `ChatResponseUpdate` fragment; a rule that needs the whole answer
+  (`IChatGuardrail.cs:57-60`) takes one `ChatResponseUpdate` fragment; a rule that needs the whole answer
   has to accumulate it itself, and a block ends the stream from that update on, though the caller has
   already seen every update yielded before it.
 - **Why it's built this way**: separate inspection points let an implementation block on
@@ -1039,26 +1050,33 @@ clients, policies, validator and provider factories, then the Level 3 registrati
 ---
 
 ### ChatToolPolicy
-> MMCA.Common.AI.Guardrails · `MMCA.Common.AI.Guardrails` · `MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/ChatToolPolicy.cs:23` · Level 0 · class
+> MMCA.Common.AI.Guardrails · `MMCA.Common.AI.Guardrails` · `MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/ChatToolPolicy.cs:24` · Level 0 · class
 
 - **What it is**: a static helper reading two `AdditionalProperties` conventions the tool-calling
   boundary shares: whether a tool declares itself consequential, and which tool names the caller
   confirmed for the current request.
-- **Depends on**: `Microsoft.Extensions.AI` (`AITool`, `ChatOptions`).
+- **Depends on**: `Microsoft.Extensions.AI` (`AITool`, `ChatOptions`), `System.Text.Json`
+  (`JsonElement`).
 - **Concept introduced, per-request confirmation via `AdditionalProperties`.** `[Rubric §16, AI-Native
   Application Architecture]` (assesses tool-calling safety patterns): a confirmation is carried as a
   key in `ChatOptions.AdditionalProperties`, never as a typed property, so it composes with any
   `ChatOptions` without a wrapper type. `[Rubric §11, Security]`: the confirmation is scoped to ONE
-  request by design (`ChatToolPolicy.cs:33` remark), because a confirmation that outlived the request
-  it was given for would be a standing grant, exactly what a confirmation step exists to avoid.
-- **Walkthrough**: `ConsequentialPropertyKey = "mmca.tool.consequential"` (`ChatToolPolicy.cs:26`)
+  request by design (`ChatToolPolicy.cs:37-40` remark), because a confirmation that outlived the
+  request it was given for would be a standing grant, exactly what a confirmation step exists to avoid.
+  The consequential marker, by contrast, fails closed: it is the whole write-safety gate, so only a
+  definite false reads as harmless (`ChatToolPolicy.cs:56-59`).
+- **Walkthrough**: `ConsequentialPropertyKey = "mmca.tool.consequential"` (`ChatToolPolicy.cs:30`)
   marks an `AITool` as doing something that cannot be undone by not reading the answer.
-  `ConfirmedToolsPropertyKey = "mmca.tool.confirmed"` (`ChatToolPolicy.cs:31`) holds the confirmed
-  names for the current request. `IsConsequential` (`ChatToolPolicy.cs:40-55`) reads the tool's
-  `AdditionalProperties`: a missing key is `false`; a `bool` value is used as-is; a `string` value is
-  parsed with `bool.TryParse` (configuration and JSON both hand a boolean over as text, and a tool
-  declared consequential in a settings file must not read as harmless because of that); anything else
-  is `false`. `ReadConfirmedTools` (`ChatToolPolicy.cs:58-78`) reads the confirmed names off
+  `ConfirmedToolsPropertyKey = "mmca.tool.confirmed"` (`ChatToolPolicy.cs:41`) holds the confirmed
+  names for the current request. `IsConsequential` (`ChatToolPolicy.cs:49-68`) reads the tool's
+  `AdditionalProperties`: a missing key is `false`; a `bool` value is used as-is; a `string` value
+  goes through the private `ParsedOrConsequential` (`ChatToolPolicy.cs:70-71`), which returns `false`
+  only for text that parses as `false` and `true` for anything else, unparseable text included
+  (configuration hands a boolean over as text, and a tool declared consequential in a settings file
+  must not read as harmless because of that); a `JsonElement` of kind `False` is `false`, a
+  `JsonElement` of kind `String` goes through the same `ParsedOrConsequential` (a JSON-bound bag
+  hands values over as `JsonElement`); and a marker present in any other shape reads as `true`
+  (`ChatToolPolicy.cs:60-67`). `ReadConfirmedTools` (`ChatToolPolicy.cs:76-97`) reads the confirmed names off
   `ChatOptions.AdditionalProperties`, accepting a single `string`, an `IEnumerable<string>`, or a
   non-generic `IEnumerable` (a JSON array bound as `object[]`), converting each element with
   `Convert.ToString` and dropping empties; anything else returns none.
@@ -1160,17 +1178,21 @@ clients, policies, validator and provider factories, then the Level 3 registrati
   (assesses whether behavior that depends on an external, non-deterministic dependency can be exercised
   deterministically): rather than calling a live model, a test replays a recorded transcript, so the
   assertion exercises the consumer's parsing and handling code without network variance.
-- **Walkthrough**: two constructors (`ReplayChatClient.cs:22-27,29-38`), one for a single response, one
+- **Walkthrough**: two constructors (`ReplayChatClient.cs:26-29,37-47`), one for a single response, one
   for an ordered list (rejecting an empty list, since a replay client needs at least one recorded
-  answer). `LastOptions`, `LastMessages`, `CallCount` (`ReplayChatClient.cs:41-49`) record what the
+  answer). `LastOptions`, `LastMessages`, `CallCount` (`ReplayChatClient.cs:50-56`) record what the
   client was last called with, for assertions. `GetResponseAsync` and `GetStreamingResponseAsync`
-  (`ReplayChatClient.cs:57-86`) both funnel through the private `Record`, with the streaming path
+  (`ReplayChatClient.cs:65-94`) both funnel through the private `Record`, with the streaming path
   projecting the SAME recorded response onto the streaming shape via the abstraction's own
   `ToChatResponseUpdates()` conversion, so a test asserting the streamed answer exercises the same
   corpus as the buffered path rather than a second, hand-built approximation of it. `Record`
-  (`ReplayChatClient.cs:98-109`) advances through the recorded list and repeats the LAST response once
+  (`ReplayChatClient.cs:104-122`) advances through the recorded list and repeats the LAST response once
   exhausted, so a test calling once more than it recorded gets a stable answer rather than an exception
-  from the harness pretending to be a failure in the code under test. `Dispose` is a no-op: the replay
+  from the harness pretending to be a failure in the code under test. It snapshots the messages
+  outside the lock, then takes one `Lock` (`_sync`, `ReplayChatClient.cs:20`) over the index read, the
+  `CallCount` increment and the `LastMessages`/`LastOptions` writes (`ReplayChatClient.cs:112-121`),
+  so concurrent calls neither lose a count nor pair one call's messages with another call's options.
+  `Dispose` is a no-op: the replay
   client holds no transport. `GetService` returns itself only when asked for its own type.
 - **Where it's used**: [`GoldenReplayTestsBase.RunCaseAsync`](#goldenreplaytestsbase) constructs one per
   case; `ReplayChatClientTests`, ADC's `GoldenReplayTests`, and `ReferenceGoldenReplayTests`.
@@ -1289,28 +1311,28 @@ clients, policies, validator and provider factories, then the Level 3 registrati
   (`InspectStreamedUpdateAsync`) checks each fragment rather than the whole answer, so a pattern that
   spans two streamed updates is missed by design; a host that needs whole-answer certainty uses the
   buffered path. `[Rubric §16, AI-Native Application Architecture]`.
-- **Walkthrough**: `ConfiguredPatternOptions` (`ContentPolicyGuardrail.cs:919`,
+- **Walkthrough**: `ConfiguredPatternOptions` (`ContentPolicyGuardrail.cs:67`,
   `IgnoreCase | CultureInvariant`) is what every CONFIGURED pattern compiles with; `MatchTimeout`
-  (`ContentPolicyGuardrail.cs:922`, 1 second) bounds a single match so a pathological pattern cannot
+  (`ContentPolicyGuardrail.cs:70`, 1 second) bounds a single match so a pathological pattern cannot
   hang a request; `BuiltInPatternOptions` adds `ExplicitCapture` on the BUILT-INS ONLY
-  (`ContentPolicyGuardrail.cs:924-927`), because turning that off under a host would silently change
+  (`ContentPolicyGuardrail.cs:72-75`), because turning that off under a host would silently change
   what a configured pattern's own backreferences mean. `BuiltInMarkers`
-  (`ContentPolicyGuardrail.cs:929-939`) pairs eight labeled `[GeneratedRegex]` patterns
+  (`ContentPolicyGuardrail.cs:77-87`) pairs eight labeled `[GeneratedRegex]` patterns
   (ignore-previous-instructions, disregard-system-prompt, role-reassignment, new-instructions,
   reveal-system-prompt, act-as-unrestricted, developer-mode, do-anything-now), each with a 1-second
-  generated-regex timeout. The constructor (`ContentPolicyGuardrail.cs:952-959`) compiles every
+  generated-regex timeout. The constructor (`ContentPolicyGuardrail.cs:100-107`) compiles every
   configured pattern ONCE, at resolve time; a pattern that does not compile has already failed
   `ContentPolicySettings.Validate` at startup, so this constructor is not where a typo is discovered.
-  `Redact` (`ContentPolicyGuardrail.cs:967-987`) rewrites only when `InjectionMode` is `Redact`: Block
+  `Redact` (`ContentPolicyGuardrail.cs:115-135`) rewrites only when `InjectionMode` is `Redact`: Block
   mode must inspect what the caller supplied, so rewriting there would hide the marker from the check
   that is supposed to refuse it; Off mode does neither. `InspectRequestAsync`
-  (`ContentPolicyGuardrail.cs:995-1013`) allows in every mode except `Block`, because in `Redact` mode
+  (`ContentPolicyGuardrail.cs:143-161`) allows in every mode except `Block`, because in `Redact` mode
   the redactor has already run and there is nothing left to refuse. `InspectResponseAsync`/
-  `InspectStreamedUpdateAsync` (`ContentPolicyGuardrail.cs:1016-1041`) both funnel through
+  `InspectStreamedUpdateAsync` (`ContentPolicyGuardrail.cs:164-189`) both funnel through
   `InspectAnswerText`, which matches against `BlockedResponsePatterns` and returns a block reason
   naming the pattern's INDEX, never the matched text: the reason reaches the caller, and the point of
   the rule was that the text should not. `RedactMessage`/`RedactText`
-  (`ContentPolicyGuardrail.cs:1180-1215`) rewrite only `TextContent`, passing images, function calls,
+  (`ContentPolicyGuardrail.cs:328-363`) rewrite only `TextContent`, passing images, function calls,
   and provider-specific content through untouched: a guardrail that silently dropped content it does
   not understand would be a far worse failure than leaving it alone.
 - **Why it's built this way**: matches the ADR-120 governed pipeline's split between redaction (silent,
@@ -1338,15 +1360,15 @@ clients, policies, validator and provider factories, then the Level 3 registrati
   pattern, not the first user who trips it, is the one who sees it.
 - **Walkthrough**: `SectionName = "Ai:ContentPolicy"` (`ContentPolicySettings.cs:26`);
   `DefaultRedactionPlaceholder = "[redacted-instruction]"` (`ContentPolicySettings.cs:29`), a VISIBLE
-  placeholder on purpose (`ContentPolicySettings.cs:1276-1280` remark) so the model can tell something
+  placeholder on purpose (`ContentPolicySettings.cs:63-67` remark) so the model can tell something
   was removed and a trace reviewer can tell a redaction from a sentence the user never wrote.
-  `InjectionMode` defaults `Redact` (`ContentPolicySettings.cs:1248`).
-  `AdditionalRequestPatterns`/`BlockedResponsePatterns` (`ContentPolicySettings.cs:1258,1270`) default
+  `InjectionMode` defaults `Redact` (`ContentPolicySettings.cs:35`).
+  `AdditionalRequestPatterns`/`BlockedResponsePatterns` (`ContentPolicySettings.cs:45,57`) default
   to empty; an empty `BlockedResponsePatterns` switches the response half of the policy off entirely,
   because a model that has already said the thing cannot unsay it, so the only available response-side
-  answer is a refusal. `RedactionPlaceholder` is `[Required]` (`ContentPolicySettings.cs:1281`).
-  `Validate` (`ContentPolicySettings.cs:1295-1306`) runs `ValidatePatterns` over both lists, which calls
-  `DescribeFailure` (`ContentPolicySettings.cs:1329-1345`) per pattern: an empty-or-whitespace pattern
+  answer is a refusal. `RedactionPlaceholder` is `[Required]` (`ContentPolicySettings.cs:68`).
+  `Validate` (`ContentPolicySettings.cs:82-93`) runs `ValidatePatterns` over both lists, which calls
+  `DescribeFailure` (`ContentPolicySettings.cs:116-132`) per pattern: an empty-or-whitespace pattern
   is rejected outright (it would match everything, "never what a policy meant"), otherwise the pattern
   is compiled with `ContentPolicyGuardrail.ConfiguredPatternOptions`/`MatchTimeout` and any
   `ArgumentException` message is surfaced against `SectionName:memberName[index]`.
@@ -1359,28 +1381,35 @@ clients, policies, validator and provider factories, then the Level 3 registrati
 ---
 
 ### PiiRedactionGuardrail
-> MMCA.Common.AI.Guardrails · `MMCA.Common.AI.Guardrails` · `MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/PiiRedactionGuardrail.cs:39` · Level 2 · class
+> MMCA.Common.AI.Guardrails · `MMCA.Common.AI.Guardrails` · `MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/PiiRedactionGuardrail.cs:39` · Level 3 · class
 
 - **What it is**: the sealed partial class implementing
   [`IChatRequestRedactor`](#ichatrequestredactor) and `IChatGuardrail` that strips emails and phone
-  numbers from outgoing message text. The guardrail half is a pass-through (always `Allow`): this type
+  numbers from the text carried by outgoing messages, tool calls and tool results included. The guardrail half is a pass-through (always `Allow`): this type
   only redacts, it never blocks.
 - **Depends on**: [`IChatRequestRedactor`](#ichatrequestredactor)/`IChatGuardrail`/`GuardrailVerdict`,
   `System.Text.RegularExpressions`.
 - **Concept introduced, configuration-free, unconditional redaction.** Contrasts with
   [`ContentPolicyGuardrail`](#contentpolicyguardrail): `PiiRedactionGuardrail` has no configurable
   options and applies to every outgoing message unconditionally.
-- **Walkthrough**: `EmailPattern`/`PhonePattern` (`PiiRedactionGuardrail.cs:1397-1407`) are
+- **Walkthrough**: `EmailPattern`/`PhonePattern` (`PiiRedactionGuardrail.cs:70-80`) are
   `[GeneratedRegex]` source-generated matchers with a 1-second timeout (email: a standard
   local-part@domain shape; phone: an optional leading country code plus a 10-digit US-shaped number,
   guarded by negative lookaround so it does not clip a longer digit run). `Redact`
-  (`PiiRedactionGuardrail.cs:1372-1383`) rewrites EVERY message, not only `ChatRole.User` (unlike
+  (`PiiRedactionGuardrail.cs:45-56`) rewrites EVERY message, not only `ChatRole.User` (unlike
   `ContentPolicyGuardrail`), via the private `RedactMessage`
-  (`PiiRedactionGuardrail.cs:1409-1435`), which replaces email matches then phone matches in
-  `TextContent` only, passing other content types through untouched for the same reason
-  `ContentPolicyGuardrail` does (a guardrail that silently dropped content it does not understand would
-  be worse than leaving it alone). `InspectRequestAsync`/`InspectResponseAsync`
-  (`PiiRedactionGuardrail.cs:1386-1395`) both unconditionally return `GuardrailVerdict.Allow`.
+  (`PiiRedactionGuardrail.cs:82-98`), which rebuilds each message (keeping role, `AuthorName`,
+  `MessageId` and `AdditionalProperties`) and hands every content item to `RedactContent`
+  (`PiiRedactionGuardrail.cs:105-123`). That switch rewrites non-empty `TextContent` and
+  `TextReasoningContent`, a `FunctionResultContent` whose result is a `string`, and the `string`
+  argument values of a `FunctionCallContent` (other argument values kept as-is), because a tool's
+  output is exactly where contact details turn up (a customer lookup, a directory search). Each
+  rewrite goes through `RedactText` (`PiiRedactionGuardrail.cs:125-126`), which replaces email
+  matches then phone matches. Binary and other non-text content (images, non-string tool results,
+  provider-specific items) passes through untouched for the same reason `ContentPolicyGuardrail` gives
+  (a guardrail that silently dropped content it does not understand would be worse than leaving it
+  alone). `InspectRequestAsync`/`InspectResponseAsync`
+  (`PiiRedactionGuardrail.cs:59-68`) both unconditionally return `GuardrailVerdict.Allow`.
 - **Why it's built this way**: unconditional redaction with zero configuration lets the guardrail
   satisfy `AiSettings.RequireGuardrail` with no setup. See
   [`ADR-120`](https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html) and
@@ -1408,10 +1437,10 @@ clients, policies, validator and provider factories, then the Level 3 registrati
   a host that later gives the type state would otherwise get two copies of it. Registration uses C#
   extension members as the idiom, not static extension methods.
 - **Walkthrough**: `AddPiiRedactionGuardrail`
-  (`GuardrailServiceCollectionExtensions.cs:1475-1486`) registers `PiiRedactionGuardrail` once via
+  (`GuardrailServiceCollectionExtensions.cs:33-44`) registers `PiiRedactionGuardrail` once via
   `TryAddSingleton`, then `TryAddEnumerable`-registers it under both `IChatGuardrail` and
   `IChatRequestRedactor`. `AddContentPolicyGuardrail`
-  (`GuardrailServiceCollectionExtensions.cs:1504-1521`) additionally binds `ContentPolicySettings` from
+  (`GuardrailServiceCollectionExtensions.cs:62-79`) additionally binds `ContentPolicySettings` from
   `Ai:ContentPolicy` with `.ValidateDataAnnotations().ValidateOnStart()` (so a bad pattern fails the
   deployment, not a user's request) before registering `ContentPolicyGuardrail` the same two-contract
   way. Both methods' doc remarks state they must be called BEFORE `AddMmcaChatClient`, which reads the
@@ -1427,10 +1456,10 @@ clients, policies, validator and provider factories, then the Level 3 registrati
 
 - **What it is**: the boundary a vendor SDK adapter implements to plug into `AddMmcaChatClient`'s
   provider selection. `Name` (`IAiProviderFactory.cs:31`) is the case-insensitive string a config file's
-  `Ai:Provider` selects it by; `Create` (`IAiProviderFactory.cs:39`) builds the ungoverned
+  `Ai:Provider` selects it by; `Create` (`IAiProviderFactory.cs:34`) builds the ungoverned
   `IChatClient` for already-validated [`AiSettings`](#aisettings).
 - **Depends on**: [`AiSettings`](#aisettings) (the bound `Ai` section it receives), `Microsoft.Extensions.AI.IChatClient`
-  and `IServiceProvider` (both external), both parameters of `Create` (`IAiProviderFactory.cs:39`).
+  and `IServiceProvider` (both external), both parameters of `Create` (`IAiProviderFactory.cs:34`).
 - **Concept introduced, the provider-factory boundary.** `[Rubric §1, SOLID]` (assesses dependency
   inversion and substitutability): `AddMmcaChatClient` and [`AiProviderValidator`](#aiprovidervalidator) depend only on this
   interface, never on a concrete vendor SDK type, so a new provider (a third LLM vendor) is one new
@@ -1439,13 +1468,13 @@ clients, policies, validator and provider factories, then the Level 3 registrati
   first-class, swappable concern rather than hard-wired code): this interface is the entire swap point,
   recorded in [ADR-120](https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html).
 - **Walkthrough**: two members only, `Name` (`IAiProviderFactory.cs:31`, a `string` getter) and
-  `Create(AiSettings settings, IServiceProvider serviceProvider)` (`IAiProviderFactory.cs:39`, returns
-  `IChatClient`). The doc comment on `Create` (`IAiProviderFactory.cs:38`) records that ownership of the
+  `Create(AiSettings settings, IServiceProvider serviceProvider)` (`IAiProviderFactory.cs:34`, returns
+  `IChatClient`). The doc comment on `Create` (`IAiProviderFactory.cs:33`) records that ownership of the
   returned client passes to the governed pipeline that wraps it, i.e. the factory itself never disposes
   what it builds.
 - **Why it's built this way**: `serviceProvider` is passed alongside `settings` so an adapter that needs
   a logger or a named `HttpClient` factory can resolve one without the interface growing a parameter per
-  future need (`IAiProviderFactory.cs:37`). The instances that implement it, [`AnthropicAiProviderFactory`](#anthropicaiproviderfactory)
+  future need (`IAiProviderFactory.cs:32`). The instances that implement it, [`AnthropicAiProviderFactory`](#anthropicaiproviderfactory)
   and [`OpenAiProviderFactory`](#openaiproviderfactory), are registered as `IEnumerable<IAiProviderFactory>` so `AddMmcaChatClient` and
   [`AiProviderValidator`](#aiprovidervalidator) can enumerate every adapter package the host actually referenced, never a fixed list.
 - **Where it's used**: `DependencyInjection.cs` in `MMCA.Common.AI` resolves the matching factory to
@@ -1472,17 +1501,17 @@ clients, policies, validator and provider factories, then the Level 3 registrati
   the chat client.
 - **Walkthrough**: the constructor captures the injected factories into a fixed array
   (`AiProviderValidator.cs:18`, `_factories = [.. factories]`). `Validate` (`AiProviderValidator.cs:65`)
-  first short-circuits when `Enabled` is false or `Provider` is blank (`AiProviderValidator.cs:71`,
+  first short-circuits when `Enabled` is false or `Provider` is blank (`AiProviderValidator.cs:27`,
   deferring to the data-annotation validator so the blank case is reported exactly once, not twice).
-  Otherwise it calls the static helper `Match` (`AiProviderValidator.cs:85`), which does a case-insensitive
+  Otherwise it calls the static helper `Match` (`AiProviderValidator.cs:41`), which does a case-insensitive
   `FirstOrDefault` over the factories' `Name`; a hit returns `Success`, a miss calls `DescribeMismatch`
-  (`AiProviderValidator.cs:92`) to build the failure text. `DescribeMismatch` branches on whether any
-  factory is registered at all (`AiProviderValidator.cs:96`): zero factories means no adapter package is
+  (`AiProviderValidator.cs:48`) to build the failure text. `DescribeMismatch` branches on whether any
+  factory is registered at all (`AiProviderValidator.cs:52`): zero factories means no adapter package is
   referenced, so the message names both adapter packages and their registration calls
   (`AddAnthropicAiProvider()`, `AddOpenAiProvider()`) plus the manual `AddMmcaChatClient` overload
-  (`AiProviderValidator.cs:98-101`); one or more factories means the name is simply wrong, so the message
-  lists the registered provider names, sorted case-insensitively (`AiProviderValidator.cs:104,106`).
-- **Why it's built this way**: `Match` and `DescribeMismatch` are `internal static` (`AiProviderValidator.cs:85,92`)
+  (`AiProviderValidator.cs:54-57`); one or more factories means the name is simply wrong, so the message
+  lists the registered provider names, sorted case-insensitively (`AiProviderValidator.cs:60,62`).
+- **Why it's built this way**: `Match` and `DescribeMismatch` are `internal static` (`AiProviderValidator.cs:41,48`)
   so the unit tests can exercise the matching and message-building logic directly without standing up
   the full options pipeline. The class itself is `internal sealed` (`AiProviderValidator.cs:16`): it is
   wiring, registered by `MMCA.Common.AI`'s own `DependencyInjection.cs`, not a public extension point.
@@ -1497,23 +1526,23 @@ clients, policies, validator and provider factories, then the Level 3 registrati
   equals `Anthropic` (`ProviderName`, `AnthropicAiProviderFactory.cs:16`).
 - **Depends on**: [`IAiProviderFactory`](#iaiproviderfactory), [`AiSettings`](#aisettings); externally, the Anthropic SDK's `AnthropicClient`
   and `ClientOptions`, and `Microsoft.Extensions.AI`'s `AsIChatClient` adapter extension
-  (`AnthropicAiProviderFactory.cs:164`).
+  (`AnthropicAiProviderFactory.cs:48`).
 - **Concept**: first concrete example of the factory boundary [`IAiProviderFactory`](#iaiproviderfactory) introduces; see that
   section for the swap-point rationale. Introduces one new idea of its own: `AsIChatClient` is the SDK's
   own `Microsoft.Extensions.AI` adapter, so this factory never hand-rolls the Messages API over
-  `HttpClient` (`AnthropicAiProviderFactory.cs:140-144`).
-- **Walkthrough**: `Name` returns the `const string ProviderName = "Anthropic"` (`AnthropicAiProviderFactory.cs:133,136`).
-  `Create` (`AnthropicAiProviderFactory.cs:149`) null-checks `settings`, builds an SDK `ClientOptions`
-  from `ApiKey` and `Timeout` (`AnthropicAiProviderFactory.cs:153-157`), and, when `settings.Endpoint`
-  is set, overrides `BaseUrl` (`AnthropicAiProviderFactory.cs:159-162`). It then constructs
+  `HttpClient` (`AnthropicAiProviderFactory.cs:24-25`).
+- **Walkthrough**: `Name` returns the `const string ProviderName = "Anthropic"` (`AnthropicAiProviderFactory.cs:17,20`).
+  `Create` (`AnthropicAiProviderFactory.cs:33`) null-checks `settings`, builds an SDK `ClientOptions`
+  from `ApiKey` and `Timeout` (`AnthropicAiProviderFactory.cs:37-41`), and, when `settings.Endpoint`
+  is set, overrides `BaseUrl` (`AnthropicAiProviderFactory.cs:43-46`). It then constructs
   `new AnthropicClient(options).AsIChatClient(settings.Model, settings.MaxOutputTokens)`
-  (`AnthropicAiProviderFactory.cs:164`), passing the model and output ceiling as the client's defaults.
+  (`AnthropicAiProviderFactory.cs:48`), passing the model and output ceiling as the client's defaults.
 - **Why it's built this way**: a `[SuppressMessage("Reliability", "CA2000", ...)]` on `Create`
-  (`AnthropicAiProviderFactory.cs:145-148`) documents why the built client is not disposed here: ownership
+  (`AnthropicAiProviderFactory.cs:29-32`) documents why the built client is not disposed here: ownership
   passes to the `IChatClient` the pipeline wraps (see [`BoundedChatClient`](#boundedchatclient)), and the DI
   container disposes it with the singleton; disposing in the factory would close the transport before the
   first call. The model and output ceiling passed as SDK defaults are not the last word: `BoundedChatClient`
-  still pins and clamps per call (`AnthropicAiProviderFactory.cs:141-143`), because a default is a
+  still pins and clamps per call (`AnthropicAiProviderFactory.cs:26-27`), because a default is a
   suggestion and a bound is not. Recorded in [ADR-120](https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html).
 - **Where it's used**: registered by [`AnthropicAiServiceCollectionExtensions`](#anthropicaiservicecollectionextensions-openaiservicecollectionextensions).`AddAnthropicAiProvider()`; exercised by
   `MMCA.Common/Tests/Core/MMCA.Common.AI.Tests/Providers/AdapterFactoryTests.cs`.
@@ -1525,21 +1554,21 @@ clients, policies, validator and provider factories, then the Level 3 registrati
   equals `OpenAI` (`ProviderName`, `OpenAiProviderFactory.cs:20`).
 - **Depends on**: [`IAiProviderFactory`](#iaiproviderfactory), [`AiSettings`](#aisettings); externally, `OpenAI`'s `OpenAIClient`,
   `OpenAIClientOptions`, `System.ClientModel.ApiKeyCredential`, and `Microsoft.Extensions.AI`'s
-  `AsIChatClient` (`OpenAiProviderFactory.cs:217-219`).
+  `AsIChatClient` (`OpenAiProviderFactory.cs:49-51`).
 - **Concept**: same factory-boundary role as [`AnthropicAiProviderFactory`](#anthropicaiproviderfactory) (see [`IAiProviderFactory`](#iaiproviderfactory) for the
   shared rationale). Differs in one behavior worth flagging on its own: the OpenAI client binds its
-  model at construction time, not per call (`OpenAiProviderFactory.cs:196-199`).
-- **Walkthrough**: `Name` returns the `const string ProviderName = "OpenAI"` (`OpenAiProviderFactory.cs:189,192`).
-  `Create` (`OpenAiProviderFactory.cs:201`) null-checks `settings`, then requires both `Model`
-  (`OpenAiProviderFactory.cs:205-206`) and `ApiKey` (`OpenAiProviderFactory.cs:207-208`) with an
+  model at construction time, not per call (`OpenAiProviderFactory.cs:28-31`).
+- **Walkthrough**: `Name` returns the `const string ProviderName = "OpenAI"` (`OpenAiProviderFactory.cs:21,24`).
+  `Create` (`OpenAiProviderFactory.cs:33`) null-checks `settings`, then requires both `Model`
+  (`OpenAiProviderFactory.cs:37-38`) and `ApiKey` (`OpenAiProviderFactory.cs:39-40`) with an
   `InvalidOperationException` naming the missing `Ai:` setting when either is absent, unlike Anthropic's
   factory, which tolerates a null model. It builds `OpenAIClientOptions` from `Timeout`
-  (`OpenAiProviderFactory.cs:210`), applies `Endpoint` when set (`OpenAiProviderFactory.cs:212-215`), and
+  (`OpenAiProviderFactory.cs:42`), applies `Endpoint` when set (`OpenAiProviderFactory.cs:44-47`), and
   returns `new OpenAIClient(new ApiKeyCredential(apiKey), options).GetChatClient(model).AsIChatClient()`
-  (`OpenAiProviderFactory.cs:217-219`).
+  (`OpenAiProviderFactory.cs:49-51`).
 - **Why it's built this way**: because the SDK binds the model at construction, the pinned model is the
   only one every request can go to; [`BoundedChatClient`](#boundedchatclient) refuses a request naming any other model
-  (`OpenAiProviderFactory.cs:196-199`), which keeps a [`PromptContract`](#promptcontract)'s model assertion meaningful here the
+  (`OpenAiProviderFactory.cs:28-31`), which keeps a [`PromptContract`](#promptcontract)'s model assertion meaningful here the
   same way it is on adapters (Anthropic's) that honor a per-request override. The eager
   `InvalidOperationException` on a missing model or key fails at first `Create` call rather than deeper
   inside the SDK. Recorded in [ADR-120](https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html).

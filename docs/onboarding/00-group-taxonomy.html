@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>Phase 1b - Functional Group Taxonomy · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="This is the primary axis of the guide. Every one of the 5,034 distinct first-party type nodes from 00-inventory.md is assigned to exactly one…">
+  <meta name="description" content="This is the primary axis of the guide. Every one of the 5,234 distinct first-party type nodes from 00-inventory.md is assigned to exactly one…">
   <link rel="canonical" href="https://ivanball.github.io/docs/onboarding/00-group-taxonomy.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="Phase 1b - Functional Group Taxonomy">
-  <meta property="og:description" content="This is the primary axis of the guide. Every one of the 5,034 distinct first-party type nodes from 00-inventory.md is assigned to exactly one…">
+  <meta property="og:description" content="This is the primary axis of the guide. Every one of the 5,234 distinct first-party type nodes from 00-inventory.md is assigned to exactly one…">
   <meta property="og:url" content="https://ivanball.github.io/docs/onboarding/00-group-taxonomy.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Phase 1b - Functional Group Taxonomy">
-  <meta name="twitter:description" content="This is the primary axis of the guide. Every one of the 5,034 distinct first-party type nodes from 00-inventory.md is assigned to exactly one…">
+  <meta name="twitter:description" content="This is the primary axis of the guide. Every one of the 5,234 distinct first-party type nodes from 00-inventory.md is assigned to exactly one…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Onboarding Guide","item":"https://ivanball.github.io/docs/onboarding/index.html"},{"@type":"ListItem","position":4,"name":"Phase 1b - Functional Group Taxonomy","item":"https://ivanball.github.io/docs/onboarding/00-group-taxonomy.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
@@ -145,7 +145,7 @@
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Onboarding guide</p>
           <h1 id="phase-1b---functional-group-taxonomy">Phase 1b - Functional Group Taxonomy</h1>
-          <p>This is the <strong>primary axis</strong> of the guide. Every one of the <strong>5,034</strong> distinct first-party type
+          <p>This is the <strong>primary axis</strong> of the guide. Every one of the <strong>5,234</strong> distinct first-party type
           nodes from <a href="00-inventory.html"><code>00-inventory.md</code></a> is assigned to <strong>exactly one</strong> functional group -
           its primary <em>home</em>: the capability or cross-cutting concern it most exists to serve. A type used
           across many groups (e.g. <code>Result&lt;T&gt;</code>, the entity base) lives in the one foundational group that
@@ -227,7 +227,7 @@
           <td>G04</td>
           <td><strong>Domain &amp; Integration Events + Outbox Dual-Dispatch</strong><br/>group-04-events-outbox.md</td>
           <td>38</td>
-          <td>L0-L13</td>
+          <td>L0-L16</td>
           <td>Event contracts, the domain-event dispatcher, the transactional outbox/inbox, and the in-process + broker message buses.</td>
           </tr>
           <tr>
@@ -247,15 +247,15 @@
           <tr>
           <td>G07</td>
           <td><strong>Persistence &amp; EF Core</strong><br/>group-07-persistence-ef-core.md</td>
-          <td>165</td>
-          <td>L0-L14</td>
+          <td>177</td>
+          <td>L0-L16</td>
           <td>The single SQLServerDbContext over the abstract ApplicationDbContext, interceptors, repositories, specifications evaluation, data-source routing (database-per-service), conventions, value generators, encryption, factories and design-time.</td>
           </tr>
           <tr>
           <td>G08</td>
           <td><strong>Authentication &amp; Authorization</strong><br/>group-08-auth.md</td>
-          <td>153</td>
-          <td>L0-L10</td>
+          <td>162</td>
+          <td>L0-L14</td>
           <td>JWT/JWKS dual-fetch token validation, current-user/claims, password hashing, cookie sessions, and policy/authorization plumbing.</td>
           </tr>
           <tr>
@@ -289,22 +289,22 @@
           <tr>
           <td>G13</td>
           <td><strong>gRPC &amp; Inter-Service Contracts</strong><br/>group-13-grpc-contracts.md</td>
-          <td>6</td>
+          <td>7</td>
           <td>L0-L4</td>
           <td>Typed gRPC clients/servers, interceptors, Result-over-the-wire, and the ServiceContract marker for synchronous inter-service calls (<a href="https://ivanball.github.io/docs/adr/007-grpc-extraction.html" target="_blank" rel="noopener">ADR-007</a>).</td>
           </tr>
           <tr>
           <td>G14</td>
           <td><strong>Module System, Composition &amp; Configuration</strong><br/>group-14-module-system-composition.md</td>
-          <td>88</td>
-          <td>L0-L14</td>
+          <td>87</td>
+          <td>L0-L17</td>
           <td>IModule discovery + Kahn-ordered ModuleLoader, the DI composition roots, assembly markers, data-source/database attributes, and options/settings binding.</td>
           </tr>
           <tr>
           <td>G15</td>
           <td><strong>Common UI Framework (MudBlazor components, theme, base pages)</strong><br/>group-15-common-ui-framework.md</td>
-          <td>153</td>
-          <td>L0-L8</td>
+          <td>174</td>
+          <td>L0-L15</td>
           <td>Reusable Blazor building blocks: the data-grid list page base, theme, common pages/services, and UI extensions shared by every consumer app.</td>
           </tr>
           <tr>
@@ -332,7 +332,7 @@
           <td>G19</td>
           <td><strong>ADC Conference - Infrastructure &amp; Persistence</strong><br/>group-19-conference-infrastructure.md</td>
           <td>29</td>
-          <td>L0-L12</td>
+          <td>L0-L14</td>
           <td>The Conference module DbContext registration, EF entity configurations, database seeding, and infrastructure services.</td>
           </tr>
           <tr>
@@ -345,28 +345,28 @@
           <tr>
           <td>G21</td>
           <td><strong>ADC Conference - UI</strong><br/>group-21-conference-ui.md</td>
-          <td>162</td>
+          <td>163</td>
           <td>L0-L10</td>
           <td>The Conference Blazor pages (events, sessions, speakers, categories, questions, rooms, feedback, public, session-selection) and their UI services.</td>
           </tr>
           <tr>
           <td>G22</td>
           <td><strong>ADC Engagement Module (Session Bookmarks)</strong><br/>group-22-engagement-module.md</td>
-          <td>194</td>
-          <td>L0-L13</td>
+          <td>196</td>
+          <td>L0-L14</td>
           <td>The Engagement bounded context end-to-end: bookmark aggregate, use cases, persistence, API/contracts/service, and feedback UI.</td>
           </tr>
           <tr>
           <td>G26</td>
           <td><strong>ADC Engagement Live Layer (Real-Time Polls &amp; Session Q&amp;A)</strong><br/>group-23-engagement-live-layer.md</td>
-          <td>85</td>
+          <td>87</td>
           <td>L0-L14</td>
           <td>Real-time audience interaction in the Engagement bounded context: event-wide live polls with voting and moderated per-session Q&amp;A with upvoting, over the SignalR hub-channel transport (<a href="https://ivanball.github.io/docs/adr/039-live-channel-push.html" target="_blank" rel="noopener">ADR-039</a>) and the cross-service gRPC live-channel adapter.</td>
           </tr>
           <tr>
           <td>G23</td>
           <td><strong>ADC Identity Module (Users, Profiles, GDPR Export/Erasure)</strong><br/>group-24-identity-module.md</td>
-          <td>107</td>
+          <td>108</td>
           <td>L0-L17</td>
           <td>The Identity bounded context end-to-end: the User aggregate, change-password/delete/export use cases, persistence, API/contracts/service, and profile/user UI.</td>
           </tr>
@@ -394,12 +394,12 @@
           <tr>
           <td>G25</td>
           <td><strong>Testing &amp; Quality Infrastructure</strong><br/>group-28-testing-infrastructure.md</td>
-          <td>2771</td>
+          <td>2923</td>
           <td>L0-L19</td>
           <td>All test projects + the reusable Testing/Testing.E2E/Testing.UI bases, architecture-fitness tests, and the component Gallery harness; individual [Fact]s are rolled up by project (logged exception).</td>
           </tr>
           </tbody></table></div>
-          <p><strong>Reconciliation:</strong> 2263 production types across 27 groups + 2771 test/testing types in G25 = <strong>5034</strong> (matches the inventory&#39;s distinct-node count). No type appears twice; none dropped.</p>
+          <p><strong>Reconciliation:</strong> 2311 production types across 27 groups + 2923 test/testing types in G25 = <strong>5234</strong> (matches the inventory&#39;s distinct-node count). No type appears twice; none dropped.</p>
           <hr>
           <h2 id="group-membership">Group membership</h2>
           <h3 id="g01---result--error-handling">G01 - Result &amp; Error Handling</h3>
@@ -1232,19 +1232,19 @@
           <td>MMCA.Common.Infrastructure.Messaging</td>
           </tr>
           <tr>
-          <td>13</td>
+          <td>16</td>
           <td><code>OutboxAdministration</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Persistence.Outbox.Administration</td>
           </tr>
           <tr>
-          <td>13</td>
+          <td>16</td>
           <td><code>OutboxCleanupService</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Persistence.Outbox.Administration</td>
           </tr>
           <tr>
-          <td>13</td>
+          <td>16</td>
           <td><code>OutboxProcessor</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Persistence.Outbox.Processing</td>
@@ -1704,14 +1704,14 @@
           <td>MMCA.Common.Application.Validation</td>
           </tr>
           <tr>
-          <td>0</td>
-          <td><code>StrongPasswordRules&lt;T&gt;</code></td>
+          <td>1</td>
+          <td><code>CommandRequestValidator&lt;TCommand, TRequest&gt;</code></td>
           <td>class</td>
           <td>MMCA.Common.Application.Validation</td>
           </tr>
           <tr>
           <td>1</td>
-          <td><code>CommandRequestValidator&lt;TCommand, TRequest&gt;</code></td>
+          <td><code>StrongPasswordRules&lt;T&gt;</code></td>
           <td>class</td>
           <td>MMCA.Common.Application.Validation</td>
           </tr>
@@ -1778,7 +1778,7 @@
           </tbody></table></div>
           <h3 id="g07---persistence--ef-core">G07 - Persistence &amp; EF Core</h3>
           <blockquote>
-          <p><code>group-07-persistence-ef-core.md</code> | 165 types | The single SQLServerDbContext over the abstract ApplicationDbContext, interceptors, repositories, specifications evaluation, data-source routing (database-per-service), conventions, value generators, encryption, factories and design-time.</p>
+          <p><code>group-07-persistence-ef-core.md</code> | 177 types | The single SQLServerDbContext over the abstract ApplicationDbContext, interceptors, repositories, specifications evaluation, data-source routing (database-per-service), conventions, value generators, encryption, factories and design-time.</p>
           </blockquote>
           <div class="table-wrap"><table>
           <thead>
@@ -1875,6 +1875,12 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>ExplicitKeyInsertGroup</code></td>
+          <td>record</td>
+          <td>MMCA.Common.Infrastructure.Persistence.DataSources.Engines</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>FileUploadOptions</code></td>
           <td>record</td>
           <td>MMCA.Common.Application.Interfaces.Infrastructure.Storage</td>
@@ -1908,12 +1914,6 @@
           <td><code>IDbSeeder</code></td>
           <td>interface</td>
           <td>MMCA.Common.Infrastructure.Persistence.DbContexts.Seeding</td>
-          </tr>
-          <tr>
-          <td>0</td>
-          <td><code>IdentityInsertGroup</code></td>
-          <td>record</td>
-          <td>MMCA.Common.Infrastructure.Persistence.DbContexts.Factory</td>
           </tr>
           <tr>
           <td>0</td>
@@ -1989,6 +1989,12 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>MigrationPolicy</code></td>
+          <td>enum</td>
+          <td>MMCA.Common.Infrastructure.Persistence.DataSources.Engines</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>ModelBuilderExtensions</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Persistence.DbContexts</td>
@@ -2016,6 +2022,12 @@
           <td><code>ProfilingHelper</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Persistence</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>RowVersionStrategy</code></td>
+          <td>enum</td>
+          <td>MMCA.Common.Infrastructure.Persistence.DataSources.Engines</td>
           </tr>
           <tr>
           <td>0</td>
@@ -2073,6 +2085,12 @@
           </tr>
           <tr>
           <td>1</td>
+          <td><code>DataSourceEngineCapabilities</code></td>
+          <td>record</td>
+          <td>MMCA.Common.Infrastructure.Persistence.DataSources.Engines</td>
+          </tr>
+          <tr>
+          <td>1</td>
           <td><code>DataSourceKey</code></td>
           <td>record struct</td>
           <td>MMCA.Common.Application.Interfaces.Infrastructure.Persistence</td>
@@ -2127,6 +2145,12 @@
           </tr>
           <tr>
           <td>1</td>
+          <td><code>IExplicitKeyInsertDialect</code></td>
+          <td>interface</td>
+          <td>MMCA.Common.Infrastructure.Persistence.DataSources.Engines</td>
+          </tr>
+          <tr>
+          <td>1</td>
           <td><code>InternalCommandMetrics</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Persistence.InternalCommands.Processing</td>
@@ -2163,19 +2187,7 @@
           </tr>
           <tr>
           <td>1</td>
-          <td><code>RestrictDeleteByDefaultConvention</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Persistence.Conventions</td>
-          </tr>
-          <tr>
-          <td>1</td>
           <td><code>SensitiveDataLoggingGate</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Persistence</td>
-          </tr>
-          <tr>
-          <td>1</td>
-          <td><code>SoftDeleteFilterSql</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Persistence</td>
           </tr>
@@ -2223,12 +2235,6 @@
           </tr>
           <tr>
           <td>2</td>
-          <td><code>IndexBuilderExtensions</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Persistence.Configuration</td>
-          </tr>
-          <tr>
-          <td>2</td>
           <td><code>InternalCommandsSettings</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Persistence.InternalCommands.Administration</td>
@@ -2238,12 +2244,6 @@
           <td><code>NullDomainEventDispatcher</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Persistence.DbContexts.Design</td>
-          </tr>
-          <tr>
-          <td>2</td>
-          <td><code>PhysicalDataSource</code></td>
-          <td>record</td>
-          <td>MMCA.Common.Infrastructure.Persistence.DataSources</td>
           </tr>
           <tr>
           <td>2</td>
@@ -2259,12 +2259,6 @@
           </tr>
           <tr>
           <td>2</td>
-          <td><code>SoftDeleteUniqueIndexConvention</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Persistence.Conventions</td>
-          </tr>
-          <tr>
-          <td>2</td>
           <td><code>TenancySettings</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Persistence.Tenancy</td>
@@ -2273,24 +2267,6 @@
           <td>2</td>
           <td><code>TenantDataSourceTarget</code></td>
           <td>record struct</td>
-          <td>MMCA.Common.Infrastructure.Persistence.DataSources</td>
-          </tr>
-          <tr>
-          <td>3</td>
-          <td><code>CrossDataSourceDegradeConvention</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Persistence.Conventions</td>
-          </tr>
-          <tr>
-          <td>3</td>
-          <td><code>DataSourceService</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Persistence.DataSources</td>
-          </tr>
-          <tr>
-          <td>3</td>
-          <td><code>IDataSourceResolver</code></td>
-          <td>interface</td>
           <td>MMCA.Common.Infrastructure.Persistence.DataSources</td>
           </tr>
           <tr>
@@ -2334,12 +2310,6 @@
           <td><code>StronglyTypedIdValueConverter&lt;TSelf, TValue&gt;</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Persistence.Conversions</td>
-          </tr>
-          <tr>
-          <td>4</td>
-          <td><code>DataSourceResolver</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Persistence.DataSources</td>
           </tr>
           <tr>
           <td>4</td>
@@ -2391,33 +2361,15 @@
           </tr>
           <tr>
           <td>4</td>
-          <td><code>RefreshSessionModelBuilderExtensions</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Persistence.Auth</td>
-          </tr>
-          <tr>
-          <td>4</td>
           <td><code>SpecificationEvaluator</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Persistence.Repositories</td>
-          </tr>
-          <tr>
-          <td>4</td>
-          <td><code>TenancySettingsValidator</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Persistence.Tenancy</td>
           </tr>
           <tr>
           <td>5</td>
           <td><code>EmailValueConverter</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Persistence.Conversions</td>
-          </tr>
-          <tr>
-          <td>5</td>
-          <td><code>EntityDataSourceRegistry</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Persistence.DataSources</td>
           </tr>
           <tr>
           <td>5</td>
@@ -2499,27 +2451,15 @@
           </tr>
           <tr>
           <td>5</td>
-          <td><code>TenantDataSourceTargets</code></td>
+          <td><code>RefreshSessionModelBuilderExtensions</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Persistence.DataSources</td>
-          </tr>
-          <tr>
-          <td>6</td>
-          <td><code>EFReadRepository&lt;TEntity, TIdentifierType&gt;</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Persistence.Repositories</td>
+          <td>MMCA.Common.Infrastructure.Persistence.Auth</td>
           </tr>
           <tr>
           <td>6</td>
           <td><code>EFReadRepositoryDecorator&lt;TEntity, TIdentifierType&gt;</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Persistence.Repositories</td>
-          </tr>
-          <tr>
-          <td>6</td>
-          <td><code>EntityTypeConfiguration&lt;TEntity, TIdentifierType&gt;</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Persistence.Configuration.EntityTypeConfiguration</td>
           </tr>
           <tr>
           <td>6</td>
@@ -2547,30 +2487,6 @@
           </tr>
           <tr>
           <td>7</td>
-          <td><code>EntityTypeConfigurationCosmos&lt;TEntity, TIdentifierType&gt;</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Persistence.Configuration.EntityTypeConfiguration</td>
-          </tr>
-          <tr>
-          <td>7</td>
-          <td><code>EntityTypeConfigurationPostgreSQL&lt;TEntity, TIdentifierType&gt;</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Persistence.Configuration.EntityTypeConfiguration</td>
-          </tr>
-          <tr>
-          <td>7</td>
-          <td><code>EntityTypeConfigurationSqlite&lt;TEntity, TIdentifierType&gt;</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Persistence.Configuration.EntityTypeConfiguration</td>
-          </tr>
-          <tr>
-          <td>7</td>
-          <td><code>EntityTypeConfigurationSQLServer&lt;TEntity, TIdentifierType&gt;</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Persistence.Configuration.EntityTypeConfiguration</td>
-          </tr>
-          <tr>
-          <td>7</td>
           <td><code>IRepositoryFactory</code></td>
           <td>interface</td>
           <td>MMCA.Common.Infrastructure.Persistence.Repositories.Factory</td>
@@ -2582,34 +2498,16 @@
           <td>MMCA.Common.Application.Interfaces.Infrastructure.Persistence</td>
           </tr>
           <tr>
-          <td>8</td>
-          <td><code>PushNotificationConfiguration</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Persistence.Configuration.EntityTypeConfiguration.Notifications</td>
-          </tr>
-          <tr>
-          <td>8</td>
-          <td><code>UserNotificationConfiguration</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Persistence.Configuration.EntityTypeConfiguration.Notifications</td>
-          </tr>
-          <tr>
           <td>9</td>
-          <td><code>EFRepository&lt;TEntity, TIdentifierType&gt;</code></td>
+          <td><code>InternalCommandOriginCapture</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Persistence.Repositories</td>
+          <td>MMCA.Common.Infrastructure.Persistence.InternalCommands</td>
           </tr>
           <tr>
           <td>10</td>
           <td><code>CapturedState</code></td>
           <td>record</td>
           <td>MMCA.Common.Infrastructure.Persistence.Interceptors</td>
-          </tr>
-          <tr>
-          <td>10</td>
-          <td><code>RepositoryFactory</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Persistence.Repositories.Factory</td>
           </tr>
           <tr>
           <td>11</td>
@@ -2631,6 +2529,30 @@
           </tr>
           <tr>
           <td>11</td>
+          <td><code>CosmosDataSourceEngine</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Persistence.DataSources.Engines</td>
+          </tr>
+          <tr>
+          <td>11</td>
+          <td><code>CosmosDbContext</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Persistence.DbContexts</td>
+          </tr>
+          <tr>
+          <td>11</td>
+          <td><code>CrossDataSourceDegradeConvention</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Persistence.Conventions</td>
+          </tr>
+          <tr>
+          <td>11</td>
+          <td><code>DataSourceEngines</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Persistence.DataSources.Engines</td>
+          </tr>
+          <tr>
+          <td>11</td>
           <td><code>DataSourceModelCacheKeyFactory</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Persistence.DbContexts</td>
@@ -2649,15 +2571,99 @@
           </tr>
           <tr>
           <td>11</td>
+          <td><code>IDataSourceEngine</code></td>
+          <td>interface</td>
+          <td>MMCA.Common.Infrastructure.Persistence.DataSources.Engines</td>
+          </tr>
+          <tr>
+          <td>11</td>
+          <td><code>PhysicalDataSource</code></td>
+          <td>record</td>
+          <td>MMCA.Common.Infrastructure.Persistence.DataSources</td>
+          </tr>
+          <tr>
+          <td>11</td>
+          <td><code>PostgreSQLDataSourceEngine</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Persistence.DataSources.Engines</td>
+          </tr>
+          <tr>
+          <td>11</td>
+          <td><code>PostgreSQLDbContext</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Persistence.DbContexts</td>
+          </tr>
+          <tr>
+          <td>11</td>
+          <td><code>RestrictDeleteByDefaultConvention</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Persistence.Conventions</td>
+          </tr>
+          <tr>
+          <td>11</td>
+          <td><code>SoftDeleteFilterSql</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Persistence</td>
+          </tr>
+          <tr>
+          <td>11</td>
+          <td><code>SoftDeleteUniqueIndexConvention</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Persistence.Conventions</td>
+          </tr>
+          <tr>
+          <td>11</td>
+          <td><code>SqliteDataSourceEngine</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Persistence.DataSources.Engines</td>
+          </tr>
+          <tr>
+          <td>11</td>
+          <td><code>SqliteDbContext</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Persistence.DbContexts</td>
+          </tr>
+          <tr>
+          <td>11</td>
+          <td><code>SQLServerDataSourceEngine</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Persistence.DataSources.Engines</td>
+          </tr>
+          <tr>
+          <td>11</td>
+          <td><code>SQLServerDbContext</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Persistence.DbContexts</td>
+          </tr>
+          <tr>
+          <td>11</td>
           <td><code>TenantSaveChangesInterceptor</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Persistence.Interceptors</td>
           </tr>
           <tr>
           <td>12</td>
-          <td><code>CosmosDbContext</code></td>
+          <td><code>DataSourceService</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Persistence.DbContexts</td>
+          <td>MMCA.Common.Infrastructure.Persistence.DataSources</td>
+          </tr>
+          <tr>
+          <td>12</td>
+          <td><code>EFReadRepository&lt;TEntity, TIdentifierType&gt;</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Persistence.Repositories</td>
+          </tr>
+          <tr>
+          <td>12</td>
+          <td><code>EntityTypeConfiguration&lt;TEntity, TIdentifierType&gt;</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Persistence.Configuration.EntityTypeConfiguration</td>
+          </tr>
+          <tr>
+          <td>12</td>
+          <td><code>IDataSourceResolver</code></td>
+          <td>interface</td>
+          <td>MMCA.Common.Infrastructure.Persistence.DataSources</td>
           </tr>
           <tr>
           <td>12</td>
@@ -2667,33 +2673,15 @@
           </tr>
           <tr>
           <td>12</td>
+          <td><code>IndexBuilderExtensions</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Persistence.Configuration</td>
+          </tr>
+          <tr>
+          <td>12</td>
           <td><code>IPhysicalDbContextFactory</code></td>
           <td>interface</td>
           <td>MMCA.Common.Infrastructure.Persistence.DbContexts.Factory</td>
-          </tr>
-          <tr>
-          <td>12</td>
-          <td><code>PostgreSQLDbContext</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Persistence.DbContexts</td>
-          </tr>
-          <tr>
-          <td>12</td>
-          <td><code>SqliteDbContext</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Persistence.DbContexts</td>
-          </tr>
-          <tr>
-          <td>12</td>
-          <td><code>SQLServerDbContext</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Persistence.DbContexts</td>
-          </tr>
-          <tr>
-          <td>13</td>
-          <td><code>AuditTrailCleanupJob</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Persistence.AuditTrail</td>
           </tr>
           <tr>
           <td>13</td>
@@ -2703,15 +2691,9 @@
           </tr>
           <tr>
           <td>13</td>
-          <td><code>DbContextFactory</code></td>
+          <td><code>DataSourceResolver</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Persistence.DbContexts.Factory</td>
-          </tr>
-          <tr>
-          <td>13</td>
-          <td><code>DesignTimeDbContextHelper</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Persistence.DbContexts.Design</td>
+          <td>MMCA.Common.Infrastructure.Persistence.DataSources</td>
           </tr>
           <tr>
           <td>13</td>
@@ -2733,21 +2715,39 @@
           </tr>
           <tr>
           <td>13</td>
-          <td><code>InternalCommandAdministration</code></td>
+          <td><code>EFRepository&lt;TEntity, TIdentifierType&gt;</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Persistence.InternalCommands.Administration</td>
+          <td>MMCA.Common.Infrastructure.Persistence.Repositories</td>
           </tr>
           <tr>
           <td>13</td>
-          <td><code>InternalCommandCleanupService</code></td>
+          <td><code>EntityDataSourceRegistry</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Persistence.InternalCommands.Administration</td>
+          <td>MMCA.Common.Infrastructure.Persistence.DataSources</td>
           </tr>
           <tr>
           <td>13</td>
-          <td><code>InternalCommandProcessor</code></td>
+          <td><code>EntityTypeConfigurationCosmos&lt;TEntity, TIdentifierType&gt;</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Persistence.InternalCommands.Processing</td>
+          <td>MMCA.Common.Infrastructure.Persistence.Configuration.EntityTypeConfiguration</td>
+          </tr>
+          <tr>
+          <td>13</td>
+          <td><code>EntityTypeConfigurationPostgreSQL&lt;TEntity, TIdentifierType&gt;</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Persistence.Configuration.EntityTypeConfiguration</td>
+          </tr>
+          <tr>
+          <td>13</td>
+          <td><code>EntityTypeConfigurationSqlite&lt;TEntity, TIdentifierType&gt;</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Persistence.Configuration.EntityTypeConfiguration</td>
+          </tr>
+          <tr>
+          <td>13</td>
+          <td><code>EntityTypeConfigurationSQLServer&lt;TEntity, TIdentifierType&gt;</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Persistence.Configuration.EntityTypeConfiguration</td>
           </tr>
           <tr>
           <td>13</td>
@@ -2769,9 +2769,27 @@
           </tr>
           <tr>
           <td>13</td>
+          <td><code>TenancySettingsValidator</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Persistence.Tenancy</td>
+          </tr>
+          <tr>
+          <td>13</td>
           <td><code>UnitOfWork</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Persistence</td>
+          </tr>
+          <tr>
+          <td>14</td>
+          <td><code>DbContextFactory</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Persistence.DbContexts.Factory</td>
+          </tr>
+          <tr>
+          <td>14</td>
+          <td><code>DesignTimeDbContextHelper</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Persistence.DbContexts.Design</td>
           </tr>
           <tr>
           <td>14</td>
@@ -2779,10 +2797,64 @@
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Persistence.DbContexts.Seeding</td>
           </tr>
+          <tr>
+          <td>14</td>
+          <td><code>PushNotificationConfiguration</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Persistence.Configuration.EntityTypeConfiguration.Notifications</td>
+          </tr>
+          <tr>
+          <td>14</td>
+          <td><code>RepositoryFactory</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Persistence.Repositories.Factory</td>
+          </tr>
+          <tr>
+          <td>14</td>
+          <td><code>TenantDataSourceTargets</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Persistence.DataSources</td>
+          </tr>
+          <tr>
+          <td>14</td>
+          <td><code>UserNotificationConfiguration</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Persistence.Configuration.EntityTypeConfiguration.Notifications</td>
+          </tr>
+          <tr>
+          <td>15</td>
+          <td><code>FrameworkTableTargets</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Persistence.DataSources</td>
+          </tr>
+          <tr>
+          <td>16</td>
+          <td><code>AuditTrailCleanupJob</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Persistence.AuditTrail</td>
+          </tr>
+          <tr>
+          <td>16</td>
+          <td><code>InternalCommandAdministration</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Persistence.InternalCommands.Administration</td>
+          </tr>
+          <tr>
+          <td>16</td>
+          <td><code>InternalCommandCleanupService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Persistence.InternalCommands.Administration</td>
+          </tr>
+          <tr>
+          <td>16</td>
+          <td><code>InternalCommandProcessor</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Persistence.InternalCommands.Processing</td>
+          </tr>
           </tbody></table></div>
           <h3 id="g08---authentication--authorization">G08 - Authentication &amp; Authorization</h3>
           <blockquote>
-          <p><code>group-08-auth.md</code> | 153 types | JWT/JWKS dual-fetch token validation, current-user/claims, password hashing, cookie sessions, and policy/authorization plumbing.</p>
+          <p><code>group-08-auth.md</code> | 162 types | JWT/JWKS dual-fetch token validation, current-user/claims, password hashing, cookie sessions, and policy/authorization plumbing.</p>
           </blockquote>
           <div class="table-wrap"><table>
           <thead>
@@ -2945,6 +3017,12 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>ISessionCookieStore</code></td>
+          <td>interface</td>
+          <td>MMCA.Common.API.SessionCookies</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>ISoftDeletedUserValidator</code></td>
           <td>interface</td>
           <td>MMCA.Common.Application.Interfaces.Infrastructure.Auth</td>
@@ -2953,7 +3031,7 @@
           <td>0</td>
           <td><code>IssuedSession</code></td>
           <td>record</td>
-          <td>MMCA.Common.Application.Auth</td>
+          <td>MMCA.Common.Application.Auth.Sessions</td>
           </tr>
           <tr>
           <td>0</td>
@@ -3020,6 +3098,12 @@
           <td><code>OwnerOrAdminFilterOptions</code></td>
           <td>class</td>
           <td>MMCA.Common.API.Authorization</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>PasswordComplexity</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Shared.Auth</td>
           </tr>
           <tr>
           <td>0</td>
@@ -3107,8 +3191,26 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>SessionClaimsToken</code></td>
+          <td>class</td>
+          <td>MMCA.Common.API.SessionCookies</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>SessionCookieRequest</code></td>
           <td>record</td>
+          <td>MMCA.Common.API.SessionCookies</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>SessionCookieSettings</code></td>
+          <td>class</td>
+          <td>MMCA.Common.API.SessionCookies</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>SessionRefreshStatus</code></td>
+          <td>enum</td>
           <td>MMCA.Common.API.SessionCookies</td>
           </tr>
           <tr>
@@ -3233,12 +3335,6 @@
           </tr>
           <tr>
           <td>1</td>
-          <td><code>ICookieSessionRefresher</code></td>
-          <td>interface</td>
-          <td>MMCA.Common.API.SessionCookies</td>
-          </tr>
-          <tr>
-          <td>1</td>
           <td><code>IcsCalendarBuilder</code></td>
           <td>class</td>
           <td>MMCA.Common.Shared.Calendars</td>
@@ -3311,12 +3407,6 @@
           </tr>
           <tr>
           <td>1</td>
-          <td><code>ResetPasswordRequestValidator</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Application.Auth.Validation</td>
-          </tr>
-          <tr>
-          <td>1</td>
           <td><code>RsaJwksProvider</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Auth</td>
@@ -3331,7 +3421,7 @@
           <td>1</td>
           <td><code>SessionStampingTokenService</code></td>
           <td>class</td>
-          <td>MMCA.Common.Application.Auth</td>
+          <td>MMCA.Common.Application.Auth.Sessions</td>
           </tr>
           <tr>
           <td>1</td>
@@ -3359,12 +3449,6 @@
           </tr>
           <tr>
           <td>2</td>
-          <td><code>CookieSessionRefreshMiddleware</code></td>
-          <td>class</td>
-          <td>MMCA.Common.API.SessionCookies</td>
-          </tr>
-          <tr>
-          <td>2</td>
           <td><code>EmailConfirmationErrors</code></td>
           <td>class</td>
           <td>MMCA.Common.Application.Auth.EmailConfirmation</td>
@@ -3389,15 +3473,9 @@
           </tr>
           <tr>
           <td>2</td>
-          <td><code>SessionCookieEndpoints</code></td>
+          <td><code>ResetPasswordRequestValidator</code></td>
           <td>class</td>
-          <td>MMCA.Common.API.SessionCookies</td>
-          </tr>
-          <tr>
-          <td>2</td>
-          <td><code>SessionCookieJar</code></td>
-          <td>class</td>
-          <td>MMCA.Common.API.SessionCookies</td>
+          <td>MMCA.Common.Application.Auth.Validation</td>
           </tr>
           <tr>
           <td>2</td>
@@ -3431,15 +3509,9 @@
           </tr>
           <tr>
           <td>3</td>
-          <td><code>CookieSessionRefreshMiddlewareExtensions</code></td>
-          <td>class</td>
-          <td>MMCA.Common.API.SessionCookies</td>
-          </tr>
-          <tr>
-          <td>3</td>
-          <td><code>CookieTokenReader</code></td>
-          <td>class</td>
-          <td>MMCA.Common.API.SessionCookies</td>
+          <td><code>IAuthSessionIssuer</code></td>
+          <td>interface</td>
+          <td>MMCA.Common.Application.Auth.Sessions</td>
           </tr>
           <tr>
           <td>3</td>
@@ -3515,12 +3587,6 @@
           </tr>
           <tr>
           <td>3</td>
-          <td><code>RefreshSession</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Domain.Auth</td>
-          </tr>
-          <tr>
-          <td>3</td>
           <td><code>RoleValue</code></td>
           <td>class</td>
           <td>MMCA.Common.Shared.Auth</td>
@@ -3545,12 +3611,6 @@
           </tr>
           <tr>
           <td>4</td>
-          <td><code>CookieSessionRefresher</code></td>
-          <td>class</td>
-          <td>MMCA.Common.API.SessionCookies</td>
-          </tr>
-          <tr>
-          <td>4</td>
           <td><code>IErasableUser</code></td>
           <td>interface</td>
           <td>MMCA.Common.Domain.Auth</td>
@@ -3563,21 +3623,15 @@
           </tr>
           <tr>
           <td>4</td>
-          <td><code>IRefreshSessionStore</code></td>
-          <td>interface</td>
-          <td>MMCA.Common.Application.Auth</td>
+          <td><code>RefreshSession</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Domain.Auth</td>
           </tr>
           <tr>
           <td>4</td>
           <td><code>RegisterRequest</code></td>
           <td>record struct</td>
           <td>MMCA.Common.Shared.Auth.Requests</td>
-          </tr>
-          <tr>
-          <td>4</td>
-          <td><code>SessionCookieAuthenticationHandler</code></td>
-          <td>class</td>
-          <td>MMCA.Common.API.SessionCookies</td>
           </tr>
           <tr>
           <td>4</td>
@@ -3635,15 +3689,9 @@
           </tr>
           <tr>
           <td>5</td>
-          <td><code>RefreshSessionRevocation</code></td>
-          <td>class</td>
+          <td><code>IRefreshSessionStore</code></td>
+          <td>interface</td>
           <td>MMCA.Common.Application.Auth</td>
-          </tr>
-          <tr>
-          <td>5</td>
-          <td><code>SessionCookieAuthenticationExtensions</code></td>
-          <td>class</td>
-          <td>MMCA.Common.API.SessionCookies</td>
           </tr>
           <tr>
           <td>5</td>
@@ -3656,6 +3704,12 @@
           <td><code>StronglyTypedIdRegistry</code></td>
           <td>class</td>
           <td>MMCA.Common.Shared.Identifiers</td>
+          </tr>
+          <tr>
+          <td>6</td>
+          <td><code>AuthSessionIssuer</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Application.Auth.Sessions</td>
           </tr>
           <tr>
           <td>6</td>
@@ -3674,6 +3728,12 @@
           <td><code>PasswordResetTokenService</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Auth</td>
+          </tr>
+          <tr>
+          <td>6</td>
+          <td><code>RefreshSessionRevocation</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Application.Auth</td>
           </tr>
           <tr>
           <td>8</td>
@@ -3706,10 +3766,76 @@
           <td>MMCA.Common.API.Authorization</td>
           </tr>
           <tr>
+          <td>9</td>
+          <td><code>SessionRefreshOutcome</code></td>
+          <td>class</td>
+          <td>MMCA.Common.API.SessionCookies</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>ICookieSessionRefresher</code></td>
+          <td>interface</td>
+          <td>MMCA.Common.API.SessionCookies</td>
+          </tr>
+          <tr>
           <td>10</td>
           <td><code>OwnerOrAdminFilter</code></td>
           <td>class</td>
           <td>MMCA.Common.API.Authorization</td>
+          </tr>
+          <tr>
+          <td>11</td>
+          <td><code>CookieSessionRefreshMiddleware</code></td>
+          <td>class</td>
+          <td>MMCA.Common.API.SessionCookies</td>
+          </tr>
+          <tr>
+          <td>11</td>
+          <td><code>SessionCookieEndpoints</code></td>
+          <td>class</td>
+          <td>MMCA.Common.API.SessionCookies</td>
+          </tr>
+          <tr>
+          <td>11</td>
+          <td><code>SessionCookieJar</code></td>
+          <td>class</td>
+          <td>MMCA.Common.API.SessionCookies</td>
+          </tr>
+          <tr>
+          <td>12</td>
+          <td><code>CookieSessionRefreshMiddlewareExtensions</code></td>
+          <td>class</td>
+          <td>MMCA.Common.API.SessionCookies</td>
+          </tr>
+          <tr>
+          <td>12</td>
+          <td><code>CookieTokenReader</code></td>
+          <td>class</td>
+          <td>MMCA.Common.API.SessionCookies</td>
+          </tr>
+          <tr>
+          <td>12</td>
+          <td><code>SessionCookieStore</code></td>
+          <td>class</td>
+          <td>MMCA.Common.API.SessionCookies</td>
+          </tr>
+          <tr>
+          <td>13</td>
+          <td><code>CookieSessionRefresher</code></td>
+          <td>class</td>
+          <td>MMCA.Common.API.SessionCookies</td>
+          </tr>
+          <tr>
+          <td>13</td>
+          <td><code>SessionCookieAuthenticationHandler</code></td>
+          <td>class</td>
+          <td>MMCA.Common.API.SessionCookies</td>
+          </tr>
+          <tr>
+          <td>14</td>
+          <td><code>SessionCookieAuthenticationExtensions</code></td>
+          <td>class</td>
+          <td>MMCA.Common.API.SessionCookies</td>
           </tr>
           </tbody></table></div>
           <h3 id="g09---caching">G09 - Caching</h3>
@@ -4746,22 +4872,22 @@
           <td>MMCA.Common.API.Startup</td>
           </tr>
           <tr>
-          <td>11</td>
+          <td>14</td>
           <td><code>DependencyInjection</code></td>
           <td>class</td>
           <td>MMCA.Common.API</td>
-          </tr>
-          <tr>
-          <td>13</td>
-          <td><code>DatabaseInitializationExtensions</code></td>
-          <td>class</td>
-          <td>MMCA.Common.API.Startup</td>
           </tr>
           <tr>
           <td>15</td>
           <td><code>AuthControllerBase</code></td>
           <td>class</td>
           <td>MMCA.Common.API.Controllers</td>
+          </tr>
+          <tr>
+          <td>15</td>
+          <td><code>DatabaseInitializationExtensions</code></td>
+          <td>class</td>
+          <td>MMCA.Common.API.Startup</td>
           </tr>
           <tr>
           <td>15</td>
@@ -4778,7 +4904,7 @@
           </tbody></table></div>
           <h3 id="g13---grpc--inter-service-contracts">G13 - gRPC &amp; Inter-Service Contracts</h3>
           <blockquote>
-          <p><code>group-13-grpc-contracts.md</code> | 6 types | Typed gRPC clients/servers, interceptors, Result-over-the-wire, and the ServiceContract marker for synchronous inter-service calls (<a href="https://ivanball.github.io/docs/adr/007-grpc-extraction.html" target="_blank" rel="noopener">ADR-007</a>).</p>
+          <p><code>group-13-grpc-contracts.md</code> | 7 types | Typed gRPC clients/servers, interceptors, Result-over-the-wire, and the ServiceContract marker for synchronous inter-service calls (<a href="https://ivanball.github.io/docs/adr/007-grpc-extraction.html" target="_blank" rel="noopener">ADR-007</a>).</p>
           </blockquote>
           <div class="table-wrap"><table>
           <thead>
@@ -4790,6 +4916,12 @@
           </tr>
           </thead>
           <tbody><tr>
+          <td>0</td>
+          <td><code>GrpcWireFormat</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Grpc</td>
+          </tr>
+          <tr>
           <td>0</td>
           <td><code>JwtForwardingClientInterceptor</code></td>
           <td>class</td>
@@ -4828,7 +4960,7 @@
           </tbody></table></div>
           <h3 id="g14---module-system-composition--configuration">G14 - Module System, Composition &amp; Configuration</h3>
           <blockquote>
-          <p><code>group-14-module-system-composition.md</code> | 88 types | IModule discovery + Kahn-ordered ModuleLoader, the DI composition roots, assembly markers, data-source/database attributes, and options/settings binding.</p>
+          <p><code>group-14-module-system-composition.md</code> | 87 types | IModule discovery + Kahn-ordered ModuleLoader, the DI composition roots, assembly markers, data-source/database attributes, and options/settings binding.</p>
           </blockquote>
           <div class="table-wrap"><table>
           <thead>
@@ -4861,13 +4993,13 @@
           <td>0</td>
           <td><code>AssemblyReference</code></td>
           <td>class</td>
-          <td>MMCA.Common.Domain</td>
+          <td>MMCA.Common.Infrastructure</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>AssemblyReference</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure</td>
+          <td>MMCA.Common.Domain</td>
           </tr>
           <tr>
           <td>0</td>
@@ -4885,6 +5017,12 @@
           <td>0</td>
           <td><code>ClassReference</code></td>
           <td>class</td>
+          <td>MMCA.Common.Infrastructure</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>ClassReference</code></td>
+          <td>class</td>
           <td>MMCA.Common.Application</td>
           </tr>
           <tr>
@@ -4892,12 +5030,6 @@
           <td><code>ClassReference</code></td>
           <td>class</td>
           <td>MMCA.Common.Domain</td>
-          </tr>
-          <tr>
-          <td>0</td>
-          <td><code>ClassReference</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure</td>
           </tr>
           <tr>
           <td>0</td>
@@ -5036,12 +5168,6 @@
           <td><code>UserDataExportSectionDefaults</code></td>
           <td>class</td>
           <td>MMCA.Common.Application.Users.UseCases.ExportUserData</td>
-          </tr>
-          <tr>
-          <td>0</td>
-          <td><code>UserUseCaseLog</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Application.Users</td>
           </tr>
           <tr>
           <td>1</td>
@@ -5350,7 +5476,7 @@
           <td>MMCA.Common.Application</td>
           </tr>
           <tr>
-          <td>13</td>
+          <td>12</td>
           <td><code>CreateMigrationProofTable</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Tests.MigrationsFixture</td>
@@ -5362,7 +5488,7 @@
           <td>MMCA.Common.Infrastructure.Scheduling</td>
           </tr>
           <tr>
-          <td>14</td>
+          <td>17</td>
           <td><code>DependencyInjection</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure</td>
@@ -5370,7 +5496,7 @@
           </tbody></table></div>
           <h3 id="g15---common-ui-framework-mudblazor-components-theme-base-pages">G15 - Common UI Framework (MudBlazor components, theme, base pages)</h3>
           <blockquote>
-          <p><code>group-15-common-ui-framework.md</code> | 153 types | Reusable Blazor building blocks: the data-grid list page base, theme, common pages/services, and UI extensions shared by every consumer app.</p>
+          <p><code>group-15-common-ui-framework.md</code> | 174 types | Reusable Blazor building blocks: the data-grid list page base, theme, common pages/services, and UI extensions shared by every consumer app.</p>
           </blockquote>
           <div class="table-wrap"><table>
           <thead>
@@ -5464,6 +5590,12 @@
           <td><code>ForgotPasswordModel</code></td>
           <td>class</td>
           <td>MMCA.Common.UI.Pages.Auth</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>HandoffBody</code></td>
+          <td>record</td>
+          <td>MMCA.Common.UI.Web.SameOriginProxy</td>
           </tr>
           <tr>
           <td>0</td>
@@ -5593,12 +5725,6 @@
           </tr>
           <tr>
           <td>0</td>
-          <td><code>MmcaClientConfigBootstrap</code></td>
-          <td>class</td>
-          <td>MMCA.Common.UI.Common.Settings</td>
-          </tr>
-          <tr>
-          <td>0</td>
           <td><code>MudTranslations</code></td>
           <td>class</td>
           <td>MMCA.Common.UI.Resources</td>
@@ -5623,12 +5749,6 @@
           </tr>
           <tr>
           <td>0</td>
-          <td><code>PasswordComplexityAttribute</code></td>
-          <td>class</td>
-          <td>MMCA.Common.UI.Pages.Auth</td>
-          </tr>
-          <tr>
-          <td>0</td>
           <td><code>PendingAttempt</code></td>
           <td>record</td>
           <td>MMCA.Common.UI.Services.Auth.OAuth</td>
@@ -5647,6 +5767,12 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>ProxyResponseMode</code></td>
+          <td>enum</td>
+          <td>MMCA.Common.UI.Web.SameOriginProxy</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>PseudoLocalizer</code></td>
           <td>class</td>
           <td>MMCA.Common.UI.Globalization</td>
@@ -5662,18 +5788,6 @@
           <td><code>RatingStars</code></td>
           <td>class</td>
           <td>MMCA.Common.UI.Components.Ratings</td>
-          </tr>
-          <tr>
-          <td>0</td>
-          <td><code>RegisterModel</code></td>
-          <td>class</td>
-          <td>MMCA.Common.UI.Pages.Auth</td>
-          </tr>
-          <tr>
-          <td>0</td>
-          <td><code>ResetPasswordModel</code></td>
-          <td>class</td>
-          <td>MMCA.Common.UI.Pages.Auth</td>
           </tr>
           <tr>
           <td>0</td>
@@ -5701,6 +5815,30 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>SameOriginApiProxyMarker</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Web.SameOriginProxy</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>SameOriginApiProxySettings</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Web.SameOriginProxy</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>SameOriginProxyHeaders</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Services.Auth</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>SameOriginProxyInvoker</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Web.SameOriginProxy</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>SharedResource</code></td>
           <td>class</td>
           <td>MMCA.Common.UI.Resources</td>
@@ -5716,6 +5854,12 @@
           <td><code>ToastSeverity</code></td>
           <td>enum</td>
           <td>MMCA.Common.UI.Common.Interfaces</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>TokenPair</code></td>
+          <td>record</td>
+          <td>MMCA.Common.UI.Web.SameOriginProxy</td>
           </tr>
           <tr>
           <td>0</td>
@@ -5845,12 +5989,6 @@
           </tr>
           <tr>
           <td>1</td>
-          <td><code>DirectApiTokenRefresher</code></td>
-          <td>class</td>
-          <td>MMCA.Common.UI.Services.Auth.Tokens</td>
-          </tr>
-          <tr>
-          <td>1</td>
           <td><code>EndpointCultureApplier</code></td>
           <td>class</td>
           <td>MMCA.Common.UI.Services.Culture</td>
@@ -5959,9 +6097,27 @@
           </tr>
           <tr>
           <td>1</td>
+          <td><code>PasswordComplexityAttribute</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Pages.Auth</td>
+          </tr>
+          <tr>
+          <td>1</td>
           <td><code>PseudoStringLocalizer</code></td>
           <td>class</td>
           <td>MMCA.Common.UI.Globalization</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>RegisterModel</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Pages.Auth</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>ResetPasswordModel</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Pages.Auth</td>
           </tr>
           <tr>
           <td>1</td>
@@ -5971,9 +6127,27 @@
           </tr>
           <tr>
           <td>1</td>
+          <td><code>SameOriginApiProxySettingsValidator</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Web.SameOriginProxy</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>SameOriginProxyRequestHandler</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Services.Auth</td>
+          </tr>
+          <tr>
+          <td>1</td>
           <td><code>SameOriginProxyTokenRefresher</code></td>
           <td>class</td>
           <td>MMCA.Common.UI.Services.Auth.Tokens</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>SessionHandoffProtector</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Web.SameOriginProxy</td>
           </tr>
           <tr>
           <td>1</td>
@@ -6043,9 +6217,45 @@
           </tr>
           <tr>
           <td>2</td>
+          <td><code>DirectApiTokenRefresher</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Services.Auth.Tokens</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>HandoffSessionCookieSync</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Web.SameOriginProxy</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>HandoffTokenRefresher</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Web.SameOriginProxy</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>IdempotentReadRetry</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Services.Api</td>
+          </tr>
+          <tr>
+          <td>2</td>
           <td><code>IUIModule</code></td>
           <td>interface</td>
           <td>MMCA.Common.UI.Common.Interfaces</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>LocalizedDataAnnotationsValidator</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Validation</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>MmcaClientConfigBootstrap</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Common.Settings</td>
           </tr>
           <tr>
           <td>2</td>
@@ -6133,6 +6343,12 @@
           </tr>
           <tr>
           <td>3</td>
+          <td><code>PagedReadAll</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Services.Api</td>
+          </tr>
+          <tr>
+          <td>3</td>
           <td><code>ResultUiExtensions</code></td>
           <td>class</td>
           <td>MMCA.Common.UI.Common</td>
@@ -6202,18 +6418,6 @@
           <td><code>RoleAdminService</code></td>
           <td>class</td>
           <td>MMCA.Common.UI.Services.Administration</td>
-          </tr>
-          <tr>
-          <td>4</td>
-          <td><code>ServerTokenStorageService</code></td>
-          <td>class</td>
-          <td>MMCA.Common.UI.Web.Services</td>
-          </tr>
-          <tr>
-          <td>5</td>
-          <td><code>DependencyInjection</code></td>
-          <td>class</td>
-          <td>MMCA.Common.UI.Web</td>
           </tr>
           <tr>
           <td>5</td>
@@ -6298,6 +6502,54 @@
           <td><code>DependencyInjection</code></td>
           <td>class</td>
           <td>MMCA.Common.UI.Notifications</td>
+          </tr>
+          <tr>
+          <td>8</td>
+          <td><code>NotificationPageGate</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Notifications</td>
+          </tr>
+          <tr>
+          <td>12</td>
+          <td><code>SameOriginProxyTransformer</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Web.SameOriginProxy</td>
+          </tr>
+          <tr>
+          <td>13</td>
+          <td><code>SameOriginApiProxyEndpoint</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Web.SameOriginProxy</td>
+          </tr>
+          <tr>
+          <td>13</td>
+          <td><code>ServerTokenStorageService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Web.Services</td>
+          </tr>
+          <tr>
+          <td>14</td>
+          <td><code>DependencyInjection</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Web</td>
+          </tr>
+          <tr>
+          <td>14</td>
+          <td><code>SameOriginApiProxyServiceExtensions</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Web.SameOriginProxy</td>
+          </tr>
+          <tr>
+          <td>14</td>
+          <td><code>SessionHandoffEndpoints</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Web.SameOriginProxy</td>
+          </tr>
+          <tr>
+          <td>15</td>
+          <td><code>SameOriginApiProxyEndpointExtensions</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Web.SameOriginProxy</td>
           </tr>
           </tbody></table></div>
           <h3 id="g16---aspire-orchestration--service-defaults">G16 - Aspire Orchestration &amp; Service Defaults</h3>
@@ -9006,6 +9258,12 @@
           <td>MMCA.ADC.Conference.Application.SessionAssets.UseCases.UploadFile</td>
           </tr>
           <tr>
+          <td>9</td>
+          <td><code>UserDeletedFeedbackHandler</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.Application.Users.IntegrationEventHandlers</td>
+          </tr>
+          <tr>
           <td>10</td>
           <td><code>ActivityCreateRequestMapper</code></td>
           <td>class</td>
@@ -9307,12 +9565,6 @@
           </tr>
           <tr>
           <td>10</td>
-          <td><code>SpeakerQuestionAnswerNavigationPopulator</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Conference.Application.Speakers</td>
-          </tr>
-          <tr>
-          <td>10</td>
           <td><code>SpeakerSyncStrategy</code></td>
           <td>class</td>
           <td>MMCA.ADC.Conference.Application.Events.UseCases.RefreshFromSessionize</td>
@@ -9355,12 +9607,6 @@
           </tr>
           <tr>
           <td>10</td>
-          <td><code>UpdateEventQuestionAnswerHandler</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Conference.Application.Events.UseCases.UpdateEventQuestionAnswer</td>
-          </tr>
-          <tr>
-          <td>10</td>
           <td><code>UpdateRoomHandler</code></td>
           <td>class</td>
           <td>MMCA.ADC.Conference.Application.Events.UseCases.UpdateRoom</td>
@@ -9374,12 +9620,6 @@
           <tr>
           <td>10</td>
           <td><code>UpdateSessionQuestionAnswerCommandValidator</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Conference.Application.Sessions.UseCases.UpdateSessionQuestionAnswer</td>
-          </tr>
-          <tr>
-          <td>10</td>
-          <td><code>UpdateSessionQuestionAnswerHandler</code></td>
           <td>class</td>
           <td>MMCA.ADC.Conference.Application.Sessions.UseCases.UpdateSessionQuestionAnswer</td>
           </tr>
@@ -9517,9 +9757,21 @@
           </tr>
           <tr>
           <td>14</td>
+          <td><code>UpdateEventQuestionAnswerHandler</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.Application.Events.UseCases.UpdateEventQuestionAnswer</td>
+          </tr>
+          <tr>
+          <td>14</td>
           <td><code>UpdateQuestionHandler</code></td>
           <td>class</td>
           <td>MMCA.ADC.Conference.Application.Questions.UseCases.Update</td>
+          </tr>
+          <tr>
+          <td>14</td>
+          <td><code>UpdateSessionQuestionAnswerHandler</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.Application.Sessions.UseCases.UpdateSessionQuestionAnswer</td>
           </tr>
           <tr>
           <td>15</td>
@@ -9608,130 +9860,130 @@
           <td>MMCA.ADC.Conference.Infrastructure</td>
           </tr>
           <tr>
-          <td>8</td>
-          <td><code>CategoryItemConfiguration</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Categories</td>
-          </tr>
-          <tr>
-          <td>8</td>
-          <td><code>ConferenceCategoryConfiguration</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Categories</td>
-          </tr>
-          <tr>
-          <td>8</td>
-          <td><code>EventConfiguration</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Events</td>
-          </tr>
-          <tr>
-          <td>8</td>
-          <td><code>EventQuestionAnswerConfiguration</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Events</td>
-          </tr>
-          <tr>
-          <td>8</td>
-          <td><code>EventSpeakerConfiguration</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Events</td>
-          </tr>
-          <tr>
-          <td>8</td>
-          <td><code>QuestionConfiguration</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Questions</td>
-          </tr>
-          <tr>
-          <td>8</td>
-          <td><code>RoomConfiguration</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Events</td>
-          </tr>
-          <tr>
-          <td>8</td>
-          <td><code>SessionAiScoreConfiguration</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Sessions</td>
-          </tr>
-          <tr>
-          <td>8</td>
-          <td><code>SpeakerCategoryItemConfiguration</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Speakers</td>
-          </tr>
-          <tr>
-          <td>8</td>
-          <td><code>SpeakerConfiguration</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Speakers</td>
-          </tr>
-          <tr>
-          <td>8</td>
-          <td><code>SpeakerQuestionAnswerConfiguration</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Speakers</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>ActivityConfiguration</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Activities</td>
-          </tr>
-          <tr>
           <td>9</td>
           <td><code>ConferenceModuleDbSeeder</code></td>
           <td>class</td>
           <td>MMCA.ADC.Conference.Infrastructure.Persistence.DbContexts.Seeding</td>
           </tr>
           <tr>
-          <td>9</td>
+          <td>12</td>
+          <td><code>ModuleApplicationDbContext</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.Infrastructure.Persistence.DbContexts</td>
+          </tr>
+          <tr>
+          <td>14</td>
+          <td><code>ActivityConfiguration</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Activities</td>
+          </tr>
+          <tr>
+          <td>14</td>
+          <td><code>CategoryItemConfiguration</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Categories</td>
+          </tr>
+          <tr>
+          <td>14</td>
+          <td><code>ConferenceCategoryConfiguration</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Categories</td>
+          </tr>
+          <tr>
+          <td>14</td>
+          <td><code>EventConfiguration</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Events</td>
+          </tr>
+          <tr>
+          <td>14</td>
+          <td><code>EventQuestionAnswerConfiguration</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Events</td>
+          </tr>
+          <tr>
+          <td>14</td>
+          <td><code>EventSpeakerConfiguration</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Events</td>
+          </tr>
+          <tr>
+          <td>14</td>
           <td><code>PartnerConfiguration</code></td>
           <td>class</td>
           <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Partners</td>
           </tr>
           <tr>
-          <td>9</td>
+          <td>14</td>
+          <td><code>QuestionConfiguration</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Questions</td>
+          </tr>
+          <tr>
+          <td>14</td>
+          <td><code>RoomConfiguration</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Events</td>
+          </tr>
+          <tr>
+          <td>14</td>
+          <td><code>SessionAiScoreConfiguration</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Sessions</td>
+          </tr>
+          <tr>
+          <td>14</td>
           <td><code>SessionAssetConfiguration</code></td>
           <td>class</td>
           <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.SessionAssets</td>
           </tr>
           <tr>
-          <td>9</td>
+          <td>14</td>
           <td><code>SessionCategoryItemConfiguration</code></td>
           <td>class</td>
           <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Sessions</td>
           </tr>
           <tr>
-          <td>9</td>
+          <td>14</td>
           <td><code>SessionConfiguration</code></td>
           <td>class</td>
           <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Sessions</td>
           </tr>
           <tr>
-          <td>9</td>
+          <td>14</td>
           <td><code>SessionQuestionAnswerConfiguration</code></td>
           <td>class</td>
           <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Sessions</td>
           </tr>
           <tr>
-          <td>9</td>
+          <td>14</td>
           <td><code>SessionSpeakerConfiguration</code></td>
           <td>class</td>
           <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Sessions</td>
           </tr>
           <tr>
-          <td>9</td>
+          <td>14</td>
+          <td><code>SpeakerCategoryItemConfiguration</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Speakers</td>
+          </tr>
+          <tr>
+          <td>14</td>
+          <td><code>SpeakerConfiguration</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Speakers</td>
+          </tr>
+          <tr>
+          <td>14</td>
+          <td><code>SpeakerQuestionAnswerConfiguration</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Speakers</td>
+          </tr>
+          <tr>
+          <td>14</td>
           <td><code>SponsorConfiguration</code></td>
           <td>class</td>
           <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Sponsors</td>
-          </tr>
-          <tr>
-          <td>12</td>
-          <td><code>ModuleApplicationDbContext</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Conference.Infrastructure.Persistence.DbContexts</td>
           </tr>
           </tbody></table></div>
           <h3 id="g20---adc-conference---api-grpc-contracts--service-host">G20 - ADC Conference - API, gRPC Contracts &amp; Service Host</h3>
@@ -10062,7 +10314,7 @@
           </tbody></table></div>
           <h3 id="g21---adc-conference---ui">G21 - ADC Conference - UI</h3>
           <blockquote>
-          <p><code>group-21-conference-ui.md</code> | 162 types | The Conference Blazor pages (events, sessions, speakers, categories, questions, rooms, feedback, public, session-selection) and their UI services.</p>
+          <p><code>group-21-conference-ui.md</code> | 163 types | The Conference Blazor pages (events, sessions, speakers, categories, questions, rooms, feedback, public, session-selection) and their UI services.</p>
           </blockquote>
           <div class="table-wrap"><table>
           <thead>
@@ -10234,6 +10486,12 @@
           <td><code>PartnerFormModel</code></td>
           <td>class</td>
           <td>MMCA.ADC.Conference.UI.Pages.Partners</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>PublicReadAudience</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Public</td>
           </tr>
           <tr>
           <td>2</td>
@@ -11048,7 +11306,7 @@
           </tbody></table></div>
           <h3 id="g22---adc-engagement-module-session-bookmarks">G22 - ADC Engagement Module (Session Bookmarks)</h3>
           <blockquote>
-          <p><code>group-22-engagement-module.md</code> | 194 types | The Engagement bounded context end-to-end: bookmark aggregate, use cases, persistence, API/contracts/service, and feedback UI.</p>
+          <p><code>group-22-engagement-module.md</code> | 196 types | The Engagement bounded context end-to-end: bookmark aggregate, use cases, persistence, API/contracts/service, and feedback UI.</p>
           </blockquote>
           <div class="table-wrap"><table>
           <thead>
@@ -11075,13 +11333,13 @@
           <td>0</td>
           <td><code>AssemblyReference</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Engagement.Application</td>
+          <td>MMCA.ADC.Engagement.Domain</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>AssemblyReference</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Engagement.Domain</td>
+          <td>MMCA.ADC.Engagement.Application</td>
           </tr>
           <tr>
           <td>0</td>
@@ -11135,12 +11393,6 @@
           <td>0</td>
           <td><code>ClassReference</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Engagement.Application</td>
-          </tr>
-          <tr>
-          <td>0</td>
-          <td><code>ClassReference</code></td>
-          <td>class</td>
           <td>MMCA.ADC.Engagement.Infrastructure</td>
           </tr>
           <tr>
@@ -11148,6 +11400,12 @@
           <td><code>ClassReference</code></td>
           <td>class</td>
           <td>MMCA.ADC.Engagement.API</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>ClassReference</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Engagement.Application</td>
           </tr>
           <tr>
           <td>0</td>
@@ -11687,13 +11945,13 @@
           <td>4</td>
           <td><code>DependencyInjection</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Engagement.API</td>
+          <td>MMCA.ADC.Engagement.Infrastructure</td>
           </tr>
           <tr>
           <td>4</td>
           <td><code>DependencyInjection</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Engagement.Infrastructure</td>
+          <td>MMCA.ADC.Engagement.API</td>
           </tr>
           <tr>
           <td>4</td>
@@ -11931,12 +12189,6 @@
           </tr>
           <tr>
           <td>8</td>
-          <td><code>AttendeeBadgeConfiguration</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration.CheckIns</td>
-          </tr>
-          <tr>
-          <td>8</td>
           <td><code>BookmarkCountService</code></td>
           <td>class</td>
           <td>MMCA.ADC.Engagement.Application.UserSessionBookmarks.Services</td>
@@ -11967,45 +12219,21 @@
           </tr>
           <tr>
           <td>8</td>
-          <td><code>LeaderboardOptInConfiguration</code></td>
+          <td><code>UserDeletedBadgeHandler</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration.Points</td>
+          <td>MMCA.ADC.Engagement.Application.CheckIns.IntegrationEventHandlers</td>
           </tr>
           <tr>
           <td>8</td>
-          <td><code>LivePollVoteConfiguration</code></td>
+          <td><code>UserDeletedBookmarksHandler</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration.LivePolls</td>
-          </tr>
-          <tr>
-          <td>8</td>
-          <td><code>PointsEntryConfiguration</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration.Points</td>
-          </tr>
-          <tr>
-          <td>8</td>
-          <td><code>SessionQuestionConfiguration</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration.SessionQuestions</td>
-          </tr>
-          <tr>
-          <td>8</td>
-          <td><code>SessionQuestionUpvoteConfiguration</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration.SessionQuestions</td>
+          <td>MMCA.ADC.Engagement.Application.UserSessionBookmarks.IntegrationEventHandlers</td>
           </tr>
           <tr>
           <td>8</td>
           <td><code>UserDeletedPointsHandler</code></td>
           <td>class</td>
           <td>MMCA.ADC.Engagement.Application.Points.IntegrationEventHandlers</td>
-          </tr>
-          <tr>
-          <td>8</td>
-          <td><code>UserSessionBookmarkConfiguration</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration.UserSessionBookmarks</td>
           </tr>
           <tr>
           <td>8</td>
@@ -12063,18 +12291,6 @@
           </tr>
           <tr>
           <td>9</td>
-          <td><code>LivePollConfiguration</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration.LivePolls</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>LivePollOptionConfiguration</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration.LivePolls</td>
-          </tr>
-          <tr>
-          <td>9</td>
           <td><code>LivePollVotingController</code></td>
           <td>class</td>
           <td>MMCA.ADC.Engagement.API.Controllers</td>
@@ -12129,12 +12345,6 @@
           </tr>
           <tr>
           <td>11</td>
-          <td><code>CheckInConfiguration</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration.CheckIns</td>
-          </tr>
-          <tr>
-          <td>11</td>
           <td><code>CheckInDTOMapper</code></td>
           <td>class</td>
           <td>MMCA.ADC.Engagement.Application.CheckIns.DTOs</td>
@@ -12173,13 +12383,13 @@
           <td>12</td>
           <td><code>DependencyInjection</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Engagement.UI</td>
+          <td>MMCA.ADC.Engagement.Application</td>
           </tr>
           <tr>
           <td>12</td>
           <td><code>DependencyInjection</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Engagement.Application</td>
+          <td>MMCA.ADC.Engagement.UI</td>
           </tr>
           <tr>
           <td>12</td>
@@ -12223,10 +12433,70 @@
           <td>class</td>
           <td>MMCA.ADC.Engagement.Contracts</td>
           </tr>
+          <tr>
+          <td>14</td>
+          <td><code>AttendeeBadgeConfiguration</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration.CheckIns</td>
+          </tr>
+          <tr>
+          <td>14</td>
+          <td><code>CheckInConfiguration</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration.CheckIns</td>
+          </tr>
+          <tr>
+          <td>14</td>
+          <td><code>LeaderboardOptInConfiguration</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration.Points</td>
+          </tr>
+          <tr>
+          <td>14</td>
+          <td><code>LivePollConfiguration</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration.LivePolls</td>
+          </tr>
+          <tr>
+          <td>14</td>
+          <td><code>LivePollOptionConfiguration</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration.LivePolls</td>
+          </tr>
+          <tr>
+          <td>14</td>
+          <td><code>LivePollVoteConfiguration</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration.LivePolls</td>
+          </tr>
+          <tr>
+          <td>14</td>
+          <td><code>PointsEntryConfiguration</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration.Points</td>
+          </tr>
+          <tr>
+          <td>14</td>
+          <td><code>SessionQuestionConfiguration</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration.SessionQuestions</td>
+          </tr>
+          <tr>
+          <td>14</td>
+          <td><code>SessionQuestionUpvoteConfiguration</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration.SessionQuestions</td>
+          </tr>
+          <tr>
+          <td>14</td>
+          <td><code>UserSessionBookmarkConfiguration</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration.UserSessionBookmarks</td>
+          </tr>
           </tbody></table></div>
           <h3 id="g26---adc-engagement-live-layer-real-time-polls--session-qa">G26 - ADC Engagement Live Layer (Real-Time Polls &amp; Session Q&amp;A)</h3>
           <blockquote>
-          <p><code>group-23-engagement-live-layer.md</code> | 85 types | Real-time audience interaction in the Engagement bounded context: event-wide live polls with voting and moderated per-session Q&amp;A with upvoting, over the SignalR hub-channel transport (<a href="https://ivanball.github.io/docs/adr/039-live-channel-push.html" target="_blank" rel="noopener">ADR-039</a>) and the cross-service gRPC live-channel adapter.</p>
+          <p><code>group-23-engagement-live-layer.md</code> | 87 types | Real-time audience interaction in the Engagement bounded context: event-wide live polls with voting and moderated per-session Q&amp;A with upvoting, over the SignalR hub-channel transport (<a href="https://ivanball.github.io/docs/adr/039-live-channel-push.html" target="_blank" rel="noopener">ADR-039</a>) and the cross-service gRPC live-channel adapter.</p>
           </blockquote>
           <div class="table-wrap"><table>
           <thead>
@@ -12622,6 +12892,18 @@
           <td>MMCA.ADC.Engagement.Application.SessionQuestions.UseCases.ToggleUpvote</td>
           </tr>
           <tr>
+          <td>8</td>
+          <td><code>UserDeletedSessionQuestionsHandler</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Engagement.Application.SessionQuestions.IntegrationEventHandlers</td>
+          </tr>
+          <tr>
+          <td>8</td>
+          <td><code>UserDeletedVotesHandler</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Engagement.Application.LivePolls.IntegrationEventHandlers</td>
+          </tr>
+          <tr>
           <td>9</td>
           <td><code>DeleteLivePollHandler</code></td>
           <td>class</td>
@@ -12750,7 +13032,7 @@
           </tbody></table></div>
           <h3 id="g23---adc-identity-module-users-profiles-gdpr-exporterasure">G23 - ADC Identity Module (Users, Profiles, GDPR Export/Erasure)</h3>
           <blockquote>
-          <p><code>group-24-identity-module.md</code> | 107 types | The Identity bounded context end-to-end: the User aggregate, change-password/delete/export use cases, persistence, API/contracts/service, and profile/user UI.</p>
+          <p><code>group-24-identity-module.md</code> | 108 types | The Identity bounded context end-to-end: the User aggregate, change-password/delete/export use cases, persistence, API/contracts/service, and profile/user UI.</p>
           </blockquote>
           <div class="table-wrap"><table>
           <thead>
@@ -12765,7 +13047,7 @@
           <td>0</td>
           <td><code>AssemblyReference</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Identity.Domain</td>
+          <td>MMCA.ADC.Identity.Infrastructure</td>
           </tr>
           <tr>
           <td>0</td>
@@ -12777,7 +13059,7 @@
           <td>0</td>
           <td><code>AssemblyReference</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Identity.Infrastructure</td>
+          <td>MMCA.ADC.Identity.Domain</td>
           </tr>
           <tr>
           <td>0</td>
@@ -12853,6 +13135,12 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>JwtAudience</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Identity.Shared.Authorization</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>RemoveUserAvatarCommand</code></td>
           <td>record</td>
           <td>MMCA.ADC.Identity.Application.Users.UseCases.RemoveUserAvatar</td>
@@ -12925,12 +13213,6 @@
           </tr>
           <tr>
           <td>1</td>
-          <td><code>ChangePasswordRequestValidator</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Identity.Application.Users.Validation</td>
-          </tr>
-          <tr>
-          <td>1</td>
           <td><code>ConfirmEmailCommand</code></td>
           <td>record</td>
           <td>MMCA.ADC.Identity.Application.Users.UseCases.ConfirmEmail</td>
@@ -12988,6 +13270,12 @@
           <td><code>UserListDTO</code></td>
           <td>record</td>
           <td>MMCA.ADC.Identity.Shared.Users</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>ChangePasswordRequestValidator</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Identity.Application.Users.Validation</td>
           </tr>
           <tr>
           <td>2</td>
@@ -13243,12 +13531,6 @@
           </tr>
           <tr>
           <td>8</td>
-          <td><code>UserConfiguration</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Identity.Infrastructure.Persistence.EntityConfiguration</td>
-          </tr>
-          <tr>
-          <td>8</td>
           <td><code>UserDTOMapper</code></td>
           <td>class</td>
           <td>MMCA.ADC.Identity.Application.Users.DTOs</td>
@@ -13360,6 +13642,12 @@
           <td><code>SendEmailConfirmationHandler</code></td>
           <td>class</td>
           <td>MMCA.ADC.Identity.Application.Users.UseCases.SendEmailConfirmation</td>
+          </tr>
+          <tr>
+          <td>14</td>
+          <td><code>UserConfiguration</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Identity.Infrastructure.Persistence.EntityConfiguration</td>
           </tr>
           <tr>
           <td>15</td>
@@ -14322,12 +14610,6 @@
           <td>MMCA.Common.AI.OpenAI</td>
           </tr>
           <tr>
-          <td>2</td>
-          <td><code>PiiRedactionGuardrail</code></td>
-          <td>class</td>
-          <td>MMCA.Common.AI.Guardrails</td>
-          </tr>
-          <tr>
           <td>3</td>
           <td><code>AnthropicAiServiceCollectionExtensions</code></td>
           <td>class</td>
@@ -14335,15 +14617,21 @@
           </tr>
           <tr>
           <td>3</td>
-          <td><code>GuardrailServiceCollectionExtensions</code></td>
+          <td><code>OpenAiServiceCollectionExtensions</code></td>
+          <td>class</td>
+          <td>MMCA.Common.AI.OpenAI</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><code>PiiRedactionGuardrail</code></td>
           <td>class</td>
           <td>MMCA.Common.AI.Guardrails</td>
           </tr>
           <tr>
-          <td>3</td>
-          <td><code>OpenAiServiceCollectionExtensions</code></td>
+          <td>4</td>
+          <td><code>GuardrailServiceCollectionExtensions</code></td>
           <td>class</td>
-          <td>MMCA.Common.AI.OpenAI</td>
+          <td>MMCA.Common.AI.Guardrails</td>
           </tr>
           <tr>
           <td>9</td>
@@ -14360,7 +14648,7 @@
           </tbody></table></div>
           <h3 id="g25---testing--quality-infrastructure">G25 - Testing &amp; Quality Infrastructure</h3>
           <blockquote>
-          <p><code>group-28-testing-infrastructure.md</code> | 2771 types | All test projects + the reusable Testing/Testing.E2E/Testing.UI bases, architecture-fitness tests, and the component Gallery harness; individual [Fact]s are rolled up by project (logged exception).</p>
+          <p><code>group-28-testing-infrastructure.md</code> | 2923 types | All test projects + the reusable Testing/Testing.E2E/Testing.UI bases, architecture-fitness tests, and the component Gallery harness; individual [Fact]s are rolled up by project (logged exception).</p>
           </blockquote>
           <p>Rolled up by project (individual <code>[Fact]</code>s not sectioned - logged exception). Reusable test
           infrastructure assemblies (sectioned in full in the chapter) are marked <strong>(infra)</strong>.</p>
@@ -14375,8 +14663,8 @@
           </thead>
           <tbody><tr>
           <td><code>MMCA.ADC.Architecture.Tests</code> <strong>(infra)</strong></td>
-          <td>56</td>
-          <td>L0-L15</td>
+          <td>57</td>
+          <td>L0-L16</td>
           <td></td>
           </tr>
           <tr>
@@ -14387,7 +14675,7 @@
           </tr>
           <tr>
           <td><code>MMCA.ADC.Conference.Application.Tests</code></td>
-          <td>193</td>
+          <td>196</td>
           <td>L0-L16</td>
           <td></td>
           </tr>
@@ -14400,7 +14688,7 @@
           <tr>
           <td><code>MMCA.ADC.Conference.Infrastructure.Tests</code></td>
           <td>11</td>
-          <td>L0-L10</td>
+          <td>L0-L15</td>
           <td></td>
           </tr>
           <tr>
@@ -14423,8 +14711,8 @@
           </tr>
           <tr>
           <td><code>MMCA.ADC.Conference.UI.Tests</code></td>
-          <td>66</td>
-          <td>L1-L11</td>
+          <td>81</td>
+          <td>L0-L11</td>
           <td></td>
           </tr>
           <tr>
@@ -14447,7 +14735,7 @@
           </tr>
           <tr>
           <td><code>MMCA.ADC.Engagement.Application.Tests</code></td>
-          <td>65</td>
+          <td>70</td>
           <td>L1-L15</td>
           <td></td>
           </tr>
@@ -14460,7 +14748,7 @@
           <tr>
           <td><code>MMCA.ADC.Engagement.Infrastructure.Tests</code></td>
           <td>4</td>
-          <td>L1-L11</td>
+          <td>L1-L16</td>
           <td></td>
           </tr>
           <tr>
@@ -14519,8 +14807,8 @@
           </tr>
           <tr>
           <td><code>MMCA.ADC.Identity.Shared.Tests</code></td>
-          <td>2</td>
-          <td>L2-L4</td>
+          <td>3</td>
+          <td>L1-L4</td>
           <td></td>
           </tr>
           <tr>
@@ -14555,7 +14843,7 @@
           </tr>
           <tr>
           <td><code>MMCA.ADC.Services.Tests</code></td>
-          <td>7</td>
+          <td>17</td>
           <td>L0-L13</td>
           <td></td>
           </tr>
@@ -14573,19 +14861,19 @@
           </tr>
           <tr>
           <td><code>MMCA.Common.API.Tests</code></td>
-          <td>155</td>
+          <td>170</td>
           <td>L0-L18</td>
           <td></td>
           </tr>
           <tr>
           <td><code>MMCA.Common.Application.Tests</code></td>
-          <td>398</td>
+          <td>401</td>
           <td>L0-L16</td>
           <td></td>
           </tr>
           <tr>
           <td><code>MMCA.Common.Architecture.Tests</code> <strong>(infra)</strong></td>
-          <td>230</td>
+          <td>254</td>
           <td>L0-L14</td>
           <td></td>
           </tr>
@@ -14597,7 +14885,7 @@
           </tr>
           <tr>
           <td><code>MMCA.Common.Aspire.Tests</code></td>
-          <td>50</td>
+          <td>52</td>
           <td>L0-L13</td>
           <td></td>
           </tr>
@@ -14609,7 +14897,7 @@
           </tr>
           <tr>
           <td><code>MMCA.Common.Domain.Tests</code></td>
-          <td>62</td>
+          <td>64</td>
           <td>L0-L8</td>
           <td></td>
           </tr>
@@ -14621,7 +14909,7 @@
           </tr>
           <tr>
           <td><code>MMCA.Common.Grpc.Tests</code></td>
-          <td>16</td>
+          <td>18</td>
           <td>L0-L4</td>
           <td></td>
           </tr>
@@ -14638,14 +14926,26 @@
           <td></td>
           </tr>
           <tr>
+          <td><code>MMCA.Common.Infrastructure.SQLServer.Tests</code></td>
+          <td>8</td>
+          <td>L1-L15</td>
+          <td></td>
+          </tr>
+          <tr>
           <td><code>MMCA.Common.Infrastructure.Tests</code></td>
-          <td>499</td>
+          <td>514</td>
+          <td>L0-L18</td>
+          <td></td>
+          </tr>
+          <tr>
+          <td><code>MMCA.Common.LoadTests</code></td>
+          <td>14</td>
           <td>L0-L17</td>
           <td></td>
           </tr>
           <tr>
           <td><code>MMCA.Common.Shared.Tests</code></td>
-          <td>58</td>
+          <td>60</td>
           <td>L0-L6</td>
           <td></td>
           </tr>
@@ -14693,14 +14993,14 @@
           </tr>
           <tr>
           <td><code>MMCA.Common.Testing.UI</code> <strong>(infra)</strong></td>
-          <td>19</td>
+          <td>18</td>
           <td>L0-L5</td>
           <td></td>
           </tr>
           <tr>
           <td><code>MMCA.Common.UI.E2E.Tests</code></td>
-          <td>20</td>
-          <td>L2-L13</td>
+          <td>21</td>
+          <td>L0-L13</td>
           <td></td>
           </tr>
           <tr>
@@ -14711,14 +15011,14 @@
           </tr>
           <tr>
           <td><code>MMCA.Common.UI.Tests</code></td>
-          <td>152</td>
-          <td>L0-L8</td>
+          <td>170</td>
+          <td>L0-L9</td>
           <td></td>
           </tr>
           <tr>
           <td><code>MMCA.Common.UI.Web.Tests</code></td>
-          <td>12</td>
-          <td>L0-L5</td>
+          <td>24</td>
+          <td>L0-L14</td>
           <td></td>
           </tr>
           </tbody></table></div>

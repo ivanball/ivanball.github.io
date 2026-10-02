@@ -192,13 +192,13 @@ Two architectural threads are worth holding onto as you read the per-type sectio
 subsystem is *why* the database-per-service split is feasible without rewriting query code
 (`[Rubric §7, Microservices Readiness]`): when a relationship's ends move to different sources, the EF
 model's [`CrossDataSourceDegradeConvention`](group-07-persistence-ef-core.md#crossdatasourcedegradeconvention)
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Conventions/CrossDataSourceDegradeConvention.cs:33`)
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Conventions/CrossDataSourceDegradeConvention.cs:34`)
 drops the relationship and ignores the CLR navigation members, routing runtime navigation "through the
 existing `INavigationPopulator` batch-loading machinery instead"
-(`CrossDataSourceDegradeConvention.cs:15-17`), the metadata provider starts reporting that navigation
+(`CrossDataSourceDegradeConvention.cs:16-18`), the metadata provider starts reporting that navigation
 as unsupported, and the populator path picks it up automatically. The application code that issued the
 query never changes, and when every entity resolves to the same physical source the convention is a
-structural no-op (`CrossDataSourceDegradeConvention.cs:25-29`). Second, the design is a clean
+structural no-op (`CrossDataSourceDegradeConvention.cs:26-30`). Second, the design is a clean
 illustration of keeping policy out of the domain: the *what* (a `[Navigation]` marker) lives in
 Domain, the *whether* (supported versus unsupported) is computed in Application from an Infrastructure
 capability check, and the *how* (batch SQL) is a static helper. Three responsibilities, three layers,

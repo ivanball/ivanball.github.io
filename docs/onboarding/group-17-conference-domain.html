@@ -260,7 +260,7 @@
           holds an optional <code>Email</code> <a href="group-02-domain-building-blocks.html#email">value object</a><span class="cite"><span> (<code>Speaker.cs:31</code>)</span></span>,
           and carries the cross-module <code>LinkedUserId</code> FK to an Identity <code>User</code><span class="cite"><span> (<code>Speaker.cs:58</code>)</span></span>. Speaker <code>Id</code>s
           are Sessionize-assigned GUIDs, with a fallback to <code>Guid.NewGuid()</code> for organizer-created and seeded
-          speakers (see the in-code note at <span class="cite"><span><code>Speaker.cs:155-161</code></span></span>).</li>
+          speakers (see the in-code note at <span class="cite"><span><code>Speaker.cs:156-162</code></span></span>).</li>
           <li><a href="#sponsor"><code>Sponsor</code></a><span class="cite"><span>
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sponsors/Sponsor.cs:18</code>)</span></span> is a flat
           root belonging to exactly one event by scalar <code>EventId</code> (<span class="cite"><span><code>Sponsor.cs:45</code></span></span>, with a private-setter
@@ -389,8 +389,8 @@
           event<span class="cite"><span> (<code>Event.cs:222</code>)</span></span>. The <code>isIdValueGenerated ? default : id!.Value</code> dance<span class="cite"><span> (<code>Event.cs:202,218</code>)</span></span>
           reconciles database-generated IDs with explicitly supplied ones. Each root spells that
           reconciliation slightly differently: <a href="#speaker"><code>Speaker</code></a> generates a GUID when no id is supplied<span class="cite"><span>
-          (<code>Speaker.cs:161</code>)</span></span>, <a href="#category"><code>Category</code></a> throws for a missing id when identity is not
-          database-generated<span class="cite"><span> (<code>Category.cs:69</code>)</span></span>, <a href="#activity"><code>Activity</code></a> uses the plain <code>Event</code> form<span class="cite"><span>
+          (<code>Speaker.cs:162</code>)</span></span>, <a href="#category"><code>Category</code></a> throws for a missing id when identity is not
+          database-generated<span class="cite"><span> (<code>Category.cs:70</code>)</span></span>, <a href="#activity"><code>Activity</code></a> uses the plain <code>Event</code> form<span class="cite"><span>
           (<code>Activity.cs:99</code>)</span></span>, and <a href="#sessionasset"><code>SessionAsset</code></a> mints <code>Guid.NewGuid()</code> when no id is supplied<span class="cite"><span>
           (<code>SessionAsset.cs:301</code>)</span></span>. <code>SessionAsset</code> also splits the factory three ways: a general <code>Create</code> that
           takes the kind as a value for a deserializer or an import, plus the <code>CreateLink</code> and <code>CreateFile</code>
@@ -398,7 +398,7 @@
           all three funnelling into one private helper whose <code>Result.Combine</code> runs the six invariant checks
           before anything is constructed, <span class="cite"><span><code>SessionAsset.cs:289-295</code></span></span>).</li>
           <li><strong>Mutator methods</strong> (<code>Update</code> at <span class="cite"><span><code>Event.cs:247</code></span></span>, <code>Publish</code>/<code>Unpublish</code> at <span class="cite"><span><code>Event.cs:299,319</code></span></span>,
-          <code>LinkUser</code>/<code>UnlinkUser</code> on Speaker at <span class="cite"><span><code>Speaker.cs:272,290</code></span></span>) that re-validate, mutate, and raise an
+          <code>LinkUser</code>/<code>UnlinkUser</code> on Speaker at <span class="cite"><span><code>Speaker.cs:274,292</code></span></span>) that re-validate, mutate, and raise an
           <code>Updated</code> event. Lifecycle guards return failures rather than throwing: publishing an already
           published event yields the <code>&quot;Event.AlreadyPublished&quot;</code> invariant error<span class="cite"><span> (<code>Event.cs:301-308</code>)</span></span>.</li>
           <li><strong>An overridden <code>Delete()</code></strong><span class="cite"><span> (<code>Event.cs:355</code>)</span></span> that soft-deletes <strong>children first and the root last</strong>,
@@ -409,16 +409,16 @@
           failing child leaves the cascade reported as a failure instead of a half-applied delete whose
           earlier children and root were already flagged. <a href="#session"><code>Session</code></a> does the same for its three
           child collections<span class="cite"><span> (<code>Session.cs:311-314,317</code>)</span></span>, <a href="#category"><code>Category</code></a> for its items<span class="cite"><span>
-          (<code>Category.cs:107-108,111</code>)</span></span>, <a href="#sponsor"><code>Sponsor</code></a>, <a href="#activity"><code>Activity</code></a>, and
+          (<code>Category.cs:109-110,113</code>)</span></span>, <a href="#sponsor"><code>Sponsor</code></a>, <a href="#activity"><code>Activity</code></a>, and
           <a href="#sessionasset"><code>SessionAsset</code></a> have nothing to cascade to and simply raise their <code>Deleted</code> events<span class="cite"><span>
           (<code>Sponsor.cs:190-197</code>, <code>Activity.cs:180-188</code>, <code>SessionAsset.cs:265,270</code>)</span></span>,
           and <a href="#speaker"><code>Speaker</code></a> uses its override for a different job: clearing the cross-context link
           while deliberately leaving its junction children alive so the Sessionize import can reactivate them
-          in place<span class="cite"><span> (<code>Speaker.cs:241-267</code>)</span></span>. Soft-delete is the default everywhere (<code>[Rubric §8, Data Architecture]</code>: the <code>IsDeleted</code> flag plus EF Core global query filters, never a hard <code>DELETE</code>;
+          in place<span class="cite"><span> (<code>Speaker.cs:243-269</code>)</span></span>. Soft-delete is the default everywhere (<code>[Rubric §8, Data Architecture]</code>: the <code>IsDeleted</code> flag plus EF Core global query filters, never a hard <code>DELETE</code>;
           <a href="https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html" target="_blank" rel="noopener">ADR-005</a>).</li>
           <li><strong>Restore methods for the Sessionize round-trip</strong> (<code>RestoreRoom</code> at <span class="cite"><span><code>Event.cs:465</code></span></span>,
           <code>RestoreEventSpeaker</code> at <span class="cite"><span><code>Event.cs:573</code></span></span>, <code>RestoreSessionSpeaker</code> and <code>RestoreSessionCategoryItem</code> at
-          <span class="cite"><span><code>Session.cs:375,458</code></span></span>, and <code>RestoreSpeakerCategoryItem</code> at <span class="cite"><span><code>Speaker.cs:352</code></span></span>): a re-imported child that
+          <span class="cite"><span><code>Session.cs:375,458</code></span></span>, and <code>RestoreSpeakerCategoryItem</code> at <span class="cite"><span><code>Speaker.cs:354</code></span></span>): a re-imported child that
           was previously soft-deleted is reactivated in place rather than re-inserted. A restore has to clear
           the same uniqueness bar as an add, which is why <code>RestoreRoom</code> re-runs the duplicate-name check before
           reactivating<span class="cite"><span> (<code>Event.cs:486</code>)</span></span>, and it first refuses any room owned by a different event<span class="cite"><span>
@@ -465,10 +465,10 @@
           <span class="cite"><span><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Questions/QuestionInvariants.cs:40,43</code></span></span>).
           <code>QuestionInvariants</code> validates the free-text enum-like fields against allow-lists
           (<span class="cite"><span><code>QuestionInvariants.cs:31,34,37</code></span></span>, checked at <span class="cite"><span><code>:71,86,101</code></span></span>) and, for answers, dispatches on the
-          question type<span class="cite"><span> (<code>QuestionInvariants.cs:118</code>)</span></span>: Rating must parse as an invariant-culture integer 1
-          through 5<span class="cite"><span> (<code>QuestionInvariants.cs:133</code>)</span></span>, Text is capped at 2000 characters<span class="cite"><span>
-          (<code>QuestionInvariants.cs:28,147</code>)</span></span>, and Email must parse as a <code>System.Net.Mail.MailAddress</code><span class="cite"><span>
-          (<code>QuestionInvariants.cs:163</code>)</span></span>. <code>ActivityInvariants</code> is the compact newcomer: name, venue name, venue
+          question type<span class="cite"><span> (<code>QuestionInvariants.cs:122</code>)</span></span>: Rating must parse as an invariant-culture integer 1
+          through 5<span class="cite"><span> (<code>QuestionInvariants.cs:137</code>)</span></span>, Text is capped at 2000 characters<span class="cite"><span>
+          (<code>QuestionInvariants.cs:28,151</code>)</span></span>, and Email must parse as a <code>System.Net.Mail.MailAddress</code><span class="cite"><span>
+          (<code>QuestionInvariants.cs:167</code>)</span></span>. <code>ActivityInvariants</code> is the compact newcomer: name, venue name, venue
           address, and venue URL length checks plus a start-before-end time-range rule<span class="cite"><span>
           (<code>ActivityInvariants.cs:36,48,58,68,79</code>)</span></span>. <code>PartnerInvariants</code> is smaller still: a name
           presence-and-length rule plus optional-length rules for the logo and website URLs<span class="cite"><span>
@@ -488,10 +488,10 @@
           list renders ascending and a negative value would silently sort ahead of everything an organizer
           arranged<span class="cite"><span> (<code>SessionAssetInvariants.cs:119-126</code>)</span></span>. <code>CategoryInvariants</code> enforces case-insensitive uniqueness of
           an item name within its category (BR-138,
-          <span class="cite"><span><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Categories/CategoryInvariants.cs:44</code></span></span>),
+          <span class="cite"><span><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Categories/CategoryInvariants.cs:51</code></span></span>),
           and its in-code note explains why the exclusion parameter is nullable rather than defaulted: a
           database-generated <code>CategoryItem</code> id is 0 until the save, so a <code>default</code> exclusion would silently
-          exempt every unsaved sibling<span class="cite"><span> (<code>CategoryInvariants.cs:49-51</code>)</span></span>. Centralizing each rule as a named,
+          exempt every unsaved sibling<span class="cite"><span> (<code>CategoryInvariants.cs:56-58</code>)</span></span>. Centralizing each rule as a named,
           side-effect-free method is what makes the domain exhaustively unit-testable (<code>[Rubric §14, Testability]</code>), and the error codes (<code>&quot;Event.AlreadyPublished&quot;</code> at <span class="cite"><span><code>Event.cs:304</code></span></span>,
           <code>&quot;Session.StatusIneligible&quot;</code> at <span class="cite"><span><code>SessionInvariants.cs:112</code></span></span>) <em>are</em> the business vocabulary. The
           recurring <code>// BR-NN</code> comments are traceability links back to the business-requirements catalogue.</p>
@@ -511,7 +511,7 @@
           the UI apply one BR-49 rule and one status vocabulary<span class="cite"><span> (<code>SessionStatuses.cs:4-7</code>)</span></span>: the domain&#39;s
           status-eligibility invariant calls it<span class="cite"><span> (<code>SessionInvariants.cs:110</code>)</span></span>, and so does the Engagement
           module&#39;s feedback page through its direct <code>Conference.Shared</code> reference<span class="cite"><span>
-          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/Feedback/SessionFeedback.razor.cs:150</code>,
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/Feedback/SessionFeedback.razor.cs:157</code>,
           <code>MMCA.ADC.Engagement.UI.csproj:12</code>)</span></span>.
           <code>[Rubric §8, Data Architecture]</code> (deliberate handling of externally sourced data).</p>
           <h2 id="domain-events-and-the-outbox-spine">Domain events and the outbox spine</h2>
@@ -554,7 +554,7 @@
           then delivers it at least once. Nothing in this chapter&#39;s code does any dispatching; the aggregates
           only <em>declare</em> what happened, which is the Clean Architecture division of labor (<code>[Rubric §6, CQRS &amp; Event-Driven]</code>). One domain detail matters for the cross-context link: <code>Speaker.Delete()</code> captures the
           previous <code>LinkedUserId</code> <em>before</em> clearing it and passes it into the <code>Deleted</code>
-          <a href="#speakerchanged"><code>SpeakerChanged</code></a> event<span class="cite"><span> (<code>Speaker.cs:254,261,263</code>)</span></span>, whose optional
+          <a href="#speakerchanged"><code>SpeakerChanged</code></a> event<span class="cite"><span> (<code>Speaker.cs:256,263,265</code>)</span></span>, whose optional
           <code>PreviousLinkedUserId</code> payload field<span class="cite"><span>
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/DomainEvents/SpeakerChanged.cs:20</code>)</span></span>
           exists precisely so the cross-context cleanup handler has what it needs even though the field is
@@ -930,8 +930,8 @@
           <li><strong>Depends on</strong>: nothing first-party; only <code>System.Reflection</code><span class="cite"><span> (<code>AssemblyReference.cs:1</code>)</span></span>.</li>
           <li><strong>Concept introduced, the assembly-marker pattern.</strong> <code>[Rubric §2, Design Patterns]</code> (assesses whether the patterns in use are idiomatic and solve a real problem): instead of hard-coding an assembly-name string, a scanner takes a <code>typeof(...)</code> from a type it knows lives in the target assembly, so renaming the assembly cannot silently break discovery. Every layer of every ADC module ships this same pair (see the sibling pairs in <a href="group-18-conference-application.html#assemblyreference">group-18 Conference.Application</a>, <a href="group-19-conference-infrastructure.html#assemblyreference">group-19 Conference.Infrastructure</a>, and <a href="group-20-conference-api-grpc.html#assemblyreference">group-20 Conference.API</a>), so registration and discovery code reads the same way in every project. MMCA.Common ships the same pair in its own layers (for example <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Domain/AssemblyReference.cs:8,18</code></span></span>), and its doc comment there records the split explicitly: <code>ClassReference</code> is the anchor for the case where a <em>static</em> type cannot be used.</li>
           <li><strong>Walkthrough</strong>: <code>AssemblyReference.Assembly</code><span class="cite"><span> (<code>AssemblyReference.cs:7</code>)</span></span> is a <code>public static readonly Assembly</code>; <code>AssemblyName</code><span class="cite"><span> (<code>AssemblyReference.cs:8</code>)</span></span> is its short name, falling back to <code>string.Empty</code> when reflection returns null. <code>ClassReference</code><span class="cite"><span> (<code>AssemblyReference.cs:11</code>)</span></span> has no members at all.</li>
-          <li><strong>Why it&#39;s built this way</strong>: a <code>typeof()</code> handle is refactor-safe where a magic string is not, and a non-static <code>ClassReference</code> can be passed where a static class cannot. A C# static type is not a legal generic type argument, so a generic scanning API such as <code>services.ScanModuleApplicationServices&lt;ClassReference&gt;()</code> (used by the Application-layer sibling at <span class="cite"><span><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:143</code></span></span>) needs the non-static form.</li>
-          <li><strong>Where it&#39;s used</strong>: the <em>Domain</em> pair has no call site in <code>MMCA.ADC/Source</code> today. The layer pairs that are actually consumed are the Application one<span class="cite"><span> (<code>Conference.Application/DependencyInjection.cs:130</code>)</span></span> and the framework&#39;s own<span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:129</code>, <code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:48</code>)</span></span>. The Domain pair exists so the layer-parallel convention holds across all five layers of the module.</li>
+          <li><strong>Why it&#39;s built this way</strong>: a <code>typeof()</code> handle is refactor-safe where a magic string is not, and a non-static <code>ClassReference</code> can be passed where a static class cannot. A C# static type is not a legal generic type argument, so a generic scanning API such as <code>services.ScanModuleApplicationServices&lt;ClassReference&gt;()</code> (used by the Application-layer sibling at <span class="cite"><span><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:139</code></span></span>) needs the non-static form.</li>
+          <li><strong>Where it&#39;s used</strong>: the <em>Domain</em> pair has no call site in <code>MMCA.ADC/Source</code> today. The layer pairs that are actually consumed are the Application one<span class="cite"><span> (<code>Conference.Application/DependencyInjection.cs:130</code>)</span></span> and the framework&#39;s own<span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:135</code>, <code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:48</code>)</span></span>. The Domain pair exists so the layer-parallel convention holds across all five layers of the module.</li>
           <li><strong>Caveats / not-in-source</strong>: whether the convention is <em>enforced</em> (an architecture fitness rule requiring one pair per project) is not visible from these files; no test in <code>MMCA.ADC/Tests</code> references either type.</li>
           </ul>
           <hr>
@@ -946,7 +946,7 @@
           <li><strong>Walkthrough</strong><ul>
           <li>Ten <code>public const string</code> capabilities named <code>EventsManage</code> = <code>conference:events:manage</code><span class="cite"><span> (<code>ConferencePermissions.cs:12</code>)</span></span>, <code>SessionsManage</code><span class="cite"><span> (<code>:15</code>)</span></span>, <code>SpeakersManage</code><span class="cite"><span> (<code>:18</code>)</span></span>, <code>RoomsManage</code><span class="cite"><span> (<code>:21</code>)</span></span>, <code>CategoriesManage</code><span class="cite"><span> (<code>:24</code>)</span></span>, <code>QuestionsManage</code><span class="cite"><span> (<code>:27</code>)</span></span>, <code>SessionSelectionManage</code> = <code>conference:session-selection:manage</code><span class="cite"><span> (<code>:30</code>)</span></span>, <code>SponsorsManage</code> = <code>conference:sponsors:manage</code><span class="cite"><span> (<code>:33</code>)</span></span>, <code>PartnersManage</code> = <code>conference:partners:manage</code><span class="cite"><span> (<code>:36</code>)</span></span>, and <code>ActivitiesManage</code> = <code>conference:activities:manage</code><span class="cite"><span> (<code>:39</code>)</span></span>, plus an eleventh added under <a href="https://ivanball.github.io/docs/adr/123-speaker-session-assets.html" target="_blank" rel="noopener">ADR-123</a>, <code>SessionAssetsManage</code> = <code>conference:session-assets:manage</code><span class="cite"><span> (<code>:47</code>)</span></span>. The <code>{module}:{resource}:{verb}</code> shape keeps the namespace collision-free across modules. <code>SessionAssetsManage</code>&#39;s doc comment<span class="cite"><span> (<code>:41-46</code>)</span></span> states the asymmetry that makes it necessary: a speaker needs no capability to manage the materials of a session they present, because the handlers accept them on the strength of the session&#39;s own speaker list, and this capability is what lets an organizer or content editor do the same for a session they do not present.</li>
           <li><code>All</code><span class="cite"><span> (<code>ConferencePermissions.cs:53-67</code>)</span></span>: an <code>IReadOnlyList&lt;string&gt;</code> collection expression naming all eleven, for granting the entire capability set to a role in one line.</li>
-          <li><code>ContentManagement</code><span class="cite"><span> (<code>ConferencePermissions.cs:74-84</code>)</span></span>: the catalog-curation subset, <code>SessionsManage</code> + <code>SpeakersManage</code> + <code>CategoriesManage</code> + <code>SponsorsManage</code> + <code>PartnersManage</code> + <code>ActivitiesManage</code> + <code>SessionAssetsManage</code>. Its doc comment<span class="cite"><span> (<code>ConferencePermissions.cs:69-73</code>)</span></span> is the load-bearing part: a content-editor role holds these but <em>not</em> event structure, rooms, questions, or session selection, a distinction that capability checks express centrally and role checks cannot.</li>
+          <li><code>ContentManagement</code><span class="cite"><span> (<code>ConferencePermissions.cs:70-79</code>)</span></span>: the catalog-curation subset, <code>SessionsManage</code> + <code>SpeakersManage</code> + <code>CategoriesManage</code> + <code>SponsorsManage</code> + <code>PartnersManage</code> + <code>ActivitiesManage</code> + <code>SessionAssetsManage</code>. Its doc comment<span class="cite"><span> (<code>ConferencePermissions.cs:65-69</code>)</span></span> is the load-bearing part: a content-editor role holds these but <em>not</em> event structure, rooms, questions, or session selection, a distinction that capability checks express centrally and role checks cannot.</li>
           </ul>
           </li>
           <li><strong>Why it&#39;s built this way</strong>: a per-module catalog keeps each module&#39;s capability vocabulary self-contained (the Conference module can add a capability without touching Identity), and pairing the constants with named subsets makes the grants read declaratively at the registration site instead of as a hand-maintained string list. Adding a capability is then a two-line change: the constant, and its entry in whichever subsets should carry it, exactly the shape <code>SessionAssetsManage</code> followed when session assets shipped.</li>
@@ -962,8 +962,8 @@
           <li><strong>Depends on</strong>: nothing first-party (BCL only).</li>
           <li><strong>Concept introduced, the informative mutation response.</strong> <code>[Rubric §9, API &amp; Contract Design]</code> (assesses stable, useful response contracts): rather than returning <code>204 No Content</code> for a bulk sync, the endpoint returns counts so the caller can verify that the expected number of sessions, speakers, and categories landed. This is the read-back shape of a bulk write. <code>[Rubric §13, Observability &amp; Operability]</code> also applies in the small: the <code>Warnings</code> list turns silent partial-import oddities into something an operator can read off the response.</li>
           <li><strong>Walkthrough</strong>: eight <code>required init</code> properties<span class="cite"><span> (<code>RefreshFromSessionizeResultDTO.cs:10-31</code>)</span></span>. Six are <code>int</code> counts, <code>CategoriesSynced</code> (line 10), <code>CategoryItemsSynced</code> (line 13), <code>RoomsSynced</code> (line 16), <code>QuestionsSynced</code> (line 19), <code>SpeakersSynced</code> (line 22), and <code>SessionsSynced</code> (line 25). <code>SkippedSoftDeleted</code> (line 28) counts entities that a sync re-encountered but did not restore because the app had soft-deleted them (BR-136). <code>Warnings</code> (line 31) is an <code>IReadOnlyList&lt;string&gt;</code> of non-fatal issues such as a duration violation or a date-range mismatch. Every property is <code>required</code>, so a partial or forgotten field cannot be constructed.</li>
-          <li><strong>Why it&#39;s built this way</strong>: <code>SkippedSoftDeleted</code> is surfaced explicitly because an organizer who soft-deleted a session and then re-ran a sync would otherwise be puzzled why the count does not match Sessionize. The handler even folds that count into the warning list when it is non-zero<span class="cite"><span> (<code>RefreshFromSessionizeHandler.cs:158-161</code>)</span></span>.</li>
-          <li><strong>Where it&#39;s used</strong>: built by the <a href="group-18-conference-application.html#refreshfromsessionizecommand"><code>RefreshFromSessionizeCommand</code></a> handler, which reads the per-strategy <a href="group-18-conference-application.html#sessionizesyncresult"><code>SessionizeSyncResult</code></a> values and the shared sync context into it<span class="cite"><span> (<code>RefreshFromSessionizeHandler.cs:173-183</code>)</span></span>, with an all-zero instance returned when Sessionize sends an empty response<span class="cite"><span> (<code>RefreshFromSessionizeHandler.cs:130-140</code>)</span></span>. Returned by <a href="group-20-conference-api-grpc.html#eventlifecyclecontroller"><code>EventLifecycleController.RefreshAsync</code></a> (<span class="cite"><span><code>EventLifecycleController.cs:117</code></span></span>, whose <code>[Idempotent]</code> attribute replays the first response for a retried <code>Idempotency-Key</code> rather than starting a second import, <span class="cite"><span><code>EventLifecycleController.cs:116</code></span></span>) and surfaced to the organizer UI through <a href="group-21-conference-ui.html#eventservice"><code>EventService.RefreshFromSessionizeAsync</code></a><span class="cite"><span> (<code>EventService.cs:43-51</code>)</span></span>, which the <a href="group-21-conference-ui.html#eventdetail"><code>EventDetail</code></a> page holds as <code>_refreshResult</code> (<span class="cite"><span><code>EventDetail.razor.cs:63</code></span></span>, assigned at <span class="cite"><span><code>:254</code></span></span>).</li>
+          <li><strong>Why it&#39;s built this way</strong>: <code>SkippedSoftDeleted</code> is surfaced explicitly because an organizer who soft-deleted a session and then re-ran a sync would otherwise be puzzled why the count does not match Sessionize. The handler even folds that count into the warning list when it is non-zero<span class="cite"><span> (<code>RefreshFromSessionizeHandler.cs:182-185</code>)</span></span>.</li>
+          <li><strong>Where it&#39;s used</strong>: built by the <a href="group-18-conference-application.html#refreshfromsessionizecommand"><code>RefreshFromSessionizeCommand</code></a> handler, which reads the per-strategy <a href="group-18-conference-application.html#sessionizesyncresult"><code>SessionizeSyncResult</code></a> values and the shared sync context into it<span class="cite"><span> (<code>RefreshFromSessionizeHandler.cs:195-205</code>)</span></span>, with an all-zero instance returned when Sessionize sends an empty response<span class="cite"><span> (<code>RefreshFromSessionizeHandler.cs:134-144</code>)</span></span>. Returned by <a href="group-20-conference-api-grpc.html#eventlifecyclecontroller"><code>EventLifecycleController.RefreshAsync</code></a> (<span class="cite"><span><code>EventLifecycleController.cs:117</code></span></span>, whose <code>[Idempotent]</code> attribute replays the first response for a retried <code>Idempotency-Key</code> rather than starting a second import, <span class="cite"><span><code>EventLifecycleController.cs:116</code></span></span>) and surfaced to the organizer UI through <a href="group-21-conference-ui.html#eventservice"><code>EventService.RefreshFromSessionizeAsync</code></a><span class="cite"><span> (<code>EventService.cs:43-51</code>)</span></span>, which the <a href="group-21-conference-ui.html#eventdetail"><code>EventDetail</code></a> page holds as <code>_refreshResult</code> (<span class="cite"><span><code>EventDetail.razor.cs:63</code></span></span>, assigned at <span class="cite"><span><code>:254</code></span></span>).</li>
           </ul>
           <hr>
           <h3 id="sessionizecodeformat">SessionizeCodeFormat</h3>
@@ -1066,7 +1066,7 @@
           </li>
           <li><p><strong>Where it&#39;s used</strong>: three layers, one definition.</p>
           <ul>
-          <li>The Conference service host spreads it into <code>adminBypassRoles</code><span class="cite"><span> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:267</code>)</span></span> and hands that array to ten named output-cache policies (<span class="cite"><span><code>Program.cs:268-297</code></span></span>: <code>ConferencePublicCache</code>, <code>EventsCache</code>, <code>SessionsCache</code>, <code>SpeakersCache</code>, <code>RoomsCache</code>, <code>CategoriesCache</code>, <code>QuestionsCache</code>, <code>SponsorsCache</code>, <code>ActivitiesCache</code>, <code>BookmarkCountsCache</code>). The comment directly above states the single-source-of-truth rule and its consequence: if the two lists ever named different roles, a privileged payload would be cached and served to the public<span class="cite"><span> (<code>Program.cs:264-266</code>)</span></span>. One policy deliberately takes no bypass list, <code>NowNextCache</code><span class="cite"><span> (<code>Program.cs:285</code>)</span></span>, because its payload is identical for every role.</li>
+          <li>The Conference service host spreads it into <code>adminBypassRoles</code><span class="cite"><span> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:266</code>)</span></span> and hands that array to ten named output-cache policies (<span class="cite"><span><code>Program.cs:267-296</code></span></span>: <code>ConferencePublicCache</code>, <code>EventsCache</code>, <code>SessionsCache</code>, <code>SpeakersCache</code>, <code>RoomsCache</code>, <code>CategoriesCache</code>, <code>QuestionsCache</code>, <code>SponsorsCache</code>, <code>ActivitiesCache</code>, <code>BookmarkCountsCache</code>). The comment directly above states the single-source-of-truth rule and its consequence: if the two lists ever named different roles, a privileged payload would be cached and served to the public<span class="cite"><span> (<code>Program.cs:263-265</code>)</span></span>. One policy deliberately takes no bypass list, <code>NowNextCache</code><span class="cite"><span> (<code>Program.cs:284</code>)</span></span>, because its payload is identical for every role.</li>
           <li>The API layer wraps it as the <a href="group-08-auth.html#icurrentuserservice"><code>ICurrentUserService</code></a> extension <code>IsPrivilegedConferenceReader()</code><span class="cite"><span> (<code>CurrentUserServiceExtensions.cs:24-25</code>)</span></span>, which the controllers use to decide whether to apply a public filter specification at all: <code>EventsController</code> picks <code>null</code> or a <a href="group-18-conference-application.html#publishedeventspecification"><code>PublishedEventSpecification</code></a> from it (<span class="cite"><span><code>.../Controllers/EventsController.cs:75</code></span></span>, with a second guard at <span class="cite"><span><code>:141</code></span></span>), and <code>SessionsController</code><span class="cite"><span> (<code>:60</code>)</span></span>, <code>SpeakersController</code><span class="cite"><span> (<code>:65</code>)</span></span>, <code>SponsorsController</code><span class="cite"><span> (<code>:52</code>)</span></span>, <code>ActivitiesController</code><span class="cite"><span> (<code>:52</code>)</span></span>, <code>RoomsController</code><span class="cite"><span> (<code>:104</code>)</span></span>, <code>SessionSpeakersController</code><span class="cite"><span> (<code>:59</code>)</span></span>, <code>SessionCategoryItemsController</code><span class="cite"><span> (<code>:59</code>)</span></span>, <code>SpeakerCategoryItemsController</code><span class="cite"><span> (<code>:59</code>)</span></span>, and <code>EventSpeakersController</code><span class="cite"><span> (<code>:58</code>)</span></span> each expose it as a private <code>IsPrivileged</code> property.</li>
           <li>The Blazor UI reads it directly when sizing its filters and detail views: <span class="cite"><span><code>.../MMCA.ADC.Conference.UI/Pages/Public/PublicSessionList.razor.cs:121</code></span></span>, <span class="cite"><span><code>.../PublicSpeakerList.razor.cs:101</code></span></span>, <span class="cite"><span><code>.../PublicEventList.razor.cs:77</code></span></span>, <span class="cite"><span><code>.../PublicEventDetail.razor.cs:64</code></span></span>, and <span class="cite"><span><code>.../PublicSpeakerDetail.razor.cs:205</code></span></span>.</li>
           </ul>
@@ -1090,8 +1090,8 @@
           <li><code>ToUtc(localWallClock, timeZone)</code><span class="cite"><span> (<code>CurrentEventSelector.cs:89-100</code>)</span></span>: the DST guard. Both window boundaries land on <strong>local midnight</strong>, which is inside the spring-forward gap in zones that transition at 00:00 (the doc comment names America/Santiago and Asia/Beirut, <span class="cite"><span><code>CurrentEventSelector.cs:79-84</code></span></span>); that wall time never existed, so a raw <code>TimeZoneInfo.ConvertTimeToUtc</code> would throw. The method null-guards the zone<span class="cite"><span> (<code>CurrentEventSelector.cs:91</code>)</span></span>, re-kinds the input as <code>Unspecified</code><span class="cite"><span> (<code>CurrentEventSelector.cs:93</code>)</span></span>, and shifts an invalid time forward by one hour into the hour that did exist<span class="cite"><span> (<code>CurrentEventSelector.cs:94-97</code>)</span></span> before converting<span class="cite"><span> (<code>CurrentEventSelector.cs:99</code>)</span></span>. Ambiguous (fall-back) times resolve to the zone&#39;s standard offset, which is <code>ConvertTimeToUtc</code>&#39;s own behavior.</li>
           </ul>
           </li>
-          <li><strong>Why it&#39;s built this way</strong>: the accessor-delegate design lets one vetted implementation of the &quot;current event&quot; rule serve every surface, so the home page, the live layer, and the list-page default filter can never disagree about which event is featured. Colocating <code>GetLiveWindowUtc</code> here keeps the window definition identical to the one <a href="#eventliveinfo"><code>EventLiveInfo</code></a> advertises (its doc comment points at that record, <span class="cite"><span><code>CurrentEventSelector.cs:7</code></span></span>), and making <code>ToUtc</code> public means the same spring-forward-gap fix is reused rather than re-derived: the home page&#39;s countdown calls it directly for that reason<span class="cite"><span> (<code>ADCHome.razor.cs:325-331</code>)</span></span>.</li>
-          <li><strong>Where it&#39;s used</strong>: the Conference <a href="group-21-conference-ui.html#adchome"><code>ADCHome</code></a> page (<span class="cite"><span><code>ADCHome.razor.cs:199</code></span></span> for the selection, <span class="cite"><span><code>ADCHome.razor.cs:330-331</code></span></span> for <code>ToUtc</code>); the shared <code>EventFilteredListPageBase</code>, which resolves the default event filter once for every list page that derives from it<span class="cite"><span> (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Common/EventFilteredListPageBase.cs:180-188</code>)</span></span>; the pages that call it directly, <a href="group-21-conference-ui.html#activitycreate"><code>ActivityCreate</code></a><span class="cite"><span> (<code>ActivityCreate.razor.cs:63</code>)</span></span>, <a href="group-21-conference-ui.html#publicactivitylist"><code>PublicActivityList</code></a><span class="cite"><span> (<code>PublicActivityList.razor.cs:55</code>)</span></span>, <a href="group-21-conference-ui.html#publiceventlist"><code>PublicEventList</code></a><span class="cite"><span> (<code>PublicEventList.razor.cs:102</code>)</span></span>, <a href="group-21-conference-ui.html#publicsponsorlist"><code>PublicSponsorList</code></a><span class="cite"><span> (<code>PublicSponsorList.razor.cs:54</code>)</span></span>, <a href="group-21-conference-ui.html#sponsorcreate"><code>SponsorCreate</code></a><span class="cite"><span> (<code>SponsorCreate.razor.cs:62</code>)</span></span>, <a href="group-21-conference-ui.html#speakerdashboard"><code>SpeakerDashboard</code></a><span class="cite"><span> (<code>SpeakerDashboard.razor.cs:170</code>)</span></span>, and <a href="group-21-conference-ui.html#sessionselectiondashboard"><code>SessionSelectionDashboard</code></a><span class="cite"><span> (<code>SessionSelectionDashboard.razor.cs:69</code>)</span></span>; the Engagement <a href="group-22-engagement-module.html#liveeventservice"><code>LiveEventService</code></a>, which uses both <code>SelectCurrentOrNext</code> and <code>GetLiveWindowUtc</code><span class="cite"><span> (<code>LiveEventService.cs:27</code>, <code>LiveEventService.cs:38</code>)</span></span>; and server-side by <a href="group-18-conference-application.html#getnownexthandler"><code>GetNowNextHandler</code></a>, which resolves the current event and its window for the Now/Next query<span class="cite"><span> (<code>GetNowNextHandler.cs:101</code>, <code>GetNowNextHandler.cs:68</code>)</span></span> and by <a href="group-18-conference-application.html#eventlivevalidationservice"><code>EventLiveValidationService</code></a> itself, which delegates rather than repeating the math<span class="cite"><span> (<code>EventLiveValidationService.cs:229</code>)</span></span>. Callers holding an <a href="#eventdto"><code>EventDTO</code></a> usually go through the <a href="#currenteventdefaults"><code>CurrentEventDefaults</code></a> wrapper instead.</li>
+          <li><strong>Why it&#39;s built this way</strong>: the accessor-delegate design lets one vetted implementation of the &quot;current event&quot; rule serve every surface, so the home page, the live layer, and the list-page default filter can never disagree about which event is featured. Colocating <code>GetLiveWindowUtc</code> here keeps the window definition identical to the one <a href="#eventliveinfo"><code>EventLiveInfo</code></a> advertises (its doc comment points at that record, <span class="cite"><span><code>CurrentEventSelector.cs:7</code></span></span>), and making <code>ToUtc</code> public means the same spring-forward-gap fix is reused rather than re-derived: the home page&#39;s countdown calls it directly for that reason<span class="cite"><span> (<code>ADCHome.razor.cs:328-334</code>)</span></span>.</li>
+          <li><strong>Where it&#39;s used</strong>: the Conference <a href="group-21-conference-ui.html#adchome"><code>ADCHome</code></a> page (<span class="cite"><span><code>ADCHome.razor.cs:202</code></span></span> for the selection, <span class="cite"><span><code>ADCHome.razor.cs:333-334</code></span></span> for <code>ToUtc</code>); the shared <code>EventFilteredListPageBase</code>, which resolves the default event filter once for every list page that derives from it<span class="cite"><span> (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Common/EventFilteredListPageBase.cs:181-189</code>)</span></span>; the pages that call it directly, <a href="group-21-conference-ui.html#activitycreate"><code>ActivityCreate</code></a><span class="cite"><span> (<code>ActivityCreate.razor.cs:64</code>)</span></span>, <a href="group-21-conference-ui.html#publicactivitylist"><code>PublicActivityList</code></a><span class="cite"><span> (<code>PublicActivityList.razor.cs:71</code>)</span></span>, <a href="group-21-conference-ui.html#publiceventlist"><code>PublicEventList</code></a><span class="cite"><span> (<code>PublicEventList.razor.cs:102</code>)</span></span>, <a href="group-21-conference-ui.html#publicsponsorlist"><code>PublicSponsorList</code></a><span class="cite"><span> (<code>PublicSponsorList.razor.cs:70</code>)</span></span>, <a href="group-21-conference-ui.html#sponsorcreate"><code>SponsorCreate</code></a><span class="cite"><span> (<code>SponsorCreate.razor.cs:63</code>)</span></span>, <a href="group-21-conference-ui.html#speakerdashboard"><code>SpeakerDashboard</code></a><span class="cite"><span> (<code>SpeakerDashboard.razor.cs:171</code>)</span></span>, and <a href="group-21-conference-ui.html#sessionselectiondashboard"><code>SessionSelectionDashboard</code></a><span class="cite"><span> (<code>SessionSelectionDashboard.razor.cs:71</code>)</span></span>; the Engagement <a href="group-22-engagement-module.html#liveeventservice"><code>LiveEventService</code></a>, which uses both <code>SelectCurrentOrNext</code> and <code>GetLiveWindowUtc</code><span class="cite"><span> (<code>LiveEventService.cs:27</code>, <code>LiveEventService.cs:38</code>)</span></span>; and server-side by <a href="group-18-conference-application.html#getnownexthandler"><code>GetNowNextHandler</code></a>, which resolves the current event and its window for the Now/Next query<span class="cite"><span> (<code>GetNowNextHandler.cs:101</code>, <code>GetNowNextHandler.cs:68</code>)</span></span> and by <a href="group-18-conference-application.html#eventlivevalidationservice"><code>EventLiveValidationService</code></a> itself, which delegates rather than repeating the math<span class="cite"><span> (<code>EventLiveValidationService.cs:234</code>)</span></span>. Callers holding an <a href="#eventdto"><code>EventDTO</code></a> usually go through the <a href="#currenteventdefaults"><code>CurrentEventDefaults</code></a> wrapper instead.</li>
           </ul>
           <hr>
           <h3 id="currenteventdefaults">CurrentEventDefaults</h3>
@@ -1129,7 +1129,7 @@
           <li><strong>Concept introduced, the numeric value doubling as display order.</strong> <code>[Rubric §9, API &amp; Contract Design]</code> (a small, purpose-built enum rather than a bare <code>bool</code> or free-text string): the doc comment states the numbers are not arbitrary, they <em>are</em> the display order of the public partners band, community first, then special<span class="cite"><span> (<code>PartnerType.cs:3-5</code>)</span></span>. <code>Community</code> is deliberately the zero value: it is the common case and, unlike a sponsorship tier, carries no commercial weight, so an omitted type landing on it is harmless (remarks, <span class="cite"><span><code>PartnerType.cs:7-10</code></span></span>).</li>
           <li><strong>Walkthrough</strong>: two explicitly numbered members, <code>Community = 0</code><span class="cite"><span> (<code>PartnerType.cs:15</code>)</span></span> and <code>Special = 1</code><span class="cite"><span> (<code>PartnerType.cs:18</code>)</span></span>. Explicit numbering keeps the wire meaning and the display order stable if the members are ever reordered in source.</li>
           <li><strong>Why it&#39;s built this way</strong>: making the enum&#39;s numeric order the sort key means a consumer that groups by <code>PartnerType</code> and orders ascending gets the correct display order for free, with no separate lookup table to keep in sync.</li>
-          <li><strong>Where it&#39;s used</strong>: carried on <a href="#partner"><code>Partner.PartnerType</code></a> (<span class="cite"><span><code>Partner.cs:25</code></span></span>, set in both create and reconstitute constructors, <span class="cite"><span><code>Partner.cs:51,59,82,118,129</code></span></span>) and on <a href="#partnerdto"><code>PartnerDTO.PartnerType</code></a>. Seeded by <code>ConferenceModuleDbSeeder</code>&#39;s sample partners, two <code>Community</code> and one <code>Special</code><span class="cite"><span> (<code>ConferenceModuleDbSeeder.cs:424-429</code>)</span></span>. Read by the ADC home page&#39;s partner band: <code>ADCHome</code> groups the fetched partners by <code>PartnerType</code>, orders the groups ascending so <code>Community</code> renders first, and orders each group by <code>Sort</code> then <code>Name</code><span class="cite"><span> (<code>ADCHome.razor.cs:294-301</code>)</span></span>. Exercised across the full CRUD test surface for <code>Partner</code> (domain, application, API, and UI test projects for creation, update, and validation).</li>
+          <li><strong>Where it&#39;s used</strong>: carried on <a href="#partner"><code>Partner.PartnerType</code></a> (<span class="cite"><span><code>Partner.cs:25</code></span></span>, set in both create and reconstitute constructors, <span class="cite"><span><code>Partner.cs:51,59,82,118,129</code></span></span>) and on <a href="#partnerdto"><code>PartnerDTO.PartnerType</code></a>. Seeded by <code>ConferenceModuleDbSeeder</code>&#39;s sample partners, two <code>Community</code> and one <code>Special</code><span class="cite"><span> (<code>ConferenceModuleDbSeeder.cs:424-429</code>)</span></span>. Read by the ADC home page&#39;s partner band: <code>ADCHome</code> groups the fetched partners by <code>PartnerType</code>, orders the groups ascending so <code>Community</code> renders first, and orders each group by <code>Sort</code> then <code>Name</code><span class="cite"><span> (<code>ADCHome.razor.cs:297-304</code>)</span></span>. Exercised across the full CRUD test surface for <code>Partner</code> (domain, application, API, and UI test projects for creation, update, and validation).</li>
           </ul>
           <hr>
           <h3 id="questionmoderationdefault">QuestionModerationDefault</h3>
@@ -1155,7 +1155,7 @@
           <li><strong>Concept</strong>: the same server-resolved cross-module snapshot <a href="#roomsessioninfo"><code>RoomSessionInfo</code></a> introduces, applied to a <a href="#sponsor"><code>Sponsor</code></a>. <code>[Rubric §7, Microservices Readiness]</code>: Engagement never references the <code>Sponsor</code> entity; it asks Conference three questions and gets three values. <code>[Rubric §11, Security]</code>: because the QR is <strong>printed</strong>, the server must confirm the sponsor still exists and its event is published before recording anything, and the soft-delete query filter means a pulled sponsor answers exactly like one that never existed, so an old printed QR simply stops working<span class="cite"><span> (<code>EventLiveValidationService.cs:110-123</code>)</span></span>.</li>
           <li><strong>Walkthrough</strong>: a positional <code>sealed record</code> with three parameters<span class="cite"><span> (<code>SponsorLiveInfo.cs:12-15</code>)</span></span>, <code>EventId</code> (line 13), <code>IsPublished</code> (line 14), and <code>SponsorName</code> (line 15, carried so a consumer can render a confirmation without a second cross-module call, per the doc comment <span class="cite"><span><code>SponsorLiveInfo.cs:3-8</code></span></span>).</li>
           <li><strong>Why it&#39;s built this way</strong>: the booth-visit write needs the owning event for scoping, the published flag for the gate, and the name for the confirmation screen. Returning all three in one record keeps the scan path to a single round-trip.</li>
-          <li><strong>Where it&#39;s used</strong>: produced by <a href="group-18-conference-application.html#eventlivevalidationservice"><code>EventLiveValidationService.GetSponsorLiveInfoAsync</code></a> (<span class="cite"><span><code>EventLiveValidationService.cs:106-141</code></span></span>, which looks the sponsor up, then its owning event, and returns <code>NotFound</code> for either miss), served over gRPC via the <code>GetSponsorLiveInfo</code> rpc<span class="cite"><span> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Contracts/Protos/event_live_validation.proto:40</code>)</span></span> and its adapter<span class="cite"><span> (<code>EventLiveValidationServiceGrpcAdapter.cs:99</code>)</span></span>. Consumed by the Engagement <a href="group-22-engagement-module.html#recordsponsorvisithandler"><code>RecordSponsorVisitHandler</code></a>, which propagates a lookup failure unchanged<span class="cite"><span> (<code>RecordSponsorVisitHandler.cs:61-62</code>)</span></span>, rejects an unpublished event<span class="cite"><span> (<code>RecordSponsorVisitHandler.cs:65-66</code>)</span></span>, scopes the check-in row to the returned <code>EventId</code><span class="cite"><span> (<code>RecordSponsorVisitHandler.cs:77</code>)</span></span>, and echoes <code>SponsorName</code> on the response whether the visit is new or a replay<span class="cite"><span> (<code>RecordSponsorVisitHandler.cs:92</code>)</span></span>. The fail-open stub returns <code>new SponsorLiveInfo(default, true, string.Empty)</code><span class="cite"><span> (<code>DisabledEventLiveValidationService.cs:51</code>)</span></span>.</li>
+          <li><strong>Where it&#39;s used</strong>: produced by <a href="group-18-conference-application.html#eventlivevalidationservice"><code>EventLiveValidationService.GetSponsorLiveInfoAsync</code></a> (<span class="cite"><span><code>EventLiveValidationService.cs:106-141</code></span></span>, which looks the sponsor up, then its owning event, and returns <code>NotFound</code> for either miss), served over gRPC via the <code>GetSponsorLiveInfo</code> rpc<span class="cite"><span> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Contracts/Protos/event_live_validation.proto:40</code>)</span></span> and its adapter<span class="cite"><span> (<code>EventLiveValidationServiceGrpcAdapter.cs:122</code>)</span></span>. Consumed by the Engagement <a href="group-22-engagement-module.html#recordsponsorvisithandler"><code>RecordSponsorVisitHandler</code></a>, which propagates a lookup failure unchanged<span class="cite"><span> (<code>RecordSponsorVisitHandler.cs:61-62</code>)</span></span>, rejects an unpublished event<span class="cite"><span> (<code>RecordSponsorVisitHandler.cs:65-66</code>)</span></span>, scopes the check-in row to the returned <code>EventId</code><span class="cite"><span> (<code>RecordSponsorVisitHandler.cs:77</code>)</span></span>, and echoes <code>SponsorName</code> on the response whether the visit is new or a replay<span class="cite"><span> (<code>RecordSponsorVisitHandler.cs:92</code>)</span></span>. The fail-open stub returns <code>new SponsorLiveInfo(default, true, string.Empty)</code><span class="cite"><span> (<code>DisabledEventLiveValidationService.cs:51</code>)</span></span>.</li>
           </ul>
           <hr>
           <h3 id="sessionassetkind">SessionAssetKind</h3>
@@ -1198,21 +1198,21 @@
           validator, the access service and the API controller, rather than each layer hard-coding its own copy.
           The doc comment on <code>AllowedFileExtensions</code> notes the extension check is only half the gate: the
           framework&#39;s <code>DocumentContentSniffer</code> also reads the real bytes, so a renamed executable is refused even
-          though its extension is on the allow-list<span class="cite"><span> (<code>SessionAssetLimits.cs:74-77</code>)</span></span>.</li>
-          <li><strong>Walkthrough</strong>: five members<span class="cite"><span> (<code>SessionAssetLimits.cs:10-95</code>)</span></span>.<ul>
+          though its extension is on the allow-list<span class="cite"><span> (<code>SessionAssetLimits.cs:29-33</code>)</span></span>.</li>
+          <li><strong>Walkthrough</strong>: five members<span class="cite"><span> (<code>SessionAssetLimits.cs:10-49</code>)</span></span>.<ul>
           <li><code>MaxFileBytes = 50 * 1024 * 1024</code><span class="cite"><span> (<code>SessionAssetLimits.cs:10</code>)</span></span>: the accepted upload size.</li>
-          <li><code>MaxRequestBytes = MaxFileBytes + 64 * 1024</code><span class="cite"><span> (<code>SessionAssetLimits.cs:65</code>)</span></span>: the transport-level cap on
+          <li><code>MaxRequestBytes = MaxFileBytes + 64 * 1024</code><span class="cite"><span> (<code>SessionAssetLimits.cs:20</code>)</span></span>: the transport-level cap on
           the whole multipart body. It adds 64 KB of headroom over <code>MaxFileBytes</code> for the multipart boundary
           lines and the part&#39;s <code>Content-Disposition</code>/<code>Content-Type</code> headers; without it, a file at exactly
           <code>MaxFileBytes</code> is rejected by Kestrel with a bare 413 before the friendlier
-          <code>SessionAsset.InvalidUpload</code> check ever runs<span class="cite"><span> (<code>SessionAssetLimits.cs:58-64</code>)</span></span>. The file itself still
+          <code>SessionAsset.InvalidUpload</code> check ever runs<span class="cite"><span> (<code>SessionAssetLimits.cs:13-19</code>)</span></span>. The file itself still
           tops out at <code>MaxFileBytes</code> via that domain check and the command validator.</li>
-          <li><code>MaxAssetsPerSession = 10</code><span class="cite"><span> (<code>SessionAssetLimits.cs:72</code>)</span></span>: the cap on live assets per session, sized so
+          <li><code>MaxAssetsPerSession = 10</code><span class="cite"><span> (<code>SessionAssetLimits.cs:27</code>)</span></span>: the cap on live assets per session, sized so
           a speaker publishing a deck, a handout, a repository link and a recording link sits well inside it
           while the public page stays bounded.</li>
-          <li><code>AllowedFileExtensions</code><span class="cite"><span> (<code>SessionAssetLimits.cs:79-88</code>)</span></span>: a lower-case, dot-prefixed list (<code>.pdf</code>,
+          <li><code>AllowedFileExtensions</code><span class="cite"><span> (<code>SessionAssetLimits.cs:34-43</code>)</span></span>: a lower-case, dot-prefixed list (<code>.pdf</code>,
           <code>.pptx</code>, <code>.docx</code>, <code>.xlsx</code>, <code>.zip</code>, <code>.md</code>, <code>.txt</code>).</li>
-          <li><code>AcceptAttribute = string.Join(&#39;,&#39;, AllowedFileExtensions)</code><span class="cite"><span> (<code>SessionAssetLimits.cs:94</code>)</span></span>: the same
+          <li><code>AcceptAttribute = string.Join(&#39;,&#39;, AllowedFileExtensions)</code><span class="cite"><span> (<code>SessionAssetLimits.cs:49</code>)</span></span>: the same
           list rendered as a browser <code>accept</code> attribute value, so the file picker only offers formats the
           server will accept.</li>
           </ul>
@@ -1236,7 +1236,7 @@
           <li><strong>Concept introduced, the server-resolved target (never trust a client-supplied id).</strong> <code>[Rubric §11, Security]</code> (assesses whether authorization-relevant inputs are decided server-side): the attendee&#39;s device sends a <strong>room</strong> id, not a session id, and Conference resolves which session that room is hosting at the call instant. A tampered QR therefore cannot record a check-in against an arbitrary session. <code>[Rubric §9, API &amp; Contract Design]</code> also applies in a subtle way: <code>SessionTitle</code> rides along so the caller can render a confirmation without a second cross-module call, and the <strong>grace window travels in the request</strong> rather than living on this record, because &quot;how early does a scan count&quot; is check-in policy owned by Engagement, not schedule data owned by Conference (doc comment, <span class="cite"><span><code>RoomSessionInfo.cs:10-14</code></span></span>, and the same split restated on the interface, <span class="cite"><span><code>IEventLiveValidationService.cs:52-55</code></span></span>).</li>
           <li><strong>Walkthrough</strong>: a positional <code>sealed record</code> with four parameters<span class="cite"><span> (<code>RoomSessionInfo.cs:20-24</code>)</span></span>, <code>SessionId</code> (the session the room is hosting at the query instant, line 19), <code>SessionTitle</code> (line 20), <code>EventId</code> (the owning event, line 21), and <code>IsPublished</code> (line 22). No behavior.</li>
           <li><strong>Why it&#39;s built this way</strong>: bundling the title and the published flag with the id keeps the door-scan path to a single cross-module round-trip, and keeping the grace window out of the record preserves the boundary: Conference answers the schedule question, Engagement decides the policy.</li>
-          <li><strong>Where it&#39;s used</strong>: produced by <a href="group-18-conference-application.html#eventlivevalidationservice"><code>EventLiveValidationService.GetCurrentRoomSessionInfoAsync</code></a><span class="cite"><span> (<code>EventLiveValidationService.cs:145</code>)</span></span>, which excludes unscheduled sessions<span class="cite"><span> (<code>EventLiveValidationService.cs:157-167</code>)</span></span>, resolves the event&#39;s zone without a fallback<span class="cite"><span> (<code>EventLiveValidationService.cs:182-186</code>)</span></span>, converts session wall-clock times through <a href="group-18-conference-application.html#calendarexportmapper"><code>CalendarExportMapper.ToUtc</code></a><span class="cite"><span> (<code>EventLiveValidationService.cs:191-199</code>)</span></span>, and prefers an in-progress session over an upcoming one inside the grace window<span class="cite"><span> (<code>EventLiveValidationService.cs:203-210</code>)</span></span> before building the record<span class="cite"><span> (<code>EventLiveValidationService.cs:218-222</code>)</span></span>. Carried over the wire by <a href="group-20-conference-api-grpc.html#eventlivevalidationservicegrpcadapter"><code>EventLiveValidationServiceGrpcAdapter</code></a><span class="cite"><span> (<code>EventLiveValidationServiceGrpcAdapter.cs:128</code>)</span></span> against the <code>GetCurrentRoomSessionInfo</code> rpc<span class="cite"><span> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Contracts/Protos/event_live_validation.proto:47</code>)</span></span>. Consumed by the Engagement <a href="group-22-engagement-module.html#recordroomcheckinhandler"><code>RecordRoomCheckInHandler</code></a>, which passes the configured grace window (<span class="cite"><span><code>RecordRoomCheckInHandler.cs:52-54</code></span></span>, from <code>CheckInSettings.RoomCheckInGraceMinutes</code>, default 15, <span class="cite"><span><code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/CheckIns/CheckInSettings.cs:21</code></span></span>), collapses a <code>NotFound</code> into a generic &quot;no session is starting here&quot; message so room ids do not leak while still propagating transport failures unchanged<span class="cite"><span> (<code>RecordRoomCheckInHandler.cs:55-65</code>, <code>:98-102</code>)</span></span>, rejects an unpublished event<span class="cite"><span> (<code>RecordRoomCheckInHandler.cs:68-69</code>)</span></span>, and uses the resolved <code>SessionId</code>/<code>SessionTitle</code> for the check-in row and its response<span class="cite"><span> (<code>RecordRoomCheckInHandler.cs:73</code>, <code>:91-92</code>)</span></span>.</li>
+          <li><strong>Where it&#39;s used</strong>: produced by <a href="group-18-conference-application.html#eventlivevalidationservice"><code>EventLiveValidationService.GetCurrentRoomSessionInfoAsync</code></a><span class="cite"><span> (<code>EventLiveValidationService.cs:145</code>)</span></span>, which excludes unscheduled sessions<span class="cite"><span> (<code>EventLiveValidationService.cs:157-172</code>)</span></span>, resolves the event&#39;s zone without a fallback<span class="cite"><span> (<code>EventLiveValidationService.cs:187-191</code>)</span></span>, converts session wall-clock times through <a href="group-18-conference-application.html#calendarexportmapper"><code>CalendarExportMapper.ToUtc</code></a><span class="cite"><span> (<code>EventLiveValidationService.cs:196-204</code>)</span></span>, and prefers an in-progress session over an upcoming one inside the grace window<span class="cite"><span> (<code>EventLiveValidationService.cs:208-215</code>)</span></span> before building the record<span class="cite"><span> (<code>EventLiveValidationService.cs:223-227</code>)</span></span>. Carried over the wire by <a href="group-20-conference-api-grpc.html#eventlivevalidationservicegrpcadapter"><code>EventLiveValidationServiceGrpcAdapter</code></a><span class="cite"><span> (<code>EventLiveValidationServiceGrpcAdapter.cs:151</code>)</span></span> against the <code>GetCurrentRoomSessionInfo</code> rpc<span class="cite"><span> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Contracts/Protos/event_live_validation.proto:47</code>)</span></span>. Consumed by the Engagement <a href="group-22-engagement-module.html#recordroomcheckinhandler"><code>RecordRoomCheckInHandler</code></a>, which passes the configured grace window (<span class="cite"><span><code>RecordRoomCheckInHandler.cs:52-54</code></span></span>, from <code>CheckInSettings.RoomCheckInGraceMinutes</code>, default 15, <span class="cite"><span><code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/CheckIns/CheckInSettings.cs:21</code></span></span>), collapses a <code>NotFound</code> into a generic &quot;no session is starting here&quot; message so room ids do not leak while still propagating transport failures unchanged<span class="cite"><span> (<code>RecordRoomCheckInHandler.cs:55-65</code>, <code>:98-102</code>)</span></span>, rejects an unpublished event<span class="cite"><span> (<code>RecordRoomCheckInHandler.cs:68-69</code>)</span></span>, and uses the resolved <code>SessionId</code>/<code>SessionTitle</code> for the check-in row and its response<span class="cite"><span> (<code>RecordRoomCheckInHandler.cs:73</code>, <code>:91-92</code>)</span></span>.</li>
           </ul>
           <hr>
           <h3 id="partnerdto">PartnerDTO</h3>
@@ -1249,7 +1249,7 @@
           <li><strong>Concept</strong>: the same aggregate-DTO shape <a href="#eventdto"><code>EventDTO</code></a> uses at a smaller scale, length constants and a concurrency token living on the DTO because, per its own doc comment, it is the lowest layer the domain invariants, EF configuration, and UI can all reach<span class="cite"><span> (<code>PartnerDTO.cs:9-12</code>)</span></span>. <code>[Rubric §9, API &amp; Contract Design]</code> (a stable, purpose-built contract) and <code>[Rubric §8, Data Architecture]</code> (<code>IConcurrencyAware</code> round-trips the EF <code>RowVersion</code> token so a concurrent edit is detected instead of silently overwritten).</li>
           <li><strong>Walkthrough</strong>: four length constants, <code>NameMaxLength = 200</code><span class="cite"><span> (<code>PartnerDTO.cs:18</code>)</span></span>, <code>LogoUrlMaxLength = 2000</code><span class="cite"><span> (<code>PartnerDTO.cs:21</code>)</span></span>, <code>DescriptionMaxLength = 2000</code><span class="cite"><span> (<code>PartnerDTO.cs:24</code>)</span></span>, and <code>WebsiteUrlMaxLength = 2000</code><span class="cite"><span> (<code>PartnerDTO.cs:27</code>)</span></span>; identity and concurrency, <code>Id</code> (<code>required</code>, <span class="cite"><span><code>PartnerDTO.cs:30</code></span></span>) and <code>RowVersion</code> (<code>byte[]</code> defaulting to <code>[]</code>, <span class="cite"><span><code>PartnerDTO.cs:33</code></span></span>); <code>Name</code> (<code>required string</code>, <span class="cite"><span><code>PartnerDTO.cs:36</code></span></span>) and <code>PartnerType</code><span class="cite"><span> (<code>PartnerDTO.cs:39</code>)</span></span>; optional scalars <code>LogoUrl</code>, <code>Description</code>, and <code>WebsiteUrl</code> (all <code>string?</code>, <span class="cite"><span><code>PartnerDTO.cs:42,45,48</code></span></span>); <code>Sort</code> (<code>int</code>, the display order within the partner&#39;s type group, <span class="cite"><span><code>PartnerDTO.cs:51</code></span></span>); and <code>EventId</code> (the owning event&#39;s foreign key, <span class="cite"><span><code>PartnerDTO.cs:54</code></span></span>).</li>
           <li><strong>Why it&#39;s built this way</strong>: keeping the four length constants on the DTO rather than duplicating them in the domain lets <code>PartnerInvariants</code> re-export them by reference (<code>NameMaxLength = PartnerDTO.NameMaxLength</code> and the same pattern for the other three, <span class="cite"><span><code>PartnerInvariants.cs:16,19,22,25</code></span></span>) instead of restating the numbers, so the UI, the domain guard, and the EF configuration all read one source of truth.</li>
-          <li><strong>Where it&#39;s used</strong>: mapped from <a href="#partner"><code>Partner</code></a> by the Mapperly-generated <code>PartnerDTOMapper.MapToDTO</code> (<span class="cite"><span><code>PartnerDTOMapper.cs:17</code></span></span>, per <a href="https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html" target="_blank" rel="noopener">ADR-001</a>); it is the DTO type parameter of <code>CreatePartnerHandler</code> (<span class="cite"><span><code>CreatePartnerHandler.cs:15-20</code></span></span>, built over <code>CreateEntityHandlerBase&lt;PartnerCreateRequest, Partner, PartnerIdentifierType, PartnerDTO&gt;</code>) and of <code>PartnersController</code>, so its inherited GetAll/GetById/Create/paged/lookup/export actions all speak it<span class="cite"><span> (<code>PartnersController.cs:38-41,78-153</code>)</span></span>. Read by the ADC home page&#39;s partner band, grouped and sorted client-side<span class="cite"><span> (<code>ADCHome.razor.cs:294-301</code>)</span></span>, and bound by the UI&#39;s <code>PartnerFormModel</code>/<code>PartnerEditModel</code>.</li>
+          <li><strong>Where it&#39;s used</strong>: mapped from <a href="#partner"><code>Partner</code></a> by the Mapperly-generated <code>PartnerDTOMapper.MapToDTO</code> (<span class="cite"><span><code>PartnerDTOMapper.cs:17</code></span></span>, per <a href="https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html" target="_blank" rel="noopener">ADR-001</a>); it is the DTO type parameter of <code>CreatePartnerHandler</code> (<span class="cite"><span><code>CreatePartnerHandler.cs:15-20</code></span></span>, built over <code>CreateEntityHandlerBase&lt;PartnerCreateRequest, Partner, PartnerIdentifierType, PartnerDTO&gt;</code>) and of <code>PartnersController</code>, so its inherited GetAll/GetById/Create/paged/lookup/export actions all speak it<span class="cite"><span> (<code>PartnersController.cs:38-41,86-161</code>)</span></span>. Read by the ADC home page&#39;s partner band, grouped and sorted client-side<span class="cite"><span> (<code>ADCHome.razor.cs:297-304</code>)</span></span>, and bound by the UI&#39;s <code>PartnerFormModel</code>/<code>PartnerEditModel</code>.</li>
           </ul>
           <hr>
           <h3 id="sessionliveinfo">SessionLiveInfo</h3>
@@ -1403,7 +1403,7 @@
           <li><strong>Where it&#39;s used</strong>: nested as the <code>Now</code> and <code>Next</code> lists on <a href="#nownextdto">NowNextDTO</a>; each row is
           built by the handler&#39;s private <code>ToRow</code> projection over a <code>Session</code> aggregate<span class="cite"><span>
           (<code>GetNowNextHandler.cs:73</code>)</span></span>, then served on the anonymous now-next endpoints of
-          <a href="group-20-conference-api-grpc.html#eventscontroller">EventsController</a><span class="cite"><span> (<code>EventsController.cs:165-174,181-188</code>)</span></span>.</li>
+          <a href="group-20-conference-api-grpc.html#eventscontroller">EventsController</a><span class="cite"><span> (<code>EventsController.cs:172-181,188-195</code>)</span></span>.</li>
           </ul>
           <h3 id="sessionstatuses">SessionStatuses</h3>
           <blockquote>
@@ -1461,14 +1461,14 @@
           <li><strong>Why it&#39;s built this way</strong>: batching <code>Next</code> as a list rather than a single session is the modelling
           decision that makes the widget correct on a multi-track schedule. Local-plus-UTC times live on the row
           type, keeping this envelope thin. The endpoint is <code>[AllowAnonymous]</code> and output-cached under the
-          <code>NowNextCache</code> policy<span class="cite"><span> (<code>EventsController.cs:165-167</code>)</span></span> because the payload is public and changes with
+          <code>NowNextCache</code> policy<span class="cite"><span> (<code>EventsController.cs:172-174</code>)</span></span> because the payload is public and changes with
           the clock, which is the <code>[Rubric §12, Performance &amp; Scalability]</code> lever for a widget that polls.</li>
           <li><strong>Where it&#39;s used</strong>: returned as <code>Result&lt;NowNextDTO&gt;</code> by
           <a href="group-18-conference-application.html#getnownexthandler">GetNowNextHandler</a><span class="cite"><span> (<code>GetNowNextHandler.cs:25</code>)</span></span>
           for <a href="group-18-conference-application.html#getnownextquery">GetNowNextQuery</a>; exposed by
           <a href="group-20-conference-api-grpc.html#eventscontroller">EventsController</a> both per event
-          (<code>GET {id}/now-next</code>, <span class="cite"><span><code>EventsController.cs:168</code></span></span>) and in the id-less &quot;current event&quot; form the
-          home-screen widget calls (<code>GET now-next</code>, <span class="cite"><span><code>EventsController.cs:183</code></span></span>). Both
+          (<code>GET {id}/now-next</code>, <span class="cite"><span><code>EventsController.cs:175</code></span></span>) and in the id-less &quot;current event&quot; form the
+          home-screen widget calls (<code>GET now-next</code>, <span class="cite"><span><code>EventsController.cs:190</code></span></span>). Both
           <a href="group-25-adc-host-composition.html#nownextwidgetprovider">NowNextWidgetProvider</a> and Engagement&#39;s
           <a href="group-22-engagement-module.html#inownextservice">INowNextService</a> deliberately mirror this wire shape
           locally instead of referencing the type, so neither takes a project reference on Conference.</li>
@@ -1628,7 +1628,7 @@
           constants<span class="cite"><span> (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/SessionInvariants.cs:16,19,22,31</code>)</span></span>,
           which is what the domain guards, the EF configuration and the validators then read, while the UI form
           binds them straight off this type<span class="cite"><span>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Sessions/SessionFormModel.cs:38,42,46</code>)</span></span>.
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Sessions/SessionFormModel.cs:44,48,52</code>)</span></span>.
           One edit here moves the database column, the domain guard and the client-side <code>MaxLength</code> together.</li>
           <li><strong>Concept, the concurrency-aware read contract.</strong> <code>[Rubric §9, API &amp; Contract Design]</code> and <code>[Rubric §8, Data Architecture]</code>. Beyond <code>IBaseDTO</code>&#39;s <code>Id</code>, this DTO implements
           <a href="group-12-api-hosting-mapping.html#iconcurrencyaware">IConcurrencyAware</a>, so it round-trips the EF
@@ -1772,7 +1772,7 @@
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/ConferenceModule.cs:21-25</code>)</span></span>, which
           <a href="group-14-module-system-composition.html#imodule">IModule</a> declares as an opt-in default no-op<span class="cite"><span>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Modules/IModule.cs:34</code>)</span></span> and <code>ModuleLoader</code> invokes
-          for a disabled module<span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Modules/ModuleLoader.cs:108</code>)</span></span>.</li>
+          for a disabled module<span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Modules/ModuleLoader.cs:119</code>)</span></span>.</li>
           <li><strong>Walkthrough</strong>: two one-line members, both returning already-completed tasks.<ul>
           <li><code>ValidateSessionForBookmarkAsync(...)</code><span class="cite"><span> (<code>DisabledSessionBookmarkValidationService.cs:33-34</code>)</span></span> returns
           <code>Task.FromResult(Result.Success())</code>, approving unconditionally.</li>
@@ -1792,7 +1792,7 @@
           (<code>ConferenceModule.cs:23</code>)</span></span> alongside the <code>IEventLiveValidationService</code> stub. In the deployed
           split-service topology it is a fallback that gets overwritten: the extracted Engagement service calls
           <code>AddConferenceSessionValidationClient</code><span class="cite"><span>
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:281</code>)</span></span>, and that registration uses
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:283</code>)</span></span>, and that registration uses
           <code>ServiceCollectionDescriptorExtensions.Replace</code> so the resolved
           <a href="#isessionbookmarkvalidationservice">ISessionBookmarkValidationService</a> is the gRPC adapter, whether
           the prior binding was the real in-process service or this stub<span class="cite"><span>
@@ -1841,7 +1841,7 @@
           <li><strong>Concept introduced, the self-contained scored row.</strong> <code>[Rubric §12, Performance &amp; Scalability]</code> (assesses shaping the payload so the client does no secondary lookups) and <code>[Rubric §9, API &amp; Contract Design]</code>. The interesting move is that the score does not travel alone: alongside the numbers it carries <code>SpeakerLocalities</code>, <code>SessionCategories</code>, and <code>SessionLevel</code> (lines 56-62), so the organizer dashboard can print a complete, sortable row for each session without an N+1 fetch back to the <a href="#session"><code>Session</code></a>, <a href="#speaker"><code>Speaker</code></a>, or <a href="#category"><code>Category</code></a> aggregates. <code>[Rubric §13, Observability &amp; Operability]</code>: the record also records <em>how</em> the number was produced, <code>ModelUsed</code> (line 39), <code>PromptVersion</code> (line 47), and <code>ScoredOn</code> (line 50), so a score is auditable, comparable against another score, and its staleness visible.</li>
           <li><strong>Walkthrough</strong>: <code>SessionId</code> + <code>SessionTitle</code> (lines 9-12, required) identify the row. Then the scores, all <code>required decimal</code> on a 1.0 to 10.0 scale: an <code>OverallScore</code> (line 15) plus six dimension sub-scores, <code>TopicRelevanceScore</code>, <code>DescriptionQualityScore</code>, <code>NoveltyScore</code>, <code>ActionableTakeawaysScore</code>, <code>DepthOrInsightQualityScore</code>, <code>CredibilityExperienceScore</code> (lines 18-33). <code>Reasoning</code> (line 36, required) holds the model&#39;s free-text justification. <code>ModelUsed</code> (line 39), <code>PromptVersion</code> (line 47), and <code>ScoredOn</code> (line 50) capture provenance, all three <code>required</code>. <code>PromptVersion</code> is the reviewer-brief contract version behind the numbers, shaped <code>yyyy-MM-dd.N</code> or the sentinel <code>legacy</code> for rows written before the column existed (documented at <span class="cite"><span><code>SessionAiScoreDTO.cs:41-46</code></span></span>); the value comes from the scoring service&#39;s own constant, today <code>&quot;2026-09-04.1&quot;</code><span class="cite"><span> (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/SessionScoringService.cs:53</code>)</span></span>. The tail members are optional display context: <code>Status</code> (line 53, nullable), <code>SpeakerLocalities</code> and <code>SessionCategories</code> (lines 56-59, defaulted to <code>[]</code> so never null), and <code>SessionLevel</code> (line 62, nullable). <code>SpeakerLocalities</code> is the speaker-locality convention surfacing here: those tier names come from a <a href="#categoryitem"><code>CategoryItem</code></a> under the &quot;Where are you traveling from&quot; category (Sessionize id 121854), not from any geographic field on <a href="#speaker"><code>Speaker</code></a> (resolved by <code>SpeakerLocalityHelper</code> in Conference.Application, <span class="cite"><span><code>SpeakerLocalityHelper.cs:19-33</code></span></span>).</li>
           <li><strong>Why it&#39;s built this way</strong>: embedding display context in the score DTO avoids per-row lookups on a dashboard that shows every session in an event at once, and recording the model id, the prompt contract version, and the timestamp keeps an AI-produced number honest and re-scorable. Two scores are only comparable when both the model and the prompt behind them match, so surfacing <code>PromptVersion</code> next to <code>ModelUsed</code> is what lets a reader tell a genuine ranking change from a change of reviewer brief.</li>
-          <li><strong>Where it&#39;s used</strong>: nested as the <code>AiScores</code> collection on <a href="#sessionselectiondashboarddto"><code>SessionSelectionDashboardDTO</code></a>; projected from the <a href="#sessionaiscore"><code>SessionAiScore</code></a> entity by <code>GetSessionSelectionDashboardHandler</code> (<span class="cite"><span><code>GetSessionSelectionDashboardHandler.cs:374</code></span></span> carries <code>PromptVersion</code> across), written by <code>ScoreEventSessionsHandler</code> (which stamps <code>aiScoringService.ModelId</code> and <code>aiScoringService.PromptVersion</code>, <span class="cite"><span><code>ScoreEventSessionsHandler.cs:83</code></span></span>, and returns a <a href="#scoreeventsessionsresultdto"><code>ScoreEventSessionsResultDTO</code></a> summary), and read back through <a href="group-20-conference-api-grpc.html#sessionselectioncontroller"><code>SessionSelectionController</code></a>.</li>
+          <li><strong>Where it&#39;s used</strong>: nested as the <code>AiScores</code> collection on <a href="#sessionselectiondashboarddto"><code>SessionSelectionDashboardDTO</code></a>; projected from the <a href="#sessionaiscore"><code>SessionAiScore</code></a> entity by <code>GetSessionSelectionDashboardHandler</code> (<span class="cite"><span><code>GetSessionSelectionDashboardHandler.cs:374</code></span></span> carries <code>PromptVersion</code> across), written by <code>SessionScoringRunner</code>, the pass that <code>ScoreEventSessionsInternalCommandHandler</code> runs<span class="cite"><span> (<code>ScoreEventSessionsInternalCommandHandler.cs:42</code>)</span></span>, which stamps <code>aiScoringService.ModelId</code> and <code>aiScoringService.PromptVersion</code><span class="cite"><span> (<code>SessionScoringRunner.cs:91</code>)</span></span> and returns a <a href="#scoreeventsessionsresultdto"><code>ScoreEventSessionsResultDTO</code></a> summary), and read back through <a href="group-20-conference-api-grpc.html#sessionselectioncontroller"><code>SessionSelectionController</code></a>.</li>
           <li><strong>Caveats / not-in-source</strong>: the 1.0 to 10.0 range and the status vocabulary are documented in the property comments and enforced by the scoring handler and the external model prompt, not by this record. The <code>legacy</code> sentinel is likewise a convention, not a constant on this type: rows predating the column were backfilled with it by the <code>AddSessionAiScorePromptVersion</code> migration<span class="cite"><span> (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/Sessions/SessionAiScoreConfiguration.cs:59-61</code>)</span></span>.</li>
           </ul>
           <p><code>[Rubric §16, AI-Native Application Architecture]</code> applies: this type is part of the AI session-scoring feature (a model call behind a port, versioned prompt and model, an evaluation gate, metered spend; ADR-111).</p>
@@ -2049,7 +2049,7 @@
           (<code>SponsorTier.cs:15-24</code>)</span></span>. A plain ascending sort therefore renders the largest package first with no
           lookup table, and <a href="group-21-conference-ui.html#publicsponsorlist"><code>PublicSponsorList</code></a> relies on
           exactly that: it groups by <code>Tier</code> and calls <code>.OrderBy(g =&gt; g.Key)</code><span class="cite"><span>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/Sponsors/PublicSponsorList.razor.cs:88-92</code>)</span></span>,
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/Sponsors/PublicSponsorList.razor.cs:103-107</code>)</span></span>,
           breaking ties inside a tier by <code>Sort</code> then <code>Name</code>. Renumbering a member would silently reorder the
           public page.</li>
           <li><strong>It is zero-based</strong> because CA1008 requires a zero member<span class="cite"><span> (<code>SponsorTier.cs:9-11</code>)</span></span>, which has the
@@ -2075,8 +2075,8 @@
           <a href="#sponsordto"><code>SponsorDTO.Tier</code></a> and on
           <a href="group-18-conference-application.html#sponsorcreaterequest"><code>SponsorCreateRequest</code></a> /
           <a href="group-18-conference-application.html#sponsorupdaterequest"><code>SponsorUpdateRequest</code></a>; the UI keys its
-          grouped view model on it<span class="cite"><span> (<code>PublicSponsorList.razor.cs:41</code>)</span></span> and renders the label through a localized
-          resource key, <code>L[$&quot;Tier.{tier}&quot;]</code><span class="cite"><span> (<code>PublicSponsorList.razor.cs:44</code>)</span></span>, which is <code>[Rubric §27, i18n]</code> in
+          grouped view model on it<span class="cite"><span> (<code>PublicSponsorList.razor.cs:45</code>)</span></span> and renders the label through a localized
+          resource key, <code>L[$&quot;Tier.{tier}&quot;]</code><span class="cite"><span> (<code>PublicSponsorList.razor.cs:48</code>)</span></span>, which is <code>[Rubric §27, i18n]</code> in
           miniature: the enum member name is the resource key, so the label translates without a switch
           statement.</p>
           </li>
@@ -2141,7 +2141,7 @@
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Activities/Activity.cs:28-36</code>)</span></span>. The DTO
           faithfully carries that decision instead of quietly converting: a consumer that needs an absolute
           instant has to combine the value with the event&#39;s zone, and the public page simply formats it as-is<span class="cite"><span>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/Activities/PublicActivityList.razor.cs:44</code>)</span></span>.</li>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/Activities/PublicActivityList.razor.cs:48</code>)</span></span>.</li>
           <li><strong>Walkthrough</strong>: five constants<span class="cite"><span> (<code>ActivityDTO.cs:17-30</code>)</span></span> then eleven properties<span class="cite"><span>
           (<code>ActivityDTO.cs:33-63</code>)</span></span>. <code>Id</code> and <code>RowVersion</code> are the two framework contracts (lines 33 and 36; the
           token defaults to an empty array rather than being nullable, see <a href="#questiondto"><code>QuestionDTO</code></a>). <code>Name</code>
@@ -2153,7 +2153,7 @@
           (<code>Activity.cs:38-42</code>,
           <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/Activities/PublicActivityList.razor:47</code>)</span></span>,
           and <code>VenueAddress</code> is what the &quot;directions&quot; affordance hands to a maps URL, labelled with the venue
-          name or the activity name when there is none<span class="cite"><span> (<code>PublicActivityList.razor.cs:106-114</code>)</span></span>. <code>SortOrder</code>
+          name or the activity name when there is none<span class="cite"><span> (<code>PublicActivityList.razor.cs:121-129</code>)</span></span>. <code>SortOrder</code>
           (line 60) breaks
           ties between activities that start at the same minute. <code>EventId</code> (line 63) scopes the activity to
           exactly one event. Note what is absent: the entity&#39;s <code>[Navigation] Event?</code> reference<span class="cite"><span>
@@ -2176,9 +2176,9 @@
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Activities/ActivitiesController.cs:41</code>)</span></span>,
           whose anonymous reads are narrowed for non-privileged callers by one overridden read hook,
           <code>GetReadSpecificationAsync</code>, so an excluded activity is a 404 rather than a redacted record<span class="cite"><span>
-          (<code>ActivitiesController.cs:61-79,81-82</code>)</span></span>; rendered by
+          (<code>ActivitiesController.cs:61-79,89-90</code>)</span></span>; rendered by
           <a href="group-21-conference-ui.html#publicactivitylist"><code>PublicActivityList</code></a>, which orders by <code>StartTime</code> then
-          <code>SortOrder</code><span class="cite"><span> (<code>PublicActivityList.razor.cs:88-89</code>)</span></span>, and by the organizer-facing
+          <code>SortOrder</code><span class="cite"><span> (<code>PublicActivityList.razor.cs:103-104</code>)</span></span>, and by the organizer-facing
           <a href="group-21-conference-ui.html#activitylist"><code>ActivityList</code></a>; written through
           <a href="group-18-conference-application.html#activitycreaterequest"><code>ActivityCreateRequest</code></a> and
           <a href="group-18-conference-application.html#activityupdaterequest"><code>ActivityUpdateRequest</code></a>.</li>
@@ -2462,30 +2462,30 @@
           <li><strong>What it is</strong>: the feature-flag name catalog for the Conference module. It holds two constants:
           <code>SessionizeIntegration = &quot;Conference.SessionizeIntegration&quot;</code><span class="cite"><span> (<code>ConferenceFeatures.cs:23</code>)</span></span>, which gates
           the Sessionize external-data sync capability, and <code>SessionScoring = &quot;Conference.SessionScoring&quot;</code><span class="cite"><span>
-          (<code>ConferenceFeatures.cs:96</code>)</span></span>, which gates the AI session-scoring pass.</li>
+          (<code>ConferenceFeatures.cs:38</code>)</span></span>, which gates the AI session-scoring pass.</li>
           <li><strong>Depends on</strong>: nothing first-party, beyond the <code>[FeatureFlag]</code> attribute<span class="cite"><span>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/FeatureFlags/FeatureFlagAttribute.cs:32</code>)</span></span> and
           <a href="group-08-auth.html#featureflaglifetime"><code>FeatureFlagLifetime</code></a> it is decorated with.</li>
           <li><strong>Concept introduced, feature flags as named constants.</strong> Rubric section 6, CQRS and Event-Driven Design (assesses whether cross-cutting behavior such as flags and configuration is centralized rather than scattered). Each constant&#39;s value matches a key under the <code>&quot;FeatureManagement&quot;</code> configuration section, and per the class doc comment<span class="cite"><span> (<code>ConferenceFeatures.cs:5-9</code>)</span></span> it is consumed with <code>[FeatureGate]</code> attributes and the <a href="group-05-cqrs-pipeline.html#ifeaturegated"><code>IFeatureGated</code></a> marker interface. Centralizing the <em>string</em> here means the flag name is written once: a typo cannot silently split one flag into two, one of which is never configured and therefore always off. The <code>&quot;{Module}.{Feature}&quot;</code> naming convention keeps flags from different modules unambiguous inside one configuration file. The mechanism itself is <a href="https://ivanball.github.io/docs/adr/031-feature-flag-management.html" target="_blank" rel="noopener">ADR-031</a>.</li>
           <li><strong>Walkthrough</strong>: two <code>public const string</code> members, each decorated
           <code>[FeatureFlag(FeatureFlagLifetime.Permanent, Owner = &quot;ADC Conference&quot;)]</code><span class="cite"><span>
-          (<code>ConferenceFeatures.cs:22,95</code>)</span></span>. <code>SessionizeIntegration</code>&#39;s doc comment<span class="cite"><span> (<code>ConferenceFeatures.cs:12-15</code>)</span></span>
+          (<code>ConferenceFeatures.cs:22,37</code>)</span></span>. <code>SessionizeIntegration</code>&#39;s doc comment<span class="cite"><span> (<code>ConferenceFeatures.cs:12-15</code>)</span></span>
           records the runtime contract: when the flag is disabled, <code>RefreshFromSessionizeCommand</code>
           short-circuits with a failure result and organizers manage event data manually instead of syncing. Its
           second <code>&lt;para&gt;</code><span class="cite"><span> (<code>ConferenceFeatures.cs:16-20</code>)</span></span> records why the lifetime is <code>Permanent</code> rather than
           <code>Temporary</code>: it is a shipped kill switch over a live external dependency, kept so an organizer can shed
           the Sessionize call during a provider incident, so it is not a rollout toggle and carries no removal
-          date (ADR-031). <code>SessionScoring</code>&#39;s doc comment<span class="cite"><span> (<code>ConferenceFeatures.cs:84-87</code>)</span></span> records the parallel
+          date (ADR-031). <code>SessionScoring</code>&#39;s doc comment<span class="cite"><span> (<code>ConferenceFeatures.cs:25-29</code>)</span></span> records the parallel
           contract: when disabled, the organizer trigger endpoint answers 404 and
           <code>ScoreEventSessionsInternalCommand</code> short-circuits with a failure result, so organizers select sessions
           from the counts and overlap views alone, and scores already stored stay readable, only the pass that
-          produces new ones is switched off. Its <code>&lt;para&gt;</code><span class="cite"><span> (<code>ConferenceFeatures.cs:88-93</code>)</span></span> gives the reason it is
+          produces new ones is switched off. Its <code>&lt;para&gt;</code><span class="cite"><span> (<code>ConferenceFeatures.cs:30-35</code>)</span></span> gives the reason it is
           <code>Permanent</code>: a scoring pass is one paid Anthropic call per session, and the organizer needs a way to
           stop it during a provider incident, a pricing surprise, or a runaway loop.
           <a href="group-08-auth.html#featureflagregistry"><code>FeatureFlagRegistry</code></a> is what enforces that a <code>Permanent</code> flag
           never carries a <code>RemoveBy</code> date and a <code>Temporary</code> one always does.</li>
           <li><strong>Why it&#39;s built this way</strong>: putting the Sessionize sync and the AI scoring pass each behind a flag lets organizers turn the capability off (for example during a Sessionize API maintenance window, or a scoring provider incident or cost spike) through configuration, with no redeploy; declaring both <code>Permanent</code> with an owner records, in the attribute itself, that these are durable operational switches rather than debt to clean up later.</li>
-          <li><strong>Where it&#39;s used</strong>: <a href="group-18-conference-application.html#refreshfromsessionizecommand"><code>RefreshFromSessionizeCommand</code></a> implements <code>IFeatureGated</code><span class="cite"><span> (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/UseCases/RefreshFromSessionize/RefreshFromSessionizeCommand.cs:13</code>)</span></span> and returns <code>SessionizeIntegration</code> from its <code>FeatureName</code> property<span class="cite"><span> (<code>RefreshFromSessionizeCommand.cs:19</code>)</span></span>; <code>ScoreEventSessionsInternalCommand</code> and <code>SessionSelectionController</code> read <code>SessionScoring</code> (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsInternalCommand.cs</code>, <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs</code>), so the pipeline decorator (G05), not the handler body, does the gating.</li>
+          <li><strong>Where it&#39;s used</strong>: <a href="group-18-conference-application.html#refreshfromsessionizecommand"><code>RefreshFromSessionizeCommand</code></a> implements <code>IFeatureGated</code><span class="cite"><span> (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/UseCases/RefreshFromSessionize/RefreshFromSessionizeCommand.cs:13</code>)</span></span> and returns <code>SessionizeIntegration</code> from its <code>FeatureName</code> property<span class="cite"><span> (<code>RefreshFromSessionizeCommand.cs:21</code>)</span></span>; <code>ScoreEventSessionsInternalCommand</code> and <code>SessionSelectionController</code> read <code>SessionScoring</code> (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsInternalCommand.cs</code>, <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs</code>), so the pipeline decorator (G05), not the handler body, does the gating.</li>
           </ul>
           <hr>
           <h3 id="categoryitemchanged">CategoryItemChanged</h3>
@@ -2531,14 +2531,14 @@
           through the dispatch pipeline unchanged.</li>
           <li><strong>Where it&#39;s used</strong>: raised by <a href="#category"><code>Category</code></a> at all three child mutation points,
           <code>AddCategoryItem</code>, <code>UpdateCategoryItem</code>, and <code>RemoveCategoryItem</code><span class="cite"><span>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Categories/Category.cs:144,176,194</code>)</span></span>;
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Categories/Category.cs:146,178,196</code>)</span></span>;
           collected on the aggregate and dispatched in-process by
           <a href="group-04-events-outbox.html#domaineventdispatcher"><code>DomainEventDispatcher</code></a> after <code>SaveChangesAsync</code>.</li>
           <li><strong>Caveats / not-in-source</strong>: no handler subscribes to it in the ADC source today; it is available for
           future observers and audit. Note also the one asymmetry: deleting the parent category cascade
           soft-deletes its items (BR-71) through a single <code>DeleteChildren</code> call but raises one
           <a href="#categorychanged"><code>CategoryChanged</code></a><code>(Deleted)</code> rather than one <code>CategoryItemChanged</code> per item<span class="cite"><span>
-          (<code>Category.cs:102-114</code>)</span></span>, so a subscriber must treat parent deletion as implying its children.</li>
+          (<code>Category.cs:104-116</code>)</span></span>, so a subscriber must treat parent deletion as implying its children.</li>
           </ul>
           <hr>
           <h3 id="conferencecategorydto">ConferenceCategoryDTO</h3>
@@ -2698,8 +2698,8 @@
           <li><strong>Why it&#39;s built this way</strong>: one lifecycle event per aggregate keeps the event surface small, and
           <code>State</code> lets a handler branch on the transition rather than subscribing to three separate types.</li>
           <li><strong>Where it&#39;s used</strong>: raised from <a href="#category"><code>Category</code></a>&#39;s <code>Create</code> (<code>Added</code>), <code>Update</code> (<code>Updated</code>),
-          and <code>Delete</code> (<code>Deleted</code>) at <span class="cite"><span><code>Category.cs:72,95,111</code></span></span>, where the delete only raises once the combined
-          cascade result succeeds<span class="cite"><span> (<code>Category.cs:106-111</code>)</span></span>; dispatched in-process by
+          and <code>Delete</code> (<code>Deleted</code>) at <span class="cite"><span><code>Category.cs:73,97,113</code></span></span>, where the delete only raises once the combined
+          cascade result succeeds<span class="cite"><span> (<code>Category.cs:108-113</code>)</span></span>; dispatched in-process by
           <a href="group-04-events-outbox.html#domaineventdispatcher"><code>DomainEventDispatcher</code></a> after <code>SaveChangesAsync</code>.</li>
           <li><strong>Caveats / not-in-source</strong>: like <a href="#categoryitemchanged"><code>CategoryItemChanged</code></a>, no handler subscribes
           to it in the ADC source today. It is an in-process domain event, not an integration event, so it never
@@ -2920,7 +2920,7 @@
           <li><strong>Walkthrough</strong>: <code>sealed record class</code> with <code>State</code>, <code>SpeakerId</code>, <code>SpeakerCategoryItemId</code>, <code>CategoryItemId</code><span class="cite"><span>
           (<code>SpeakerCategoryItemChanged.cs:13-17</code>)</span></span>.</li>
           <li><strong>Where it&#39;s used</strong>: raised by <a href="#speaker"><code>Speaker</code></a>&#39;s <code>AddSpeakerCategoryItem</code> (declared at
-          <span class="cite"><span><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:314</code></span></span>, raises at <span class="cite"><span><code>:335</code></span></span>),
+          <span class="cite"><span><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:316</code></span></span>, raises at <span class="cite"><span><code>:335</code></span></span>),
           <code>RestoreSpeakerCategoryItem</code> (<span class="cite"><span><code>:352</code></span></span>, raises <code>Added</code> at <span class="cite"><span><code>:364</code></span></span>), and <code>RemoveSpeakerCategoryItem</code> (<span class="cite"><span><code>:374</code></span></span>,
           raises at <span class="cite"><span><code>:382</code></span></span>); captured by the outbox.</li>
           <li><strong>Caveats / not-in-source</strong>: no handler subscribes today.</li>
@@ -2943,7 +2943,7 @@
           <li><strong>Walkthrough</strong>: <code>sealed record class</code> with <code>State</code>, <code>SpeakerId</code>, <code>SpeakerQuestionAnswerId</code>, <code>QuestionId</code><span class="cite"><span>
           (<code>SpeakerQuestionAnswerChanged.cs:13-17</code>)</span></span>.</li>
           <li><strong>Where it&#39;s used</strong>: raised by <a href="#speaker"><code>Speaker</code></a>&#39;s <code>AddSpeakerQuestionAnswer</code> (declared at
-          <span class="cite"><span><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:401</code></span></span>, raises at <span class="cite"><span><code>:414</code></span></span>),
+          <span class="cite"><span><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:403</code></span></span>, raises at <span class="cite"><span><code>:414</code></span></span>),
           <code>UpdateSpeakerQuestionAnswer</code> (<span class="cite"><span><code>:425</code></span></span>, raises at <span class="cite"><span><code>:438</code></span></span>), and <code>RemoveSpeakerQuestionAnswer</code> (<span class="cite"><span><code>:448</code></span></span>, raises
           at <span class="cite"><span><code>:456</code></span></span>); captured by the outbox.</li>
           <li><strong>Caveats / not-in-source</strong>: no handler subscribes today.</li>
@@ -3158,10 +3158,10 @@
           <li><strong>Walkthrough</strong>: <code>sealed record class SpeakerChanged(DomainEntityState State, SpeakerIdentifierType SpeakerId, string FullName, UserIdentifierType? PreviousLinkedUserId = null)</code>
           chaining <code>(State, SpeakerId)</code> to the base<span class="cite"><span> (<code>SpeakerChanged.cs:16-21</code>)</span></span>. The default <code>null</code> on the fourth
           parameter is what keeps the non-delete raise sites a three-argument call: <code>Create</code> (raises at
-          <span class="cite"><span><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:168</code></span></span>), <code>Update</code><span class="cite"><span> (<code>:235</code>)</span></span>,
+          <span class="cite"><span><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:169</code></span></span>), <code>Update</code><span class="cite"><span> (<code>:235</code>)</span></span>,
           <code>LinkUser</code><span class="cite"><span> (<code>:284</code>)</span></span>, and <code>UnlinkUser</code><span class="cite"><span> (<code>:302</code>)</span></span>, while the <code>Delete</code> override (declared at <span class="cite"><span><code>:251</code></span></span>) is the only
           four-argument call: it captures <code>LinkedUserId</code> into a local <em>before</em> calling <code>base.Delete()</code>, nulls the
-          field, and passes the captured value<span class="cite"><span> (<code>Speaker.cs:253-265</code>)</span></span>. Note that <code>LinkUser</code> and <code>UnlinkUser</code> both emit
+          field, and passes the captured value<span class="cite"><span> (<code>Speaker.cs:255-267</code>)</span></span>. Note that <code>LinkUser</code> and <code>UnlinkUser</code> both emit
           <code>Updated</code>, not a bespoke link event, so a subscriber cannot tell a link change from a name edit by event
           type alone.</li>
           <li><strong>Why it&#39;s built this way</strong>: an event is an immutable record of what already happened, so snapshotting the
@@ -3269,7 +3269,7 @@
           <li><strong>Why it&#39;s built this way</strong>: it closes the loop on the eventually-consistent link, and it is the
           downstream half of a <a href="#speakerchanged"><code>SpeakerChanged</code></a> delete. That is exactly why
           <a href="#speaker"><code>Speaker.Delete</code></a> snapshots the previous link id into a local <strong>before</strong> the soft-delete runs<span class="cite"><span>
-          (<code>Speaker.cs:251-254</code>)</span></span> and carries it on the domain event<span class="cite"><span> (<code>Speaker.cs:263</code>)</span></span>: the handler that publishes
+          (<code>Speaker.cs:253-256</code>)</span></span> and carries it on the domain event<span class="cite"><span> (<code>Speaker.cs:265</code>)</span></span>: the handler that publishes
           this integration event would otherwise have nothing left to read.</li>
           <li><strong>Where it&#39;s used</strong>: added to the aggregate by
           <a href="group-18-conference-application.html#unlinkuserfromspeakerhandler"><code>UnlinkUserFromSpeakerHandler</code></a>
@@ -3317,7 +3317,7 @@
           <a href="group-22-engagement-module.html#ipointsawarder"><code>IPointsAwarder</code></a><span class="cite"><span>
           (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/Points/IntegrationEventHandlers/SessionFeedbackSubmittedPointsHandler.cs:42-49</code>)</span></span>,
           and is registered as a broker consumer in the Engagement service host<span class="cite"><span>
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:287</code>)</span></span>.</li>
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:289</code>)</span></span>.</li>
           </ul>
           <hr>
           <h3 id="eventfeedbacksubmitted">EventFeedbackSubmitted</h3>
@@ -3347,7 +3347,7 @@
           and the <a href="group-04-events-outbox.html#outboxprocessor"><code>OutboxProcessor</code></a> publishes it through
           <a href="group-04-events-outbox.html#imessagebus"><code>IMessageBus</code></a> instead, wrapped in a broker-publish resilience
           pipeline<span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:537-550</code>)</span></span>.
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:529-544</code>)</span></span>.
           The registered transport then decides delivery: in-process for the monolith, MassTransit broker for the
           extracted services.</li>
           <li><strong>It carries an explicit wire name.</strong> <code>[EventName(&quot;Conference.EventFeedbackSubmitted.v1&quot;)]</code><span class="cite"><span>
@@ -3387,7 +3387,7 @@
           <a href="group-22-engagement-module.html#pointssubjectkeys"><code>PointsSubjectKeys</code></a> and calls
           <a href="group-22-engagement-module.html#ipointsawarder"><code>IPointsAwarder</code></a><span class="cite"><span>
           (<code>EventFeedbackSubmittedPointsHandler.cs:40-47</code>)</span></span>; registered as a broker consumer in the Engagement service
-          host<span class="cite"><span> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:288</code>)</span></span>.</p>
+          host<span class="cite"><span> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:290</code>)</span></span>.</p>
           </li>
           </ul>
           <hr>
@@ -3411,8 +3411,8 @@
           </ul>
           </li>
           <li><strong>Why it&#39;s built this way</strong>: range validation belongs to the domain because it is a statement about what a score <em>is</em>, not about who asked for one. Keeping the check in a private helper shared by the two public entry points means a future range change cannot be applied to one path and forgotten on the other.</li>
-          <li><strong>Where it&#39;s used</strong>: created by the scoring pass (<a href="group-18-conference-application.html#sessionscoringrunner"><code>SessionScoringRunner</code></a>, <span class="cite"><span><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/SessionScoringRunner.cs:81</code></span></span>, over the repository resolved at <span class="cite"><span><code>:28</code></span></span>, passing <code>aiScoringService.ModelId</code> and <code>aiScoringService.PromptVersion</code> as the provenance pair at <span class="cite"><span><code>:83</code></span></span>), invoked from the internal-command handler <a href="group-18-conference-application.html#scoreeventsessionsinternalcommandhandler"><code>ScoreEventSessionsInternalCommandHandler</code></a> (ADR-114), read back by the organizer dashboard (<a href="group-18-conference-application.html#getsessionselectiondashboardhandler"><code>GetSessionSelectionDashboardHandler</code></a>, <span class="cite"><span><code>.../GetSessionSelectionDashboard/GetSessionSelectionDashboardHandler.cs:98,338,363</code></span></span>), configured by <a href="group-19-conference-infrastructure.html#sessionaiscoreconfiguration"><code>SessionAiScoreConfiguration</code></a> in Infrastructure, projected as <a href="#sessionaiscoredto"><code>SessionAiScoreDTO</code></a>, and rendered by the organizer page <a href="group-21-conference-ui.html#sessionselectionaiscores"><code>SessionSelectionAiScores</code></a>.</li>
-          <li><strong>Caveats / not-in-source</strong>: <code>Update</code> is not on the re-scoring path today. The handler replaces a session&#39;s score with a delete-then-add pair inside the same step that writes the new one<span class="cite"><span> (<code>SessionScoringRunner.cs:107-109</code>)</span></span>, a choice its comment justifies by partial-failure behavior: N sequential paid model calls follow, so a run that dies partway through has replaced only what it actually re-scored, and the unique filtered index on <code>SessionId</code> keeps at most one live row either way<span class="cite"><span> (<code>SessionScoringRunner.cs:96-105</code>)</span></span>. <code>Update</code> therefore remains a valid domain operation with no current caller in <code>Source</code>.</li>
+          <li><strong>Where it&#39;s used</strong>: created by the scoring pass (<a href="group-18-conference-application.html#sessionscoringrunner"><code>SessionScoringRunner</code></a>, <span class="cite"><span><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/SessionScoringRunner.cs:87</code></span></span>, over the repository resolved at <span class="cite"><span><code>:28</code></span></span>, passing <code>aiScoringService.ModelId</code> and <code>aiScoringService.PromptVersion</code> as the provenance pair at <span class="cite"><span><code>:83</code></span></span>), invoked from the internal-command handler <a href="group-18-conference-application.html#scoreeventsessionsinternalcommandhandler"><code>ScoreEventSessionsInternalCommandHandler</code></a> (ADR-114), read back by the organizer dashboard (<a href="group-18-conference-application.html#getsessionselectiondashboardhandler"><code>GetSessionSelectionDashboardHandler</code></a>, <span class="cite"><span><code>.../GetSessionSelectionDashboard/GetSessionSelectionDashboardHandler.cs:98,338,363</code></span></span>), configured by <a href="group-19-conference-infrastructure.html#sessionaiscoreconfiguration"><code>SessionAiScoreConfiguration</code></a> in Infrastructure, projected as <a href="#sessionaiscoredto"><code>SessionAiScoreDTO</code></a>, and rendered by the organizer page <a href="group-21-conference-ui.html#sessionselectionaiscores"><code>SessionSelectionAiScores</code></a>.</li>
+          <li><strong>Caveats / not-in-source</strong>: <code>Update</code> is not on the re-scoring path today. The handler replaces a session&#39;s score with a delete-then-add pair inside the same step that writes the new one<span class="cite"><span> (<code>SessionScoringRunner.cs:107-109</code>)</span></span>, a choice its comment justifies by partial-failure behavior: N sequential paid model calls follow, so a run that dies partway through has replaced only what it actually re-scored, and the unique filtered index on <code>SessionId</code> keeps at most one live row either way<span class="cite"><span> (<code>SessionScoringRunner.cs:102-111</code>)</span></span>. <code>Update</code> therefore remains a valid domain operation with no current caller in <code>Source</code>.</li>
           </ul>
           <hr>
           <p><code>[Rubric §16, AI-Native Application Architecture]</code> applies: this type is part of the AI session-scoring feature (a model call behind a port, versioned prompt and model, an evaluation gate, metered spend; ADR-111).</p>
@@ -3508,15 +3508,15 @@
           callers never hold a bare <code>CategoryItem</code>. Two consequences are visible directly in this file:</p>
           <ol>
           <li><strong>All child mutation routes through the parent.</strong> <code>AddCategoryItem</code>, <code>UpdateCategoryItem</code>, and
-          <code>RemoveCategoryItem</code><span class="cite"><span> (<code>Category.cs:125</code>, <code>:156</code>, <code>:186</code>)</span></span> live on <code>Category</code>, never on
+          <code>RemoveCategoryItem</code><span class="cite"><span> (<code>Category.cs:127</code>, <code>:158</code>, <code>:188</code>)</span></span> live on <code>Category</code>, never on
           <a href="#categoryitem"><code>CategoryItem</code></a>, and each raises a <a href="#categoryitemchanged"><code>CategoryItemChanged</code></a> from
-          the root (for example <span class="cite"><span><code>Category.cs:144</code></span></span>) so observers learn the aggregate changed.</li>
+          the root (for example <span class="cite"><span><code>Category.cs:146</code></span></span>) so observers learn the aggregate changed.</li>
           <li><strong>The private list enforces encapsulation.</strong> <code>_categoryItems</code> is a <code>private readonly List&lt;CategoryItem&gt;</code><span class="cite"><span> (<code>Category.cs:27</code>)</span></span>; the public surface is the read-only projection
           <code>CategoryItems =&gt; _categoryItems.AsReadOnly()</code><span class="cite"><span> (<code>Category.cs:31</code>)</span></span>. EF still materializes the backing
           field, which is why the private parameterless constructor exists<span class="cite"><span> (<code>Category.cs:34</code>)</span></span>.</li>
           </ol>
           <p><code>[Rubric §8, Data Architecture]</code> also applies: cascade soft-delete is orchestrated by the aggregate, not
-          by a handler. <code>Delete()</code><span class="cite"><span> (<code>Category.cs:102-114</code>)</span></span> cascade-soft-deletes every still-active child per BR-71
+          by a handler. <code>Delete()</code><span class="cite"><span> (<code>Category.cs:104-116</code>)</span></span> cascade-soft-deletes every still-active child per BR-71
           before raising <code>CategoryChanged(Deleted)</code>.</p>
           </li>
           <li><p><strong>Walkthrough</strong></p>
@@ -3529,36 +3529,38 @@
           <li><strong>Constructors</strong><span class="cite"><span> (<code>Category.cs:34-44</code>)</span></span>: the private EF constructor sets <code>Title = string.Empty</code> to
           satisfy the non-nullable field before EF assigns columns; the private field constructor is what the
           factory calls.</li>
-          <li><strong><code>Create</code></strong><span class="cite"><span> (<code>Category.cs:54-75</code>)</span></span>: validate through <code>CategoryInvariants.EnsureTitleIsValid</code>, then
+          <li><strong><code>Create</code></strong><span class="cite"><span> (<code>Category.cs:54-76</code>)</span></span>: validate through one <code>Result.Combine</code> of
+          <code>CategoryInvariants.EnsureTitleIsValid</code> and <code>CategoryInvariants.EnsureTypeIsValid</code><span class="cite"><span>
+          (<code>Category.cs:60-62</code>)</span></span>, so a missing title and an over-long <code>Type</code> are reported together, then
           resolve whether the id is database-generated via <code>typeof(Category).IsIdValueGenerated</code><span class="cite"><span>
-          (<code>Category.cs:65</code>)</span></span>, then construct. The id expression is worth reading closely:
+          (<code>Category.cs:66</code>)</span></span>, then construct. The id expression is worth reading closely:
           <code>Id = id ?? (isIdValueGenerated ? default : throw new ArgumentNullException(nameof(id)))</code><span class="cite"><span>
-          (<code>Category.cs:69</code>)</span></span>, so a supplied id always wins, an omitted id is legal only because this type is
+          (<code>Category.cs:70</code>)</span></span>, so a supplied id always wins, an omitted id is legal only because this type is
           id-value-generated, and any other combination fails loudly rather than silently writing a zero.
-          Finally <code>AddDomainEvent(new CategoryChanged(DomainEntityState.Added, ...))</code><span class="cite"><span> (<code>Category.cs:72</code>)</span></span>. This is
+          Finally <code>AddDomainEvent(new CategoryChanged(DomainEntityState.Added, ...))</code><span class="cite"><span> (<code>Category.cs:73</code>)</span></span>. This is
           the canonical validate, then construct, then emit shape used by every aggregate in this chapter.</li>
-          <li><strong><code>Update</code></strong><span class="cite"><span> (<code>Category.cs:84-98</code>)</span></span>: re-validates the title, writes the three scalars, raises
-          <code>CategoryChanged(Updated)</code>.</li>
-          <li><strong><code>Delete</code></strong><span class="cite"><span> (<code>Category.cs:102-114</code>)</span></span>: one <code>Result.Combine</code> of
+          <li><strong><code>Update</code></strong><span class="cite"><span> (<code>Category.cs:85-100</code>)</span></span>: re-validates the title and the optional type with the same
+          <code>Result.Combine</code><span class="cite"><span> (<code>Category.cs:87-89</code>)</span></span>, writes the three scalars, raises <code>CategoryChanged(Updated)</code>.</li>
+          <li><strong><code>Delete</code></strong><span class="cite"><span> (<code>Category.cs:104-116</code>)</span></span>: one <code>Result.Combine</code> of
           <code>DeleteChildren&lt;CategoryItem, CategoryItemIdentifierType&gt;(_categoryItems)</code> and <code>base.Delete()</code><span class="cite"><span>
-          (<code>:106-108</code>)</span></span>. <code>DeleteChildren</code> is the framework helper on
+          (<code>:108-110</code>)</span></span>. <code>DeleteChildren</code> is the framework helper on
           <a href="group-02-domain-building-blocks.html#auditableaggregaterootentitytidentifiertype"><code>AuditableAggregateRootEntity&lt;TIdentifierType&gt;</code></a>
           that replaced the loop each aggregate used to hand-roll; it skips already-deleted children so
-          re-deleting a parent is idempotent. The comment at <span class="cite"><span><code>:104-105</code></span></span> records the ordering rationale: children
+          re-deleting a parent is idempotent. The comment at <span class="cite"><span><code>:106-107</code></span></span> records the ordering rationale: children
           first, root last, so a failing child aggregates into the combined result instead of leaving a
           half-applied delete.</li>
-          <li><strong><code>AddCategoryItem</code></strong><span class="cite"><span> (<code>Category.cs:125-147</code>)</span></span>: uniqueness check first (BR-138) via
+          <li><strong><code>AddCategoryItem</code></strong><span class="cite"><span> (<code>Category.cs:127-149</code>)</span></span>: uniqueness check first (BR-138) via
           <code>CategoryInvariants.EnsureCategoryItemNameIsUnique</code>, then delegate construction to
           <code>CategoryItem.Create</code>, then add to the private list, then emit. Callers never <code>new CategoryItem(...)</code>.</li>
-          <li><strong><code>UpdateCategoryItem</code></strong><span class="cite"><span> (<code>Category.cs:156-179</code>)</span></span>: resolves the child through the private
-          <code>GetCategoryItemOrNotFound</code> helper (<span class="cite"><span><code>Category.cs:205</code></span></span>, which wraps the base
+          <li><strong><code>UpdateCategoryItem</code></strong><span class="cite"><span> (<code>Category.cs:158-181</code>)</span></span>: resolves the child through the private
+          <code>GetCategoryItemOrNotFound</code> helper (<span class="cite"><span><code>Category.cs:207</code></span></span>, which wraps the base
           <code>GetChildOrNotFound&lt;T, TId&gt;</code> so a missing child becomes an
           <a href="group-01-result-error-handling.html#error"><code>Error</code></a> rather than a null), re-checks uniqueness while
-          excluding the item being renamed<span class="cite"><span> (<code>:167-168</code>)</span></span>, then delegates to the child&#39;s own <code>Update</code>.</li>
-          <li><strong><code>RemoveCategoryItem</code></strong><span class="cite"><span> (<code>Category.cs:186-197</code>)</span></span>: a single call to the base
-          <code>RemoveChildOrNotFound&lt;CategoryItem, CategoryItemIdentifierType&gt;</code><span class="cite"><span> (<code>:188</code>)</span></span>, which resolves and
+          excluding the item being renamed<span class="cite"><span> (<code>:169-170</code>)</span></span>, then delegates to the child&#39;s own <code>Update</code>.</li>
+          <li><strong><code>RemoveCategoryItem</code></strong><span class="cite"><span> (<code>Category.cs:188-199</code>)</span></span>: a single call to the base
+          <code>RemoveChildOrNotFound&lt;CategoryItem, CategoryItemIdentifierType&gt;</code><span class="cite"><span> (<code>:190</code>)</span></span>, which resolves and
           soft-deletes in one step, then emits <code>CategoryItemChanged(Deleted)</code>.</li>
-          <li><strong><code>SetCategoryItems</code></strong><span class="cite"><span> (<code>Category.cs:201</code>)</span></span>: an <code>internal</code> hook used only by the navigation populator
+          <li><strong><code>SetCategoryItems</code></strong><span class="cite"><span> (<code>Category.cs:203</code>)</span></span>: an <code>internal</code> hook used only by the navigation populator
           after a cross-source load. It calls the base <code>SetItems(_categoryItems, ...)</code> and raises <strong>no</strong> domain
           events, because it is hydration, not a domain mutation.</li>
           </ul>
@@ -3586,8 +3588,8 @@
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the invariant rules for <a href="#category"><code>Category</code></a> and its
-          <a href="#categoryitem"><code>CategoryItem</code></a> children: title validation, item-name validation, and case-insensitive
-          uniqueness checking (BR-138).</li>
+          <a href="#categoryitem"><code>CategoryItem</code></a> children: title validation, the optional type&#39;s length cap,
+          item-name validation, and case-insensitive uniqueness checking (BR-138).</li>
           <li><strong>Depends on</strong>: <a href="group-02-domain-building-blocks.html#commoninvariants"><code>CommonInvariants</code></a> (the reusable
           lower layer it delegates to, <span class="cite"><span><code>CategoryInvariants.cs:3</code></span></span>),
           <a href="group-01-result-error-handling.html#result"><code>Result</code></a> and
@@ -3605,17 +3607,21 @@
           constants at <span class="cite"><span><code>ConferenceCategoryDTO.cs:17</code></span></span>, <span class="cite"><span><code>:20</code></span></span>, and <span class="cite"><span><code>CategoryItemDTO.cs:16</code></span></span>. Note these are
           <code>public static readonly int</code> here rather than the <code>public const int</code> used by the other invariant
           classes in this chapter.</li>
-          <li><code>EnsureTitleIsValid</code><span class="cite"><span> (<code>:26-29</code>)</span></span> and <code>EnsureCategoryItemNameIsValid</code><span class="cite"><span> (<code>:31-34</code>)</span></span>: each a <code>Result.Combine</code>
+          <li><code>EnsureTitleIsValid</code><span class="cite"><span> (<code>:26-29</code>)</span></span> and <code>EnsureCategoryItemNameIsValid</code><span class="cite"><span> (<code>:38-41</code>)</span></span>: each a <code>Result.Combine</code>
           of <code>CommonInvariants.EnsureStringIsNotEmpty</code> plus <code>CommonInvariants.EnsureStringMaxLength</code>, with the
           message built through <code>string.Create(CultureInfo.InvariantCulture, ...)</code> so the text does not vary by
           ambient culture. That call is needed here and not in the sibling classes precisely because the length
           is a <code>static readonly int</code> rather than a compile-time constant, so the interpolation is evaluated at
           run time.</li>
-          <li><code>EnsureCategoryItemNameIsUnique</code><span class="cite"><span> (<code>:44-65</code>)</span></span>: takes the existing item collection plus an optional
+          <li><code>EnsureTypeIsValid</code> (<span class="cite"><span><code>:35-36</code></span></span>, documented as the M139 column cap at <span class="cite"><span><code>:31</code></span></span>): a single call to
+          <code>CommonInvariants.EnsureOptionalStringMaxLength</code> with code <code>Category.Type.TooLong</code>. Because <code>Type</code> is
+          optional, the helper treats a null or empty value as success and only fails when the value exceeds
+          <code>TypeMaxLength</code><span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Invariants/CommonInvariants.cs:242-245</code>)</span></span>.</li>
+          <li><code>EnsureCategoryItemNameIsUnique</code><span class="cite"><span> (<code>:51-72</code>)</span></span>: takes the existing item collection plus an optional
           <code>excludeItemId</code> (so renaming an item to its own name during an update does not self-conflict). It
-          skips <code>IsDeleted</code> items and compares with <code>StringComparison.OrdinalIgnoreCase</code><span class="cite"><span> (<code>:53-56</code>)</span></span>, returning
-          <code>Error.Conflict(&quot;CategoryItem.Name.Duplicate&quot;)</code> on a duplicate<span class="cite"><span> (<code>:58-64</code>)</span></span>. The inline comment at
-          <span class="cite"><span><code>:50-52</code></span></span> records why the exclusion is modeled as a nullable rather than defaulted: defaulting to
+          skips <code>IsDeleted</code> items and compares with <code>StringComparison.OrdinalIgnoreCase</code><span class="cite"><span> (<code>:60-63</code>)</span></span>, returning
+          <code>Error.Conflict(&quot;CategoryItem.Name.Duplicate&quot;)</code> on a duplicate<span class="cite"><span> (<code>:65-71</code>)</span></span>. The inline comment at
+          <span class="cite"><span><code>:57-59</code></span></span> records why the exclusion is modeled as a nullable rather than defaulted: defaulting to
           <code>default(id)</code> would silently exclude every unsaved sibling, since a database-generated <code>CategoryItem</code>
           id is 0 until the save.</li>
           </ul>
@@ -3625,15 +3631,18 @@
           as a parameter so it stays a <strong>pure</strong> function with no repository and no EF dependency, which is what
           lets the aggregate call it in memory.</li>
           <li><strong>Where it&#39;s used</strong>: called from <a href="#category"><code>Category</code></a>&#39;s <code>Create</code>, <code>Update</code>, <code>AddCategoryItem</code>, and
-          <code>UpdateCategoryItem</code>, and from <a href="#categoryitem"><code>CategoryItem</code></a>&#39;s <code>Create</code> and <code>Update</code>; the length
-          constants are read by the Categories EF configurations
+          <code>UpdateCategoryItem</code> (<code>Create</code> and <code>Update</code> combine <code>EnsureTitleIsValid</code> with <code>EnsureTypeIsValid</code> at
+          <span class="cite"><span><code>Category.cs:60-62</code></span></span> and <span class="cite"><span><code>:87-89</code></span></span>), and from <a href="#categoryitem"><code>CategoryItem</code></a>&#39;s <code>Create</code> and <code>Update</code>; the
+          length constants are read by the Categories EF configurations
           (<a href="group-19-conference-infrastructure.html#conferencecategoryconfiguration"><code>ConferenceCategoryConfiguration</code></a>
           at <span class="cite"><span><code>:27</code></span></span> and <span class="cite"><span><code>:34</code></span></span>,
-          <a href="group-19-conference-infrastructure.html#categoryitemconfiguration"><code>CategoryItemConfiguration</code></a> at <span class="cite"><span><code>:19</code></span></span>).</li>
-          <li><strong>Caveats / not-in-source</strong>: <code>TypeMaxLength</code> has <strong>no</strong> rule method. Nothing in this class validates
-          <code>Category.Type</code>, and neither <code>Category.Create</code> nor <code>Category.Update</code> checks it<span class="cite"><span> (<code>Category.cs:60-61</code>,
-          <code>:86-87</code>)</span></span>; the constant&#39;s only consumer is the EF column at <span class="cite"><span><code>ConferenceCategoryConfiguration.cs:34</code></span></span>, so
-          an over-long <code>Type</code> is caught at the database, not by the domain.</li>
+          <a href="group-19-conference-infrastructure.html#categoryitemconfiguration"><code>CategoryItemConfiguration</code></a> at <span class="cite"><span><code>:19</code></span></span>),
+          and <code>TitleMaxLength</code> plus <code>CategoryItemNameMaxLength</code> by the FluentValidation rules in
+          <span class="cite"><span><code>ConferenceCategoryValidationRules.cs:20</code></span></span> and <span class="cite"><span><code>:34</code></span></span>.</li>
+          <li><strong>Caveats / not-in-source</strong>: the domain now caps <code>Category.Type</code> through <code>EnsureTypeIsValid</code>, matching
+          the EF column at <span class="cite"><span><code>ConferenceCategoryConfiguration.cs:34</code></span></span>, but <code>ConferenceCategoryValidationRules</code> has no
+          <code>Type</code> rule (only <span class="cite"><span><code>:20</code></span></span> and <span class="cite"><span><code>:34</code></span></span> read the constants), so an over-long <code>Type</code> passes request validation
+          and is rejected by the aggregate as a domain <code>Result</code> failure.</li>
           </ul>
           <h3 id="categoryitem">CategoryItem</h3>
           <blockquote>
@@ -3802,7 +3811,7 @@
           </ul>
           <p>The private constructors<span class="cite"><span> (<code>Session.cs:119</code> and <code>:121</code>)</span></span> plus the <code>static Result&lt;Session&gt; Create</code> factory<span class="cite"><span> (<code>Session.cs:187</code>)</span></span> are what make that boundary real: there is no way to obtain a <code>Session</code> that skipped validation or the creation event.</p>
           <p><strong>A second concept lands here too: the change trail.</strong> The class is marked <a href="group-02-domain-building-blocks.html#iauditedentity"><code>IAuditedEntity</code></a><span class="cite"><span> (<code>Session.cs:22</code>)</span></span>, and the class doc comment<span class="cite"><span> (<code>Session.cs:16-20</code>)</span></span> gives the reason in business terms: sessions are written by organizers <em>and</em> overwritten by the Sessionize sync, so &quot;what changed this title, room, or time slot, and was it a person or the importer&quot; is a question that actually gets asked, and only a change history answers it. <code>[Rubric §13, Observability &amp; Operability]</code>: audit stamps say who touched the row last, the trail says what the sequence was.</p>
-          <p><strong>A third: the framework owns the child-collection mechanics.</strong> <code>[Rubric §1, SOLID]</code> and <code>[Rubric §15, Best Practices &amp; Code Quality]</code>. Delete, restore, and remove-by-id are not hand-rolled loops here; they call four <code>protected static</code> helpers on the base class, <code>DeleteChildren</code>, <code>RestoreChild</code>, <code>RemoveChildOrNotFound</code>, and <code>GetChildOrNotFound</code><span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/AuditableAggregateRootEntity.cs:273</code>, <code>:212</code>, <code>:156</code>, <code>:103</code>)</span></span>. The split is deliberate and documented at the helper: the helper owns the mechanics, and the aggregate method owns the meaning, so the caller still decides which domain event to raise and what it carries<span class="cite"><span> (<code>AuditableAggregateRootEntity.cs:129-145</code>)</span></span>.</p>
+          <p><strong>A third: the framework owns the child-collection mechanics.</strong> <code>[Rubric §1, SOLID]</code> and <code>[Rubric §15, Best Practices &amp; Code Quality]</code>. Delete, restore, and remove-by-id are not hand-rolled loops here; they call four <code>protected static</code> helpers on the base class, <code>DeleteChildren</code>, <code>RestoreChild</code>, <code>RemoveChildOrNotFound</code>, and <code>GetChildOrNotFound</code><span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/AuditableAggregateRootEntity.cs:275</code>, <code>:212</code>, <code>:156</code>, <code>:103</code>)</span></span>. The split is deliberate and documented at the helper: the helper owns the mechanics, and the aggregate method owns the meaning, so the caller still decides which domain event to raise and what it carries<span class="cite"><span> (<code>AuditableAggregateRootEntity.cs:131-147</code>)</span></span>.</p>
           </li>
           <li><p><strong>Walkthrough</strong></p>
           <ul>
@@ -3812,9 +3821,9 @@
           <li><strong>Child collections</strong><span class="cite"><span> (<code>Session.cs:90-116</code>)</span></span>: three <code>private readonly List&lt;T&gt;</code> fields exposed as <code>IReadOnlyCollection&lt;T&gt;</code> through <code>.AsReadOnly()</code>. <code>SessionSpeakers</code><span class="cite"><span> (<code>:88</code>)</span></span> and <code>SessionCategoryItems</code><span class="cite"><span> (<code>:110</code>)</span></span> carry <code>[Navigation(IsCollection = true)]</code>. <code>SessionQuestionAnswers</code><span class="cite"><span> (<code>:104</code>)</span></span> deliberately does <strong>not</strong>, and its remarks<span class="cite"><span> (<code>:95-103</code>)</span></span> are worth reading in full: the collection grows with attendance rather than with the schedule, it was riding along on the hottest public reads (the session grid, session detail, the speaker dashboard) which never render it, and it is the one child collection here that is not public data, since its dedicated controller is authenticated and scopes rows per caller while <code>GET /sessions?includeChildren=true</code> is anonymous. Handlers that genuinely need the answers pass an explicit <code>includes:</code> list. <code>[Rubric §12, Performance &amp; Scalability]</code> and <code>[Rubric §11, Security]</code> in one attribute that is absent.</li>
           <li><strong><code>Create</code></strong><span class="cite"><span> (<code>Session.cs:187-237</code>)</span></span>: combines <code>EnsureTitleIsValid</code>, <code>EnsureEndsAtIsAfterStartsAt</code>, and <code>EnsureOptionalTextLengthsAreValid</code><span class="cite"><span> (<code>:205-208</code>)</span></span> so all validation failures surface together, then reads <code>typeof(Session).IsIdValueGenerated</code><span class="cite"><span> (<code>:212</code>)</span></span>. <code>Session</code> carries no <code>[IdValueGenerated]</code> attribute, so that is false and the factory assigns <code>id!.Value</code><span class="cite"><span> (<code>:229</code>)</span></span>; the identical line in a database-generated entity leaves <code>default</code>. It ends by raising <code>SessionChanged(Added)</code><span class="cite"><span> (<code>:234</code>)</span></span>.</li>
           <li><strong><code>Update</code></strong><span class="cite"><span> (<code>Session.cs:257-299</code>)</span></span>: the same three-invariant combine<span class="cite"><span> (<code>:273-276</code>)</span></span>, then assigns every mutable field including the two workflow booleans and <code>RoomId</code> (<span class="cite"><span><code>:280-294</code></span></span>, now also recomputing <code>Duration</code> at <span class="cite"><span><code>:284</code></span></span>), and raises <code>SessionChanged(Updated)</code><span class="cite"><span> (<code>:296</code>)</span></span>.</li>
-          <li><strong><code>Delete</code></strong><span class="cite"><span> (<code>Session.cs:306-320</code>)</span></span>: one <code>Result.Combine</code> over three <code>DeleteChildren&lt;TChild, TChildId&gt;</code> calls and <code>base.Delete()</code><span class="cite"><span> (<code>:310-314</code>)</span></span>, then <code>SessionChanged(Deleted)</code> only when the whole combine succeeded<span class="cite"><span> (<code>:316-317</code>)</span></span>. The comment above it<span class="cite"><span> (<code>:308-309</code>)</span></span> records why combine rather than short-circuit: aggregating every child failure with the root&#39;s own means a failing child cannot leave earlier children and the root already flagged. The helper itself skips children that are already deleted<span class="cite"><span> (<code>AuditableAggregateRootEntity.cs:283-286</code>)</span></span>, which makes re-deleting a parent idempotent with respect to its children.</li>
+          <li><strong><code>Delete</code></strong><span class="cite"><span> (<code>Session.cs:306-320</code>)</span></span>: one <code>Result.Combine</code> over three <code>DeleteChildren&lt;TChild, TChildId&gt;</code> calls and <code>base.Delete()</code><span class="cite"><span> (<code>:310-314</code>)</span></span>, then <code>SessionChanged(Deleted)</code> only when the whole combine succeeded<span class="cite"><span> (<code>:316-317</code>)</span></span>. The comment above it<span class="cite"><span> (<code>:308-309</code>)</span></span> records why combine rather than short-circuit: aggregating every child failure with the root&#39;s own means a failing child cannot leave earlier children and the root already flagged. The helper itself skips children that are already deleted<span class="cite"><span> (<code>AuditableAggregateRootEntity.cs:285-288</code>)</span></span>, which makes re-deleting a parent idempotent with respect to its children.</li>
           <li><strong>Child mutation methods</strong>: speakers at <span class="cite"><span><code>Session.cs:338</code></span></span> (<code>AddSessionSpeaker</code>), <span class="cite"><span><code>:352</code></span></span> (<code>RestoreSessionSpeaker</code>), <span class="cite"><span><code>:371</code></span></span> (<code>RemoveSessionSpeaker</code>); category items at <span class="cite"><span><code>:397</code></span></span>, <span class="cite"><span><code>:435</code></span></span>, <span class="cite"><span><code>:457</code></span></span>; question answers at <span class="cite"><span><code>:484</code></span></span> (<code>AddSessionQuestionAnswer</code>), <span class="cite"><span><code>:508</code></span></span> (<code>UpdateSessionQuestionAnswer</code>), <span class="cite"><span><code>:531</code></span></span> (<code>RemoveSessionQuestionAnswer</code>). Each delegates to the child&#39;s own <code>Create</code> / <code>UpdateAnswer</code> or to a base helper, mutates the private list, and raises the child-specific <code>*Changed</code> event.</li>
-          <li><strong>The restore path</strong><span class="cite"><span> (<code>Session.cs:375-387</code> and <code>:435-450</code>)</span></span> is the interesting one. It takes the join <em>instance</em> rather than an id, because a soft-deleted row is excluded by the global query filter and so must be resolved by the caller (remarks at <span class="cite"><span><code>:345-349</code></span></span>). It hands the instance to <code>RestoreChild&lt;...&gt;</code> along with the aggregate&#39;s own error code, <code>&quot;Session.Speaker.NotDeleted&quot;</code><span class="cite"><span> (<code>:356-357</code>)</span></span> or <code>&quot;Session.CategoryItem.NotDeleted&quot;</code><span class="cite"><span> (<code>:439-443</code>)</span></span>; the helper refuses a not-deleted candidate<span class="cite"><span> (<code>AuditableAggregateRootEntity.cs:223-231</code>)</span></span>, calls the child&#39;s <code>Reactivate()</code>, and re-adds it to the list only if absent<span class="cite"><span> (<code>:243-246</code>)</span></span>. The aggregate then raises <code>SessionSpeakerChanged(Added)</code> because the association re-enters the visible set<span class="cite"><span> (<code>Session.cs:384</code>)</span></span>. BR-135: an association that reappears in the Sessionize feed is reactivated rather than duplicated by a second row.</li>
+          <li><strong>The restore path</strong><span class="cite"><span> (<code>Session.cs:375-387</code> and <code>:435-450</code>)</span></span> is the interesting one. It takes the join <em>instance</em> rather than an id, because a soft-deleted row is excluded by the global query filter and so must be resolved by the caller (remarks at <span class="cite"><span><code>:345-349</code></span></span>). It hands the instance to <code>RestoreChild&lt;...&gt;</code> along with the aggregate&#39;s own error code, <code>&quot;Session.Speaker.NotDeleted&quot;</code><span class="cite"><span> (<code>:356-357</code>)</span></span> or <code>&quot;Session.CategoryItem.NotDeleted&quot;</code><span class="cite"><span> (<code>:439-443</code>)</span></span>; the helper refuses a not-deleted candidate<span class="cite"><span> (<code>AuditableAggregateRootEntity.cs:225-233</code>)</span></span>, calls the child&#39;s <code>Reactivate()</code>, and re-adds it to the list only if absent<span class="cite"><span> (<code>:243-246</code>)</span></span>. The aggregate then raises <code>SessionSpeakerChanged(Added)</code> because the association re-enters the visible set<span class="cite"><span> (<code>Session.cs:384</code>)</span></span>. BR-135: an association that reappears in the Sessionize feed is reactivated rather than duplicated by a second row.</li>
           <li><strong>Removal</strong><span class="cite"><span> (<code>Session.cs:394-405</code>, <code>:457-468</code>, <code>:531-542</code>)</span></span>: each calls <code>RemoveChildOrNotFound&lt;TChild, TChildId&gt;</code> and, on success, raises the matching <code>*Changed(Deleted)</code> event with the removed child&#39;s id. A missing or already-deleted id yields a <code>NotFound</code> failure from the helper rather than a null reference.</li>
           <li><strong>Lookup helper</strong><span class="cite"><span> (<code>Session.cs:573-576</code>)</span></span>: a single private <code>GetSessionQuestionAnswerOrNotFound</code> routing through the base <code>GetChildOrNotFound&lt;TChild, TChildId&gt;</code>, used only by <code>UpdateSessionQuestionAnswer</code><span class="cite"><span> (<code>:512</code>)</span></span>. The other two children have no update path, so they need no lookup wrapper.</li>
           <li><strong><code>SetSession*</code> methods</strong><span class="cite"><span> (<code>Session.cs:409</code>, <code>:472</code>, <code>:546</code>)</span></span>: <code>internal</code>, used only by the navigation populator. They call the base <code>SetItems</code> helper<span class="cite"><span> (<code>AuditableAggregateRootEntity.cs:60</code>)</span></span> to replace in-memory collections during query-side population, bypassing domain logic. They are never on the command path.</li>
@@ -3899,7 +3908,7 @@
           keeps each single-rule guard to one expression instead of a hand-written null check.
           <code>[Rubric §15, Best Practices &amp; Code Quality]</code>.</li>
           <li><strong>Where it&#39;s used</strong>: <a href="#partner"><code>Partner</code></a>&#39;s private <code>Validate</code> helper, called from both <code>Create</code><span class="cite"><span>
-          (<code>Partner.cs:159</code>)</span></span> and <code>Update</code><span class="cite"><span> (<code>Partner.cs:194</code>)</span></span>; the constants additionally feed
+          (<code>Partner.cs:89</code>)</span></span> and <code>Update</code><span class="cite"><span> (<code>Partner.cs:124</code>)</span></span>; the constants additionally feed
           <code>PartnerConfiguration</code>&#39;s <code>HasMaxLength</code> calls
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/Partners/PartnerConfiguration.cs</code>,
           4 call sites) and <code>PartnerValidationRules</code>
@@ -3917,7 +3926,7 @@
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the domain rule set for the <a href="#speaker"><code>Speaker</code></a> aggregate and its
-          <a href="#speakerquestionanswer"><code>SpeakerQuestionAnswer</code></a> child. Ten field-length constants plus three
+          <a href="#speakerquestionanswer"><code>SpeakerQuestionAnswer</code></a> child. Ten field-length constants plus four
           <code>EnsureXxx</code> guards that the two entities call before they mutate anything.</li>
           <li><strong>Depends on</strong>: <a href="group-02-domain-building-blocks.html#commoninvariants"><code>CommonInvariants</code></a> (Level 5),
           <a href="group-01-result-error-handling.html#result"><code>Result</code></a> (Level 2), and
@@ -3938,7 +3947,7 @@
           <code>:25</code>, <code>:32</code>, <code>:36</code>, <code>:44</code>, <code>:48</code>, <code>:52</code>, <code>:56</code>, <code>:60</code>)</span></span>, and so does every FluentValidation rule in
           <code>SpeakerValidationRules</code><span class="cite"><span>
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/Validation/SpeakerValidationRules.cs:16</code>,
-          <code>:27</code>, <code>:46</code>, <code>:65</code>)</span></span>. <code>[Rubric §15, Best Practices &amp; Code Quality]</code>: one edit in the Shared DTO moves the Razor
+          <code>:27</code>, <code>:46</code>, <code>:65</code>, <code>:84</code>, <code>:103</code>)</span></span>. <code>[Rubric §15, Best Practices &amp; Code Quality]</code>: one edit in the Shared DTO moves the Razor
           <code>maxlength</code>, the validator message, the domain guard, and the column width together, because there is
           exactly one definition point.</li>
           <li><strong>Walkthrough</strong><ul>
@@ -3959,7 +3968,18 @@
           message to a field.</li>
           <li><code>EnsureLastNameIsValid</code><span class="cite"><span> (<code>:50-53</code>)</span></span>: identical shape against <code>LastNameMaxLength</code>, error codes
           <code>Speaker.LastName.Empty</code> and <code>Speaker.LastName.TooLong</code>.</li>
-          <li><code>EnsureAnswerValueIsValid(string answerValue, string source)</code><span class="cite"><span> (<code>:55-58</code>)</span></span>: the same shape against
+          <li><code>EnsureOptionalFieldsAreValid(tagLine, profilePicture, twitterHandle, linkedInUrl, gitHubUrl, websiteUrl, source)</code><span class="cite"><span> (<code>:68-85</code>)</span></span>: one <code>Result.Combine</code> of nine checks. Six are
+          <code>CommonInvariants.EnsureOptionalStringMaxLength</code><span class="cite"><span>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Invariants/CommonInvariants.cs:242</code>)</span></span>, which passes a
+          null or empty value and otherwise caps it at the matching constant (<span class="cite"><span><code>:77-82</code></span></span>, codes
+          <code>Speaker.TagLine.TooLong</code> through <code>Speaker.WebsiteUrl.TooLong</code>). The other three are
+          <code>CommonInvariants.EnsureUrlIsWellFormed</code><span class="cite"><span> (<code>CommonInvariants.cs:293</code>)</span></span> on the LinkedIn, GitHub and
+          website links<span class="cite"><span> (<code>:83-85</code>)</span></span>, which also passes an empty value and otherwise demands an absolute
+          http or https URL (<code>Speaker.LinkedInUrl.Invalid</code> and siblings). The doc comment<span class="cite"><span> (<code>:55-58</code>)</span></span> names
+          both reasons: the caps (M139) stop SQL truncation and the URL shape (M161) stops a link a browser
+          would run as script, and putting both in the domain covers every write path (API, Sessionize sync,
+          seeder) rather than only the HTTP one.</li>
+          <li><code>EnsureAnswerValueIsValid(string answerValue, string source)</code><span class="cite"><span> (<code>:87-90</code>)</span></span>: the same shape against
           <code>AnswerValueMaxLength</code>, but the error codes are namespaced to the child entity,
           <code>SpeakerQuestionAnswer.AnswerValue.Empty</code> and <code>SpeakerQuestionAnswer.AnswerValue.TooLong</code>, because
           that is the type a consumer sees the failure from.</li>
@@ -3972,20 +3992,24 @@
           cannot reference Domain, use the identical figure. Static methods returning
           <a href="group-01-result-error-handling.html#result"><code>Result</code></a> keep the aggregate free of exceptions on the
           validation path.</li>
-          <li><strong>Where it&#39;s used</strong>: <a href="#speaker"><code>Speaker.Create</code></a><span class="cite"><span> (<code>Speaker.cs:140-141</code>)</span></span> and <code>Speaker.Update</code><span class="cite"><span>
-          (<code>Speaker.cs:218-219</code>)</span></span>; <a href="#speakerquestionanswer"><code>SpeakerQuestionAnswer.Create</code></a><span class="cite"><span>
+          <li><strong>Where it&#39;s used</strong>: <a href="#speaker"><code>Speaker.Create</code></a><span class="cite"><span> (<code>Speaker.cs:140-142</code>)</span></span> and <code>Speaker.Update</code><span class="cite"><span>
+          (<code>Speaker.cs:219-221</code>)</span></span>; <a href="#speakerquestionanswer"><code>SpeakerQuestionAnswer.Create</code></a><span class="cite"><span>
           (<code>SpeakerQuestionAnswer.cs:52</code>)</span></span> and <code>UpdateAnswer</code><span class="cite"><span> (<code>SpeakerQuestionAnswer.cs:73</code>)</span></span>. The constants
           additionally feed <a href="group-19-conference-infrastructure.html#speakerconfiguration"><code>SpeakerConfiguration</code></a>,
           <a href="group-19-conference-infrastructure.html#speakerquestionanswerconfiguration"><code>SpeakerQuestionAnswerConfiguration</code></a><span class="cite"><span>
-          (<code>SpeakerQuestionAnswerConfiguration.cs:25</code>)</span></span>, and <code>SpeakerValidationRules</code>. Covered directly by
+          (<code>SpeakerQuestionAnswerConfiguration.cs:25</code>)</span></span>, <code>SpeakerValidationRules</code>, and
+          <a href="group-18-conference-application.html#speakersyncstrategy"><code>SpeakerSyncStrategy</code></a>, which pre-screens
+          Sessionize links against the same caps and drops an oversized or malformed one with a warning<span class="cite"><span>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/UseCases/RefreshFromSessionize/SpeakerSyncStrategy.cs:220-235</code>)</span></span>
+          so the domain guard does not reject the whole speaker. Covered directly by
           <a href="group-28-testing-infrastructure.html#per-project-test-rollup"><code>SpeakerInvariantsTests</code></a>.</li>
-          <li><strong>Caveats / not-in-source</strong>: only three of the ten constants have a matching <code>EnsureXxx</code> method.
-          Email, tag line, profile picture, the three URL fields and the Twitter handle are enforced by the
-          application validator and the EF column width, not by a domain guard, so a caller that constructs a
-          <code>Speaker</code> through the domain factory alone (a test, or the Sessionize importer) can exceed those
-          lengths and only fail at <code>SaveChangesAsync</code>. <code>Bio</code> is a further step out: it has no constant here at
-          all (the <code>SpeakerDTO.BioMaxLength</code> of 4000 at <span class="cite"><span><code>SpeakerDTO.cs:37</code></span></span> is not mirrored), and
-          <span class="cite"><span><code>SpeakerConfiguration.cs:28-29</code></span></span> maps it with no <code>HasMaxLength</code>, so the column is unbounded.</li>
+          <li><strong>Caveats / not-in-source</strong>: <code>EmailMaxLength</code> is the one profile constant with no domain guard here;
+          the email goes through the <a href="group-02-domain-building-blocks.html#email"><code>Email</code></a> value object in
+          <code>Speaker.Create</code> instead, while the 255 cap itself is enforced by the application validator<span class="cite"><span>
+          (<code>SpeakerValidationRules.cs:46</code>)</span></span> and the EF column width<span class="cite"><span> (<code>SpeakerConfiguration.cs:44</code>)</span></span>. <code>Bio</code> is a
+          further step out: it has no constant here at all (the <code>SpeakerDTO.BioMaxLength</code> of 4000 at
+          <span class="cite"><span><code>SpeakerDTO.cs:37</code></span></span> is not mirrored), and <span class="cite"><span><code>SpeakerConfiguration.cs:28-29</code></span></span> maps it with no
+          <code>HasMaxLength</code>, so the column is unbounded.</li>
           </ul>
           <h3 id="questioninvariants">QuestionInvariants</h3>
           <blockquote>
@@ -4003,8 +4027,9 @@
           richer. <code>[Rubric §4, Domain-Driven Design]</code>: the closed value sets and the answer rules are expressed as
           domain logic, not as API or UI validation. The permitted values are held as <strong>data</strong> rather than as long
           <code>switch</code> statements: <code>ValidQuestionEntities</code>, <code>ValidQuestionTypes</code>, and <code>ValidQuestionSources</code> are
-          <code>private static readonly string[]</code><span class="cite"><span> (<code>QuestionInvariants.cs:31</code>, <code>:34</code>, <code>:37</code>)</span></span> checked with
-          <code>StringComparer.OrdinalIgnoreCase</code>.</li>
+          <code>private static readonly string[]</code><span class="cite"><span> (<code>QuestionInvariants.cs:31</code>, <code>:34</code>, <code>:37</code>)</span></span>. Entity and type are
+          checked with <code>StringComparer.Ordinal</code><span class="cite"><span> (<code>:74</code>, <code>:91</code>)</span></span>, source with <code>StringComparer.OrdinalIgnoreCase</code><span class="cite"><span>
+          (<code>:106</code>)</span></span>.</li>
           <li><strong>Walkthrough</strong><ul>
           <li>Length constants<span class="cite"><span> (<code>QuestionInvariants.cs:16-28</code>)</span></span>: <code>QuestionTextMaxLength</code> (1000) and the three 20-char
           discriminator limits (<code>QuestionEntityMaxLength</code>, <code>QuestionTypeMaxLength</code>, <code>QuestionSourceMaxLength</code>),
@@ -4016,21 +4041,25 @@
           <a href="#sessioninvariants"><code>SessionInvariants</code></a> and <a href="#eventinvariants"><code>EventInvariants</code></a> use.</li>
           <li><code>EnsureQuestionTextIsValid</code><span class="cite"><span> (<code>:51-63</code>)</span></span>: an explicit <code>IsNullOrWhiteSpace</code> guard first, then max length
           via <code>CommonInvariants.EnsureStringMaxLength</code>.</li>
-          <li><code>EnsureQuestionEntityIsValid</code><span class="cite"><span> (<code>:71-78</code>)</span></span>, <code>EnsureQuestionTypeIsValid</code><span class="cite"><span> (<code>:86-93</code>)</span></span>, and
-          <code>EnsureQuestionSourceIsValid</code><span class="cite"><span> (<code>:101-108</code>)</span></span>: membership tests against the closed arrays, each returning
-          a specific <code>Error.Invariant</code> code.</li>
-          <li><code>EnsureAnswerValueMatchesQuestionType</code><span class="cite"><span> (<code>:118-129</code>)</span></span>: a <code>switch</code> expression on <code>questionType</code>
+          <li><code>EnsureQuestionEntityIsValid</code><span class="cite"><span> (<code>:73-80</code>)</span></span>, <code>EnsureQuestionTypeIsValid</code><span class="cite"><span> (<code>:90-97</code>)</span></span>, and
+          <code>EnsureQuestionSourceIsValid</code><span class="cite"><span> (<code>:105-112</code>)</span></span>: membership tests against the closed arrays, each returning
+          a specific <code>Error.Invariant</code> code. The entity and type checks are <strong>ordinal</strong>, so only the canonical
+          casing (&quot;Session&quot;, &quot;Rating&quot;) passes; the doc comments<span class="cite"><span> (<code>:67-68</code>, <code>:84-85</code>)</span></span> give the reason (M143):
+          consumers match and <code>switch</code> on the stored value case-sensitively, so a differently cased value
+          accepted here would be silently unmatched downstream. The source check stays case-insensitive.</li>
+          <li><code>EnsureAnswerValueMatchesQuestionType</code><span class="cite"><span> (<code>:122-133</code>)</span></span>: a <code>switch</code> expression on <code>questionType</code>
           dispatching to three private validators, because what counts as a valid answer depends on the
           question&#39;s type:<ul>
-          <li><code>ValidateRatingAnswer</code><span class="cite"><span> (<code>:131-143</code>)</span></span>: <code>int.TryParse</code> with <code>NumberStyles.Integer</code> and
+          <li><code>ValidateRatingAnswer</code><span class="cite"><span> (<code>:135-147</code>)</span></span>: <code>int.TryParse</code> with <code>NumberStyles.Integer</code> and
           <code>CultureInfo.InvariantCulture</code>, requiring 1 to 5, otherwise <code>Error.Validation</code>. The invariant culture
           is deliberate: a rating must parse identically wherever the request originates.</li>
-          <li><code>ValidateTextAnswer</code><span class="cite"><span> (<code>:145-157</code>)</span></span>: length must not exceed <code>TextAnswerMaxLength</code> (2000).</li>
-          <li><code>ValidateEmailAnswer</code><span class="cite"><span> (<code>:159-174</code>)</span></span>: constructs a <code>System.Net.Mail.MailAddress</code> and treats a
+          <li><code>ValidateTextAnswer</code><span class="cite"><span> (<code>:149-161</code>)</span></span>: length must not exceed <code>TextAnswerMaxLength</code> (2000).</li>
+          <li><code>ValidateEmailAnswer</code><span class="cite"><span> (<code>:163-178</code>)</span></span>: constructs a <code>System.Net.Mail.MailAddress</code> and treats a
           <code>FormatException</code> as invalid, letting the BCL be the format authority.</li>
           <li>An unrecognized type falls through to <code>Error.Invariant(&quot;Question.QuestionType.Unknown&quot;)</code><span class="cite"><span>
-          (<code>:124-128</code>)</span></span>. Note the dispatch is an ordinal <code>switch</code> on the literal strings, so it is
-          case-sensitive here even though <code>EnsureQuestionTypeIsValid</code> accepts any casing.</li>
+          (<code>:128-132</code>)</span></span>. The dispatch is an ordinal <code>switch</code> on the literal strings, which is exactly the
+          case-sensitive consumer the ordinal <code>EnsureQuestionTypeIsValid</code> check protects: a stored type can
+          only ever be one of the three canonical spellings.</li>
           </ul>
           </li>
           </ul>
@@ -4047,8 +4076,10 @@
           <a href="group-19-conference-infrastructure.html#questionconfiguration"><code>QuestionConfiguration</code></a><span class="cite"><span>
           (<code>QuestionConfiguration.cs:19</code>, <code>:23</code>, <code>:27</code>, <code>:37</code>)</span></span>.</li>
           <li><strong>Caveats / not-in-source</strong>: the XML doc on <code>EnsureQuestionEntityIsValid</code><span class="cite"><span> (<code>:66</code>)</span></span> still says the valid
-          values are &quot;Session&quot; or &quot;Event&quot;, while the array<span class="cite"><span> (<code>:31</code>)</span></span> and the failure message<span class="cite"><span> (<code>:75</code>)</span></span> both include
-          &quot;Speaker&quot;. The array is the operative rule; that one doc line is stale.</li>
+          values are &quot;Session&quot; or &quot;Event&quot;, while the array<span class="cite"><span> (<code>:31</code>)</span></span> and the failure message<span class="cite"><span> (<code>:77</code>)</span></span> both include
+          &quot;Speaker&quot;. The array is the operative rule; that one doc line is stale. <code>Question.Update</code> takes no
+          source parameter<span class="cite"><span> (<code>Question.cs:108-113</code>)</span></span> and re-checks only text, entity and type<span class="cite"><span> (<code>:116-118</code>)</span></span>, so
+          <code>EnsureQuestionSourceIsValid</code> runs once, at <code>Create</code><span class="cite"><span> (<code>Question.cs:83</code>)</span></span>.</li>
           </ul>
           <h3 id="sessionassetinvariants">SessionAssetInvariants</h3>
           <blockquote>
@@ -4099,8 +4130,8 @@
           <code>CreateCore</code> and <code>Update</code> free of inline conditionals, and combining the guards into <code>Result.Combine</code>
           calls (see <a href="#sessionasset"><code>SessionAsset</code></a>) surfaces every problem in one round trip rather than one
           error at a time.</li>
-          <li><strong>Where it&#39;s used</strong>: called from <a href="#sessionasset"><code>SessionAsset</code></a>&#39;s <code>CreateCore</code><span class="cite"><span> (<code>SessionAsset.cs:447-453</code>)</span></span>
-          and <code>Update</code><span class="cite"><span> (<code>SessionAsset.cs:405-408</code>)</span></span>. Unit-tested directly by <code>SessionAssetInvariantsTests</code>
+          <li><strong>Where it&#39;s used</strong>: called from <a href="#sessionasset"><code>SessionAsset</code></a>&#39;s <code>CreateCore</code><span class="cite"><span> (<code>SessionAsset.cs:289-295</code>)</span></span>
+          and <code>Update</code><span class="cite"><span> (<code>SessionAsset.cs:247-250</code>)</span></span>. Unit-tested directly by <code>SessionAssetInvariantsTests</code>
           (<code>MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.Domain.Tests/SessionAssets/SessionAssetInvariantsTests.cs</code>).
           The constants and the kind check additionally feed
           <code>SessionAssetValidationRules</code> and <code>SessionAssetConfiguration</code> in the Application and Infrastructure
@@ -4252,51 +4283,55 @@
           <code>string.Empty</code> so they are definitely assigned before EF writes the columns; the private
           seven-parameter one<span class="cite"><span> (<code>:82-98</code>)</span></span> can only be reached through the factory, which guarantees validation
           ran first.</li>
-          <li><code>Create(...)</code><span class="cite"><span> (<code>:116-171</code>)</span></span>: note the ordering. The optional email is parsed into a value object
+          <li><code>Create(...)</code><span class="cite"><span> (<code>:116-172</code>)</span></span>: note the ordering. The optional email is parsed into a value object
           <strong>first</strong><span class="cite"><span> (<code>:130-137</code>)</span></span>, returning <code>Result.Failure&lt;Speaker&gt;(emailResult.Errors)</code> immediately if it
-          is malformed, and only then are the name guards combined<span class="cite"><span> (<code>:139-141</code>)</span></span>. Identity resolution is the
-          interesting part<span class="cite"><span> (<code>:145</code>, <code>:161</code>)</span></span>: <code>SpeakerIdentifierType</code> is a client-assigned <code>Guid</code>, so a
+          is malformed, and only then are the field guards combined<span class="cite"><span> (<code>:139-142</code>)</span></span>: the two name guards plus
+          <a href="#speakerinvariants"><code>SpeakerInvariants</code></a><code>.EnsureOptionalFieldsAreValid</code> over the tag line, picture,
+          Twitter handle and three links<span class="cite"><span> (<code>:142</code>)</span></span>, so an over-long or non-http(s) link fails the factory
+          rather than the database write. Identity resolution is the
+          interesting part<span class="cite"><span> (<code>:146</code>, <code>:162</code>)</span></span>: <code>SpeakerIdentifierType</code> is a client-assigned <code>Guid</code>, so a
           Sessionize-imported speaker carries the id the feed gave it, while <code>Id = id ?? (isIdValueGenerated ? default : Guid.NewGuid())</code> generates one when the caller passes null. The comment above that line<span class="cite"><span>
-          (<code>:156-160</code>)</span></span> records why the null-coalescing exists at all: the earlier <code>id!.Value</code> threw &quot;Nullable
+          (<code>:157-161</code>)</span></span> records why the null-coalescing exists at all: the earlier <code>id!.Value</code> threw &quot;Nullable
           object must have a value&quot; for organizer-created speakers and for the seeder, which both pass null.
-          The four social links are set through an object initializer<span class="cite"><span> (<code>:162-165</code>)</span></span> rather than the
-          constructor. Finally <code>AddDomainEvent(new SpeakerChanged(DomainEntityState.Added, speaker.Id, speaker.FullName))</code><span class="cite"><span> (<code>:168</code>)</span></span>.</li>
-          <li><code>Update(...)</code><span class="cite"><span> (<code>:195-238</code>)</span></span>: the same email-then-names validation order<span class="cite"><span> (<code>:208-219</code>)</span></span>, then eleven
-          scalar writes<span class="cite"><span> (<code>:223-233</code>)</span></span>, then <code>SpeakerChanged(Updated, ...)</code><span class="cite"><span> (<code>:235</code>)</span></span>. <strong><code>LinkedUserId</code> is
-          deliberately absent</strong> from the parameter list, and the remarks<span class="cite"><span> (<code>:176-182</code>)</span></span> explain the risk that
+          The four social links are set through an object initializer<span class="cite"><span> (<code>:163-166</code>)</span></span> rather than the
+          constructor. Finally <code>AddDomainEvent(new SpeakerChanged(DomainEntityState.Added, speaker.Id, speaker.FullName))</code><span class="cite"><span> (<code>:169</code>)</span></span>.</li>
+          <li><code>Update(...)</code><span class="cite"><span> (<code>:196-240</code>)</span></span>: the same email-then-fields validation order (<span class="cite"><span><code>:209-221</code></span></span>, the optional
+          field guard at <span class="cite"><span><code>:221</code></span></span>), then eleven
+          scalar writes<span class="cite"><span> (<code>:225-235</code>)</span></span>, then <code>SpeakerChanged(Updated, ...)</code><span class="cite"><span> (<code>:237</code>)</span></span>. <strong><code>LinkedUserId</code> is
+          deliberately absent</strong> from the parameter list, and the remarks<span class="cite"><span> (<code>:177-183</code>)</span></span> explain the risk that
           drove that: <code>LinkUser</code> and <code>UnlinkUser</code> carry the uniqueness check and raise the events that keep
           Identity&#39;s <code>User.LinkedSpeakerId</code> in sync, whereas a generic update raises only <code>SpeakerChanged</code>,
           so writing the link here would silently desynchronize the two sides.</li>
-          <li><code>Delete()</code><span class="cite"><span> (<code>:251-267</code>)</span></span>: captures <code>LinkedUserId</code> into a local <strong>before</strong> anything else<span class="cite"><span> (<code>:254</code>)</span></span>,
-          calls <code>base.Delete()</code><span class="cite"><span> (<code>:256</code>)</span></span>, and on success clears the link inside the Conference context<span class="cite"><span>
-          (<code>:261</code>)</span></span> and raises <code>SpeakerChanged(Deleted, Id, FullName, previousLinkedUserId)</code><span class="cite"><span> (<code>:263</code>)</span></span>. The
+          <li><code>Delete()</code><span class="cite"><span> (<code>:253-269</code>)</span></span>: captures <code>LinkedUserId</code> into a local <strong>before</strong> anything else<span class="cite"><span> (<code>:256</code>)</span></span>,
+          calls <code>base.Delete()</code><span class="cite"><span> (<code>:258</code>)</span></span>, and on success clears the link inside the Conference context<span class="cite"><span>
+          (<code>:263</code>)</span></span> and raises <code>SpeakerChanged(Deleted, Id, FullName, previousLinkedUserId)</code><span class="cite"><span> (<code>:265</code>)</span></span>. The
           captured value is the whole point: by the time the handler runs, the field on the entity is null,
-          so the event has to carry it. The doc comment<span class="cite"><span> (<code>:240-249</code>)</span></span> also records a deliberate <strong>non</strong>
+          so the event has to carry it. The doc comment<span class="cite"><span> (<code>:242-251</code>)</span></span> also records a deliberate <strong>non</strong>
           cascade: the child associations survive the soft-delete, because the Sessionize import reactivates
           them in place when the speaker returns and no cascade-restore counterpart exists, and junction
           reads follow the parent&#39;s visibility so the surviving children are not observable meanwhile.</li>
-          <li><code>LinkUser(UserIdentifierType userId)</code><span class="cite"><span> (<code>:272-286</code>)</span></span> and <code>UnlinkUser()</code><span class="cite"><span> (<code>:290-304</code>)</span></span>: mirror guards.
-          Linking an already-linked speaker fails with <code>Speaker.AlreadyLinked</code><span class="cite"><span> (<code>:276-281</code>)</span></span>, unlinking an
-          unlinked one fails with <code>Speaker.NotLinked</code><span class="cite"><span> (<code>:294-299</code>)</span></span>. Both raise <code>SpeakerChanged(Updated, ...)</code>
-          on success.</li>
-          <li><strong>Category-item children</strong><span class="cite"><span> (<code>:314-390</code>)</span></span>: <code>AddSpeakerCategoryItem</code><span class="cite"><span> (<code>:314</code>)</span></span> guards against a
-          duplicate <em>live</em> association with <code>_speakerCategoryItems.Exists(sci =&gt; !sci.IsDeleted &amp;&amp; sci.CategoryItemId == categoryItemId)</code><span class="cite"><span> (<code>:318</code>)</span></span>, failing with <code>Speaker.CategoryItem.Duplicate</code>; the
+          <li><code>LinkUser(UserIdentifierType userId)</code><span class="cite"><span> (<code>:274-288</code>)</span></span> and <code>UnlinkUser()</code><span class="cite"><span> (<code>:292-306</code>)</span></span>: mirror guards.
+          Linking an already-linked speaker fails with <code>Speaker.AlreadyLinked</code><span class="cite"><span> (<code>:276-283</code>)</span></span>, unlinking an
+          unlinked one fails with <code>Speaker.NotLinked</code><span class="cite"><span> (<code>:294-301</code>)</span></span>. Both raise <code>SpeakerChanged(Updated, ...)</code>
+          on success<span class="cite"><span> (<code>:286</code>, <code>:304</code>)</span></span>.</li>
+          <li><strong>Category-item children</strong><span class="cite"><span> (<code>:316-392</code>)</span></span>: <code>AddSpeakerCategoryItem</code><span class="cite"><span> (<code>:316</code>)</span></span> guards against a
+          duplicate <em>live</em> association with <code>_speakerCategoryItems.Exists(sci =&gt; !sci.IsDeleted &amp;&amp; sci.CategoryItemId == categoryItemId)</code><span class="cite"><span> (<code>:320</code>)</span></span>, failing with <code>Speaker.CategoryItem.Duplicate</code>; the
           <code>!sci.IsDeleted</code> half is what leaves room for the reactivation path. <code>RestoreSpeakerCategoryItem</code><span class="cite"><span>
-          (<code>:352</code>)</span></span> takes the join <strong>instance</strong> rather than an id, because a soft-deleted row is excluded by
-          the global query filter and so must be resolved by the caller (remarks, <span class="cite"><span><code>:345-349</code></span></span>); it delegates
+          (<code>:354</code>)</span></span> takes the join <strong>instance</strong> rather than an id, because a soft-deleted row is excluded by
+          the global query filter and so must be resolved by the caller (remarks, <span class="cite"><span><code>:347-351</code></span></span>); it delegates
           to the framework&#39;s <code>RestoreChild&lt;TChild, TChildId&gt;</code><span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/AuditableAggregateRootEntity.cs:212</code>)</span></span> and
-          then raises <code>SpeakerCategoryItemChanged(Added, ...)</code><span class="cite"><span> (<code>:364</code>)</span></span>, because the association re-enters the
-          visible set. <code>RemoveSpeakerCategoryItem</code><span class="cite"><span> (<code>:374</code>)</span></span> goes through <code>RemoveChildOrNotFound</code><span class="cite"><span>
-          (<code>AuditableAggregateRootEntity.cs:156</code>)</span></span> and raises the <code>Deleted</code> variant<span class="cite"><span> (<code>:382</code>)</span></span>.</li>
-          <li><strong>Question-answer children</strong><span class="cite"><span> (<code>:401-464</code>)</span></span>: <code>AddSpeakerQuestionAnswer</code><span class="cite"><span> (<code>:401</code>)</span></span> has <strong>no</strong> duplicate
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/AuditableAggregateRootEntity.cs:214</code>)</span></span> and
+          then raises <code>SpeakerCategoryItemChanged(Added, ...)</code><span class="cite"><span> (<code>:366</code>)</span></span>, because the association re-enters the
+          visible set. <code>RemoveSpeakerCategoryItem</code><span class="cite"><span> (<code>:376</code>)</span></span> goes through <code>RemoveChildOrNotFound</code><span class="cite"><span>
+          (<code>AuditableAggregateRootEntity.cs:158</code>)</span></span> and raises the <code>Deleted</code> variant<span class="cite"><span> (<code>:384</code>)</span></span>.</li>
+          <li><strong>Question-answer children</strong><span class="cite"><span> (<code>:403-466</code>)</span></span>: <code>AddSpeakerQuestionAnswer</code><span class="cite"><span> (<code>:403</code>)</span></span> has <strong>no</strong> duplicate
           guard, unlike the category-item side; validation lives in the child factory.
-          <code>UpdateSpeakerQuestionAnswer</code><span class="cite"><span> (<code>:425</code>)</span></span> resolves through the private
-          <code>GetSpeakerQuestionAnswerOrNotFound</code> helper (<span class="cite"><span><code>:467</code></span></span>, over <code>GetChildOrNotFound</code> at
-          <span class="cite"><span><code>AuditableAggregateRootEntity.cs:103</code></span></span>), calls <code>answer.UpdateAnswer</code> and re-raises
-          <code>SpeakerQuestionAnswerChanged(Updated, ...)</code><span class="cite"><span> (<code>:438</code>)</span></span>. <code>RemoveSpeakerQuestionAnswer</code><span class="cite"><span> (<code>:448</code>)</span></span>
+          <code>UpdateSpeakerQuestionAnswer</code><span class="cite"><span> (<code>:427</code>)</span></span> resolves through the private
+          <code>GetSpeakerQuestionAnswerOrNotFound</code> helper (<span class="cite"><span><code>:469</code></span></span>, over <code>GetChildOrNotFound</code> at
+          <span class="cite"><span><code>AuditableAggregateRootEntity.cs:105</code></span></span>), calls <code>answer.UpdateAnswer</code> and re-raises
+          <code>SpeakerQuestionAnswerChanged(Updated, ...)</code><span class="cite"><span> (<code>:440</code>)</span></span>. <code>RemoveSpeakerQuestionAnswer</code><span class="cite"><span> (<code>:450</code>)</span></span>
           mirrors the category-item remove.</li>
-          <li><strong>Populator hooks</strong><span class="cite"><span> (<code>:389</code>, <code>:463</code>)</span></span>: <code>SetSpeakerCategoryItems</code> and <code>SetSpeakerQuestionAnswers</code> are
+          <li><strong>Populator hooks</strong><span class="cite"><span> (<code>:391</code>, <code>:465</code>)</span></span>: <code>SetSpeakerCategoryItems</code> and <code>SetSpeakerQuestionAnswers</code> are
           <code>internal</code>, not public, and delegate to the framework&#39;s <code>SetItems</code><span class="cite"><span>
           (<code>AuditableAggregateRootEntity.cs:60</code>)</span></span>. Internal visibility is the compromise that lets the
           same-assembly populator rehydrate a cross-source load without opening bulk replacement to the
@@ -4319,7 +4354,7 @@
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Users/IntegrationEventHandlers/UserRegisteredHandler.cs:105</code>)</span></span>;
           imported and reconciled by
           <a href="group-18-conference-application.html#speakersyncstrategy"><code>SpeakerSyncStrategy</code></a><span class="cite"><span>
-          (<code>.../Events/UseCases/RefreshFromSessionize/SpeakerSyncStrategy.cs:157,161,174,178</code>)</span></span>; hydrated by
+          (<code>.../Events/UseCases/RefreshFromSessionize/SpeakerSyncStrategy.cs:121,134,145,170,174</code>)</span></span>; hydrated by
           <a href="group-18-conference-application.html#speakernavigationpopulator"><code>SpeakerNavigationPopulator</code></a><span class="cite"><span>
           (<code>.../Speakers/SpeakerNavigationPopulator.cs:20,27</code>)</span></span>; its delete observed by
           <a href="group-18-conference-application.html#speakerdeletedhandler"><code>SpeakerDeletedHandler</code></a>, which publishes
@@ -4388,7 +4423,7 @@
           the join is a child of the speaker root, not a root of its own, because it has no lifecycle
           independent of the speaker.</li>
           <li><strong>Where it&#39;s used</strong>: created, restored and removed only through <a href="#speaker"><code>Speaker</code></a><span class="cite"><span>
-          (<code>Speaker.cs:314,352,374</code>)</span></span>; reconciled against the feed by
+          (<code>Speaker.cs:316,354,376</code>)</span></span>; reconciled against the feed by
           <a href="group-18-conference-application.html#speakersyncstrategy"><code>SpeakerSyncStrategy.SyncCategoryItems</code></a><span class="cite"><span>
           (<code>.../RefreshFromSessionize/SpeakerSyncStrategy.cs:145-164</code>)</span></span>, which is the only caller of
           <code>RestoreSpeakerCategoryItem</code>; projected by
@@ -4443,7 +4478,7 @@
           including the Sessionize import, which never touches a FluentValidation validator, is held to the
           same 4000-character rule.</li>
           <li><strong>Where it&#39;s used</strong>: added, updated and removed only through <a href="#speaker"><code>Speaker</code></a><span class="cite"><span>
-          (<code>Speaker.cs:401,425,448</code>)</span></span>; populated from the feed by
+          (<code>Speaker.cs:403,427,450</code>)</span></span>; populated from the feed by
           <a href="group-18-conference-application.html#speakersyncstrategy"><code>SpeakerSyncStrategy.SyncQuestionAnswers</code></a><span class="cite"><span>
           (<code>.../RefreshFromSessionize/SpeakerSyncStrategy.cs:166-181</code>)</span></span>, which updates a live answer in place
           when one exists for the question and adds otherwise; projected by
@@ -4781,7 +4816,7 @@
           <li><strong>Caveats / not-in-source</strong>: nothing in this file checks that <code>AnswerValue</code> matches the referenced
           question&#39;s type. <code>EventInvariants.EnsureAnswerValueIsValid</code><span class="cite"><span> (<code>EventInvariants.cs:140</code>)</span></span> only enforces
           not-empty plus 4000 characters. The BR-124 shape rule
-          (<code>QuestionInvariants.EnsureAnswerValueMatchesQuestionType</code>, <span class="cite"><span><code>QuestionInvariants.cs:118</code></span></span>) is applied one
+          (<code>QuestionInvariants.EnsureAnswerValueMatchesQuestionType</code>, <span class="cite"><span><code>QuestionInvariants.cs:122</code></span></span>) is applied one
           layer up by
           <a href="group-18-conference-application.html#addeventquestionanswerhandler"><code>AddEventQuestionAnswerHandler</code></a>&#39;s
           <code>ValidateQuestionAsync</code><span class="cite"><span> (<code>AddEventQuestionAnswerHandler.cs:67-70</code>)</span></span>, where the handler has the question
@@ -4893,7 +4928,7 @@
           database rather than an externally supplied value. What is new for this part is the generic
           write-side CRUD adoption: ADC&#39;s Conference module registers <code>Partner</code> as a fourth <code>AddEntityCrud</code>
           aggregate alongside <code>Category</code>, <code>Activity</code>, and <code>Sponsor</code><span class="cite"><span>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:156</code>)</span></span>,
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:152</code>)</span></span>,
           which is the mechanism ADR-099 (Generic Write-Side Entity Commands) adds: the create, update, and
           delete handlers come from the framework rather than being hand-written per aggregate, and a
           <code>PartnerUpdateApplier</code> supplies the piece that is still aggregate-specific, translating the generic
