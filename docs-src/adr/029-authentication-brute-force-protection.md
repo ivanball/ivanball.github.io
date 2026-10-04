@@ -17,6 +17,8 @@ default; a third `ICacheService` implementation, the opt-in `HybridCacheService`
 `IncrementAsync`; and `ResetPasswordHandlerBase` is a second framework call site, clearing the
 failed-attempt counter after a password reset).
 Revised 2026-10-01 (change-password is a third framework call site, with a principal-keyed counter; every ADC and Store service host calls `AddCommonHybridCacheWhenRedisConfigured`, so with Redis configured the counters run through `HybridCacheService.IncrementAsync`; see Revision below).
+Revised 2026-10-03 (the counters fail open with a Warning log when the cache is unavailable, instead of
+answering 500; see Revision below).
 ## Context
 ADR-019's global rate limiter is **principal-keyed**: it caps requests per authenticated principal,
 and anonymous traffic is exempt with one metered exception, the configured real-time hub path
@@ -199,6 +201,26 @@ Redis configured the counters run through `HybridCacheService.IncrementAsync`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:253`), the same
 non-atomic read-modify-write with L1 bypassed. The line anchors inside the 2026-09-07 Revision record
 the code as it stood then and are left as written.
+
+## Revision (2026-10-03)
+Decision added: **the counters fail open when the cache is unavailable.** Before this revision no
+behavior was decided for a cache outage, and the observed result was neither open nor closed: with
+Redis stopped, the lockout check read nothing and let the attempt through, while the failed-attempt
+increment and the post-login reset rethrew the cache failure, so `POST /Auth/login` answered 500 for
+a right and a wrong password alike (ADC Local Test Run 3). `LoginProtectionService` now catches a
+cache failure in every check, increment and reset (login lockout and registration throttle), logs it
+at Warning, and continues as if no counter state exists: a check answers success and an increment or
+reset is a no-op. Caller cancellation still propagates.
+
+Fail open was chosen over fail closed for three reasons. `CacheSettings` already promises that a
+cache outage never becomes an error, and login is the one path where breaking that promise locks
+every user out of every service at once. The counters are ephemeral by design (expiry is the reset),
+so an outage only shortens a lockout that would have lapsed anyway. And guessing is still bounded
+while the cache is down, because ADR-019's `auth-ip` per-IP window on login and register keeps its
+own in-process state and is unaffected by the outage (it is deliberately never Redis-backed). It is
+also the posture the framework already takes for the distributed request limiter,
+`RedisFixedWindowRateLimiter`, which permits the request and logs a warning on a Redis fault. The cost is that a lockout already in force is
+not enforced during the outage; the Warning log makes that window visible.
 
 ## Alternatives rejected
 - **Making the failed-attempt and registration counters atomic.** The increment in

@@ -1734,7 +1734,8 @@
           </ol>
           <p><strong>Alternate Flows:</strong></p>
           <ul>
-          <li>A run is already queued or in progress for the same event: HTTP 409 rather than a duplicate run</li>
+          <li>A run is already queued or in progress for the same event: the trigger still answers 202 Accepted, and no duplicate run happens. The handler takes a per-event claim before it starts, so a second pass for an event already being scored logs and completes without paying for the same calls twice</li>
+          <li>The event does not exist or is soft-deleted: HTTP 404 and nothing is queued</li>
           </ul>
           <p><strong>Postconditions:</strong> Sessions carry AI scores that inform the accept/decline decision.</p>
           <blockquote>
@@ -3954,8 +3955,13 @@
           <td><code>&quot;Validation failed&quot;</code></td>
           </tr>
           <tr>
+          <td>401 Unauthorized</td>
+          <td>Registration abuse prevention (BR-213): code <code>Auth.RegistrationRateLimitExceeded</code></td>
+          <td><code>&quot;Operation failed&quot;</code></td>
+          </tr>
+          <tr>
           <td>429 Too Many Requests</td>
-          <td>Sessionize refresh throttle (BR-63) exceeded, or login brute-force protection (BR-212), or registration abuse prevention (BR-213)</td>
+          <td>Sessionize refresh throttle (BR-63) exceeded, or login brute-force protection (BR-212)</td>
           <td><code>&quot;Too many requests&quot;</code></td>
           </tr>
           <tr>
@@ -4354,7 +4360,7 @@
           </tr>
           <tr>
           <td><code>POST /api/sessionselection/score/{eventId}</code></td>
-          <td>Queues AI scoring; returns <strong>202 Accepted</strong>, or <strong>409</strong> when a run is already queued or in progress for that event (UC-27)</td>
+          <td>Queues AI scoring; returns <strong>202 Accepted</strong> (also when a run is already queued or in progress for that event, which the handler de-duplicates), or <strong>404</strong> when the event does not exist (UC-27)</td>
           </tr>
           </tbody></table></div>
           <h3 id="1113-session-materials-br-116b">11.13 Session Materials (BR-116b)</h3>
@@ -5079,7 +5085,7 @@
           </tr>
           <tr>
           <td>BR-213</td>
-          <td>Registration <strong>abuse prevention:</strong> Maximum <strong>10 account registrations per IP address per hour</strong>. Excess attempts return HTTP 429.</td>
+          <td>Registration <strong>abuse prevention:</strong> Maximum <strong>10 account registrations per IP address per hour</strong>. Excess attempts return HTTP 401 with code <code>Auth.RegistrationRateLimitExceeded</code>, the uniform login-protection failure of ADR-029. The client IP is the browser&#39;s on every path: the WebAssembly proxy and the Blazor Server circuit both forward it, so first-visit registrations do not share one bucket keyed on the UI host.</td>
           </tr>
           <tr>
           <td>BR-214</td>
