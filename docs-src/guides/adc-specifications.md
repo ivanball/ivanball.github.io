@@ -928,7 +928,8 @@ the count, never who voted (BR-238).
 4. Organizer refreshes the dashboard to see results
 
 **Alternate Flows:**
-- A run is already queued or in progress for the same event: HTTP 409 rather than a duplicate run
+- A run is already queued or in progress for the same event: the trigger still answers 202 Accepted, and no duplicate run happens. The handler takes a per-event claim before it starts, so a second pass for an event already being scored logs and completes without paying for the same calls twice
+- The event does not exist or is soft-deleted: HTTP 404 and nothing is queued
 
 **Postconditions:** Sessions carry AI scores that inform the accept/decline decision.
 
@@ -1809,7 +1810,8 @@ All error responses use the **RFC 9457 ProblemDetails** format (the successor to
 | 404 Not Found | Entity does not exist or is soft-deleted | `"Not found"` |
 | 409 Conflict | Duplicate operation (bookmark) | `"Conflict"` |
 | 422 Unprocessable Entity | FluentValidation failure | `"Validation failed"` |
-| 429 Too Many Requests | Sessionize refresh throttle (BR-63) exceeded, or login brute-force protection (BR-212), or registration abuse prevention (BR-213) | `"Too many requests"` |
+| 401 Unauthorized | Registration abuse prevention (BR-213): code `Auth.RegistrationRateLimitExceeded` | `"Operation failed"` |
+| 429 Too Many Requests | Sessionize refresh throttle (BR-63) exceeded, or login brute-force protection (BR-212) | `"Too many requests"` |
 | 503 Service Unavailable | API rate limit exceeded (BR-20/BR-68): ASP.NET Core fixed-window rate limiter rejects excess requests with 503 | *(framework default)* |
 | 502 Bad Gateway | External service (Sessionize API) unreachable: timeout, HTTP 5xx, or DNS failure (UC-6) | `"Sessionize API is unavailable. Try again later."` |
 | *(Client disconnection)* | Client disconnected before response completed: no HTTP response is sent. The server logs the cancellation at `Information` level for diagnostics. This is not an HTTP status code returned to the client. | *(N/A: logged server-side only)* |
@@ -2028,7 +2030,7 @@ Organizer-only endpoints that support the accept/decline decision on submitted s
 | `GET /api/sessionselection/categories/{eventId}` | Category distribution across the event's sessions |
 | `GET /api/sessionselection/speaker-overlap/{eventId}` | Speakers with more than one submitted session |
 | `GET /api/sessionselection/content-similarity/{eventId}` | Pairs of sessions with similar content |
-| `POST /api/sessionselection/score/{eventId}` | Queues AI scoring; returns **202 Accepted**, or **409** when a run is already queued or in progress for that event (UC-27) |
+| `POST /api/sessionselection/score/{eventId}` | Queues AI scoring; returns **202 Accepted** (also when a run is already queued or in progress for that event, which the handler de-duplicates), or **404** when the event does not exist (UC-27) |
 
 ### 11.13 Session Materials (BR-116b)
 
@@ -2509,7 +2511,7 @@ IAuthService (UI abstraction)
 | BR-210 | The `speaker_id` JWT claim grants **no additional permissions** beyond what the user's `role` provides. It is an identity claim that enables speaker-specific data views (own session feedback, bookmark counts, profile editing). Authorization is determined solely by `role`. |
 | BR-211 | Self-registration is **open**. Any person can create an account without invitation or pre-approval. New accounts default to the `Attendee` role (BR-45). Organizer promotion is done via database seeding or manual update. |
 | BR-212 | Login **brute-force protection:** After **5 consecutive failed login attempts** for a given email address, subsequent attempts are delayed with exponential backoff (1s, 2s, 4s, 8s, 16s, capped at **5 minutes**). The counter resets on successful login. |
-| BR-213 | Registration **abuse prevention:** Maximum **10 account registrations per IP address per hour**. Excess attempts return HTTP 429. |
+| BR-213 | Registration **abuse prevention:** Maximum **10 account registrations per IP address per hour**. Excess attempts return HTTP 401 with code `Auth.RegistrationRateLimitExceeded`, the uniform login-protection failure of ADR-029. The client IP is the browser's on every path: the WebAssembly proxy and the Blazor Server circuit both forward it, so first-visit registrations do not share one bucket keyed on the UI host. |
 | BR-214 | Speakers can update their **own** speaker profile (bio, tagline, social links) when linked. The `speaker_id` in the JWT must match the target Speaker entity's ID. Organizers can update any speaker profile regardless of linking. |
 | BR-215 | Sessionize refresh (UC-6) **overwrites all speaker profile fields** including any local edits made by speakers via the app. Sessionize remains the source of truth (BR-48). |
 | BR-216 | **Logout** invalidates the user's current refresh token (web) or clears stored credentials (MAUI). Access tokens cannot be server-side invalidated before expiry: they remain valid until their 1-hour TTL expires. For immediate revocation needs (e.g., account deletion, role change), a token blacklist or short-lived tokens would be needed (out of scope). |
