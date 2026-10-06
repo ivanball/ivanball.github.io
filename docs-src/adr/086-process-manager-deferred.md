@@ -49,8 +49,8 @@ Nothing in the four repositories has all three properties. A content sweep of th
 (`PaymentReconciliationService.cs:75`) plus four MMCA.Common maintenance jobs
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Auth/RefreshSessionCleanupService.cs:53`,
 `.../Persistence/Auth/PermissionGrantRefreshService.cs:36`,
-`.../Persistence/InternalCommands/Administration/InternalCommandCleanupService.cs:52`,
-`.../Persistence/Outbox/Administration/OutboxCleanupService.cs:54`), none of which coordinates a
+`.../Persistence/InternalCommands/Administration/InternalCommandCleanupService.cs:46`,
+`.../Persistence/Outbox/Administration/OutboxCleanupService.cs:49`), none of which coordinates a
 workflow.
 
 Writing an orchestrator now would therefore be building the coordinator before the workflow. This
@@ -94,7 +94,7 @@ machine**, not a hand-rolled orchestrator and not a third-party workflow engine:
 MassTransit is **pinned to v8** and the pin is a build gate
 ([ADR-016](016-lockstep-versioning-masstransit-pin.md)): `MassTransit`, `MassTransit.RabbitMQ` and
 `MassTransit.Azure.ServiceBus.Core` are all held at 8.5.11 in
-`MMCA.Common/Directory.Packages.props:128-130`, because v9 requires a commercial license. The v8 saga
+`MMCA.Common/Directory.Packages.props:124-126`, because v9 requires a commercial license. The v8 saga
 state machine and its EF Core saga repository are fully capable, so the pin does not block the design;
 what it blocks is assuming a future v9 feature, and it means the coordinator inherits the pin's own
 risk. If v8 stops receiving security fixes, a process manager built on it is inside the blast radius
@@ -188,11 +188,11 @@ production subclass (`PaymentReconciliationService.cs:74`).
 ## Revision (2026-10-01)
 
 No decision or rationale changed. Two current-state statements are refreshed. The MassTransit pin is
-8.5.11 for all three packages, still v8 (`MMCA.Common/Directory.Packages.props:128-130`), so the
+8.5.11 for all three packages, still v8 (`MMCA.Common/Directory.Packages.props:124-126`), so the
 licensing constraint stands unchanged. `PeriodicBackgroundService` no longer has exactly one production
 subclass: beside `PaymentReconciliationService` (`PaymentReconciliationService.cs:75`) it now has four
 MMCA.Common maintenance jobs (`RefreshSessionCleanupService.cs:53`, `PermissionGrantRefreshService.cs:36`,
-`InternalCommandCleanupService.cs:52`, `OutboxCleanupService.cs:54`). None of them is a reconciliation
+`InternalCommandCleanupService.cs:46`, `OutboxCleanupService.cs:49`). None of them is a reconciliation
 sweep or a workflow coordinator, so the absence evidence for this record's trigger holds. The
 2026-09-11 Revision above is kept as written; its `PaymentReconciliationService.cs:68`/`:74` anchors
 now sit at `:69`/`:75`, and the arm call it attributes to `CheckOutHandler` is a

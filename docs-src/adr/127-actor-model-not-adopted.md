@@ -26,7 +26,7 @@ and session state is the caller's own row, read per request. Contention is handl
 rather than by a writer thread: every auditable entity carries a database-managed concurrency token
 (`MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IRowVersioned.cs:11`) configured for every
 context in `OnModelCreating`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:417`).
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:416`).
 That is the single-writer guarantee an actor would provide, and it already holds across replicas,
 which an in-process actor would not ([ADR-035](035-optimistic-concurrency.md)).
 
@@ -91,8 +91,9 @@ tiers, and live fan-out stays on the notification hub.
   about, a second serialization contract beside the integration-event schema
   ([ADR-010](010-integration-event-schema-versioning.md)), and a second answer to where state lives.
 - **A hand-rolled in-memory per-entity lock or actor-like queue.** It is per replica, and both apps scale
-  to more than one (every container app is `minReplicas: 1`, `maxReplicas: 2`,
-  `MMCA.ADC/infra/main.bicep:1843`, `MMCA.Store/infra/main.bicep:1591`), so an in-process writer guarantee is not a guarantee, and it would silently weaken a
+  to more than one (every container app is `minReplicas: 1` and at least `maxReplicas: 2`, four for the scaled ADC
+  apps under `conferenceMode`,
+  `MMCA.ADC/infra/main.bicep:1882`, `conferenceScaledMaxReplicas` at `:191`, `MMCA.Store/infra/main.bicep:1591`), so an in-process writer guarantee is not a guarantee, and it would silently weaken a
   correctness property the concurrency token holds across the fleet.
 - **Adopting actors only for live polls.** The live path is the least durable state in the system and
   the most visible during the event, so its first production exercise would fall on the day itself.
@@ -112,10 +113,11 @@ service is contained. An actor runtime beneath every module is the opposite deci
 ## Revision (2026-10-01)
 No decision or rationale changed. Citations refreshed: the vote handler's class declaration
 (`CastVoteHandler.cs:20`) and its poll repository call (`:33`), `OnModelCreating`
-(`ApplicationDbContext.cs:417`), and the output-cache pipeline step (`MiddlewarePipelineBuilder.cs:133`).
+(`ApplicationDbContext.cs:416`), and the output-cache pipeline step (`MiddlewarePipelineBuilder.cs:133`).
 One wording correction: both apps scale to more than one replica rather than running more than one at
-baseline, since every container app declares `minReplicas: 1`, `maxReplicas: 2`
-(`MMCA.ADC/infra/main.bicep:1843`, `MMCA.Store/infra/main.bicep:1591`); a per-replica writer guarantee
+baseline, since every container app declares `minReplicas: 1` and at least `maxReplicas: 2` (four for
+the scaled ADC apps under `conferenceMode`)
+(`MMCA.ADC/infra/main.bicep:1882`, `conferenceScaledMaxReplicas` at `:191`, `MMCA.Store/infra/main.bicep:1591`); a per-replica writer guarantee
 still fails at two replicas, so the argument holds.
 
 ## Related

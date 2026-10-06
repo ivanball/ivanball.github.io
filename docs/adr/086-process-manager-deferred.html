@@ -284,8 +284,8 @@
           (<code>PaymentReconciliationService.cs:75</code>) plus four MMCA.Common maintenance jobs
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Auth/RefreshSessionCleanupService.cs:53</code>,
           <code>.../Persistence/Auth/PermissionGrantRefreshService.cs:36</code>,
-          <code>.../Persistence/InternalCommands/Administration/InternalCommandCleanupService.cs:52</code>,
-          <code>.../Persistence/Outbox/Administration/OutboxCleanupService.cs:54</code>), none of which coordinates a
+          <code>.../Persistence/InternalCommands/Administration/InternalCommandCleanupService.cs:46</code>,
+          <code>.../Persistence/Outbox/Administration/OutboxCleanupService.cs:49</code>), none of which coordinates a
           workflow.</p>
           <p>Writing an orchestrator now would therefore be building the coordinator before the workflow. This
           record exists because the alternative failure mode is worse: the first genuine multi-step
@@ -326,7 +326,7 @@
           <p>MassTransit is <strong>pinned to v8</strong> and the pin is a build gate
           (<a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a>): <code>MassTransit</code>, <code>MassTransit.RabbitMQ</code> and
           <code>MassTransit.Azure.ServiceBus.Core</code> are all held at 8.5.11 in
-          <code>MMCA.Common/Directory.Packages.props:128-130</code>, because v9 requires a commercial license. The v8 saga
+          <code>MMCA.Common/Directory.Packages.props:124-126</code>, because v9 requires a commercial license. The v8 saga
           state machine and its EF Core saga repository are fully capable, so the pin does not block the design;
           what it blocks is assuming a future v9 feature, and it means the coordinator inherits the pin&#39;s own
           risk. If v8 stops receiving security fixes, a process manager built on it is inside the blast radius
@@ -414,11 +414,11 @@
           production subclass (<code>PaymentReconciliationService.cs:74</code>).</p>
           <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
           <p>No decision or rationale changed. Two current-state statements are refreshed. The MassTransit pin is
-          8.5.11 for all three packages, still v8 (<code>MMCA.Common/Directory.Packages.props:128-130</code>), so the
+          8.5.11 for all three packages, still v8 (<code>MMCA.Common/Directory.Packages.props:124-126</code>), so the
           licensing constraint stands unchanged. <code>PeriodicBackgroundService</code> no longer has exactly one production
           subclass: beside <code>PaymentReconciliationService</code> (<code>PaymentReconciliationService.cs:75</code>) it now has four
           MMCA.Common maintenance jobs (<code>RefreshSessionCleanupService.cs:53</code>, <code>PermissionGrantRefreshService.cs:36</code>,
-          <code>InternalCommandCleanupService.cs:52</code>, <code>OutboxCleanupService.cs:54</code>). None of them is a reconciliation
+          <code>InternalCommandCleanupService.cs:46</code>, <code>OutboxCleanupService.cs:49</code>). None of them is a reconciliation
           sweep or a workflow coordinator, so the absence evidence for this record&#39;s trigger holds. The
           2026-09-11 Revision above is kept as written; its <code>PaymentReconciliationService.cs:68</code>/<code>:74</code> anchors
           now sit at <code>:69</code>/<code>:75</code>, and the arm call it attributes to <code>CheckOutHandler</code> is a

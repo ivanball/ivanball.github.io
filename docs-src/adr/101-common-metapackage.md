@@ -97,8 +97,11 @@ Publish a metapackage named `MMCA.Common` that carries dependencies and no code.
 - **NU5128 is suppressed rather than avoided.** The suppression is scoped to this project and
   justified in place, but it is a warning switched off, and a future genuine packaging problem in
   this project would have to be caught by the pack output rather than by the build.
-- **No consumer exercises it.** The package-consumption CI job packs and restores every package, so a
-  pack break is caught, but no application in this workspace builds against the metapackage today, so
+- **No consumer exercises it.** The package-consumption CI job packs every package
+  (`MMCA.Common/.github/workflows/ci.yml:724`), so a pack break is caught, but it never restores the
+  metapackage: its throwaway consumer references only `MMCA.Common.API`, `MMCA.Common.Infrastructure`
+  and `MMCA.Common.Testing.Architecture` (`:759-761`), and the `MMCA.Common.*` source-mapping pattern
+  (`:743`) would not route the bare `MMCA.Common` id. No application in this workspace builds against the metapackage today, so
   its ergonomics are asserted rather than demonstrated. That is a deliberate consequence of point 6.
 
 ## Related

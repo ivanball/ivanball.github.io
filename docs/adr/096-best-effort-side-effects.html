@@ -297,9 +297,10 @@
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/OutputCacheEvictionExtensions.cs:78-92</code>,
           the token at <code>:90</code>; the ADC submit and moderation broadcasts take the parameter&#39;s default for the
           same reason, <code>.../SubmitQuestionHandler.cs:197-200</code>, the call closing at <code>:235</code>, and
-          <code>.../ModerateQuestionHandler.cs:157</code>, while the three ADC domain-event handlers pass their own
-          <code>cancellationToken</code>, <code>.../SessionQuestionUpvoteChangedHandler.cs:84</code>,
-          <code>.../LivePollVoteChangedHandler.cs:83</code> and <code>.../UserSessionBookmarkCacheEvictionHandler.cs:80</code>).</li>
+          <code>.../ModerateQuestionHandler.cs:157</code>, while the two ADC domain-event handlers pass their own
+          <code>cancellationToken</code>, <code>.../SessionQuestionUpvoteChangedHandler.cs:84</code> and
+          <code>.../LivePollVoteChangedHandler.cs:83</code>, and the hosted bookmark eviction processor passes its
+          <code>stoppingToken</code>, <code>.../Caching/BookmarkCacheEvictionProcessor.cs:77</code>).</li>
           <li><strong>The contract is pinned by tests.</strong> <code>BestEffortTests</code> covers the transparent success path, token
           passthrough, one-Warning-per-failure, the <code>operation</code>-tagged increment observed through a
           <code>MeterListener</code>, the rethrow of the caller&#39;s cancellation, the swallow of a non-caller cancellation,
@@ -320,8 +321,8 @@
           broadcast <code>livepoll-results-broadcast</code>
           (<code>.../LivePolls/DomainEventHandlers/LivePollVoteChangedHandler.cs:44</code>, call at <code>:51</code>); and the
           cross-host cache eviction <code>bookmark-cache-evict-broadcast</code>
-          (<code>.../UserSessionBookmarks/DomainEventHandlers/UserSessionBookmarkCacheEvictionHandler.cs:56</code>, call at
-          <code>:68-80</code>). The Store five are a checkout display label, <code>checkout-customer-name</code>, resolved by the
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/Caching/BookmarkCacheEvictionProcessor.cs:49</code>,
+          call at <code>:62-77</code>, a hosted processor that drains the signal the domain-event handler raises). The Store five are a checkout display label, <code>checkout-customer-name</code>, resolved by the
           checkout preflight outside the transaction so an unreachable Identity leaves the name null instead of
           failing an otherwise valid checkout
           (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutPreflight.cs:77-87</code>,
@@ -423,9 +424,9 @@
           The <code>checkout-customer-name</code> call lives in the checkout preflight, not the handler
           (<code>.../ShoppingCarts/UseCases/CheckOut/CheckOutPreflight.cs:77-87</code>). Four of the five Store sites are
           pre-commit reads, not two. Only the ADC submit and moderation broadcasts take the token parameter&#39;s
-          default; the three domain-event handlers pass their own token
-          (<code>.../SessionQuestionUpvoteChangedHandler.cs:84</code>, <code>.../LivePollVoteChangedHandler.cs:83</code>,
-          <code>.../UserSessionBookmarkCacheEvictionHandler.cs:80</code>). Store Catalog reaches <code>TryEvictTagsAsync</code> from
+          default; the two domain-event handlers pass their own token
+          (<code>.../SessionQuestionUpvoteChangedHandler.cs:84</code>, <code>.../LivePollVoteChangedHandler.cs:83</code>) and the
+          bookmark eviction processor passes its <code>stoppingToken</code> (<code>.../BookmarkCacheEvictionProcessor.cs:77</code>). Store Catalog reaches <code>TryEvictTagsAsync</code> from
           seven controllers, three of them evicting two tags at once (<code>CategoriesController.cs:171</code>). The
           <code>AddVariantHandler</code> schedule runs inside the <code>ITransactional</code> command and commits with the variant
           rather than after the commit (<code>AddVariantHandler.cs:76-79</code>, <code>:94-95</code>). Citations refreshed: the meter

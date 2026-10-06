@@ -57,7 +57,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html</loc>
-    <lastmod>2026-10-01</lastmod>
+    <lastmod>2026-10-06</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -77,7 +77,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/008-service-extraction-topology.html</loc>
-    <lastmod>2026-10-01</lastmod>
+    <lastmod>2026-10-06</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -132,7 +132,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/019-rate-limiting.html</loc>
-    <lastmod>2026-10-01</lastmod>
+    <lastmod>2026-10-06</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -252,7 +252,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/043-mobile-deep-links-and-native-oauth-callback.html</loc>
-    <lastmod>2026-10-01</lastmod>
+    <lastmod>2026-10-06</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -287,7 +287,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/050-jwt-refresh-token-rotation.html</loc>
-    <lastmod>2026-10-01</lastmod>
+    <lastmod>2026-10-06</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -307,7 +307,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/054-saga-compensation-and-reconciliation.html</loc>
-    <lastmod>2026-10-01</lastmod>
+    <lastmod>2026-10-06</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -377,7 +377,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/068-value-objects-as-validated-primitives.html</loc>
-    <lastmod>2026-10-01</lastmod>
+    <lastmod>2026-10-06</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -412,7 +412,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/075-audit-trail.html</loc>
-    <lastmod>2026-10-01</lastmod>
+    <lastmod>2026-10-06</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -442,7 +442,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/081-cost-baseline-deploy-gate.html</loc>
-    <lastmod>2026-10-01</lastmod>
+    <lastmod>2026-10-06</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -467,7 +467,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/086-process-manager-deferred.html</loc>
-    <lastmod>2026-10-01</lastmod>
+    <lastmod>2026-10-06</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -502,7 +502,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/093-container-image-posture.html</loc>
-    <lastmod>2026-10-01</lastmod>
+    <lastmod>2026-10-06</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -517,7 +517,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/096-best-effort-side-effects.html</loc>
-    <lastmod>2026-10-01</lastmod>
+    <lastmod>2026-10-06</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -542,7 +542,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/101-common-metapackage.html</loc>
-    <lastmod>2026-08-30</lastmod>
+    <lastmod>2026-10-06</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -587,7 +587,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/110-rubric-v2-category-realignment.html</loc>
-    <lastmod>2026-09-26</lastmod>
+    <lastmod>2026-10-06</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -642,7 +642,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/121-ephemeral-in-process-work-queue.html</loc>
-    <lastmod>2026-10-01</lastmod>
+    <lastmod>2026-10-06</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -672,7 +672,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/127-actor-model-not-adopted.html</loc>
-    <lastmod>2026-10-01</lastmod>
+    <lastmod>2026-10-06</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -902,12 +902,12 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/governance/adc-ArchitectureScorecard.html</loc>
-    <lastmod>2026-10-01</lastmod>
+    <lastmod>2026-10-06</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/governance/adc-RemediationBacklog.html</loc>
-    <lastmod>2026-10-01</lastmod>
+    <lastmod>2026-10-06</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -922,17 +922,17 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/governance/common-RemediationBacklog.html</loc>
-    <lastmod>2026-10-01</lastmod>
+    <lastmod>2026-10-06</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/governance/store-ArchitectureScorecard.html</loc>
-    <lastmod>2026-10-01</lastmod>
+    <lastmod>2026-10-06</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/governance/store-RemediationBacklog.html</loc>
-    <lastmod>2026-10-01</lastmod>
+    <lastmod>2026-10-06</lastmod>
     <priority>0.6</priority>
   </url>
   <url>

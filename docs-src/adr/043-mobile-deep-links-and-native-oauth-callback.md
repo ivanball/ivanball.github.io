@@ -42,8 +42,9 @@ fingerprint (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:64-66`, 
 verbatim into the document's `sha256_cert_fingerprints`
 (`Source/Presentation/MMCA.Common.API/Startup/Endpoints/AppAssociationEndpointExtensions.cs:63`), so the
 served `assetlinks.json` names a real certificate. No other setting of that key exists in the ADC
-repo. MMCA.Store has not adopted the wave: no association endpoints, allowlist config, or platform
-callback registrations exist there yet.
+repo. MMCA.Store does not adopt the wave, and it is not applicable there (user decision, 2026-10-06): Store
+has no external login ([ADR-036](036-external-oauth-login.md)) and no mobile deep links, so it needs no
+association endpoints, allowlist config, or platform callback registrations.
 Revised 2026-09-07 (the dispatcher rejects any route that is not app-relative, so the guard is
 shape-based and covers an explicit intent that never passed an intent filter). Revised 2026-09-11
 (anchors re-pinned across MMCA.Common and MMCA.ADC after `Program.cs` and `AuthUIService.cs` grew,

@@ -278,9 +278,9 @@
           <ul>
           <li><strong>Each service is the monolith with one module enabled.</strong> The hosts still run <code>ModuleLoader</code>, just with
           <code>Modules:{Module}:Enabled=true</code> for their own module, and each names only its own module assembly
-          to <code>AddModuleHost</code> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:365-367</code>), so
+          to <code>AddModuleHost</code> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:370-372</code>), so
           peer modules are never discovered there; the cross-module interfaces a service consumes are
-          satisfied by gRPC clients the host registers (<code>:409</code>). The Domain/Application/Shared code is identical whether it runs in-process or extracted.</li>
+          satisfied by gRPC clients the host registers (<code>:417</code>). The Domain/Application/Shared code is identical whether it runs in-process or extracted.</li>
           <li><strong>Extraction follows the Strangler Fig route; a rewrite is never the plan.</strong> Nothing in the topology
           needs a big-bang switch. A module is extracted by (1) starting its single-module service host beside
           the combined host, which keeps running with that module turned off (<code>Modules:{Module}:Enabled=false</code>)
@@ -295,18 +295,21 @@
           <li><strong>The Gateway is the only client entry point.</strong> It owns the route-to-service map (<code>/Auth</code>, <code>/Events</code>,
           <code>/Bookmarks</code>, <code>/hubs</code>, <code>/.well-known</code>, and so on); clients (Blazor/MAUI) never address a service directly. It
           has no DbContext or controllers. Its pipeline is edge rate limiting
-          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:74</code>, <code>:178</code>), one per-downstream readiness check
-          per service (<code>:88</code>), forwarded headers (<code>:158</code>), correlation (<code>:163</code>), security-headers middleware
-          (ADR-023, <code>:118</code>, <code>:168</code>), CORS (<code>:123</code>, <code>:171</code>), static files (<code>:183</code>), a <code>/privacy</code> minimal-API
-          endpoint (<code>:190</code>), a request-body cap raised only for the session-asset upload path (<code>:201-213</code>),
+          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:76</code>, <code>:180</code>), one per-downstream readiness check
+          per service (<code>:90</code>), forwarded headers (<code>:160</code>), correlation (<code>:165</code>), security-headers middleware
+          (ADR-023, <code>:120</code>, <code>:170</code>), CORS (<code>:125</code>, <code>:173</code>), static files (<code>:185</code>), <code>/privacy</code>, <code>/terms</code> and
+          <code>/delete-account</code> minimal-API endpoints (<code>:192</code>, <code>:199</code>, <code>:203</code>), a request-body cap raised only for
+          the session-asset upload path (<code>:215-222</code>),
           authorization middleware that evaluates the <code>anonymous</code> policy every route declares
-          (<code>AddAuthorization</code> at <code>:112</code>, <code>UseAuthorization</code> at <code>:218</code>; no authentication scheme is registered,
+          (<code>AddAuthorization</code> at <code>:114</code>, <code>UseAuthorization</code> at <code>:231</code>; no authentication scheme is registered,
           so the Gateway authenticates no one, ADR-088), and the proxy itself: the route table is loaded from
-          the <code>ReverseProxy</code> configuration section and mapped by <code>MapReverseProxy</code> (<code>:146-149</code>, <code>:221</code>), not
+          the <code>ReverseProxy</code> configuration section and mapped by <code>MapReverseProxy</code> (<code>:148-149</code>, <code>:234</code>), not
           expressed as <code>MapForwarder</code> calls in code (ADR-089). Both Gateways layer Azure Key Vault
-          configuration before anything binds settings (ADC <code>:67</code>,
+          configuration before anything binds settings (ADC <code>:67</code>, ahead of <code>AddServiceDefaults</code> at <code>:69</code>, the
+          order every ADC service and UI host now follows too, for example
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:115</code> before <code>:117</code>; Store
           <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:63</code>). Store&#39;s Gateway is the same shape
-          without the static files, the <code>/privacy</code> endpoint, the upload cap and the authorization pair: its
+          without the static files, the <code>/privacy</code>, <code>/terms</code> and <code>/delete-account</code> endpoints, the upload cap and the authorization pair: its
           routes declare <code>anonymous</code> too, but it registers no authorization middleware, by design
           (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:45-49</code>).</li>
           <li><strong>Cross-service communication uses edge transports:</strong> synchronous calls over gRPC contracts (ADR-007);
@@ -382,9 +385,9 @@
           <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
           <p>Three statements are corrected against the code; the topology itself is unchanged. The extracted
           service hosts do not rely on <code>Disabled*</code> stubs for their peers: each passes only its own module
-          assembly to <code>AddModuleHost</code> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:365-367</code>,
+          assembly to <code>AddModuleHost</code> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:370-372</code>,
           and likewise in the Engagement, Identity and Notification hosts), so peer modules are never discovered
-          and the cross-module interfaces are wired by host-registered gRPC clients (<code>:409</code>). The
+          and the cross-module interfaces are wired by host-registered gRPC clients (<code>:417</code>). The
           <code>ModuleLoader</code> stub path (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Modules/ModuleLoader.cs:119</code>)
           serves a combined host that discovers a disabled module. Because the module list is named in host
           code, re-collapsing services is a host-level change rather than configuration alone. JWKS federation

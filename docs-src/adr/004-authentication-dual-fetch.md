@@ -46,8 +46,15 @@ opts into HS256 explicitly, alongside the `Jwt:SecretForKey` that choice require
   signature against the published key
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.Authentication.cs:51-56`).
   No service except Identity holds key material. ADC's Conference, Engagement, and Notification
-  services all use this path, passing the host's `IConfiguration` and `IHostEnvironment` and leaving
-  `requireHttpsMetadata` at its default.
+  services and Store's Catalog and Sales services all use this path
+  (`.../MMCA.ADC.Conference.Service/Program.cs:330`, `.../MMCA.ADC.Engagement.Service/Program.cs:178`,
+  `.../MMCA.ADC.Notification.Service/Program.cs:168`; `.../MMCA.Store.Catalog.Service/Program.cs:205`,
+  `.../MMCA.Store.Sales.Service/Program.cs:179`), passing the host's `IConfiguration` and
+  `IHostEnvironment` and leaving `requireHttpsMetadata` at its default. All five resolve the audience
+  fail-closed through the Common `JwtAudience.RequireConfigured(builder.Configuration[JwtAudience.ConfigKey])`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Auth/JwtAudience.cs:17`, key `Jwt:Audience`
+  at `:20`, guard at `:28`), so a host with no configured audience fails at startup instead of
+  validating against a hard-coded default.
 - The metadata fetch is HTTPS-only by default, and the caller supplies configuration and environment
   so the framework can resolve that: the explicit `requireHttpsMetadata` argument when it is not
   null, then the `Authentication:JwtBearer:RequireHttpsMetadata` configuration key, then `true`

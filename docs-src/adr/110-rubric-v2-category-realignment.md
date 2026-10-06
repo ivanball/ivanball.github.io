@@ -54,7 +54,7 @@ two overlap-heavy categories in place and adding criteria to eleven others.**
    and stating the scope-out in the scorecard's N/A note (Sigma-weight 79). MMCA.Common was scoped
    out the same way at the rebase and is no longer: it scores the category from 2026-09-11, first at
    M2/I5 when `MMCA.Common.AI` shipped under [ADR-120](120-governed-chat-client-boundary.md), and at
-   M3/I6 from 2026-09-15, so its weight-2 row rejoined both denominators (Sigma-weight 82).
+   M3/I6 from 2026-09-15 (M4/I9 as of 2026-10-01, `Website/docs-src/governance/common-ArchitectureScorecard.md:80`), so its weight-2 row rejoined both denominators (Sigma-weight 82).
    MMCA.ADC scores it: its AI
    session-scoring feature calls the Anthropic Messages API in production, so the weight-2 category
    is live in both of its denominators from the 2026-09-04 re-score
@@ -84,11 +84,11 @@ two overlap-heavy categories in place and adding criteria to eleven others.**
    the rebase for MMCA.Common and MMCA.Store. For MMCA.ADC §16 is scored rather than scoped out, so
    its weight-2 row re-enters both denominators and its sum returns to 81. Since the rebase, every
    repo has re-scored section 10 against the v2 criteria, so no row carries a merged-prior figure:
-   MMCA.Common and MMCA.Store re-scored it on 2026-09-04 and confirmed it, and their rows read M4/I9
-   (`Website/docs-src/governance/common-ArchitectureScorecard.md:74`) and M4/I8
+   MMCA.Common re-scored it on 2026-09-04 and confirmed it, and its row reads M4/I9
+   (`Website/docs-src/governance/common-ArchitectureScorecard.md:74`); MMCA.Store's row reads M3/I8
    (`Website/docs-src/governance/store-ArchitectureScorecard.md:51`); MMCA.ADC's row scores it on the
    v2 criteria at M3/I8 (`Website/docs-src/governance/adc-ArchitectureScorecard.md:74`, evidence as of
-   2026-09-22 per `:5`). MMCA.Common's section 16 scope-out ended on 2026-09-11, taking its sum to 82.
+   2026-10-01 per `:5`). MMCA.Common's section 16 scope-out ended on 2026-09-11, taking its sum to 82.
 
 6. **Landing order.** The rubric, the three scorecards, the three backlogs, and this record land in
    one Website PR, because the workflow reads its category list from the scorecard rows and a rubric
@@ -116,7 +116,7 @@ scorecard rows for a decision three lines can record.
   re-score, which the row says explicitly. Store's §10 sits at implementation 8, so its
   implementation-band priority rises from 2 to 3 with the weight before any new evidence is read.
   That carried state has since cleared for all three repos: each scorecard's section 10 row is scored
-  against the v2 criteria (Common M4/I9, ADC M3/I8, Store M4/I8), so no row reads as carried and the
+  against the v2 criteria (Common M4/I9, ADC M3/I8, Store M3/I8), so no row reads as carried and the
   section 10 figures are comparable across repos again.
 - The former §16 evidence (lockstep pin, evolvability gate, tech-debt ledger) lives on as prose in
   the retired row and in §32/§33/§34, but nothing re-scores it as its own line.

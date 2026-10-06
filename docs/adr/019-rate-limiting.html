@@ -478,9 +478,9 @@
           server-rendered UI host&#39;s own back-end calls, token refresh above all, otherwise collapse into one
           client-IP partition and throttle every visitor together.</li>
           <li><strong>ADC scopes its tighter gateway policy to the credential-submission routes.</strong> The gateway&#39;s
-          <code>auth-tight</code> policy (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:65</code>) is attached to
-          <code>identity-auth-login</code> (<code>:90-96</code>, the policy at <code>:95</code>) and <code>identity-auth-register</code> (<code>:97-103</code>, the
-          policy at <code>:102</code>) and to nothing else, so <code>/Auth/refresh</code> keeps the exemption this record requires
+          <code>auth-tight</code> policy (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:63</code>) is attached to
+          <code>identity-auth-login</code> (<code>:88-94</code>, the policy at <code>:93</code>) and <code>identity-auth-register</code> (<code>:95-101</code>, the
+          policy at <code>:100</code>) and to nothing else, so <code>/Auth/refresh</code> keeps the exemption this record requires
           for Blazor Server circuits, whose refreshes all leave from the UI host&#39;s address.</li>
           </ol>
           <h2 id="revision-2026-09-10">Revision (2026-09-10)</h2>
@@ -488,10 +488,10 @@
           ships in the framework.</strong> Two items, both landed.</p>
           <ol>
           <li><strong>Store&#39;s gateway splits the credential routes out of the <code>/Auth</code> catch-all.</strong> Its <code>auth-tight</code>
-          policy (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:33</code>, the block at <code>:32-39</code>)
-          is attached to <code>identity-auth-login</code> (<code>:74-80</code>, the policy at <code>:79</code>) and <code>identity-auth-register</code>
-          (<code>:81-87</code>, the policy at <code>:86</code>), and the remaining <code>identity-auth</code> route matching
-          <code>/Auth/{**catch-all}</code> (<code>:90-94</code>) carries no <code>RateLimiterPolicy</code> at all, so refresh, logout,
+          policy (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:37</code>, the block at <code>:36-43</code>)
+          is attached to <code>identity-auth-login</code> (<code>:78-84</code>, the policy at <code>:83</code>) and <code>identity-auth-register</code>
+          (<code>:85-91</code>, the policy at <code>:90</code>), and the remaining <code>identity-auth</code> route matching
+          <code>/Auth/{**catch-all}</code> (<code>:94-98</code>) carries no <code>RateLimiterPolicy</code> at all, so refresh, logout,
           forgot-and-reset and the OAuth callbacks sit on the edge global limiter alone. That is the same
           three-route shape ADC has, and it is what item 4 above requires of any Blazor Server host: a
           circuit&#39;s refreshes all leave from the UI host&#39;s single address, so a per-IP cap on <code>/Auth</code>
@@ -542,6 +542,15 @@
           <code>RateLimitingSettings</code> binds into, and the <code>Distributed</code> degradation that sits outside it), ADR-079
           (the shared middleware pipeline that places <code>UseRateLimiter</code> after authentication and after forwarded
           headers, which is what makes both partition keys resolvable).</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <p><strong>Every ADC service binds the <code>RateLimiting</code> section.</strong> ADC&#39;s Identity and Notification services now
+          call the configuration overload, <code>AddCommonRateLimiting(builder.Configuration)</code>
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:165</code>,
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:144</code>), so their declared limits bind
+          through <code>RateLimitingSettings</code> instead of being ignored by the int overload. The Bicep key moved to the
+          bound property name, <code>RateLimiting__AuthIpPermitLimit</code> (<code>MMCA.ADC/infra/main.bicep:1836</code>, rationale at
+          <code>:1831</code>). The gateway <code>auth-tight</code> anchors in item 4 and in Revision (2026-09-10) point at the current
+          lines.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -562,6 +571,7 @@
             <li><a href="#revision-2026-09-10">Revision (2026-09-10)</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#related">Related</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             </ul>
           </nav>
         </aside>

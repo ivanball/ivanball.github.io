@@ -62,9 +62,10 @@ documented exception.
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/OutputCacheEvictionExtensions.cs:78-92`,
   the token at `:90`; the ADC submit and moderation broadcasts take the parameter's default for the
   same reason, `.../SubmitQuestionHandler.cs:197-200`, the call closing at `:235`, and
-  `.../ModerateQuestionHandler.cs:157`, while the three ADC domain-event handlers pass their own
-  `cancellationToken`, `.../SessionQuestionUpvoteChangedHandler.cs:84`,
-  `.../LivePollVoteChangedHandler.cs:83` and `.../UserSessionBookmarkCacheEvictionHandler.cs:80`).
+  `.../ModerateQuestionHandler.cs:157`, while the two ADC domain-event handlers pass their own
+  `cancellationToken`, `.../SessionQuestionUpvoteChangedHandler.cs:84` and
+  `.../LivePollVoteChangedHandler.cs:83`, and the hosted bookmark eviction processor passes its
+  `stoppingToken`, `.../Caching/BookmarkCacheEvictionProcessor.cs:77`).
 - **The contract is pinned by tests.** `BestEffortTests` covers the transparent success path, token
   passthrough, one-Warning-per-failure, the `operation`-tagged increment observed through a
   `MeterListener`, the rethrow of the caller's cancellation, the swallow of a non-caller cancellation,
@@ -85,8 +86,8 @@ onto the live-channel publish queue at `:217-218` rather than publishing inline)
 broadcast `livepoll-results-broadcast`
 (`.../LivePolls/DomainEventHandlers/LivePollVoteChangedHandler.cs:44`, call at `:51`); and the
 cross-host cache eviction `bookmark-cache-evict-broadcast`
-(`.../UserSessionBookmarks/DomainEventHandlers/UserSessionBookmarkCacheEvictionHandler.cs:56`, call at
-`:68-80`). The Store five are a checkout display label, `checkout-customer-name`, resolved by the
+(`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/Caching/BookmarkCacheEvictionProcessor.cs:49`,
+call at `:62-77`, a hosted processor that drains the signal the domain-event handler raises). The Store five are a checkout display label, `checkout-customer-name`, resolved by the
 checkout preflight outside the transaction so an unreachable Identity leaves the name null instead of
 failing an otherwise valid checkout
 (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutPreflight.cs:77-87`,
@@ -189,9 +190,9 @@ a third `inventory-catalog-labels` fetch
 The `checkout-customer-name` call lives in the checkout preflight, not the handler
 (`.../ShoppingCarts/UseCases/CheckOut/CheckOutPreflight.cs:77-87`). Four of the five Store sites are
 pre-commit reads, not two. Only the ADC submit and moderation broadcasts take the token parameter's
-default; the three domain-event handlers pass their own token
-(`.../SessionQuestionUpvoteChangedHandler.cs:84`, `.../LivePollVoteChangedHandler.cs:83`,
-`.../UserSessionBookmarkCacheEvictionHandler.cs:80`). Store Catalog reaches `TryEvictTagsAsync` from
+default; the two domain-event handlers pass their own token
+(`.../SessionQuestionUpvoteChangedHandler.cs:84`, `.../LivePollVoteChangedHandler.cs:83`) and the
+bookmark eviction processor passes its `stoppingToken` (`.../BookmarkCacheEvictionProcessor.cs:77`). Store Catalog reaches `TryEvictTagsAsync` from
 seven controllers, three of them evicting two tags at once (`CategoriesController.cs:171`). The
 `AddVariantHandler` schedule runs inside the `ITransactional` command and commits with the variant
 rather than after the commit (`AddVariantHandler.cs:76-79`, `:94-95`). Citations refreshed: the meter
