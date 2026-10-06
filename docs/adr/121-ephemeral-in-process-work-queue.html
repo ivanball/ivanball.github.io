@@ -285,13 +285,17 @@
           and no caller can learn from a return value that anything was discarded. The channel&#39;s
           <code>itemDropped</code> callback (<code>:40</code>) is therefore the only real signal, and it is wired to both an
           <code>Interlocked</code> counter and a <code>Warning</code> log naming the channel, the event and the running total
-          (<code>:61-64</code>, message at <code>:67-70</code>), with the total exposed as <code>DroppedCount</code> (<code>:47</code>).</li>
+          (<code>:61-64</code>, message at <code>:67-70</code>), with the total exposed as <code>DroppedCount</code> (<code>:47</code>).
+          The full mode is a per-job choice, not a rule: a job whose requests coalesce may use a capacity-one
+          channel with <code>DropWrite</code> instead, as ADC&#39;s bookmark cache-eviction signal does
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/UserSessionBookmarks/Services/BookmarkCacheEvictionSignal.cs:27-30</code>),
+          where any number of requests made while one is pending collapse into it and the drop is the intent.</li>
           <li><strong>A <code>BackgroundService</code> drain per queue</strong>, <code>SingleReader</code> (<code>LiveChannelPublishQueue.cs:37</code>),
           consuming with <code>ReadAllAsync(stoppingToken)</code>
           (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/Live/LiveChannelPublishProcessor.cs:41</code>,
           the <code>BackgroundService</code> base at <code>:33</code>, registered by
           <code>AddHostedService&lt;LiveChannelPublishProcessor&gt;()</code> at
-          <code>MMCA.ADC.Engagement.Infrastructure/DependencyInjection.cs:21</code>). Because it is a hosted service the
+          <code>MMCA.ADC.Engagement.Infrastructure/DependencyInjection.cs:23</code>). Because it is a hosted service the
           host owns the work: shutdown cancels it and waits for it to unwind. The drain is a singleton, so it
           resolves scoped services through <code>IServiceScopeFactory</code> per item
           (<code>LiveChannelPublishProcessor.cs:50</code>).</li>
@@ -348,8 +352,10 @@
           a duplicate, which is the correct posture for a self-deduplicating schedule and is the opposite of
           what an in-process queue could offer.</li>
           </ul>
-          <p>One implementation exists: <code>LiveChannelPublishQueue</code> / <code>LiveChannelPublishProcessor</code> (ephemeral,
-          <code>DropOldest</code>, ADR-039).</p>
+          <p>Two implementations exist: <code>LiveChannelPublishQueue</code> / <code>LiveChannelPublishProcessor</code> (ephemeral,
+          <code>DropOldest</code>, ADR-039) and <code>BookmarkCacheEvictionSignal</code> / <code>BookmarkCacheEvictionProcessor</code>
+          (ephemeral, capacity one, <code>DropWrite</code>; the processor is registered at
+          <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/DependencyInjection.cs:24</code>).</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
           <li><strong>The host lifetime is the point.</strong> A <code>BackgroundService</code> is the only in-process shape the host can

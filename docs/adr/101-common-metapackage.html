@@ -334,8 +334,11 @@
           <li><strong>NU5128 is suppressed rather than avoided.</strong> The suppression is scoped to this project and
           justified in place, but it is a warning switched off, and a future genuine packaging problem in
           this project would have to be caught by the pack output rather than by the build.</li>
-          <li><strong>No consumer exercises it.</strong> The package-consumption CI job packs and restores every package, so a
-          pack break is caught, but no application in this workspace builds against the metapackage today, so
+          <li><strong>No consumer exercises it.</strong> The package-consumption CI job packs every package
+          (<code>MMCA.Common/.github/workflows/ci.yml:724</code>), so a pack break is caught, but it never restores the
+          metapackage: its throwaway consumer references only <code>MMCA.Common.API</code>, <code>MMCA.Common.Infrastructure</code>
+          and <code>MMCA.Common.Testing.Architecture</code> (<code>:759-761</code>), and the <code>MMCA.Common.*</code> source-mapping pattern
+          (<code>:743</code>) would not route the bare <code>MMCA.Common</code> id. No application in this workspace builds against the metapackage today, so
           its ergonomics are asserted rather than demonstrated. That is a deliberate consequence of point 6.</li>
           </ul>
           <h2 id="related">Related</h2>

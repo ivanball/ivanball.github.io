@@ -197,14 +197,19 @@ MMCA.Common. Inside the framework the base also carries Common's own periodic jo
 
 **Adoption is one module.** This pattern lives in MMCA.Store's Sales module only: the two saga
 handlers and the one reconciliation sweep above. MMCA.ADC and MMCA.Helpdesk have no compensating saga
-handler and no reconciliation sweep today. The nearest thing in ADC is a single compensating step,
-not a saga: when a session-asset upload has put its bytes in storage but the row does not follow,
+handler and no reconciliation sweep today. The nearest things in ADC are two compensating steps,
+not a saga. The first: when a session-asset upload has put its bytes in storage but the row does not follow,
 `UploadSessionAssetHandler` schedules the durable `Conference.DeleteSessionAssetBlob.v1` internal
 command to remove the orphaned blob
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/SessionAssets/UseCases/UploadFile/UploadSessionAssetHandler.cs:112-116`
 and `:126-133`, the schedule at `:178-195`, the command at
 `.../SessionAssets/UseCases/DeleteSessionAssetBlob/DeleteSessionAssetBlobInternalCommand.cs:28-29`).
-That behaviour is recorded in [ADR-123](123-speaker-session-assets.md) and rides ADR-114's queue, not
+The second is the avatar upload: when an avatar's bytes are in storage but the user row does not
+follow, `SetUserAvatarHandler` schedules the durable `DeleteAvatarBlob` internal command for the
+orphaned blob (`SetUserAvatarHandler.cs:80` and `:87` in
+`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases`), recorded in
+[ADR-045](045-managed-file-storage-and-avatars.md). Those behaviours are recorded in
+[ADR-123](123-speaker-session-assets.md) and ADR-045 and ride ADR-114's queue, not
 this record's saga machinery. The record exists because the mechanism (compensate, mark, reconcile)
 is the framework's stated answer to cross-boundary consistency, not because it is broadly adopted.
 

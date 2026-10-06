@@ -239,9 +239,9 @@ carry `auth-ip`, and infrastructure paths are still exempt. Four things below it
    server-rendered UI host's own back-end calls, token refresh above all, otherwise collapse into one
    client-IP partition and throttle every visitor together.
 4. **ADC scopes its tighter gateway policy to the credential-submission routes.** The gateway's
-   `auth-tight` policy (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:65`) is attached to
-   `identity-auth-login` (`:90-96`, the policy at `:95`) and `identity-auth-register` (`:97-103`, the
-   policy at `:102`) and to nothing else, so `/Auth/refresh` keeps the exemption this record requires
+   `auth-tight` policy (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:63`) is attached to
+   `identity-auth-login` (`:88-94`, the policy at `:93`) and `identity-auth-register` (`:95-101`, the
+   policy at `:100`) and to nothing else, so `/Auth/refresh` keeps the exemption this record requires
    for Blazor Server circuits, whose refreshes all leave from the UI host's address.
 
 ## Revision (2026-09-10)
@@ -250,10 +250,10 @@ carry `auth-ip`, and infrastructure paths are still exempt. Four things below it
 ships in the framework.** Two items, both landed.
 
 1. **Store's gateway splits the credential routes out of the `/Auth` catch-all.** Its `auth-tight`
-   policy (`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:33`, the block at `:32-39`)
-   is attached to `identity-auth-login` (`:74-80`, the policy at `:79`) and `identity-auth-register`
-   (`:81-87`, the policy at `:86`), and the remaining `identity-auth` route matching
-   `/Auth/{**catch-all}` (`:90-94`) carries no `RateLimiterPolicy` at all, so refresh, logout,
+   policy (`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:37`, the block at `:36-43`)
+   is attached to `identity-auth-login` (`:78-84`, the policy at `:83`) and `identity-auth-register`
+   (`:85-91`, the policy at `:90`), and the remaining `identity-auth` route matching
+   `/Auth/{**catch-all}` (`:94-98`) carries no `RateLimiterPolicy` at all, so refresh, logout,
    forgot-and-reset and the OAuth callbacks sit on the edge global limiter alone. That is the same
    three-route shape ADC has, and it is what item 4 above requires of any Blazor Server host: a
    circuit's refreshes all leave from the UI host's single address, so a per-IP cap on `/Auth`
@@ -305,3 +305,14 @@ here avoids by owning its own `rl:` keyspace), ADR-070 (the fail-fast configurat
 `RateLimitingSettings` binds into, and the `Distributed` degradation that sits outside it), ADR-079
 (the shared middleware pipeline that places `UseRateLimiter` after authentication and after forwarded
 headers, which is what makes both partition keys resolvable).
+
+## Revision (2026-10-06)
+
+**Every ADC service binds the `RateLimiting` section.** ADC's Identity and Notification services now
+call the configuration overload, `AddCommonRateLimiting(builder.Configuration)`
+(`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:165`,
+`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:144`), so their declared limits bind
+through `RateLimitingSettings` instead of being ignored by the int overload. The Bicep key moved to the
+bound property name, `RateLimiting__AuthIpPermitLimit` (`MMCA.ADC/infra/main.bicep:1836`, rationale at
+`:1831`). The gateway `auth-tight` anchors in item 4 and in Revision (2026-09-10) point at the current
+lines.

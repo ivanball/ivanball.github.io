@@ -43,9 +43,9 @@ and front them with a single **YARP reverse-proxy Gateway** (`MMCA.ADC.Gateway`,
 
 - **Each service is the monolith with one module enabled.** The hosts still run `ModuleLoader`, just with
   `Modules:{Module}:Enabled=true` for their own module, and each names only its own module assembly
-  to `AddModuleHost` (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:365-367`), so
+  to `AddModuleHost` (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:370-372`), so
   peer modules are never discovered there; the cross-module interfaces a service consumes are
-  satisfied by gRPC clients the host registers (`:409`). The Domain/Application/Shared code is identical whether it runs in-process or extracted.
+  satisfied by gRPC clients the host registers (`:417`). The Domain/Application/Shared code is identical whether it runs in-process or extracted.
 - **Extraction follows the Strangler Fig route; a rewrite is never the plan.** Nothing in the topology
   needs a big-bang switch. A module is extracted by (1) starting its single-module service host beside
   the combined host, which keeps running with that module turned off (`Modules:{Module}:Enabled=false`)
@@ -60,18 +60,21 @@ and front them with a single **YARP reverse-proxy Gateway** (`MMCA.ADC.Gateway`,
 - **The Gateway is the only client entry point.** It owns the route-to-service map (`/Auth`, `/Events`,
   `/Bookmarks`, `/hubs`, `/.well-known`, and so on); clients (Blazor/MAUI) never address a service directly. It
   has no DbContext or controllers. Its pipeline is edge rate limiting
-  (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:74`, `:178`), one per-downstream readiness check
-  per service (`:88`), forwarded headers (`:158`), correlation (`:163`), security-headers middleware
-  (ADR-023, `:118`, `:168`), CORS (`:123`, `:171`), static files (`:183`), a `/privacy` minimal-API
-  endpoint (`:190`), a request-body cap raised only for the session-asset upload path (`:201-213`),
+  (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:76`, `:180`), one per-downstream readiness check
+  per service (`:90`), forwarded headers (`:160`), correlation (`:165`), security-headers middleware
+  (ADR-023, `:120`, `:170`), CORS (`:125`, `:173`), static files (`:185`), `/privacy`, `/terms` and
+  `/delete-account` minimal-API endpoints (`:192`, `:199`, `:203`), a request-body cap raised only for
+  the session-asset upload path (`:215-222`),
   authorization middleware that evaluates the `anonymous` policy every route declares
-  (`AddAuthorization` at `:112`, `UseAuthorization` at `:218`; no authentication scheme is registered,
+  (`AddAuthorization` at `:114`, `UseAuthorization` at `:231`; no authentication scheme is registered,
   so the Gateway authenticates no one, ADR-088), and the proxy itself: the route table is loaded from
-  the `ReverseProxy` configuration section and mapped by `MapReverseProxy` (`:146-149`, `:221`), not
+  the `ReverseProxy` configuration section and mapped by `MapReverseProxy` (`:148-149`, `:234`), not
   expressed as `MapForwarder` calls in code (ADR-089). Both Gateways layer Azure Key Vault
-  configuration before anything binds settings (ADC `:67`,
+  configuration before anything binds settings (ADC `:67`, ahead of `AddServiceDefaults` at `:69`, the
+  order every ADC service and UI host now follows too, for example
+  `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:115` before `:117`; Store
   `MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:63`). Store's Gateway is the same shape
-  without the static files, the `/privacy` endpoint, the upload cap and the authorization pair: its
+  without the static files, the `/privacy`, `/terms` and `/delete-account` endpoints, the upload cap and the authorization pair: its
   routes declare `anonymous` too, but it registers no authorization middleware, by design
   (`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:45-49`).
 - **Cross-service communication uses edge transports:** synchronous calls over gRPC contracts (ADR-007);
@@ -147,9 +150,9 @@ to discover the path for themselves.
 ## Revision (2026-10-01)
 Three statements are corrected against the code; the topology itself is unchanged. The extracted
 service hosts do not rely on `Disabled*` stubs for their peers: each passes only its own module
-assembly to `AddModuleHost` (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:365-367`,
+assembly to `AddModuleHost` (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:370-372`,
 and likewise in the Engagement, Identity and Notification hosts), so peer modules are never discovered
-and the cross-module interfaces are wired by host-registered gRPC clients (`:409`). The
+and the cross-module interfaces are wired by host-registered gRPC clients (`:417`). The
 `ModuleLoader` stub path (`MMCA.Common/Source/Core/MMCA.Common.Application/Modules/ModuleLoader.cs:119`)
 serves a combined host that discovers a disabled module. Because the module list is named in host
 code, re-collapsing services is a host-level change rather than configuration alone. JWKS federation

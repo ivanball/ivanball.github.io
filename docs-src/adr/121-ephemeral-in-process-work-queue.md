@@ -52,12 +52,16 @@ starts an untracked `Task` from a request, and nothing that must run lands here.
   `itemDropped` callback (`:40`) is therefore the only real signal, and it is wired to both an
   `Interlocked` counter and a `Warning` log naming the channel, the event and the running total
   (`:61-64`, message at `:67-70`), with the total exposed as `DroppedCount` (`:47`).
+  The full mode is a per-job choice, not a rule: a job whose requests coalesce may use a capacity-one
+  channel with `DropWrite` instead, as ADC's bookmark cache-eviction signal does
+  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/UserSessionBookmarks/Services/BookmarkCacheEvictionSignal.cs:27-30`),
+  where any number of requests made while one is pending collapse into it and the drop is the intent.
 - **A `BackgroundService` drain per queue**, `SingleReader` (`LiveChannelPublishQueue.cs:37`),
   consuming with `ReadAllAsync(stoppingToken)`
   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/Live/LiveChannelPublishProcessor.cs:41`,
   the `BackgroundService` base at `:33`, registered by
   `AddHostedService<LiveChannelPublishProcessor>()` at
-  `MMCA.ADC.Engagement.Infrastructure/DependencyInjection.cs:21`). Because it is a hosted service the
+  `MMCA.ADC.Engagement.Infrastructure/DependencyInjection.cs:23`). Because it is a hosted service the
   host owns the work: shutdown cancels it and waits for it to unwind. The drain is a singleton, so it
   resolves scoped services through `IServiceScopeFactory` per item
   (`LiveChannelPublishProcessor.cs:50`).
@@ -112,8 +116,10 @@ starts an untracked `Task` from a request, and nothing that must run lands here.
   a duplicate, which is the correct posture for a self-deduplicating schedule and is the opposite of
   what an in-process queue could offer.
 
-One implementation exists: `LiveChannelPublishQueue` / `LiveChannelPublishProcessor` (ephemeral,
-`DropOldest`, ADR-039).
+Two implementations exist: `LiveChannelPublishQueue` / `LiveChannelPublishProcessor` (ephemeral,
+`DropOldest`, ADR-039) and `BookmarkCacheEvictionSignal` / `BookmarkCacheEvictionProcessor`
+(ephemeral, capacity one, `DropWrite`; the processor is registered at
+`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/DependencyInjection.cs:24`).
 
 ## Rationale
 - **The host lifetime is the point.** A `BackgroundService` is the only in-process shape the host can

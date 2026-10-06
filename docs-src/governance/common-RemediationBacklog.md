@@ -64,7 +64,7 @@ Derived from the [scorecard](common-ArchitectureScorecard.md): Maturity **96.6%*
 - *Lever:* not yet identified.
 
 ### [ ] #20 · Design System & UI Consistency
-- [ ] **Source the brand hex from one token, and add a Common inline-style guard.** `#1565C0` is defined in both `Source/Presentation/MMCA.Common.UI/Theme/BrandColors.cs:13` and `wwwroot/app.css:63`, and restated raw at `Layout/ReconnectModal.razor.css:99`, outside the token drift guard; 19 inline style declarations sit across 12 razor files with no Common guard, while ADC has one (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Ui/InlineStyleTests.cs:16`).
+- [ ] **Source the brand hex from one token, and add a Common inline-style guard.** `#1565C0` is defined in both `Source/Presentation/MMCA.Common.UI/Theme/BrandColors.cs:13` and `wwwroot/app.css:63`, and restated raw at `Layout/ReconnectModal.razor.css:99`, outside the token drift guard. The inline-style half is closed: Common's razor files carry 0 inline style declarations, enforced by Common's own `InlineStyleTests` (`Tests/Architecture/MMCA.Common.Architecture.Tests/Ui/ComponentConventions/InlineStyleTests.cs:12`, file floor `:18`) over the shared `InlineStyleTestsBase` (`Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Ui/InlineStyleTestsBase.cs`), which ADC now subclasses too (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Ui/InlineStyleTests.cs:10`).
 - *Gap beyond the lever:* the shared layout scoped CSS carries 41 `!important` overrides with raw nav colors (`Layout/NavMenu.razor.css:163-198`) and a badge override block duplicated between `Layout/MainLayout.razor.css:71` and `NavMenu.razor.css:276-286`.
 
 ### [~] #23 · Front-End Performance

@@ -280,15 +280,14 @@
           login and registration as callers (ADC&#39;s external-login path also calls it, see the Decision); and the constructor wiring of each app&#39;s subclass was re-read (its current
           shape is recorded in the 2026-09-25 note below).</p>
           <p>Note (2026-09-25): four corrections re-verified against current source. Both apps&#39; subclass
-          constructors take <code>IOptions&lt;RefreshSessionSettings&gt;</code> directly and forward it unchanged to the base
+          constructors then took <code>IOptions&lt;RefreshSessionSettings&gt;</code> directly and forwarded it unchanged to the base
           (ADC <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:57</code>,
           forwarded at <code>:67</code>; Store
           <code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/AuthenticationService.cs:33</code>,
           forwarded at <code>:43</code>). Account lock and role change revoke live refresh sessions in both apps (Status
-          paragraph above). The refresh workflow is not identical across the two apps in one respect: Store
-          alone overrides <code>CreateRefreshUserMissingError</code> to answer a vanished user with 404 (<code>:136-137</code>), where
-          ADC keeps the base&#39;s 401 (<code>Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:735</code>,
-          used at <code>:368</code>); that difference is not recorded against <a href="097-multi-device-refresh-sessions.html">ADR-097</a>.
+          paragraph above). The refresh workflow was then not identical across the two apps in one respect: Store
+          alone overrode <code>CreateRefreshUserMissingError</code> to answer a vanished user with 404, where ADC kept the
+          base&#39;s 401. That difference is gone: see Revision (2026-10-06) at the end.
           The Common anchors for the class, the lifetime guard, the sliding expiry, the atomic rotation and
           the reuse revocation are refreshed in the body.</p>
           <h2 id="context">Context</h2>
@@ -372,22 +371,23 @@
           role change now runs in each app&#39;s user-administration service instead (ADC
           <code>UserAdministrationService.cs:138,191</code>, Store <code>UserAdministrationService.cs:112,164</code>).</li>
           <li><strong>Both apps inherit the workflow through a sealed subclass.</strong> ADC&#39;s <code>AuthenticationService</code>
-          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:48</code>,
-          <code>ITokenService</code> forwarded to the base at <code>AuthenticationService.cs:61</code>) and Store&#39;s
-          (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/AuthenticationService.cs:25</code>,
-          forwarded at <code>AuthenticationService.cs:37</code>) both pass <code>ITokenService</code> into the base constructor and
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:50</code>,
+          <code>IAuthSessionIssuer</code> taken at <code>:56</code> and forwarded to the base at <code>:64</code>) and Store&#39;s
+          (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/AuthenticationService.cs:26</code>,
+          taken at <code>:31</code>, forwarded at <code>:38</code>) both pass <code>IAuthSessionIssuer</code> into the base constructor and
           supply only app-specific hooks (the claim set, deactivated-account gates, the registration side-effect);
-          both constructors also take <code>IRefreshSessionStore</code> today (ADC <code>AuthenticationService.cs:56</code>, Store
-          <code>AuthenticationService.cs:32</code>) and <code>IOptions&lt;RefreshSessionSettings&gt;</code> (ADC <code>AuthenticationService.cs:57</code>,
-          Store <code>AuthenticationService.cs:33</code>), and forward both to the base unchanged (ADC
-          <code>AuthenticationService.cs:66-67</code>, Store <code>AuthenticationService.cs:42-43</code>).
+          both constructors also take <code>IOptions&lt;EmailConfirmationSettings&gt;</code> (ADC <code>AuthenticationService.cs:57</code>,
+          Store <code>AuthenticationService.cs:32</code>) and forward it to the base unchanged (ADC <code>:66</code>, Store <code>:40</code>).
+          Neither takes <code>IRefreshSessionStore</code> or <code>IOptions&lt;RefreshSessionSettings&gt;</code>: session issuing and the
+          refresh settings sit behind the framework&#39;s <code>IAuthSessionIssuer</code>.
           The rotation, reuse-detection, and lifetime logic is identical across both apps because it lives once in
-          the base, with one app-level difference at the edge: Store overrides <code>CreateRefreshUserMissingError</code> so
-          a refresh for a vanished user answers 404 (<code>AuthenticationService.cs:136-137</code>), while ADC keeps the
-          base&#39;s 401 (<code>Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:735-736</code>). ADC&#39;s
+          the base, with no app-level difference at the edge: neither app overrides <code>CreateRefreshUserMissingError</code>,
+          so a refresh for a vanished user answers the base&#39;s 401 in both
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:600-601</code>,
+          called at <code>:343</code>). ADC&#39;s
           external OAuth path (ADR-036) issues the same refresh credential when it exchanges an
           external identity for the local token pair, by routing into the shared <code>IssueTokensAsync</code>
-          (<code>AuthenticationService.cs:320</code>).</li>
+          (<code>AuthenticationService.cs:338</code>).</li>
           </ul>
           <h2 id="rationale">Rationale</h2>
           <ul>
@@ -463,6 +463,16 @@
           that exchanges a federated identity for this same single rotating refresh token), ADR-047 (the
           soft-deleted-user middleware that bounds the stateless access token&#39;s revocation gap, complementing the
           refresh-token revocation this ADR performs on the user row).</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <p><strong>Both apps answer a vanished refresh user with 401, and neither constructor takes the refresh-session
+          types.</strong> Store no longer overrides <code>CreateRefreshUserMissingError</code>, so both apps inherit the
+          framework&#39;s 401 (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:600-601</code>,
+          called at <code>:343</code>). Both subclass constructors take <code>IAuthSessionIssuer</code> (ADC
+          <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:56</code>,
+          Store <code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/AuthenticationService.cs:31</code>)
+          and <code>IOptions&lt;EmailConfirmationSettings&gt;</code> (ADC <code>:57</code>, Store <code>:32</code>) in place of <code>IRefreshSessionStore</code>
+          and <code>IOptions&lt;RefreshSessionSettings&gt;</code>; the Decision body is corrected to match. The 2026-09-25 note
+          keeps the anchors it recorded.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -480,6 +490,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#related">Related</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             </ul>
           </nav>
         </aside>

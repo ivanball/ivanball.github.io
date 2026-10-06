@@ -356,15 +356,15 @@
           outside the range a non-root user cannot bind
           (<code>.../MMCA.ADC.Conference.Service/Dockerfile:59-66</code>). See Revision (2026-09-07) item 2.</p>
           <p>What stays open is the gate, not the image. Each deploy scans the image it pushes with Trivy, but
-          report-only in both consumers (<code>MMCA.ADC/.github/workflows/deploy.yml:1172-1173</code>,
-          <code>MMCA.Store/.github/workflows/deploy.yml:1090,1097</code>), so a base-layer CRITICAL or HIGH is printed in the
-          step log and does not stop a rollout. ADC scans every leg&#39;s tag, including a leg that only re-tagged
-          an unchanged image; Store scans only a leg that rebuilt (<code>MMCA.Store/.github/workflows/deploy.yml:1091</code>),
-          since an unchanged image was scanned by the deploy that built it. The supply-chain job generates its
+          report-only in both consumers (<code>MMCA.ADC/.github/workflows/deploy.yml:1229-1230</code>,
+          <code>MMCA.Store/.github/workflows/deploy.yml:1174-1175</code>), so a base-layer CRITICAL or HIGH is printed in the
+          step log and does not stop a rollout. Both scan every leg&#39;s tag, including a leg that only re-tagged
+          an unchanged image (Store&#39;s scan runs after its re-tag step, <code>MMCA.Store/.github/workflows/deploy.yml:1128-1129</code>),
+          so a CVE disclosed after an image was built is still found (<code>:1160-1161</code>). The supply-chain job generates its
           CycloneDX SBOM from the solution filter (<code>MMCA.ADC/.github/workflows/deploy.yml:623-636</code>), so it describes the NuGet graph
           and not the image, which leaves that report-only scan as the only thing in either pipeline that
-          looks at the base layer at all. Flipping it to gating is recorded as a follow-up beside each step
-          rather than decided here: see Revision (2026-09-07) item 4 and Revision (2026-09-10).</p>
+          looks at the base layer at all. Keeping it non-gating while the baseline is observed is the recorded
+          decision for both repos: see Revision (2026-10-06).</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
           <li><strong>A secret that is never a layer cannot leak from a layer.</strong> BuildKit secret mounts are the only
@@ -599,6 +599,20 @@
           non-root <code>USER</code> line in the Store services is <code>Dockerfile:72</code>; and ADC&#39;s Trivy comment still names a
           floating base image as the reason to stay non-gating (<code>MMCA.ADC/.github/workflows/deploy.yml:1168-1171</code>),
           so the stale-reason finding in Revision (2026-09-10) still stands.</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <p><strong>One Trivy posture in both consumers, recorded as a decision.</strong> Both deploy workflows run the scan
+          the same way: on every image leg, the re-tagged unchanged images included, with <code>exit-code: &#39;1&#39;</code> so a
+          CRITICAL or HIGH finding marks the step failed, and <code>continue-on-error: true</code> so the finding never
+          fails the job or stops the rollout (ADC <code>MMCA.ADC/.github/workflows/deploy.yml:1229</code>,
+          <code>continue-on-error</code> <code>:1230</code>, pin <code>:1231</code>, <code>exit-code</code> <code>:1237</code>; Store
+          <code>MMCA.Store/.github/workflows/deploy.yml:1174</code>, <code>continue-on-error</code> <code>:1175</code>, pin <code>:1176</code>, <code>exit-code</code>
+          <code>:1182</code>). Store&#39;s scan carries no <code>matrix.changed</code> guard and runs after the re-tag step (<code>:1128-1129</code>),
+          so a leg that only re-tagged is scanned too (<code>:1160-1161</code>). ADC&#39;s step comment gives the same reason
+          for staying non-gating, observing the baseline (<code>:1219-1223</code>), so the stale-reason finding of Revision
+          (2026-09-10) and Revision (2026-10-01) is closed. Both comments name the same exit: flip
+          <code>continue-on-error</code> to <code>false</code> once the baseline is clean or the residue is justified in a
+          <code>.trivyignore</code> (ADC <code>:1227-1228</code>, Store <code>:1170-1171</code>). This replaces the open item: the scan is a
+          deliberate non-gating report in both repos, not a difference between them.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -620,6 +634,7 @@
             <li><a href="#revision-2026-09-03">Revision (2026-09-03)</a></li>
             <li><a href="#revision-2026-09-10">Revision (2026-09-10)</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             </ul>
           </nav>
         </aside>

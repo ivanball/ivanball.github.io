@@ -203,17 +203,17 @@ auditing, so a rewrite of `dbo.AuditTrailEntries` by the shared admin login left
 now record trail DML, each shaped by its own volume decision.
 
 - **Store: statement auditing at the server.** `sqlAuditingSettings`
-  (`MMCA.Store/infra/main.bicep:866`) lists `BATCH_COMPLETED_GROUP` plus the two authentication groups
+  (`MMCA.Store/infra/main.bicep:894`) lists `BATCH_COMPLETED_GROUP` plus the two authentication groups
   (`:875-878`), routed through a `SQLSecurityAuditEvents` diagnostic setting on the master database
   (`:852`). The rationale, including why the batch group is the only way to cover the trail table at
   server scope, is at `:822-846`. The batch group records every statement, so the workspace daily cap
   is sized for it (`MMCA.Store/infra/foundation.bicep:57`, `dailyQuotaGb: 3`).
 - **ADC: object-scoped auditing per database.** The server-level policy `sqlServerAuditing`
-  (`MMCA.ADC/infra/main.bicep:827`) stays authentication, principal, role, permission and schema-change
-  groups only (`:833`), with no statement group, for volume (`:818-826`). A database-level policy,
-  `auditTrailDmlAuditing` (`:984`), adds `UPDATE ON dbo.AuditTrailEntries BY public` and
-  `DELETE ON dbo.AuditTrailEntries BY public` (`:992-993`) on the three databases that carry the trail
-  (`auditTrailDatabaseNames`, `:962`), each with its own `SQLSecurityAuditEvents` diagnostic setting
+  (`MMCA.ADC/infra/main.bicep:872`) stays authentication, principal, role, permission and schema-change
+  groups only (`:878-885`), with no statement group, for volume (`:863-869`). A database-level policy,
+  `auditTrailDmlAuditing` (`:1026`), adds `UPDATE ON dbo.AuditTrailEntries BY public` and
+  `DELETE ON dbo.AuditTrailEntries BY public` (`:1034-1035`) on the three databases that carry the trail
+  (`auditTrailDatabaseNames`, `:1004`), each with its own `SQLSecurityAuditEvents` diagnostic setting
   (`auditTrailDiagnostics`, `:968`). The rationale is at `:938-961`. Because the trail is append-only in
   normal operation, these actions fire on tampering and on the retention purge only, and the daily cap
   is unchanged. `SqlAuditConventionTests`

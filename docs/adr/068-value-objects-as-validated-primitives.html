@@ -362,7 +362,9 @@
           and <code>Order.Total</code> (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/Order.cs:58</code>) is
           seeded with <code>Money.Zero()</code> in the private constructor (<code>:171</code>) and accumulated through <code>Money.Add</code>
           (<code>:220</code>, assigned back at <code>:224</code>), mapped <code>required: false</code> (<code>OrderConfiguration.cs:39</code>) alongside
-          <code>OrderLine.UnitPrice</code> (<code>OrderLineConfiguration.cs:28</code>). Store Identity types <code>Customer.Address</code> as the
+          <code>OrderLine.UnitPrice</code> (<code>OrderLineConfiguration.cs:28</code>) and <code>OrderLine.ListPrice</code>
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/OrderLine.cs:42</code>, mapped at
+          <code>OrderLineConfiguration.cs:33</code>). Store Identity types <code>Customer.Address</code> as the
           framework <code>Address</code>
           (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Domain/Customers/Customer.cs:40</code>) and maps
           <code>Customer.Email</code> through <code>EmailValueConverter</code> (<code>CustomerConfiguration.cs:33</code>) with <code>Customer.Address</code>
@@ -401,6 +403,17 @@
           of them at all.</li>
           </ul>
           <h2 id="rationale">Rationale</h2>
+          <p>  <strong>Documented exception (ADC, user decision 2026-10-06).</strong> ADC&#39;s <code>Event.VenueAddress</code> and
+            <code>Activity.VenueAddress</code>
+            (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/Event.cs:45</code>,
+            <code>Activities/Activity.cs:45</code>) stay one free-text string on purpose: a display line that carries the
+            venue name, with no invariant beyond its length
+            (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/Events/EventConfiguration.cs:45-46</code>),
+            so the structured <code>Address</code> would impose a shape the data does not have. ADC&#39;s Start/End pairs stay
+            primitive too (<code>Events/Event.cs:33-36</code>, <code>Activities/Activity.cs:33-36</code>, <code>Sessions/Session.cs:31-34</code>):
+            their only rule is order, enforced by <code>CommonInvariants.EnsureEndIsNotBeforeStart</code>
+            (<code>Events/EventInvariants.cs:113</code>, <code>Activities/ActivityInvariants.cs:80</code>), and <code>DateRange</code> has no EF
+            converter to map them with.</p>
           <ul>
           <li><strong>The invariant belongs to the type, not to every caller.</strong> A <code>string</code> email can be validated in one
           handler and not the next; an <code>Email</code> cannot exist unvalidated, because the only entrance is a factory
@@ -441,7 +454,9 @@
           <code>DateTimeRange</code> are annotation-free.</li>
           <li><strong>Three of the seven have no consumer.</strong> <code>PhoneNumber</code> ships with invariants, tests and converters,
           and <code>DateRange</code> and <code>DateTimeRange</code> with tests only (no <code>*Invariants</code> class, no converter), but none
-          of the three has production usage, so their behavior is exercised only by the framework&#39;s own tests.</li>
+          of the three has production usage, so their behavior is exercised only by the framework&#39;s own tests.
+          Candidates exist: ADC&#39;s Start/End pairs could be <code>DateRange</code> or <code>DateTimeRange</code>, and stay primitive
+          by the documented exception under &quot;Adoption is real but partial&quot;.</li>
           <li><strong>Nothing gates that a domain value uses a value object.</strong> The <code>Create</code>-returns-<code>Result</code> rule is
           fitness-enforced, but no rule says a new email field must be <code>Email</code> rather than <code>string</code>. MMCA.Helpdesk
           is the visible consequence: the reference app models everything on primitives.</li>

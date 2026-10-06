@@ -262,7 +262,7 @@
           rather than by a writer thread: every auditable entity carries a database-managed concurrency token
           (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IRowVersioned.cs:11</code>) configured for every
           context in <code>OnModelCreating</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:417</code>).
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:416</code>).
           That is the single-writer guarantee an actor would provide, and it already holds across replicas,
           which an in-process actor would not (<a href="035-optimistic-concurrency.html">ADR-035</a>).</p>
           <p><strong>Fan-out is a push channel, not an actor mailbox.</strong> <code>ILiveChannelPublisher</code> is the port
@@ -326,8 +326,9 @@
           about, a second serialization contract beside the integration-event schema
           (<a href="010-integration-event-schema-versioning.html">ADR-010</a>), and a second answer to where state lives.</li>
           <li><strong>A hand-rolled in-memory per-entity lock or actor-like queue.</strong> It is per replica, and both apps scale
-          to more than one (every container app is <code>minReplicas: 1</code>, <code>maxReplicas: 2</code>,
-          <code>MMCA.ADC/infra/main.bicep:1843</code>, <code>MMCA.Store/infra/main.bicep:1591</code>), so an in-process writer guarantee is not a guarantee, and it would silently weaken a
+          to more than one (every container app is <code>minReplicas: 1</code> and at least <code>maxReplicas: 2</code>, four for the scaled ADC
+          apps under <code>conferenceMode</code>,
+          <code>MMCA.ADC/infra/main.bicep:1882</code>, <code>conferenceScaledMaxReplicas</code> at <code>:191</code>, <code>MMCA.Store/infra/main.bicep:1591</code>), so an in-process writer guarantee is not a guarantee, and it would silently weaken a
           correctness property the concurrency token holds across the fleet.</li>
           <li><strong>Adopting actors only for live polls.</strong> The live path is the least durable state in the system and
           the most visible during the event, so its first production exercise would fall on the day itself.</li>
@@ -345,10 +346,11 @@
           <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
           <p>No decision or rationale changed. Citations refreshed: the vote handler&#39;s class declaration
           (<code>CastVoteHandler.cs:20</code>) and its poll repository call (<code>:33</code>), <code>OnModelCreating</code>
-          (<code>ApplicationDbContext.cs:417</code>), and the output-cache pipeline step (<code>MiddlewarePipelineBuilder.cs:133</code>).
+          (<code>ApplicationDbContext.cs:416</code>), and the output-cache pipeline step (<code>MiddlewarePipelineBuilder.cs:133</code>).
           One wording correction: both apps scale to more than one replica rather than running more than one at
-          baseline, since every container app declares <code>minReplicas: 1</code>, <code>maxReplicas: 2</code>
-          (<code>MMCA.ADC/infra/main.bicep:1843</code>, <code>MMCA.Store/infra/main.bicep:1591</code>); a per-replica writer guarantee
+          baseline, since every container app declares <code>minReplicas: 1</code> and at least <code>maxReplicas: 2</code> (four for
+          the scaled ADC apps under <code>conferenceMode</code>)
+          (<code>MMCA.ADC/infra/main.bicep:1882</code>, <code>conferenceScaledMaxReplicas</code> at <code>:191</code>, <code>MMCA.Store/infra/main.bicep:1591</code>); a per-replica writer guarantee
           still fails at two replicas, so the argument holds.</p>
           <h2 id="related">Related</h2>
           <p><a href="007-grpc-extraction.html">ADR-007</a>, <a href="008-service-extraction-topology.html">ADR-008</a> and

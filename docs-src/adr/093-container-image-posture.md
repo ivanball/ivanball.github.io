@@ -127,15 +127,15 @@ outside the range a non-root user cannot bind
 (`.../MMCA.ADC.Conference.Service/Dockerfile:59-66`). See Revision (2026-09-07) item 2.
 
 What stays open is the gate, not the image. Each deploy scans the image it pushes with Trivy, but
-report-only in both consumers (`MMCA.ADC/.github/workflows/deploy.yml:1172-1173`,
-`MMCA.Store/.github/workflows/deploy.yml:1090,1097`), so a base-layer CRITICAL or HIGH is printed in the
-step log and does not stop a rollout. ADC scans every leg's tag, including a leg that only re-tagged
-an unchanged image; Store scans only a leg that rebuilt (`MMCA.Store/.github/workflows/deploy.yml:1091`),
-since an unchanged image was scanned by the deploy that built it. The supply-chain job generates its
+report-only in both consumers (`MMCA.ADC/.github/workflows/deploy.yml:1229-1230`,
+`MMCA.Store/.github/workflows/deploy.yml:1174-1175`), so a base-layer CRITICAL or HIGH is printed in the
+step log and does not stop a rollout. Both scan every leg's tag, including a leg that only re-tagged
+an unchanged image (Store's scan runs after its re-tag step, `MMCA.Store/.github/workflows/deploy.yml:1128-1129`),
+so a CVE disclosed after an image was built is still found (`:1160-1161`). The supply-chain job generates its
 CycloneDX SBOM from the solution filter (`MMCA.ADC/.github/workflows/deploy.yml:623-636`), so it describes the NuGet graph
 and not the image, which leaves that report-only scan as the only thing in either pipeline that
-looks at the base layer at all. Flipping it to gating is recorded as a follow-up beside each step
-rather than decided here: see Revision (2026-09-07) item 4 and Revision (2026-09-10).
+looks at the base layer at all. Keeping it non-gating while the baseline is observed is the recorded
+decision for both repos: see Revision (2026-10-06).
 
 ## Rationale
 - **A secret that is never a layer cannot leak from a layer.** BuildKit secret mounts are the only
@@ -320,3 +320,19 @@ ADC Trivy step is now `MMCA.ADC/.github/workflows/deploy.yml:1172` (pin `:1174`,
 non-root `USER` line in the Store services is `Dockerfile:72`; and ADC's Trivy comment still names a
 floating base image as the reason to stay non-gating (`MMCA.ADC/.github/workflows/deploy.yml:1168-1171`),
 so the stale-reason finding in Revision (2026-09-10) still stands.
+
+## Revision (2026-10-06)
+
+**One Trivy posture in both consumers, recorded as a decision.** Both deploy workflows run the scan
+the same way: on every image leg, the re-tagged unchanged images included, with `exit-code: '1'` so a
+CRITICAL or HIGH finding marks the step failed, and `continue-on-error: true` so the finding never
+fails the job or stops the rollout (ADC `MMCA.ADC/.github/workflows/deploy.yml:1229`,
+`continue-on-error` `:1230`, pin `:1231`, `exit-code` `:1237`; Store
+`MMCA.Store/.github/workflows/deploy.yml:1174`, `continue-on-error` `:1175`, pin `:1176`, `exit-code`
+`:1182`). Store's scan carries no `matrix.changed` guard and runs after the re-tag step (`:1128-1129`),
+so a leg that only re-tagged is scanned too (`:1160-1161`). ADC's step comment gives the same reason
+for staying non-gating, observing the baseline (`:1219-1223`), so the stale-reason finding of Revision
+(2026-09-10) and Revision (2026-10-01) is closed. Both comments name the same exit: flip
+`continue-on-error` to `false` once the baseline is clean or the residue is justified in a
+`.trivyignore` (ADC `:1227-1228`, Store `:1170-1171`). This replaces the open item: the scan is a
+deliberate non-gating report in both repos, not a difference between them.

@@ -128,7 +128,9 @@ Model a domain value that carries an invariant as an **immutable record value ob
   and `Order.Total` (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/Order.cs:58`) is
   seeded with `Money.Zero()` in the private constructor (`:171`) and accumulated through `Money.Add`
   (`:220`, assigned back at `:224`), mapped `required: false` (`OrderConfiguration.cs:39`) alongside
-  `OrderLine.UnitPrice` (`OrderLineConfiguration.cs:28`). Store Identity types `Customer.Address` as the
+  `OrderLine.UnitPrice` (`OrderLineConfiguration.cs:28`) and `OrderLine.ListPrice`
+  (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/OrderLine.cs:42`, mapped at
+  `OrderLineConfiguration.cs:33`). Store Identity types `Customer.Address` as the
   framework `Address`
   (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Domain/Customers/Customer.cs:40`) and maps
   `Customer.Email` through `EmailValueConverter` (`CustomerConfiguration.cs:33`) with `Customer.Address`
@@ -167,6 +169,18 @@ Model a domain value that carries an invariant as an **immutable record value ob
   of them at all.
 
 ## Rationale
+  **Documented exception (ADC, user decision 2026-10-06).** ADC's `Event.VenueAddress` and
+  `Activity.VenueAddress`
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/Event.cs:45`,
+  `Activities/Activity.cs:45`) stay one free-text string on purpose: a display line that carries the
+  venue name, with no invariant beyond its length
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/Events/EventConfiguration.cs:45-46`),
+  so the structured `Address` would impose a shape the data does not have. ADC's Start/End pairs stay
+  primitive too (`Events/Event.cs:33-36`, `Activities/Activity.cs:33-36`, `Sessions/Session.cs:31-34`):
+  their only rule is order, enforced by `CommonInvariants.EnsureEndIsNotBeforeStart`
+  (`Events/EventInvariants.cs:113`, `Activities/ActivityInvariants.cs:80`), and `DateRange` has no EF
+  converter to map them with.
+
 - **The invariant belongs to the type, not to every caller.** A `string` email can be validated in one
   handler and not the next; an `Email` cannot exist unvalidated, because the only entrance is a factory
   that returns a failure instead (`Email.cs:30-41`). That is the same invariant-over-discipline posture
@@ -206,6 +220,8 @@ Model a domain value that carries an invariant as an **immutable record value ob
 - **Three of the seven have no consumer.** `PhoneNumber` ships with invariants, tests and converters,
   and `DateRange` and `DateTimeRange` with tests only (no `*Invariants` class, no converter), but none
   of the three has production usage, so their behavior is exercised only by the framework's own tests.
+  Candidates exist: ADC's Start/End pairs could be `DateRange` or `DateTimeRange`, and stay primitive
+  by the documented exception under "Adoption is real but partial".
 - **Nothing gates that a domain value uses a value object.** The `Create`-returns-`Result` rule is
   fitness-enforced, but no rule says a new email field must be `Email` rather than `string`. MMCA.Helpdesk
   is the visible consequence: the reference app models everything on primitives.
