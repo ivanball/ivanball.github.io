@@ -210,12 +210,11 @@ and Decision were re-verified against current source (the `OutboxMessage` column
 
 ## Related
 [ADR-016](016-lockstep-versioning-masstransit-pin.md) (the lockstep release policy this pin is
-enforced under; its 2026-08-28 amendment first sketched exit options, and this record takes ownership
-of that list. ADR-016's **Transport exit options** section is still live and ranks a different
-set of candidates, an OpenTransit community fork of v8 first and a commercial v9 licence second,
-neither of which appears in decision 4 here. Its **Related** section now links back to this record
-and says the two lists are not reconciled, but it does not cede ownership of the list. Where the two
-disagree on candidates or ordering, this record is the later decision; ADR-016 does not say so),
+enforced under; its 2026-08-28 amendment first sketched exit options, and this record owns the
+ordered list. ADR-016's **Transport exit options** section now defers to this record: it keeps the
+surface inventory, the trial point and the proving ground, and records its OpenTransit-fork,
+commercial-v9 and raw-SDK candidates only as first sketched, so where the two lists differ this
+record governs),
 [ADR-066](066-broker-transport-selection.md) (which broker runs where, the axis orthogonal to which
 library talks to it),
 [ADR-003](003-outbox-dual-dispatch.md) (the outbox this record refuses to hand to a library),
