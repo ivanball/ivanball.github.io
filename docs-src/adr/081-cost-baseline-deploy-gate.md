@@ -116,19 +116,18 @@ The cost baseline is asserted by a **read-only reusable workflow** that both run
   (`MMCA.Store/.github/workflows/cost-guard.yml:52`, `MMCA.ADC/.github/workflows/cost-guard.yml:50`).
 
 - **`deploy` waits on it by name.** `cost-guard` is listed in `deploy.needs`
-  (`MMCA.Store/.github/workflows/deploy.yml:1187`, `MMCA.ADC/.github/workflows/deploy.yml:1242`), and
+  (`MMCA.Store/.github/workflows/deploy.yml:1083`, `MMCA.ADC/.github/workflows/deploy.yml:1145`), and
   because the deploy condition runs under `always()` with explicit per-need results, the condition
   requires `needs.cost-guard.result == 'success'` literally
-  (`MMCA.Store/.github/workflows/deploy.yml:1215-1229`,
-  `MMCA.ADC/.github/workflows/deploy.yml:1274-1289`). The only needs allowed to be `skipped` there are
-  the diff-scoped gates, and the two lists are not symmetric. Store tolerates one pair, `e2e-gate` or
-  `backend-test-gate`, whose UI and backend conditions are exact complements, so exactly one of the
-  two runs on every code deploy (`MMCA.Store/.github/workflows/deploy.yml:1228-1229`). ADC tolerates
-  that same pair plus `ai-eval-gate`
-  (`MMCA.ADC/.github/workflows/deploy.yml:1287-1289`), which runs on any code diff, so its `skipped`
-  arm covers only the docs-only path on which `deploy` does not run at all
-  (`MMCA.ADC/.github/workflows/deploy.yml:1266-1273`). Either way a cost-guard that fails, errors or
-  is skipped leaves `deploy` unrun.
+  (`MMCA.Store/.github/workflows/deploy.yml:1106-1116`,
+  `MMCA.ADC/.github/workflows/deploy.yml:1172-1183`). The only needs allowed to be `skipped` there are
+  the diff-scoped gates, and the two lists are not symmetric. Store tolerates one, `e2e-gate`, which
+  runs when the diff touches the UI (`MMCA.Store/.github/workflows/deploy.yml:761,1116`). ADC tolerates
+  `e2e-gate` plus `ai-eval-gate`, which runs when the diff touches the scoring code
+  (`MMCA.ADC/.github/workflows/deploy.yml:511,1182-1183`). Either way a cost-guard that fails, errors or
+  is skipped on a code push leaves `deploy` unrun; on a docs-only push `cost-guard` and `deploy` both
+  skip (`MMCA.ADC/.github/workflows/deploy.yml:772,1176`,
+  `MMCA.Store/.github/workflows/deploy.yml:732,1110`).
 
 - **Gate on deploys only, never on pull requests.** The calling job carries
   `if: github.event_name != 'pull_request'` and `secrets: inherit`

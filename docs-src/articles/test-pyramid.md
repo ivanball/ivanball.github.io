@@ -206,8 +206,8 @@ compiles. The in-process integration tier boots hosts directly through `WebAppli
 the point of that tier and also means it never sees the orchestration. The E2E tier does boot a full
 stack (ADC's E2E workflow brings the Aspire stack up in CI), but it asserts browser journeys rather than
 the wiring contracts, and the deploy path runs it only for UI-affecting changes.
-ADR-117 closes that gap as a package rather than a per-repo copy, and both consumer smoke tiers subclass
-it.
+ADR-117 closes that gap as a package rather than a per-repo copy, exercised in the framework's own CI
+over a sample AppHost; each consumer's real AppHost is booted by its E2E workflow instead.
 
 `AppHostFixtureBase` is a collection fixture: it boots the real AppHost once through an
 `IDistributedApplicationTestingBuilder`, starts it, waits for the resources to report ready, and hands the
@@ -347,8 +347,8 @@ The shape is right, but the scorecard names real gaps and one is squarely in the
   an aspiration. What holds category 14 below the top band starts with mutation testing: there is none
   on the Core tier, so a green suite proves the lines run, not that every assertion would catch a
   mutant. The scorecard names three structural gaps beside it: the integration tier (Redis, PostgreSQL,
-  package consumption, Bicep) runs on pull requests but is not a merge gate, the AppHost tier is
-  advisory, and messaging never meets a real broker in the framework's own CI. Those are real limits,
+  package consumption, Bicep) runs on pull requests but is not a merge gate, the AppHost tier fails the
+  run without being a required check, and messaging never meets a real broker in the framework's own CI. Those are real limits,
   stated plainly.
 
 None of these argue against the pyramid. They are the cost of keeping the base fast and honest about
@@ -463,6 +463,6 @@ four Identity workflow bases (`UserLoginTestsBase.cs:82`, `UserRegistrationTests
 `PageExtensions.cs:326-327`, `MMCA.Common/global.json:3`, ADR-015's structure/registration trade-off
 (`Website/docs-src/adr/015-architecture-fitness-functions.md:83`), and the Helpdesk subclasses
 (`DecoratorPipelineOrderTests.cs:36`, `MiddlewarePipelineOrderTests.cs:15`). The illustrative `CatalogTests`
-snippet is composed for shape; the base type and helpers are real.*
+snippet is composed for shape; the base type and helpers are real. 2026-10-07: the AppHost-tier sentences (consumers boot their real AppHost through E2E; the framework tier fails the run but is not a required check) follow `MMCA.ADC/AGENTS.md:77`, `MMCA.Store/AGENTS.md:76` and `MMCA.Common/.github/workflows/ci.yml:910-911`.*
 
 - Full series index: https://ivanball.github.io/writing.html

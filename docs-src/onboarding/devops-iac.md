@@ -56,21 +56,20 @@ GitHub Actions (deploy.yml)
 Phases 1 and 2 are their own jobs (`deploy.yml:1089`, `deploy.yml:1143`) rather than steps inside
 `deploy`, so they overlap the ~20-minute chromium `e2e-gate` instead of sitting on the critical
 path (`deploy.yml:1081-1088`, `:1123-1131`). Nothing is rolled out there: `build-images` only pushes
-tags, and the `deploy` job (`deploy.yml:1234-1690`) still waits on every gate before `main.bicep`
-points a container app at any of them. That gate list (`deploy.yml:1237`) is `supply-chain`,
-`cost-guard`, the **four** freshness gates (`dr-freshness`, `load-freshness`,
-`cross-service-freshness` and `cross-browser-freshness`), `foundation`, `build-images`,
-`ai-eval-gate`, and then **exactly one** of the two complementary test gates: the chromium
-`e2e-gate` on a UI diff or `backend-test-gate` on every other code diff (`deploy.yml:1261-1268`,
-`:1282-1284`). Those last two conditions are exact complements, which is what keeps the invariant
-"no production deploy without test execution" true without either gate having to be unconditional.
-The two newest entries are `cross-browser-freshness`, which asserts a recent successful firefox
-**and** webkit leg on `e2e.yml`, so cross-engine coverage is enforced without putting
-either engine back on the per-deploy critical path, and `ai-eval-gate`, which runs the AI session
-scorer's golden-replay and prompt-contract tiers on every code deploy and adds the paid live judge
-only when the diff touches the scoring code (`deploy.yml:1242-1246`). Both are `deploy.yml` jobs and
-belong to the CI/CD chapter; they matter here because the feature `ai-eval-gate` guards is the same
-one the token-ceiling alert in `main.bicep` bounds at runtime (see below).
+tags, and the `deploy` job (`deploy.yml:1142`) still waits on every gate before `main.bicep`
+points a container app at any of them. That gate list (`deploy.yml:1145`) is `supply-chain`,
+`cost-guard`, the `freshness` job with its **four** steps (`dr-freshness`, `load-freshness`,
+`cross-service-freshness` and `cross-browser-freshness`), `foundation`, `build-images`, and two
+conditional gates: the chromium `e2e-gate` on a UI diff and `ai-eval-gate` on a scoring-code diff
+(`deploy.yml:1182-1183`). There is no separate test gate on the push: the PR's `build-and-test` is the
+test gate, because branch protection enforces admins and requires an up-to-date branch, so the PR run
+covers the exact tree that merges (`deploy.yml:1146-1148`). `cross-browser-freshness` asserts a recent
+successful firefox **and** webkit leg on `e2e.yml`, so cross-engine coverage is enforced without putting
+either engine back on the per-deploy critical path, and `ai-eval-gate` runs the AI session scorer's paid
+live judge only when the diff touches the scoring code (`deploy.yml:505-511`), while its golden-replay
+and prompt-contract tiers run in every PR. Both live in `deploy.yml` and belong to the CI/CD chapter;
+they matter here because the feature `ai-eval-gate` guards is the same one the token-ceiling alert in
+`main.bicep` bounds at runtime (see below).
 
 The **shared resource group** is `acc-rg` in the QiMata Sponsorship subscription (East US 2), read
 from the `AZURE_RESOURCE_GROUP` repository variable (`deploy.yml:24`) and named in the SQL-region

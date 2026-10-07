@@ -413,14 +413,14 @@
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
           <li><strong>The gate is ui-scoped and may legitimately skip.</strong> Both apps gate <code>e2e-gate</code> on a <code>ui</code> change
-          filter (ADC <code>deploy.yml:885</code>, Store <code>:852</code>) and <code>deploy</code> accepts <code>skipped</code> for it (ADC <code>:1287</code>,
-          Store <code>:1228</code>), so a backend-only or infra-only deploy ships with no Web Vitals measurement of that
-          commit. Both apps pair the gate with a <code>backend-test-gate</code> carrying the exact inverse condition
-          (ADC <code>deploy.yml:504</code>, <code>:506</code>; Store <code>:537</code>, <code>:539</code>), but that job runs no browser, so it leaves
-          this budget unmeasured on those deploys. Same intended cost trade as the accessibility gate, and the same caveat: &quot;deployed&quot;
+          filter (ADC <code>deploy.yml:803</code>, Store <code>:761</code>) and <code>deploy</code> accepts <code>skipped</code> for it (ADC <code>:1182</code>,
+          Store <code>:1116</code>), so a backend-only or infra-only deploy ships with no Web Vitals measurement of that
+          commit. The test gate on such a deploy is the pull request&#39;s required checks (ADC <code>:798-800</code>,
+          Store <code>:757-759</code>), which run no browser, so they leave this budget unmeasured on those deploys.
+          Same intended cost trade as the accessibility gate, and the same caveat: &quot;deployed&quot;
           does not always mean &quot;the budget ran on this commit&quot;.</li>
           <li><strong>It never runs on a pull request.</strong> The E2E project is in neither solution filter and the gate is
-          push/dispatch only (ADC <code>deploy.yml:885</code>, Store <code>:852</code>), so a regression is caught between merge and
+          push/dispatch only (ADC <code>deploy.yml:803</code>, Store <code>:761</code>), so a regression is caught between merge and
           rollout, not before merge.</li>
           <li><strong>The measured configuration is not the production one.</strong> CI pins the UI to <code>InteractiveServer</code>
           (ADC <code>e2e.yml:226</code>, Store <code>:229</code>), so the numbers describe Server-mode prerender-then-hydrate under

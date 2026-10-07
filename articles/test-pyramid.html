@@ -332,8 +332,8 @@
           the point of that tier and also means it never sees the orchestration. The E2E tier does boot a full
           stack (ADC&#39;s E2E workflow brings the Aspire stack up in CI), but it asserts browser journeys rather than
           the wiring contracts, and the deploy path runs it only for UI-affecting changes.
-          ADR-117 closes that gap as a package rather than a per-repo copy, and both consumer smoke tiers subclass
-          it.</p>
+          ADR-117 closes that gap as a package rather than a per-repo copy, exercised in the framework&#39;s own CI
+          over a sample AppHost; each consumer&#39;s real AppHost is booted by its E2E workflow instead.</p>
           <p><code>AppHostFixtureBase</code> is a collection fixture: it boots the real AppHost once through an
           <code>IDistributedApplicationTestingBuilder</code>, starts it, waits for the resources to report ready, and hands the
           running <code>DistributedApplication</code> to every test in the collection. The wait is the design point. &quot;The
@@ -455,8 +455,8 @@
           an aspiration. What holds category 14 below the top band starts with mutation testing: there is none
           on the Core tier, so a green suite proves the lines run, not that every assertion would catch a
           mutant. The scorecard names three structural gaps beside it: the integration tier (Redis, PostgreSQL,
-          package consumption, Bicep) runs on pull requests but is not a merge gate, the AppHost tier is
-          advisory, and messaging never meets a real broker in the framework&#39;s own CI. Those are real limits,
+          package consumption, Bicep) runs on pull requests but is not a merge gate, the AppHost tier fails the
+          run without being a required check, and messaging never meets a real broker in the framework&#39;s own CI. Those are real limits,
           stated plainly.</li>
           </ul>
           <p>None of these argue against the pyramid. They are the cost of keeping the base fast and honest about

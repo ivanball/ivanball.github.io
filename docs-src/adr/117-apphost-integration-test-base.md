@@ -18,6 +18,10 @@ Revised 2026-10-01: decision 9 shows a non-null skip reason in every consumer.
 Revised 2026-10-06: the ADC gateway test asserts liveness (`/alive`) rather than the aggregate
 `/health`, and the package's XML documentation now recommends the safe skip branch.
 
+Revised 2026-10-07: the consumer AppHost smoke projects (ADC and Store) and their CI job are removed,
+so the consumer passages are restated as history, and MMCA.Common's `apphost-testing` tier is now
+blocking and remains where the base is exercised (see Revision below).
+
 ## Context
 The AppHost is the only file that states how a whole stack fits together: which project resources
 exist, which database each one owns, which broker they share, where JWKS discovery points, and the
@@ -33,11 +37,10 @@ tier does the same for three hosts at once
 runs against a deployed environment, by which time a composition mistake is a production incident
 rather than a test failure.
 
-MMCA.ADC proved both the gap and the shape of the answer. Its
-`Tests/Integration/MMCA.ADC.AppHost.SmokeTests` project boots the real AppHost through
-`DistributedApplicationTestingBuilder`, and it sits deliberately outside every `.slnx` and `.slnf`
-so no ordinary build picks it up: CI restores and builds it by explicit project path
-(`MMCA.ADC/.github/workflows/cross-service-tests.yml:225`, `:268`). Before this package existed that
+MMCA.ADC proved both the gap and the shape of the answer. Its AppHost smoke project (removed on
+2026-10-07, see Revision below) booted the real AppHost through
+`DistributedApplicationTestingBuilder` and sat deliberately outside every `.slnx` and `.slnf`, so no
+ordinary build picked it up and CI built it by explicit project path. Before this package existed that
 project asked the gateway for one health answer, and what it proved is how little of the code around
 that answer is ADC-specific: a startup budget, a readiness budget, a poll interval, a poll loop that
 treats a connection failure as "not yet", and a teardown. Roughly a hundred lines of infrastructure
@@ -109,8 +112,9 @@ skip rather than a timeout, and wait for readiness per resource rather than for 
    current user's personal store read-only and answers false when it cannot
    (`.../DeveloperCertificateAvailability.cs:61-75`). Installing or trusting a certificate is a
    machine-level act a test fixture has no business performing silently; a CI job that needs one runs
-   `dotnet dev-certs https --trust` as an explicit step
-   (`MMCA.Common/.github/workflows/ci.yml:1000`, in the `apphost-testing` job declared at `:958`).
+   `dotnet dev-certs https --trust` as an explicit step. The framework's own `apphost-testing` job
+   needs none, because its sample AppHost serves cleartext only, and its header says a consumer stack
+   with an https launch profile adds that step (`MMCA.Common/.github/workflows/ci.yml:905`, `:914-917`).
 
 5. **The RS256 keypair is minted when the environment has none.** `EphemeralRsaKeyPair.Create()`
    (`.../Preconditions/EphemeralRsaKeyPair.cs:42`) generates an RSA-2048 pair and the fixture pushes
@@ -157,16 +161,19 @@ skip rather than a timeout, and wait for readiness per resource rather than for 
    `MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/MMCA.Common.Testing.Aspire.csproj:25`), so a
    test class writes the skip itself, always with a non-null reason: `Assert.SkipWhen(!Fixture.IsAvailable,
    Fixture.SkipReason ?? "...")`
-   (`MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Aspire.AppHostTests/SampleAppHostTests.cs:155`,
-   `MMCA.Store/Tests/Integration/MMCA.Store.AppHost.SmokeTests/AppHostCompositionSmokeTests.cs:50`) or
-   an `if (!Fixture.IsAvailable) Assert.Skip(...)` branch
-   (`MMCA.ADC/Tests/Integration/MMCA.ADC.AppHost.SmokeTests/AdcAppHostSmokeTests.cs:67-73`).
+   (`MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Aspire.AppHostTests/SampleAppHostTests.cs:155`) or
+   the `if (!Fixture.IsAvailable) { Assert.Skip(Fixture.SkipReason!); }` branch the package's own
+   documentation prescribes
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/Fixtures/AppHostFixtureBase.cs:34-35`).
    `SkipReason` is null exactly when the stack started, and `SkipWhen` validates its reason before
-   the condition, so a null-forgiven `Fixture.SkipReason!` throws `ArgumentNullException` on the
-   runner the tier exists for (`.../AdcAppHostSmokeTests.cs:59-66`). That keeps the skip API where
-   a test project already has it and keeps one more package out of a consumer's graph.
+   the condition, so a null-forgiven `Fixture.SkipReason!` passed to `SkipWhen` throws
+   `ArgumentNullException` on the runner the tier exists for (`.../AppHostFixtureBase.cs:36-37`). That
+   keeps the skip API where a test project already has it and keeps one more package out of a
+   consumer's graph.
 
-10. **The tier runs in CI, advisory, against an in-repo sample.**
+10. **The tier runs in CI, blocking, against an in-repo sample.** The `apphost-testing` job carries
+    no `continue-on-error`, so a red fails the run, but it is not a required merge check
+    (`MMCA.Common/.github/workflows/ci.yml:905`, `:910-911`).
     `Tests/Hosting/MMCA.Common.Testing.Aspire.AppHostTests` boots a sample AppHost with a SQLite file
     and ONE sample service project declared as TWO resources, so it needs no container runtime, and
     asserts every helper against it. The two resources are the two cleartext protocol profiles,
@@ -220,35 +227,20 @@ Six shapes were weighed, and each rejection is a property the package keeps:
   four lines over the existing `TestPolling.PollUntilAsync`.
 
 ## Trade-offs
-- **A consumer's smoke tier is a subclass.** `MMCA.ADC.AppHost.SmokeTests` is two files. The fixture
-  is `AdcAppHostFixture : AppHostFixtureBase<Projects.MMCA_ADC_AppHost>`
-  (`MMCA.ADC/Tests/Integration/MMCA.ADC.AppHost.SmokeTests/AdcAppHostFixture.cs:28`), whose whole
-  body is a `RequiredEnvironment` override (`:31`, opt-in, Docker and the developer certificate), a
-  `Budget` override (`:42`, twelve minutes startup and eight readiness, because a cold
-  agent pulls four container images before a process starts) and a `ResourcesToAwait` override
-  (`:52`, the four services then the gateway, in dependency order so a failure names the first thing
-  that did not come up). The tests are
-  `AdcAppHostSmokeTests : AppHostTestBase<AdcAppHostFixture>` (`.../AdcAppHostSmokeTests.cs:32`). The
-  mapping was mechanical: the old `StartupBudget` / `ReadinessBudget` / `PollInterval` fields are the
-  one `Budget` override; the `PollUntilHealthyAsync` loop is gone, because the base waits on each
-  resource's own health signal instead of polling one endpoint through the gateway; the
-  `DistributedApplicationTestingBuilder.CreateAsync` / `BuildAsync` / `StartAsync` / `StopAsync`
-  sequence is the type parameter; and the single `/health` assertion is now a liveness assertion,
-  `AssertAliveAsync("gateway", "http")` (`:97`), because the gateway's aggregate `/health` report
-  probes every backend and answers 503 whenever one downstream probe has not settled (`:75-91`). It
-  sits alongside `AssertJwksAsync` (`:110`), `AssertH2cAsync` over four endpoints (`:125` for the
-  three REST services, `:137` for Notification's dedicated `grpc` endpoint) and
-  `AssertDataSourceAsync` over four data sources (`:152`), none of which the earlier project
-  asserted. The workflow job keeps its `dotnet dev-certs` step
-  (`MMCA.ADC/.github/workflows/cross-service-tests.yml:275`) and runs no `openssl` keypair step
-  (`:282`), since the fixture mints one. MMCA.Store's tier is the same shape
-  (`MMCA.Store/Tests/Integration/MMCA.Store.AppHost.SmokeTests/StoreAppHostFixture.cs:23`,
-  `.../AppHostCompositionSmokeTests.cs:26`).
-- **Cost: this is the slowest tier per assertion, and it is deliberately advisory.** The
-  `apphost-testing` job runs `continue-on-error`, exactly as ADC's `apphost-smoke` does under
-  [ADR-098](098-aspire-orchestration-not-testing-or-dashboards.md), so a flake reds the job for
-  visibility without failing the run and can never gate a release. Promote it out of
-  `continue-on-error` only after a green streak; delete it if it proves to be a flake generator.
+- **A consumer's AppHost tier is a subclass, and neither consumer carries one today.** While both
+  consumers ran the tier (2026-09-11 to 2026-10-07), each was a fixture plus a test class over the
+  package: ADC's was two files, a fixture whose body was three overrides (`RequiredEnvironment`,
+  `Budget` with twelve minutes startup and eight readiness, and `ResourcesToAwait`) and a test class
+  over `AppHostTestBase<AdcAppHostFixture>`, and Store's had the same shape. Both projects, and the
+  `apphost-smoke` job that ran them, are removed. Each consumer's real AppHost composition is exercised
+  instead by its `e2e.yml`, which boots the AppHost for every E2E run, including the deploy's chromium
+  `e2e-gate` (`MMCA.ADC/.github/workflows/e2e.yml:29-30`, `:227`;
+  `MMCA.Store/.github/workflows/e2e.yml:252`), and the base itself by MMCA.Common's own tier
+  (`MMCA.ADC/AGENTS.md:77`, `MMCA.Store/AGENTS.md:76`). The package is unchanged, so a consumer that
+  wants the wiring assertions back writes the subclass again rather than a harness.
+- **Cost: this is the slowest tier per assertion, and it blocks the CI run without being a required
+  merge check.** The `apphost-testing` job has no `continue-on-error`, so a red fails the MMCA.Common
+  CI run, but it is not a required merge check (`MMCA.Common/.github/workflows/ci.yml:910-911`).
 - **A consumer's real stack still needs Docker on the runner.** The in-repo sample avoids containers
   on purpose, so the framework's own CI does not pay for image pulls, but ADC's AppHost starts SQL
   Server, Redis, RabbitMQ and MailDev. That is why `AppHostEnvironmentRequirement.Docker` is part of
@@ -295,6 +287,21 @@ No decision or rationale changed.
 - The Aspire pin still reads 13.6.0 (`MMCA.Common/Directory.Packages.props:359`, `:368`).
 - Anchors re-verified against current source: `AppHostFixtureBase.cs`, `H2cHealthCheckExtensions.cs`,
   `AdcAppHostSmokeTests.cs`, `Directory.Packages.props` and `FACTS.md:40`.
+
+## Revision (2026-10-07)
+- The consumer AppHost smoke projects (`MMCA.ADC.AppHost.SmokeTests`, `MMCA.Store.AppHost.SmokeTests`)
+  and the `apphost-smoke` job in each `cross-service-tests.yml` are removed, along with the consumers'
+  `Aspire.Hosting.Testing` pins; the package is now pinned in MMCA.Common only
+  (`MMCA.Common/Directory.Packages.props:368`). Context and Trade-offs describe the consumer tiers as
+  history, and the anchors into those projects in earlier revisions no longer resolve.
+- Each consumer's AppHost composition is exercised by `e2e.yml` booting the real AppHost on every E2E
+  run (`MMCA.ADC/AGENTS.md:77`, `MMCA.Store/AGENTS.md:76`).
+- MMCA.Common's `apphost-testing` tier is blocking (no `continue-on-error`) and is where the base is
+  exercised; it is not a required merge check (`MMCA.Common/.github/workflows/ci.yml:905`, `:910-911`).
+  Its `dotnet dev-certs` step is removed, because the sample serves cleartext only (`:914-917`), so
+  decision 4 no longer cites one.
+- Decision 9 now cites the framework sample test and the package documentation instead of the deleted
+  consumer tests. The decision itself is unchanged.
 
 ## Related
 [ADR-098](098-aspire-orchestration-not-testing-or-dashboards.md) (the orchestration posture this tier

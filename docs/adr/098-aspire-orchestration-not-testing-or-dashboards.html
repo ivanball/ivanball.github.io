@@ -248,7 +248,7 @@
           one app&#39;s; the ADC bicep and workflow anchors are re-pinned to their current lines. Revised
           2026-10-01: the per-PR framework AppHost test job and the extra telemetry cuts are recorded. Revised
           2026-10-06: the ADC AppHost&#39;s broker is described as selectable (RabbitMQ or the Service Bus
-          emulator) rather than RabbitMQ only. Records two
+          emulator) rather than RabbitMQ only. Revised 2026-10-07: the consumer AppHost smoke projects and their nightly job are removed, so the bounded exception is MMCA.Common&#39;s blocking framework tier alone (see Revision below). Records two
           standing divergences from the default .NET Aspire path as
           decisions rather than as gaps. Both parts describe what the four repos already do, with the single
           bounded exception recorded in Decision 1, and the value of writing them down is that a reader (or a
@@ -275,24 +275,17 @@
           like an unfinished adoption:</p>
           <ol>
           <li><code>DistributedApplicationTestingBuilder</code> (the <code>Aspire.Hosting.Testing</code> package), which boots the
-          whole app model in a test process. No integration tier here uses it, and the only projects that
-          reference it are the framework&#39;s own AppHost testing package and the two nightly AppHost
-          composition smoke tests it exists for, the bounded exception Decision 1 sanctions. The framework
-          package also has its own per-PR test project over a sample AppHost, taking it by
+          whole app model in a test process. No integration tier here uses it, and the only project that
+          references it is the framework&#39;s own AppHost testing package, the bounded exception Decision 1
+          sanctions. That package has its own per-PR test project over a sample AppHost, taking it by
           <code>ProjectReference</code> rather than a direct package reference
           (<code>MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Aspire.AppHostTests/MMCA.Common.Testing.Aspire.AppHostTests.csproj:28</code>,
-          run by the <code>continue-on-error</code> <code>apphost-testing</code> job at <code>MMCA.Common/.github/workflows/ci.yml:958</code>,
-          the flag at <code>:976</code>, the <code>MMCA_APPHOST_TESTS</code> opt-in at <code>:1012</code>). The package is
-          pinned in three repos (<code>MMCA.Common/Directory.Packages.props:368</code>,
-          <code>MMCA.ADC/Directory.Packages.props:92</code>, <code>MMCA.Store/Directory.Packages.props:109</code>) and referenced
-          by three projects: <code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/MMCA.Common.Testing.Aspire.csproj:20</code>,
+          run by the blocking <code>apphost-testing</code> job at <code>MMCA.Common/.github/workflows/ci.yml:905</code>, the
+          blocking note at <code>:910-911</code>, the <code>MMCA_APPHOST_TESTS</code> opt-in at <code>:947</code>). The package is
+          pinned in MMCA.Common only (<code>MMCA.Common/Directory.Packages.props:368</code>) and referenced by
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/MMCA.Common.Testing.Aspire.csproj:20</code>,
           which owns the only <code>DistributedApplicationTestingBuilder.CreateAsync</code> call in the workspace
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/Fixtures/AppHostFixtureBase.Generic.cs:31</code>),
-          plus the two consumer smoke
-          projects that take the framework package instead
-          (<code>MMCA.ADC/Tests/Integration/MMCA.ADC.AppHost.SmokeTests/MMCA.ADC.AppHost.SmokeTests.csproj:28</code>
-          and <code>:32</code>, <code>MMCA.Store/Tests/Integration/MMCA.Store.AppHost.SmokeTests/MMCA.Store.AppHost.SmokeTests.csproj:29</code>
-          and <code>:30</code>).</li>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/Fixtures/AppHostFixtureBase.Generic.cs:31</code>).</li>
           <li>The Azure Container Apps Aspire dashboard, the hosted version of the local dashboard, for looking
           at a deployed environment. No ACA dashboard resource or property exists in ADC&#39;s infrastructure.</li>
           </ol>
@@ -339,26 +332,22 @@
           the E2E lane (<code>MMCA.ADC/.github/workflows/e2e.yml:3-5</code>). So an app-model integration tier would be a
           CI-only tier duplicating the coverage of a CI-only tier that already exists, while removing the fast
           loop the current fixtures give.</p>
-          <p><strong>One sanctioned exception is allowed, and it is bounded on purpose:</strong> a nightly AppHost smoke tier
-          that brings the app model up and probes the composition, on the existing non-gating cross-service
-          nightly (<code>MMCA.ADC/.github/workflows/cross-service-tests.yml:25-31</code>, never in <code>deploy.needs</code> by
-          design at <code>:17-22</code>). Its job is to catch a broken AppHost composition without putting the app model
-          in the gating path.</p>
+          <p><strong>One sanctioned exception is allowed, and it is bounded on purpose:</strong> an AppHost test tier that
+          brings an app model up and probes the composition, kept out of every consumer&#39;s gating path. Its job
+          is to catch a broken AppHost composition without turning the app model into an integration-test
+          harness.</p>
           <p>ADR-117 turns that exception into a framework tier, which is what keeps it bounded. The boot, the
           readiness budget and the opt-in gate live once in <code>MMCA.Common.Testing.Aspire</code>
           (<code>AppHostFixtureBase.cs:41</code>, the generic subclass a consumer names its AppHost through at
-          <code>AppHostFixtureBase.Generic.cs:20</code>, the assertion base at <code>AppHostTestBase.cs:29</code>), so each app
-          declares a fixture and its contracts rather than an orchestration harness. Both consumers own one:
-          ADC&#39;s <code>AdcAppHostFixture.cs:28</code> with five test methods on <code>AdcAppHostSmokeTests.cs:32</code> (gateway
-          health, JWKS through the gateway, h2c prior knowledge on the three Http2-only services and on
-          notification&#39;s <code>grpc</code> endpoint, a resolved per-service connection string each), and Store&#39;s
-          <code>StoreAppHostFixture.cs:23</code> with five on <code>AppHostCompositionSmokeTests.cs:26</code>. Each project sits
-          outside every <code>.slnx</code> and <code>.slnf</code> and is restored, built and run by explicit path in an
-          <code>apphost-smoke</code> job that stays <code>continue-on-error</code> (ADC: <code>cross-service-tests.yml:208</code>, the flag at
-          <code>:213</code>, the three explicit-path steps at <code>:224</code>, <code>:267</code> and <code>:277</code>; Store: <code>:199</code>, the flag at
-          <code>:204</code>, the steps at <code>:215</code>, <code>:257</code> and <code>:267</code>). Both runs set the framework&#39;s <code>MMCA_APPHOST_TESTS</code>
-          opt-in (ADC <code>:289</code>, Store <code>:274</code>); without it the fixture never boots an orchestrator and every test
-          skips with that reason, which is what a developer machine gets.</p>
+          <code>AppHostFixtureBase.Generic.cs:20</code>, the assertion base at <code>AppHostTestBase.cs:29</code>), and the tier runs
+          per pull request in MMCA.Common over a sample AppHost, in the <code>apphost-testing</code> job, which is blocking
+          but not a required merge check (<code>MMCA.Common/.github/workflows/ci.yml:905</code>, <code>:910-911</code>). It sets the
+          framework&#39;s <code>MMCA_APPHOST_TESTS</code> opt-in (<code>:947</code>); without it the fixture never boots an orchestrator
+          and every test skips with that reason, which is what a developer machine gets. Neither consumer
+          carries an AppHost smoke project: each consumer&#39;s real AppHost composition is booted by its <code>e2e.yml</code>
+          on every E2E run, including the deploy&#39;s chromium <code>e2e-gate</code> (<code>MMCA.ADC/AGENTS.md:77</code>,
+          <code>MMCA.Store/AGENTS.md:76</code>, <code>MMCA.ADC/.github/workflows/e2e.yml:227</code>,
+          <code>MMCA.Store/.github/workflows/e2e.yml:252</code>).</p>
           <p>What stays out is the scope, not the assertion count: an app-model tier that starts carrying
           behavioural coverage the per-service and E2E tiers already own is a reversal of this record, not an
           extension of it.</p>
@@ -414,11 +403,12 @@
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
-          <li><strong>Nothing below the E2E lane tests the AppHost&#39;s own wiring.</strong> A bad reference or a missing
+          <li><strong>Nothing below the E2E lane tests a consumer AppHost&#39;s own wiring.</strong> A bad reference or a missing
           environment injection in <code>Program.cs</code> is caught by the E2E gate or by a developer, and the E2E gate
           is ui-scoped and can legitimately skip (ADR-092 records the same property for the vitals budget).
-          The nightly AppHost smoke tier exists precisely to close this, and being nightly and non-gating,
-          it closes it a day late by design.</li>
+          The framework tier proves the shared base against a sample AppHost, not an app&#39;s composition, so
+          this gap is closed only by the E2E runs (scheduled, dispatched and on UI deploys) that boot each
+          consumer&#39;s AppHost.</li>
           <li><strong>The environment-variable channel is global and order-sensitive.</strong> Hosts must boot strictly
           sequentially and every pushed variable has to be restored on disposal
           (<code>SqlServerIntegrationTestFixtureBase.cs:17-24</code>, <code>CrossServiceFixtureBase.cs:32-38</code>), which is
@@ -475,6 +465,20 @@
           SLO rules, availability alert, action group, workbook, the four container apps) and the deploy
           step that applies the Bicep template.</li>
           </ul>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <ul>
+          <li>The consumer AppHost smoke projects and the nightly <code>apphost-smoke</code> job in each
+          <code>cross-service-tests.yml</code> are removed, together with the consumers&#39; <code>Aspire.Hosting.Testing</code> pins;
+          the package is pinned in MMCA.Common only (<code>MMCA.Common/Directory.Packages.props:368</code>). Each
+          consumer&#39;s AppHost composition is exercised instead by <code>e2e.yml</code>, which boots the real AppHost on
+          every E2E run (<code>MMCA.ADC/AGENTS.md:77</code>, <code>MMCA.Store/AGENTS.md:76</code>).</li>
+          <li>MMCA.Common&#39;s <code>apphost-testing</code> job is blocking (no <code>continue-on-error</code>) but not a required merge
+          check (<code>MMCA.Common/.github/workflows/ci.yml:910-911</code>), and it remains where the AppHost test base is
+          exercised.</li>
+          <li>Context item 1, the bounded exception in Decision 1 and the first Trade-off are restated for that
+          state. The exception stays bounded to one framework tier over a sample AppHost; the orchestration
+          and observability decisions are unchanged.</li>
+          </ul>
           <h2 id="related">Related</h2>
           <p><a href="041-observability-and-telemetry.html">ADR-041</a> (the shared Aspire OpenTelemetry baseline and the
           sampling / metric-toggle knobs this record&#39;s production half configures),
@@ -492,7 +496,7 @@
           <a href="092-web-vitals-budget-gate.html">ADR-092</a> (the E2E lane this record defers app-model coverage to, and
           the record of that lane&#39;s skip behavior),
           <a href="117-apphost-integration-test-base.html">ADR-117</a> (the framework AppHost fixture base, opt-in gate and
-          readiness budget that turn this record&#39;s bounded exception into a shared tier both consumers take).</p>
+          readiness budget that turn this record&#39;s bounded exception into a shared framework tier).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -510,6 +514,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>
