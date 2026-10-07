@@ -88,10 +88,10 @@ address, and so does a 500 when the SMTP hop is down.
    `ResetPasswordCommand` record, a handler that is a constructor call on the base, and a sealed
    `PasswordResetController` supplying the two command factories. Configuration is one key
    (`PasswordReset:ResetUrl`) in each Identity service's `appsettings.json` (MMCA.ADC
-   `Source/Services/MMCA.ADC.Identity.Service/appsettings.json:108`, MMCA.Store
+   `Source/Services/MMCA.ADC.Identity.Service/appsettings.json:114`, MMCA.Store
    `Source/Services/MMCA.Store.Identity.Service/appsettings.json:105`) and as `PasswordReset__ResetUrl`
-   in `infra/main.bicep` for production (MMCA.ADC `:1763`, MMCA.Store `:1551`). Only MMCA.ADC's Aspire
-   AppHost also sets it for local runs (`Source/Hosting/MMCA.ADC.AppHost/Program.cs:470`); MMCA.Store's
+   in `infra/main.bicep` for production (MMCA.ADC `:1790`, MMCA.Store `:1551`). Only MMCA.ADC's Aspire
+   AppHost also sets it for local runs (`Source/Hosting/MMCA.ADC.AppHost/Program.cs:462`); MMCA.Store's
    local runs use the `appsettings.json` default. MMCA.ADC and MMCA.Store both
    adopted it in v1.160.0.
 
@@ -170,3 +170,15 @@ acceptance, two were wrong as written, and one had drifted from a later revision
   two production apps only. The Trade-offs line on [ADR-024](024-push-notifications.md) now matches
   that record's 2026-08-31 revision, which no longer calls `IEmailSender` an app-level-only primitive
   while keeping it outside the channel model.
+
+## Revision (2026-10-06)
+No behavior changed; only line anchors moved.
+
+- Decision 6 anchors updated: MMCA.ADC Identity `appsettings.json:114`, MMCA.ADC `infra/main.bicep:1790`,
+  and the MMCA.ADC AppHost key at `Source/Hosting/MMCA.ADC.AppHost/Program.cs:462` (the AppHost
+  anchor recorded as `:470` in the 2026-10-01 Corrections bullet now sits at `:462`).
+- The breaking `IDistributedLock` constructor change and its fix, recorded above at
+  `MMCA.Common/CHANGELOG.md:86` and `:91`, now sit at `:427` and `:432` under `[1.213.0]`.
+- All other anchors (`PasswordResetTokenService.cs`, `ResetPasswordHandlerBase.cs`,
+  `ForgotPasswordHandlerBase.cs`, MMCA.Store `appsettings.json:105` and `infra/main.bicep:1551`)
+  were re-verified against current source and hold.

@@ -11,6 +11,7 @@ channel is namespaced per application).
 Revised 2026-09-11 (the Store order-email call sites moved onto ADR-114 durable internal commands, so
 those paths now retry and dead-letter; `IEmailSender` itself is unchanged).
 Revised 2026-10-01 (the opt-in dedup key is scoped to the sender; see Revision below).
+Revised 2026-10-06: the dedup race is recorded as propagate-and-roll-back under the `ITransactional` send, not catch-and-requery.
 ## Context
 The framework needs to deliver user-facing notifications (an organizer broadcasting a schedule change,
 a per-user alert). Two delivery models each fail on their own. A pure real-time push over a WebSocket
@@ -30,22 +31,29 @@ recipient policy both behind abstractions.
   `SendPushNotificationHandler` (`MMCA.Common.Application`) resolves recipients, creates a
   `PushNotification` aggregate (`MMCA.Common.Domain.Notifications.PushNotifications`, the audit record of
   what was sent, carrying the caller's optional `ScopeKey` alongside the title, body, sender and
-  recipient count, `SendPushNotificationHandler.cs:75-81`), persists one `UserNotification` inbox row
+  recipient count, `SendPushNotificationHandler.cs:86-92`), persists one `UserNotification` inbox row
   per recipient (`MMCA.Common.Domain.Notifications.UserNotifications`, carrying `IsRead` / `ReadOn` with
   an idempotent `MarkAsRead`), and only then dispatches the live push. The inbox is the durable source
-  of truth; the push is the best-effort live layer over it.
+  of truth; the push is the best-effort live layer over it. The three saves (audit row, inbox rows,
+  terminal status, `:103`, `:113`, `:156`) are one unit: `SendPushNotificationCommand` is
+  `ITransactional` (`SendPushNotificationCommand.cs:23`), so a fault anywhere rolls the whole send
+  back, and the live legs run inside that unit, making live delivery at-least-once and the inbox rows
+  exactly-once (`SendPushNotificationHandler.cs:21-31`).
 - **A send is idempotent only when the caller opts in.** The command may carry a `DedupKey`; when it is
   present and not whitespace the handler scopes it to the sender (the stored key is the hex SHA-256 of
-  `{sentByUserId}:{clientKey}`, `SendPushNotificationHandler.cs:185-187`), so another caller reusing the
+  `{sentByUserId}:{clientKey}`, `SendPushNotificationHandler.cs:168-170`), so another caller reusing the
   same client key neither suppresses this send nor is handed this sender's notification. It looks that
   scoped key up before doing anything else and, on a hit, returns the already-sent notification without
-  resolving recipients, writing inbox rows, or pushing (`SendPushNotificationHandler.cs:45-60`). That
-  lookup is a check-then-act, so two concurrent retries of the same send both pass it and the loser
-  fails on the insert against the filtered unique index on `DedupKey`
-  (`PushNotificationConfiguration.cs:69-73`). The handler catches that save failure, requeries the key
-  on `CancellationToken.None`, and returns the winner's notification if the key now exists, rethrowing
-  untouched otherwise (`SendPushNotificationHandler.cs:91-122`). With no key the path is unchanged:
-  nothing is deduplicated by default.
+  resolving recipients, writing inbox rows, or pushing (`SendPushNotificationHandler.cs:60-71`, lookup
+  in `FindByDedupKeyAsync` at `:188-197`). That lookup is a check-then-act, so two concurrent retries
+  of the same send both pass it and the loser fails its first save on the filtered unique index on
+  `DedupKey` (`PushNotificationConfiguration.cs:69-73`). The handler does not recover in place: the
+  failure propagates (`SendPushNotificationHandler.cs:102-103`) as the persistence exception, surfaced
+  as a 409 through `DbUpdateExceptionHandler`, the transactional decorator rolls the attempt back, and
+  the client's retry is then answered by the dedup lookup with the winner's notification
+  (`SendPushNotificationHandler.cs:33-41`, which also records why a requery is not possible: the failed
+  insert stays tracked, and on PostgreSQL the violation has already aborted the transaction). With no
+  key the path is unchanged: nothing is deduplicated by default.
 - **Transient delivery is an abstraction with a no-op default.** `IPushNotificationSender`
   (`MMCA.Common.Application`) is registered by default as `NullPushNotificationSender` (no-op), so a host
   that never calls the opt-in does nothing on send. `AddPushNotifications(configuration)`
@@ -54,8 +62,8 @@ recipient policy both behind abstractions.
   clients. The hub (`NotificationHub`) is `[Authorize]` and is mapped with `MapNotificationHub()`
   (`MMCA.Common.API`); the Blazor client wraps it in `NotificationHubService` (`MMCA.Common.UI`). The
   hub is no longer notification-only: it also carries an ephemeral live-channel role, exposing
-  `JoinChannel` / `LeaveChannel` group management (`NotificationHub.cs:118-143`, the hub-method names
-  declared at `:36` and `:39`) and a `ReceiveChannelEvent`
+  `JoinChannel` / `LeaveChannel` group management (`JoinChannelAsync` at `NotificationHub.cs:128`,
+  `LeaveChannelAsync` at `:145`, the hub-method names declared at `:36` and `:39`) and a `ReceiveChannelEvent`
   push that backs `ILiveChannelPublisher` / `SignalRLiveChannelPublisher` for transient live-channel
   events, a path distinct from the durable notification delivery this ADR governs.
 - **Recipient selection is the consumer's policy.** `INotificationRecipientProvider`
@@ -63,14 +71,15 @@ recipient policy both behind abstractions.
   each app registers its own provider that knows its domain's audience. The framework ships the delivery
   machinery, not the address book.
 - **Delivery failure is non-fatal.** If the live push throws, the handler records `MarkAsFailed` on the
-  `PushNotification` and returns success: the inbox row is already committed, so the recipient still gets
-  the notification on next load. A send is never rolled back because the WebSocket fan-out failed.
+  `PushNotification` and returns success: the inbox rows are already saved in the same unit and commit
+  with the failed status, so the recipient still gets the notification on next load. A send is never
+  rolled back because the WebSocket fan-out failed.
 - **An optional third, native-push leg (ADR-044).** After the inbox write and the SignalR push,
   `SendPushNotificationHandler` also dispatches through `INativePushSender`
-  (`SendPushNotificationHandler.cs:154-171`), an OS-level native-push channel that reaches devices the
+  (`SendPushNotificationHandler.cs:137-154`), an OS-level native-push channel that reaches devices the
   SignalR hub cannot (the app backgrounded or killed). It is best-effort by the same logic as the live
   push (a throw is logged, never fatal, and the SignalR leg has already decided the audit status), and it
-  defaults to `NullNativePushSender` (`MMCA.Common.Infrastructure`, `DependencyInjection.cs:320`), so it
+  defaults to `NullNativePushSender` (`MMCA.Common.Infrastructure`, `DependencyInjection.cs:330`), so it
   stays inert until a native hub is configured. The design of that channel is ADR-044's scope; this ADR
   keeps its own on the inbox and SignalR channels, so the "Two-Channel" title names the durable and
   transient channels this record governs, not a hard cap on the number of delivery legs.
@@ -88,8 +97,9 @@ recipient policy both behind abstractions.
 
 ## Rationale
 - **Each channel covers the other's failure mode.** The inbox guarantees eventual delivery to offline
-  users; the push gives connected users immediacy. Persisting the inbox before pushing means a crash
-  between the two leaves the notification recoverable, never lost.
+  users; the push gives connected users immediacy. Saving the inbox before pushing, inside one
+  transactional unit, means a crash before commit rolls the whole send back for a retry rather than
+  leaving a pushed notification with no inbox row, and a failed push never takes the inbox rows with it.
 - **Null-default abstraction keeps it transport-at-the-edge.** Defaulting `IPushNotificationSender` and
   `INotificationRecipientProvider` to no-ops means application code calls the same handler whether or not
   a host wires SignalR, matching the framework's "depend on abstractions, choose transport at the edge"
@@ -235,3 +245,33 @@ the `NullNativePushSender` default
 `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:41-70`
 (`AddSignalR()` at `:48`, the two transient registrations at `:65-66`, still unconditional). Anchors
 inside the earlier Revision sections are left as recorded.
+
+## Revision (2026-10-06)
+- **The dedup race is not caught in place.** `SendPushNotificationHandler` no longer catches the losing
+  insert and requeries: the first save propagates the unique-index failure (a 409 through
+  `DbUpdateExceptionHandler`), the transactional decorator rolls the attempt back, and the client's
+  retry is answered by the dedup lookup
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/PushNotifications/UseCases/Send/SendPushNotificationHandler.cs:33-41`,
+  `:102-103`). The 2026-10-01 statement that catch-and-requery handling was "unchanged" is superseded;
+  the Decision text is corrected.
+- **The send is one transactional unit.** `SendPushNotificationCommand` is `ITransactional`
+  (`SendPushNotificationCommand.cs:23`), so the audit, inbox and status saves (`:103`, `:113`, `:156`)
+  commit together and the live legs run inside the unit (`SendPushNotificationHandler.cs:21-31`). The
+  Decision and Rationale wording about the inbox being "already committed" before the push is corrected.
+- **Current locations for facts recorded in earlier Revisions** (those sections are left as recorded):
+  `MaxConnectionsPerUser` default 20 at `PushNotificationSettings.cs:46`, read in `OnConnectedAsync` at
+  `NotificationHub.cs:63`; the backplane channel prefix now set in
+  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:59-61`; the
+  default registrations in `DependencyInjection.cs` (`IEmailSender` `:324`, `IPushNotificationSender`
+  `:325`, `ILiveChannelPublisher` `:326`, `INativePushSender` `:330`, `IPushDeviceRegistrar` `:331`,
+  inside `AddServices()` `:294`, called at `:234`); `SmtpEmailSender` creates its client through
+  `CreateClient` at `SmtpEmailSender.cs:67` (factory `:97`) and sends at `:74` (method `:61-75`);
+  `ForgotPasswordHandlerBase.cs` sends at `:84` and swallows at `:91`, with the ADC and Store handlers
+  passing their sender to the base at `ForgotPasswordHandler.cs:27` and `:28`; the Store order-email
+  handlers take `IEmailSender` at `SendOrderPaidEmailInternalCommandHandler.cs:34` (send `:83`,
+  `BuildEmailBody` `:90`), `SendOrderPaymentFailedEmailInternalCommandHandler.cs:23` (send `:60`) and
+  `SendOrderShippedEmailInternalCommandHandler.cs:28` (send `:67`, `BuildEmailBody` `:74`), scheduled
+  from `OrderPaidHandler.cs:38`, `OrderPaymentFailedSagaHandler.cs:35` and
+  `OrderShippedHandler.cs:34` (a scheduling site the 2026-08-07 record did not name).
+- All `path:line` anchors in the live sections (Status through Trade-offs) were re-verified against
+  current source.

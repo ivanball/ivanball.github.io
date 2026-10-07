@@ -265,7 +265,8 @@
           Citations refreshed: the Common <code>DependencyInjection</code> registration helpers now span
           <code>DependencyInjection.cs</code>, <code>DependencyInjection.ModuleScanning.cs</code> and <code>DependencyInjection.Crud.cs</code>).
           Revised 2026-10-01 (the record states where each kind of validation lives: UI form models, the
-          Validating decorator with its coverage fitness gate, and domain factories; see Revision below).</p>
+          Validating decorator with its coverage fitness gate, and domain factories; see Revision below).
+          Revised 2026-10-06: the Decision states the shipped seven-decorator command chain and six-decorator query chain instead of the pre-2026-08-18 order.</p>
           <h2 id="context">Context</h2>
           <p>Commands and queries share cross-cutting concerns: validation, transactions, cache invalidation,
           logging / timing, and feature gating. Putting that logic inside each handler scatters it, makes the
@@ -281,10 +282,13 @@
           (ADR-013).</li>
           <li>Cross-cutting concerns are decorators registered with Scrutor <code>TryDecorate</code> in
           <code>AddApplicationDecorators()</code>. Because <code>TryDecorate</code> applies in <strong>reverse</strong> registration order (last
-          registered is outermost), the execution order (outermost to innermost) is (<strong>superseded by the
-          Revision (2026-08-18)</strong>, which inserts Authorization and Timeout into both chains):<ul>
-          <li><strong>Commands:</strong> FeatureGate -&gt; Logging -&gt; Caching -&gt; Validating -&gt; Transactional -&gt; Handler</li>
-          <li><strong>Queries:</strong> FeatureGate -&gt; Logging -&gt; Caching -&gt; Handler</li>
+          registered is outermost), the execution order (outermost to innermost) is (registration sequence at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:134-140</code> for commands and
+          <code>:143-148</code> for queries; how the chain reached this shape is in the Revisions (2026-08-18) and
+          (2026-08-26) below):<ul>
+          <li><strong>Commands:</strong> FeatureGate -&gt; Authorization -&gt; Logging -&gt; Caching -&gt; Validating -&gt; Timeout -&gt;
+          Transactional -&gt; Handler</li>
+          <li><strong>Queries:</strong> FeatureGate -&gt; Authorization -&gt; Logging -&gt; Caching -&gt; Validating -&gt; Timeout -&gt; Handler</li>
           <li>plus an optional pair of <code>Profiling</code> decorators (<code>ProfilingCommandDecorator</code> /
           <code>ProfilingQueryDecorator</code>) registered by a <strong>separate</strong> opt-in <code>AddApplicationProfiling()</code> call,
           not by <code>AddApplicationDecorators()</code>. No consumer host wires it today.</li>
@@ -307,10 +311,10 @@
           (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:132</code>). The seven production service hosts
           compose the same sequence through <code>AddMmcaApplicationPipeline(pipeline =&gt; ...)</code> instead, which runs it
           in order and seals it (see the Revision (2026-08-26) below): ADC Identity / Conference / Engagement /
-          Notification (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:311</code>, <code>...Conference.Service/Program.cs:407</code>,
-          <code>...Engagement.Service/Program.cs:279</code>, <code>...Notification.Service/Program.cs:221</code>) and Store Identity /
-          Catalog / Sales (<code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:234</code>,
-          <code>...Catalog.Service/Program.cs:254</code>, <code>...Sales.Service/Program.cs:234</code>). Only that decorators-last
+          Notification (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:324</code>, <code>...Conference.Service/Program.cs:414</code>,
+          <code>...Engagement.Service/Program.cs:285</code>, <code>...Notification.Service/Program.cs:227</code>) and Store Identity /
+          Catalog / Sales (<code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:236</code>,
+          <code>...Catalog.Service/Program.cs:256</code>, <code>...Sales.Service/Program.cs:236</code>). Only that decorators-last
           ordering is load-bearing; the relative position of <code>AddInfrastructure</code>/<code>AddAPI</code> is not.</li>
           <li><strong>Each kind of validation has one home.</strong> UI form models declare DataAnnotations rules once and
           bridge them onto <code>MudForm</code> through <code>ModelValidation.For(model, validator)</code>
@@ -687,6 +691,22 @@
           <p>Citations refreshed in the Decision: the <code>AddMmcaApplicationPipeline</code> call sites are now ADC Identity
           <code>:311</code> and Notification <code>:221</code>, and Store Identity <code>:234</code>, Catalog <code>:254</code> and Sales <code>:234</code>. Stale
           anchors inside the earlier Revision sections are left as historical records.</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <ul>
+          <li><strong>The Decision now states the shipped chain.</strong> Its order bullet carried the pre-2026-08-18 chain
+          (five command decorators, three query decorators) behind a &quot;superseded&quot; pointer; it now reads
+          FeatureGate -&gt; Authorization -&gt; Logging -&gt; Caching -&gt; Validating -&gt; Timeout -&gt; Transactional -&gt;
+          Handler for commands and the same chain without Transactional for queries, citing the registration
+          sequence (<code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:134-140</code>,
+          <code>:143-148</code>). The chain itself is unchanged since the Revision (2026-08-26).</li>
+          <li>The <code>AddMmcaApplicationPipeline</code> call sites in the Decision moved again: ADC Identity <code>:324</code>,
+          Conference <code>:414</code>, Engagement <code>:285</code>, Notification <code>:227</code>; Store Identity <code>:236</code>, Catalog <code>:256</code>,
+          Sales <code>:236</code>. The anchors restated in the Revision (2026-10-01) above are left as recorded.</li>
+          <li>The <code>IRequiresPermission</code> marker cited in the Revision (2026-08-18) is now declared at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Markers/IRequiresPermission.cs:34</code>, with its
+          single member <code>string Permission { get; }</code> at <code>:41</code>; behavior is unchanged.</li>
+          <li>Anchors in the live sections were re-verified against current source.</li>
+          </ul>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -711,6 +731,7 @@
             <li><a href="#revision-2026-09-19">Revision (2026-09-19)</a></li>
             <li><a href="#revision-2026-09-25">Revision (2026-09-25)</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             </ul>
           </nav>
         </aside>

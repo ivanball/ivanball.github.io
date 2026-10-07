@@ -7,7 +7,10 @@ registration moved out of `WebApplicationExtensions` into the named-step `Middle
 (ADR-079), and a tenant-resolution step (ADR-073) now sits between authentication and rate limiting.
 Revised 2026-09-03 (MMCA.Common 1.185.0): the deleted-marker write was lifted out of the apps into
 `DeleteUserHandlerBase`, so the revocation window is now uniform across every consumer and the
-per-app asymmetry the 2026-08-07 revision recorded is gone.
+per-app asymmetry the 2026-08-07 revision recorded is gone. Revised 2026-10-01 (ADC's erasure tail
+re-described, middleware tests listed, anchors refreshed). Revised 2026-10-06: the deleted marker now
+lives 15 minutes while a "not deleted" answer still caches for 30 seconds, and the marker is honored
+on every host, including one with no validator.
 
 ## Context
 Soft-delete is the framework's default deletion model (ADR-005): `AuditableBaseEntity.Delete()` sets
@@ -32,16 +35,16 @@ and without coupling every extracted service to the Identity database.
 
 ## Decision
 Add a shared-pipeline middleware, `SoftDeletedUserMiddleware`
-(`Source/Presentation/MMCA.Common.API/Middleware/SoftDeletedUserMiddleware.cs:31`, BR-133), that
+(`Source/Presentation/MMCA.Common.API/Middleware/SoftDeletedUserMiddleware.cs:33`, BR-133), that
 rejects an authenticated caller with HTTP 401 once the caller's account has been soft-deleted, backed
-by a short cache so the account-status lookup is not paid on every request.
+by a cache so the account-status lookup is not paid on every request.
 
 - **It runs after authentication, before authorization.** That position is data in a named-step
   pipeline builder (ADR-079), not a hand-ordered sequence of `Use*` calls:
   `UseCommonMiddlewarePipeline`
   (`Source/Presentation/MMCA.Common.API/Startup/WebApplicationExtensions.cs:48`) delegates to the
-  private `ApplyPipeline` helper (`WebApplicationExtensions.cs:168`), which seeds the framework steps
-  from `MiddlewarePipelineBuilder.CreateDefault()` (`WebApplicationExtensions.cs:170`;
+  private `ApplyPipeline` helper (`WebApplicationExtensions.cs:170`), which seeds the framework steps
+  from `MiddlewarePipelineBuilder.CreateDefault()` (`WebApplicationExtensions.cs:172`;
   `Source/Presentation/MMCA.Common.API/Startup/Pipeline/MiddlewarePipelineBuilder.cs:31-151`). This middleware
   is the `SoftDeletedUserFilter` step (`MiddlewarePipelineStepNames.cs:59`), applied as
   `app.UseMiddleware<SoftDeletedUserMiddleware>()` at `MiddlewarePipelineBuilder.cs:125`. Four
@@ -58,67 +61,79 @@ by a short cache so the account-status lookup is not paid on every request.
   fitness function, not at startup.
 - **Anonymous requests pass straight through.** When `ICurrentUserService.UserId` is null the
   middleware calls the next delegate and returns without any lookup
-  (`SoftDeletedUserMiddleware.cs:65-73`), so unauthenticated traffic pays nothing.
+  (`SoftDeletedUserMiddleware.cs:74-82`), so unauthenticated traffic pays nothing.
 - **The account-status check is an abstraction, implemented once in the framework.**
   `ISoftDeletedUserValidator`
   (`Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Auth/ISoftDeletedUserValidator.cs:7`)
   exposes a single `IsUserSoftDeletedAsync(userId, ...)` method
   (`ISoftDeletedUserValidator.cs:15`). One shared generic implementation,
   `SoftDeletedUserValidator<TUser>`
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/SoftDeletedUserValidator.cs:20-34`), runs
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/SoftDeletedUserValidator.cs:20-36`), runs
   the filter-bypassing existence query
   `repository.ExistsAsync(u => u.Id == userId && u.IsDeleted, ignoreQueryFilters: true, ...)`
   (`SoftDeletedUserValidator.cs:31-34`) against whichever aggregate it is closed over
   (`TUser : AuditableAggregateRootEntity<UserIdentifierType>`, `SoftDeletedUserValidator.cs:21`). Each
   app closes it over its own `User` at registration and writes no subclass of its own
   (`services.TryAddScoped<ISoftDeletedUserValidator, SoftDeletedUserValidator<User>>()` at
-  `MMCA.ADC.Identity.Application/DependencyInjection.cs:37` and
+  `MMCA.ADC.Identity.Application/DependencyInjection.cs:38` and
   `MMCA.Store.Identity.Application/DependencyInjection.cs:47`). The query bypasses the soft-delete
   global query filter deliberately, because a plain read would hide the very row it needs to find.
-- **A 30-second cache amortizes the lookup.** The key shape and the marker lifetime live in a shared
-  class rather than inside the middleware, because a module that deletes an account has to write the
-  exact key the middleware reads and a private constant in the presentation layer is unreachable from
-  an application-layer handler. `SoftDeletedUserCache.MarkerDuration` is `TimeSpan.FromSeconds(30)`
-  (`Source/Core/MMCA.Common.Application/Auth/SoftDeletedUserCache.cs:29`), and
-  `SoftDeletedUserCache.KeyFor(userId)` builds `user:deleted:{userId}` under the invariant culture
-  (`SoftDeletedUserCache.cs:42-43`). The middleware builds that key
-  (`SoftDeletedUserMiddleware.cs:85`) and reads it from `ICacheService` first (`:91`): a cached `true`
-  short-circuits to 401 with no database call (`:102-106`); a cache miss runs the validator once
-  (`:114-116`), caches the boolean for `MarkerDuration` (`:131-133`), and 401s if deleted (`:143-147`);
-  a cached `false` falls through to the next delegate (`:150`). So a given user costs at most one
-  status query per 30-second window per cache scope, not one per request.
+- **A cache amortizes the lookup, with two lifetimes.** The key shape and the marker lifetime live in
+  a shared class rather than inside the middleware, because a module that deletes an account has to
+  write the exact key the middleware reads and a private constant in the presentation layer is
+  unreachable from an application-layer handler. `SoftDeletedUserCache.MarkerDuration` is
+  `TimeSpan.FromMinutes(15)`
+  (`Source/Core/MMCA.Common.Application/Auth/SoftDeletedUserCache.cs:32`), sized to the default
+  access-token lifetime so the marker outlives every token issued before the delete (its remarks,
+  `SoftDeletedUserCache.cs:22-31`), and `SoftDeletedUserCache.KeyFor(userId)` builds
+  `user:deleted:{userId}` under the invariant culture (`SoftDeletedUserCache.cs:45-46`). A "not
+  deleted" answer is only a lookup shortcut and keeps a short lifetime: the middleware's private
+  `NotDeletedLookupDuration` is `TimeSpan.FromSeconds(30)` (`SoftDeletedUserMiddleware.cs:39`). The
+  middleware builds the key (`SoftDeletedUserMiddleware.cs:84`) and reads it from `ICacheService`
+  first (`:90`): a cached `true` short-circuits to 401 with no database call (`:102-109`), before the
+  validator is even resolved; a cache miss runs the validator once (`:127-129`), caches the answer
+  for `MarkerDuration` if deleted or `NotDeletedLookupDuration` if not (`:140-158`, the choice at
+  `:147`), and 401s if deleted (`:160-164`); a cached `false` falls through to the next delegate
+  (`:167`). So a live user costs at most one status query per 30-second window per cache scope, not
+  one per request.
 - **The check fails open.** Every external call on the path is wrapped: a cache read failure is logged
-  and falls through to the validator query (`SoftDeletedUserMiddleware.cs:93-100`), a validator failure
-  is logged and the request proceeds (`:118-125`), and a failed cache write only costs the next request
-  another lookup (`:135-140`). The class states the reasoning in its own remarks (`:16-30`): failing
+  and falls through to the validator query (`SoftDeletedUserMiddleware.cs:92-100`), a validator failure
+  is logged and the request proceeds (`:131-138`), and a failed cache write only costs the next request
+  another lookup (`:152-157`). The class states the reasoning in its own remarks (`:18-32`): failing
   closed would turn any cache or database blip into a total outage for every authenticated request,
   because this middleware sits on the hot path of all of them, while failing open leaves a residual
   exposure bounded by the 15-minute access-token lifetime and by the refresh-token revocation the
   deletion already performed.
-- **It no-ops in services that do not host Identity.** The validator is resolved lazily via
-  `context.RequestServices.GetService<ISoftDeletedUserValidator>()`
-  (`SoftDeletedUserMiddleware.cs:75`) rather than as an `InvokeAsync` parameter. In an extracted
-  service that does not host Identity (for example Store's Catalog or Sales service), no
-  implementation is registered, so the middleware passes the request through
-  (`SoftDeletedUserMiddleware.cs:76-83`): Identity is the source of truth and already validated the
-  token upstream. Resolving it as a constructor/parameter dependency would instead 500 every request
-  in those services. MMCA.Helpdesk wires the same pipeline
+- **Services that do not host Identity honor the marker but have no fallback query.** The class
+  summary states it (`SoftDeletedUserMiddleware.cs:13-15`): the marker is honored on every host. The
+  validator is resolved lazily via `context.RequestServices.GetService<ISoftDeletedUserValidator>()`
+  (`SoftDeletedUserMiddleware.cs:111`) rather than as an `InvokeAsync` parameter, and only after the
+  cached-`true` check. In an extracted service that does not host Identity (for example Store's
+  Catalog or Sales service), no implementation is registered, so a set marker still answers 401,
+  while a cache miss, a cached `false` or an unreachable cache passes the request through
+  (`SoftDeletedUserMiddleware.cs:112-119`; the method remarks at `:56-59`): Identity is the source of
+  truth. Resolving the validator as a constructor/parameter dependency would instead 500 every
+  request in those services. MMCA.Helpdesk wires the same pipeline
   (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:142`) but hosts only a Tickets module and
-  registers no validator, so it takes the same no-op path.
+  registers no validator, so it takes the same marker-only path.
 
 `SoftDeletedUserMiddlewareTests`
 (`MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/Middleware/SoftDeletedUserMiddlewareTests.cs`)
-covers the branches: anonymous pass-through, no-validator pass-through with no cache call, a live
-non-deleted pass, a live deleted 401, a cached-deleted 401 with no database call, and a cached
-non-deleted pass with no database call (`SoftDeletedUserMiddlewareTests.cs:25-121`). It also pins
-the fail-open policy: a cache read failure with a deleted or a live user (`:143`, `:162`), cache and
-validator both failing (`:190`), a validator failure (`:213`), and a cache write failure for a live
-or a deleted user (`:236`, `:265`).
+holds sixteen tests. Ten cover the branches: anonymous pass-through (`SoftDeletedUserMiddlewareTests.cs:25`);
+the four no-validator cases, a cache miss passing through, a set marker answering 401, a cached
+`false` passing through, and a cache read failure passing through (`:44`, `:68`, `:88`, `:106`); a
+deleted user found by the validator caching the marker for `MarkerDuration` (`:127`); a live
+non-deleted pass and a live deleted 401 (`:145`, `:169`); and a cached-deleted 401 and a cached
+non-deleted pass, both with no database call (`:186`, `:204`). Six pin the fail-open policy: a cache
+read failure with a deleted or a live user (`:226`, `:245`), cache and validator both failing
+(`:273`), a validator failure (`:296`), and a cache write failure for a live or a deleted user
+(`:319`, `:348`).
 
 **The marker write is part of the shared erasure workflow, so the window is uniform.** Without a
-marker the revocation is passive: a soft-deleted account's still-valid tokens keep working until the
-cached status expires (at most the 30-second marker lifetime, once the account has been queried at
-least once in that window) instead of until the token itself expires. Writing the marker at delete
+marker the revocation is passive: on an Identity-hosting service a soft-deleted account's
+still-valid tokens keep working until a cached "not deleted" answer expires (at most the 30-second
+`NotDeletedLookupDuration`, once the account has been queried at least once in that window), and on
+a service with no validator they keep working until the token itself expires. Writing the marker at delete
 time collapses that to the next request. That write is not left to each app's delete handler: it is a
 step of `DeleteUserHandlerBase.HandleAsync`, the shared account-erasure workflow in
 `MMCA.Common.Application`
@@ -131,20 +146,20 @@ so every app that derives from the base gets the identical revocation window wit
 - **It runs after the commit and before the app's tail.** The order is
   `SaveChangesAsync` (`:139`), then `SoftDeletedUserCache.MarkDeletedAsync(cacheService,
   command.UserId, cancellationToken)` (`:146-148`; `SoftDeletedUserCache.MarkDeletedAsync` at
-  `SoftDeletedUserCache.cs:53-61`), then the queued `afterCommit` actions (`:155-158`). The base's own
+  `SoftDeletedUserCache.cs:56-64`), then the queued `afterCommit` actions (`:155-158`). The base's own
   remarks give the reason (`:35-39`): the app's tail is unbounded work (deleting a blob, calling
   storage) that can be slow or throw, and every second it takes is a second the deleted account's
   token still works, so revoking first bounds the exposure to the cache round trip regardless of what
   the app queued behind it.
 - **It is best effort, and deliberately so.** A non-cancellation exception is caught and logged as a
-  warning via `UserUseCaseLog.SoftDeletedMarkerFailed`
-  (`DeleteUserHandlerBase.cs:150-153`; `MMCA.Common/Source/Core/MMCA.Common.Application/Users/UserUseCaseLog.cs:23`)
+  warning via the base's own private `SoftDeletedMarkerFailed` logger message
+  (`DeleteUserHandlerBase.cs:150-153`, the call at `:152`; declared at `:199-200`)
   rather than failing an erasure that has already committed irreversibly. A failed write costs only
-  the shortening: revocation falls back to the passive 30-second window, exactly as it behaved before
-  the marker existed (`DeleteUserHandlerBase.cs:25-33`).
+  the shortening: revocation falls back to the passive path described above, exactly as it behaved
+  before the marker existed (`DeleteUserHandlerBase.cs:25-33`).
 - **Apps are told not to write it themselves.** The `afterCommit` parameter's own documentation says
   the base already wrote the marker ahead of the tail, so a subclass must not queue a second write
-  (`DeleteUserHandlerBase.cs:179-185`).
+  (`DeleteUserHandlerBase.cs:179-186`).
 
 Both deployed apps therefore revoke at the same speed. MMCA.ADC's `DeleteUserHandler`
 (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/DeleteUser/DeleteUserHandler.cs`)
@@ -159,35 +174,39 @@ keeps its linked-`Customer` cascade and gains the marker behavior purely by forw
 ## Rationale
 - **Bounds the stateless-JWT revocation gap cheaply.** Stateless JWT (ADR-004) has no built-in
   revocation, so a deactivated account would otherwise stay usable for the full remaining token
-  lifetime. A 30-second cached check turns "valid until the token expires" into "rejected within
-  about 30 seconds," which is the point of the middleware.
+  lifetime. The deleted marker turns "valid until the token expires" into "rejected on the next
+  request", and where no marker was written an Identity-hosting service still rejects within about
+  30 seconds, which is the point of the middleware.
 - **The cache is what keeps it stateless-friendly.** Checking account status on every request would
   put a database read back in the hot path of every authenticated call, the cost stateless JWT was
-  meant to avoid. Caching the boolean for 30 seconds keeps the lookup rate at most once per user per
-  window, so the common case stays a cache hit.
+  meant to avoid. Caching a "not deleted" answer for 30 seconds keeps the lookup rate at most once per
+  live user per window, so the common case stays a cache hit.
 - **The validator abstraction keeps the middleware in the framework.** The middleware lives in
   `MMCA.Common.API` and depends only on `ISoftDeletedUserValidator`, so it needs no reference to any
   app's `User` entity. The query itself is generic over the app's aggregate
   (`SoftDeletedUserValidator<TUser>`), so each Identity module supplies only the type argument and the
   registration, not a copy of the query.
 - **Lazy resolution is what makes it safe everywhere.** One pipeline runs in Identity-hosting and
-  non-Identity hosts alike; resolving the validator lazily lets the same middleware gate real
-  requests where Identity lives and stay inert where it does not, without a per-host pipeline
-  variant.
+  non-Identity hosts alike; resolving the validator lazily lets the same middleware run the full
+  check where Identity lives and enforce only the marker where it does not, without a per-host
+  pipeline variant.
 
 ## Trade-offs
 - **Revocation is bounded, not immediate.** A soft-deleted user whose status is cached as not-deleted
   keeps passing until that cache entry expires (up to 30 seconds), unless the deleting handler wrote
   the marker itself. Shrinking the window costs more database lookups; lengthening it widens the
   exposure. 30 seconds is the chosen balance, and it is a compile-time value
-  (`SoftDeletedUserCache.MarkerDuration`, `SoftDeletedUserCache.cs:29`), not configurable per host
-  today.
+  (`NotDeletedLookupDuration`, `SoftDeletedUserMiddleware.cs:39`), not configurable per host today.
+  The marker lifetime is compile-time too (`SoftDeletedUserCache.MarkerDuration`,
+  `SoftDeletedUserCache.cs:32`, 15 minutes): its own remarks say a host that raises the access-token
+  lifetime should write its own marker with a matching duration (`SoftDeletedUserCache.cs:27-29`).
 - **The marker only covers erasures that go through the shared base.** The framework now both
-  supplies the key and TTL (`SoftDeletedUserCache.MarkDeletedAsync`, `SoftDeletedUserCache.cs:53-61`)
+  supplies the key and TTL (`SoftDeletedUserCache.MarkDeletedAsync`, `SoftDeletedUserCache.cs:56-64`)
   and calls it on the app's behalf (`DeleteUserHandlerBase.cs:146-148`), so no app can forget it. What
   the base cannot cover is a soft-delete that never reaches it: an administrative `IsDeleted = true`
   applied by a migration, a support script or any handler other than a `DeleteUserHandlerBase`
-  subclass writes no marker, and those deletions still revoke only at the passive 30-second bound.
+  subclass writes no marker, and those deletions still revoke only at the passive 30-second bound on
+  an Identity-hosting service, and not at all before token expiry on a service with no validator.
   Uniformity here is uniformity across the *erasure use case*, not across every path that can set the
   flag.
 - **A cache fault silently degrades the window rather than failing.** The write is swallowed and
@@ -197,20 +216,22 @@ keeps its linked-`Customer` cascade and gains the marker behavior purely by forw
   accelerated.
 - **Failing open is a deliberate availability-over-strictness trade.** A cache or database failure on
   this path lets the request through instead of rejecting it
-  (`SoftDeletedUserMiddleware.cs:93-100`, `:118-125`), so while either store is unhealthy a deleted
+  (`SoftDeletedUserMiddleware.cs:92-100`, `:131-138`), so while either store is unhealthy a deleted
   user keeps being served for the remaining lifetime of an already-issued access token. The
   alternative, failing closed, would convert the same blip into a 401 for every authenticated request
   in the application.
-- **The no-op posture trusts upstream validation.** In a service with no validator registered, a
-  soft-deleted user's token is accepted for its full lifetime at that service, on the assumption that
-  Identity is the source of truth and the token was validated upstream. Only Identity-hosting hosts
-  actually enforce the revocation; extracted non-Identity services do not re-check.
-- **Cache-scope-dependent.** The window is per cache scope: with a distributed cache the revocation
-  is shared across replicas, but with a per-instance memory cache each instance carries its own
-  30-second window, so the effective revocation lag is per replica.
+- **The marker-only posture trusts the marker.** In a service with no validator registered, a
+  soft-deleted user is rejected only when the deleted marker is present in that service's cache; on a
+  miss, a cached `false` or a cache failure the token is accepted for its remaining lifetime there,
+  on the assumption that Identity is the source of truth. Only Identity-hosting hosts re-check the
+  database; extracted non-Identity services enforce the revocation only through the marker.
+- **Cache-scope-dependent.** The window is per cache scope: with a distributed cache the marker and
+  the cached answers are shared across replicas and services, but with a per-instance memory cache
+  each instance carries its own 30-second window, and a marker written by the Identity host is not
+  visible to another process, so the effective revocation lag is per replica.
 - **Enforcement depends on registration.** An Identity-hosting service that fails to register
-  `ISoftDeletedUserValidator` silently degrades to the no-op path, the same audit-the-inventory
-  caveat other opt-in framework capabilities carry (ADR-005).
+  `ISoftDeletedUserValidator` silently degrades to the marker-only path, the same
+  audit-the-inventory caveat other opt-in framework capabilities carry (ADR-005).
 
 ## Related
 ADR-005 (soft-delete is the deletion model whose still-authenticated tokens this middleware revokes;
@@ -386,3 +407,32 @@ wrong and the anchors had drifted.
    `MMCA.Store.Identity.Application/DependencyInjection.cs:47`; Helpdesk's
    `app.UseCommonMiddlewarePipeline()` is at `Program.cs:142` and Helpdesk still registers no
    validator.
+
+## Revision (2026-10-06)
+Re-verified against current source. The decision, the pipeline position, the fail-open policy and the
+shared marker write are unchanged; the cache lifetimes and the behavior of hosts without a validator
+moved.
+
+1. **The marker and the lookup cache now have different lifetimes.** `SoftDeletedUserCache.MarkerDuration`
+   is `TimeSpan.FromMinutes(15)` (`SoftDeletedUserCache.cs:32`), sized to the default access-token
+   lifetime, no longer 30 seconds. The middleware caches a deleted answer for `MarkerDuration` and a
+   "not deleted" answer for its private 30-second `NotDeletedLookupDuration`
+   (`SoftDeletedUserMiddleware.cs:39`, chosen at `:147`). The Decision, Rationale and Trade-offs now
+   say which figure is which.
+2. **The marker is honored on hosts with no validator.** The cache is read and a cached `true`
+   answers 401 before the validator is resolved (`SoftDeletedUserMiddleware.cs:102-109`, then `:111`),
+   so a service that does not host Identity, Helpdesk included, rejects a marked user instead of
+   no-opping; only a cache miss, a cached `false` or a cache failure passes through there (`:112-119`).
+   The "no-op" bullet, the Rationale's "stay inert" wording and the no-op trade-off are rewritten.
+3. **Marker failure logging lives on the base.** `UserUseCaseLog.cs` no longer exists;
+   `SoftDeletedMarkerFailed` is a private `LoggerMessage` on `DeleteUserHandlerBase`
+   (`DeleteUserHandlerBase.cs:199-200`, called at `:152`).
+4. **The middleware tests number sixteen**, adding four no-validator cases and the marker-duration
+   write (`SoftDeletedUserMiddlewareTests.cs:44-127`); the fail-open tests now sit at `:226`, `:245`,
+   `:273`, `:296`, `:319`, `:348`.
+5. **Anchors re-verified against current source**: middleware declaration `:33`, remarks `:18-32`,
+   anonymous pass-through `:74-82`, key `:84`, read `:90`; `KeyFor` `SoftDeletedUserCache.cs:45-46`,
+   `MarkDeletedAsync` `:56-64`; `ApplyPipeline` `WebApplicationExtensions.cs:170` with `CreateDefault()`
+   at `:172`; `SoftDeletedUserValidator.cs:20-36`; ADC registration
+   `MMCA.ADC.Identity.Application/DependencyInjection.cs:38`; `afterCommit` documentation
+   `DeleteUserHandlerBase.cs:179-186`.

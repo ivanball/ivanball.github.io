@@ -242,7 +242,7 @@
           <p>Accepted (2026-09-12). Extends <a href="045-managed-file-storage-and-avatars.html">ADR-045</a> from images to
           documents: the framework gains a document content sniffer, a blob-name sanitizer and stored response
           headers, and ADC gains a <code>SessionAsset</code> aggregate that uses them. ADR-045&#39;s avatar-only scope
-          statement (&quot;no other managed uploads exist&quot;) is superseded by this record. Revised 2026-10-01 (the upload-options overload is abstract and the template enables on-upload malware scanning by default; see Revision below).</p>
+          statement (&quot;no other managed uploads exist&quot;) is superseded by this record. Revised 2026-10-01 (the upload-options overload is abstract and the template enables on-upload malware scanning by default; see Revision below). Revised 2026-10-06: all three delete paths schedule blob removal inside the delete&#39;s transaction, so there is no post-commit tail.</p>
           <h2 id="context">Context</h2>
           <p>A speaker finishes a talk and forty people want the deck. Until now ADC&#39;s only answer was
           <code>Session.ResourceLinks</code>, a free-text field imported from Sessionize: the speaker types URLs into
@@ -291,8 +291,8 @@
           <p><strong>2. Authorization is capability OR ownership, decided in the handlers.</strong> A caller may manage a
           session&#39;s materials if they hold <code>conference:session-assets:manage</code>
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferencePermissions.cs:47</code>,
-          granted to Organizer through the full Conference set at <code>:50-63</code> (<code>:62</code>) and to ContentEditor through
-          the ContentManagement set at <code>:70-79</code> (<code>:78</code>); the grants are declared once in
+          granted to Organizer through the full Conference set at <code>:58-72</code> (<code>:70</code>) and to ContentEditor through
+          the ContentManagement set at <code>:79-88</code> (<code>:87</code>); the grants are declared once in
           <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferencePermissionGrants.cs:47-48</code>,
           applied by the service at <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/DependencyInjection.cs:43</code>
           and by the token-minting Identity host, per <code>ConferencePermissionGrants.cs:12-17</code>)
@@ -350,10 +350,10 @@
           safe precisely because a blob name carries a fresh asset id and therefore never changes content.</p>
           <p><strong>5. Storage reuses ADR-045 with its own container, and downloads go straight to the blob.</strong> The
           Conference service registers the same <code>AddAzureBlobFileStorage</code>
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:353</code>) against a new <strong>public-read
-          <code>session-assets</code> container</strong> on the existing storage account (<code>MMCA.ADC/infra/main.bicep:1281-1287</code>,
-          container name injected at <code>:1956</code>); the account-scoped data-plane grant already covers it, so no
-          second role assignment (<code>:1314-1322</code>, comment at <code>:1307-1309</code>). The blob name is
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:357</code>) against a new <strong>public-read
+          <code>session-assets</code> container</strong> on the existing storage account (<code>MMCA.ADC/infra/main.bicep:1308-1314</code>,
+          container name injected at <code>:1995</code>); the account-scoped data-plane grant already covers it, so no
+          second role assignment (<code>:1341-1349</code>, comment at <code>:1334-1336</code>). The blob name is
           <code>{eventId}/{sessionId}/{assetId}/{sanitized-file-name}</code>
           (<code>UploadSessionAssetHandler.cs:90-94</code>), which is what makes a public container acceptable: the GUID
           segment is unguessable, so holding one asset URL reveals nothing about any other. Attendees download
@@ -362,28 +362,36 @@
           <code>SessionAsset.StorageNotConfigured</code> while links keep working (<code>:56-62</code>), which is the local-dev
           posture. Optional on-upload malware scanning (Microsoft Defender for Storage) is available behind the
           bicep parameter <code>enableSessionAssetMalwareScanning</code>, <strong>defaulting to true</strong>
-          (<code>MMCA.ADC/infra/main.bicep:136</code>, resource at <code>:1334-1350</code>): the deploy identity&#39;s Contributor role covers
-          the settings write (comment at <code>:1324-1333</code>), and the per-GB scanning cost is bounded by a
-          50 GB monthly cap (<code>:1342</code>). Production diverges from the template: an <code>az rest</code> read of the
+          (<code>MMCA.ADC/infra/main.bicep:136</code>, resource at <code>:1361-1377</code>): the deploy identity&#39;s Contributor role covers
+          the settings write (comment at <code>:1351-1360</code>), and the per-GB scanning cost is bounded by a
+          50 GB monthly cap (<code>:1369</code>). Production diverges from the template: an <code>az rest</code> read of the
           account&#39;s <code>defenderForStorageSettings/current</code> on 2026-10-01 returned Defender for Storage enabled
           but <code>malwareScanning.onUpload.isEnabled=false</code> (<code>capGBPerMonth=-1</code>). It is defence in depth behind the content gate, not the primary
           control.</p>
-          <p><strong>6. Blob removal is a post-commit internal command.</strong> Deleting the row and deleting the bytes are
+          <p><strong>6. Blob removal is an internal command scheduled in the delete&#39;s transaction.</strong> Deleting the row and deleting the bytes are
           two different systems, so the second is scheduled as the durable internal command
           <code>Conference.DeleteSessionAssetBlob.v1</code>
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/SessionAssets/UseCases/DeleteSessionAssetBlob/DeleteSessionAssetBlobInternalCommand.cs:28-29</code>)
           on <a href="114-internal-commands-durable-job-queue.html">ADR-114</a>&#39;s queue, mirroring what Identity already
           does for avatars. Four paths schedule it: an asset delete
-          (<code>.../SessionAssets/UseCases/Delete/DeleteSessionAssetHandler.cs:63-73</code>), a session delete
-          (<code>.../Sessions/UseCases/Delete/DeleteSessionHandler.cs:71-95</code> soft-deletes the assets in the same
-          save, <code>:41-62</code> schedules the blobs after it commits), an event delete
-          (<code>.../Events/UseCases/Delete/DeleteEventHandler.cs:77-90</code>, blobs scheduled after the commit at <code>:96</code>, cascading through
+          (<code>.../SessionAssets/UseCases/Delete/DeleteSessionAssetHandler.cs:63-74</code>, before the save at <code>:76</code>;
+          the command is <code>ITransactional</code>, <code>DeleteSessionAssetCommand.cs:16</code>), a session delete
+          (<code>.../Sessions/UseCases/Delete/DeleteSessionHandler.cs:44-47</code> opens the transaction, and
+          <code>OnDeletingAsync</code> at <code>:56-92</code> soft-deletes the assets in the same save, <code>:71-79</code>, and schedules their
+          blobs, <code>:81-89</code>), an event delete
+          (<code>.../Events/UseCases/Delete/DeleteEventHandler.cs:41-43</code> opens the transaction, assets loaded at
+          <code>:98-103</code>, blobs scheduled at <code>:111-113</code> before the save at <code>:115</code>, cascading through
           <code>EventCascadeDeletionDomainService.CascadeDelete</code> which now takes the event&#39;s assets as a fifth
           collection, <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/EventCascadeDeletionDomainService.cs:31-37</code>),
           and an upload whose row could not be created or failed to commit after the bytes had already landed
-          (<code>UploadSessionAssetHandler.cs:114</code>, <code>:131</code>). The three delete paths schedule <strong>after</strong> the commit, so a
-          rolled-back delete never removes a file its row still points at, and a storage outage or a crash in
-          that tail defers the cleanup instead of losing it.</p>
+          (<code>UploadSessionAssetHandler.cs:114</code>, <code>:131</code>). The three delete paths schedule <strong>inside</strong> the delete&#39;s
+          transaction, before its save, so the internal-command row commits with the soft-delete or not at
+          all: the processor only sees it once the delete has committed, so a rolled-back delete never removes
+          a file its row still points at, and a scheduling failure fails the delete, which rolls back, rather
+          than committing it without the file&#39;s removal. There is no post-commit tail. Only the upload-orphan
+          path schedules outside a transaction, from <code>ScheduleOrphanCleanupAsync</code>
+          (<code>UploadSessionAssetHandler.cs:178-195</code>), and only it logs a blob that could not be scheduled as one
+          that must be removed by hand (<code>:200-204</code>).</p>
           <p><strong>Limits.</strong> 50 MB per file and at most 10 live assets per session, both stated once on
           <code>SessionAssetLimits</code>
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/SessionAssets/SessionAssetLimits.cs:11</code>,
@@ -395,7 +403,7 @@
           applies it with <code>[RequestSizeLimit]</code> (<code>SessionAssetsController.cs:151-153</code>). The YARP gateway
           terminates the request before the service sees it and has no endpoint to hang an attribute on, so the
           body-size raise there is <strong>path-scoped to <code>/SessionAssets/file</code> alone</strong>
-          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:194-213</code>), not global: every other route keeps
+          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:207-226</code>), not global: every other route keeps
           its default budget. The gateway&#39;s forwarding route itself is anonymous, as every gateway route is
           (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:219-223</code>).</p>
           <p><strong>UI.</strong> Speakers and organizers manage a session&#39;s materials through
@@ -458,10 +466,11 @@
           exactly that residue and the template turns on-upload scanning on by default, capped at 50 GB a
           month; production read scanning off on 2026-10-01, so the deployed posture is format-checked but
           not malware-scanned until the deployed setting matches the template.</li>
-          <li><strong>Blob cleanup is eventually consistent.</strong> Every delete path schedules the blob removal after its
-          commit, so between the commit and the queue&#39;s next tick the file is still fetchable by anyone
-          holding its URL. A row that fails to schedule is logged as an orphan that needs a manual sweep;
-          there is no reconciler that walks the container looking for blobs with no row.</li>
+          <li><strong>Blob cleanup is eventually consistent.</strong> Every delete path commits the blob-removal row with the
+          delete, but the processor runs it later, so between the commit and the queue&#39;s next tick the file
+          is still fetchable by anyone holding its URL. A delete whose row cannot be scheduled fails and rolls
+          back; only an upload-orphan blob that cannot be scheduled is logged as needing removal by hand,
+          and there is no reconciler that walks the container looking for blobs with no row.</li>
           <li><strong>The gateway carries a duplicated literal.</strong> The Gateway references no Conference assembly, so its
           50 MB plus 64 KB body limit is a literal rather than <code>SessionAssetLimits.MaxRequestBytes</code>. The
           route is pinned by <code>RouteMapTests</code> and the real enforcement is the service-side attribute, but the
@@ -496,6 +505,23 @@
           because both components are wired into three pages (<code>SpeakerDashboard.razor:223</code>,
           <code>SessionDetail.razor:179</code>, <code>PublicSessionDetail.razor:114</code>). Every other citation was refreshed to
           current line numbers.</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <ul>
+          <li>Part 6 and the &quot;Blob cleanup is eventually consistent&quot; trade-off are corrected: all three delete
+          paths now schedule <code>Conference.DeleteSessionAssetBlob.v1</code> inside the delete&#39;s transaction, before
+          its save (<code>DeleteSessionAssetHandler.cs:63-76</code>, <code>DeleteSessionHandler.cs:44-47</code> and <code>:81-89</code>,
+          <code>DeleteEventHandler.cs:41-43</code> and <code>:111-115</code>), and a scheduling failure fails and rolls back the
+          delete. There is no post-commit tail; only the upload-orphan path schedules outside a transaction
+          and logs an unscheduled blob for removal by hand (<code>UploadSessionAssetHandler.cs:178-204</code>).</li>
+          <li>Anchors recorded in the 2026-10-01 revision that have since moved: the v1.210.0 breaking change is
+          now at <code>MMCA.Common/CHANGELOG.md:672-673</code> (release heading <code>:610</code>), the scanning resource at
+          <code>MMCA.ADC/infra/main.bicep:1361-1377</code> (cap <code>:1369</code>, Contributor comment <code>:1351-1360</code>), and the
+          public download list at <code>PublicSessionDetail.razor:116</code>; that revision&#39;s &quot;every other citation was
+          refreshed&quot; no longer holds for those anchors.</li>
+          <li>Every live-section anchor was re-verified against current source this pass (permissions,
+          Conference service registration, bicep container, grant and scanning resource, Gateway body-size
+          raise, delete handlers).</li>
+          </ul>
           <h2 id="related">Related</h2>
           <p><a href="045-managed-file-storage-and-avatars.html">ADR-045</a> (the storage abstraction, the image path this
           record is the document sibling of, and the avatar-only scope statement this supersedes),
@@ -522,6 +548,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

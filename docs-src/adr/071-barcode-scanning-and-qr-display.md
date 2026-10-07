@@ -38,16 +38,16 @@ scanning ships as an ADR-042 capability whose native half is opt-in per head.**
 
 - **Display is a component, not a capability.** `QrCodeImage`
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/Sharing/QrCodeImage.razor`) renders a payload as
-  an inline base64 PNG data URI through QRCoder's managed `PngByteQRCode` path (`:71-74`), so it works
-  identically on SSR, Server, WASM and MAUI with no per-head registration at all. `Payload` (`:15-17`)
-  and `AltText` (`:23-25`) are both `[EditorRequired]`, which is what keeps a generated image from
-  shipping without an accessible name; `PixelsPerModule` (default 10, clamped to at least 1 at `:74`),
+  an inline base64 PNG data URI through QRCoder's managed `PngByteQRCode` path (`:74-77`), so it works
+  identically on SSR, Server, WASM and MAUI with no per-head registration at all. `Payload` (`:18-20`)
+  and `AltText` (`:26-28`) are both `[EditorRequired]`, which is what keeps a generated image from
+  shipping without an accessible name; `PixelsPerModule` (default 10, clamped to at least 1 at `:77`),
   `ErrorCorrection` and `Class` cover sizing and styling. A blank payload renders nothing rather than a
-  broken image (`:66-69`), and the bitmap is memoized against the three inputs that affect it
-  (`:42-56`), so a parent re-render does not re-encode.
+  broken image (`:69-72`), and the bitmap is memoized against the three inputs that affect it
+  (`:45-59`), so a parent re-render does not re-encode.
 - **The error-correction level is a framework enum, not the generator's.**
   `QrErrorCorrectionLevel` (`Components/Sharing/QrErrorCorrectionLevel.cs:9-21`: `Low`, `Medium` (default),
-  `Quartile`, `High`) is mapped onto QRCoder's `ECCLevel` inside the component (`QrCodeImage.razor:77-83`),
+  `Quartile`, `High`) is mapped onto QRCoder's `ECCLevel` inside the component (`QrCodeImage.razor:80-86`),
   so the package's public surface does not pin consumers to the generator that happens to back it today.
 - **Scanning is one contract on the ADR-042 pattern.** `IBarcodeScannerService`
   (`Services/Capabilities/Media/IBarcodeScannerService.cs:11-20`) is two members: `bool IsSupported` and
@@ -86,7 +86,7 @@ scanning ships as an ADR-042 capability whose native half is opt-in per head.**
 
 Packaging follows ADR-042 exactly: `QRCoder` 1.8.0 (MIT) is a `MMCA.Common.UI` dependency and
 `ZXing.Net.Maui.Controls` 0.10.4 (MIT) a `MMCA.Common.UI.Maui` one, both pinned in
-`MMCA.Common/Directory.Packages.props` (`:191`, `:225`), and the MAUI package keeps its
+`MMCA.Common/Directory.Packages.props` (`:187`, `:221`), and the MAUI package keeps its
 windows-job build and pack.
 
 ## Rationale
@@ -133,7 +133,7 @@ windows-job build and pack.
   it is functional rather than decorative: a MAUI head that forgets `UseCommonBarcodeScanner` gets the
   same behavior as a browser head. The mitigation is on the consumer, which is why ADC's check-in page
   shows its scan card only when `IsSupported` is true (`CheckInScan.razor:69-93`, `ScannerAvailable`
-  at `CheckInScan.razor.cs:41`) and always renders a manual attendee search beside it on every head
+  at `CheckInScan.razor.cs:46`) and always renders a manual attendee search beside it on every head
   (`CheckInScan.razor:113-118`, ADR-072), so the task stays completable when the scanner is absent.
 - **Opt-in means the platform matrix is not uniform.** A Windows or Mac Catalyst MAUI head that calls
   `UseCommonBarcodeScanner` still reports `IsSupported == false`, so "registered" and "usable" are two
@@ -155,6 +155,15 @@ null-fallback trade-off is corrected to describe what ADC's check-in page does: 
 behind `ScannerAvailable => Scanner.IsSupported` (`CheckInScan.razor:69-93`,
 `CheckInScan.razor.cs:41`) and renders the manual search on every head (`CheckInScan.razor:113-118`),
 rather than substituting the manual path for the scanner.
+
+## Revision (2026-10-06)
+No decision, rationale or behavior changed; versions are unchanged (QRCoder 1.8.0,
+ZXing.Net.Maui.Controls 0.10.4).
+- The package pins recorded in the 2026-10-01 revision now sit at
+  `MMCA.Common/Directory.Packages.props:187` (QRCoder) and `:221` (ZXing.Net.Maui.Controls), and
+  `ScannerAvailable => Scanner.IsSupported` at `CheckInScan.razor.cs:46`.
+- Anchors in the live sections were re-verified against current source and re-anchored
+  (`QrCodeImage.razor`, `Directory.Packages.props`, `CheckInScan.razor.cs`).
 
 ## Related
 [ADR-042](042-device-capability-abstraction.md) (the capability pattern this extends: contract in

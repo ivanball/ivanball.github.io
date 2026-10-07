@@ -28,6 +28,7 @@ Citations refreshed: the Common `DependencyInjection` registration helpers now s
 `DependencyInjection.cs`, `DependencyInjection.ModuleScanning.cs` and `DependencyInjection.Crud.cs`).
 Revised 2026-10-01 (the record states where each kind of validation lives: UI form models, the
 Validating decorator with its coverage fitness gate, and domain factories; see Revision below).
+Revised 2026-10-06: the Decision states the shipped seven-decorator command chain and six-decorator query chain instead of the pre-2026-08-18 order.
 
 ## Context
 Commands and queries share cross-cutting concerns: validation, transactions, cache invalidation,
@@ -45,10 +46,13 @@ Use single-responsibility handlers behind a Scrutor-composed decorator pipeline.
   (ADR-013).
 - Cross-cutting concerns are decorators registered with Scrutor `TryDecorate` in
   `AddApplicationDecorators()`. Because `TryDecorate` applies in **reverse** registration order (last
-  registered is outermost), the execution order (outermost to innermost) is (**superseded by the
-  Revision (2026-08-18)**, which inserts Authorization and Timeout into both chains):
-  - **Commands:** FeatureGate -> Logging -> Caching -> Validating -> Transactional -> Handler
-  - **Queries:** FeatureGate -> Logging -> Caching -> Handler
+  registered is outermost), the execution order (outermost to innermost) is (registration sequence at
+  `MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:134-140` for commands and
+  `:143-148` for queries; how the chain reached this shape is in the Revisions (2026-08-18) and
+  (2026-08-26) below):
+  - **Commands:** FeatureGate -> Authorization -> Logging -> Caching -> Validating -> Timeout ->
+    Transactional -> Handler
+  - **Queries:** FeatureGate -> Authorization -> Logging -> Caching -> Validating -> Timeout -> Handler
   - plus an optional pair of `Profiling` decorators (`ProfilingCommandDecorator` /
     `ProfilingQueryDecorator`) registered by a **separate** opt-in `AddApplicationProfiling()` call,
     not by `AddApplicationDecorators()`. No consumer host wires it today.
@@ -69,10 +73,10 @@ Use single-responsibility handlers behind a Scrutor-composed decorator pipeline.
   (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:132`). The seven production service hosts
   compose the same sequence through `AddMmcaApplicationPipeline(pipeline => ...)` instead, which runs it
   in order and seals it (see the Revision (2026-08-26) below): ADC Identity / Conference / Engagement /
-  Notification (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:311`, `...Conference.Service/Program.cs:407`,
-  `...Engagement.Service/Program.cs:279`, `...Notification.Service/Program.cs:221`) and Store Identity /
-  Catalog / Sales (`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:234`,
-  `...Catalog.Service/Program.cs:254`, `...Sales.Service/Program.cs:234`). Only that decorators-last
+  Notification (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:324`, `...Conference.Service/Program.cs:414`,
+  `...Engagement.Service/Program.cs:285`, `...Notification.Service/Program.cs:227`) and Store Identity /
+  Catalog / Sales (`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:236`,
+  `...Catalog.Service/Program.cs:256`, `...Sales.Service/Program.cs:236`). Only that decorators-last
   ordering is load-bearing; the relative position of `AddInfrastructure`/`AddAPI` is not.
 - **Each kind of validation has one home.** UI form models declare DataAnnotations rules once and
   bridge them onto `MudForm` through `ModelValidation.For(model, validator)`
@@ -466,3 +470,18 @@ decorator's role is read against its neighbours rather than in isolation. The ch
 Citations refreshed in the Decision: the `AddMmcaApplicationPipeline` call sites are now ADC Identity
 `:311` and Notification `:221`, and Store Identity `:234`, Catalog `:254` and Sales `:234`. Stale
 anchors inside the earlier Revision sections are left as historical records.
+
+## Revision (2026-10-06)
+- **The Decision now states the shipped chain.** Its order bullet carried the pre-2026-08-18 chain
+  (five command decorators, three query decorators) behind a "superseded" pointer; it now reads
+  FeatureGate -> Authorization -> Logging -> Caching -> Validating -> Timeout -> Transactional ->
+  Handler for commands and the same chain without Transactional for queries, citing the registration
+  sequence (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:134-140`,
+  `:143-148`). The chain itself is unchanged since the Revision (2026-08-26).
+- The `AddMmcaApplicationPipeline` call sites in the Decision moved again: ADC Identity `:324`,
+  Conference `:414`, Engagement `:285`, Notification `:227`; Store Identity `:236`, Catalog `:256`,
+  Sales `:236`. The anchors restated in the Revision (2026-10-01) above are left as recorded.
+- The `IRequiresPermission` marker cited in the Revision (2026-08-18) is now declared at
+  `MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Markers/IRequiresPermission.cs:34`, with its
+  single member `string Permission { get; }` at `:41`; behavior is unchanged.
+- Anchors in the live sections were re-verified against current source.

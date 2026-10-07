@@ -264,7 +264,7 @@
           Aspire service-discovery names (<code>http://identity</code>, <code>http://conference</code>, <code>http://catalog</code> and so on)
           resolved through <code>AddHttpForwarderWithServiceDiscovery</code>, which is the part of the arrangement that was
           right and stays, now as <code>AddServiceDiscoveryDestinationResolver</code>
-          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:149</code>,
+          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:151</code>,
           <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:141</code>).</p>
           <p><strong>The problem was not that the table was duplicated across deployment artifacts. It was that one table
           was described three times inside one repository, and the three already disagreed.</strong> ADC was the worked
@@ -287,10 +287,10 @@
           was pinned by no test at all.</p>
           <p><strong>What is genuinely elsewhere is not the route table, and that distinction is worth recording</strong>,
           because it is the duplication a reader assumes exists. The Aspire AppHost holds references and
-          start-ordering (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:353-361</code>,
-          <code>MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:312-318</code>) and the bicep templates hold
+          start-ordering (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:345-353</code>,
+          <code>MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:307-313</code>) and the bicep templates hold
           <code>services__&lt;name&gt;__http__0</code> environment variables on the gateway container app
-          (<code>MMCA.ADC/infra/main.bicep:2381-2384</code>, <code>MMCA.Store/infra/main.bicep:1933-1935</code>). Both are <strong>address
+          (<code>MMCA.ADC/infra/main.bicep:2421-2424</code>, <code>MMCA.Store/infra/main.bicep:1943-1945</code>). Both are <strong>address
           books</strong>: service name to URL, with no path prefix anywhere in them. They answer &quot;where does
           <code>conference</code> resolve&quot; and never &quot;what reaches conference&quot;, so neither is a second route table and
           neither should become one.</p>
@@ -317,7 +317,7 @@
           <h3 id="1-reverseproxy-configuration-is-the-route-table">1. <code>ReverseProxy</code> configuration is the route table</h3>
           <p>Each gateway calls <code>AddReverseProxy().LoadFromConfig(builder.Configuration.GetSection(&quot;ReverseProxy&quot;))</code>
           and <code>MapReverseProxy()</code>, and the <code>MapForwarder</code> lists are deleted. ADC wires it at
-          <code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:146-149</code> and maps it at <code>:221</code>; Store at
+          <code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:148-151</code> and maps it at <code>:234</code>; Store at
           <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:138-141</code> and <code>:173</code>. Routes and clusters live
           in the gateway&#39;s own <code>appsettings.json</code>: 33 routes over five clusters for ADC (8 identity, 18
           conference, 5 engagement, 2 notification, at
@@ -485,6 +485,15 @@
           both gateways&#39; <code>Program.cs</code> wiring and <code>MapReverseProxy</code>, both route and cluster tables and the shared
           <code>MmcaGateway</code> profile in <code>appsettings.json</code>, both AppHost gateway blocks, both bicep gateway address
           books, and both <code>RouteMapTests</code> suites.</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <ul>
+          <li>No decision and no current-state statement changed: the AppHost blocks still hold only
+          <code>WithReference</code> and <code>WaitFor</code> ordering, and both bicep gateway address books still carry bare
+          <code>http://&lt;app&gt;</code> destinations with no path prefix.</li>
+          <li>Anchors were re-verified against current source and re-anchored where they had moved: ADC gateway
+          wiring (<code>Program.cs:148-151</code>) and <code>MapReverseProxy</code> (<code>:234</code>), both AppHost gateway blocks, and both
+          bicep gateway address books. Store gateway <code>Program.cs</code> citations still hold.</li>
+          </ul>
           <h2 id="related">Related</h2>
           <p><a href="008-service-extraction-topology.html">ADR-008</a> (amended: the Gateway keeps the route-to-service map it
           was given, now expressed as configuration rather than as forwarder registrations),
@@ -518,6 +527,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

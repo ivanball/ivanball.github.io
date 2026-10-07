@@ -256,9 +256,9 @@
           (<code>Source/Presentation/MMCA.Common.UI.Maui/Capabilities/Auth/MauiExternalAuthBroker.cs:20</code>). The ADC
           consumer&#39;s deep-link wave has shipped: <code>MMCA.ADC.UI.Web</code> serves the two well-known association
           documents through the shared helper
-          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:267</code>), the Identity service allow-lists the
-          <code>atldevcon</code> scheme (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:83-85</code>, the
-          entry at <code>:84</code>), and
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:293</code>), the Identity service allow-lists the
+          <code>atldevcon</code> scheme (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:89-91</code>, the
+          entry at <code>:90</code>), and
           the native heads register the callback: iOS carries both the custom-scheme URL type
           (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/iOS/Info.plist:16</code>) and the associated-domains
           entitlement (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/iOS/Entitlements.plist:11</code>), while
@@ -266,16 +266,19 @@
           (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/Android/WebAuthenticatorCallbackActivity.cs:14</code>).
           Android&#39;s <code>AutoVerify</code> https App Links intent filter is in place too, declared as a C# attribute on
           <code>MainActivity</code> rather than in XML
-          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/Android/MainActivity.cs:26-31</code>, with the public web
-          host constant at <code>:39</code> and the verified link reduced to path plus query at <code>:78</code>, shape-checked at
-          <code>:92</code> and published to <code>IDeepLinkDispatcher</code> at <code>:97</code>). The checked-in
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/Android/MainActivity.cs:29-35</code>, with the public web
+          host constant at <code>:43</code> and the verified link reduced to path plus query at <code>:82</code>, shape-checked at
+          <code>:96</code> and published to <code>IDeepLinkDispatcher</code> at <code>:101</code>). The filter claims only the deep-linkable
+          path prefixes (<code>/conference/</code>, <code>/happening-now</code>, <code>/feedback/</code>, <code>/auth/oauth-complete</code>, at <code>:34</code>),
+          the same set the iOS <code>applinks</code> components declare, so any other page on the host stays in the
+          browser. The checked-in
           <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/Android/AndroidManifest.xml</code> carries nine
-          <code>uses-permission</code> entries (<code>:4-26</code>) above the package-visibility <code>queries</code> block (<code>:29-42</code>);
+          <code>uses-permission</code> entries (<code>:4-26</code>) above the package-visibility <code>queries</code> block (<code>:29-48</code>);
           activities and their intent filters are attributes in code, which .NET for Android merges into the
           generated manifest at build time. The SERVED fingerprint has landed as well:
           <code>AppAssociation:AndroidCertFingerprints</code> now carries the production Play App Signing SHA-256
-          fingerprint (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:64-66</code>, the single value at
-          <code>:65</code>, inside the <code>AppAssociation</code> section at <code>:62-68</code>) in place of the former
+          fingerprint (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:83-85</code>, the single value at
+          <code>:84</code>, inside the <code>AppAssociation</code> section at <code>:81-87</code>) in place of the former
           <code>REPLACE_WITH_PLAY_APP_SIGNING_SHA256_FINGERPRINT</code> placeholder, and the helper copies that array
           verbatim into the document&#39;s <code>sha256_cert_fingerprints</code>
           (<code>Source/Presentation/MMCA.Common.API/Startup/Endpoints/AppAssociationEndpointExtensions.cs:63</code>), so the
@@ -290,7 +293,10 @@
           shared <code>DeepLinkDispatcher.IsAppRelativeRoute</code> directly; see Revision below). Revised 2026-09-25
           (MMCA.ADC anchors re-pinned: the <code>Program.cs</code> association block, both <code>appsettings.json</code> config
           sections, the MAUI head&#39;s <code>PublicSite:BaseUrl</code> line and the two <code>MainActivity</code> publish call sites
-          moved; see Revision below).</p>
+          moved; see Revision below). Revised 2026-10-01 (MMCA.Common anchors re-pinned; see Revision below).
+          Revised 2026-10-06: the native completion now round-trips a per-attempt <code>state</code> value that the shared
+          completion page checks before exchanging the code, and the Android App Links filter claims only the
+          deep-linkable path prefixes; see Revision below.</p>
           <h2 id="context">Context</h2>
           <p>Three mobile flows all need a URL to leave the web world and land inside the MAUI app:</p>
           <ol>
@@ -315,26 +321,32 @@
           <code>OAuth:AllowedReturnUrlSchemes</code> (a config array, default empty). When the challenge&#39;s stashed
           <code>returnUrl</code> is an absolute URI whose scheme appears in the allowlist (for example
           <code>atldevcon://oauth-complete</code>), the completion redirect (and completion errors) target that URL
-          instead of <code>OAuth:UIBaseUrl</code>, carrying only the same single-use code. The redirect echoes the
+          instead of <code>OAuth:UIBaseUrl</code>, carrying the same single-use code plus the client&#39;s round-tripped
+          <code>state</code> value when one was supplied (both targets get the same suffix:
+          <code>Source/Presentation/MMCA.Common.API/Controllers/OAuthControllerBase.cs:170-176</code>, the state read
+          back from the challenge properties at <code>:124</code> and <code>:160-161</code>). The redirect echoes the
           client&#39;s <code>Uri.OriginalString</code> because URI normalization would append a trailing slash and native
           callback matching can be exact. <code>http</code>/<code>https</code> schemes never match even if listed, so web
           destinations always flow through the pinned base URL and the allowlist cannot become an open
           redirect. An empty allowlist reproduces the previous behavior byte for byte.</li>
           <li><strong>Client flow.</strong> The MAUI head calls
-          <code>WebAuthenticator</code> with <code>{gateway}/auth/oauth/{provider}?returnUrl={scheme}://oauth-complete</code> and
-          captures <code>code</code> from the custom-scheme callback
-          (the <code>WebAuthenticator</code> call at
-          <code>Source/Presentation/MMCA.Common.UI.Maui/Capabilities/Auth/MauiExternalAuthBroker.cs:75-81</code>, the
-          <code>code</code> read out of <code>result.Properties</code> at <code>:84</code>), then
-          hands the code to the shared <code>/auth/oauth-complete</code> page by navigating to it (<code>:97-98</code>). That page
-          owns the rest, exactly as it does on web heads:
-          <code>Source/Presentation/MMCA.Common.UI/Pages/Auth/OAuthComplete.razor:86</code> calls
+          <code>WebAuthenticator</code> with <code>{gateway}/auth/oauth/{provider}?returnUrl={scheme}://oauth-complete&amp;state=...</code>
+          and captures <code>code</code> (and the echoed <code>state</code>) from the custom-scheme callback. The <code>state</code> value
+          comes from <code>OAuthFlowStateStore.BeginAsync</code>
+          (<code>Source/Presentation/MMCA.Common.UI.Maui/Capabilities/Auth/MauiExternalAuthBroker.cs:66</code>,
+          appended at <code>:67-71</code>), so the completion can be bound to an attempt this device started (the
+          <code>WebAuthenticator</code> call at <code>:75-81</code>, the <code>code</code> read out of <code>result.Properties</code> at <code>:84</code>, the
+          returned <code>state</code> at <code>:90</code>), then
+          hands both to the shared <code>/auth/oauth-complete</code> page by navigating to it (<code>:94-98</code>). That page
+          owns the rest, exactly as it does on web heads: it refuses the code when
+          <code>OAuthFlowState.TryCompleteAsync(State)</code> finds no matching local attempt
+          (<code>Source/Presentation/MMCA.Common.UI/Pages/Auth/OAuthComplete.razor:75</code>), and otherwise <code>:86</code> calls
           <code>IAuthUIService.ExchangeOAuthCodeAsync</code>, which returns <code>Result&lt;AuthenticationResponse&gt;</code> so the
           page branches on <code>result.IsFailure</code> (<code>:87</code>) rather than on an exception. The service&#39;s
           <code>ExchangeOAuthCodeAsync</code>
           (<code>Source/Presentation/MMCA.Common.UI/Services/Auth/AuthUIService.cs:76</code>) POSTs the existing
           anonymous <code>auth/oauth/exchange</code> through the shared <code>AuthenticateAsync</code> helper (<code>:84</code>, the helper
-          itself at <code>:266</code>), which stores the pair via <code>ITokenStorageService</code> (<code>:294</code>), so the
+          itself at <code>:275</code>), which stores the pair via <code>ITokenStorageService</code> (<code>:303</code>), so the
           single-use-code contract lives in exactly one place. This rides behind the <code>IExternalAuthBroker</code>
           contract
           (ADR-042); the default broker is unavailable, which keeps the shared Login page on its anchor
@@ -365,20 +377,22 @@
           currently ride the Azure Container Apps default domain, which changes if the environment is ever
           recreated and would force store resubmissions. Three places in the ADC repo put the host string
           inside the app binary: <code>PublicSite:BaseUrl</code> in the MAUI head&#39;s
-          <code>appsettings.json</code> (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/appsettings.json:23</code>, compiled in as an
+          <code>appsettings.json</code> (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/appsettings.json:33</code>, compiled in as an
           <code>EmbeddedResource</code> per <code>MMCA.ADC.UI.csproj:134</code>), a raw literal in the iOS associated-domains
           array (<code>Platforms/iOS/Entitlements.plist:11</code>), and the <code>PublicWebHost</code> compile-time constant that
-          feeds the Android intent-filter attribute (<code>Platforms/Android/MainActivity.cs:39</code>). Only the first
+          feeds the Android intent-filter attribute (<code>Platforms/Android/MainActivity.cs:43</code>). Only the first
           is read through configuration; the two native manifests take literals, because neither an
           entitlement nor an attribute argument can read config. A cutover is therefore a three-spot edit
-          plus a rebuild, not a setting change (the comment at <code>MainActivity.cs:37-38</code> still describes it as
+          plus a rebuild, not a setting change (the comment at <code>MainActivity.cs:41-42</code> still describes it as
           touching two spots), plus the two verification commands in
           <code>MMCA.ADC/Docs/MobileReleaseRunbook.md:48</code> and <code>:52</code>, which repeat the host but ship nothing; a
           custom domain is the durable fix.</li>
           <li>A custom-scheme URI&#39;s host and path are attacker-choosable on a device with a hostile app
           registered for the same scheme (scheme hijack). Accepted: the redirect carries only a two-minute
-          single-use code, the exchange is one-shot, and platform app-link verification does not exist for
-          custom schemes anywhere.</li>
+          single-use code (<code>OAuthControllerBase.cs:59</code>) plus the client&#39;s own <code>state</code> value, the exchange is
+          one-shot, the completion page refuses a code that no attempt on this device started
+          (<code>OAuthComplete.razor:75</code>), and platform app-link verification does not exist for custom schemes
+          anywhere.</li>
           <li>Completion failures that occur before authentication properties exist cannot know the native
           callback and still land on the web login page; the broker times out and the user retries.</li>
           </ul>
@@ -621,6 +635,33 @@
           the earlier revisions has moved too: <code>DeepLinkDispatcher.IsAppRelativeRoute</code> is at
           <code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Capabilities/Navigation/DeepLinkDispatcher.cs:49</code>,
           <code>Publish</code> at <code>:104</code>, and the guard applied inside it at <code>:108</code>.</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <p>Correction and anchor pass from an ADR audit. The decision is unchanged; two descriptions lagged the
+          code.</p>
+          <ol>
+          <li><strong>The completion round-trips a per-attempt <code>state</code>.</strong> The Decision said the native redirect
+          carries &quot;only the same single-use code&quot;. <code>BuildSuccessRedirectUrl</code> (now defined at
+          <code>Source/Presentation/MMCA.Common.API/Controllers/OAuthControllerBase.cs:163</code> and called at <code>:154</code>)
+          appends the client&#39;s <code>state</code> to both the web and the native target (<code>:170-176</code>). The MAUI broker
+          starts that attempt through <code>OAuthFlowStateStore.BeginAsync</code>
+          (<code>Source/Presentation/MMCA.Common.UI.Maui/Capabilities/Auth/MauiExternalAuthBroker.cs:66</code>) and
+          forwards the echoed value with the code (<code>:90</code>, <code>:94-98</code>), and the shared completion page refuses
+          a code no local attempt matches (<code>Source/Presentation/MMCA.Common.UI/Pages/Auth/OAuthComplete.razor:75</code>).
+          The client-flow bullet and the scheme-hijack trade-off now say so.</li>
+          <li><strong>The Android App Links filter is path-scoped.</strong> <code>DataPathPrefixes</code> limits it to <code>/conference/</code>,
+          <code>/happening-now</code>, <code>/feedback/</code> and <code>/auth/oauth-complete</code>
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/Android/MainActivity.cs:34</code>), the set the iOS
+          <code>applinks</code> components declare, rather than claiming the whole host. The manifest&#39;s <code>queries</code> block
+          also grew to <code>:29-48</code> (an <code>IMAGE_CAPTURE</code> intent query at <code>:45-47</code>).</li>
+          <li><strong>Anchors re-verified against current source.</strong> In ADC: the <code>Program.cs</code> association block
+          (comment <code>:286-291</code>, <code>GetSection</code> <code>:292</code>, <code>MapAppAssociationEndpoints</code> <code>:293</code>, package-id comment
+          <code>:295-298</code>, <code>AndroidPackageName</code> <code>:299</code>, <code>AndroidCertFingerprints</code> <code>:300</code>, <code>AppleAppId</code> <code>:301</code>,
+          <code>AppleAppLinkComponents</code> <code>:302</code>), both <code>appsettings.json</code> sections, <code>PublicSite:BaseUrl</code>
+          (<code>MMCA.ADC.UI/appsettings.json:33</code>) and every <code>MainActivity</code> anchor (<code>PublicWebHost</code> <code>:43</code>,
+          <code>OnCreate</code> publish <code>:49</code>, <code>OnNewIntent</code> publish <code>:66</code>, <code>PublishDeepLink</code> <code>:69-102</code>, the two-spot
+          comment <code>:41-42</code>); in Common, <code>AuthUIService</code>&#39;s helper (<code>:275</code>) and <code>SetTokensAsync</code> (<code>:303</code>).
+          Every live citation above is updated; the dated entries keep the values they recorded.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -644,6 +685,7 @@
             <li><a href="#revision-2026-09-11">Revision (2026-09-11)</a></li>
             <li><a href="#revision-2026-09-25">Revision (2026-09-25)</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             </ul>
           </nav>
         </aside>

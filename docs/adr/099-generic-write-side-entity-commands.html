@@ -255,7 +255,10 @@
           update-request rules reach the generic command with no hand-registered pairing. Revised 2026-09-19:
           the shared mutate workflow now carries one more step, a concurrency-token touch on a conditional
           write just before the save (SEC-Common-77), and ADC&#39;s Conference module registers a fourth
-          <code>AddEntityCrud</code> aggregate, <code>Partner</code>.</p>
+          <code>AddEntityCrud</code> aggregate, <code>Partner</code>. Revised 2026-10-01: the generic update gets the transactional,
+          permission and timeout steps only when a derived command opts in. Revised 2026-10-06: the payment
+          override now runs on the shared mutate workflow with its provider call inside <code>MutateAsync</code>, so the
+          generic-path boundary is the generic update path, not the presence of a provider call.</p>
           <h2 id="context">Context</h2>
           <p>ADR-034 records the read side of the generic resource layer and stops one verb short. Its
           <code>AggregateRootEntityControllerBase</code> ships <code>[HttpPost]</code> create and <code>[HttpDelete(&quot;{id}&quot;)]</code>
@@ -267,10 +270,10 @@
           a status and a child collection, and the update handler is the same twelve lines every time. The
           shared load-mutate-save machinery already existed
           (<code>Source/Core/MMCA.Common.Application/UseCases/Crud/MutateEntityHandlerBase.cs:52</code>, whose
-          <code>MutateCoreAsync</code> at <code>:271</code> loads the aggregate (<code>:281</code>), stamps the caller&#39;s concurrency token
-          (<code>:291-296</code>), runs the mutation (<code>:298</code>), touches the root&#39;s concurrency token when the request was
-          conditional (<code>MutateEntityHandlerBase.cs:314</code>, added 2026-09-07 for SEC-Common-77 so a write that
-          changed only child rows still emits a root <code>UPDATE</code> carrying the caller&#39;s token) and saves (<code>:316</code>)),
+          <code>MutateCoreAsync</code> at <code>:277</code> loads the aggregate (<code>:287</code>), stamps the caller&#39;s concurrency token
+          (<code>:297-302</code>), runs the mutation (<code>:304</code>), touches the root&#39;s concurrency token when the request was
+          conditional (<code>MutateEntityHandlerBase.cs:319-320</code>, added 2026-09-07 for SEC-Common-77 so a write that
+          changed only child rows still emits a root <code>UPDATE</code> carrying the caller&#39;s token) and saves (<code>:322</code>)),
           so what was missing was not the workflow but a command and a handler generic enough to close over any
           aggregate, plus somewhere for the module to say which aggregate method a request maps to.</p>
           <p>Two constraints shaped the answer.</p>
@@ -324,7 +327,7 @@
           <li><p><strong>One generic update handler, on the existing base.</strong>
           <code>UpdateEntityHandler&lt;TEntity, TEntityDTO, TIdentifierType, TUpdateRequest&gt;</code>
           (<code>Source/Core/MMCA.Common.Application/UseCases/Crud/UpdateEntityHandler.cs:48</code>) derives from the
-          DTO-returning <code>MutateEntityHandlerBase</code> (<code>MutateEntityHandlerBase.cs:356</code>) and overrides three
+          DTO-returning <code>MutateEntityHandlerBase</code> (<code>MutateEntityHandlerBase.cs:362</code>) and overrides three
           members: the id (<code>UpdateEntityHandler.cs:68</code>), the row version (<code>:76</code>), and <code>MutateAsync</code>, which
           is a single delegation to the applier (<code>:84-92</code>). It is left unsealed so a module can subclass it
           to declare the <code>Includes</code> a particular aggregate&#39;s mutation needs, or to add a <code>[LoggerMessage]</code>
@@ -381,7 +384,7 @@
           <li><strong>Invariants and events keep exactly one home.</strong> The applier calls the aggregate&#39;s guarded methods,
           so a generic PUT raises the same <code>{Entity}Changed</code> event with the same state discriminator a
           hand-written handler would (ADR-083), and a refused invariant stops the write before the save
-          (<code>MutateEntityHandlerBase.cs:298-300</code>).</li>
+          (<code>MutateEntityHandlerBase.cs:304-306</code>).</li>
           <li><strong>A new base beats a wider one.</strong> Adding a fifth type parameter to the shipped base would break
           every consumer&#39;s controllers at compile time in exchange for one action. Inheritance costs one word
           in a class declaration for the controllers that want the verb and nothing at all for those that do
@@ -625,6 +628,39 @@
           <code>DependencyInjection.ModuleScanning.cs:119-135</code>); and the consumer registrations in ADC Conference
           (<code>:149-152</code>), Store Catalog (<code>:101-105</code>, <code>:112</code>) and Store Identity (<code>:78-80</code>). Anchors inside the
           2026-08-30 Revision are left as recorded.</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <ul>
+          <li><strong>The payment-override example needs a nuance.</strong> &quot;Where the generic path stops&quot; cites
+          <code>PayOrderHandler</code> as a hand-written domain-verb state machine and separately says a handler that
+          talks to a payment provider between load and save sits outside the load-mutate-save workflow.
+          <code>PayOrderHandler</code> now runs on the bare-<code>Result</code> mutate base
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/Pay/PayOrderHandler.cs:23</code>,
+          base at <code>:27</code>) and retires the provider&#39;s hosted payment page inside <code>MutateAsync</code>, between the load
+          and the save (<code>PaymentSessionRetirement.RetireAsync</code> at <code>:69</code>). The base invites exactly that: a
+          mutation that first has to consult another service fits in <code>MutateAsync</code>, with the aggregate loaded
+          and its token stamped (<code>MutateEntityHandlerBase.cs:101-105</code>). So the boundary is not &quot;a provider
+          call happens&quot;; it is a hand-written subclass of the shared workflow versus the generic
+          <code>UpdateEntityHandler</code> path. The state-machine verbs still stay off the generic update path (no
+          request DTO, no applier), and a flow with its own compensation and idempotency that does not fit
+          one load-mutate-save, such as <code>ProcessPaymentWebhookHandler</code> (still a direct <code>ICommandHandler</code>,
+          <code>.../ProcessPaymentWebhook/ProcessPaymentWebhookHandler.cs:21</code>, <code>:24</code>), stays fully hand-written.</li>
+          <li><strong>Current locations for facts recorded in the 2026-08-30 Revision</strong> (its text is left as recorded):
+          the mutate workflow is <code>MutateCoreAsync</code> at <code>MutateEntityHandlerBase.cs:277</code>, <code>OnMutatedAsync</code> with
+          the context at <code>:233</code>, the <code>SaveSkipped</code> short circuit at <code>:310-311</code>, the injected-unit-of-work
+          overload at <code>:247-248</code> and the attempt-scope overload at <code>:261</code> (failed-attempt rationale at
+          <code>:254-256</code>); the bare base is <code>:339</code>, the DTO base <code>:362</code>, the payload base <code>:407</code>, <code>BuildResult</code>
+          <code>:438</code>, called only on success (<code>:423-425</code>), and the arity rationale <code>:399-401</code>. The registration
+          helpers live in <code>DependencyInjection.Crud.cs</code>, not <code>DependencyInjection.cs</code>: <code>AddEntityUpdateVerb</code>
+          <code>:136</code> (seal <code>:142</code>, <code>TryAdd</code> <code>:144-148</code>, bridge <code>:150-152</code>), <code>AddEntityUpdate</code> <code>:187</code> (seal <code>:193</code>,
+          <code>TryAdd</code> <code>:195-197</code>, bridge <code>:199</code>), <code>AddCommandRequestValidator</code> <code>:220</code> (<code>TryAddTransient</code> <code>:223</code>).
+          Consumers: ADC <code>AddEntityUpdate&lt;UpdateSpeakerCommand, ...&gt;</code> at
+          <code>MMCA.ADC.Conference.Application/DependencyInjection.cs:161</code>, <code>SpeakerUpdateApplier.cs:14-15</code>,
+          <code>SetUserAvatarHandler.cs:27</code> (payload base <code>:34</code>), <code>RemoveUserAvatarHandler.cs:18</code> (bare base <code>:22</code>,
+          context-taking <code>MutateAsync</code> <code>:31</code>); Store <code>AddEntityUpdateVerb</code> pair at
+          <code>MMCA.Store.Sales.Application/DependencyInjection.cs:87-88</code>; ADC <code>ChangePasswordHandler.cs:24</code>.</li>
+          <li>Anchors in the current-state sections (Context, Decision 3, Rationale) were re-verified against
+          current source and moved where the code had shifted.</li>
+          </ul>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -643,6 +679,7 @@
             <li><a href="#related">Related</a></li>
             <li><a href="#revision-2026-08-30-the-five-surfaces-that-complete-the-write-side">Revision (2026-08-30): the five surfaces that complete the write side</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             </ul>
           </nav>
         </aside>

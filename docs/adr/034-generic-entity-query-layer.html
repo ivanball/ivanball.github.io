@@ -279,8 +279,8 @@
           (plus a <code>[HttpGet(&quot;export&quot;)]</code> CSV action inserted between the paged and lookup
           routes): <code>[HttpGet]</code> list (<code>EntityControllerBase.cs:107</code>), <code>[HttpGet(&quot;paged&quot;)]</code>
           (<code>EntityControllerBase.cs:154</code>), <code>[HttpGet(&quot;lookup&quot;)]</code> for id/name dropdown
-          entries (<code>EntityControllerBase.cs:308</code>), and <code>[HttpGet(&quot;{id}&quot;)]</code>
-          (<code>EntityControllerBase.cs:347</code>).</p>
+          entries (<code>EntityControllerBase.cs:317</code>), and <code>[HttpGet(&quot;{id}&quot;)]</code>
+          (<code>EntityControllerBase.cs:356</code>).</p>
           </li>
           <li><p><strong>Generic write controller.</strong> <code>AggregateRootEntityControllerBase&lt;TEntity, TEntityDTO, TIdentifierType, TCreateRequest&gt;</code>
           (<code>Source/Presentation/MMCA.Common.API/Controllers/AggregateRootEntityControllerBase.cs:28</code>)
@@ -292,14 +292,14 @@
           not create a duplicate (ADR-017).</p>
           </li>
           <li><p><strong>Sparse fieldsets via <code>fields</code>.</strong> A comma-separated <code>fields</code> query parameter
-          (<code>EntityControllerBase.cs:111</code>, <code>:163</code>, <code>:356</code>) drives a server-side projection:
+          (<code>EntityControllerBase.cs:111</code>, <code>:163</code>, <code>:365</code>) drives a server-side projection:
           <code>QueryFieldService.ApplyFieldSelection</code>
-          (<code>Source/Core/MMCA.Common.Application/Services/QueryFieldService.cs:279</code>) builds a
+          (<code>Source/Core/MMCA.Common.Application/Services/QueryFieldService.cs:283</code>) builds a
           <code>MemberInit</code> expression that selects only the requested writable properties
-          (<code>QueryFieldService.cs:337</code>) so only those columns leave the database. The
+          (<code>QueryFieldService.cs:341</code>) so only those columns leave the database. The
           compiled projections are cached per field set, capped at <code>MaxCacheEntries</code> 512
           (<code>QueryFieldService.cs:39</code>); once the cache is full, a new field set skips the
-          server-side projection (<code>QueryFieldService.cs:298-299</code>) and the response is still
+          server-side projection (<code>QueryFieldService.cs:302-303</code>) and the response is still
           trimmed to the requested fields.</p>
           </li>
           <li><p><strong>Dynamic per-type filtering.</strong> The paged route binds
@@ -391,8 +391,8 @@
           type through its registered <code>IFilterStrategy</code> rather than free-form expression
           evaluation, and capping rows with <code>MaxUnboundedResultLimit</code>
           (<code>EntityQueryPipeline.cs:23</code>). Sparse fieldsets reject non-writable properties
-          with <code>InvalidEntityField</code> during field validation (<code>QueryFieldService.cs:517-523</code>),
-          and the projection itself selects only writable properties (<code>QueryFieldService.cs:337</code>).</li>
+          with <code>InvalidEntityField</code> during field validation (<code>QueryFieldService.cs:559-561</code>),
+          and the projection itself selects only writable properties (<code>QueryFieldService.cs:341</code>).</li>
           <li><strong>Generic endpoints are less self-documenting than bespoke ones.</strong> One generic
           shape per entity is consistent but conveys less domain intent than a named,
           purpose-built endpoint; the query contract (filter key syntax, operators) must be
@@ -510,6 +510,22 @@
           <p>Citations in Decision, Rationale, Trade-offs and Related were rebased to their current lines
           (<code>EntityControllerBase.cs</code>, <code>QueryFieldService.cs</code>, <code>QueryFilterService.cs</code>, <code>EntityQueryPipeline.cs</code>,
           <code>EntityQueryService.cs</code>). Anchors inside the earlier Revision sections are left as recorded.</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <p>No decision, rationale or behavior changed; this pass refreshes citations from an ADR audit.</p>
+          <ol>
+          <li><strong>Anchors recorded in earlier Revision sections have moved.</strong> They stay as recorded; the current
+          locations are: the fast-path predicate <code>TryGetFastPathIncludes</code> is declared at
+          <code>Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:196</code>, called from the by-id fast
+          path at <code>:164</code>, and sends a read with unsupported includes back to the pipeline at <code>:219-222</code>;
+          <code>EFReadRepository.GetAllForLookupAsync</code> applies <code>MaxUnboundedResultLimit</code> at
+          <code>Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:246</code>; the
+          <code>MaxCacheEntries</code> cap is documented at <code>QueryFieldService.cs:328</code> and <code>:619</code>; the projection-cache
+          skip is at <code>QueryFieldService.cs:302-303</code>, the writable-only projection at <code>:341</code>, and the
+          non-writable <code>InvalidEntityField</code> rejection at <code>:559-561</code>.</li>
+          </ol>
+          <p>Anchors in Decision and Trade-offs were re-verified against current source and rebased
+          (<code>EntityControllerBase.cs</code>, <code>QueryFieldService.cs</code>). Anchors inside the earlier Revision sections are
+          left as recorded.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -530,6 +546,7 @@
             <li><a href="#revision-2026-07-24">Revision (2026-07-24)</a></li>
             <li><a href="#revision-2026-07-25">Revision (2026-07-25)</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             </ul>
           </nav>
         </aside>

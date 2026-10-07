@@ -240,8 +240,9 @@
           <h1 id="adr-002-navigationpopulators-for-cross-container-loading">ADR-002: NavigationPopulators for Cross-Container Loading</h1>
           <h2 id="status">Status</h2>
           <p>Accepted</p>
+          <p>Revised 2026-10-06: four engines including PostgreSQL; Include support is classified by source identity on relational engines, with every Cosmos DB navigation unsupported.</p>
           <h2 id="context">Context</h2>
-          <p>The application supports multiple database backends (SQL Server, Cosmos DB, SQLite). EF Core&#39;s <code>.Include()</code> works for SQL Server but fails for Cosmos DB cross-container relationships and certain SQLite configurations. Navigation properties are tagged with <code>[Navigation]</code> (the attribute&#39;s <code>IsCollection</code> flag distinguishes a child collection from an FK reference). Whether a given navigation can actually be loaded via <code>Include</code> is <em>not</em> a static attribute value: it is classified at runtime by <code>NavigationMetadataProvider</code>, which asks <code>IDataSourceService.HaveIncludeSupport(declaringType, targetType)</code>. Include is used when both ends share one relational source; a navigation whose ends live in different containers or databases (cross-container Cosmos, cross-database under database-per-service) is classified <strong>unsupported</strong> and routed to manual population instead.</p>
+          <p>The application supports multiple database backends (SQL Server, PostgreSQL, SQLite, Cosmos DB: the <code>DataSource</code> enum at <code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IDataSourceService.cs:9-22</code>). EF Core&#39;s <code>.Include()</code> works on a relational engine (SQL Server, PostgreSQL, SQLite) when both ends live in the same physical database, and never on Cosmos DB, which is non-relational (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/Engines/CosmosDataSourceEngine.cs:44</code>). Navigation properties are tagged with <code>[Navigation]</code> (the attribute&#39;s <code>IsCollection</code> flag distinguishes a child collection from an FK reference). Whether a given navigation can actually be loaded via <code>Include</code> is <em>not</em> a static attribute value: it is classified at runtime by <code>NavigationMetadataProvider</code>, which asks <code>IDataSourceService.HaveIncludeSupport(declaringEntityType.FullName, targetEntityType.FullName)</code> with the two entity full names (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Query/NavigationMetadataProvider.cs:96</code>, against the string overload at <code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IDataSourceService.cs:70</code>, which also returns false when either entity has no registered <code>DataSourceKey</code>: <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/DataSourceService.cs:35-38</code>). Include is used only when both ends resolve to the same <code>DataSourceKey</code> and that engine is relational (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/DataSourceService.cs:31-32</code>); any other navigation (every Cosmos DB navigation, same container or not, and any cross-database navigation under database-per-service) is classified <strong>unsupported</strong> and routed to manual population instead.</p>
           <h2 id="decision">Decision</h2>
           <p>Each entity that has unsupported navigations gets a <code>INavigationPopulator&lt;TEntity&gt;</code> implementation. A <code>DeclarativeNavigationPopulator&lt;TEntity&gt;</code> base class (added in MMCA.Common) allows populators to be defined as a list of <code>INavigationDescriptor&lt;TEntity&gt;</code> declarations rather than imperative if-check boilerplate.</p>
           <p>Two descriptor types exist:</p>
@@ -254,12 +255,19 @@
           <ul>
           <li><strong>Multi-DB support</strong>: The query pipeline automatically falls back from Include to NavigationPopulator when the data source reports navigations as unsupported.</li>
           <li><strong>Batch efficiency</strong>: All related entities for all parents are loaded in one query per navigation, not per-parent.</li>
-          <li><strong>Declarative</strong>: The <code>DeclarativeNavigationPopulator</code> eliminates ~30-40 lines of repeated if-checks per entity. Each populator is now just a list of descriptors.</li>
+          <li><strong>Declarative</strong>: The <code>DeclarativeNavigationPopulator</code> replaces the repeated per-navigation if-checks each populator used to carry. Each populator is now just a list of descriptors.</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
           <li>Extra abstraction layer for SQL Server (where Include works fine). Mitigated: the populator is only called when the query pipeline&#39;s metadata says navigations are unsupported.</li>
           <li>Entities that need no manual loading still require a no-op populator (or use <code>NullNavigationPopulator</code>).</li>
+          </ul>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <ul>
+          <li>Context: the engine list now names all four <code>DataSource</code> values, adding PostgreSQL (<code>IDataSourceService.cs:9-22</code>).</li>
+          <li>Context: Include support is stated as the code computes it, same <code>DataSourceKey</code> on a relational engine (<code>DataSourceService.cs:31-32</code>). Every Cosmos DB navigation is unsupported, not only cross-container ones (<code>CosmosDataSourceEngine.cs:44</code>), and the &quot;certain SQLite configurations&quot; case is dropped: SQLite is relational like SQL Server and PostgreSQL (<code>SqliteDataSourceEngine.cs:41</code>, <code>SQLServerDataSourceEngine.cs:44</code>, <code>PostgreSQLDataSourceEngine.cs:42</code>).</li>
+          <li>Rationale: the &quot;~30-40 lines per entity&quot; figure is dropped as overstated; the Store adoption commit saved fewer lines per populator than that.</li>
+          <li>Anchors and type names (<code>NavigationMetadataProvider</code>, <code>DeclarativeNavigationPopulator</code>, <code>ChildNavigationDescriptor</code>, <code>FKNavigationDescriptor</code>, <code>NavigationLoader</code>, <code>NullNavigationPopulator</code>) were re-verified against current MMCA.Common source.</li>
           </ul>
           
         <div class="doc-foot btn-row">
@@ -276,6 +284,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             </ul>
           </nav>
         </aside>

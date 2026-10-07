@@ -17,6 +17,11 @@ Revised 2026-09-25: ADC's `IdentityPermissions.All` holds only the capability AD
 (`identity:users:read`) and its grant map names the framework's `ManageUsers` and `ManageRoles` beside
 it, the declaration shape Store already used; the effective grants are unchanged. Grant-site citations
 refreshed (both apps now declare grants in a Shared-project `*PermissionGrants` map).
+Revised 2026-10-01: the role-vocabulary paragraph records where a host-supplied role string reaches
+framework code beyond `AddPermissions(...)`.
+Revised 2026-10-06: ADC's Conference module defines twelve permissions (`SpeakersLink` added,
+Organizer-only), and the explicit-authorization-decision fitness gate is on by default with all four
+repos held to it.
 ## Context
 The default answer in ASP.NET Core is pure role-based access control (RBAC): an endpoint declares
 `[Authorize(Policy = "RequireOrganizer")]` against a named policy that calls `RequireRole(...)`, and a
@@ -73,8 +78,9 @@ one authorization model. Nothing is pre-registered per role name.
   applied from `MMCA.ADC.Notification.API/DependencyInjection.cs:44`).
 
 Adoption is asymmetric and that is intentional: a module declares as many capabilities as its own
-surface needs. ADC's Conference module defines eleven (`ConferencePermissions.cs:12-47`, enumerated in
-`All` at `:50-63`), including a curation subset (`ContentManagement` at `:70-79`: sessions, speakers,
+surface needs. ADC's Conference module defines twelve (`ConferencePermissions.cs:12-55`, enumerated in
+`All` at `:58-72`; the twelfth, `SpeakersLink` at `:55`, is Organizer-only and deliberately kept out of
+the curation subset), including a curation subset (`ContentManagement` at `:79-88`: sessions, speakers,
 categories, sponsors, partners, activities, session assets) granted to the app's own `ContentEditor` role constant
 (`MMCA.ADC.Conference.Shared/Authorization/ConferencePermissionGrants.cs:48`, the whole set to `Organizer`
 at `:47`, applied from `MMCA.ADC.Conference.API/DependencyInjection.cs:43`); its Engagement module defines three
@@ -107,12 +113,12 @@ role string reaches framework code only when a host supplies it, as the key it h
 `AddPermissions(...)` or as a role-valued setting on a framework gate. The framework's own
 navigation entries gate on `NavItem.RequiredPermission`
 (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/NavItem.cs:20`, matched against the
-`permission` claim at `.../UI/Layout/NavMenu.razor:256`), the notification entry on
+`permission` claim at `.../UI/Layout/NavMenu.razor:259`), the notification entry on
 `NotificationPermissions.Manage`
 (`.../UI/Notifications/NotificationUIModule.cs:20`). The role-valued settings are all host-supplied
 and empty by default: the signed-in-devices entry narrows to `LayoutSettings.SessionsNavRequiredRole`
 when one is configured (`.../UI/Common/Settings/LayoutSettings.cs:39`, checked with `IsInRole` at
-`.../UI/Layout/NavMenu.razor:249-250`), a host's own `NavItem.RequiredRole` is honoured (`:254`), the
+`.../UI/Layout/NavMenu.razor:252-253`), a host's own `NavItem.RequiredRole` is honoured (`:257`), the
 owner-or-admin bypass role is required configuration a host supplies
 (`OwnerOrAdminFilterOptions.BypassRole`, `.../API/Authorization/OwnerOrAdminFilterOptions.cs:24`;
 [ADR-033](033-resource-ownership-authorization.md)), the public output-cache policy takes its bypass
@@ -220,6 +226,33 @@ the output-cache bypass roles
 Citations refreshed: the registry namespace (`MMCA.Common.Shared.Auth.Permissions`,
 `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/Permissions/PermissionRegistry.cs:3`),
 `AuthorizationExtensions.cs:25`, `NavMenu.razor:256`, and `TokenService.cs:73` and `:133-141`.
+
+## Revision (2026-10-06)
+- ADC's Conference module now defines twelve permissions, not eleven: `SpeakersLink`
+  (`conference:speakers:link`, `ConferencePermissions.cs:55`) is granted to `Organizer` through `All`
+  (`:58-72`, `ConferencePermissionGrants.cs:47`) and kept out of `ContentManagement` (`:79-88`, still
+  seven members). The Decision paragraph is updated.
+- The explicit-authorization-decision gate recorded in the 2026-09-07 revision is on by default, not
+  opt-in: `RequireExplicitAuthorizationDecision` defaults to `true`
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Api/AnonymousEndpointTestsBase.cs:69`)
+  and a repo opts out by overriding it to `false` (early return at `:121-125`). All four repos hold
+  themselves to it, each overriding it to `true` explicitly: MMCA.Common
+  (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Api/AnonymousEndpointTests.cs:71`),
+  MMCA.ADC (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Api/AnonymousEndpointTests.cs:139`),
+  MMCA.Store (`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Api/AnonymousEndpointTests.cs:86`)
+  and MMCA.Helpdesk (`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/AnonymousEndpointTests.cs:45`).
+  Current locations in that base: `Endpoints_DeclareAnAuthorizationDecision` at `:119`, the
+  `EndpointsWithoutAuthorizationAttribute` allow-list at `:77`, the staleness check
+  `UndecoratedAllowList_HasNoStaleEntries` at `:137`.
+- Current locations for the fallback-policy facts recorded in the 2026-09-07 revision: in
+  `AuthorizationExtensions.cs` the configurable overload is at `:62`, the `FallbackAuthorizationHandler`
+  registration at `:82-83`, the `FallbackPolicy` assignment at `:89` and the `Enabled = false` opt-out
+  documentation at `:45`; the handler class is at `Fallback/FallbackAuthorizationHandler.cs:32`, and
+  `ExemptPathPrefixes` at `Fallback/FallbackAuthorizationOptions.cs:64`.
+- Current `NavMenu.razor` locations for the role-vocabulary facts recorded on 2026-10-01: the permission
+  filter at `:259`, `SessionsNavRequiredRole` read and checked with `IsInRole` at `:252-253`, the
+  `NavItem.RequiredRole` filter at `:257`.
+- Anchors in the live sections were re-verified against current source.
 
 ## Related
 ADR-004 (the authenticated principal and claims this keys on, including the optional `permission`

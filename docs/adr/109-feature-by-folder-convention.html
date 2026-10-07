@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-109: Feature-by-Folder Layout as an Enforced Convention · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-09-03; folder inventory and IDE0130 exception list refreshed 2026-09-19).">
+  <meta name="description" content="Accepted (2026-09-03; folder inventory and IDE0130 exception list refreshed 2026-09-19). Revised 2026-10-01: citations re-anchored. Revised 2026-10-06:…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/109-feature-by-folder-convention.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-109: Feature-by-Folder Layout as an Enforced Convention">
-  <meta property="og:description" content="Accepted (2026-09-03; folder inventory and IDE0130 exception list refreshed 2026-09-19).">
+  <meta property="og:description" content="Accepted (2026-09-03; folder inventory and IDE0130 exception list refreshed 2026-09-19). Revised 2026-10-01: citations re-anchored. Revised 2026-10-06:…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/109-feature-by-folder-convention.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-109: Feature-by-Folder Layout as an Enforced Convention">
-  <meta name="twitter:description" content="Accepted (2026-09-03; folder inventory and IDE0130 exception list refreshed 2026-09-19).">
+  <meta name="twitter:description" content="Accepted (2026-09-03; folder inventory and IDE0130 exception list refreshed 2026-09-19). Revised 2026-10-01: citations re-anchored. Revised 2026-10-06:…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"109 · Feature-by-Folder Layout as an Enforced Convention","item":"https://ivanball.github.io/docs/adr/109-feature-by-folder-convention.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
@@ -239,7 +239,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-109-feature-by-folder-layout-as-an-enforced-convention">ADR-109: Feature-by-Folder Layout as an Enforced Convention</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-09-03; folder inventory and IDE0130 exception list refreshed 2026-09-19).</p>
+          <p>Accepted (2026-09-03; folder inventory and IDE0130 exception list refreshed 2026-09-19). Revised 2026-10-01: citations re-anchored. Revised 2026-10-06: module-name consumers moved to the per-engine data-source engines, PostgreSQL added.</p>
           <h2 id="context">Context</h2>
           <p>The rubric&#39;s section 5 asks that &quot;code is organized by feature/capability, so a change touches one
           cohesive slice&quot;, with features &quot;grouped by use case ..., not by horizontal technical folders&quot;
@@ -248,12 +248,12 @@
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Cqrs/SliceCohesionTestsBase.cs</code>)
           fails a build when a handler is stranded from its command or query contract.</p>
           <p>Nothing gated the <em>shape of the tree</em> until 2026-09-02, when a folder-width fitness function and a
-          repo-wide reorganization shipped together (<code>MMCA.Common/CHANGELOG.md:1649-1652</code>, <code>:1682-1686</code>). That
-          reorganization, and a second pass the next day (<code>:1590-1596</code>), were both marked <strong>Breaking</strong>, because in
+          repo-wide reorganization shipped together (<code>MMCA.Common/CHANGELOG.md:1984-1987</code>, <code>:2017-2021</code>). That
+          reorganization, and a second pass the next day (<code>:1925-1931</code>), were both marked <strong>Breaking</strong>, because in
           this workspace namespaces follow folders: moving a file renames a namespace, and a namespace is
           public API on a package family released in lockstep (ADR-016). Two consecutive MMCA.Common
           releases (v1.183.0 and v1.184.0) were therefore layout releases, and they are what forced
-          <code>UPGRADING.md</code> into existence (<code>MMCA.Common/CHANGELOG.md:1637-1638</code>).</p>
+          <code>UPGRADING.md</code> into existence (<code>MMCA.Common/CHANGELOG.md:1972-1973</code>).</p>
           <p>The convention itself is written down only in the workspace <code>CLAUDE.md</code> and in the rubric text
           above. The bill it produces (public namespace renames, a scripted consumer sweep, an UPGRADING
           protocol, and doc citations that rot underneath it) is recorded nowhere as a decision. This record
@@ -319,8 +319,8 @@
           one-concept folders: <code>MMCA.Common.Application/UseCases/Decorators</code>, its test twin, and
           <code>MMCA.Common.Domain/Interfaces</code> (<code>FolderWidthTests.cs:28-33</code>). ADC, Store and Helpdesk run
           against the empty default (<code>FolderWidthTestsBase.cs:29</code>). The base is public API and is baselined
-          under the ADR-015 gate (<code>Testing.Architecture/PublicAPI.Shipped.txt:120-122</code>, <code>:336</code>, <code>:436</code>,
-          <code>:531-532</code>).</p>
+          under the ADR-015 gate (<code>Testing.Architecture/PublicAPI.Shipped.txt:127-129</code>, <code>:363</code>,
+          <code>:584-585</code>).</p>
           </li>
           <li><p><strong>Namespaces follow folders, so a folder move is a compile error until every namespace moves with
           it.</strong> The shared analyzer baseline sets <code>dotnet_style_namespace_match_folder = true:warning</code>
@@ -342,9 +342,11 @@
           <code>Domain</code> matches at any index from 1 up (<code>:41-43</code>) and the other four match only at index 3 or
           later (<code>:17</code>, <code>:48-50</code>). A sub-folder carrying one of those names therefore shifts the derived
           module. That name is load-bearing: it is the SQL Server schema
-          (<code>Infrastructure/Persistence/Configuration/EntityTypeConfiguration/EntityTypeConfiguration.cs:86</code>),
-          the Cosmos container (<code>:107</code>), the logical data-source name for unit-of-work routing
-          (<code>Infrastructure/Persistence/DataSources/EntityDataSourceRegistry.cs:181</code>), all three through the
+          (<code>Infrastructure/Persistence/DataSources/Engines/SQLServerDataSourceEngine.cs:101</code>), the
+          PostgreSQL schema (<code>PostgreSQLDataSourceEngine.cs:100</code>), the Cosmos container
+          (<code>CosmosDataSourceEngine.cs:95</code>), each engine reached from
+          <code>EntityTypeConfiguration.cs:77</code>, the logical data-source name for unit-of-work routing
+          (<code>Infrastructure/Persistence/DataSources/EntityDataSourceRegistry.cs:181</code>), all four through the
           internal <code>Infrastructure/Persistence/NamespaceConventions.cs:20-21</code> wrapper, and the module tag on
           every CQRS log line (<code>Application/UseCases/Decorators/LoggingCommandDecorator.cs:95</code>,
           <code>LoggingQueryDecorator.cs:89</code>). The derivation is locked by
@@ -354,14 +356,14 @@
           <li><p><strong>The move is scripted, not hand-edited.</strong> <code>Tools/Scripts/move-namespace.ps1</code> rewrites namespaces
           and usings repo-wide and across the consumers, and <code>Tools/Scripts/auto-add-usings.py</code> plus
           <code>Tools/Scripts/fix-build-usings.py</code> settle the usings the compiler then reports. The framework&#39;s
-          own changelog names the script as the consumer sweep (<code>MMCA.Common/CHANGELOG.md:1593-1595</code>,
-          <code>:1651-1652</code>).</p>
+          own changelog names the script as the consumer sweep (<code>MMCA.Common/CHANGELOG.md:1928-1930</code>,
+          <code>:1985-1987</code>).</p>
           </li>
           <li><p><strong>A layout change ships as a breaking minor release with an old-to-new map.</strong> v1.183.0 dissolved
           <code>MMCA.Common.Infrastructure.Services</code> and <code>.Settings</code> into the features they implement and split
-          the UI capability, service and component grab-bags (<code>CHANGELOG.md:1656-1679</code>), and added the
-          folder-width rule (<code>:1682-1686</code>). v1.184.0 split the eight remaining flat public namespaces
-          (<code>:1590-1596</code>, <code>:1600-1633</code>) and added <code>UPGRADING.md</code> (<code>:1637-1638</code>). There is no dual-namespace grace
+          the UI capability, service and component grab-bags (<code>CHANGELOG.md:1991-2013</code>), and added the
+          folder-width rule (<code>:2017-2021</code>). v1.184.0 split the eight remaining flat public namespaces
+          (<code>:1925-1931</code>, <code>:1933-1968</code>) and added <code>UPGRADING.md</code> (<code>:1972-1973</code>). There is no dual-namespace grace
           release and no <code>[Obsolete]</code> shim, because C# cannot forward a type across namespaces inside one
           assembly (<code>MMCA.Common/UPGRADING.md:10-12</code>); the first-party consumers are swept in the same
           release (<code>UPGRADING.md:32-33</code>).</p>
@@ -417,8 +419,7 @@
           <li><strong>The exemption prose drifts from the exemption list.</strong> MMCA.Common&#39;s <code>FolderWidthTests</code> class
           summary still describes the pre-v1.184.0 set (application contracts, CQRS primitives, shared auth
           contracts, API startup extensions, the integration-test package root:
-          <code>FolderWidthTests.cs:9-16</code>), while the live list holds three entries (<code>:28-33</code>), and the
-          folder-width gate is not mentioned at all in the scorecard row that summary points at.</li>
+          <code>FolderWidthTests.cs:9-16</code>), while the live list holds three entries (<code>:28-33</code>).</li>
           <li><strong>Namespace-follows-folder is not universal.</strong> Eight documented IDE0130 exclusions
           (<code>MMCA.Common/.editorconfig:867-883</code>, <code>MMCA.ADC/.editorconfig:856-857</code>,
           <code>MMCA.Store/.editorconfig:845-846</code>) mean that in those trees a folder move renames nothing, so the
@@ -435,6 +436,22 @@
           <code>Testing.Architecture/PublicAPI.Shipped.txt:120-122</code>, <code>:336</code>, <code>:436</code>, <code>:531-532</code>. The Context
           sentence about &quot;the last three releases&quot; was a point-in-time statement and now names the two
           consecutive layout releases, v1.183.0 and v1.184.0.</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <ul>
+          <li>Decision 8: the module name now reaches the database through the per-engine data-source engines
+          (<code>SQLServerDataSourceEngine.cs:101</code>, <code>PostgreSQLDataSourceEngine.cs:100</code>,
+          <code>CosmosDataSourceEngine.cs:95</code>, dispatched from <code>EntityTypeConfiguration.cs:77</code>), so the
+          PostgreSQL schema is a fourth consumer of the <code>NamespaceConventions.cs:20-21</code> wrapper. Behavior is
+          unchanged.</li>
+          <li>Trade-offs: dropped the clause saying the scorecard section 5 row does not mention the
+          folder-width gate; that row now cites <code>FolderWidthTests.cs:18</code> and <code>MMCA.Common.slnx:59</code>
+          (<code>common-ArchitectureScorecard.md:69</code>).</li>
+          <li>The 2026-10-01 revision&#39;s changelog, PublicAPI and <code>EntityTypeConfiguration.cs</code> anchors had moved:
+          the v1.184.0 and v1.183.0 entries now span <code>MMCA.Common/CHANGELOG.md:1923-2026</code>, and the
+          <code>FolderWidthTestsBase</code> baseline is six entries at <code>PublicAPI.Shipped.txt:127-129</code>, <code>:363</code>,
+          <code>:584-585</code>.</li>
+          <li>Anchors re-verified against current source (MMCA.Common v1.232.0).</li>
+          </ul>
           <h2 id="related">Related</h2>
           <p><a href="015-architecture-fitness-functions.html">ADR-015</a> (the fitness-function tier this rule joins, and the
           public-API baseline that records <code>FolderWidthTestsBase</code>),
@@ -462,6 +479,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

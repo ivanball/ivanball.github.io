@@ -1,7 +1,7 @@
 # ADR-128: Time as an Input (No Ambient Clock Reads in Domain and Application)
 
 ## Status
-Accepted (2026-10-01).
+Accepted (2026-10-01). Revised 2026-10-06: async-lambda clock reads are attributed to, and exempted with, their source member.
 
 ## Context
 Expiry windows, payment deadlines, discount windows, overdue checks and cutoffs are business rules,
@@ -19,9 +19,9 @@ a domain event's occurrence instant is, by definition, the moment the aggregate 
 the type's remarks at `:18-25`). Any enforcement has to accept that one stamp without turning into a
 list every consumer has to repeat.
 
-The rule shipped as a fitness base in MMCA.Common v1.210.0 (`MMCA.Common/CHANGELOG.md:269`, the entry
-at `:282-285`), and v1.213.0 extended it to `DateTime.Today` (`MMCA.Common/CHANGELOG.md:82`, the entry
-at `:173`). [ADR-015](015-architecture-fitness-functions.md) sets the fitness-function style it is
+The rule shipped as a fitness base in MMCA.Common v1.210.0, v1.213.0 extended it to `DateTime.Today`,
+and v1.232.0 attributed a read inside an async lambda or async local function to the member that
+wrote it (L142); each change is recorded under its version in `MMCA.Common/CHANGELOG.md`. [ADR-015](015-architecture-fitness-functions.md) sets the fitness-function style it is
 written in but does not list this rule, so this record states it.
 
 ## Decision
@@ -42,10 +42,11 @@ instant as a parameter. The rule is an IL-scanning fitness test, shipped once in
   body of every type is searched (`:80`, `:104`), which includes lambdas and async or iterator state
   machines whether the compiler emits them as nested types or as methods on the declaring type. A read
   in a lambda or in an async or iterator method is attributed back to the member the developer wrote,
-  recovered from the text inside the first angle brackets of the generated name (`:129-160`), so the
-  report reads `Type.Member reads DateTime.UtcNow` (`:114`). The name is cut at the first `>`
-  (`:158-159`), so the doubly bracketed state machine of an async lambda or async local function
-  reports a member name that keeps a leading `<`.
+  recovered from the generated name past every leading angle bracket, walking up generated nested
+  types before falling back to the method name (`:129-171`), so the report reads
+  `Type.Member reads DateTime.UtcNow` (`:114`). The name is cut at the first `>` after the leading
+  brackets (`:158-170`), so the doubly bracketed state machine of an async lambda or async local
+  function is attributed to the member that wrote it.
 - **A vacuous scan is a failure.** A map that yields no Domain or Application assembly fails with that
   explanation rather than passing (`:72-73`).
 - **The failure message is the instruction.** It names the fix (inject `TimeProvider`, pass the instant
@@ -57,8 +58,8 @@ instant as a parameter. The rule is an IL-scanning fitness test, shipped once in
   `DateOccurred` initializer compiled into `BaseDomainEvent` and nothing declared on a derived event.
 - **The allowlist is an adoption ratchet.** Entries are a type full name, a namespace prefix, or one
   member written `Namespace.Type.Member` (`:45-48`); a member entry is matched by ordinal equality on
-  `{owner}.{member}` (`:107`) and exempts that member's lambda and async-method bodies with it (not the state machine of an
-  async lambda inside it, whose recovered name keeps a leading `<`). The base
+  `{owner}.{member}` (`:107`) and exempts that member's lambda, async-method and async-lambda bodies
+  with it. The base
   exposes it as `AllowedClockReaders`, empty by default
   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Domain/ClockReadTestsBase.cs:24`),
   and its documentation asks for a comment saying why each entry is right (`:10-12`).
@@ -68,11 +69,12 @@ instant as a parameter. The rule is an IL-scanning fitness test, shipped once in
 - **MMCA.Common adopts it over its own code and self-tests the rule.** Its subclass
   (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Domain/ClockReadTests.cs:14`) maps the
   framework through `CommonArchitectureMap` (`:20`) with no allowlist, and runs the rule against
-  compiled fixtures through a map whose Domain layer is the test assembly (`:84-92`): direct reads of
+  compiled fixtures through a map whose Domain layer is the test assembly (`:97-106`): direct reads of
   both clock types are flagged (`:22-29`), `DateTime.Today` is flagged (`:31-35`), lambda and async
-  reads are attributed to their source member (`:37-48`), an injected `TimeProvider` is not flagged
-  (`:50-54`), a member entry exempts only that member (`:56-63`), and a namespace entry exempts every
-  type under it (`:65-67`).
+  reads are attributed to their source member (`:37-48`), a read inside an async lambda is attributed
+  to its source member and exempted by that member's entry (`:53-62`), an injected `TimeProvider` is
+  not flagged (`:64-68`), a member entry exempts only that member (`:70-77`), and a namespace entry
+  exempts every type under it (`:79-81`).
 - **MMCA.ADC adopts it with no exemptions.** Its subclass
   (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Domain/ClockReadTests.cs:8`) supplies
   `AdcArchitectureMap` (`:10`) and does not override `AllowedClockReaders`.
@@ -125,6 +127,17 @@ instant as a parameter. The rule is an IL-scanning fitness test, shipped once in
   entry; Store uses the narrow form.
 - **MMCA.Helpdesk is unguarded.** As the reference app and template source, it hands an adopter no
   clock-read test until it subclasses the base.
+
+## Revision (2026-10-06)
+- Since MMCA.Common v1.232.0 (L142) a read inside an async lambda or async local function is
+  attributed to the member that wrote it: the name is read past every leading angle bracket and
+  generated nested types are walked up (`ArchitectureRules.ClockReads.cs:134-171`), so a member
+  allowlist entry now exempts it. The two statements that such a name keeps a leading `<` are
+  retracted.
+- MMCA.Common's self-tests gained the async-lambda attribution-and-exemption case
+  (`ClockReadTests.cs:53-62`); the Decision bullet lists it.
+- CHANGELOG citations now name versions only, since the file grows at the top every release.
+- Every remaining `path:line` anchor was re-verified against current source.
 
 ## Related
 [ADR-015](015-architecture-fitness-functions.md) (the fitness-function style and the shared

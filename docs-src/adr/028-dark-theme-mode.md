@@ -1,7 +1,8 @@
 # ADR-028: Day/Dark Theme Mode
 
 ## Status
-Accepted (2026-06-27; revised 2026-07-15; revised 2026-08-31).
+Accepted (2026-06-27; revised 2026-07-15; revised 2026-08-31; revised 2026-10-01).
+Revised 2026-10-06: the first-paint flash is scoped to web heads and the MAUI first-frame mode source is recorded.
 
 ## Context
 `MMCATheme` (`MMCA.Common.UI/Theme/MMCATheme.cs`) has always defined a complete, brand-tuned `PaletteDark`
@@ -12,27 +13,27 @@ The mechanics are the same ones ADR-027 solves for locale: a Blazor `Interactive
 theme across SSR prerender, the InteractiveServer circuit, and the InteractiveWebAssembly client to avoid a
 flash of the wrong theme (FOUC) on load. So the theme toggle reuses the i18n persistence machinery (cookie +
 localStorage + profile) rather than inventing a parallel one; the matching no-flash SSR bootstrap is the
-intended end state but is not yet wired for theme (see Decision 3).
+intended end state but is not yet wired for theme on web heads (see Decision 3).
 
 ## Decision
 
 1. **Bind the existing theme.** The shared `MainLayout` renders a single `<MmcaThemeProviders />`
-   component (`MMCA.Common.UI/Layout/MainLayout.razor:14`), which owns the four Mud providers plus the
+   component (`MMCA.Common.UI/Layout/MainLayout.razor:16`), which owns the four Mud providers plus the
    Day/Dark lifecycle in one place. Inside that component `MudThemeProvider` is bound with
    `Theme="@Theme"` and `@bind-IsDarkMode`
-   (`MMCA.Common.UI/Theme/MmcaThemeProviders.razor:12`), a two-way binding to that component's own
-   `_isDarkMode` field (`MmcaThemeProviders.razor:36`); no `@ref` is used. `Theme` is a `MudTheme`
+   (`MMCA.Common.UI/Theme/MmcaThemeProviders.razor:14`), a two-way binding to that component's own
+   `_isDarkMode` field (`MmcaThemeProviders.razor:38`); no `@ref` is used. `Theme` is a `MudTheme`
    parameter whose default is the already-complete `MMCATheme.Instance`
-   (`MmcaThemeProviders.razor:34`), so a consuming app that needs its own brand passes a derived
+   (`MmcaThemeProviders.razor:36`), so a consuming app that needs its own brand passes a derived
    `MudTheme` instead of duplicating the provider block. The layout no longer holds the provider
    markup or the `_isDarkMode` field itself. No new palette work.
 
 2. **A `ThemeService` (`MMCA.Common.UI`) owns the preference**, registered in `AddUIShared`. It holds the
    current mode, reads/writes a **non-HttpOnly cookie + localStorage**, and raises a change event that
-   `MmcaThemeProviders` (`MmcaThemeProviders.razor:39`) and every `ThemeToggle` (`ThemeToggle.razor:16`)
+   `MmcaThemeProviders` (`MmcaThemeProviders.razor:52`) and every `ThemeToggle` (`ThemeToggle.razor:16`)
    subscribe to, so the shared providers component and the app-bar toggle stay in sync; the layout
    itself subscribes to nothing. First-visit default is the OS `prefers-color-scheme`, read
-   via a small JS interop call (`theme.js` `systemPrefersDark()` →
+   via a small JS interop call (`theme.js` `systemPrefersDark()` ->
    `window.matchMedia('(prefers-color-scheme: dark)')`), used only when no cookie/profile value exists.
 
 3. **Theme is restored from the cookie/localStorage after first render: the no-flash SSR bootstrap is
@@ -41,8 +42,16 @@ intended end state but is not yet wired for theme (see Decision 3).
    `IsDarkMode` is corrected just after hydration. The cookie-as-single-source-of-truth persistence of
    ADR-027 is reused, but the *server-side* prerender read that makes locale flash-free (a `data-theme`
    attribute / inline `<head>` script emitted from the cookie before Blazor hydrates) is **not yet wired for
-   theme**. A brief wrong-theme flash on first paint is therefore currently possible; emitting the theme
-   server-side at prerender to close it is tracked as follow-up.
+   theme**. On web heads a brief wrong-theme flash on first paint is therefore currently possible;
+   emitting the theme server-side at prerender to close it is tracked as follow-up. MAUI heads do not
+   wait for JS: `MMCA.Common.UI.Maui` registers `IInitialThemeModeSource` as
+   `MauiInitialThemeModeSource` (`MMCA.Common.UI.Maui/DependencyInjection.cs:68`), and
+   `MmcaThemeProviders.OnInitialized` seeds `_isDarkMode` from it before subscribing
+   (`MmcaThemeProviders.razor:47`), so the first frame paints in the stored mode. Web heads register
+   no source and keep the post-render JS path. Store's MAUI head also carries a host-local pre-paint
+   inline script that sets `data-mmca-theme` from the `mmca_theme` cookie or localStorage
+   (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/wwwroot/index.html:16-43`), consumed by its `app.css`
+   (`app.css:34-44`) so the host page background starts in the right mode.
 
 4. **The toggle ships in the shared `MainLayout`**, next to the i18n culture switcher, in the app-bar
    `appbar-icon-actions` slot, so every consumer gets both controls without per-host wiring.
@@ -65,14 +74,15 @@ intended end state but is not yet wired for theme (see Decision 3).
   instead of two subtly different ones. Theme and locale are the same shape of problem, so the no-flash SSR
   bootstrap built for locale is the template theme will follow when it is wired.
 - **The palette already existed**, so the cost is wiring + persistence, not design, and `BrandColorTokenTests`
-  already guards the C#↔CSS token sync, so the dark surfaces stay on-brand.
+  already guards the C# to CSS token sync, so the dark surfaces stay on-brand.
 - **Defaulting to the OS preference** respects the user's system setting on first visit while letting an
   explicit choice win and follow them across devices.
 
 ## Trade-offs
-- **The same FOUC hazard as locale is not yet closed for theme.** The SSR `data-theme`/inline-script read is
-  unimplemented (Decision 3), so the first paint can briefly flash the wrong theme before the post-render JS
-  interop corrects it; there is no free no-flash for InteractiveAuto.
+- **The same FOUC hazard as locale is not yet closed for theme on web heads.** The SSR
+  `data-theme`/inline-script read is unimplemented (Decision 3), so the first paint can briefly flash the
+  wrong theme before the post-render JS interop corrects it; there is no free no-flash for InteractiveAuto.
+  MAUI heads avoid it through `IInitialThemeModeSource` (Decision 3).
 - **Helpdesk's custom layout** is still wired separately because it does not inherit Common's
   `MainLayout`, but the obligation is now two component tags (`<MmcaThemeProviders />` plus
   `<ThemeToggle />`) rather than a provider block and its lifecycle: the layout's own comment
@@ -90,8 +100,22 @@ and the `OnChange` subscription are re-cited at `MmcaThemeProviders.razor:34`, `
 `<MmcaThemeProviders />` and the `<CultureSwitcher />` / `<ThemeToggle />` pair are re-cited at
 `MainLayout.razor:8-9`, `:10` and `:27-28`.
 
+## Revision (2026-10-06)
+- Decision 3 and Trade-offs scope the first-paint wrong-theme flash to web heads and record the MAUI
+  path: `IInitialThemeModeSource` registered by `MMCA.Common.UI.Maui/DependencyInjection.cs:68` and read
+  in `MmcaThemeProviders.razor:47`, plus Store's MAUI host pre-paint script
+  (`MMCA.Store.UI/wwwroot/index.html:16-43`).
+- Related no longer credits ADR-015 with a theme host-wiring assertion: no fitness test asserts theme
+  wiring today.
+- Two non-ASCII arrows in Decision 2 and Rationale replaced with plain text.
+- Anchors re-verified against current source: shared `MainLayout.razor:16`; `MmcaThemeProviders.razor:14`
+  (provider), `:36` (`Theme`), `:38` (`_isDarkMode`) and `:52` (`OnChange`), superseding the `:34`, `:36`,
+  `:39` recorded on 2026-10-01. Helpdesk anchors (`:8-9`, `:10`, `:27-28`) and `ThemeToggle.razor:16`
+  unchanged.
+
 ## Related
 [ADR-027](027-multi-locale-i18n.md) (shares the cookie source-of-truth and the `User` preference migration,
 and is the model for the theme no-flash SSR bootstrap that is not yet wired),
 [ADR-022](022-browser-session-cookie-auth.md) (the SSR cookie-read pattern),
-[ADR-015](015-architecture-fitness-functions.md) (the host-wiring fitness assertion).
+[ADR-015](015-architecture-fitness-functions.md) (the fitness-function framework; no theme host-wiring
+assertion exists in it today).

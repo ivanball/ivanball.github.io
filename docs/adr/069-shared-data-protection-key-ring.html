@@ -241,7 +241,10 @@
           <h2 id="status">Status</h2>
           <p>Accepted (2026-08-07). Updated 2026-08-14: Store&#39;s adoption has landed and is live (its own dedicated
           storage account, gated on <code>dataProtectionStorageReady</code>), and the ADC call-site ordering is recorded
-          precisely (Key Vault configuration loads between <code>AddServiceDefaults()</code> and the registration call).</p>
+          precisely. Revised 2026-09-10: gate 2 ships in both templates, default off. Revised 2026-10-01:
+          citations refreshed. Revised 2026-10-06: in both ADC hosts Key Vault configuration now loads before
+          <code>AddServiceDefaults()</code> (still before the registration call), the ADC replica cap is
+          <code>conferenceScaledMaxReplicas</code>, and gate 2 is recorded as switched on for ADC and off for Store.</p>
           <h2 id="context">Context</h2>
           <p>ASP.NET Core&#39;s DataProtection default keeps the key ring <strong>in memory, per process</strong>. That is correct
           for a single-process host and wrong for a scaled-out one: every replica generates its own keys, so an
@@ -252,10 +255,11 @@
           HttpOnly cookies read during Blazor SSR prerender, and the Blazor Server forms those pages render mint
           antiforgery tokens; both are DataProtection payloads. ADR-008 then split the monolith into
           independently scaled hosts, and in ADC the two hosts that mint those payloads (the UI host and the
-          Identity service, which also does OAuth correlation and state cookie cryptography) both run at
-          <code>maxReplicas: 2</code> (<code>MMCA.ADC/infra/main.bicep:1843</code> Identity service, <code>:2586</code> UI host). Only the
+          Identity service, which also does OAuth correlation and state cookie cryptography) both scale to
+          <code>maxReplicas: conferenceScaledMaxReplicas</code>, which is 2, or 4 in conference mode
+          (<code>MMCA.ADC/infra/main.bicep:191</code>; <code>:1882</code> Identity service, <code>:2640</code> UI host). Only the
           Identity service runs with <strong>no session affinity</strong>; the UI ingress is sticky
-          (<code>MMCA.ADC/infra/main.bicep:2485-2487</code>), which narrows the UI window rather than closing it, since
+          (<code>MMCA.ADC/infra/main.bicep:2535-2537</code>), which narrows the UI window rather than closing it, since
           affinity is lost on a replica restart, a revision swap, or a dropped affinity cookie.</p>
           <p>Nothing in the record decided <strong>where the key ring lives</strong>. ADR-061 decides how a running app reaches
           a secret (Key Vault reference resolved by a managed identity) and ADR-045 decides that blob storage is
@@ -291,58 +295,67 @@
           Crypto User role, because that role assignment is granted out of band and can lag a deployment.
           Folding the second step into the first would turn an optional hardening gap into a total
           authentication outage. The deployment template records the same reasoning as a follow-up
-          (<code>MMCA.ADC/infra/main.bicep:1310-1313</code>). Both templates now ship the gate-2 path, default off (see the
-          2026-09-10 revision): whether a given deployment has turned it on is a repository variable and is not
-          determinable from source.</li>
+          (<code>MMCA.ADC/infra/main.bicep:1337-1340</code>). Both templates now ship the gate-2 path, default off (see the
+          2026-09-10 revision); a deployment turns it on through the <code>DATA_PROTECTION_KEY_VAULT_KEY_URI</code>
+          repository variable (<code>MMCA.ADC/.github/workflows/deploy.yml:1519-1520</code>,
+          <code>MMCA.Store/.github/workflows/deploy.yml:1408-1409</code>). That is repository configuration, not source:
+          as read on 2026-10-06 the variable is set on the ADC repository and absent on the Store repository.</li>
           <li><strong>One <code>DefaultAzureCredential</code> instance serves both sinks</strong> (<code>DataProtectionExtensions.cs:68</code>), so
           they share a single token cache. A deployed host authenticates with its managed identity and a
           developer machine falls back to the local Azure CLI or Visual Studio sign-in; ADC pins <strong>which</strong>
-          identity with <code>AZURE_CLIENT_ID</code> on both adopting apps (<code>MMCA.ADC/infra/main.bicep:1745</code>, <code>:2526</code>).</li>
+          identity with <code>AZURE_CLIENT_ID</code> on both adopting apps (<code>MMCA.ADC/infra/main.bicep:1772</code>, <code>:2576</code>).</li>
           <li><strong>ADC adopts it on exactly the two hosts that mint the payloads.</strong> The Identity service calls it
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:114</code>) and so does the Web UI host
-          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:61</code>). Neither call sits immediately after
-          <code>AddServiceDefaults()</code>: <code>AddCommonKeyVaultConfiguration()</code> deliberately sits between them in both
-          hosts (UI host <code>:51</code> -&gt; <code>:59</code> -&gt; <code>:61</code>; Identity service <code>:99</code> -&gt; <code>:107</code> -&gt; <code>:114</code>), because
-          <code>ConfigurationManager</code> loads each source as it is added, so the vault has to be layered in before
-          anything reads the blob URI out of configuration. The Conference, Engagement, Notification and
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:119</code>) and so does the Web UI host
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:65</code>), each after <code>AddServiceDefaults()</code>.
+          <code>AddCommonKeyVaultConfiguration()</code> runs first in both hosts, ahead of <code>AddServiceDefaults()</code> itself
+          (UI host <code>:61</code> -&gt; <code>:63</code> -&gt; <code>:65</code>; Identity service <code>:110</code> -&gt; <code>:112</code> -&gt; <code>:119</code>; the reason is in the
+          comments at UI <code>:58-60</code> and Identity <code>:107-109</code>), because <code>ConfigurationManager</code> loads each source
+          as it is added, so the vault has to be layered in before anything reads configuration, the blob URI
+          included. The Conference, Engagement, Notification and
           Gateway hosts do not call it at all, because they mint neither a session cookie nor an antiforgery
           token.</li>
           <li><strong>In ADC, infrastructure provisions one private container, not a new storage account.</strong>
           <code>dataprotection-keys</code> is created on the existing avatar storage account with <code>publicAccess: &#39;None&#39;</code>
-          (<code>MMCA.ADC/infra/main.bicep:1294-1300</code>), deliberately unlike the public <code>avatars</code> container beside it,
-          and both apps are pointed at <code>.../dataprotection-keys/keys.xml</code> with the shared discriminator
-          <code>MMCA.ADC</code> (<code>:1743-1744</code>, <code>:2524-2525</code>), unconditionally. No extra role assignment is needed: the
-          ADR-045 Storage Blob Data Contributor grant is scoped to the storage <strong>account</strong>, so it already
-          covers this container (<code>:1302-1309</code>, <code>:1316</code>). That grant is itself guarded by <code>grantAvatarStorageRole</code>,
-          default <code>false</code>, because the deploy identity deliberately lacks role-assignment rights (<code>:133</code>,
-          <code>:1302-1322</code>).</li>
+          (<code>MMCA.ADC/infra/main.bicep:1321-1327</code>), deliberately unlike the public <code>avatars</code> and
+          <code>session-assets</code> containers beside it (<code>:1292-1298</code>, <code>:1308-1314</code>), and both apps are pointed at
+          <code>.../dataprotection-keys/keys.xml</code> with the shared discriminator <code>MMCA.ADC</code> (<code>:1770-1771</code>,
+          <code>:2574-2575</code>), unconditionally. No extra role assignment is needed: the ADR-045 Storage Blob Data
+          Contributor grant is scoped to the storage <strong>account</strong>, so it already covers this container
+          (<code>:1329-1336</code>, <code>:1343</code>). That grant is itself guarded by <code>grantAvatarStorageRole</code>, default <code>false</code>,
+          because the deploy identity deliberately lacks role-assignment rights (<code>:133</code>, <code>:1341-1349</code>). The
+          account&#39;s blob data-plane audit explicitly covers reads of <code>dataprotection-keys/keys.xml</code>
+          (<code>:1263</code>).</li>
           <li><strong>The Azure dependencies live in the Aspire package only.</strong>
           <code>Azure.Extensions.AspNetCore.DataProtection.Blobs</code> and <code>.Keys</code> are referenced by
           <code>MMCA.Common.Aspire</code> (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/MMCA.Common.Aspire.csproj:42-43</code>)
-          and pinned centrally (<code>MMCA.Common/Directory.Packages.props:152-153</code>), alongside a direct
+          and pinned centrally (<code>MMCA.Common/Directory.Packages.props:148-149</code>), alongside a direct
           <code>System.Security.Cryptography.Xml</code> pin that lifts that chain&#39;s transitive off a vulnerable version
-          for consumers without the ASP.NET Core framework reference (<code>Directory.Packages.props:158</code>).</li>
+          for consumers without the ASP.NET Core framework reference (<code>Directory.Packages.props:154</code>).</li>
           </ul>
           <p><strong>Both consumers have now adopted it (2026-08-13).</strong> MMCA.Store originally had no call site and no
           <code>DataProtection</code> configuration anywhere in the repo, even though its UI and Identity container apps
-          also run at <code>maxReplicas: 2</code> (<code>MMCA.Store/infra/main.bicep:2087</code> UI host, <code>:1591</code> Identity
-          service). Its UI host now calls <code>AddCommonDataProtection()</code> immediately after <code>AddServiceDefaults()</code>
-          (<code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:62</code>, <code>:68</code>), and the infrastructure side has
+          also run at <code>maxReplicas: 2</code> (<code>MMCA.Store/infra/main.bicep:2097</code> UI host, <code>:1591</code> Identity
+          service). Its UI host now calls <code>AddCommonDataProtection()</code> immediately after <code>AddServiceDefaults()</code>,
+          with only an ADR-069 comment block between them
+          (<code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:63</code>, <code>:69</code>; <code>AddCommonKeyVaultConfiguration()</code>
+          precedes both at <code>:44</code>), and the infrastructure side has
           landed and is live. Store diverges from ADC in three ways worth recording:</p>
           <ul>
           <li><strong>A new dedicated storage account, not a reused one.</strong> Store has no public-blob workload to share an
           account with, so the template provisions its own <code>Standard_LRS</code> account <code>dataProtectionStorage</code> with
           <code>allowBlobPublicAccess: false</code> (<code>MMCA.Store/infra/main.bicep:1162-1180</code>) and its own private
-          <code>dataprotection-keys</code> container (<code>:1187-1193</code>).</li>
+          <code>dataprotection-keys</code> container (<code>:1187-1193</code>), with a diagnostic setting that sends the account&#39;s
+          blob reads, writes and deletes to Log Analytics (<code>:1203</code>).</li>
           <li><strong>The blob URI is gated behind a readiness flag.</strong> <code>DataProtection__ApplicationName=&#39;MMCA.Store&#39;</code>
-          (<code>:2056</code>) and <code>AZURE_CLIENT_ID</code> (<code>:2058</code>) are unconditional, but
+          (<code>:2066</code>) and <code>AZURE_CLIENT_ID</code> (the shared <code>azureClientIdEnv</code> entry at <code>:2068</code>, defined at
+          <code>:1412-1415</code>) are unconditional, but
           <code>DataProtection__BlobStorageUri</code> is appended only when the <code>dataProtectionStorageReady</code> parameter is
-          true (default <code>false</code> at <code>:97</code>, concatenated at <code>:2059-2061</code>). The flag exists because
+          true (default <code>false</code> at <code>:97</code>, concatenated at <code>:2069-2071</code>). The flag exists because
           <code>AddCommonDataProtection</code> gates on the presence of the URI, never on reachability: wiring the URI
           before the data-plane grant exists would 403 on the first protect call rather than degrade. That
           flag has since been flipped true in production: the deploy workflow passes
           <code>&quot;dataProtectionStorageReady&quot;: {&quot;value&quot;: true}</code> in its base parameters
-          (<code>MMCA.Store/.github/workflows/deploy.yml:1260</code>).</li>
+          (<code>MMCA.Store/.github/workflows/deploy.yml:1315</code>).</li>
           <li><strong>Its own role-assignment guard.</strong> The Storage Blob Data Contributor grant is guarded by Store&#39;s
           own <code>grantDataProtectionStorageRole</code> parameter (default <code>false</code> at <code>:94</code>), with the account-scoped
           role assignment at <code>:1244-1252</code>, deliberately separate from the readiness flag above: one says whether
@@ -376,9 +389,10 @@
           <li><strong>The key ring is encrypted at rest only where gate 2 was switched on.</strong> Both templates ship the
           path and both default it off (2026-09-10 revision), so on default parameters the ring is protected
           by the container being private and the account grant being narrow, not by a Key Vault key. Turning
-          it on is a deployment decision (one repository variable plus the Key Vault Crypto User grant), and
-          the deployed value of that variable is not readable from the repositories, so this record can state
-          what ships and not what is enabled.</li>
+          it on is a deployment decision (one repository variable plus the Key Vault Crypto User grant). That
+          variable lives in repository configuration rather than source; as read on 2026-10-06 it is set for
+          ADC, so the ADC Identity and UI deploys inject <code>DataProtection__KeyVaultKeyUri</code>, and unset for
+          Store, whose UI ring stays unencrypted by a Key Vault key.</li>
           <li><strong>Opt-in per host, so adoption must be audited.</strong> A scaled-out host that never calls
           <code>AddCommonDataProtection</code> keeps the broken per-replica default and fails intermittently rather than
           loudly, the same audit-the-inventory caveat as ADR-005 / ADR-017 / ADR-021. Store was exactly that
@@ -469,6 +483,25 @@
           historical record; the current gate-2 locations are ADC <code>infra/main.bicep:142</code>, <code>:145</code>, <code>:1502-1504</code>,
           <code>:1799</code> (Identity), <code>:2544</code> (UI) and <code>deploy.yml:1281</code>, <code>:1461-1462</code>, and Store <code>infra/main.bicep:100</code>,
           <code>:103</code>, <code>:1275-1277</code>, <code>:2067</code> (UI) and <code>deploy.yml:1226</code>, <code>:1353-1354</code>.</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <ul>
+          <li><strong>ADC call ordering corrected.</strong> Both ADC hosts now run <code>AddCommonKeyVaultConfiguration()</code> before
+          <code>AddServiceDefaults()</code> (Identity <code>Program.cs:110</code> -&gt; <code>:112</code> -&gt; <code>:119</code>; UI <code>Program.cs:61</code> -&gt; <code>:63</code> -&gt;
+          <code>:65</code>), so the earlier &quot;Key Vault sits between <code>AddServiceDefaults()</code> and the registration call&quot;
+          wording is retired; the vault still loads before the blob URI is read.</li>
+          <li><strong>ADC replica cap corrected.</strong> Identity and UI scale to <code>conferenceScaledMaxReplicas</code>
+          (<code>MMCA.ADC/infra/main.bicep:191</code>, 2, or 4 in conference mode), not a literal 2.</li>
+          <li><strong>Gate 2 state recorded per consumer.</strong> The <code>DATA_PROTECTION_KEY_VAULT_KEY_URI</code> repository variable
+          is set on ADC and absent on Store as read on 2026-10-06 (repository configuration, not source), so
+          &quot;shipped and off by default&quot; now holds for Store only.</li>
+          <li><strong>Omissions filled.</strong> ADC&#39;s <code>session-assets</code> public container beside <code>dataprotection-keys</code>, the ADC
+          blob audit covering <code>keys.xml</code>, Store&#39;s blob diagnostic setting, and Store&#39;s shared
+          <code>azureClientIdEnv</code> entry.</li>
+          <li>Anchors in Context, Decision, the Store adoption notes and Trade-offs were re-verified against
+          current source. Current gate-2 locations: ADC <code>infra/main.bicep:142</code>, <code>:145</code>, <code>:1529-1531</code>, <code>:1826</code>
+          (Identity), <code>:2594</code> (UI) and <code>deploy.yml:1339</code>, <code>:1519-1520</code>; Store <code>infra/main.bicep:100</code>, <code>:103</code>,
+          <code>:1275-1277</code>, <code>:2077</code> (UI) and <code>deploy.yml:1281</code>, <code>:1408-1409</code>.</li>
+          </ul>
           <h2 id="related">Related</h2>
           <p>ADR-022 (the browser session cookies whose decryption this makes replica-independent, together with
           the antiforgery tokens the SSR pages mint), ADR-008 (the multi-host topology that created the problem;
@@ -493,6 +526,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-09-10">Revision (2026-09-10)</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

@@ -245,7 +245,11 @@
           device-token provider as a second native override that sits outside <code>AddMauiDeviceCapabilities</code>.
           Revised 2026-09-11: <code>IAppLifecycleNotifier</code> joins the shared contract set (24 contracts today), and it
           is the fourth capability outside <code>AddMauiDeviceCapabilities</code>, fed from the native window through a
-          window-lifecycle extension.</p>
+          window-lifecycle extension.
+          Revised 2026-10-01: null fallbacks sit beside their contracts in concern sub-folders, not a
+          <code>Fallbacks/</code> folder.
+          Revised 2026-10-06: the concern sub-folder list gains <code>Navigation/</code> (nine, not eight), and the
+          lifecycle no-op is cited at the extension rather than the ADC call site.</p>
           <h2 id="context">Context</h2>
           <p>The consumer apps ship the same Blazor component set through three heads: MAUI Blazor Hybrid
           (Android/iOS/MacCatalyst/Windows), Blazor Server SSR, and WebAssembly. Native device capabilities
@@ -258,7 +262,7 @@
           <p>Two constraints shape the packaging. First, per-head service selection already has a working
           precedent: <code>ITokenStorageService</code> resolves to a per-head implementation registered after
           <code>AddUIShared</code> (<code>builder.Services.AddCommonMauiTokenStorage()</code>,
-          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:163</code>). Second, MMCA.Common&#39;s CI and release
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:165</code>). Second, MMCA.Common&#39;s CI and release
           pipelines run on ubuntu-latest, which cannot build MAUI target frameworks at all, while the
           framework&#39;s packages release in lockstep (ADR-016).</p>
           <h2 id="decision">Decision</h2>
@@ -279,20 +283,21 @@
           for camera barcode/QR scanning (<code>Capabilities/DependencyInjection.cs:70</code>), and
           <code>IAppLifecycleNotifier</code> for the native window&#39;s background/foreground callbacks
           (<code>Capabilities/DependencyInjection.cs:82</code>). <code>AddMauiDeviceCapabilities</code>
-          (<code>Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:42-78</code>) natively overrides 20 of
+          (<code>Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:44-84</code>) natively overrides 20 of
           the 24. Four stay outside it. <code>IDeepLinkDispatcher</code> and <code>IAppLifecycleNotifier</code> need no override
           because the shared default IS the real implementation: the MAUI package feeds the notifier from the
           native window instead of replacing it, through <code>AttachMmcaAppLifecycle</code>
           (<code>Source/Presentation/MMCA.Common.UI.Maui/WindowLifecycleExtensions.cs:33</code>), which forwards the
           window&#39;s <code>Stopped</code> and <code>Resumed</code> events and no-ops when the head registered no notifier
-          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/App.xaml.cs:32</code>). The other two are deliberately opt-in per head:
+          (<code>WindowLifecycleExtensions.cs:38-42</code>; ADC calls it from <code>CreateWindow</code> at
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/App.xaml.cs:65</code>). The other two are deliberately opt-in per head:
           <code>IPushDeviceTokenProvider</code> comes from the platform-conditional <code>AddMauiPushDeviceTokenProvider</code>
-          (<code>Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:118-126</code>, FCM on Android, APNs on
+          (<code>Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:124-132</code>, FCM on Android, APNs on
           iOS/MacCatalyst, nothing on windows, and both providers stay configuration-gated), while
           <code>AddMauiDeviceCapabilities</code> registers only the <code>IPushRegistrationService</code> half of the push pair
-          (<code>:67</code>); and <code>IBarcodeScannerService</code> ships behind the opt-in <code>UseCommonBarcodeScanner</code>
+          (<code>:73</code>); and <code>IBarcodeScannerService</code> ships behind the opt-in <code>UseCommonBarcodeScanner</code>
           (<code>Source/Presentation/MMCA.Common.UI.Maui/HostingDependencyInjection.cs:104</code>, called by ADC at
-          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:153</code>), so a head that never scans ships
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:155</code>), so a head that never scans ships
           neither the ZXing handler nor a camera permission declaration. Each capability has an independent
           fallback story, and per-capability contracts let heads adopt incrementally.</p>
           </li>
@@ -388,8 +393,8 @@
           per-head service contract here before a hybrid head can use it.</li>
           <li>Biometrics, speech-to-text, and the external-auth broker now ship native MAUI implementations,
           all three registered by <code>AddMauiDeviceCapabilities()</code>
-          (<code>Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:61</code>, <code>:62</code>, and the broker scoped
-          at <code>:76</code>). The residual trade-off is configuration, not code: <code>MauiExternalAuthBroker</code> registers
+          (<code>Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:63</code>, <code>:64</code>, and the broker scoped
+          at <code>:82</code>). The residual trade-off is configuration, not code: <code>MauiExternalAuthBroker</code> registers
           unconditionally but reports <code>IsAvailable == false</code>
           (<code>Source/Presentation/MMCA.Common.UI.Maui/Capabilities/Auth/MauiExternalAuthBroker.cs:43</code>)
           until the head supplies <code>OAuth:MobileRedirectScheme</code>, so a misconfigured head quietly keeps the web
@@ -401,6 +406,20 @@
           sub-folder of <code>Source/Presentation/MMCA.Common.UI/Services/Capabilities/</code> (Accessibility, Auth,
           DeviceStatus, DeviceStorage, Geo, Interop, Media, Notifications), for example
           <code>Source/Presentation/MMCA.Common.UI/Services/Capabilities/Interop/NullShareService.cs</code>.</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <p>No decision or rationale changed.</p>
+          <ul>
+          <li>The 2026-10-01 list of concern sub-folders under
+          <code>Source/Presentation/MMCA.Common.UI/Services/Capabilities/</code> missed one: there are nine, the ninth
+          being <code>Navigation/</code>, which holds <code>IDeepLinkDispatcher.cs</code>, its shared default
+          <code>DeepLinkDispatcher.cs</code> and <code>DeepLinkRouteEventArgs.cs</code>.</li>
+          <li>The Decision bullet now cites the lifecycle no-op where it lives
+          (<code>Source/Presentation/MMCA.Common.UI.Maui/WindowLifecycleExtensions.cs:38-42</code>) and the ADC call
+          separately (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/App.xaml.cs:65</code>, inside <code>CreateWindow</code>).</li>
+          <li>Line anchors in the live sections were re-verified against current source and moved where the
+          code had shifted (<code>AddMauiDeviceCapabilities</code> 44-84, push provider 124-132, push registration
+          <code>:73</code>, biometrics/speech/broker <code>:63</code>/<code>:64</code>/<code>:82</code>, ADC <code>MauiProgram.cs</code> <code>:155</code>/<code>:165</code>).</li>
+          </ul>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -417,6 +436,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             </ul>
           </nav>
         </aside>

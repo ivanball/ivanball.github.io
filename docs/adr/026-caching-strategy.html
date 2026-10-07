@@ -267,7 +267,15 @@
           <code>AddCommonHybridCache()</code> only when the redis connection string is configured, today through the
           framework&#39;s guarded <code>AddCommonHybridCacheWhenRedisConfigured(...)</code> helper; ADC Conference&#39;s bypass
           overload covers eleven of its twelve policies; the service and substrate anchors are refreshed). See
-          the Revision (2026-09-25) at the end.</p>
+          the Revision (2026-09-25) at the end.
+          Also revised 2026-07-24, 2026-07-28, 2026-08-01, 2026-08-07 and 2026-08-31 (substrate corrections and
+          anchor refreshes; see those sections). Revised 2026-10-01 (the hybrid opt-in moved into the guarded
+          framework helper <code>AddCommonHybridCacheWhenRedisConfigured(...)</code>, and the client tier&#39;s store became
+          generation-checked). See the Revision (2026-10-01) at the end.
+          Revised 2026-10-06: the client tier invalidates after any write that may have landed, not only after
+          a successful one, the default TTL is host-configurable through <code>Cache:DefaultDuration</code>, and ADC
+          Conference&#39;s eleven-of-twelve count is scoped to its public-read policies beside the built-in
+          <code>ConferenceCache</code> policy. See the Revision (2026-10-06) at the end.</p>
           <h2 id="context">Context</h2>
           <p>The framework needs caching in two distinct places. Inside the application pipeline, query results
           are memoized and invalidated on mutation (the Caching decorators of ADR-014, keyed by
@@ -290,9 +298,10 @@
           <code>GetAsync</code> / <code>SetAsync</code> / <code>RemoveAsync</code> / <code>RemoveByPrefixAsync</code>. Application code (the ADR-014
           Caching decorators, <code>LoginProtectionService</code>) depends only on this interface, never on a concrete
           cache or on Redis.</li>
-          <li><strong>The backing store is chosen at startup, not in code (amended by ADR-077).</strong> <code>AddCaching()</code>
-          (<code>MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:26</code>, called from <code>AddInfrastructure</code> at
-          <code>MMCA.Common.Infrastructure/DependencyInjection.cs:134</code>)
+          <li><strong>The backing store is chosen at startup, not in code (amended by ADR-077).</strong> <code>AddCaching(configuration)</code>
+          (<code>MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:26</code>, where the configuration parameter is
+          optional, called from <code>AddInfrastructure</code> at
+          <code>MMCA.Common.Infrastructure/DependencyInjection.cs:140</code>)
           registers <code>DistributedCacheService</code> when a real <code>IDistributedCache</code> is present (one that is not the
           in-memory <code>MemoryDistributedCache</code>, i.e. Aspire registered Redis), and otherwise
           <code>MemoryCacheService</code>. The
@@ -308,13 +317,13 @@
           (<code>MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:200</code>), which calls it only when the named
           connection string is non-empty (<code>:206-208</code>) and otherwise leaves the registration untouched. Every
           one of the seven ADC and Store services opts in through that helper: ADC Conference
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:202</code>), Notification
-          (<code>.../MMCA.ADC.Notification.Service/Program.cs:118</code>), Engagement
-          (<code>.../MMCA.ADC.Engagement.Service/Program.cs:112</code>), Identity
-          (<code>.../MMCA.ADC.Identity.Service/Program.cs:133</code>), Store Catalog
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:107</code>), Sales
-          (<code>.../MMCA.Store.Sales.Service/Program.cs:112</code>) and Identity
-          (<code>.../MMCA.Store.Identity.Service/Program.cs:101</code>). So <code>HybridCacheService</code> is the live
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:203</code>), Notification
+          (<code>.../MMCA.ADC.Notification.Service/Program.cs:119</code>), Engagement
+          (<code>.../MMCA.ADC.Engagement.Service/Program.cs:116</code>), Identity
+          (<code>.../MMCA.ADC.Identity.Service/Program.cs:138</code>), Store Catalog
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:108</code>), Sales
+          (<code>.../MMCA.Store.Sales.Service/Program.cs:113</code>) and Identity
+          (<code>.../MMCA.Store.Identity.Service/Program.cs:102</code>). So <code>HybridCacheService</code> is the live
           <code>ICacheService</code> wherever Redis is configured, and the two-way swap above is what runs where it is
           not: local runs, tests, and any host that wires no Redis.</li>
           <li><strong>Prefix invalidation, implemented per store.</strong> <code>IMemoryCache</code> has no key-enumeration API, so
@@ -330,8 +339,15 @@
           entry options are its own type, ADR-077) defaults to the same policy instead of hard-coding a
           second 30 seconds. <code>CacheOptions.DefaultExpiration</code> is that duration expressed as an absolute
           expiration (<code>AbsoluteExpirationRelativeToNow = DefaultDuration</code>,
-          <code>MMCA.Common.Infrastructure/Caching/CacheOptions.cs:28-31</code>); callers may override per entry. The
-          short default means even a prefix invalidation that cannot reach every replica (memory mode, or
+          <code>MMCA.Common.Infrastructure/Caching/CacheOptions.cs:28-31</code>); callers may override per entry. A host
+          may also move the default without code: <code>CacheSettings.DefaultDuration</code>
+          (<code>MMCA.Common.Infrastructure/Caching/CacheSettings.cs:32</code>, the <code>Cache:DefaultDuration</code> key) defaults
+          to <code>CacheOptions.DefaultDuration</code>, is bound by <code>AddCaching</code> when it receives configuration
+          (<code>MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:43-46</code>), and is what the cache services
+          apply to an entry whose caller supplies no expiration (for example
+          <code>MMCA.Common.Infrastructure/Caching/DistributedCacheService.cs:72</code>). The same section carries an
+          optional L1 ceiling for <code>HybridCacheService</code> (<code>CacheSettings.cs:42</code>) and the populate-lock timeout
+          (<code>:57</code>). The short default means even a prefix invalidation that cannot reach every replica (memory mode, or
           distributed mode without a multiplexer) self-heals within seconds.</li>
           </ul>
           <h3 id="tier-2-an-http-output-cache-edge">Tier 2: an HTTP output-cache edge</h3>
@@ -366,15 +382,19 @@
           (<code>MMCA.Common.API/Caching/OutputCacheOptionsExtensions.cs:34</code>): a caller in one of the named roles
           skips the cache entirely, no lookup and no storage, and always reads fresh. Store Catalog&#39;s four
           policies use the plain overload and cache every caller alike
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:151</code>, <code>:152</code>, <code>:158</code>, <code>:161</code>).
-          ADC Conference uses the bypass overload for eleven of its twelve policies
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:266-280</code> and <code>:295</code>), passing an
-          <code>adminBypassRoles</code> array projected from <code>ConferenceReadAudience.PrivilegedRoles</code> (<code>:265</code>), the same
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:152</code>, <code>:153</code>, <code>:159</code>, <code>:162</code>).
+          ADC Conference uses the bypass overload for eleven of its twelve public-read policies
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:267-268</code>, <code>:274-281</code> and <code>:298</code>), passing an
+          <code>adminBypassRoles</code> array projected from <code>ConferenceReadAudience.PrivilegedRoles</code> (<code>:266</code>), the same
           list the API layer&#39;s visibility checks read, because those roles receive an elevated payload
           (unpublished rows) that must never be stored under a key the public shares. So &quot;cache authenticated
           requests too&quot; holds for the attendee and anonymous traffic that is the conference-day load, and stops
-          at the privileged reader. The one policy with no bypass list, <code>NowNextCache</code> (<code>:283</code>), returns the
-          same payload to every role.</li>
+          at the privileged reader. The one public-read policy with no bypass list, <code>NowNextCache</code> (<code>:284</code>),
+          returns the same payload to every role. Conference also registers a thirteenth named policy,
+          <code>ConferenceCache</code>, through the plain built-in <code>AddPolicy</code> (<code>:236</code>), not through
+          <code>AddPublicEndpointPolicy</code>: it keeps the built-in default semantics (no caching for an
+          <code>Authorization</code>-carrying request) because a permission-gated controller also references it, and
+          a public-read policy must never back a permission-gated endpoint (<code>:231-235</code>).</li>
           <li><strong>The output-cache store itself is Redis-backed wherever a service runs more than one replica.</strong>
           <code>AddOutputCache</code> defaults to a per-replica in-memory store, so a tag eviction reaches only the replica
           that served the mutation. Both adopters register a shared store through the framework wrapper
@@ -382,8 +402,8 @@
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Caching/RedisCachingExtensions.cs:91</code>), which holds
           the framework&#39;s single <code>AddStackExchangeRedisOutputCache(...)</code> call (<code>:99</code>) and no-ops when the named
           connection string is blank (<code>:94</code>). Both adopters call the wrapper unconditionally and lean on that
-          no-op: ADC Conference (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:194</code>) and
-          Store Catalog (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:98</code>).
+          no-op: ADC Conference (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:195</code>) and
+          Store Catalog (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:99</code>).
           <code>AddOutputCache</code> registers its store with <code>TryAdd</code>, so the explicit registration wins regardless of
           call order, and with no Redis configured the in-memory store still applies, which is correct at a
           single replica. ADR-040&#39;s 2026-07-25 amendment
@@ -400,33 +420,37 @@
           (<code>:50</code>), <code>Set</code> (<code>:59</code>, plus a generation-checked overload at <code>:70</code>), <code>InvalidatePrefix</code> (<code>:78</code>) and
           <code>Clear</code> (<code>:85</code>); the default implementation
           (<code>MMCA.Common.UI/Services/Caching/UiReadCache.cs:18</code>) is a lock-guarded dictionary with lazy expiry,
-          registered scoped by <code>AddUIShared</code> (<code>MMCA.Common.UI/DependencyInjection.cs:63</code>, <code>TryAddScoped</code>),
+          registered scoped by <code>AddUIShared</code> (<code>MMCA.Common.UI/DependencyInjection.cs:76</code>, <code>TryAddScoped</code>),
           which is one instance per Blazor Server circuit and one per app lifetime on WebAssembly and MAUI.</li>
           <li><strong>The key is the relative URL, path plus the full query, deliberately the same key shape Tier 2
           uses.</strong> <code>PublicEndpointOutputCachePolicy</code> sets <code>CacheVaryByRules.QueryKeys = &quot;*&quot;</code>
           (<code>MMCA.Common.API/Caching/PublicEndpointOutputCachePolicy.cs:96</code>), so mirroring it means the two
           layers agree on what &quot;the same read&quot; is: a filter, page or sort change misses on both sides instead
-          of being answered stale by one of them (<code>MMCA.Common.UI/Services/Api/EntityServiceBase.cs:229</code>).</li>
+          of being answered stale by one of them (<code>MMCA.Common.UI/Services/Api/EntityServiceBase.cs:239-241</code>).</li>
           <li><strong>Freshness is stated in configuration.</strong> <code>UiReadCacheOptions</code>
           (<code>MMCA.Common.UI/Common/Settings/UiReadCacheOptions.cs:13</code>, bound from the <code>UiReadCache</code> section,
           <code>:16</code>) carries an <code>Enabled</code> kill switch (<code>:24</code>), a 60-second <code>DefaultTtl</code> (<code>:32</code>) and per-route-prefix
           TTL overrides (<code>:41</code>). The longest matching prefix wins (<code>UiReadCache.cs:163-178</code>, the length
           comparison at <code>:170</code>), so a nested route can state a stricter budget than the endpoint above it
           whatever order configuration enumerates in.</li>
-          <li><strong>Successes only, prefix invalidation on write, clear on sign-out.</strong> <code>GetCachedAsync</code>
-          (<code>MMCA.Common.UI/Services/Api/EntityServiceBase.cs:241</code>) stores a value only when the read succeeded
-          (<code>:266-269</code>), so a transient outage or a 404 is never pinned in front of the user; a successful write
-          drops this endpoint&#39;s whole prefix (<code>InvalidateOnSuccess</code>, <code>:285</code>, calling
-          <code>InvalidatePrefix(Endpoint)</code> at <code>:289</code>); a read still in flight when that write lands is not
-          re-cached, because the store is generation-checked (the generation is captured before the GET at
-          <code>:261</code> and <code>UiReadCache.Set</code> drops the value if <code>InvalidatePrefix</code> or <code>Clear</code> moved it,
-          <code>UiReadCache.cs:119-122</code>); and <code>AuthUIService</code> empties the cache on sign-out and on an
-          unrefreshable session (<code>MMCA.Common.UI/Services/Auth/AuthUIService.cs:352</code> and <code>:162</code>), which is what
+          <li><strong>Successes only, prefix invalidation after any write that may have landed, clear on sign-out.</strong>
+          <code>GetCachedAsync</code> (<code>MMCA.Common.UI/Services/Api/EntityServiceBase.cs:253</code>) stores a value only when
+          the read succeeded (<code>:278-281</code>, through the generation-checked <code>Set</code> at <code>:280</code>), so a transient
+          outage or a 404 is never pinned in front of the user. A write drops this endpoint&#39;s whole prefix
+          (<code>InvalidateAfterWrite</code>, <code>:300</code>, calling <code>InvalidatePrefix(Endpoint)</code> at <code>:304</code>) on success and on
+          every failure except one the server refused before touching state (<code>:302</code>): only validation,
+          unprocessable-entity, unauthorized, forbidden and too-many-requests failures skip it (<code>:309-314</code>),
+          so a 412, 404, 409, 5xx or transport failure, whose write may have landed, invalidates too. A read
+          still in flight when that write lands is not re-cached, because the store is generation-checked (the
+          generation is captured before the GET at <code>:273</code> and <code>UiReadCache.Set</code> drops the value if
+          <code>InvalidatePrefix</code> or <code>Clear</code> moved it, <code>UiReadCache.cs:119-122</code>); and <code>AuthUIService</code> empties the
+          cache on sign-out and on an unrefreshable session
+          (<code>MMCA.Common.UI/Services/Auth/AuthUIService.cs:374</code> and <code>:171</code>), which is what
           keeps one account&#39;s reads from outliving its session where the scope does.</li>
           <li><strong>Shipped and registered, adopted by no app.</strong> <code>EntityServiceBase</code> takes the cache as an optional
           constructor parameter defaulting to <code>null</code> (<code>MMCA.Common.UI/Services/Api/EntityServiceBase.cs:47</code>,
           exposed as the protected <code>ReadCache</code> property at <code>:58</code>); with <code>null</code> every read goes to the API and
-          the class behaves exactly as it did before the cache existed (<code>:248</code>). No UI service in ADC, Store or
+          the class behaves exactly as it did before the cache existed (<code>:260-263</code>). No UI service in ADC, Store or
           Helpdesk passes it: a search of all four repositories finds <code>IUiReadCache</code> only inside MMCA.Common&#39;s
           own source and tests. This tier is therefore a capability the framework offers, not a posture the
           apps are in.</li>
@@ -465,13 +489,13 @@
           (<a href="025-startup-warmup-readiness.html">ADR-025</a> owns that decision and the PING-only replacement check).
           All seven services call the wrapper, and all seven call it unconditionally, since it no-ops on its
           own (<code>RedisCachingExtensions.cs:59</code>): ADC Conference
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:184</code>, Notification
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:110</code>, Engagement
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:104</code>, Identity
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:125</code>; Store Catalog
-          <code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:88</code>, Sales
-          <code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:103</code>, Identity
-          <code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:92</code>. Only
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:185</code>, Notification
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:111</code>, Engagement
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:108</code>, Identity
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:130</code>; Store Catalog
+          <code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:89</code>, Sales
+          <code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:104</code>, Identity
+          <code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:93</code>. Only
           <code>AddCommonHybridCache()</code>, which has no guard of its own, is reached conditionally, through the
           guarded <code>AddCommonHybridCacheWhenRedisConfigured(...)</code> helper (Tier 1 above). Those
           seven are the whole set: a sweep of both repos&#39; <code>Source/</code> trees finds no eighth <code>AddRedisCaching</code> call and no direct
@@ -508,7 +532,7 @@
           Redis output-cache store (Tier 2 above), which is what a multi-replica adopter needs for tag eviction
           to reach every replica (ADR-040).</li>
           <li><strong>The optional client tier is an inventory item, and the inventory is empty.</strong> <code>IUiReadCache</code> is
-          registered wherever a host calls <code>AddUIShared</code> (<code>MMCA.Common.UI/DependencyInjection.cs:63</code>), but a UI
+          registered wherever a host calls <code>AddUIShared</code> (<code>MMCA.Common.UI/DependencyInjection.cs:76</code>), but a UI
           service reads through it only if its own constructor forwards the optional parameter
           (<code>MMCA.Common.UI/Services/Api/EntityServiceBase.cs:47</code>), so registration on its own changes nothing and
           no build, test or startup notices the difference. That is Tier 2&#39;s audit-the-inventory caveat one
@@ -1086,6 +1110,45 @@
           <code>:91</code>, <code>:94</code>, <code>:99</code>, ADC Identity <code>:125</code> and the three Store <code>AddRedisCaching()</code> calls (<code>:88</code>,
           <code>:103</code>, <code>:92</code>) and Store Catalog&#39;s <code>AddRedisOutputCaching()</code> at <code>:98</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <p>Three content corrections plus a line-anchor re-verification. No decision changed.</p>
+          <ol>
+          <li><strong>The client tier invalidates after any write that may have landed.</strong> <code>InvalidateOnSuccess</code> no
+          longer exists; <code>InvalidateAfterWrite</code> (<code>MMCA.Common.UI/Services/Api/EntityServiceBase.cs:300</code>)
+          drops the endpoint prefix on success and on every failure except validation, unprocessable-entity,
+          unauthorized, forbidden and too-many-requests (<code>:302</code>, <code>:309-314</code>), so a 412, 404, 409, 5xx or
+          transport failure invalidates too. The Decision bullet now says so.</li>
+          <li><strong>The default TTL is host-configurable.</strong> <code>CacheSettings.DefaultDuration</code>
+          (<code>MMCA.Common.Infrastructure/Caching/CacheSettings.cs:32</code>, key <code>Cache:DefaultDuration</code>) defaults to
+          <code>CacheOptions.DefaultDuration</code>, is bound by <code>AddCaching(configuration)</code>
+          (<code>DependencyInjection.Caching.cs:43-46</code>) and is applied by the cache services
+          (<code>DistributedCacheService.cs:72</code>). The 30-second figure still has one home; Tier 1 now names the
+          override.</li>
+          <li><strong>ADC Conference&#39;s count is scoped to its public-read policies.</strong> Eleven of its twelve
+          <code>AddPublicEndpointPolicy</code> registrations take the bypass list; a thirteenth named policy,
+          <code>ConferenceCache</code> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:236</code>), is a
+          plain built-in <code>AddPolicy</code> because a permission-gated controller also references it. Tier 2 now
+          says so.</li>
+          <li><strong>Line anchors re-verified against current source.</strong> <code>AddCaching</code> is called at
+          <code>DependencyInjection.cs:140</code>. The seven hybrid opt-ins are at ADC Conference <code>:203</code>, Notification
+          <code>:119</code>, Engagement <code>:116</code>, Identity <code>:138</code>, Store Catalog <code>:108</code>, Sales <code>:113</code>, Identity <code>:102</code>;
+          the seven <code>AddRedisCaching()</code> calls at ADC Conference <code>:185</code>, Notification <code>:111</code>, Engagement
+          <code>:108</code>, Identity <code>:130</code>, Store Catalog <code>:89</code>, Sales <code>:104</code>, Identity <code>:93</code>; the two
+          <code>AddRedisOutputCaching()</code> calls at ADC Conference <code>:195</code> and Store Catalog <code>:99</code>. Store Catalog&#39;s
+          four policies are at <code>:152</code>, <code>:153</code>, <code>:159</code>, <code>:162</code>; ADC Conference&#39;s <code>adminBypassRoles</code> at
+          <code>:266</code>, its bypass policies at <code>:267-268</code>, <code>:274-281</code> and <code>:298</code>, <code>NowNextCache</code> at <code>:284</code>.
+          <code>MMCA.Common.UI/DependencyInjection.cs:76</code>; <code>EntityServiceBase.cs</code> key rule <code>:239-241</code>,
+          <code>GetCachedAsync</code> <code>:253</code>, bypass path <code>:260-263</code>, generation <code>:273</code>, store <code>:278-281</code>;
+          <code>AuthUIService.cs:374</code> (sign-out) and <code>:171</code> (unrefreshable session). Two anchors recorded only in
+          the Revision (2026-08-18) have moved: <code>RegisterOutputCacheEvictionConsumer</code> is at
+          <code>MMCA.Common.Infrastructure/Messaging/Consumers/IntegrationEventConsumerExtensions.cs:158-160</code> and
+          <code>RegisterUpcastedIntegrationEventConsumer&lt;TEvent&gt;</code> at <code>:123-140</code> (now also taking an optional
+          endpoint-configuration callback), and the <code>MMCA.Common.OutputCache</code> meter subscription is at
+          <code>MMCA.Common.Aspire/Extensions.Telemetry.cs:312</code>. Re-checked and unchanged:
+          <code>DependencyInjection.Caching.cs:26</code>, <code>:139</code>, <code>:200</code>, <code>:206-208</code>, <code>CacheOptions.cs:23</code> and
+          <code>:28-31</code>, <code>RedisCachingExtensions.cs:57</code>, <code>:59</code>, <code>:64</code>, <code>:65</code>, <code>:91</code>, <code>:94</code>, <code>:99</code>, and
+          <code>EntityServiceBase.cs:47</code> and <code>:58</code>.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -1117,6 +1180,7 @@
             <li><a href="#revision-2026-09-03">Revision (2026-09-03)</a></li>
             <li><a href="#revision-2026-09-25">Revision (2026-09-25)</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             </ul>
           </nav>
         </aside>

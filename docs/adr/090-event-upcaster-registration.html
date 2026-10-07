@@ -245,7 +245,9 @@
           follow-up work. It ships one now. ADR-010&#39;s policy is unchanged; this record covers the
           mechanism that enforces its consumer-side half. Revised 2026-09-03 (outbox type resolution is no
           longer assembly-qualified-name-only, so the aliasing trade-off is narrower than recorded, and three
-          citations are re-anchored after the flat-namespace split): see the revision at the end.</p>
+          citations are re-anchored after the flat-namespace split): see the revision at the end.
+          Revised 2026-10-01: citations refreshed only. Revised 2026-10-06: a terminal unresolvable-type
+          miss leaves <code>ProcessedOn</code> null rather than stamping it, so the row stays listed and replayable.</p>
           <h2 id="context">Context</h2>
           <p>ADR-010 splits event evolution into a signal and a discipline. The signal (<code>SchemaVersion</code>, a
           fitness-function-gated property on every integration event) shipped with ADR-010 itself. The
@@ -402,6 +404,22 @@ x.RegisterUpcastedIntegrationEventConsumer&lt;ProductVariantChanged&gt;(); <span
           (<code>ResolveEventType</code>) with the fallback at <code>:189</code>, and in <code>OutboxProcessor.cs</code> the <code>DeserializeEvent</code>
           call at <code>:533</code>, the <code>HandleUnresolvableType</code> call at <code>:536</code>, the method at <code>:661</code>, and the
           <code>type_unresolvable</code> reason tag at <code>:681</code>.</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <p>No decision, mechanism, or rationale changed.</p>
+          <ul>
+          <li><strong>Correction to the 2026-09-03 revision, item 2.</strong> The terminal miss does not stamp
+          <code>ProcessedOn</code>. <code>HandleUnresolvableType</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:658</code>)
+          dead-letters the row the way exhausted retries do: <code>RetryCount</code> is set to <code>MaxRetries</code> and
+          <code>LockedUntil</code> cleared (<code>:673-674</code>) while <code>ProcessedOn</code> stays null, so the row leaves the poll but
+          stays listed and replayable by the outbox administration (XML doc at <code>:648-651</code>). The dead-letter
+          counter increment tagged <code>reason</code> <code>type_unresolvable</code> is unchanged (<code>:675-678</code>).</li>
+          <li><strong>Anchors re-verified against current source.</strong> In <code>OutboxMessage.cs</code>, <code>GetStorageName</code> is at
+          <code>:141</code> (inside <code>FromDomainEvent</code>, <code>:133</code>), <code>DeserializeEvent</code> at <code>:168</code> calls <code>ResolveEventType</code>
+          (<code>:191</code>), and the fallback is at <code>:201</code>. In <code>OutboxProcessor.cs</code>, the <code>DeserializeEvent</code> call is
+          at <code>:530</code>, the <code>HandleUnresolvableType</code> call at <code>:533</code>, the method at <code>:658</code>, and the reason tag
+          at <code>:678</code>. <code>AddEventUpcaster</code> remains at <code>DependencyInjection.Extensibility.cs:81</code>.</li>
+          </ul>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -419,6 +437,7 @@ x.RegisterUpcastedIntegrationEventConsumer&lt;ProductVariantChanged&gt;(); <span
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-09-03">Revision (2026-09-03)</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             </ul>
           </nav>
         </aside>

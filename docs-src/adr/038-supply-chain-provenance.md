@@ -8,6 +8,8 @@ protected environment plus a merged-main assertion).
 Revised 2026-09-19 (locked-mode restore described at its actual scope: the two explicit restore steps,
 CI `build-and-test` and release `publish`, not every job in either workflow).
 Revised 2026-09-22 (build-provenance attestations on every released nupkg; the audit and SBOM gates are shared composite actions consumed by ADC and Store; see the Revision below).
+Revised 2026-10-01 (current-state sections re-anchored to the composite actions; see the Revision below).
+Revised 2026-10-06: the SQLitePCLRaw pin is recorded at its current version (3.0.5) and both projects that reference it, and `wasm-payload-budget` joins the first-party actions consumers reference by branch.
 ## Context
 MMCA.Common is a published framework: on every `v*` tag (release.yml:3-5) it packs its NuGet packages
 and pushes them to both GitHub Packages (release.yml:117-118) and nuget.org through OIDC trusted
@@ -24,7 +26,7 @@ MassTransit-v8 license pin), but it deliberately stops there. The four controls 
 establish provenance and integrity, an SBOM release gate, committed lock files, a CI vulnerability
 audit, and package source mapping, already live in the release and CI workflows,
 `Directory.Build.props`, and `nuget.config`, and are summarized for consumers in SECURITY.md
-(SECURITY.md:43-52). No ADR owned them as a single coherent posture. This record does, and it exceeds
+(SECURITY.md:44-53). No ADR owned them as a single coherent posture. This record does, and it exceeds
 ADR-016's scope: ADR-016 gestures at lock files as sweep mechanics, this ADR owns supply-chain
 integrity as the decision.
 
@@ -62,8 +64,10 @@ posture ADR-015 applies to architecture rules. Four controls, each a hard gate:
    advisory GHSA-2m69-gcr7-jv3q (CVE-2025-6965), was suppressed from 2026-06-19 while SQLitePCLRaw
    shipped no patched build. SQLitePCLRaw 2.1.12 (published 2026-07-14) delivered the patched build, so
    the suppression was removed on 2026-07-20 and replaced with a direct fix: a
-   `SQLitePCLRaw.bundle_e_sqlite3` pin tracked in `Directory.Packages.props` (Directory.Packages.props:58-62),
-   referenced directly by `MMCA.Common.Infrastructure` (MMCA.Common.Infrastructure.csproj:38-40) so the
+   `SQLitePCLRaw.bundle_e_sqlite3` pin tracked in `Directory.Packages.props`, currently at version 3.0.5
+   (Directory.Packages.props:58, rationale comment :54-57), referenced directly by
+   `MMCA.Common.Infrastructure` (MMCA.Common.Infrastructure.csproj:40-42) and by `MMCA.Common.Aspire`
+   (MMCA.Common.Aspire.csproj:69-73, for the copy `AspNetCore.HealthChecks.Sqlite` pulls in) so the
    patched version flows to consumers through the published package graph, the same pattern used for
    the MessagePack pin. This complements the build-time audit: `NuGetAudit` with `NuGetAuditMode=all`
    (Directory.Build.props:9-10)
@@ -196,11 +200,36 @@ restores (`ci.yml:132`, `release.yml:66`), the upload step (`release.yml:110-115
 `MMCA.Common.Infrastructure.csproj:38-40`. Anchors inside the earlier Revision sections are left as
 recorded.
 
+## Revision (2026-10-06)
+- The SQLite fix in Decision 3 now names the pin's current version, 3.0.5
+  (`Directory.Packages.props:58`), and the second project that references it directly,
+  `MMCA.Common.Aspire` (`MMCA.Common.Aspire.csproj:73`), beside `MMCA.Common.Infrastructure`
+  (`MMCA.Common.Infrastructure.csproj:42`).
+- The branch-referenced first-party actions number four, not three: `wasm-payload-budget` is also
+  consumed `@main` (`MMCA.Store/.github/workflows/deploy.yml:510`, `MMCA.ADC/.github/workflows/deploy.yml:478`).
+  Current consumer locations of the others: audit and SBOM at Store `deploy.yml:617`, `:642` and ADC
+  `deploy.yml:647`, `:672`; `freshness-gate` at Store `deploy.yml:876`, `:901`, `:929`, `:968` and ADC
+  `deploy.yml:908`, `:933`, `:962`, `:1014`.
+- Facts recorded in the 2026-09-07 Revision still hold at moved anchors. Every `uses:` remains
+  SHA-pinned (CI checkout `ci.yml:51`, setup-dotnet `:99`, cache `:223`; release checkout
+  `release.yml:26`, `:159`, attest `:96`, `:213`, `NuGet/login` `:131`, `:245`). CycloneDX is no
+  longer installed in `release.yml`: both release jobs call the `cyclonedx-sbom` action
+  (`release.yml:105`, `:221`), whose `tool-version` input defaults to 6.2.0
+  (`.github/actions/cyclonedx-sbom/action.yml:29`) and installs at `action.yml:51-52`;
+  `dotnet-coverage --version 18.11.0` is at `ci.yml:150`, `:314`. The two locked restores are
+  `ci.yml:132` (Build `--no-restore` at `:136`) and `release.yml:66`; the cache-key comments naming
+  `--locked-mode` sit at `ci.yml:106`, `:195`, `:274`, `:373`, `:545`, `:713`, `:860` and
+  `release.yml:55`, `:189`. The fail-closed audit logic lives in the composite action
+  (`.github/actions/nuget-vulnerability-audit/action.yml:63-68`, header check `:69-73`,
+  accept-list `:74-84`). The release jobs declare `environment: release` at `release.yml:19`, `:152`.
+- Anchors in the live sections were re-verified against current source; SECURITY.md's supply-chain
+  section moved to `SECURITY.md:44-53`.
+
 ## Related
 ADR-016 (lockstep versioning + the MassTransit-v8 license pin; this record extends dependency
 governance from versioning and licensing into supply-chain provenance and integrity), ADR-015
 (architecture invariants enforced as build-gating fitness functions; the same gate-the-build posture
 applied here to dependencies), ADR-010 (integration-event schema versioning; another release-discipline
 control that turns a contract into an enforced signal). See SECURITY.md ("Dependency & supply-chain
-security", SECURITY.md:43-52) for the consumer-facing summary and rubric §32
+security", SECURITY.md:44-53) for the consumer-facing summary and rubric §32
 (ArchitectureEvaluationCriteria.md:843-861) for the evaluation criteria.

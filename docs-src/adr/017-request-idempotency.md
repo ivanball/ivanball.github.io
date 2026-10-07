@@ -224,6 +224,18 @@ actions are forgot-password and reset-password
 `IdempotencyFilter.cs:122-123` and `ReadIdempotencyKey` at `:164-171`; the gate's simple-name remark
 spans `ArchitectureRules.Idempotency.cs:38-41`. That earlier section is left as written.
 
+## Revision (2026-10-06)
+- No content change. Two anchors recorded in the earlier Revisions have moved: the per-session revoke
+  (`[HttpPost("revoke/{sessionId:guid}")]` plus `[NonIdempotent]`) is at
+  `MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AuthControllerBase.cs:208-209`, and the
+  OAuth exchange is at `.../Controllers/OAuthControllerBase.cs:186-187` with `complete` at `:106`. The
+  exchange is still the only `[HttpPost]` on `OAuthControllerBase`, so every POST on the shared auth
+  controllers remains `[NonIdempotent]` (register, login, refresh and revoke at `AuthControllerBase.cs:93-94`,
+  `:69-70`, `:117-118`, `:144-145`), and the 2026-08-18 statement that register is `[Idempotent]` stays
+  superseded by the Revision (2026-10-01).
+- Anchors in Status, Context, Decision, Rationale and Trade-offs were re-verified against current source
+  and are unchanged.
+
 ## Related
 ADR-003 (handler idempotency for outbox/event consumers, a distinct concern), ADR-013 (Result is the
 response the filter caches/replays), ADR-014 (the filter keeps the handler thin), ADR-009 (the resilience

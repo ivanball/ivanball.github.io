@@ -300,8 +300,8 @@
           (2026-08-26)) and then dead-lettered, which requires manual investigation.
           A message that <strong>throws during dispatch</strong> is retried up to <code>Outbox:MaxRetries</code> (default 5) times,
           then dropped from the eligible set (it stops being polled once <code>RetryCount &gt;= MaxRetries</code>).</li>
-          <li>Failed-message retries are paced by an explicit exponential backoff, not by the polling interval, and the backoff is randomized. A failure re-leases its own row for <code>Outbox:RetryBackoffBaseSeconds * 2^(n-1)</code> seconds multiplied by a random jitter factor in <code>[0.8, 1.2]</code>, capped at <code>Outbox:LeaseSeconds</code> (the re-lease at <code>MMCA.Common/.../Outbox/Processing/OutboxProcessor.cs:598-599</code>; <code>ComputeRetryBackoffSeconds</code> at <code>:691-692</code> delegates to the jitter-then-cap formula in <code>PollingLoop.ComputeRetryBackoffSeconds</code> at <code>MMCA.Common/.../Persistence/Polling/PollingLoop.cs:183-197</code>, jitter at <code>:193</code>, cap at <code>:196</code>). At the shipped defaults (base 10s, <code>MaxRetries</code> 5, lease 300s, batch 50: <code>MMCA.Common/.../Outbox/Administration/OutboxSettings.cs:17,21,82,99</code>) the four waits between the five attempts are ranges rather than fixed values: about 8-12s, 16-24s, 32-48s and 64-96s. A persistently failing message therefore spends <strong>about 150 seconds of backoff (2.5 minutes), 120s to 180s across the jitter range</strong>, before the fifth failure dead-letters it, and the 300s cap never binds at those defaults (the longest jittered wait tops out near 96s; only a sixth attempt, nominally 320s, could reach the cap).</li>
-          <li>That backoff total is a floor, not a schedule. A backoff that expires between cycles is only noticed when the processor next wakes, and a failed-but-eligible row never shortens the wait (the next-cycle wait is computed only from the not-yet-eligible remainder: <code>OutboxProcessor.cs:210-222</code>), so the wall-clock horizon is the floor plus poll granularity at the 2s default interval, and up to one fallback interval per retry (about 20 minutes at the 300s prod interval) when no new write signals the loop sooner. A batch that dispatched nothing also does not re-poll immediately (<code>HasMoreEligibleWork</code> requires progress: <code>OutboxProcessor.cs:259-265</code>), so a batch of 50 that fails in full cannot hot-spin the processor.</li>
+          <li>Failed-message retries are paced by an explicit exponential backoff, not by the polling interval, and the backoff is randomized. A failure re-leases its own row for <code>Outbox:RetryBackoffBaseSeconds * 2^(n-1)</code> seconds multiplied by a random jitter factor in <code>[0.8, 1.2]</code>, capped at <code>Outbox:LeaseSeconds</code> (the re-lease at <code>MMCA.Common/.../Outbox/Processing/OutboxProcessor.cs:595-596</code>; <code>ComputeRetryBackoffSeconds</code> at <code>:688-689</code> delegates to the jitter-then-cap formula in <code>PollingLoop.ComputeRetryBackoffSeconds</code> at <code>MMCA.Common/.../Persistence/Polling/PollingLoop.cs:183-197</code>, jitter at <code>:193</code>, cap at <code>:196</code>). At the shipped defaults (base 10s, <code>MaxRetries</code> 5, lease 300s, batch 50: <code>MMCA.Common/.../Outbox/Administration/OutboxSettings.cs:17,21,82,99</code>) the four waits between the five attempts are ranges rather than fixed values: about 8-12s, 16-24s, 32-48s and 64-96s. A persistently failing message therefore spends <strong>about 150 seconds of backoff (2.5 minutes), 120s to 180s across the jitter range</strong>, before the fifth failure dead-letters it, and the 300s cap never binds at those defaults (the longest jittered wait tops out near 96s; only a sixth attempt, nominally 320s, could reach the cap).</li>
+          <li>That backoff total is a floor, not a schedule. A backoff that expires between cycles is only noticed when the processor next wakes, and a failed-but-eligible row never shortens the wait (the next-cycle wait is computed only from the not-yet-eligible remainder: <code>OutboxProcessor.cs:207-220</code>), so the wall-clock horizon is the floor plus poll granularity at the 2s default interval, and up to one fallback interval per retry (about 20 minutes at the 300s prod interval) when no new write signals the loop sooner. A batch that dispatched nothing also does not re-poll immediately (<code>HasMoreEligibleWork</code> requires progress: <code>OutboxProcessor.cs:248-255</code>), so a batch of 50 that fails in full cannot hot-spin the processor.</li>
           <li>Rows orphaned by a process crash (no signal exists) wait up to the polling interval before the safety-net pickup.</li>
           </ul>
           <h2 id="revision-2026-07-19">Revision (2026-07-19)</h2>
@@ -649,6 +649,36 @@
           the endpoint prefix resolved at <code>DependencyInjection.Messaging.cs:80-82</code>, the SignalR channel prefix
           at <code>DependencyInjection.Notifications.cs:59-61</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <p>No content change: the dispatch model, the retry curve and every behavior recorded above still hold.
+          The earlier Revision sections keep the anchors recorded on their dates; for readers following them,
+          the load-bearing locations now are:</p>
+          <ul>
+          <li><code>OutboxProcessor</code> (<code>MMCA.Common/.../Outbox/Processing/OutboxProcessor.cs</code>): <code>PollingLoop.RunAsync</code>
+          at <code>:107</code>, <code>PollingLoop.DrainAllAsync</code> at <code>:152</code>, <code>ComputeRetryBackoffSeconds</code> at <code>:688-689</code>; the
+          per-row scope at <code>:516</code> with <code>AmbientOrigin.Restore</code> at <code>:522</code>; the cancellation catch at <code>:576</code>
+          and <code>TryPersistStampsOnCancellationAsync</code> at <code>:304</code>; the <code>MaxRetries</code> dead-letter check at <code>:620</code>;
+          the <code>Outbox</code> authentication type at <code>:76</code>.</li>
+          <li><code>OutboxMessage</code> (<code>MMCA.Common/.../Persistence/Outbox/OutboxMessage.cs</code>): <code>OrderingKey</code> at <code>:88</code>
+          (copied at <code>:154</code>), <code>TenantId</code> at <code>:95</code>, <code>UserRoles</code> at <code>:108</code>, <code>CorrelationId</code> at <code>:115</code>,
+          <code>FromDomainEvent</code> at <code>:133</code> (origin assignments at <code>:146-149</code>), the stored event name at <code>:141</code>
+          and resolved at <code>:201</code>.</li>
+          <li>The origin: <code>ApplicationDbContext.CurrentOutboxOrigin</code> at
+          <code>MMCA.Common/.../Persistence/DbContexts/ApplicationDbContext.cs:177</code> (accessor property <code>:171</code>),
+          attached at <code>.../DbContexts/Factory/DbContextFactory.cs:156</code>; <code>AmbientOrigin.FlattenRoles</code> at
+          <code>MMCA.Common/.../Context/AmbientOrigin.cs:54</code>, the 512-character <code>MaxRolesLength</code> at <code>:38</code>,
+          <code>Restore</code> at <code>:156</code>.</li>
+          <li><code>IOutboxAdministration</code> lives at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IOutboxAdministration.cs</code>,
+          registered at <code>MMCA.Common/.../Infrastructure/DependencyInjection.cs:229</code> inside the
+          <code>IsOutboxEnabled</code> branch (<code>:217</code>).</li>
+          <li><code>MessageBus:EndpointPrefix</code> at <code>MMCA.Common/.../Messaging/MessageBusSettings.cs:73</code>, resolved at
+          <code>MMCA.Common/.../Infrastructure/DependencyInjection.Messaging.cs:81-83</code>.</li>
+          <li><code>IHasOrderingKey</code> at <code>MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IHasOrderingKey.cs:31</code>,
+          member <code>OrderingKey</code> at <code>:37</code>.</li>
+          </ul>
+          <p>Anchors in the current-state sections were re-verified against current source (Trade-offs
+          <code>OutboxProcessor.cs</code> cites moved).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -672,6 +702,7 @@
             <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
             <li><a href="#revision-2026-09-11">Revision (2026-09-11)</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             </ul>
           </nav>
         </aside>

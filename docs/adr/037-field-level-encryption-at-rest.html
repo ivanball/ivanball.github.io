@@ -254,7 +254,7 @@
           Neither covers the case of a field that must stay <strong>retrievable in plaintext to the application</strong> yet
           be <strong>unreadable in the database itself</strong>: an at-rest, reversible, column-level confidentiality control.
           ADR-005 already names this converter as the mechanism for erasure fields &quot;that must remain retrievable&quot;
-          (<code>Website/docs-src/adr/005-soft-delete-vs-erasure.md:23</code>), and <code>SECURITY.md:36</code> lists it in the security model, so the
+          (<code>Website/docs-src/adr/005-soft-delete-vs-erasure.md:25</code>), and <code>SECURITY.md:36</code> lists it in the security model, so the
           capability is referenced across the docs but was never recorded as a decision.</p>
           <p>The framework ships the plumbing for this, an EF Core value converter that encrypts and decrypts string
           columns transparently, and it is covered by unit tests. It is <strong>not yet adopted</strong>: no entity
@@ -281,8 +281,8 @@
           null-checks the array (<code>ArgumentNullException.ThrowIfNull</code>, <code>EncryptedStringConverter.cs:129</code>) and throws
           <code>ArgumentException</code> on any other length (<code>EncryptedStringConverter.cs:130</code>, <code>:132</code>), and the key-ring path
           applies the same rule per entry (<code>EncryptedStringConverter.cs:166</code>, <code>:168</code>). <code>GenerateKey()</code> produces a
-          cryptographically random 32-byte key via <code>RandomNumberGenerator.GetBytes(32)</code>
-          (<code>EncryptedStringConverter.cs:125</code>). The envelope sizes are fixed constants: <code>VersionSize = 1</code>
+          cryptographically random 32-byte key via <code>RandomNumberGenerator.GetBytes(KeySize)</code>
+          (<code>EncryptedStringConverter.cs:125</code>, with <code>KeySize = 32</code> at <code>:84</code>). The envelope sizes are fixed constants: <code>VersionSize = 1</code>
           (<code>EncryptedStringConverter.cs:75</code>), <code>NonceSize = 12</code> (96 bits, NIST recommended,
           <code>EncryptedStringConverter.cs:78</code>) and <code>TagSize = 16</code> (128 bits, <code>EncryptedStringConverter.cs:81</code>).</p>
           </li>
@@ -414,7 +414,7 @@
           no entity configuration wires it, so the encrypt/decrypt round-trip, the tag-validated integrity path, and
           the key-length guard are exercised only by <code>EncryptedStringConverterTests</code> and not by any deployed column.
           ADR-005 names this converter as the mechanism for erasure fields that must remain retrievable
-          (<code>Website/docs-src/adr/005-soft-delete-vs-erasure.md:23</code>), but that pairing is available, not yet applied. This is the same
+          (<code>Website/docs-src/adr/005-soft-delete-vs-erasure.md:25</code>), but that pairing is available, not yet applied. This is the same
           shipped-but-unadopted posture ADR-018 records for polyglot persistence.</li>
           <li><strong>Encrypted columns are not queryable.</strong> The random nonce (<code>EncryptedStringConverter.cs:193</code>) makes
           ciphertext non-deterministic, so there is no equality filter, index seek, sort, or join on an encrypted
@@ -453,7 +453,7 @@
           </ul>
           <h2 id="related">Related</h2>
           <p>ADR-005 (soft-delete vs erasure: the other sensitive-data control, which names this converter as the
-          mechanism for erasure fields that must stay retrievable, <code>Website/docs-src/adr/005-soft-delete-vs-erasure.md:23</code>), ADR-032
+          mechanism for erasure fields that must stay retrievable, <code>Website/docs-src/adr/005-soft-delete-vs-erasure.md:25</code>), ADR-032
           (password hashing: the one-way credential counterpart in the same Infrastructure layer, which already calls
           this converter &quot;the at-rest counterpart to hashing credentials&quot;), ADR-018 (polyglot persistence: the
           shipped, tested, but unadopted precedent this record mirrors). This ADR backs the one-line &quot;Field encryption&quot;
@@ -524,6 +524,22 @@
           as the mechanism for erasure fields that must remain retrievable. The changelog anchor inside the
           2026-08-15 revision is left as a historical record: the <code>[1.153.0]</code> heading now sits at
           <code>MMCA.Common/CHANGELOG.md:2978</code>, and that entry still does not name the converter.</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <p>Anchor-only refresh; no decision, rationale or trade-off changed.</p>
+          <ul>
+          <li>The three live citations of ADR-005 (Context, Trade-offs, Related) now point at
+          <code>Website/docs-src/adr/005-soft-delete-vs-erasure.md:25</code>, where Decision item 2 still names
+          <code>EncryptedStringConverter</code> as the mechanism for erasure fields that must remain retrievable.</li>
+          <li>Decision item 2 now quotes the key-generation call as written, <code>RandomNumberGenerator.GetBytes(KeySize)</code>
+          (<code>EncryptedStringConverter.cs:125</code>), with <code>KeySize = 32</code> at <code>EncryptedStringConverter.cs:84</code>; the key
+          size is unchanged.</li>
+          <li>The <code>[1.153.0]</code> changelog heading cited in the two revisions above now sits at
+          <code>MMCA.Common/CHANGELOG.md:3319</code>; that entry still does not name the converter. Both earlier anchors are
+          left as recorded.</li>
+          <li>Every other <code>EncryptedStringConverter.cs</code> and <code>EncryptedStringConverterTests.cs</code> anchor was re-verified
+          against current source and still holds; adoption is still zero (no reference to the type in Store, ADC
+          or Helpdesk).</li>
+          </ul>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -544,6 +560,7 @@
             <li><a href="#revision-2026-07-25">Revision (2026-07-25)</a></li>
             <li><a href="#revision-2026-08-15">Revision (2026-08-15)</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             </ul>
           </nav>
         </aside>

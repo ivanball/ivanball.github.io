@@ -59,8 +59,8 @@ Use a dual-dispatch strategy:
   (2026-08-26)) and then dead-lettered, which requires manual investigation.
   A message that **throws during dispatch** is retried up to `Outbox:MaxRetries` (default 5) times,
   then dropped from the eligible set (it stops being polled once `RetryCount >= MaxRetries`).
-- Failed-message retries are paced by an explicit exponential backoff, not by the polling interval, and the backoff is randomized. A failure re-leases its own row for `Outbox:RetryBackoffBaseSeconds * 2^(n-1)` seconds multiplied by a random jitter factor in `[0.8, 1.2]`, capped at `Outbox:LeaseSeconds` (the re-lease at `MMCA.Common/.../Outbox/Processing/OutboxProcessor.cs:598-599`; `ComputeRetryBackoffSeconds` at `:691-692` delegates to the jitter-then-cap formula in `PollingLoop.ComputeRetryBackoffSeconds` at `MMCA.Common/.../Persistence/Polling/PollingLoop.cs:183-197`, jitter at `:193`, cap at `:196`). At the shipped defaults (base 10s, `MaxRetries` 5, lease 300s, batch 50: `MMCA.Common/.../Outbox/Administration/OutboxSettings.cs:17,21,82,99`) the four waits between the five attempts are ranges rather than fixed values: about 8-12s, 16-24s, 32-48s and 64-96s. A persistently failing message therefore spends **about 150 seconds of backoff (2.5 minutes), 120s to 180s across the jitter range**, before the fifth failure dead-letters it, and the 300s cap never binds at those defaults (the longest jittered wait tops out near 96s; only a sixth attempt, nominally 320s, could reach the cap).
-- That backoff total is a floor, not a schedule. A backoff that expires between cycles is only noticed when the processor next wakes, and a failed-but-eligible row never shortens the wait (the next-cycle wait is computed only from the not-yet-eligible remainder: `OutboxProcessor.cs:210-222`), so the wall-clock horizon is the floor plus poll granularity at the 2s default interval, and up to one fallback interval per retry (about 20 minutes at the 300s prod interval) when no new write signals the loop sooner. A batch that dispatched nothing also does not re-poll immediately (`HasMoreEligibleWork` requires progress: `OutboxProcessor.cs:259-265`), so a batch of 50 that fails in full cannot hot-spin the processor.
+- Failed-message retries are paced by an explicit exponential backoff, not by the polling interval, and the backoff is randomized. A failure re-leases its own row for `Outbox:RetryBackoffBaseSeconds * 2^(n-1)` seconds multiplied by a random jitter factor in `[0.8, 1.2]`, capped at `Outbox:LeaseSeconds` (the re-lease at `MMCA.Common/.../Outbox/Processing/OutboxProcessor.cs:595-596`; `ComputeRetryBackoffSeconds` at `:688-689` delegates to the jitter-then-cap formula in `PollingLoop.ComputeRetryBackoffSeconds` at `MMCA.Common/.../Persistence/Polling/PollingLoop.cs:183-197`, jitter at `:193`, cap at `:196`). At the shipped defaults (base 10s, `MaxRetries` 5, lease 300s, batch 50: `MMCA.Common/.../Outbox/Administration/OutboxSettings.cs:17,21,82,99`) the four waits between the five attempts are ranges rather than fixed values: about 8-12s, 16-24s, 32-48s and 64-96s. A persistently failing message therefore spends **about 150 seconds of backoff (2.5 minutes), 120s to 180s across the jitter range**, before the fifth failure dead-letters it, and the 300s cap never binds at those defaults (the longest jittered wait tops out near 96s; only a sixth attempt, nominally 320s, could reach the cap).
+- That backoff total is a floor, not a schedule. A backoff that expires between cycles is only noticed when the processor next wakes, and a failed-but-eligible row never shortens the wait (the next-cycle wait is computed only from the not-yet-eligible remainder: `OutboxProcessor.cs:207-220`), so the wall-clock horizon is the floor plus poll granularity at the 2s default interval, and up to one fallback interval per retry (about 20 minutes at the 300s prod interval) when no new write signals the loop sooner. A batch that dispatched nothing also does not re-poll immediately (`HasMoreEligibleWork` requires progress: `OutboxProcessor.cs:248-255`), so a batch of 50 that fails in full cannot hot-spin the processor.
 - Rows orphaned by a process crash (no signal exists) wait up to the polling interval before the safety-net pickup.
 
 ## Revision (2026-07-19)
@@ -416,3 +416,34 @@ are corrected; the earlier Revision sections stay as written and are superseded 
    consumer's abandon at `Messaging/Consumers/IntegrationEventConsumer.cs:101` (rethrow `:108`); and
    the endpoint prefix resolved at `DependencyInjection.Messaging.cs:80-82`, the SignalR channel prefix
    at `DependencyInjection.Notifications.cs:59-61`.
+
+## Revision (2026-10-06)
+No content change: the dispatch model, the retry curve and every behavior recorded above still hold.
+The earlier Revision sections keep the anchors recorded on their dates; for readers following them,
+the load-bearing locations now are:
+
+- `OutboxProcessor` (`MMCA.Common/.../Outbox/Processing/OutboxProcessor.cs`): `PollingLoop.RunAsync`
+  at `:107`, `PollingLoop.DrainAllAsync` at `:152`, `ComputeRetryBackoffSeconds` at `:688-689`; the
+  per-row scope at `:516` with `AmbientOrigin.Restore` at `:522`; the cancellation catch at `:576`
+  and `TryPersistStampsOnCancellationAsync` at `:304`; the `MaxRetries` dead-letter check at `:620`;
+  the `Outbox` authentication type at `:76`.
+- `OutboxMessage` (`MMCA.Common/.../Persistence/Outbox/OutboxMessage.cs`): `OrderingKey` at `:88`
+  (copied at `:154`), `TenantId` at `:95`, `UserRoles` at `:108`, `CorrelationId` at `:115`,
+  `FromDomainEvent` at `:133` (origin assignments at `:146-149`), the stored event name at `:141`
+  and resolved at `:201`.
+- The origin: `ApplicationDbContext.CurrentOutboxOrigin` at
+  `MMCA.Common/.../Persistence/DbContexts/ApplicationDbContext.cs:177` (accessor property `:171`),
+  attached at `.../DbContexts/Factory/DbContextFactory.cs:156`; `AmbientOrigin.FlattenRoles` at
+  `MMCA.Common/.../Context/AmbientOrigin.cs:54`, the 512-character `MaxRolesLength` at `:38`,
+  `Restore` at `:156`.
+- `IOutboxAdministration` lives at
+  `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IOutboxAdministration.cs`,
+  registered at `MMCA.Common/.../Infrastructure/DependencyInjection.cs:229` inside the
+  `IsOutboxEnabled` branch (`:217`).
+- `MessageBus:EndpointPrefix` at `MMCA.Common/.../Messaging/MessageBusSettings.cs:73`, resolved at
+  `MMCA.Common/.../Infrastructure/DependencyInjection.Messaging.cs:81-83`.
+- `IHasOrderingKey` at `MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IHasOrderingKey.cs:31`,
+  member `OrderingKey` at `:37`.
+
+Anchors in the current-state sections were re-verified against current source (Trade-offs
+`OutboxProcessor.cs` cites moved).

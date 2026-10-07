@@ -1,11 +1,13 @@
 # ADR-131: Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)
 
 ## Status
-Accepted (2026-10-01). Targeted at MMCA.Common v1.218.0, which is unreleased at the time of writing.
+Accepted (2026-10-01). Shipped in MMCA.Common v1.218.0. Revised 2026-10-06: v1.218.0 is released,
+ADC adopted it through 1.218.1, HTTP/2 WebSocket CONNECT is exempt from the CSRF header, and proxied
+hub traffic is exempt from the UI rate limiter.
 Records the owner's TD-08 decision for Option A of the token-storage design note; the implementing
 MMCA.Common commits are 4cfb4a35 (the proxy), b542dde1 (downloads through the proxy) and fba02c29
 (refresh outcomes and the same-origin gate). Opt-in per host: a host that does not call
-`AddCommonSameOriginApiProxy` is unchanged (`MMCA.Common/UPGRADING.md:149`). Extends
+`AddCommonSameOriginApiProxy` is unchanged (`MMCA.Common/UPGRADING.md:274`). Extends
 [ADR-022](022-browser-session-cookie-auth.md) (the HttpOnly session cookie, until now read only for
 server-side rendering) and [ADR-051](051-client-auth-token-lifecycle.md) (the client token
 lifecycle) without changing [ADR-088](088-gateway-edge-responsibilities.md) (the gateway stays the
@@ -17,9 +19,9 @@ UI host, so the HttpOnly session cookies the UI host writes (ADR-022) never trav
 The client therefore authenticates with a bearer token script can read: a host that does not opt in
 still attaches the stored token to the notification hub through
 `options.AccessTokenProvider = _tokenStorageService.GetAccessTokenAsync`
-(`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Notifications/NotificationHubService.cs:366`),
+(`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Notifications/NotificationHubService.cs:528`),
 and to every `"APIClient"` call through `AuthDelegatingHandler`
-(`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/AuthDelegatingHandler.cs:12`). One
+(`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/AuthDelegatingHandler.cs:14`). One
 successful script injection can then lift a live token and use it from anywhere until it expires.
 
 The ADC token-storage design note (kept in the private ADC repository) weighed four answers to "how
@@ -33,7 +35,7 @@ needs already existed: the cookie pair and its writer (`ISessionCookieStore`,
 Secure outside Development, 7-day lifetime, `:9-10`), and a single-flight refresher over that cookie
 (`ICookieSessionRefresher`,
 `MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/CookieSessionRefresher.cs:32`, striped
-per refresh token, `:63-72`).
+per refresh token, `:67-71`, `:87`).
 
 ## Decision
 The UI host serves the API on its own origin and forwards to the gateway server-side, attaching the
@@ -61,26 +63,32 @@ bearer it reads from the HttpOnly cookie. The browser never holds a token that a
   non-absolute gateway and any `SameSite` other than `Strict` or `Lax`
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxySettingsValidator.cs:26-43`).
 - **The request pipeline, in order.** `SameOriginApiProxyEndpoint`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxyEndpoint.cs:26`)
-  runs every gate before anything is forwarded (`:209-235`):
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxyEndpoint.cs:29`)
+  runs every gate before anything is forwarded (`:71`, `:232-259`):
   1. **Same-origin gate.** An `Origin` that is not exactly the host's own (scheme, host and port as the
-     app sees them; a sibling subdomain is another origin), a WebSocket upgrade with no `Origin`, or a
-     `Sec-Fetch-Site` other than `same-origin` is refused 403 `cross_origin_rejected`; `none` is
-     allowed only on a plain GET or HEAD, for a user-initiated navigation such as a pasted download
-     link (`:109-185`, own-origin comparison `:139-153`, refusal `:211-216`).
+     app sees them; a sibling subdomain is another origin), a WebSocket upgrade with no `Origin`
+     (HTTP/1.1 upgrade or HTTP/2 extended `CONNECT`), or a `Sec-Fetch-Site` other than `same-origin`
+     is refused 403 `cross_origin_rejected`; `none` is allowed only on a plain GET or HEAD, for a
+     user-initiated navigation such as a pasted download link (`:115-207`, own-origin comparison
+     `:146-160`, refusal `:234-239`).
   2. **`OPTIONS` answered locally** with 204 and no CORS grant, never forwarded, so the gateway's CORS
-     policy is never consulted on the proxy's behalf (`:218-225`).
+     policy is never consulted on the proxy's behalf (`:241-248`).
   3. **CSRF header.** Every unsafe method must carry exactly `X-CSRF: 1` or gets 403
-     `csrf_header_required` (`:101-107`, `:227-232`); the constants are `SameOriginProxyHeaders`
+     `csrf_header_required` (`:110-113`, `:250-256`). The one exemption is a WebSocket opened over
+     HTTP/2, an RFC 8441 extended `CONNECT` to which a browser cannot add headers and which the
+     same-origin gate has already held to the host's own `Origin` (`:169-172`, `:251`). The
+     constants are `SameOriginProxyHeaders`
      (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/SameOriginProxyHeaders.cs:11`,
      `:14`, `:17`).
   4. **Session step.** A request with a session cookie is validated or refreshed through
      `ICookieSessionRefresher.ValidateOrRefreshAsync`; sign-in requests skip it so a stale session
-     cannot block a login (`SameOriginApiProxyEndpoint.cs:79-90`).
-  5. **Forward** through YARP over HTTP/1.1 with a 100-second activity timeout, so WebSocket upgrades
-     forward as plain upgrades (`:34-42`, `:315-325`), with the bearer attached server-side.
+     cannot block a login (`SameOriginApiProxyEndpoint.cs:85-96`).
+  5. **Forward** through YARP over HTTP/1.1 with a 100-second activity timeout, so an HTTP/1.1
+     WebSocket upgrade forwards as a plain upgrade and an HTTP/2 one is turned into an HTTP/1.1 GET
+     upgrade to the gateway (`:40-48`, `:339-349`), with the bearer attached server-side.
   6. **One forced refresh and replay** when a safe, bodiless method comes back 401 (a revoked token
-     or a rotated key); nothing with a body is re-sent (`:191-194`, `:289-305`).
+     or a rotated key); nothing with a body, and no upgrade, is re-sent (`:98-104`, `:213-217`,
+     `:313-329`).
 - **What the forward rewrites.** `SameOriginProxyTransformer` replaces any browser `Authorization` with
   the session's bearer, drops the `X-CSRF` header and strips the two session cookies from the upstream
   `Cookie` header
@@ -89,7 +97,7 @@ bearer it reads from the HttpOnly cookie. The browser never holds a token that a
   browser with `accessToken` replaced by its claims-only form and `refreshToken` emptied (`:91`,
   `:134-143`); a revoke forwards the bearer and clears the cookies whatever the upstream answered
   (`:84-87`). A browser POST to the refresh path is answered by the proxy itself from the refresh
-  cookie, in the same stripped shape (`SameOriginApiProxyEndpoint.cs:267-287`, `:332-350`).
+  cookie, in the same stripped shape (`SameOriginApiProxyEndpoint.cs:76-81`, `:291-301`, `:351-374`).
 - **Stateless: tokens stay in the existing cookie.** No server-side session store; the proxy reads and
   writes the same HttpOnly pair through `ISessionCookieStore` (`ISessionCookieStore.cs:20`, `:24`).
 - **The browser holds an unsigned claims copy.** `SessionClaimsToken.Create`
@@ -106,8 +114,8 @@ bearer it reads from the HttpOnly cookie. The browser never holds a token that a
   `Unavailable` (5xx, 429, timeout, network failure, unreadable body) (`:10-23`), classified at
   `CookieSessionRefresher.cs:119-121`. The proxy clears the cookies and answers 401 only on
   `Rejected`; on `Unavailable` it keeps them, forwards and replays nothing, and answers 503 with the
-  upstream `Retry-After`, or 5 seconds when there is none (`SameOriginApiProxyEndpoint.cs:45`,
-  `:237-261`).
+  upstream `Retry-After`, or 5 seconds when there is none (`SameOriginApiProxyEndpoint.cs:51`,
+  `:268-285`).
 - **The Blazor Server circuit trades handoffs, not tokens.** The circuit keeps calling the gateway
   server-to-server; it exchanges tokens with the cookies only as data-protected, purpose-bound
   handoffs that live one minute
@@ -121,13 +129,13 @@ bearer it reads from the HttpOnly cookie. The browser never holds a token that a
   and `ApiSettings.SameOriginApiEndpoint`
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/Settings/ApiSettings.cs:33`) then becomes the
   `"APIClient"` base address
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:114`) and adds
-  `SameOriginProxyRequestHandler` (`DependencyInjection.cs:131-132`), which removes any
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:136`) and adds
+  `SameOriginProxyRequestHandler` (`DependencyInjection.cs:153-154`), which removes any
   `Authorization` header and stamps `X-CSRF: 1`
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/SameOriginProxyRequestHandler.cs:11`,
   `:18-20`).
 - **Hubs are proxied too.** On an opted-in client the notification hub connects through the proxy
-  with the CSRF header and no access-token provider (`NotificationHubService.cs:76`, `:360-364`); the
+  with the CSRF header and no access-token provider (`NotificationHubService.cs:97`, `:522-526`); the
   proxy attaches the bearer to the upgrade server-side.
 - **Downloads follow the API client.** `ApiFileDownloadButton` resolves its anchor base as
   `SameOriginApiEndpoint`, then `WasmApiEndpoint`, then `ApiEndpoint`
@@ -135,21 +143,21 @@ bearer it reads from the HttpOnly cookie. The browser never holds a token that a
   so a top-level GET carries the cookie and the proxy supplies the bearer.
 - **MAUI is excluded.** Native heads keep OS SecureStorage and talk to the gateway directly; the
   `"APIClient"` pipeline changes only when `SameOriginApiEndpoint` is configured, which only an
-  opted-in host's WebAssembly client receives (`DependencyInjection.cs:95-99`).
+  opted-in host's WebAssembly client receives (`DependencyInjection.cs:117-121`).
 - **SameSite: Strict by default, Lax allowed.** The framework-wide cookie default stays `Lax`
   (`SessionCookieSettings.cs:19`); opting in raises it to the proxy's `SessionCookieSameSite`,
   `Strict` unless the host chooses `Lax` (`SameOriginApiProxySettings.cs:68-74`). CSRF protection
-  rests on the header and origin gates above, not on `SameSite`. ADC's 1.218.0 adoption branch
-  (`feat/common-1.218.0-adoption`, unmerged at the time of writing) sets `Lax` so a signed-in user
-  arriving from a mailed deep link keeps the session on the first server render
-  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:47-51`).
+  rests on the header and origin gates above, not on `SameSite`. MMCA.ADC, which adopted the proxy
+  with MMCA.Common 1.218.1 (ADC #236), sets `Lax` so a signed-in user arriving from a mailed deep
+  link keeps the session on the first server render
+  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:60-65`).
 - **Gates.** The behavior is pinned by `SameOriginApiProxyOptInTests` (hosts that do not opt in are
   unchanged,
   `MMCA.Common/Tests/Presentation/MMCA.Common.UI.Web.Tests/SameOriginProxy/SameOriginApiProxyOptInTests.cs:21`),
   `SameOriginApiProxyCsrfTests` (`SameOriginApiProxyCsrfTests.cs:12`), `SameOriginApiProxyOriginTests`
   (`SameOriginApiProxyOriginTests.cs:14`), `SameOriginApiProxyRefreshOutcomeTests`
   (`SameOriginApiProxyRefreshOutcomeTests.cs:14`), `SameOriginApiProxyHubTests`
-  (`SameOriginApiProxyHubTests.cs:25`), `SameOriginApiProxyTokenTests`
+  (`SameOriginApiProxyHubTests.cs:29`), `SameOriginApiProxyTokenTests`
   (`SameOriginApiProxyTokenTests.cs:15`) and `SameOriginApiProxyAuthFlowTests`
   (`SameOriginApiProxyAuthFlowTests.cs:20`), all in the same folder.
 
@@ -160,7 +168,7 @@ bearer it reads from the HttpOnly cookie. The browser never holds a token that a
   once UI and API share a registrable domain in every environment.
 - **Reuse, not a second auth system.** The proxy is built on the cookie writer and the single-flight
   refresher that already served server-side rendering (`ISessionCookieStore.cs:14`,
-  `CookieSessionRefresher.cs:63-72`), so there is one place a session is refreshed and one cookie
+  `CookieSessionRefresher.cs:67-71`), so there is one place a session is refreshed and one cookie
   format.
 - **The right package.** MMCA.Common.UI.Web is server-only; the MMCA.Common.UI Razor class library is
   loaded by WebAssembly and MAUI heads, which cannot host a forwarder, and MMCA.Common.API is
@@ -168,9 +176,9 @@ bearer it reads from the HttpOnly cookie. The browser never holds a token that a
   browser.
 - **Defense in depth for CSRF.** A cookie that authenticates data calls must not be usable from
   another origin. The custom header cannot be sent cross-origin without a preflight, and the proxy
-  never answers a preflight with a grant (`SameOriginApiProxyEndpoint.cs:218-225`); the origin gate
-  covers what the header cannot, a WebSocket upgrade, which is a GET and is not CORS-protected
-  (`:116-117`). Both gates were added after an adversarial review found upgrades and preflights open
+  never answers a preflight with a grant (`SameOriginApiProxyEndpoint.cs:241-248`); the origin gate
+  covers what the header cannot, a WebSocket upgrade, which is not CORS-protected
+  (`:122-124`). Both gates were added after an adversarial review found upgrades and preflights open
   (commit fba02c29).
 - **A blip at the identity endpoint must not sign users out.** Treating every failed refresh as the
   end of the session cleared the cookies on a 5xx or a timeout; separating `Unavailable` from
@@ -182,27 +190,29 @@ bearer it reads from the HttpOnly cookie. The browser never holds a token that a
 
 ## Trade-offs
 - **One extra hop.** Every browser API call and every hub frame passes through the UI host before the
-  gateway (`SameOriginApiProxyEndpoint.cs:315-319`).
+  gateway (`SameOriginApiProxyEndpoint.cs:339-342`).
 - **The UI host becomes a stateful-ish auth edge.** It owns refresh, the refresh race, the 401 replay
-  and cookie rotation for browser traffic (`SameOriginApiProxyEndpoint.cs:289-305`,
-  `:332-350`); a UI host outage now takes the browser's API path down with it.
+  and cookie rotation for browser traffic (`SameOriginApiProxyEndpoint.cs:313-329`,
+  `:351-374`); a UI host outage now takes the browser's API path down with it.
 - **The UI host rate limiter now meters API traffic.** Its exempt prefixes are `/health`, `/alive`,
   `/_framework`, `/_content` and `/hubs`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:50`),
-  so every proxied `/api/**` call, including the hub at `/api/hubs/notifications`
-  (`NotificationHubService.cs:76`), counts against the per-IP window and the concurrency ceiling of
-  [ADR-124](124-blazor-circuit-ceiling-ui-edge.md).
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:56`),
+  and proxied hub traffic under `{PathPrefix}/hubs` (the hub at `/api/hubs/notifications`,
+  `NotificationHubService.cs:97`) is exempt too (`UiRateLimitingExtensions.cs:51-54`). Every other
+  proxied `/api/**` call, a file-extension path such as `/api/report.csv` included, counts against
+  the per-IP window and the concurrency ceiling of [ADR-124](124-blazor-circuit-ceiling-ui-edge.md)
+  (`UiRateLimitingExtensions.cs:65-70`).
 - **Ingress hosts must adopt forwarded headers or lose every POST.** The origin gate compares against
-  the scheme, host and port as the app sees them (`SameOriginApiProxyEndpoint.cs:132-138`), so a host
+  the scheme, host and port as the app sees them (`SameOriginApiProxyEndpoint.cs:139-160`), so a host
   behind a TLS-terminating ingress must call `UseCommonUiForwardedHeaders()`
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/CommonForwardedHeadersExtensions.cs:24`)
-  first, or every browser POST is refused (`UPGRADING.md:139-142`).
+  first, or every browser POST is refused (`UPGRADING.md:264-267`).
 - **Registration order matters.** `AddCommonSameOriginApiProxy` must come after every
   `ITokenRefresher` and `ISessionCookieSync` registration; the boot fails otherwise
   (`SameOriginApiProxyServiceExtensions.cs:29-35`).
 - **Client code that presented the browser-held token breaks.** Decoding it for claims still works;
-  sending it to the gateway does not (`UPGRADING.md:143-144`), and requests a host writes by hand must
-  add `X-CSRF: 1` on unsafe methods (`UPGRADING.md:137-138`).
+  sending it to the gateway does not (`UPGRADING.md:268-269`), and requests a host writes by hand must
+  add `X-CSRF: 1` on unsafe methods (`UPGRADING.md:261-263`).
 - **Script on the page can still act as the user.** The proxy removes theft, not use: an injected
   script runs same-origin and passes both gates. Content Security Policy
   ([ADR-023](023-security-response-headers.md)) stays the control for that.
@@ -227,7 +237,7 @@ bearer it reads from the HttpOnly cookie. The browser never holds a token that a
   the origin gate cover both fetches and WebSocket upgrades.
 - **Forwarding `OPTIONS` to the gateway** (rejected 2026-10-01, after review). The gateway's CORS
   policy would then decide whether `X-CSRF` may be sent cross-origin to the proxy
-  (`SameOriginApiProxyEndpoint.cs:218-219`).
+  (`SameOriginApiProxyEndpoint.cs:241-242`).
 - **Proxying MAUI too** (rejected 2026-10-01). A native head has no DOM and no script-injection
   surface, keeps tokens in OS SecureStorage, and would only gain a hop.
 
@@ -235,14 +245,29 @@ bearer it reads from the HttpOnly cookie. The browser never holds a token that a
 - **Adoption, per Blazor Web host.** Register after the session-cookie and token registrations, map
   next to the session-cookie endpoints after `UseAuthorization`, configure the section only where a
   default does not fit, and call `UseCommonUiForwardedHeaders()` first behind an ingress
-  (`UPGRADING.md:118-149`).
+  (`UPGRADING.md:243-274`).
 - **The gateway URL stays configured.** `ApiEndpoint` keeps the gateway address for full-page
   navigations that must reach the gateway itself, such as the external sign-in challenge
   (`ApiSettings.cs:25-31`).
 - **What to watch.** UI host 429s and concurrency rejections on `/api/**` after a consumer opts in
-  (the limiter above now sees API and hub traffic), 503 `session_refresh_unavailable` rates as a
+  (the limiter above now sees API traffic; proxied hub traffic stays exempt), 503 `session_refresh_unavailable` rates as a
   signal of identity-endpoint health, and 403 `cross_origin_rejected` spikes after an ingress change,
   which usually mean forwarded headers are missing.
+
+## Revision (2026-10-06)
+- **Release state.** MMCA.Common v1.218.0 is released (tags `v1.218.0` and `v1.218.1`), and MMCA.ADC
+  adopted the proxy with 1.218.1 (ADC #236); the Status line and the SameSite bullet no longer
+  describe an unreleased version or an unmerged adoption branch.
+- **CSRF exemption for HTTP/2 WebSockets.** An RFC 8441 extended `CONNECT` with `:protocol websocket`
+  is exempt from the `X-CSRF` header and still held to the host's own `Origin`
+  (`SameOriginApiProxyEndpoint.cs:169-172`, `:251`); YARP turns it into an HTTP/1.1 GET upgrade
+  upstream (`:40-48`).
+- **Rate limiter and hub traffic.** Proxied hub traffic under `{PathPrefix}/hubs` is exempt from the
+  UI host limiter, while non-hub proxied paths count even with a file extension
+  (`UiRateLimitingExtensions.cs:51-56`, `:65-70`); the Trade-offs and Consequences text no longer
+  says the hub is metered.
+- Every `path:line` anchor in the live sections was re-verified against current source and moved
+  where the code had moved.
 
 ## Related
 [ADR-022](022-browser-session-cookie-auth.md) (the HttpOnly session cookie the proxy reads),

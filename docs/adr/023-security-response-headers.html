@@ -251,7 +251,13 @@
           Revised 2026-09-19 (the Blazor provider&#39;s emitted policy is recorded in full: it also carries
           <code>img-src</code> and <code>font-src</code>, an opt-in startup-validated <code>frame-src</code>, and a Development-only
           <code>script-src &#39;unsafe-inline&#39;</code>; and the UI host&#39;s forwarded-headers options clear <code>KnownProxies</code> and
-          <code>KnownIPNetworks</code> on purpose).</p>
+          <code>KnownIPNetworks</code> on purpose).
+          Revised 2026-09-10 (both UI origins are pinned by a host-level conformance test in the no-database
+          CI filter).
+          Revised 2026-10-01 (a custom provider registered after <code>AddCommonSecurityHeaders</code> with plain
+          <code>AddSingleton</code> still wins; only a late <code>TryAdd</code> registration loses to the static default).
+          Revised 2026-10-06 (credential paths also answer <code>Pragma: no-cache</code>, re-apply their cache headers at
+          response start over a weaker downstream value, and have their prefixes validated at startup).</p>
           <h2 id="context">Context</h2>
           <p>Every client-facing host (the YARP Gateway and the Blazor UI web host in each app) must stamp the same
           hardened HTTP response headers: <code>X-Content-Type-Options</code>, <code>X-Frame-Options</code>, <code>Referrer-Policy</code>,
@@ -336,13 +342,14 @@
           <code>&#39;unsafe-inline&#39;</code>. The default is documented on <code>SecurityHeadersSettings.ContentSecurityPolicy</code>.</li>
           <li><strong>Registration order matters only for <code>TryAdd</code>.</strong> The static default is registered with
           <code>TryAddSingleton</code>
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Security/SecurityHeaders.cs:263</code>), so a custom
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Security/SecurityHeaders.cs:288</code>), so a custom
           <code>ICspPolicyProvider</code> registered <em>before</em> <code>AddCommonSecurityHeaders</code> suppresses it. A custom provider
           added afterwards with plain <code>AddSingleton</code> (as <code>AddCommonBlazorCsp</code> does,
-          <code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:62</code>) still wins, because
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:77</code>) still wins, because
           a single-service resolve returns the last registration; the static default wins silently only when
           the late custom provider is itself added with <code>TryAdd</code>. Registering first remains the documented
-          convention (<code>SecurityHeaders.cs:243-244</code>, <code>DependencyInjection.cs:41-43</code>).</li>
+          convention (<code>SecurityHeaders.cs:265-266</code> and the interface summary at <code>:83-84</code>,
+          <code>DependencyInjection.cs:56-58</code>).</li>
           <li><strong>A shared Blazor CSP provider constrains per-host divergence.</strong> <code>BlazorCspPolicyProvider</code> now lives
           once in <code>MMCA.Common.UI.Web</code>, over the shared <code>ApiSettings</code> type, and both apps register it via
           <code>AddCommonBlazorCsp</code>, so the connect-src/origin logic is no longer copied per app. The remaining
@@ -478,6 +485,32 @@
           is <code>BlazorCspPolicyProvider.cs:92-94</code>, not lines of <code>BlazorCspSettings.cs</code> or
           <code>DependencyInjection.cs</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <ol>
+          <li><strong>The credential-path cache posture is stronger than the 2026-09-07 revision recorded.</strong> The
+          value is the constant <code>CredentialCacheControl</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Security/SecurityHeaders.cs:156</code>), written by
+          <code>ApplyCredentialCacheHeaders</code> (<code>:246-250</code>), which also sets <code>Pragma: no-cache</code> (<code>:249</code>). The
+          middleware applies it on a matching path (<code>:197-199</code>) and re-applies it in a
+          <code>Response.OnStarting</code> callback (<code>:205-211</code>), because the Razor Components endpoint writes its own
+          weaker <code>Cache-Control</code> while rendering and the callback settles the value last. <code>CredentialPathPrefixes</code>
+          (<code>:48</code>, defaults unchanged) carries <code>[LeadingSlashPathPrefixes]</code> (<code>:47</code>) and
+          <code>AddCommonSecurityHeaders</code> registers the settings with <code>ValidateDataAnnotations().ValidateOnStart()</code>
+          (<code>:276-277</code>), so a malformed prefix fails the boot instead of every request. The match is the
+          segment-based <code>IsCredentialPath</code> (<code>:179-182</code>, used at <code>:192</code> and <code>:197</code>), and <code>no-referrer</code> is at
+          <code>:193</code>.</li>
+          <li><strong>Current homes of facts recorded in earlier revisions.</strong> The static baseline with its explicit
+          <code>object-src &#39;none&#39;</code> is <code>SecurityHeaders.cs:67-69</code>. <code>AddCommonBlazorCsp</code> is
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:67-78</code>
+          (<code>ValidateOnStart</code> at <code>:69-71</code>, validator at <code>:74-75</code>). In the ADC Blazor host
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs</code>), <code>AddCommonBlazorCsp</code> and
+          <code>AddCommonSecurityHeaders</code> are at <code>:192-193</code>, <code>UseCommonUiForwardedHeaders()</code> at <code>:207</code>,
+          <code>UseCommonSecurityHeaders()</code> at <code>:213</code> and <code>UseHttpsRedirection()</code> at <code>:231</code>, with the rationale
+          comments at <code>:181-191</code>, <code>:197-206</code> and <code>:209-212</code>; <code>UseUiRateLimiting()</code> (<code>:218</code>, ADR-019) now
+          sits between the security headers and the HTTPS redirect. The ordering is unchanged.</li>
+          <li>Anchors in the live sections were re-verified against current source; the Trade-offs anchors
+          moved.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-019 (rate limiting, the other always-on edge protection living in the same Aspire layer), ADR-022
           (browser session-cookie auth, the other browser-edge security control), ADR-008 (the gateway topology
@@ -501,6 +534,7 @@
             <li><a href="#revision-2026-09-10">Revision (2026-09-10)</a></li>
             <li><a href="#revision-2026-09-19">Revision (2026-09-19)</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

@@ -246,13 +246,17 @@
           <p>Revised 2026-09-19: the receipt email is rendered by a durable internal command rather than inside the
           <code>OrderPaid</code> domain event handler (ADR-114), and it re-reads the order&#39;s frozen pricing columns instead
           of consuming the event&#39;s carried copies. The columns, the invariants and the contracts are unchanged.</p>
+          <p>Revised 2026-10-01: the products output-cache policy expires after 60 seconds, and checkout refuses an
+          order total the payment provider cannot charge rather than a non-positive line price.</p>
+          <p>Revised 2026-10-06: the database-per-service citation points at ADR-008 rather than ADR-005, and the
+          body row-version token is scoped to the two variant discount endpoints.</p>
           <h2 id="context">Context</h2>
           <p>MMCA.Store sells product variants, and a variant&#39;s price is one <code>Money</code> on the variant row
-          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/ProductVariant.cs:26</code>).
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/ProductVariant.cs:30</code>).
           Merchandising wants to run a sale: a percentage off, or a fixed special price, on one variant or
           across a whole product, optionally bounded by a start and an end.</p>
           <p>Two things constrain the answer. First, Catalog and Sales are separate services with separate
-          databases (ADR-005, ADR-006), talking over a <code>[ServiceContract]</code> interface whose purity is
+          databases (ADR-006, ADR-008), talking over a <code>[ServiceContract]</code> interface whose purity is
           build-enforced (ADR-007,
           <code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Products/IProductVariantService.cs:34</code>).
           Any pricing model that needs Sales to understand promotions grows that wire surface and makes the
@@ -279,18 +283,18 @@
           nothing: <code>Product.SetDiscountOnAllVariants</code> refuses a product that has no active variant to discount
           (<code>Product.NoActiveVariants</code>, an invariant error surfaced as 400) and otherwise validates the discount
           against every active variant&#39;s list price before it touches any of them
-          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/Product.cs:588-603</code>,
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/Product.cs:590-605</code>,
           <code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/ProductInvariants.cs:114</code>).</p>
           <p><strong>The list price is preserved and the effective price is computed in one method.</strong>
           <code>ProductVariant.Price</code> stays the list price whatever the discount says, so clearing a discount
           restores the original price with no bookkeeping. <code>ProductVariant.GetEffectivePrice(now)</code> and its
           static twin <code>ResolveEffectivePrice</code> are the single computation
-          (<code>ProductVariant.cs:171-172,183-191</code>): they return the list price when there is no discount, when the window
+          (<code>ProductVariant.cs:183-184,195-203</code>): they return the list price when there is no discount, when the window
           does not cover <code>now</code>, and when the stored pairing no longer resolves. Every caller goes through it:
           the DTO mapper for the read model
           (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Products/DTOs/ProductVariantDTOMapper.cs:48-49</code>)
           and the cross-module pricing service over its projection
-          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Products/ProductVariantService.cs:84-90</code>),
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Products/ProductVariantService.cs:19,77-90,101</code>),
           both against an injected <code>TimeProvider</code>.</p>
           <p><strong>Sales re-fetches at checkout, stores no cart price, and freezes the whole answer.</strong>
           <code>IProductVariantService.GetUnitPricesAsync</code> replies with a <code>VariantUnitPrice</code> triple: the effective
@@ -313,9 +317,9 @@
           <code>SendOrderPaidEmailInternalCommand</code> carrying the order id alone (ADR-114,
           <code>Orders/DomainEventHandlers/OrderPaidHandler.cs:37-39</code>), and
           <code>SendOrderPaidEmailInternalCommandHandler</code> re-reads the order with its lines
-          (<code>Orders/InternalCommands/SendOrderPaidEmailInternalCommandHandler.cs:44-47</code>) before rendering the
+          (<code>Orders/InternalCommands/SendOrderPaidEmailInternalCommandHandler.cs:45-48</code>) before rendering the
           struck &quot;Was&quot; amount, the HTML-encoded label and the &quot;You saved&quot; total
-          (<code>SendOrderPaidEmailInternalCommandHandler.cs:96,104,119</code>). The order detail page renders the same
+          (<code>SendOrderPaidEmailInternalCommandHandler.cs:121-123,128-131,143-146</code>). The order detail page renders the same
           three from the order&#39;s own read model, plus an accessible &quot;Was X, now Y&quot; sentence
           (<code>Sales.UI/Pages/Orders/OrderLinesPanel.razor:56,58,72,96</code>). Every one appears only when there is a
           saving. <code>OrderPaid</code> still carries the order&#39;s <code>TotalSavings</code> and each line&#39;s <code>ListPrice</code> and
@@ -328,7 +332,7 @@
           (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Contracts/Protos/user_sales_export.proto:87,90</code>,
           <code>UserSalesExportService.cs:70-71</code>): new numbers on existing messages, which a peer built against the
           previous generation ignores. The <code>ProductVariantChanged</code> integration event keeps carrying the list
-          price and nothing else (<code>Product.cs:545-546</code>), so ADR-010&#39;s schema-version rule is not engaged and
+          price and nothing else (<code>Product.cs:547-548,568-569,613-614</code>), so ADR-010&#39;s schema-version rule is not engaged and
           ADR-083&#39;s one-lifecycle-event-per-entity taxonomy is unchanged. The two Sales columns land NOT NULL
           with defaults plus a guarded backfill from the unit price, add-only under ADR-057
           (<code>MMCA.Store/Source/Hosting/MMCA.Store.Migrations.SqlServer.Sales/Migrations/20260907232734_AddOrderLineListPrice.cs:60-63</code>).</p>
@@ -342,9 +346,12 @@
           <p>The three write endpoints are gated on <code>catalog:pricing:manage</code>
           (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Authorization/CatalogPermissions.cs:29</code>,
           <code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ProductVariantsController.cs:150-151,177-178</code>,
-          <code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ProductsController.cs:142-143</code>), a narrower
-          permission than variant management, and follow ADR-035&#39;s two-token rule: the product ETag in
-          <code>If-Match</code>, the variant row version in the body.</p>
+          <code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ProductsController.cs:145-146</code>), a narrower
+          permission than variant management. All three take the product ETag in <code>If-Match</code> (ADR-035,
+          <code>ProductsController.cs:147,159</code>); the two variant endpoints also carry the variant row version in the
+          body for ADR-035&#39;s <code>IRowVersioned</code> child overload (<code>ProductVariantSetDiscountRequest.cs:20</code>,
+          <code>ProductVariantClearDiscountRequest.cs:18</code>), while the product-wide request carries none
+          (<code>ProductSetDiscountRequest.cs:15-27</code>).</p>
           <h2 id="rationale">Rationale</h2>
           <p>A discount that belongs to exactly one variant, is replaced rather than edited, and has no life of
           its own once the variant is gone is a value object by every test we apply elsewhere
@@ -369,7 +376,7 @@
           <code>ICacheInvalidating</code> and their controllers evict the <code>catalog:products</code> output-cache tag, so an
           admin edit is visible at once. A window that opens or closes on the clock evicts nothing, so a
           cached storefront read can show the pre-boundary price until the products cache policy&#39;s 60-second TTL expires
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:153-158</code>). Checkout is never stale
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:154-159</code>). Checkout is never stale
           because it is a live cross-service call.</li>
           <li><strong>An order line records the two prices and the promotion&#39;s name, not the promotion itself.</strong> A line
           answers &quot;struck from 24.99, charged at 19.99, Summer Sale&quot;, which is what the receipt, the order
@@ -381,7 +388,7 @@
           the same <code>ResolveEffectivePrice</code> call, which is the one place a price is decided.</li>
           <li><strong>A discount cannot be applied to a free variant, and a discounted variant&#39;s list price cannot be
           changed to an inconsistent value.</strong> <code>ChangePrice</code> fails rather than silently dropping the discount
-          (<code>ProductVariant.cs:106-122</code>), so an admin repricing a variant on sale has to clear the discount
+          (<code>ProductVariant.cs:118-134</code>, the failure at <code>:124-129</code>), so an admin repricing a variant on sale has to clear the discount
           first. Failing loudly beats repricing a storefront nobody asked to reprice.</li>
           <li><strong>Two clocks answer the same question.</strong> The DTO&#39;s <code>IsActive</code> flag and the checkout price are both
           resolved server-side against <code>TimeProvider</code>, but at different instants, so a shopper can see a sale
@@ -401,16 +408,31 @@
           live in <code>CheckOutPreflight</code> (<code>CheckOutPreflight.cs:50-52,58-60</code>), and the anchors into
           <code>ProductVariant.cs</code>, <code>ProductVariantDTOMapper.cs</code>, <code>Product.cs</code>, <code>ProductsController.cs</code> and
           <code>OrderLinesPanel.razor</code> were re-pointed.</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <ul>
+          <li>Context and Related cited ADR-005 (soft-delete vs. right-to-erasure) for database per service; the
+          citation now points at ADR-008, whose topology gives each service its own database
+          (<code>008-service-extraction-topology.md:85</code>).</li>
+          <li>The discount write endpoints no longer claim a uniform two-token rule. All three take the product
+          ETag in <code>If-Match</code>; only the two variant endpoints carry <code>VariantRowVersion</code> in the body
+          (<code>ProductVariantSetDiscountRequest.cs:20</code>, <code>ProductVariantClearDiscountRequest.cs:18</code>), and the
+          product-wide request has none (<code>ProductSetDiscountRequest.cs:15-27</code>).</li>
+          <li>The 60-second products cache policy recorded in the 2026-10-01 revision is now at
+          <code>Program.cs:159</code> (comment at <code>:154-158</code>).</li>
+          <li>Every <code>path:line</code> anchor in the live sections was re-verified against current source and re-pointed
+          where it had moved (<code>ProductVariant.cs</code>, <code>ProductVariantService.cs</code>, <code>Product.cs</code>,
+          <code>ProductsController.cs</code>, <code>Program.cs</code>, <code>SendOrderPaidEmailInternalCommandHandler.cs</code>).</li>
+          </ul>
           <h2 id="related">Related</h2>
           <ul>
-          <li><a href="005-soft-delete-vs-erasure.html">ADR-005</a>, <a href="006-database-per-service.html">ADR-006</a>: each service owns
-          its database, and cross-service copies are denormalized rather than joined.</li>
+          <li><a href="006-database-per-service.html">ADR-006</a>, <a href="008-service-extraction-topology.html">ADR-008</a>: each service
+          owns its database, and cross-service copies are denormalized rather than joined.</li>
           <li><a href="007-grpc-extraction.html">ADR-007</a>: <code>[ServiceContract]</code> purity, the rule that keeps the pricing
           method a contract and not a leak of Catalog&#39;s internals.</li>
           <li><a href="010-integration-event-schema-versioning.html">ADR-010</a>: the event contract is unchanged, so no
           version bump and no upcaster.</li>
-          <li><a href="035-optimistic-concurrency.html">ADR-035</a>: the two-token concurrency contract the discount endpoints
-          follow.</li>
+          <li><a href="035-optimistic-concurrency.html">ADR-035</a>: the <code>If-Match</code> product ETag every discount endpoint takes,
+          plus the <code>IRowVersioned</code> child overload the two variant endpoints use.</li>
           <li><a href="057-expand-contract-schema-evolution-gate.html">ADR-057</a>: the discount columns are add-only.</li>
           <li><a href="083-crud-lifecycle-event-taxonomy.html">ADR-083</a>: discount changes reuse <code>ProductVariantChanged</code> with
           the <code>Updated</code> state rather than minting a new event type.</li>
@@ -433,6 +455,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

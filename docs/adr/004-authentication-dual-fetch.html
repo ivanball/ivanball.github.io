@@ -281,10 +281,10 @@
           points the JWT bearer middleware at an <code>Authority</code>, so it fetches
           <code>{authority}/.well-known/openid-configuration</code>, follows <code>jwks_uri</code>, and validates the token
           signature against the published key
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.Authentication.cs:51-56</code>).
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.Authentication.cs:52-57</code>).
           No service except Identity holds key material. ADC&#39;s Conference, Engagement, and Notification
           services and Store&#39;s Catalog and Sales services all use this path
-          (<code>.../MMCA.ADC.Conference.Service/Program.cs:330</code>, <code>.../MMCA.ADC.Engagement.Service/Program.cs:178</code>,
+          (<code>.../MMCA.ADC.Conference.Service/Program.cs:329</code>, <code>.../MMCA.ADC.Engagement.Service/Program.cs:178</code>,
           <code>.../MMCA.ADC.Notification.Service/Program.cs:168</code>; <code>.../MMCA.Store.Catalog.Service/Program.cs:205</code>,
           <code>.../MMCA.Store.Sales.Service/Program.cs:179</code>), passing the host&#39;s <code>IConfiguration</code> and
           <code>IHostEnvironment</code> and leaving <code>requireHttpsMetadata</code> at its default. All five resolve the audience
@@ -295,11 +295,11 @@
           <li>The metadata fetch is HTTPS-only by default, and the caller supplies configuration and environment
           so the framework can resolve that: the explicit <code>requireHttpsMetadata</code> argument when it is not
           null, then the <code>Authentication:JwtBearer:RequireHttpsMetadata</code> configuration key, then <code>true</code>
-          everywhere except Development (<code>.../WebApplicationBuilderExtensions.Authentication.cs:63-65</code>, key
-          declared at <code>:24</code>). Resolving to <code>false</code> outside Development stays legal, because an internal-ingress h2c
+          everywhere except Development (<code>.../WebApplicationBuilderExtensions.Authentication.cs:64-66</code>, key
+          declared at <code>:25</code>). Resolving to <code>false</code> outside Development stays legal, because an internal-ingress h2c
           authority is a real deployment shape, but it registers <code>InsecureJwtMetadataWarningStartupFilter</code>
           so the host logs one startup warning naming the key
-          (<code>.../WebApplicationBuilderExtensions.Authentication.cs:67-71</code>).</li>
+          (<code>.../WebApplicationBuilderExtensions.Authentication.cs:68-72</code>).</li>
           <li><code>ValidIssuer</code> is deliberately <strong>not</strong> pinned: the middleware takes the issuer from the discovery
           document, because the <code>authority</code> is the Aspire service-discovery URL (e.g. <code>http://identity</code>)
           while the token&#39;s <code>iss</code> claim is the public gateway origin (e.g. <code>https://localhost:6001</code>).</li>
@@ -367,6 +367,17 @@
           so its citations are re-anchored there: the signature at <code>:51-56</code>, the <code>RequireHttpsMetadata</code>
           resolution at <code>:63-65</code>, the config key at <code>:24</code>, and the <code>InsecureJwtMetadataWarningStartupFilter</code>
           registration at <code>:67-71</code>.</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <p>Anchor-only refresh; no decision, rationale or behavior changed.</p>
+          <ul>
+          <li>The <code>AddForwardedJwtBearer</code> citations in the Decision section moved down one line in
+          <code>WebApplicationBuilderExtensions.Authentication.cs</code>: the signature is now at <code>:52-57</code>, the
+          <code>RequireHttpsMetadata</code> resolution at <code>:64-66</code>, the config key at <code>:25</code>, and the
+          <code>InsecureJwtMetadataWarningStartupFilter</code> registration at <code>:68-72</code> (the filter class itself is
+          declared at <code>Startup/Auth/InsecureJwtMetadataWarningStartupFilter.cs:15</code>).</li>
+          <li>The ADC Conference service call is cited at <code>Program.cs:329</code>, where <code>services.AddForwardedJwtBearer(</code> starts.</li>
+          <li>All other anchors in the live sections were re-verified against current source and are unchanged.</li>
+          </ul>
           <h2 id="related">Related</h2>
           <p>ADR-007 (gRPC calls forward the validated JWT downstream via <code>JwtForwardingClientInterceptor</code>),
           ADR-008 (the extraction that split issuer and validator into separate processes), ADR-012 (the
@@ -388,6 +399,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

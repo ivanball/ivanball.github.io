@@ -254,7 +254,9 @@
           <code>PartnerChanged</code> and <code>SessionAssetChanged</code> were missing from the base-derived set, so 17 records now
           derive <code>EntityChangedEvent&lt;TId&gt;</code> across the four repos (19 including the <code>MMCA.ECommerce</code> sample), and
           the shape sweep finds 35 lifecycle events across the three apps (25 in ADC, of which 18 are in
-          Conference; 9 in Store; 1 in Helpdesk).</p>
+          Conference; 9 in Store; 1 in Helpdesk).
+          Revised 2026-10-06: <code>Session</code> now raises <code>SessionChanged</code> from four sites (a second <code>Updated</code> from
+          <code>UnassignRoom</code>), and the stale source citations were re-anchored.</p>
           <h2 id="context">Context</h2>
           <p>ADR-003 decides how a domain event <strong>moves</strong>: captured into the outbox inside <code>SaveChangesAsync</code>,
           dispatched in-process after commit, or published to the broker when it is an integration event.
@@ -285,18 +287,19 @@
           site in any repo raises <code>Unchanged</code>: it is the zero default, and it appears only as a negative
           <code>[InlineData]</code> case in a handler test, whose helper has to hand-build the event because no
           transition on the aggregate produces one
-          (<code>MMCA.ADC/Tests/Modules/Engagement/MMCA.ADC.Engagement.Application.Tests/Points/DomainEventHandlers/SessionQuestionSubmittedPointsHandlerTests.cs:79,190-191</code>).</li>
+          (<code>MMCA.ADC/Tests/Modules/Engagement/MMCA.ADC.Engagement.Application.Tests/Points/DomainEventHandlers/SessionQuestionSubmittedPointsHandlerTests.cs:79,203-220</code>).</li>
           <li><strong><code>Added</code> from the factory, <code>Updated</code> from mutators, <code>Deleted</code> from <code>Delete()</code>.</strong> The base&#39;s usage
           note fixes the mapping (<code>EntityChangedEvent.cs:10-13</code>), and <code>Session</code> is the canonical shape: one
-          event type, three raise sites, in
-          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/Session.cs:234</code> (Added, from
-          the static factory), <code>:296</code> (Updated), <code>:317</code> (Deleted, inside the soft delete), all constructing the
-          same <code>SessionChanged</code> (<code>.../Sessions/DomainEvents/SessionChanged.cs:13-18</code>).</li>
+          event type, four raise sites, in
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/Session.cs:243</code> (Added, from
+          the static factory), <code>:305</code> (Updated, from <code>Update</code>), <code>:324</code> (Updated, from <code>UnassignRoom</code>) and <code>:345</code>
+          (Deleted, inside the <code>Delete</code> override once the base soft delete and the child cascade succeed), all
+          constructing the same <code>SessionChanged</code> (<code>.../Sessions/DomainEvents/SessionChanged.cs:13-18</code>).</li>
           <li><strong>Handlers filter on <code>State</code>, or deliberately do not.</strong> <code>SpeakerDeletedHandler</code> subscribes to
           <code>SpeakerChanged</code> and returns immediately unless the state is <code>Deleted</code>
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/DomainEventHandlers/SpeakerDeletedHandler.cs:29-30</code>),
           and the points award for asking a question does the same for <code>Added</code> on <code>SessionQuestionChanged</code>
-          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/Points/DomainEventHandlers/SessionQuestionSubmittedPointsHandler.cs:60-63</code>).
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/Points/DomainEventHandlers/SessionQuestionSubmittedPointsHandler.cs:66-70</code>).
           A handler that genuinely wants every transition writes no filter and logs the discriminator instead:
           <code>TicketChangedAuditHandler</code> passes <code>domainEvent.State</code> straight into its <code>LoggerMessage</code> template
           (<code>MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Application/Tickets/DomainEventHandlers/TicketChangedAuditHandler.cs:23,28-29</code>).</li>
@@ -321,7 +324,7 @@
           and stops on <code>Deleted</code>
           (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Inventory/DomainEventHandlers/ProductVariantChangedHandler.cs:56-59</code>).
           Because integration-event shapes are snapshot-frozen by an architecture test
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.Events.cs:45-58</code>),
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.Events.cs:40-57</code>),
           <code>State:ProductChangeState</code> is a committed line of the wire contract
           (<code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Contracts/IntegrationEventContractTests.cs:12</code>, and
           the sibling <code>ProductInfoChanged</code> entry at <code>:11</code> carries it too),
@@ -445,6 +448,17 @@
           <li><strong>A past-tense naming fitness rule in <code>EventConventionTestsBase</code>.</strong> Rejected alongside the rename,
           and for a stronger reason: the rule would fail the build on the convention this ADR accepts.</li>
           </ul>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <ul>
+          <li><code>Session</code> has four <code>SessionChanged</code> raise sites, not three: <code>UnassignRoom</code> (O-60) raises a second
+          <code>Updated</code> (<code>Session.cs:324</code>) alongside <code>Update</code> (<code>:305</code>); still one event type, and every <code>Updated</code>
+          comes from a mutator. The <code>Deleted</code> raise now sits in the <code>Delete</code> override after the base soft
+          delete and the child cascade (<code>:345</code>).</li>
+          <li>Source citations re-verified against current code and re-anchored: <code>Session.cs</code> (<code>:243</code>, <code>:305</code>,
+          <code>:324</code>, <code>:345</code>), the hand-built <code>Unchanged</code> test helper (<code>SessionQuestionSubmittedPointsHandlerTests.cs:79,203-220</code>),
+          the <code>Added</code> guard (<code>SessionQuestionSubmittedPointsHandler.cs:66-70</code>) and the contract snapshot builder
+          (<code>ArchitectureRules.Events.cs:40-57</code>).</li>
+          </ul>
           <h2 id="related">Related</h2>
           <p>ADR-003 (how these events are captured and dispatched; this ADR decides only their shape), ADR-010
           (schema versioning for the discriminator once it crosses a service boundary), ADR-008 (the extraction
@@ -467,6 +481,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#alternatives-rejected">Alternatives rejected</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

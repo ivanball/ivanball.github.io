@@ -246,7 +246,11 @@
           identifier type exists anywhere was rewritten against the framework surface ADR-115 shipped; see the
           Revision (2026-09-11) at the end). Revised 2026-09-19 (the alias count and the migration-surface
           census were re-measured again, and the non-<code>int</code> alias bullet was rewritten: there are now two <code>Guid</code>
-          aliases, not one; see the Revision (2026-09-19) at the end).
+          aliases, not one; see the Revision (2026-09-19) at the end). Revised 2026-10-01 (the
+          migration-surface census was re-measured and the wrapper-capability bullet was corrected on the
+          object-mapper file; see the Revision (2026-10-01) at the end). Revised 2026-10-06: the
+          migration-surface census was re-measured to 3,945 lines across 1,227 files (see the Revision
+          (2026-10-06) at the end).
           <strong>Revisits <a href="048-primitive-identifier-type-aliases.html">ADR-048</a></strong>, which stays
           Accepted and unchanged in substance: the aliases remain the identifier model. What changes is the
           shape of the deferral. ADR-048 left the wrapper-struct alternative &quot;considered and left unbuilt&quot; with
@@ -300,7 +304,7 @@
           nullable twin <code>:56</code>) and is applied from <code>ApplicationDbContext.ConfigureConventions</code>
           (<code>Persistence/DbContexts/ApplicationDbContext.cs:402-409</code>). All of it is wired by one DI call,
           <code>AddStronglyTypedIds</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:366</code>), and shape-checked
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:376</code>), and shape-checked
           by a fitness rule, <code>StronglyTypedIdsAreReadonlyRecordStructs</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Domain/ArchitectureRules.StronglyTypedIds.cs:34</code>).
           That capability is <a href="115-strongly-typed-identifiers-opt-in.html">ADR-115</a>, and it is opt-in: no
@@ -341,14 +345,14 @@
           <p>That radius is measurable, and the measurement only means something with its counting rule stated.
           An <strong>alias token</strong> here is any <code>*IdentifierType</code> token other than the framework&#39;s own generic
           parameter <code>TIdentifierType</code>, counted in the <code>.cs</code> and <code>.razor</code> files of the four <code>Source</code> trees on
-          2026-10-01, with tests, <code>bin</code> and <code>obj</code> excluded, one hit per source line that carries at least one
-          such token. On that rule the aliases appear on <strong>3,869 lines across 1,209 files</strong>: 296 in 117 files in
-          MMCA.Common, 2,282 in 694 files in MMCA.ADC, 1,227 in 367 files in MMCA.Store, and 64 in 31 files in
-          MMCA.Helpdesk. (Counting every token rather than every line raises the total to 4,099 and leaves the
-          file count unchanged.) Excluding <code>TIdentifierType</code> is what makes the framework figure honest: 735 of
-          MMCA.Common&#39;s 1,031 <code>IdentifierType</code> lines carry only that generic parameter, which a wrapper
+          2026-10-06, with tests, <code>bin</code> and <code>obj</code> excluded, one hit per source line that carries at least one
+          such token. On that rule the aliases appear on <strong>3,945 lines across 1,227 files</strong>: 319 in 124 files in
+          MMCA.Common, 2,318 in 702 files in MMCA.ADC, 1,244 in 370 files in MMCA.Store, and 64 in 31 files in
+          MMCA.Helpdesk. (Counting every token rather than every line raises the total to 4,180 and leaves the
+          file count unchanged.) Excluding <code>TIdentifierType</code> is what makes the framework figure honest: 759 of
+          MMCA.Common&#39;s 1,078 <code>IdentifierType</code> lines carry only that generic parameter, which a wrapper
           migration re-satisfies with a new type argument rather than rewrites call
-          site by call site. Every one of the 3,869 is a signature, a property, a generic argument, or a DTO
+          site by call site. Every one of the 3,945 is a signature, a property, a generic argument, or a DTO
           field that a wrapper migration would have to either change or prove it can leave alone. Because
           MMCA.Common is a published package family released in lockstep
           (<a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a>), the framework share of that count
@@ -383,7 +387,7 @@
           <li><strong>The cost is paid once and the benefit accrues per defect avoided, and the defect count is
           currently zero.</strong> No production incident in any of the four repos has been traced to a swapped
           identifier. That is not proof of safety, and this record does not claim it is; it is the only
-          evidence available, and it does not support a 1,209-file change.</li>
+          evidence available, and it does not support a 1,227-file change.</li>
           <li><strong>A partial migration is worse than either endpoint.</strong> Wrapping some identifiers and not others
           produces a codebase where the absence of a compiler error means nothing, because the reader cannot
           tell whether a given call site is protected or merely un-migrated. The change is therefore
@@ -414,7 +418,7 @@
           identifier assignment, so with no wrapper declared it matches nothing. Trigger 1 therefore depends on a
           production defect being <em>traced</em> to a transposition, and a wrong-user check-in is exactly the kind
           of defect that gets written off as a scanning mistake instead.</li>
-          <li><strong>The migration price rises with the codebase.</strong> The 3,869 lines counted here are a snapshot
+          <li><strong>The migration price rises with the codebase.</strong> The 3,945 lines counted here are a snapshot
           and the number only grows. Deferring on cost grounds means the cost argument gets stronger every
           release, which is the classic shape of a decision that is never revisited on its merits.</li>
           <li><strong>Trigger 3 is not measured.</strong> No count of cross-module scalar identifier references is maintained,
@@ -534,6 +538,21 @@
           (<code>Persistence/Conversions/StronglyTypedIdValueConverter.cs:28</code>, nullable twin <code>:56</code>) and is applied
           from <code>ApplicationDbContext.ConfigureConventions</code> (<code>ApplicationDbContext.cs:402-409</code>). The
           <code>AddStronglyTypedIds</code> citation is re-anchored to <code>DependencyInjection.cs:366</code>.</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <p>No decision, trigger, rationale or trade-off changed.</p>
+          <ul>
+          <li><strong>The migration-surface census is re-measured on the same rule</strong>: <strong>3,945 lines across 1,227
+          files</strong> (Common 319/124, ADC 2,318/702, Store 1,244/370, Helpdesk 64/31), 4,180 tokens, and
+          <code>MMCA.Common/Source</code> now carries 1,078 <code>IdentifierType</code> lines, 759 of them the generic parameter
+          alone. The Decision, Rationale and Trade-offs figures follow it. The count covers each repository&#39;s
+          <code>Source</code> tree, so MMCA.Common&#39;s shipped <code>MMCA.Common.Testing*</code> packages are included as framework
+          source, as in the earlier passes.</li>
+          <li><strong>The alias count is unchanged</strong>: 48 across the same 10 files, 46 of them <code>int</code>, the two <code>Guid</code>
+          aliases still at <code>MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:17</code> and <code>:23</code>.</li>
+          <li><strong><code>AddStronglyTypedIds</code> now declares at <code>DependencyInjection.cs:376</code></strong>; the <code>:366</code> recorded on
+          2026-10-01 falls inside its XML doc block. The Context bullet carries the current anchor.</li>
+          <li>Line anchors in the live sections were re-verified against current source.</li>
+          </ul>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -554,6 +573,7 @@
             <li><a href="#revision-2026-09-11">Revision (2026-09-11)</a></li>
             <li><a href="#revision-2026-09-19">Revision (2026-09-19)</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             </ul>
           </nav>
         </aside>

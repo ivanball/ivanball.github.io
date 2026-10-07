@@ -355,13 +355,13 @@
           the rest of the subsystem: caught, logged at warning level, never fatal (<code>:141-146</code>, <code>:205-207</code>). Both
           production apps subclass and register it: ADC in Conference
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/SelfHttpOutputCacheWarmupTask.cs:22</code>, registered
-          at <code>Program.cs:308</code>), Engagement (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/SelfHttpWarmupTask.cs:23</code>,
-          <code>Program.cs:156</code>) and Identity (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/SelfHttpWarmupTask.cs:23</code>,
-          <code>Program.cs:168</code>); Store in Catalog
+          at <code>Program.cs:311</code>), Engagement (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/SelfHttpWarmupTask.cs:23</code>,
+          <code>Program.cs:160</code>) and Identity (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/SelfHttpWarmupTask.cs:23</code>,
+          <code>Program.cs:174</code>); Store in Catalog
           (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/SelfHttpOutputCacheWarmupTask.cs:23</code>,
-          <code>Program.cs:183</code>), Identity (<code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/SelfHttpOutputCacheWarmupTask.cs:25</code>,
-          <code>Program.cs:144</code>) and Sales (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/SelfHttpOutputCacheWarmupTask.cs:26</code>,
-          <code>Program.cs:157</code>).</li>
+          <code>Program.cs:184</code>), Identity (<code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/SelfHttpOutputCacheWarmupTask.cs:25</code>,
+          <code>Program.cs:145</code>) and Sales (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/SelfHttpOutputCacheWarmupTask.cs:26</code>,
+          <code>Program.cs:158</code>).</li>
           <li><strong>Extensible per host.</strong> <code>AddWarmupReadiness()</code> registers the gate, the runner, the readiness health
           check, and the built-in OIDC task; a host adds its own pre-fetches (output cache, reference data) with
           <code>AddWarmupTask&lt;T&gt;()</code>, which is also how a <code>SelfHttpWarmupTaskBase</code> subclass enters the run.</li>
@@ -436,6 +436,10 @@
           Polly total-request timeout is assigned at <code>Extensions.cs:53</code>; the <code>SelfHttpWarmupTaskBase</code> public API
           starts at <code>PublicAPI.Shipped.txt:129-131</code>; and the per-host <code>AddWarmupTask</code> registrations moved to
           ADC Conference <code>Program.cs:308</code>, Engagement <code>:156</code>, Identity <code>:168</code> and Store Catalog <code>:183</code>, Sales <code>:157</code>.</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <p>No decision or rationale changed. The per-host <code>AddWarmupTask</code> registrations moved again and are now
+          ADC Conference <code>Program.cs:311</code>, Engagement <code>:160</code>, Identity <code>:174</code> and Store Catalog <code>Program.cs:184</code>,
+          Identity <code>:145</code>, Sales <code>:158</code>. Anchors were re-verified against current source.</p>
           <h2 id="related">Related</h2>
           <p>ADR-004 (the OIDC discovery document the built-in task pre-fetches, and the auth-side view of the same
           cold-start), ADR-009 (the Polly resilience pipeline that absorbs the lazy retry when the gate opens
@@ -458,6 +462,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

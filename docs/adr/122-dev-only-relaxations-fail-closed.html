@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-122: Dev-Only Relaxations Are Environment-Gated and Fail Closed · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-09-11).">
+  <meta name="description" content="Accepted (2026-09-11). Revised 2026-10-01: citations re-anchored. Revised 2026-10-06: the plain-check inventory adds the Development-only design-time…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/122-dev-only-relaxations-fail-closed.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-122: Dev-Only Relaxations Are Environment-Gated and Fail Closed">
-  <meta property="og:description" content="Accepted (2026-09-11).">
+  <meta property="og:description" content="Accepted (2026-09-11). Revised 2026-10-01: citations re-anchored. Revised 2026-10-06: the plain-check inventory adds the Development-only design-time…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/122-dev-only-relaxations-fail-closed.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-122: Dev-Only Relaxations Are Environment-Gated and Fail Closed">
-  <meta name="twitter:description" content="Accepted (2026-09-11).">
+  <meta name="twitter:description" content="Accepted (2026-09-11). Revised 2026-10-01: citations re-anchored. Revised 2026-10-06: the plain-check inventory adds the Development-only design-time…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed","item":"https://ivanball.github.io/docs/adr/122-dev-only-relaxations-fail-closed.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
@@ -239,7 +239,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-122-dev-only-relaxations-are-environment-gated-and-fail-closed">ADR-122: Dev-Only Relaxations Are Environment-Gated and Fail Closed</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-09-11).</p>
+          <p>Accepted (2026-09-11). Revised 2026-10-01: citations re-anchored. Revised 2026-10-06: the plain-check inventory adds the Development-only design-time database skip.</p>
           <h2 id="context">Context</h2>
           <p>Several capabilities are useful locally and dangerous in a deployed environment: EF Core rendering
           parameter values into logs and exception messages, an SMTP session that skips TLS, prompt and
@@ -276,8 +276,8 @@
           </ul>
           <p><code>RequireHttpsMetadata</code> on forwarded JWT bearer is the hybrid the SMTP gate was modelled on: explicit
           argument, then configuration, then <code>!environment.IsDevelopment()</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.Authentication.cs:63-65</code>),
-          with a startup-warning filter registered when a non-Development host opts out (<code>:67-71</code>).</p>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.Authentication.cs:64-66</code>),
+          with a startup-warning filter registered when a non-Development host opts out (<code>:68-72</code>).</p>
           <p><strong>The remaining environment-conditional relaxations are plain <code>IsDevelopment()</code> checks, not
           fail-closed gates</strong>, and this record names them as such: each reads a non-nullable environment the
           host always supplies, so there is no unknown case for them to close against. They are listed here so
@@ -285,21 +285,28 @@
           <ul>
           <li>CORS: the pipeline selects <code>CorsPolicyAllowAll</code> in Development and <code>CorsPolicyAllowSpecificOrigins</code>
           otherwise (<code>.../Startup/Pipeline/MiddlewarePipelineBuilder.cs:99-101</code>); the allow-any policy is
-          registered at <code>.../Startup/WebApplicationBuilderExtensions.cs:139-142</code> behind an analyzer
-          suppression that states the scope (<code>:138</code>). The Aspire gateway takes the same shape on its default
+          registered at <code>.../Startup/WebApplicationBuilderExtensions.cs:145-148</code> behind an analyzer
+          suppression that states the scope (<code>:144</code>). The Aspire gateway takes the same shape on its default
           policy (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/GatewayCorsExtensions.cs:34-42</code>). See
           ADR-082.</li>
           <li>Cookie <code>Secure</code> flag: <code>Secure = !environment.IsDevelopment()</code> for the session cookies
-          (<code>.../MMCA.Common.API/SessionCookies/SessionCookieJar.cs:34</code>) and for the culture cookie
+          (<code>.../MMCA.Common.API/SessionCookies/SessionCookieJar.cs:64</code>) and for the culture cookie
           (<code>.../Startup/WebApplicationExtensions.cs:134</code>).</li>
           <li>HSTS: <code>_enableHsts = options.Value.EnableHsts &amp;&amp; !environment.IsDevelopment()</code>
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Security/SecurityHeaders.cs:170</code>), so Development
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Security/SecurityHeaders.cs:175</code>), so Development
           is the only way to suppress it once a host enables it. CSP is built from the same flag
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Security/BlazorCspPolicyProvider.cs:41</code>). See
           ADR-023.</li>
           <li>Pseudo-locale: added to the supported cultures and accepted by <code>/culture/set</code> only in Development
           (<code>.../Startup/WebApplicationExtensions.cs:80-82</code>, <code>:119-122</code>).</li>
+          <li>Design-time database skip: database initialization returns early only when the host is
+          Development and the <code>OpenApiDesignTimeKey</code> setting is true
+          (<code>.../Startup/DatabaseInitializationExtensions.cs:153</code>), so a build-time OpenAPI run does not
+          touch a database.</li>
           </ul>
+          <p>The Serilog minimum level (<code>Debug</code> in Development, <code>Information</code> otherwise,
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Logging/SerilogHostExtensions.cs:77</code>) is also
+          environment-conditional but relaxes no security control, so it is not part of this inventory.</p>
           <p>The two fail-closed gates that are pure functions are unit-tested on exactly the closing case: the
           EF gate with no environment registered is false
           (<code>MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/SensitiveDataLoggingGateTests.cs:45-46</code>,
@@ -338,6 +345,18 @@
           (<code>WebApplicationBuilderExtensions.cs:139-142</code>, suppression <code>:138</code>), the culture cookie <code>Secure</code> flag
           (<code>WebApplicationExtensions.cs:134</code>), the pseudo-locale check (<code>:119-122</code>), and the CSP flag
           (<code>BlazorCspPolicyProvider.cs:41</code>).</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <ul>
+          <li>The plain-check inventory gained the design-time database skip
+          (<code>DatabaseInitializationExtensions.cs:153</code>), a Development-only branch it previously omitted, and
+          now names the Serilog minimum level (<code>SerilogHostExtensions.cs:77</code>) as environment-conditional but
+          out of scope.</li>
+          <li>Anchors re-verified against current source: <code>RequireHttpsMetadata</code> resolution and warning filter
+          moved to <code>WebApplicationBuilderExtensions.Authentication.cs:64-66</code> and <code>:68-72</code>, the allow-any CORS
+          policy to <code>WebApplicationBuilderExtensions.cs:145-148</code> (suppression <code>:144</code>), the session cookie
+          <code>Secure</code> flag to <code>SessionCookieJar.cs:64</code>, and HSTS to <code>SecurityHeaders.cs:175</code>; all other
+          citations still hold.</li>
+          </ul>
           <h2 id="related">Related</h2>
           <p><a href="070-fail-fast-configuration-contract.html">ADR-070</a> (binds and validates settings at startup; this
           record governs when a validated setting may be honored),
@@ -363,6 +382,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

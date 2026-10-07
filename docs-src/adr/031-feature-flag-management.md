@@ -13,6 +13,14 @@ fitness rules behind `FeatureFlagLifecycleTestsBase` fail the build for an undec
 temporary one past its date; adoption is per repo, like every other fitness base. See the Revision
 (2026-09-11) at the end.)
 
+Revised 2026-10-01 (the disabled response is `404` but not anonymous: the edge writes its own
+"Feature not available" ProblemDetails and the CQRS failure carries the `Feature.Disabled` code; the
+Decision and Rationale describe the bodies as they are. See the Revision (2026-10-01) at the end.)
+
+Revised 2026-10-06: the CQRS disabled failure no longer names the flag; its message is the generic
+wording the edge handler uses, and clients branch on the `Feature.Disabled` code. See the Revision
+(2026-10-06) at the end.
+
 ## Context
 The apps need to decouple *release* from *deploy*: ship code dark, flip a kill switch, or roll a feature
 out to a percentage of users without a redeploy. A flag has to be enforceable at **two** different points
@@ -42,8 +50,11 @@ is enforced at two independent surfaces:
   validation, or transaction work.
 - **Disabled = `404` (NotFound), never `403`.** Both surfaces return not-found rather than advertising a
   forbidden capability. The bodies still say a feature is off: the edge title reads "Feature not
-  available", and the CQRS failure carries code `Feature.Disabled` with a message naming the flag
-  (`MMCA.Common.Application/UseCases/Decorators/FeatureGateCommandDecorator.cs:57-59`).
+  available", and the CQRS failure carries code `Feature.Disabled` with the generic message "The
+  requested feature is not currently available." (the flag name is kept out of it; clients branch on
+  the code), the same wording as the edge's `Detail`
+  (`MMCA.Common.Application/UseCases/Decorators/FeatureGateCommandDecorator.cs:60-62`,
+  `FeatureGateQueryDecorator.cs:59-61`).
 - **Flag names are module constants** (`CatalogFeatures` / `SalesFeatures` in Store,
   `ConferenceFeatures` / `EngagementFeatures` in ADC) that match keys in each service's
   `"FeatureManagement"` config, so a flag flips at config + restart, not at deploy. The framework itself
@@ -57,7 +68,7 @@ is enforced at two independent surfaces:
   is unreachable from either entry instead of leaking through the one that was missed.
 - **The `404` convention reuses the not-found status.** The CQRS surface goes through the
   Result to ProblemDetails edge (ADR-013), whose `errors` extension serializes each error's `Code` and
-  `Message` (`MMCA.Common.API/Middleware/ErrorHttpMapping.cs:61-69`); the MVC edge writes its own
+  `Message` (`MMCA.Common.API/Middleware/ErrorHttpMapping.cs:62-70`); the MVC edge writes its own
   ProblemDetails. Both answer `404` rather than `403`, so neither reveals a guarded capability, but
   neither body is identical to an ordinary not-found: each states that a feature is unavailable.
 
@@ -177,3 +188,25 @@ surface does go through `HandleFailure`, and `BuildErrorsExtension`
 so that response names the flag. The decision itself (`404`, never `403`, at both surfaces) is
 unchanged; the Decision and Rationale bullets now describe the bodies as they are. The `AddAPI`
 registration anchor in the Decision is refreshed to `DependencyInjection.cs:105-107`.
+
+## Revision (2026-10-06)
+- **The CQRS disabled failure no longer names the flag.** The Revision (2026-10-01) quoted the message
+  "Feature '{FeatureName}' is not currently available." and said that response names the flag. Both
+  decorators now return `Error.NotFoundError("Feature.Disabled", "The requested feature is not
+  currently available.")`
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/FeatureGateCommandDecorator.cs:60-62`,
+  `FeatureGateQueryDecorator.cs:59-61`), the same wording as `DisabledFeatureHandler`'s `Detail`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/FeatureManagement/DisabledFeatureHandler.cs:22`).
+  The source comment (`FeatureGateCommandDecorator.cs:56-58`) records why: the message reaches the user
+  verbatim, so the internal flag name stays out and clients branch on the code. The response is still
+  not anonymous (the code and the edge title both say a feature is off); the Decision bullet now says
+  so.
+- **Current locations for facts recorded in the Revision (2026-08-18).** The decorator's
+  `IFeatureManager` parameter is at `FeatureGateCommandDecorator.cs:22` (class at `:20`) and the
+  `IsEnabledAsync(featureGated.FeatureName)` call at `:53`. `AddHttpContextAccessor()` is at
+  `MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:104` and
+  `AddFeatureManagement().WithTargeting<CurrentUserTargetingContextAccessor>()` at `:105-106`, with the
+  singleton rationale at `:98-103`. `AuthClaimTypes.Subject` (`"sub"`) is at
+  `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/AuthClaimTypes.cs:34`.
+- Anchors in the live sections were re-verified against current source; `BuildErrorsExtension` is at
+  `ErrorHttpMapping.cs:62-70`.

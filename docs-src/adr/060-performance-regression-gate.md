@@ -7,6 +7,8 @@ names two of the eight benchmarks, so six, not seven, are gated on allocations a
 Revised 2026-09-25 (records that MMCA.ADC and MMCA.Store gate every production deploy on the
 recency of their k6 load-test run through a `load-freshness` job in `deploy.needs`; the load-test and
 `ci.yml` citations are re-anchored).
+Revised 2026-10-01 (the consumer `load-freshness` jobs call the shared `freshness-gate` composite
+action; citations re-anchored).
 
 ## Context
 Rubric section 12 asks for hot-path efficiency that is **measured, not assumed**
@@ -103,15 +105,15 @@ artifact for backend hot paths is a k6 load test against deployed read endpoints
 on a schedule and on demand, not on a pull request (`MMCA.ADC/.github/workflows/load-test.yml:13-23`,
 `MMCA.Store/.github/workflows/load-test.yml:11-21`). Both consumers gate every production deploy on
 that run's recency: a `load-freshness` job fails the deploy when the latest successful `load-test.yml`
-run is older than 35 days (ADC `MMCA.ADC/.github/workflows/deploy.yml:875`, window at `:890`; Store
-`MMCA.Store/.github/workflows/deploy.yml:848`, window at `:863`). Both jobs call the shared composite
-action `ivanball/MMCA.Common/.github/actions/freshness-gate@main` (ADC `deploy.yml:886`, Store
-`deploy.yml:859`), which queries the latest successful run
-(`MMCA.Common/.github/actions/freshness-gate/action.yml:185-187`) and fails when its age in whole
-days exceeds the window (`action.yml:134-143`), and the `deploy` job lists it in `needs` (ADC
-`deploy.yml:1185`, Store `deploy.yml:1136`). A break-glass skip exists and refuses to fire without a
-written justification (`action.yml:93-98`; the deploy workflows pass `skip` and
-`skip-justification` at ADC `deploy.yml:892-893`, Store `deploy.yml:865-866`).
+run is older than 35 days (ADC `MMCA.ADC/.github/workflows/deploy.yml:922`, window at `:937`; Store
+`MMCA.Store/.github/workflows/deploy.yml:890`, window at `:905`). Both jobs call the shared composite
+action `ivanball/MMCA.Common/.github/actions/freshness-gate@main` (ADC `deploy.yml:933`, Store
+`deploy.yml:901`) in its default success mode (no `required-jobs` input), which queries the latest
+successful run (`MMCA.Common/.github/actions/freshness-gate/action.yml:214-217`) and fails when its
+age in whole days exceeds the window (`action.yml:137-146`), and the `deploy` job lists it in `needs`
+(ADC `deploy.yml:1242`, Store `deploy.yml:1187`). A break-glass skip exists and refuses to fire
+without a written justification (`action.yml:96-101`; the deploy workflows pass `skip` and
+`skip-justification` at ADC `deploy.yml:939-940`, Store `deploy.yml:907-908`).
 That makes the k6 run a standing precondition of shipping, not a per-PR measurement: it proves
 capacity was checked within the window, not that the change being deployed kept it. MMCA.Helpdesk
 has neither. The client-side
@@ -197,6 +199,15 @@ so the Decision paragraph now cites the action. The remaining citations are re-a
 `performance-smoke` job in `ci.yml` (`:355-356`, `:359`, `:383`, `:385-386`, `:388`, `:391`, `:397`),
 `release.yml:52,186`, `CONTRIBUTING.md:203`, and the consumer `load-freshness` and `deploy.needs`
 lines.
+
+## Revision (2026-10-06)
+- No decision or rationale changed. The Decision paragraph now notes that both consumer
+  `load-freshness` jobs call the shared action in its default success mode (no `required-jobs`
+  input); the action also offers a required-jobs mode that this gate does not use.
+- The Status block now lists the 2026-10-01 revision, which it had omitted.
+- Anchors re-verified against current source: ADC `deploy.yml:922,933,937,939-940,1242`, Store
+  `deploy.yml:890,901,905,907-908,1187`, and `action.yml:214-217` (query), `:137-146` (age check),
+  `:96-101` (justification check). The 2026-10-01 anchors above are kept as recorded on that date.
 
 ## Related
 ADR-015 (structural fitness functions, which explicitly stop at structure and registration; this is

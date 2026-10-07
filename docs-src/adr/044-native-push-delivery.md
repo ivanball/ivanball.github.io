@@ -5,6 +5,7 @@ Accepted (2026-07-11). Amends ADR-024. The framework pipeline is implemented and
 default; each consumer switches it on by provisioning a notification hub with platform
 credentials and enabling the `NativePush` configuration section. Revised 2026-10-01 (UI.Maui
 ships credentialed FCM/APNs token providers and token-rotation re-registration; see Revision below).
+Revised 2026-10-06: the device DELETE route is `/Notifications/Devices/{installationId}`.
 
 ## Context
 ADR-024 established two notification channels: a durable per-user `UserNotification` inbox (the
@@ -37,7 +38,8 @@ may not exist when the code ships.
   attempt, it calls `INativePushSender.SendToUsersAsync` inside its own non-fatal catch. The
   audit status (`Sent`/`Failed`) stays owned by the SignalR leg: the inbox remains the source
   of truth, and a hub outage must not fail the command or the other channels.
-- **`DevicesController` (PUT/DELETE `/Notifications/Devices`)** ships in `MMCA.Common.API` via
+- **`DevicesController` (PUT `/Notifications/Devices`, DELETE `/Notifications/Devices/{installationId}`,
+  `DevicesController.cs:22,31,55`)** ships in `MMCA.Common.API` via
   the existing `AddNotificationControllers` application part, `[Authorize]` for any signed-in
   user and feature-gated with the same `Notification.PushNotifications` flag as the rest of the
   pipeline. Ownership is stamped server-side from the current user; installation ids are
@@ -51,7 +53,7 @@ may not exist when the code ships.
   over the named API client, with a `SemaphoreSlim` serializing registration passes,
   `MauiPushRegistrationService.cs:24,41`). The token provider defaults to
   `NullPushDeviceTokenProvider` (TryAdd, `MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:62`);
-  the opt-in `AddMauiPushDeviceTokenProvider()` (`MMCA.Common.UI.Maui/DependencyInjection.cs:118-126`)
+  the opt-in `AddMauiPushDeviceTokenProvider()` (`MMCA.Common.UI.Maui/DependencyInjection.cs:124-132`)
   replaces it with `FcmPushDeviceTokenProvider` on Android (gated on the `Push:Fcm` section,
   `FcmPushDeviceTokenProvider.cs:33,43-49`) and `ApnsPushDeviceTokenProvider` on iOS/MacCatalyst
   (gated on `Push:Apns:Enabled`, `ApnsPushDeviceTokenProvider.cs:30,37`), while the windows TFM
@@ -60,17 +62,17 @@ may not exist when the code ships.
   auth-state changes, and on Android `MauiFirebaseMessagingService.OnNewToken` re-registers when
   FCM rotates the token (`MauiFirebaseMessagingService.cs:26-35`). `AuthUIService` owns the
   unregister leg: `LogoutAsync` and `RevokeAllSessionsAsync` both call `UnregisterPushAsync`
-  before the local sign-out (`AuthUIService.cs:90,134,320`).
+  before the local sign-out (`AuthUIService.cs:90,143`, defined at `:342`).
 
 ## Consequences
 - Sends fan out per 20-user chunk and per platform: an audience of N users costs
   `ceil(N/20) * 2` hub calls. Acceptable at conference scale; a template-based send can
   consolidate later without touching callers.
 - The handler's third leg is best-effort: it is awaited inside a non-fatal catch
-  (`SendPushNotificationHandler.cs:158-171`), with no per-device delivery tracking. Because
+  (`SendPushNotificationHandler.cs:141-154`), with no per-device delivery tracking. Because
   `SendPushNotificationCommand` is `ITransactional`, a transient fault on the final status save
   re-runs the live legs under the execution strategy, so native delivery is at-least-once and a
-  device can receive the same OS push twice (`SendPushNotificationHandler.cs:21-29`). The hub's
+  device can receive the same OS push twice (`SendPushNotificationHandler.cs:21-30`). The hub's
   telemetry is the observability surface; the inbox remains the recovery path.
 - A delete verifies ownership before it acts: the registrar reads the installation and checks
   the `user:{id}` tag `UpsertAsync` stamped on it
@@ -104,3 +106,12 @@ catch, and because `SendPushNotificationCommand` is `ITransactional` a retried f
 the live legs, making native delivery at-least-once (`SendPushNotificationHandler.cs:21-29,158-171`).
 The server-side decision (Notification Hubs, `user:{id}` tags, the Null-by-default sender and
 registrar) is unchanged.
+
+## Revision (2026-10-06)
+- The Decision entry on `DevicesController` now names the DELETE route correctly: PUT is the bare
+  `/Notifications/Devices` route and DELETE is `/Notifications/Devices/{installationId}`
+  (`DevicesController.cs:22,31,55`).
+- Anchors in the live sections were re-verified against current source: `AddMauiPushDeviceTokenProvider()`
+  is now `MMCA.Common.UI.Maui/DependencyInjection.cs:124-132`, the unregister calls are
+  `AuthUIService.cs:90,143` (definition at `:342`), and the handler's native leg and at-least-once
+  remarks are `SendPushNotificationHandler.cs:141-154` and `:21-30`.

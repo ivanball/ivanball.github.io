@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-095: Uniqueness Under Soft Delete (Filtered Unique Indexes) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-08-23). Revised 2026-08-26 (the convention appends its clause to a hand-authored filter instead of skipping the index).">
+  <meta name="description" content="Accepted (2026-08-23). Revised 2026-08-26 (the convention appends its clause to a hand-authored filter instead of skipping the index). Revised…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/095-soft-delete-unique-indexes.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-095: Uniqueness Under Soft Delete (Filtered Unique Indexes)">
-  <meta property="og:description" content="Accepted (2026-08-23). Revised 2026-08-26 (the convention appends its clause to a hand-authored filter instead of skipping the index).">
+  <meta property="og:description" content="Accepted (2026-08-23). Revised 2026-08-26 (the convention appends its clause to a hand-authored filter instead of skipping the index). Revised…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/095-soft-delete-unique-indexes.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-095: Uniqueness Under Soft Delete (Filtered Unique Indexes)">
-  <meta name="twitter:description" content="Accepted (2026-08-23). Revised 2026-08-26 (the convention appends its clause to a hand-authored filter instead of skipping the index).">
+  <meta name="twitter:description" content="Accepted (2026-08-23). Revised 2026-08-26 (the convention appends its clause to a hand-authored filter instead of skipping the index). Revised…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)","item":"https://ivanball.github.io/docs/adr/095-soft-delete-unique-indexes.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
@@ -240,18 +240,20 @@
           <h1 id="adr-095-uniqueness-under-soft-delete-filtered-unique-indexes">ADR-095: Uniqueness Under Soft Delete (Filtered Unique Indexes)</h1>
           <h2 id="status">Status</h2>
           <p>Accepted (2026-08-23). Revised 2026-08-26 (the convention <strong>appends</strong> its clause to a hand-authored
-          filter instead of skipping the index).</p>
+          filter instead of skipping the index). Revised 2026-10-01 (PostgreSQL coverage and per-engine
+          quoting). Revised 2026-10-06: the per-engine predicate now comes from each engine&#39;s
+          <code>IDataSourceEngine.BuildSoftDeleteFilter</code>, and the Cosmos no-op is a relational-capability check.</p>
           <h2 id="context">Context</h2>
           <p>ADR-005 makes deletion <strong>soft</strong>: an <code>IAuditableEntity</code> sets <code>IsDeleted = true</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IAuditableEntity.cs:11</code>) and a named global
           query filter hides the row from every query
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:454-468</code>,
-          the filter name at <code>:475</code>). The application therefore behaves as though the row is gone.</p>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:453-467</code>,
+          the filter name at <code>:474</code>). The application therefore behaves as though the row is gone.</p>
           <p>The database does not. A unique index still counts the hidden row, so the deleted record keeps
           occupying its unique slot forever: delete a speaker and the email unique index still refuses to
           create a new speaker with that email, with an error the user cannot act on because the conflicting
           row is invisible to them. That contradiction is stated as the reason for the convention in its own
-          remarks (<code>.../Persistence/Conventions/SoftDeleteUniqueIndexConvention.cs:10-16</code>).</p>
+          remarks (<code>.../Persistence/Conventions/SoftDeleteUniqueIndexConvention.cs:11-17</code>).</p>
           <p>The obvious fix, a hand-written <code>HasFilter(&quot;[IsDeleted] = 0&quot;)</code> on each index, is the kind of rule
           that gets forgotten: it lives in a different file from the <code>IsDeleted</code> flag, it is engine-specific
           SQL typed as a string literal, and nothing fails when it is missing until a user tries to re-create a
@@ -262,60 +264,65 @@
           rows, automatically, in every context of every consumer.</p>
           <ul>
           <li><strong>A model-finalizing convention, registered once in the base context.</strong>
-          <code>SoftDeleteUniqueIndexConvention</code> (<code>.../Conventions/SoftDeleteUniqueIndexConvention.cs:33</code>) is added
+          <code>SoftDeleteUniqueIndexConvention</code> (<code>.../Conventions/SoftDeleteUniqueIndexConvention.cs:34</code>) is added
           by <code>ApplicationDbContext.ConfigureConventions</code>
-          (<code>.../DbContexts/ApplicationDbContext.cs:393</code>, rationale at <code>:390-392</code>). Because ADR-006 keeps one
+          (<code>.../DbContexts/ApplicationDbContext.cs:392</code>, rationale at <code>:389-391</code>). Because ADR-006 keeps one
           context class per engine over that base, a single registration reaches every module, every database
           and every consumer repo. Nothing opts in per entity.</li>
           <li><strong>Scope: unique, non-owned, soft-deletable.</strong> The convention walks entity types assignable to
-          <code>IAuditableEntity</code> and not owned (<code>:45-46</code>, the same predicate the query filter uses at
-          <code>ApplicationDbContext.cs:457</code>), then applies the filter to every index that is unique
-          (<code>:48-49</code>, <code>:60-63</code>).</li>
+          <code>IAuditableEntity</code> and not owned (<code>:46-47</code>, the same predicate the query filter uses at
+          <code>ApplicationDbContext.cs:456</code>), then applies the filter to every index that is unique
+          (<code>:49-50</code>, <code>:61-64</code>).</li>
           <li><strong>A hand-authored filter is kept and extended, not replaced and not skipped.</strong> An index that
-          already declares a predicate keeps it and gains the soft-delete clause appended with <code>AND</code> (<code>:79</code>),
+          already declares a predicate keeps it and gains the soft-delete clause appended with <code>AND</code> (<code>:80</code>),
           in the same order <code>HasSoftDeleteFilter(additionalFilter:)</code> produces
           (<code>.../Persistence/Configuration/IndexBuilderExtensions.cs:62-65</code>), so the two paths yield
-          byte-identical SQL for the same pair of predicates (<code>SoftDeleteUniqueIndexConvention.cs:77-78</code>).
+          byte-identical SQL for the same pair of predicates (<code>SoftDeleteUniqueIndexConvention.cs:78-79</code>).
           Skipping such an index, as the convention originally did, left precisely the partial-unique indexes
-          a model bothered to hand-author as the only ones a soft-deleted row could keep blocking (<code>:17-26</code>):
+          a model bothered to hand-author as the only ones a soft-deleted row could keep blocking (<code>:19-26</code>):
           the framework&#39;s own push-notification dedup index, filtered on <code>[DedupKey] IS NOT NULL</code>, was exactly
           that case
           (<code>.../Persistence/Configuration/EntityTypeConfiguration/Notifications/PushNotificationConfiguration.cs:69-73</code>).
           The append is <strong>idempotent</strong>: a filter that already constrains the soft-delete column is recognized
-          and left alone (<code>SoftDeleteUniqueIndexConvention.cs:72-75</code>), so a second model build cannot produce
-          <code>... AND [IsDeleted] = 0 AND [IsDeleted] = 0</code>. Recognition compares a normalized form with
-          whitespace and all three identifier quoting styles stripped
-          (<code>.../Persistence/SoftDeleteFilterSql.cs:68-75</code>, normalizer at <code>:93-94</code>), because a hand-written
-          <code>HasFilter(&quot;[IsDeleted] = 0&quot;)</code> literal and the builder&#39;s output do not agree on quoting (<code>:60-67</code>);
-          the boolean <code>= false</code> spelling counts as the same clause as <code>= 0</code> (<code>:73-74</code>).</li>
+          and left alone (<code>SoftDeleteUniqueIndexConvention.cs:73-76</code>), so a second model build cannot produce
+          <code>... AND [IsDeleted] = 0 AND [IsDeleted] = 0</code>. Recognition (<code>SoftDeleteFilterSql.ContainsPredicate</code>)
+          compares a normalized form with whitespace and all three identifier quoting styles stripped
+          (<code>.../Persistence/SoftDeleteFilterSql.cs:52-59</code>, normalizer at <code>:77-78</code>), because a hand-written
+          <code>HasFilter(&quot;[IsDeleted] = 0&quot;)</code> literal and the builder&#39;s output do not agree on quoting (<code>:44-51</code>);
+          the boolean <code>= false</code> spelling counts as the same clause as <code>= 0</code> (<code>:57-58</code>).</li>
           <li><strong>There is therefore no opt-out.</strong> Declaring a filter no longer excludes an index from the
           convention (the early <code>continue</code> on an existing filter is gone,
-          <code>SoftDeleteUniqueIndexConvention.cs:60-80</code>), so a unique index that genuinely must enforce
+          <code>SoftDeleteUniqueIndexConvention.cs:61-81</code>), so a unique index that genuinely must enforce
           uniqueness across deleted rows too cannot express that on a soft-deletable entity. Nothing in the
           workspace wants it, and the alternative (leaving hand-filtered indexes silently un-narrowed) is the
           bug this revision fixes.</li>
           <li><strong>One predicate builder serves both paths.</strong> <code>SoftDeleteFilterSql.Build</code>
-          (<code>.../Persistence/SoftDeleteFilterSql.cs:27-51</code>) is called by the convention
-          (<code>SoftDeleteUniqueIndexConvention.cs:56</code>) and by the public opt-in <code>HasSoftDeleteFilter</code>
+          (<code>.../Persistence/SoftDeleteFilterSql.cs:34-35</code>) is called by the convention
+          (<code>SoftDeleteUniqueIndexConvention.cs:57</code>) and by the public opt-in <code>HasSoftDeleteFilter</code>
           (<code>.../Persistence/Configuration/IndexBuilderExtensions.cs:52-66</code>), so the automatic and the manual
           path cannot disagree about identifier quoting or about which column carries the flag
-          (<code>SoftDeleteFilterSql.cs:8-14</code>). The column name is read from the model (<code>:32</code>), falling back to the
-          property name (<code>:88-90</code>), and the predicate is chosen per engine: <code>[IsDeleted] = 0</code> for SQL Server,
-          <code>&quot;IsDeleted&quot; = 0</code> for SQLite, and <code>&quot;IsDeleted&quot; = false</code> for PostgreSQL, whose flag is a real boolean
-          column that refuses an integer comparison (<code>:34-50</code>).</li>
-          <li><strong>SQL Server, PostgreSQL and SQLite are covered; Cosmos is a no-op.</strong> The convention returns immediately for
-          <code>DataSource.CosmosDB</code> (<code>SoftDeleteUniqueIndexConvention.cs:42-43</code>) and the builder returns <code>null</code>
-          for it (<code>SoftDeleteFilterSql.cs:29-30</code>), which the callers read as &quot;leave the index untouched&quot;.</li>
+          (<code>SoftDeleteFilterSql.cs:9-16</code>). The column name is read from the model, falling back to the
+          property name (<code>:72-74</code>), and <code>Build</code> hands it to the engine&#39;s <code>IDataSourceEngine.BuildSoftDeleteFilter</code>,
+          which owns the per-engine predicate: <code>[IsDeleted] = 0</code> for SQL Server
+          (<code>.../Persistence/DataSources/Engines/SQLServerDataSourceEngine.cs:117</code>), <code>&quot;IsDeleted&quot; = 0</code> for
+          SQLite (<code>SqliteDataSourceEngine.cs:115</code>), and <code>&quot;IsDeleted&quot; = false</code> for PostgreSQL
+          (<code>PostgreSQLDataSourceEngine.cs:116</code>), whose flag is a real boolean column that refuses an integer
+          comparison.</li>
+          <li><strong>SQL Server, PostgreSQL and SQLite are covered; Cosmos is a no-op.</strong> The convention returns
+          immediately for any engine whose capabilities are not relational
+          (<code>SoftDeleteUniqueIndexConvention.cs:43-44</code>), which is Cosmos, and the Cosmos engine&#39;s builder
+          returns <code>null</code> (<code>CosmosDataSourceEngine.cs:117</code>), which the callers read as &quot;leave the index
+          untouched&quot;.</li>
           <li><strong>Non-unique indexes opt in by hand.</strong> <code>HasSoftDeleteFilter</code> is the extension point for an index the
           convention deliberately skips (a non-unique one), and a unique index that wants to declare the
           combined predicate at its own declaration site uses the same call: the two are joined as
           <code>{additionalFilter} AND {filter}</code> (<code>:62-65</code>). The framework&#39;s own push-notification dedup index does
           exactly that (<code>PushNotificationConfiguration.cs:69-73</code>, quoting <code>DedupKey</code> per engine through
-          <code>SoftDeleteFilterSql.QuoteColumn</code>, <code>SoftDeleteFilterSql.cs:85-86</code>), and since the convention started appending,
+          <code>SoftDeleteFilterSql.QuoteColumn</code>, <code>SoftDeleteFilterSql.cs:69-70</code>), and since the convention started appending,
           that call is belt and braces rather than the only thing narrowing the index: it produces the same
           SQL in the same order, and the convention recognizes it and stops
-          (<code>SoftDeleteUniqueIndexConvention.cs:72-75</code>). Store&#39;s SKU index
-          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Infrastructure/Persistence/EntityConfiguration/ProductVariantConfiguration.cs:103-108</code>)
+          (<code>SoftDeleteUniqueIndexConvention.cs:73-76</code>). Store&#39;s SKU index
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Infrastructure/Persistence/EntityConfiguration/ProductVariantConfiguration.cs:104-109</code>)
           is the same shape.</li>
           </ul>
           <p>The two paths differ in one respect worth knowing: the convention runs at model finalizing, after
@@ -339,9 +346,9 @@
           index depends on (<code>PushNotificationConfiguration.cs:55-68</code>); skipping leaves that index enforcing
           uniqueness against soft-deleted rows, which is the exact defect the convention exists to remove, and
           it does so only for the indexes someone thought hard enough about to filter
-          (<code>SoftDeleteUniqueIndexConvention.cs:21-23</code>). Appending is the composition that keeps both
+          (<code>SoftDeleteUniqueIndexConvention.cs:22-24</code>). Appending is the composition that keeps both
           predicates, and idempotent recognition is what makes appending safe to run on a model that already
-          says it (<code>:23-25</code>).</li>
+          says it (<code>:24-26</code>).</li>
           <li><strong>The behavior is pinned by tests, in both directions.</strong>
           <code>MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Conventions/SoftDeleteUniqueIndexConventionTests.cs</code>
           asserts the filter is applied (<code>:31</code>), that a soft-deleted row no longer blocks re-inserting the
@@ -370,13 +377,13 @@
           unique index on a soft-deletable entity. So &quot;the framework changed your schema&quot; is true for some
           consumers and not others, and only the generated migration says which.</li>
           <li><strong>It moves that schema a second time, for the indexes it previously skipped.</strong> Because the
-          convention now appends to a hand-authored filter (<code>SoftDeleteUniqueIndexConvention.cs:79</code>), every
+          convention now appends to a hand-authored filter (<code>SoftDeleteUniqueIndexConvention.cs:80</code>), every
           pre-filtered unique index on a soft-deletable entity has a new predicate, so the next migration a
           consumer scaffolds drops and recreates it once, with the same ADR-057 override the first adoption
           needed. The one-off applies to precisely the indexes that were left un-narrowed before, which is
           also the population that was still refusing to re-create a soft-deleted record. After that migration
           the shape is stable: the recognition check makes a later model build a no-op rather than a further
-          append (<code>:72-75</code>, pinned at <code>.../Conventions/SoftDeleteUniqueIndexConventionTests.cs:108</code>).</li>
+          append (<code>:73-76</code>, pinned at <code>.../Conventions/SoftDeleteUniqueIndexConventionTests.cs:108</code>).</li>
           <li><strong>Duplicates among deleted rows become legal, permanently.</strong> Any number of soft-deleted rows may
           now share the same &quot;unique&quot; value. Two consequences follow: a report that reads with
           <code>ignoreQueryFilters: true</code> can see duplicates that the model&#39;s index name promises are impossible,
@@ -385,7 +392,7 @@
           rather than at delete time.</li>
           <li><strong>Engine coverage is partial by construction.</strong> The guarantee exists only where the provider
           supports a filtered or partial index. On Cosmos both paths return without touching the index
-          (<code>SoftDeleteUniqueIndexConvention.cs:42-43</code>, <code>SoftDeleteFilterSql.cs:29-30</code>), so a Cosmos-backed
+          (<code>SoftDeleteUniqueIndexConvention.cs:43-44</code>, <code>CosmosDataSourceEngine.cs:117</code>), so a Cosmos-backed
           source (ADR-018) does not get this behavior at all, and a model shared across engines gets a
           different uniqueness contract per engine.</li>
           <li><strong>The filter is not visible where the index is declared.</strong> Reading
@@ -409,6 +416,24 @@
           <code>IndexBuilderExtensions.cs</code> (<code>:52-66</code>, <code>:62-65</code>), <code>PushNotificationConfiguration.cs</code> (<code>:69-73</code>,
           <code>:55-68</code>), Store&#39;s <code>ProductVariantConfiguration.cs</code> (<code>:103-108</code>), and ADR-057&#39;s ADC marker citation
           (<code>057-expand-contract-schema-evolution-gate.md:90</code>).</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <p>No decision or rationale changed.</p>
+          <ul>
+          <li><code>SoftDeleteFilterSql.Build</code> is now a one-line delegation to the engine&#39;s
+          <code>IDataSourceEngine.BuildSoftDeleteFilter</code> (<code>SoftDeleteFilterSql.cs:34-35</code>); the per-engine
+          predicates live in <code>SQLServerDataSourceEngine.cs:117</code>, <code>SqliteDataSourceEngine.cs:115</code>,
+          <code>PostgreSQLDataSourceEngine.cs:116</code> and <code>CosmosDataSourceEngine.cs:117</code> (which returns <code>null</code>). The
+          predicate values are unchanged; the Decision bullet on the shared builder now says where they live.</li>
+          <li>The convention&#39;s Cosmos no-op is a capability check (<code>!DataSourceEngines.For(engine).Capabilities.IsRelational</code>,
+          <code>SoftDeleteUniqueIndexConvention.cs:43-44</code>), not a <code>DataSource.CosmosDB</code> comparison; the Decision and
+          Trade-offs bullets say so. Recognition is <code>SoftDeleteFilterSql.ContainsPredicate</code> (<code>:52-59</code>).</li>
+          <li>The 2026-10-01 revision&#39;s in-place citations had moved again (<code>ApplicationDbContext.cs</code>,
+          <code>SoftDeleteUniqueIndexConvention.cs</code>, <code>SoftDeleteFilterSql.cs</code>, Store&#39;s <code>ProductVariantConfiguration.cs</code>
+          now <code>:104-109</code>); that section stays as recorded. The PostgreSQL predicate it cites at
+          <code>SoftDeleteFilterSql.cs:34-50</code> is now <code>PostgreSQLDataSourceEngine.cs:116</code>, and the remarks naming all
+          three engines are at <code>SoftDeleteUniqueIndexConvention.cs:29-30</code>.</li>
+          <li>All live-section anchors were re-verified against current source.</li>
+          </ul>
           <h2 id="related">Related</h2>
           <p>ADR-005 (decides soft-delete over erasure and owns the query filter that hides the row, but says
           nothing about uniqueness: this ADR closes that gap), ADR-057 (the expand/contract CI gate, which
@@ -432,6 +457,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

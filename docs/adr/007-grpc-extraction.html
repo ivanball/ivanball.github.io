@@ -242,7 +242,9 @@
           <p>Accepted. Revised 2026-08-23 (the <code>[ServiceContract]</code> marker now has a dedicated fitness rule behind
           it, <code>ServiceContractPurityTestsBase</code>, subclassed in all four repos; it is a ratchet that no marked
           type triggers yet). Revised 2026-09-04: the <code>*.Contracts</code> gRPC adapter is named for what it is, the
-          module&#39;s <strong>Anti-Corruption Layer</strong>; no code changed.</p>
+          module&#39;s <strong>Anti-Corruption Layer</strong>; no code changed. Revised 2026-10-06: the <code>[ServiceContract]</code> ratchet
+          is now triggered (ADC marks six interfaces and Store four), a second fitness rule keeps their
+          implementations non-public, and the h2c, JWKS and disabled-stub bullets are narrowed to current wiring.</p>
           <h2 id="context">Context</h2>
           <p>Once modules became separate service processes, the in-process interface calls between them (e.g.
           Conference → Engagement&#39;s <code>IBookmarkCountService</code>, Engagement → Conference&#39;s
@@ -275,12 +277,25 @@
           <code>error-{i}-*</code> trailers, so the caller sees the same <code>Result</code> shape it would from an in-process call.
           Adapters whose interface returns a plain type (for example <code>Task&lt;int&gt;</code> or <code>Task&lt;IReadOnlyList&lt;T&gt;&gt;</code>)
           surface a remote failure as a thrown exception instead.</li>
-          <li><strong>HTTP/2 cleartext (h2c)</strong>: the REST services serve HTTP/2 on their cleartext endpoint so clients
-          negotiate without TLS/ALPN (a deliberate <code>SocketsHttpHandler</code> override).</li>
+          <li><strong>HTTP/2 cleartext (h2c)</strong>: every gRPC target serves HTTP/2 on a cleartext endpoint so clients
+          negotiate without TLS/ALPN (a deliberate <code>SocketsHttpHandler</code> override). That is the default endpoint
+          of an <code>Http2</code>-only service, or a dedicated <code>Http2</code>-only <code>grpc</code> endpoint on the mixed-profile services
+          (see Trade-offs).</li>
           <li><strong>Federated auth, not a shared secret</strong>: services validate forwarded JWTs against the issuer&#39;s
-          JWKS (ADR-004), discovered through the gateway.</li>
-          <li><strong>Disabled-module stubs</strong>: when a service runs with a peer module disabled, it registers a
-          <code>Disabled*</code> stub for that peer&#39;s interface, so resolution always succeeds.</li>
+          JWKS (ADR-004) through <code>AddForwardedJwtBearer</code>, which fetches OIDC discovery and the JWKS from the
+          configured authority and pins RS256
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.Authentication.cs:52</code>,
+          <code>:109</code>). Under the AppHost the authority is wired by <code>WithJwksDiscovery(identity, gateway)</code>, whose
+          gateway argument is optional (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:309-311</code>);
+          in production the bicep points the authority straight at Identity&#39;s internal cleartext URL with
+          <code>RequireHttpsMetadata=false</code>, not through the gateway (<code>MMCA.ADC/infra/main.bicep:1969</code>, <code>:1973</code>;
+          <code>MMCA.Store/infra/main.bicep:1684</code>, <code>:1689</code>).</li>
+          <li><strong>Disabled-module stubs</strong>: when a multi-module host runs with a peer module switched off,
+          <code>ModuleLoader</code> registers that module&#39;s <code>Disabled*</code> stubs so resolution always succeeds
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Modules/ModuleLoader.cs:119</code>). The extracted
+          service hosts name only their own module assembly (for example
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:213-215</code>), so peers are never
+          discovered, no stub is registered, and the gRPC adapter registration satisfies the interface.</li>
           </ul>
           <h2 id="rationale">Rationale</h2>
           <ul>
@@ -295,10 +310,23 @@
           (MMCA.Common.Testing.Architecture, rule body
           <code>ArchitectureRules.ServiceContractsDoNotDependOnServiceInternals</code>) scans every assembly the repo&#39;s
           architecture map registers and fails any marked type that depends on the producing service&#39;s
-          Domain, Application or Infrastructure. All four repos subclass it. The rule is a <strong>ratchet, not yet
-          triggered</strong>: no contract type carries the attribute today, so the test passes without asserting
-          anything, and the wire surface is currently defined by the <code>.proto</code> files alone. It bites in a repo
-          the moment its first contract type is marked.</li>
+          Domain, Application or Infrastructure. All four repos subclass it. A second rule,
+          <code>ContractImplementationTestsBase.ServiceContractImplementations_ShouldNotBe_Public</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Contracts/ContractImplementationTestsBase.cs:33</code>,
+          rule body <code>ArchitectureRules.ServiceContractImplementationsAreNotPublic</code> at
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.Contracts.cs:81</code>),
+          fails any public concrete class implementing a marked interface, with an
+          <code>AllowedPublicImplementations</code> escape hatch (<code>ContractImplementationTestsBase.cs:30</code>); all four repos
+          subclass it too. Both rules are <strong>triggered in ADC and Store</strong>, whose architecture maps register the
+          module Shared assemblies (<code>AdcArchitectureMap.cs:31</code>, <code>:39</code>, <code>:47</code>, <code>:53</code>;
+          <code>StoreArchitectureMap.cs:25</code>, <code>:33</code>, <code>:41</code>). ADC marks six interfaces
+          (<code>ISessionBookmarkValidationService.cs:10</code>, <code>IEventLiveValidationService.cs:12</code>,
+          <code>IBookmarkCountService.cs:10</code>, <code>IUserEngagementExportService.cs:13</code>, <code>IAttendeeQueryService.cs:10</code>,
+          <code>IUserNotificationExportService.cs:13</code>) and Store four (<code>IProductVariantService.cs:33</code>,
+          <code>IUserCatalogExportService.cs:19</code>, <code>IUserSalesExportService.cs:20</code>, <code>ICustomerService.cs:25</code>), all
+          with the parameterless form, so none passes a version. MMCA.Common and Helpdesk mark nothing
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/ServiceContractAttribute.cs:11</code>), so
+          there the rules stay a ratchet that passes without asserting anything.</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
@@ -307,9 +335,29 @@
           errors self-heal via the resilience pipeline.</li>
           <li><strong>h2c assumptions.</strong> Target services must serve HTTP/2 on cleartext; the Notification service runs
           <code>Http1AndHttp2</code> on its default endpoint for its SignalR WebSocket upgrade, unlike the <code>Http2</code>-only
-          REST services, and carries a second, <code>Http2</code>-only <code>grpc</code> endpoint for its gRPC ingress (ADR-012).</li>
+          REST services, and carries a second, <code>Http2</code>-only <code>grpc</code> endpoint for its gRPC ingress (ADR-012)
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:57-72</code>; <code>appsettings.json:13</code>,
+          <code>:17</code>). Store&#39;s Sales service runs the same mixed profile: its default endpoints stay <code>Http1AndHttp2</code>
+          because REST and the Stripe webhook arrive over HTTP/1.1, and a dedicated <code>Http2</code>-only <code>grpc</code>
+          endpoint serves <code>IUserSalesExportService</code>
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:64-78</code>; <code>appsettings.json:13</code>, <code>:17</code>).</li>
           <li><strong>Operational surface.</strong> gRPC adds proto tooling, service discovery, and resilience tuning to the
           deployment.</li>
+          </ul>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <ul>
+          <li>The <code>[ServiceContract]</code> purity rule is no longer an untriggered ratchet: ADC marks six interfaces
+          and Store four (including <code>ICustomerService</code>), so the rule asserts in both; Common and Helpdesk still
+          mark nothing.</li>
+          <li>Added the second fitness rule the ADR omitted, <code>ServiceContractImplementationsAreNotPublic</code> via
+          <code>ContractImplementationTestsBase</code>, subclassed in all four repos.</li>
+          <li>Federated auth: gateway-routed JWKS discovery is the AppHost wiring only; production bicep points
+          the authority directly at Identity&#39;s internal cleartext URL.</li>
+          <li>Disabled-module stubs apply to multi-module hosts with a module switched off; extracted service
+          hosts never discover peers and rely on the gRPC adapter registration.</li>
+          <li>h2c: Store Sales joins ADC Notification on the ADR-012 mixed profile (default <code>Http1AndHttp2</code> plus
+          an <code>Http2</code>-only <code>grpc</code> endpoint).</li>
+          <li>Anchors re-verified against current source.</li>
           </ul>
           
         <div class="doc-foot btn-row">
@@ -326,6 +374,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             </ul>
           </nav>
         </aside>

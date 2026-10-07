@@ -6,6 +6,8 @@ Revised 2026-09-11: verification now carries a canonical-material length guard (
 hash or salt that is not exactly `HashSize`/`SaltSize` bytes) and derives to `HashSize` rather than to
 the stored hash length. The record's decision is unchanged (one interface, one implementation, PBKDF2
 only); the Decision and Trade-offs passages describing the read path are rewritten to match.
+Revised 2026-10-01: anchor refresh only.
+Revised 2026-10-06: the app-side forwarding passage now names the seeder service-locate, and the legacy-removal search cite is narrowed to the one matching test line.
 
 ## Context
 ADR-032 recorded a hasher with two verification paths: PBKDF2-HMAC-SHA512 for new credentials, and an
@@ -37,8 +39,8 @@ path through it, in both directions.
   has the single implementation `PasswordHasher`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordHasher.cs:12`), registered
   with `TryAddSingleton`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:304`) inside the
-  `AddServices` helper (`:284`) that `AddInfrastructure` (`:56`) calls unconditionally (`:224`).
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:314`) inside the
+  `AddServices` helper (`:294`) that `AddInfrastructure` (`:57`) calls unconditionally (`:234`).
   `TryAdd` semantics keep a host's own prior registration, so the framework supplies the default
   rather than forcing it, and the type is stateless (three private `const` fields and no instance
   state, `PasswordHasher.cs:15`, `:18`, `:24`), which is what makes the singleton lifetime safe.
@@ -63,10 +65,10 @@ path through it, in both directions.
   `CryptographicOperations.FixedTimeEquals` (`PasswordHasher.cs:64`), which always reads the full
   length so verify time does not leak how many leading bytes matched.
 - **The legacy path is gone, not merely unreachable.** `LegacyHmacSaltSize`, `ComputeLegacyHash` and
-  every `HMACSHA512` usage are absent from all `Source/` code in the four repos: a workspace-wide
-  search for those three identifiers across `*.cs` matches only the test that proves the removal
-  (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Auth/PasswordHasherSecurityTests.cs:105`
-  and `:108`). `PasswordHasher.cs` is 75 lines end to end.
+  every `HMACSHA512` usage are absent from all `Source/` code in the four repos: a search of each
+  repo for those three identifiers across `*.cs` matches only the `new HMACSHA512()` in the test
+  that proves the removal
+  (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Auth/PasswordHasherSecurityTests.cs:108`). `PasswordHasher.cs` is 75 lines end to end.
 - **A test asserts the rejection rather than the acceptance.**
   `VerifyPassword_RejectsALegacyHmacDigest` (`PasswordHasherSecurityTests.cs:105-115`) builds a
   128-byte HMAC key as the salt and the matching single-round `HMACSHA512` digest (`:108-110`) and
@@ -90,11 +92,11 @@ path through it, in both directions.
   salt, `:50-54` for the correct password, `:57-61` for the wrong one), per-call salt uniqueness
   (`:30-36`) and null/empty argument guards; no legacy-format test remains in it.
 - **Every framework call site runs through the one path.** Login verification
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:194`) and
-  registration hashing (`:280`) live in the shared base (`:74`, hasher parameter at `:77`), which
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:161`) and
+  registration hashing (`:255`) live in the shared base (`:64`, hasher parameter at `:66`), which
   also equalizes timing for an unknown account by burning a verification against canonical-shaped
-  dummy material, `VerifyPassword(password, new byte[64], new byte[32])` (`:932`, in
-  `BurnPasswordVerificationCost` at `:923`): that call depends on the guard admitting exactly the
+  dummy material, `VerifyPassword(password, new byte[64], new byte[32])` (`:624`, in
+  `BurnPasswordVerificationCost` at `:615`): that call depends on the guard admitting exactly the
   64/32 shape, so the burn still costs a full derivation rather than short-circuiting;
   change-password verifies then hashes in `ChangePasswordHandlerBase<TUser, TCommand>`
   (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:42`,
@@ -104,10 +106,13 @@ path through it, in both directions.
   `:94`); and seeding hashes
   in `IdentityModuleDbSeederBase<TUser>`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Seeding/IdentityModuleDbSeederBase.cs:39`,
-  `:104`). No file under either app's `Source/` invokes the hasher: ADC and Store only declare the
-  parameter and forward it to a Common base
-  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:51,62`,
-  `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/AuthenticationService.cs:28,38`).
+  `:104`). No file under either app's `Source/` invokes the hasher: ADC and Store only obtain it and
+  forward it to a Common base, either as a constructor parameter
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:52,61`,
+  `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/AuthenticationService.cs:28,35`)
+  or, for seeding, by resolving it from the service provider before handing it to the seeder
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/IdentityModuleSeeder.cs:34`,
+  `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.API/IdentityModuleSeeder.cs:33`).
 - **The security model summary states the same rule.** `MMCA.Common/SECURITY.md:29-35` documents
   PBKDF2-SHA512 with a high iteration count and constant-time comparison as build-failing invariants
   and says outright that PBKDF2 is the only verification path with no legacy HMAC fallback (`:34-35`).
@@ -168,6 +173,17 @@ current source: the `TryAddSingleton` registration (`DependencyInjection.cs:304`
 `ChangePasswordHandlerBase.cs` (`:42`, `:44`, `:95`, `:104`); `ResetPasswordHandlerBase.cs` (`:41`,
 `:43`); and the ADC and Store `AuthenticationService.cs` parameter and forward lines (`:51,62` and
 `:28,38`), which still only forward the hasher to the Common base.
+
+## Revision (2026-10-06)
+- The legacy-removal search cite now names only the matching line
+  (`PasswordHasherSecurityTests.cs:108`, the `new HMACSHA512()`); `:105` is the test method name and
+  matches none of the three identifiers. The search is stated as per repo, since each repo has to be
+  searched on its own.
+- The app-side forwarding passage now also names the `IdentityModuleSeeder` service-locate in ADC and
+  Store (`GetRequiredService<IPasswordHasher>`), which still forwards the hasher without invoking it.
+- Anchors re-verified against current source: `DependencyInjection.cs` (`:314`, `:294`, `:57`,
+  `:234`), `AuthenticationServiceBase.cs` (`:64`, `:66`, `:161`, `:255`, `:615`, `:624`), and the ADC
+  and Store `AuthenticationService.cs` parameter and forward lines (`:52,61` and `:28,35`).
 
 ## Related
 [ADR-032](032-password-hashing.md) (the superseded record: the same hasher, its parameters and its

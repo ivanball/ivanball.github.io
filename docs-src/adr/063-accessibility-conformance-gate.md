@@ -17,7 +17,10 @@ alone), and refreshes the `E2ETestBase` helper, ADC `deploy.yml`, and Store `dep
 anchors; no decision changed. Revised 2026-09-19: all three suite counts are re-measured from source
 (ADC now 45 scans, Store now 32, the gallery seventeen assertions across eleven classes), and the two
 shell-level gallery classes the record had never listed, `ShellPagesE2ETests` and
-`MobileNavKeyboardE2ETests`, are added to the narrative; no decision changed.
+`MobileNavKeyboardE2ETests`, are added to the narrative; no decision changed. Revised 2026-10-01: citations
+re-anchored to current source; no decision changed. Revised 2026-10-06: the deploy-gate narrative now records
+the `cross-browser-freshness` gate that enforces firefox and webkit recency on both deploys, and ADC's
+`ProfileManagementTests` base is named precisely (`AdcE2ETestBase`); no decision changed.
 
 ## Context
 Accessibility was documented before it was enforced. The narrative guide
@@ -51,23 +54,24 @@ the package's own workflow bases, and wire it as a required merge check and a de
   (`:12-15`), so the gate fails only on conformance violations, never on advisories.
 - **A violation is a thrown test failure, not a report.**
   `AssertNoAccessibilityViolationsAsync(AxeRunOptions?)`
-  (`.../Testing.E2E/Infrastructure/PageExtensions.cs:307`) runs axe and, on any violation, throws
-  `AccessibilityViolationException` (`:330`; the type is
+  (`.../Testing.E2E/Infrastructure/PageExtensions.cs:316`) runs axe and, on any violation, throws
+  `AccessibilityViolationException` (`:355`; the type is
   `.../Testing.E2E/Infrastructure/AccessibilityViolationException.cs:7`) carrying each rule's impact,
-  id, help text, and the offending markup compacted to one line per node (`:320-328`), so a red gate
+  id, help text, and the offending markup compacted to one line per node (`:345-353`, the per-node
+  `CompactHtml` line at `:351`), so a red gate
   points at the element rather than at a dashboard.
 - **The package's Identity workflow bases assert it, so a consumer inherits the scan.** Four bases carry
   the assertion, so a subclass gets a login-page, register-page, profile-page, forgot-password-page, and
   reset-password-page a11y test with no test code of its own:
   `.../Testing.E2E/Workflows/Identity/UserLoginTestsBase.cs:82`,
-  `UserRegistrationTestsBase.cs:95`, `ProfileManagementTestsBase.cs:191`, and
+  `UserRegistrationTestsBase.cs:99`, `ProfileManagementTestsBase.cs:191`, and
   `PasswordResetTestsBase.cs` (class at `:17`, the two scans asserting at `:88` and `:99`, added with the
   password-recovery flow of [ADR-091](091-cache-backed-password-reset.md)) each call the assert with
   `AxeOptions.Wcag21Aa`.
 - **Consumer page scans go through two helpers that make strictness explicit.** On
-  `.../Testing.E2E/Infrastructure/E2ETestBase.cs`, `ScanAsync()` (`:365`) waits for any loading bar to
-  clear and asserts the strict options (`:368`); `ScanGridAsync()` (`:355`) additionally waits for a
-  seeded data row before scanning and asserts with the one recorded exception (`:360`). Which helper a
+  `.../Testing.E2E/Infrastructure/E2ETestBase.cs`, `ScanAsync()` (`:539`) waits for any loading bar to
+  clear and asserts the strict options (`:542`); `ScanGridAsync()` (`:529`) additionally waits for a
+  seeded data row before scanning and asserts with the one recorded exception (`:534`). Which helper a
   page uses is the declaration of which rule set applies to it.
 - **Exactly one recorded exception exists, and it is a value, not a switch.**
   `AxeOptions.Wcag21AaExceptMudPagerCombobox` (`AxeOptions.cs:35`) carries the same four WCAG tags
@@ -82,10 +86,14 @@ the package's own workflow bases, and wire it as a required merge check and a de
   `E2E_BROWSER` (`:321`), with `fail-fast: false` so each engine reports independently (`:255`). All
   three contexts block merges (`MMCA.Common/CONTRIBUTING.md:63-64`, enumerated in the branch-protection
   payload at `:198-200`).
-- **Both deployed apps gate the deploy on it.** `MMCA.ADC/.github/workflows/deploy.yml:827` and
-  `MMCA.Store/.github/workflows/deploy.yml:799` call the reusable `e2e.yml` workflow chromium-only
-  (ADC `:841`, Store `:813`) against the full Aspire stack, and the `deploy` job waits on that gate
-  (ADC `:1185`, Store `:1136`).
+- **Both deployed apps gate the deploy on it.** The `e2e-gate` jobs
+  (`MMCA.ADC/.github/workflows/deploy.yml:874`, `MMCA.Store/.github/workflows/deploy.yml:841`) call the
+  reusable `e2e.yml` workflow (ADC `:886`, Store `:853`) chromium-only (ADC `:888`, Store `:855`) against
+  the full Aspire stack, and the `deploy` job waits on that gate (ADC `:1242`, Store `:1187`). The same
+  `deploy` needs list also carries a `cross-browser-freshness` gate (ADC `:1000`, Store `:954`) that
+  launches no browser: it asserts that the scheduled firefox and webkit `e2e.yml` legs (Monday firefox,
+  Thursday webkit) each have a recent successful run, so engine coverage beyond chromium gates the deploy
+  by recency rather than per commit (ADC rationale at `:978-999`, Store at `:945-953`).
 - **The gate already owns design-token decisions.** Contrast values in the shared theme are set to
   what the scan will accept, with the ratio recorded in place: light-palette `WarningContrastText`
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Theme/MMCATheme.cs:36`, rationale at `:28-34`,
@@ -125,7 +133,7 @@ table, its current-device marker, and the per-device sign-out buttons under the 
 subclasses three of the four
 (`Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/Identity/UserLoginTests.cs:5`,
 `UserRegistrationTests.cs:5`, `PasswordResetTests.cs:5`); its `ProfileManagementTests` derives
-`E2ETestBase` directly
+the app's own `AdcE2ETestBase` wrapper rather than `ProfileManagementTestsBase`
 (`ProfileManagementTests.cs:8`) because the ADC profile page supports only password change and account
 deletion, so it does not inherit the base's profile scan. Beyond the Identity bases each app carries a
 dedicated suite: ADC's `Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/AccessibilityTests.cs:29` holds 45 page
@@ -154,7 +162,8 @@ accessibility gate today.
 - **Cross-browser where it is cheap, chromium where it is expensive.** The gallery is backend-less, so
   all three engines run there and catch the cross-engine class of defect at low cost. A full Aspire-stack
   E2E leg costs roughly twenty minutes, so the deploy path runs chromium only and leans on the gallery
-  matrix for engine coverage.
+  matrix, plus the `cross-browser-freshness` recency check over the scheduled firefox and webkit legs, for
+  engine coverage.
 - **Exceptions as distinct option values, not as suppression flags.** A second constant with a different
   name forces the caller to say which contract it is scanning under, and it keeps the exception's
   justification attached to the thing being excepted rather than buried in a config file.
@@ -166,7 +175,7 @@ accessibility gate today.
   (`AxeOptions.cs:12-15`).
 - **One accepted exception, with real blast radius.** `Wcag21AaExceptMudPagerCombobox` disables
   `aria-input-field-name` for the whole page scan, not just for the pager node. A grid page that later
-  gains a genuinely unnamed combobox of its own would pass `ScanGridAsync` (`E2ETestBase.cs:360`). The
+  gains a genuinely unnamed combobox of its own would pass `ScanGridAsync` (`E2ETestBase.cs:534`). The
   exception is documented as "use only where the sole combobox is a pager" (`AxeOptions.cs:33`), which is
   a convention the compiler cannot enforce. It is upstream-owned: it stands until MudBlazor labels the
   pager select.
@@ -174,8 +183,8 @@ accessibility gate today.
   not machine-checkable and are covered by the manual screen-reader checklist in
   [common-ACCESSIBILITY.md](../guides/common-ACCESSIBILITY.md), which is a periodic human pass, not a gate.
 - **The deploy gate is ui-scoped and may legitimately skip.** Both apps gate `e2e-gate` on a `ui` change
-  filter (ADC `deploy.yml:838`, Store `deploy.yml:810`), and `deploy` accepts `success` or `skipped` for it
-  (ADC `:1230`, Store `:1177`), so a backend-only or infra-only deploy ships without a browser scan. That
+  filter (ADC `deploy.yml:885`, Store `deploy.yml:852`), and `deploy` accepts `success` or `skipped` for it
+  (ADC `:1287`, Store `:1228`), so a backend-only or infra-only deploy ships without a browser scan. That
   is the intended cost trade (a backend change cannot alter rendered markup) with the post-deploy smoke
   gate as backstop, but it does mean "deployed" does not always mean "axe ran on this commit".
 - **Consumer breadth is hand-maintained.** Nothing forces a new page into `AccessibilityTests`, so
@@ -193,6 +202,21 @@ lines (ADC `:827`, `:838`, `:841`, `:1185`, `:1230`; Store `:799`, `:810`, `:813
 `MMCATheme.cs` contrast tokens (`:36`, `:66`, `:85`, `:93`), both `AccessibilityTests` class declarations
 (ADC `:29`, Store `:18`), and the MMCA.Helpdesk pin (`Directory.Packages.props:94`). The suite counts
 (ADC 45 scans, 13 grid and 32 strict; Store 32, 9 grid and 23 strict) are re-measured and unchanged.
+
+## Revision (2026-10-06)
+No decision or rationale changed.
+- The deploy-gate bullet and the cross-browser rationale now record the `cross-browser-freshness` gate in
+  both apps' `deploy` needs (ADC `deploy.yml:1000`, Store `deploy.yml:954`), which enforces recency of the
+  scheduled firefox and webkit E2E legs; the earlier text implied the gallery matrix was the only engine
+  coverage behind a deploy.
+- ADC's `ProfileManagementTests` is described as deriving the app's `AdcE2ETestBase` wrapper
+  (`ProfileManagementTests.cs:8`), not `E2ETestBase` literally; the substance (it does not inherit the
+  base's profile scan) is unchanged.
+- Anchors re-verified against current source: `PageExtensions.cs` (`:316`, `:355`, `:345-353`),
+  `UserRegistrationTestsBase.cs:99`, the `E2ETestBase` helpers (`ScanGridAsync` `:529`/`:534`, `ScanAsync`
+  `:539`/`:542`), and the ADC and Store `deploy.yml` gate, reusable-workflow, browser, filter, needs and
+  acceptance lines (ADC `:874`, `:886`, `:888`, `:885`, `:1242`, `:1287`; Store `:841`, `:853`, `:855`,
+  `:852`, `:1187`, `:1228`).
 
 ## Related
 ADR-015 (architecture fitness functions: the structural tier this parallels at the browser tier, and the

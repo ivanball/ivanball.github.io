@@ -45,7 +45,13 @@ narrowing grew to fifteen declarations across eleven files; MMCA.Store's `Assign
 is now `CategoryAssignParentUpdateHandler`. Every `IRepository.cs`, `EFReadRepository.cs`,
 `EFReadRepositoryDecorator.cs`, `EntityQueryService.cs`, `DependencyInjection.cs` and consumer anchor
 is re-verified, and the superseded `Expression.Invoke` entry drops its line number, which now points
-at unrelated text. See the Revision (2026-08-31) at the end).
+at unrelated text. See the Revision (2026-08-31) at the end). Revised 2026-10-01 (consumer growth
+and re-anchoring: MMCA.Store narrows a fourth holder and composes fluently at two sites, and the
+generic pipeline caps unpaginated reads; see the Revision (2026-10-01) at the end). Revised
+2026-10-06 (the And/Or/Not combinators now refuse a shaped `QuerySpecification` with an
+`ArgumentException`, so composition is criteria-only by enforcement; ADC's narrowing is restated as
+forty-four sites across twenty-seven files, one of them an API controller; see the Revision
+(2026-10-06) at the end).
 
 ## Context
 Every read an application handler performs has to come from somewhere, and the shape of that contract
@@ -53,7 +59,7 @@ decides whether the module can still be lifted into its own service later (ADR-0
 framework already keeps persistence out of Application by reference: the interfaces live in
 `Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IRepository.cs` and the EF
 implementation in
-`Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:20-22`, so no
+`Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:21-23`, so no
 Application project references EF Core. That is not enough on its own. A repository that hands back
 an `IQueryable` re-couples the caller through the back door: the query is composed inside the
 handler, translated by whatever provider sits behind the `DbSet`, and there is no way to answer that
@@ -89,12 +95,12 @@ keeps the raw `IQueryable` surfaces out of Application code.
   client-side; and `FindIncludingDeletedAsync` (`:217`), which returns the active and the
   soft-deleted matches as two collections from one read.
   `IReadRepository` composes exactly those two (`:332-333`), and `IRepository` composes read plus
-  write (`:495`). The interface documentation directs new handlers at the focused sub-interfaces and
+  write (`:497`). The interface documentation directs new handlers at the focused sub-interfaces and
   leaves existing code on the composite (`:327-328`).
 - **The raw queryables live on the composite only.** `Table`, `TableNoTracking`,
   `TableNoTrackingSingleQuery`, and `TableNoTrackingSplitQuery` are declared on `IReadRepository`
   (`IRepository.cs:338`, `:341`, `:344`, `:347`) and implemented as EF `DbSet` expressions
-  (`EFReadRepository.cs:515`, `:518`, `:521`, `:524`). They are deliberately absent from
+  (`EFReadRepository.cs:526`, `:529`, `:532`, `:535`). They are deliberately absent from
   `IEntityReader` and `IEntityQuerier`, so a handler that declares the narrow dependency cannot reach
   a queryable at all.
 - **Application code must not touch those queryables, and a fitness rule fails the build.**
@@ -121,24 +127,31 @@ keeps the raw `IQueryable` surfaces out of Application code.
   (`Source/Core/MMCA.Common.Domain/Specifications/OwnedByUserSpecification.cs:20`, `:29-30`) and is
   closed over the entity type at the call site, which is how ADC scopes an attendee to their own
   answers
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Events/EventQuestionAnswersController.cs:111`,
-  inside the `GetExportSpecification` override at `:107-112`, resolved through
-  `OwnershipHelper.GetOwnershipSpecification` at `:108`).
-- **Specifications compose.** `AndSpecification` (`Specification.cs:81`), `OrSpecification` (`:105`),
-  and `NotSpecification` (`:128`) each expose a `Criteria` that delegates to the internal
-  `SpecificationComposer` (`:146`). `Combine` (`:155`) rebinds the right operand's parameter onto the
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Events/EventQuestionAnswersController.cs:113`,
+  inside the `GetExportSpecification` override at `:109-114`, resolved through
+  `OwnershipHelper.GetOwnershipSpecification` at `:110`).
+- **Specifications compose.** `AndSpecification` (`Specification.cs:81`), `OrSpecification` (`:107`),
+  and `NotSpecification` (`:132`) each expose a `Criteria` that delegates to the internal
+  `SpecificationComposer` (`:151`). `Combine` (`:198`) rebinds the right operand's parameter onto the
   left's with an `ExpressionVisitor`, `ParameterReplacer.Replace` (`ParameterReplacer.cs:34`), and
-  joins the two bodies with `AndAlso` or `OrElse` (`Specification.cs:169-173`); `Negate` (`:181`)
-  wraps the inner body in `Expression.Not` and keeps the inner lambda's own parameter (`:189-191`).
+  joins the two bodies with `AndAlso` or `OrElse` (`Specification.cs:212-216`); `Negate` (`:224`)
+  wraps the inner body in `Expression.Not` and keeps the inner lambda's own parameter (`:231-234`).
   No `Expression.Invoke` is involved, so the composed result is a single expression tree any provider
-  can translate, and each combinator caches it in a per-instance lazy field (`:91-93`, `:115-117`,
-  `:137-138`). `InlineSpecification` (`:45`) wraps a predicate that was assembled dynamically and has
+  can translate, and each combinator caches it in a per-instance lazy field (`:90` with `??=` at
+  `:94`, `:116` with `:120`, `:139` with `:143`). Composition is **criteria-only, and enforced as
+  such**: every combinator constructor passes its operands through `SpecificationComposer.RejectShaped`
+  (`:88-89`, `:114-115`, `:138`; defined at `:165-179`), which throws `ArgumentException` when an
+  operand is a `QuerySpecification` carrying ordering, includes, paging, tracking or soft-delete scope
+  (`HasShape`, `:181-189`), because the composed specification could not forward that shape and would
+  drop it silently. An unshaped `QuerySpecification` composes like any other, and the check applies
+  equally to the fluent `.And()` / `.Or()` / `.Not()`, which construct the same classes.
+  `InlineSpecification` (`:45`) wraps a predicate that was assembled dynamically and has
   no hand-written class. Composition is used in production: ADC's paged session read ANDs the
   public-session specification with the speaker-scoped one rather than substituting, because dropping
   the public filter would leak non-accepted sessions to non-privileged callers
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionsController.cs:105`,
-  `:127`, rationale at `:100-102`). Every composing call site writes the fluent form, three in
-  MMCA.ADC, for example `publicSpecification.And(...)` (`SessionsController.cs:127`), and two in
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionsController.cs:113`,
+  `:135`, rationale at `:108-110`). Every composing call site writes the fluent form, three in
+  MMCA.ADC, for example `publicSpecification.And(...)` (`SessionsController.cs:135`), and two in
   MMCA.Store
   (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ReviewsController.cs:106`,
   `MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Reviews/DomainEventHandlers/ProductReviewChangedHandler.cs:111`),
@@ -179,7 +192,10 @@ layer and bookmark aggregations, the Identity user-list projection, the Identity
 (`MMCA.ADC/.../RawQueryableConventionTests.cs:33-58`).
 
 The interface split is shipped and, since 2026-08-21, consumed. MMCA.ADC declares the narrow
-interfaces at forty read-only sites across twenty-three Application files: helper parameters narrowed to
+interfaces at forty-four read-only sites across twenty-seven files, twenty-six of them Application
+files plus one API controller local
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs:142`):
+helper parameters narrowed to
 `IEntityReader` where the helper only looks up or checks existence (for example
 `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/Validation/SessionRoomScheduling.cs:45`)
 or to `IEntityQuerier` where it projects or counts (for example
@@ -190,10 +206,10 @@ and locals typed to the querier where a visibility helper reads through the unit
 `:75`, `:126`, `:151`). MMCA.Store ships the same narrowing at four read-only holders: two
 by-id/existence service fields
 (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Customers/CustomerService.cs:14`,
-and `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/AuthenticationService.cs:54`,
-assigned from `GetReadRepository` at `:55`),
+and `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/AuthenticationService.cs:49`,
+assigned from `GetReadRepository` at `:50`),
 a handler parameter narrowed to `IEntityReader`
-(`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Categories/UseCases/AssignParentCategory/CategoryAssignParentUpdateHandler.cs:98`),
+(`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Categories/UseCases/AssignParentCategory/CategoryAssignParentUpdateHandler.cs:120`),
 and a querier parameter on the customer-provisioning handler's `LogCollisionAsync` helper
 (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/DomainEventHandlers/UserRegisteredHandler.cs:131`);
 `ProductVariantService`
@@ -210,7 +226,7 @@ What has not changed is the wiring, and that is deliberate. `IUnitOfWork` hands 
 composites (`IRepository` at
 `Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IUnitOfWork.cs:19`, `IReadRepository`
 at `:29`), and the container registers only the open generic `IRepository<,>`
-(`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:122`). Every narrowed holder is
+(`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:128`). Every narrowed holder is
 assigned from `IUnitOfWork.GetReadRepository<,>()` (or `GetRepository<,>()` where the same handler
 also writes) and narrows by an implicit reference conversion at the assignment, because
 `IReadRepository` derives from both narrow interfaces (`IRepository.cs:332-333`). Nothing
@@ -233,7 +249,7 @@ three consumer applications, sitting on an unchanged registration surface
   in a query and compiled in memory by `IsSatisfiedBy` (`Specification.cs:9-11`, `:32`), so an
   authorization predicate can be asserted in a domain test with no database at all.
 - **Composability keeps filters additive.** ANDing an authorization scope onto a business filter is a
-  single-expression construction (`SessionsController.cs:125-127`) instead of a second hand-written query path,
+  single-expression construction (`SessionsController.cs:133-135`) instead of a second hand-written query path,
   which is what makes "never substitute the public filter" a cheap rule to follow.
 - **A textual scan was chosen deliberately over IL analysis.** NetArchTest and reflection cannot see
   member usage inside method bodies, and the testing package carries no IL or Roslyn dependency on
@@ -592,3 +608,37 @@ project-last at `EntityQueryPipeline.cs:102-106`, tie-break passed at `:86`, `:1
 `KeysetQueryBuilder` ordering at `:62`, `:77`, `:80-81` and its `NotSupportedException` at `:305`,
 `GetPageByCursorAsync` at `EFReadRepository.cs:621` with `Error.InvalidEntityField` at `:631` and
 `Error.InvalidCursor` at `:649`, and `SpeakersController.cs:165`.
+
+## Revision (2026-10-06)
+No decision changed; one enforcement rule landed and the consumer count moved.
+
+- **Composition is now criteria-only by enforcement.** `SpecificationComposer.RejectShaped`
+  (`MMCA.Common/Source/Core/MMCA.Common.Domain/Specifications/Specification.cs:165-179`, with
+  `HasShape` at `:181-189`) runs in every combinator constructor (`:88-89`, `:114-115`, `:138`) and
+  throws `ArgumentException` for a `QuerySpecification` operand that carries ordering, includes,
+  paging, tracking or soft-delete scope. The Revision (2026-08-18) statement that an explicit
+  `new AndSpecification<...>(a, b)` "keeps working unchanged" therefore holds only for unshaped
+  operands; the same applies to the fluent `.And()` / `.Or()` / `.Not()`. The Decision's composition
+  bullet now states the rule.
+- **ADC's narrowing is restated.** The Revision (2026-10-01) count of forty sites across twenty-three
+  Application files is now forty-four across twenty-seven files, and one of them is no longer an
+  Application file: an API controller local at `SessionSelectionController.cs:142`. The Decision
+  paragraph is restated to that.
+- **Current locations for anchors recorded only in earlier Revisions:** `SpecificationComposer` at
+  `Specification.cs:151`, `Combine` `:198`, the join `:212-216`, `Negate` `:224` (parameter kept
+  `:231-234`), lazy fields `:90`/`:94`, `:116`/`:120`, `:139`/`:143`; `SpecificationExtensions`
+  class `:36`, extension block `:38`, `And` `:54`, `Or` `:74`, `Not` `:91`; `QuerySpecification`
+  class `:43`, `OrderBy` `:59`, `IncludePaths` `:65`, `Skip` / `Take` `:68` / `:71`, `AsTracking`
+  `:77`, `IgnoreQueryFilters` `:87`, `AddOrderBy` `:95`, `AddInclude` `:107`, `ApplyPaging` `:122`,
+  `WithTracking` `:132`, `WithSoftDeleted` `:138`, `OrderExpression` `:155`; the specification-first
+  reads in `IRepository.cs` at `:245` (`CountAsync`), `:262` / `:281` (`ListAsync`), `:293`
+  (`AnyAsync`), `:318` (`GetPageByCursorAsync`), implemented in `EFReadRepository.cs` at `:448`,
+  `:587`, `:600`, `:618` and `:632`, with `Error.InvalidEntityField` at `:642` and
+  `Error.InvalidCursor` at `:660`; the projector guard `CanProject` at `EntityQueryService.cs:541-544`,
+  called at `:339` with `ExecuteProjectedAsync` at `:343-344`, the list overload at `:262`
+  delegating to `:283`; `UnitOfWork` at `UnitOfWork.cs:20`, its per-scope `_repositories` cache
+  `:34`, `GetRepository` `:48-61` and `GetReadRepository` `:68-81`; `SpeakersController.cs:186`.
+- Every anchor in the current-state sections (Context, Decision, Rationale) was re-verified against
+  current source; `EFReadRepository.cs`, `IRepository.cs`, `Specification.cs`,
+  `DependencyInjection.cs`, `SessionsController.cs`, `EventQuestionAnswersController.cs`,
+  `AuthenticationService.cs` and `CategoryAssignParentUpdateHandler.cs` citations moved.

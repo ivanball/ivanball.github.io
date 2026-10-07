@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-030: Each Service Self-Applies Its Migrations at Startup (Sole Migrator) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-06-27).">
+  <meta name="description" content="Accepted (2026-06-27). Revised 2026-08-07: the sole migrator also runs the module seeders on every boot. Revised 2026-10-01: PostgreSQL and tenant…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/030-startup-sole-migrator.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-030: Each Service Self-Applies Its Migrations at Startup (Sole Migrator)">
-  <meta property="og:description" content="Accepted (2026-06-27).">
+  <meta property="og:description" content="Accepted (2026-06-27). Revised 2026-08-07: the sole migrator also runs the module seeders on every boot. Revised 2026-10-01: PostgreSQL and tenant…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/030-startup-sole-migrator.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-030: Each Service Self-Applies Its Migrations at Startup (Sole Migrator)">
-  <meta name="twitter:description" content="Accepted (2026-06-27).">
+  <meta name="twitter:description" content="Accepted (2026-06-27). Revised 2026-08-07: the sole migrator also runs the module seeders on every boot. Revised 2026-10-01: PostgreSQL and tenant…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)","item":"https://ivanball.github.io/docs/adr/030-startup-sole-migrator.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
@@ -239,7 +239,10 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-030-each-service-self-applies-its-migrations-at-startup-sole-migrator">ADR-030: Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-06-27).</p>
+          <p>Accepted (2026-06-27). Revised 2026-08-07: the sole migrator also runs the module seeders on every
+          boot. Revised 2026-10-01: PostgreSQL and tenant copies join the migrationless <code>EnsureCreated</code> path.
+          Revised 2026-10-06: seeding runs on the default scope only, after a tenant-database pass, and the
+          startup path consults the environment for the build-time OpenAPI skip.</p>
           <h2 id="context">Context</h2>
           <p>Under database-per-service (ADR-006), each service owns its own database and its own migrations project,
           so <em>something</em> must apply pending migrations on every deploy. The framework&#39;s
@@ -253,11 +256,11 @@
           </ul>
           <p>Any other value is a configuration mistake and stops startup before a single source is created
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:57</code>, the
-          check itself at <code>:229-236</code>, its message at <code>:241-242</code>). The setting governs migrations only: a source no
+          check itself at <code>:231-238</code>, its message at <code>:243-244</code>). The setting governs migrations only: a source no
           migrations pipeline owns (Cosmos, or PostgreSQL or SQLite with no migrations assembly declared) is
           created with EF&#39;s <code>EnsureCreated</code> ahead of the strategy switch, because it has no migration to apply and
-          nothing else would ever create it (<code>:70-98</code>); a tenant&#39;s own copy of such a source is created the same
-          way under either strategy (<code>&quot;Migrate&quot;</code> at <code>:199-211</code>, <code>&quot;None&quot;</code> at <code>:249-263</code>).</p>
+          nothing else would ever create it (<code>:70-100</code>); a tenant&#39;s own copy of such a source is created the same
+          way under either strategy (<code>&quot;Migrate&quot;</code> at <code>:203-213</code>, <code>&quot;None&quot;</code> at <code>:251-265</code>).</p>
           <p>The framework&#39;s own comments mark <code>&quot;None&quot;</code> as the production strategy and <code>&quot;Migrate&quot;</code> as dev/test. Both
           production apps deliberately diverge from that recommendation, and the divergence was bought with an
           incident, so it deserves to be recorded.</p>
@@ -267,8 +270,8 @@
           at startup, before the new revision serves traffic. There is deliberately <strong>no</strong> separate deploy-step
           migration (no <code>sqlcmd</code> / <code>dotnet ef database update</code> apply in <code>deploy.yml</code>).</p>
           <ul>
-          <li><strong>Set in prod for every service.</strong> <code>MMCA.Store/infra/main.bicep:1521,1687,1819</code> (Identity/Catalog/Sales)
-          and <code>MMCA.ADC/infra/main.bicep:1715,1935,2069,2221</code> (Identity/Conference/Engagement/Notification) all set
+          <li><strong>Set in prod for every service.</strong> <code>MMCA.Store/infra/main.bicep:1521,1690,1825</code> (Identity/Catalog/Sales)
+          and <code>MMCA.ADC/infra/main.bicep:1742,1974,2108,2260</code> (Identity/Conference/Engagement/Notification) all set
           <code>DatabaseInitStrategy = &#39;Migrate&#39;</code>.</li>
           <li><strong>One applier per revision.</strong> Each service runs <code>minReplicas: 1</code>, so the startup <code>MigrateAsync</code> is not
           racing sibling replicas of the same revision. (Since the 2026-07-19 outbox lease revision, ADR-003,
@@ -276,13 +279,13 @@
           is scale-out safe by construction, so above one replica the setting is a cost/migration choice.)</li>
           <li><strong>No deploy-step backstop, on purpose.</strong> Both <code>deploy.yml</code> files carry an explicit comment that there
           is <em>no external <code>sqlcmd</code> migration backstop</em> and that each service is the <strong>sole migrator</strong>
-          (<code>MMCA.Store/.github/workflows/deploy.yml:1366-1374</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:1475-1484</code>). The
+          (<code>MMCA.Store/.github/workflows/deploy.yml:1421-1429</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:1549-1559</code>). The
           <code>sqlcmd</code> that <em>is</em> installed in the pipeline is a connectivity/readiness probe, not a migration apply.</li>
           <li><strong>Build-time drift gate, not a runtime apply.</strong> CI runs
-          <code>dotnet ef migrations has-pending-model-changes</code> (Store <code>deploy.yml:421</code>, ADC <code>deploy.yml:440</code>) so a
+          <code>dotnet ef migrations has-pending-model-changes</code> (Store <code>deploy.yml:424</code>, ADC <code>deploy.yml:445</code>) so a
           model that has drifted from its migrations fails the build, but that gate only <em>detects</em>; it never
           applies anything. The container does the applying. The gate sits in <code>build-and-test</code>, which runs on
-          pull requests only (Store <code>deploy.yml:257</code>, ADC <code>deploy.yml:225</code>), so a deploy dispatched by hand does
+          pull requests only (Store <code>deploy.yml:260</code>, ADC <code>deploy.yml:225</code>), so a deploy dispatched by hand does
           not re-run it.</li>
           <li><strong>This overrides the framework&#39;s documented &quot;None for production&quot; recommendation</strong>, accepting
           auto-migrate-on-boot in prod as the price of one fewer moving part.</li>
@@ -307,7 +310,7 @@
           migration would ship itself on the next deploy. The apps accept this; the build-time model-drift gate
           is the compensating control, together with the expand/contract migration guard, which fails a pull
           request adding a migration that contains <code>DropColumn</code>/<code>DropTable</code>/<code>DropIndex</code> unless it carries an
-          <code>EXPAND-CONTRACT-OVERRIDE</code> marker (Store <code>deploy.yml:427-472</code>, ADC <code>deploy.yml:234-276</code>), and the
+          <code>EXPAND-CONTRACT-OVERRIDE</code> marker (Store <code>deploy.yml:430-481</code>, ADC <code>deploy.yml:234-282</code>), and the
           per-service blast radius bounds the damage.</li>
           <li><strong>A failed startup migration fails the new revision.</strong> ACA keeps traffic on the previous revision
           (readiness gating, ADR-025), but a <em>half-applied</em> migration still needs manual recovery: there is no
@@ -385,6 +388,35 @@
           2026-08-07 revision describes is now reached through <code>InitializeDatabaseUnlessDesignTimeAsync</code>, which
           skips initialization and seeding only for build-time OpenAPI generation in Development (<code>:144-160</code>);
           production still migrates and re-seeds on every boot.</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <p>No decision changed; every service still migrates and seeds itself at startup. Corrections to the
+          2026-08-07 revision, whose text stays as recorded:</p>
+          <ul>
+          <li><strong>Seeding is default-scope only, after a tenant pass.</strong> <code>InitializeDatabaseAsync</code> now runs a
+          tenant-database pass after the strategy switch and before seeding, and <code>SeedAllAsync</code> runs on the
+          default scope only, never per tenant
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:117-124</code>,
+          switch at <code>:105-115</code>). It still sits outside the switch, so <code>&quot;None&quot;</code> still seeds.</li>
+          <li><strong>The environment is consulted once, at the host entry point.</strong> The hosts now call
+          <code>app.InitializeDatabaseUnlessDesignTimeAsync(moduleHost)</code> (<code>:146-162</code>), which checks
+          <code>IsDevelopment()</code> together with the OpenAPI design-time switch (<code>:153</code>); outside that build-time
+          run the path is environment-independent, so production still re-seeds every revision. The call
+          follows <code>builder.Build()</code> after a few lines rather than immediately (ADC Identity
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:353</code>, Conference <code>:443</code>,
+          Engagement <code>:321</code>, Notification <code>:266</code>; Store Identity
+          <code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:296</code>, Catalog <code>:317</code>, Sales <code>:296</code>).</li>
+          <li><strong>Seeder probes now key on a stable identity first.</strong> <code>ConferenceModuleDbSeeder</code> checks the
+          Sessionize code or a fixed key before the (pre-rename) name, with <code>ignoreQueryFilters: true</code> so a
+          soft-deleted seed row counts as present
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/DbContexts/Seeding/ConferenceModuleDbSeeder.cs:80-97</code>).
+          Not every step opens with <code>ExistsAsync</code>: the sample-data <code>SeedSampleEventLinksAsync</code> (<code>:319</code>) does not.</li>
+          <li><code>ModuleLoader.SeedAllAsync</code> is now at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/Modules/ModuleLoader.cs:266-272</code>; a disabled module
+          skips at <code>:123</code>, before its seeder is added (<code>:129-132</code>).</li>
+          <li>Anchors in Context, Decision and Trade-offs were re-verified against current source and refreshed
+          (strategy check, migrationless and tenant paths, both <code>main.bicep</code> setting lines, both <code>deploy.yml</code>
+          sole-migrator comments, drift-gate and expand/contract steps).</li>
+          </ul>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -403,6 +435,7 @@
             <li><a href="#related">Related</a></li>
             <li><a href="#revision-2026-08-07">Revision (2026-08-07)</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             </ul>
           </nav>
         </aside>

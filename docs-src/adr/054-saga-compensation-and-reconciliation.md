@@ -61,21 +61,21 @@ saga-timeout backstop for steps that depend on an external system.
 
 - **Compensation is a domain-event handler, and the one exception has to run before the commit.**
   `CancelOrderHandler` performs the guarded transition and saves
-  (`.../Orders/UseCases/Cancel/CancelOrderHandler.cs:55-67`), and owns exactly one compensating
+  (`.../Orders/UseCases/Cancel/CancelOrderHandler.cs:60-81`, the transition at `:80`), and owns exactly one compensating
   action itself: retiring the payment provider's checkout session
-  (`CancelOrderHandler.cs:60`, `RetirePaymentSessionAsync` at `CancelOrderHandler.cs:90-126`). That
+  (`CancelOrderHandler.cs:74`, `RetirePaymentSessionAsync` at `CancelOrderHandler.cs:104-140`). That
   call runs only for an order still in `PaymentInitiated` with a session id
-  (`CancelOrderHandler.cs:92-95`); it goes through the shared `PaymentSessionRetirement.RetireAsync`
-  (`CancelOrderHandler.cs:102-103`), which reads the session's authoritative status, expires the
+  (`CancelOrderHandler.cs:106-109`); it goes through the shared `PaymentSessionRetirement.RetireAsync`
+  (`CancelOrderHandler.cs:116-117`), which reads the session's authoritative status, expires the
   hosted page, and re-reads the status when the expire fails
   (`.../Orders/PaymentSessionRetirement.cs:49-85`; the same helper serves
-  `.../UseCases/Pay/PayOrderHandler.cs:55`). When either read finds the session already paid, the
+  `.../UseCases/Pay/PayOrderHandler.cs:69`). When either read finds the session already paid, the
   handler **refuses the cancellation** with
   `OrderCancellationErrorCodes.PaymentAlreadyCompleted` instead of transitioning
-  (`CancelOrderHandler.cs:110-118`, the code at `.../Cancel/OrderCancellationErrorCodes.cs:18`), so
+  (`CancelOrderHandler.cs:124-132`, the code at `.../Cancel/OrderCancellationErrorCodes.cs:18`), so
   a paid order is left alone for a refund. Every other outcome (already expired, session gone,
   provider unreachable) is a Warning and the cancellation proceeds, the hosted page having been
-  expired best-effort inside the helper (`CancelOrderHandler.cs:105-108` and `:120-123`). It sits in the command rather than a
+  expired best-effort inside the helper (`CancelOrderHandler.cs:119-122` and `:134-137`). It sits in the command rather than a
   saga step because a saga step runs *after* the commit and could only discover the money once the
   order was already `Cancelled` and a manual refund was the only remedy left. Everything that
   compensates after the fact is still its own handler: restoring stock is
@@ -109,13 +109,13 @@ saga-timeout backstop for steps that depend on an external system.
   `IInventoryAllocationService.IncrementAsync` (`OrderCancelledSagaHandler.cs:141-156`), a relative
   atomic `ExecuteUpdate` (`.../Infrastructure/Inventory/InventoryAllocationService.cs:97,127`). A failed
   `Result` from the delegate rolls the whole unit back, marker included
-  (`MMCA.Common/.../DbContexts/Factory/DbContextFactory.cs:644-650`). Same database, one transaction: the marker
+  (`MMCA.Common/.../DbContexts/Factory/DbContextFactory.cs:615-621`). Same database, one transaction: the marker
   cannot exist without the writes it guards, and the writes cannot land unmarked.
 - **Redelivery is the retry mechanism.** A failing in-process handler leaves its outbox row
   unprocessed (`MMCA.Common/.../Interceptors/DomainEventSaveChangesInterceptor.cs:332-360`, the catch at
   `:346-354`) and the `OutboxProcessor` re-dispatches the pure domain event on a later cycle
-  (`MMCA.Common/.../Outbox/Processing/OutboxProcessor.cs:559-560`), with the bounded retries, backoff and
-  dead-lettering ADR-003 already defines (`OutboxProcessor.cs:587-599,623-633,661-683`). The framework packages that failure mode and only that
+  (`MMCA.Common/.../Outbox/Processing/OutboxProcessor.cs:556-557`), with the bounded retries, backoff and
+  dead-lettering ADR-003 already defines (`OutboxProcessor.cs:586-596,620-634,662-679`). The framework packages that failure mode and only that
   one: `SafeDomainEventHandler<TDomainEvent>` runs the subclass inside an exception filter whose
   `LogAndRethrow` writes one error line and always returns `false`, so the exception keeps
   propagating, with `OperationCanceledException` excluded because a host shutdown is not a delivery
@@ -168,7 +168,7 @@ saga-timeout backstop for steps that depend on an external system.
   `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:97-102`).
 - **The sweep gets no private path into the aggregate, and loses races on purpose.** It calls the same
   guarded transitions as the webhook handler
-  (`.../Orders/UseCases/ProcessPaymentWebhook/ProcessPaymentWebhookHandler.cs:109,174`) and the
+  (`.../Orders/UseCases/ProcessPaymentWebhook/ProcessPaymentWebhookHandler.cs:110,175`) and the
   client-initiated check (`.../Orders/UseCases/VerifyPayment/VerifyPaymentHandler.cs:72`). Both passes
   reload each order tracked in its own scope and re-check the status under the fresh load
   (`PaymentReconciliationService.cs:311-315` for reconciliation,
@@ -181,7 +181,7 @@ MMCA.Common ships it as an abstract base class, `PeriodicBackgroundService`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Hosting/Background/PeriodicBackgroundService.cs:20-50`),
 whose `ExecuteAsync` owns the enablement gate, the startup delay, the per-cycle `try`/`catch` that
 never kills the loop, and every wait through `TimeProvider`
-(`PeriodicBackgroundService.cs:53-94`). `PaymentReconciliationService` derives from it
+(`PeriodicBackgroundService.cs:53-95`). `PaymentReconciliationService` derives from it
 (`PaymentReconciliationService.cs:75`) and overrides only the three parts that are its own:
 `Interval`, read from configuration (`PaymentReconciliationService.cs:82`); `IsEnabled`, which
 distinguishes "the toggle is off" from "Stripe is not configured" before refusing to run
@@ -189,9 +189,9 @@ distinguishes "the toggle is off" from "Stripe is not configured" before refusin
 internally visible `ReconcileOnceAsync` so one cycle is testable without the timer
 (`PaymentReconciliationService.cs:111-112`). It is the base class's **only** subclass outside
 MMCA.Common. Inside the framework the base also carries Common's own periodic jobs
-(`.../Persistence/Outbox/Administration/OutboxCleanupService.cs:54`,
+(`.../Persistence/Outbox/Administration/OutboxCleanupService.cs:49`,
 `.../Persistence/Auth/RefreshSessionCleanupService.cs:53`,
-`.../Persistence/InternalCommands/Administration/InternalCommandCleanupService.cs:52`,
+`.../Persistence/InternalCommands/Administration/InternalCommandCleanupService.cs:46`,
 `.../Persistence/Auth/PermissionGrantRefreshService.cs:36`) and the test double in its own unit tests
 (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Scheduling/PeriodicBackgroundServiceTests.cs:104`).
 
@@ -206,7 +206,7 @@ and `:126-133`, the schedule at `:178-195`, the command at
 `.../SessionAssets/UseCases/DeleteSessionAssetBlob/DeleteSessionAssetBlobInternalCommand.cs:28-29`).
 The second is the avatar upload: when an avatar's bytes are in storage but the user row does not
 follow, `SetUserAvatarHandler` schedules the durable `DeleteAvatarBlob` internal command for the
-orphaned blob (`SetUserAvatarHandler.cs:80` and `:87` in
+orphaned blob (`SetUserAvatarHandler.cs:80` and `:87`, the schedule at `:187`, in
 `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases`), recorded in
 [ADR-045](045-managed-file-storage-and-avatars.md). Those behaviours are recorded in
 [ADR-123](123-speaker-session-assets.md) and ADR-045 and ride ADR-114's queue, not
@@ -269,7 +269,7 @@ is the framework's stated answer to cross-boundary consistency, not because it i
   `OrderCancelledSagaHandler.cs:174`). A refused `MarkInventoryRestored` ends the same way
   (`OrderCancelledSagaHandler.cs:130-135`). A failed `IncrementAsync` after the marker save also
   returns a failed `Result` with a Warning (`OrderCancelledSagaHandler.cs:148-155`), which rolls the
-  marker back with the transaction (`DbContextFactory.cs:644-650`). All three are returns, not throws:
+  marker back with the transaction (`DbContextFactory.cs:615-621`). All three are returns, not throws:
   the handler discards the transaction's `Result` (`OrderCancelledSagaHandler.cs:55`), so the event
   counts as handled and its outbox row is marked processed. Nothing redelivers it, and that order's
   stock stays unrestored until someone acts on the Warning.
@@ -286,7 +286,7 @@ is the framework's stated answer to cross-boundary consistency, not because it i
   swallow its failures itself.
 - **The sweep is not replica-leased.** The outbox processor claims rows with a lease before working
   them (ADR-003); the sweep takes no such claim, so at the configured `maxReplicas: 2`
-  (`MMCA.Store/infra/main.bicep:1850`, the `salesApp` scale block) two replicas can pick the same stuck order and each spend a
+  (`MMCA.Store/infra/main.bicep:1860`, the `salesApp` scale block) two replicas can pick the same stuck order and each spend a
   Stripe status call. Correctness holds through the concurrency token; the duplicated external call
   does not deduplicate.
 - **Every compensating action needs its own marker.** There is no generic mechanism: the ADR-021
@@ -401,6 +401,23 @@ is re-anchored (`CheckOutHandler`, `OrderCancelledSagaHandler`, `CancelOrderHand
 `PaymentReconciliationService`, `appsettings.json`, `ProcessPaymentWebhookHandler`,
 `VerifyPaymentHandler`, `DomainEventSaveChangesInterceptor`, `OutboxProcessor`, `ApplicationDbContext`,
 `maxReplicas`, `UploadSessionAssetHandler`).
+
+## Revision (2026-10-06)
+
+No behaviour changed; this pass only re-anchors.
+
+- Current-state citations moved for `CancelOrderHandler` (`MutateAsync` now `:60-81`, retirement
+  `:104-140`), `PayOrderHandler` (`:69`), `ProcessPaymentWebhookHandler` (`:110,175`),
+  `DbContextFactory` (the failed-`Result` rollback now `:615-621`), `OutboxProcessor`,
+  `PeriodicBackgroundService`, `OutboxCleanupService`, `InternalCommandCleanupService` and
+  `maxReplicas` (`main.bicep:1860`); the avatar orphan delete also cites its schedule
+  (`SetUserAvatarHandler.cs:187`).
+- Facts the earlier Revisions record that still hold, at their current locations: the enrolled
+  internal-command rows are flushed before commit by `FlushEnrolledCommandsBeforeCommitAsync`
+  (called at `DbContextFactory.cs:625`, defined at `:681-707`); `UnpaidOrderExpirySettings` is bound
+  and validated on start at `SalesModule.cs:61-64`, `PaymentReconciliationSettings` at `:66-69`, and
+  `PaymentReconciliationSettingsValidator` is registered at `:74`.
+- Every other citation in the current-state sections was re-verified against current source.
 
 ## Related
 ADR-003 (the outbox delivery and retry this leans on for compensation redelivery; this record says

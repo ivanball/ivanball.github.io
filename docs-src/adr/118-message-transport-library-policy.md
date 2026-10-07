@@ -15,8 +15,8 @@ decision and the replacement order are unchanged.
 
 ## Context
 MassTransit is the only message-broker library in this workspace, and it is pinned to 8.5.11 across
-all three of its packages (`MMCA.Common/Directory.Packages.props:128-130`, the pin comment at
-`:123-127`). Two consumers declare a
+all three of its packages (`MMCA.Common/Directory.Packages.props:124-126`, the pin comment at
+`:119-123`). Two consumers declare a
 `MassTransit.Azure.ServiceBus.Core` entry of their own at the same 8.5.11 patch for their Service Bus
 emulator test tier (`MMCA.ADC/Directory.Packages.props:65`,
 `MMCA.Store/Directory.Packages.props:93`), so the workspace carries five pinned MassTransit entries,
@@ -47,9 +47,9 @@ are not MassTransit's:
 
 - **The outbox is ours.** `OutboxMessage`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs`) is a
-  plain EF entity holding the serialized `Payload` (`:41`) keyed by `EventType` (`:38`), with the
-  claim lease (`LockedUntil` `:58`, `LockToken` `:65`), the retry counter (`:50`), the propagated
-  `TraceId` / `SpanId` (`:71`, `:74`) and the optional `OrderingKey` (`:86`). None of those columns
+  plain EF entity holding the serialized `Payload` (`:43`) keyed by `EventType` (`:40`), with the
+  claim lease (`LockedUntil` `:60`, `LockToken` `:67`), the retry counter (`:52`), the propagated
+  `TraceId` / `SpanId` (`:73`, `:76`) and the optional `OrderingKey` (`:88`). None of those columns
   is a broker concept ([ADR-003](003-outbox-dual-dispatch.md)).
 - **The inbox is ours.** `IInboxStore` (`.../Persistence/Inbox/IInboxStore.cs:16`), `InboxMessage`
   (keyed on `MessageId`, `.../Persistence/Inbox/InboxMessage.cs:14`) and `EfInboxStore` dedup
@@ -59,8 +59,9 @@ are not MassTransit's:
   is the broker's.
 - **The publish and consume leg is the only part MassTransit owns.** `OutboxProcessor` resolves
   `IMessageBus` from the per-row scope
-  (`.../Persistence/Outbox/Processing/OutboxProcessor.cs:545`) and publishes every integration event
-  through it (`:551-555`), and only the broker hop is wrapped in the circuit breaker (`:547-550`)
+  (`.../Persistence/Outbox/Processing/OutboxProcessor.cs:542`) and publishes every integration event
+  through it (`PublishAsync` at `:550`), and only the broker hop is wrapped in the circuit breaker
+  (`:548-552`, the comment saying so at `:544-547`)
   ([ADR-087](087-broker-poison-message-handling.md)).
 
 The abstractions that stand between application code and the library are already in place and are
@@ -125,7 +126,7 @@ so the pin is a dated decision rather than an open-ended hold.**
      decision 2 already owns that layer.
    - **Second: a raw-SDK adapter.** `RabbitMQ.Client` plus `Azure.Messaging.ServiceBus`, the latter
      already pinned at 7.21.0 for the Service Bus emulator test tier
-     (`MMCA.Common/Directory.Packages.props:135`; the comment at `:131-134` names 7.20.2 as the first
+     (`MMCA.Common/Directory.Packages.props:131`; the comment at `:127-130` names 7.20.2 as the first
      line with working emulator admin-plane support). This is the floor option: no third-party
      abstraction at all, at the cost of hand-writing consumer dispatch, retry and delayed redelivery.
 
@@ -139,14 +140,14 @@ so the pin is a dated decision rather than an open-ended hold.**
 
 6. **A trial ships beside the incumbent.** The trial point is an additive arm in the
    `MessageBusProvider` switch inside `ConfigureBrokerTransport`
-   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:258`, the
-   switch at `:263`, beside the RabbitMQ arm at `:265` and the Azure Service Bus arm at `:296`), so a candidate is exercised by
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:264`, the
+   switch at `:269`, beside the RabbitMQ arm at `:271` and the Azure Service Bus arm at `:302`), so a candidate is exercised by
    configuration without removing anything, and ADC's nightly Service Bus emulator smoke is where it
    runs first. That job is authoritative rather than advisory: it has carried no `continue-on-error`
    since 2026-08-31 (TD-17), and `deploy.yml`'s cross-service-freshness gate requires it to have
    concluded success alongside the `cross-service` job in the same qualifying nightly
    (`MMCA.ADC/.github/workflows/cross-service-tests.yml:159`, the gating rationale at `:132-143`;
-   the gate's `required-jobs` at `MMCA.ADC/.github/workflows/deploy.yml:923-926`), so
+   the gate's `required-jobs` at `MMCA.ADC/.github/workflows/deploy.yml:970-972`), so
    a candidate arm that regresses Service Bus topology or the AMQP round-trip blocks the next deploy.
 
 ## Rationale
@@ -197,6 +198,15 @@ NuGet is still excluded. The transport fitness rule checks Domain, Application a
 transport configuration moved to `DependencyInjection.Messaging.cs` (`:258`), which is also the ninth
 `using MassTransit` file in place of `DependencyInjection.cs`; the count of nine is unchanged. The
 `OutboxProcessor`, `BrokerMessageBus` and ADC workflow citations are re-anchored.
+
+## Revision (2026-10-06)
+No decision, trigger, replacement order or rationale changed, and no fact changed: every corrected
+item is a moved line. The 2026-10-01 anchors above now sit at: the three Common MassTransit entries
+`MMCA.Common/Directory.Packages.props:124-126` (still 8.5.11), `Azure.Messaging.ServiceBus` 7.21.0 at
+`:131`, and `ConfigureBrokerTransport` at `DependencyInjection.Messaging.cs:264`. Anchors in Context
+and Decision were re-verified against current source (the `OutboxMessage` columns, the
+`OutboxProcessor` publish leg and breaker, the transport switch arms, and ADC `deploy.yml`'s
+`required-jobs`).
 
 ## Related
 [ADR-016](016-lockstep-versioning-masstransit-pin.md) (the lockstep release policy this pin is

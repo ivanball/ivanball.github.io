@@ -241,7 +241,10 @@
           <h2 id="status">Status</h2>
           <p>Accepted (2026-09-09). Revised 2026-09-19 (the alias count and the migration-surface census this
           record quotes were re-measured, the <code>CheckIn</code> parameter run was corrected from &quot;consecutive&quot;, and the
-          fitness rule&#39;s subclass list was completed; see the Revision (2026-09-19) at the end).
+          fitness rule&#39;s subclass list was completed; see the Revision (2026-09-19) at the end). Revised
+          2026-10-01 (the <code>TypeDescriptor</code> nullable-converter failure mode, the shipped public API surface and
+          the <code>CheckIn</code> parameter types were corrected). Revised 2026-10-06: the <code>string</code> identity-path
+          rationale was corrected, since <code>System.String</code> does implement <code>IParsable&lt;string&gt;</code>.
           <strong>Revisits <a href="048-primitive-identifier-type-aliases.html">ADR-048</a> and
           <a href="085-identifier-type-aliases-revisited.html">ADR-085</a></strong> by adding the capability those records deferred,
           without migrating anything. ADR-048&#39;s decision (every entity identity is a primitive named through a
@@ -315,9 +318,11 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Identifiers/StronglyTypedId.cs:63</code>) defaults a null
           provider to <code>CultureInfo.InvariantCulture</code> (<code>:68</code>), because a route segment is never
           culture-formatted. <code>StronglyTypedIdValueParser&lt;TValue&gt;</code> (<code>:173</code>) builds the parser once per closed
-          primitive in a static initializer (<code>:180</code>): <code>string</code> takes an identity path, since it is the one
-          supported primitive that does not implement <code>IParsable&lt;string&gt;</code> (<code>:188-191</code>), and everything else
-          binds a closed <code>IParsable&lt;T&gt;.TryParse</code> (<code>:193-200</code>). <code>int</code>, <code>long</code>, <code>Guid</code> and <code>string</code> are
+          primitive in a static initializer (<code>:180</code>): <code>string</code> takes an identity path, because the route
+          segment already is the value (<code>:190-191</code>), and everything else binds a closed
+          <code>IParsable&lt;T&gt;.TryParse</code> (<code>:193-200</code>). The identity path is a choice rather than a necessity:
+          on net10.0 <code>System.String</code> implements <code>IParsable&lt;string&gt;</code> explicitly, so the <code>IParsable</code> leg
+          would accept it too. <code>int</code>, <code>long</code>, <code>Guid</code> and <code>string</code> are
           covered; any other <code>IParsable</code> primitive parses too.</p>
           </li>
           <li><p><strong>JSON is the bare primitive, through a factory registered once.</strong>
@@ -345,7 +350,7 @@
           </li>
           <li><p><strong>One call is the whole opt-in.</strong>
           <code>services.AddStronglyTypedIds(typeof(OrderId).Assembly)</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:366</code>) scans the named
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:376</code>) scans the named
           assemblies for wrappers, registers the <code>TypeConverter</code> for each, and registers a
           <code>StronglyTypedIdRegistry</code> singleton
           (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Identifiers/StronglyTypedIdRegistry.cs:22</code>). A host
@@ -354,7 +359,7 @@
           <li><p><strong>EF Core maps a wrapper as a PRE-CONVENTION type mapping, registered once on the base
           context.</strong> <code>ApplicationDbContext.ConfigureConventions</code> resolves the registry with <code>GetService</code> and
           applies it
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:407-409</code>);
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:406-408</code>);
           <code>StronglyTypedIdModelConfiguration.Apply</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Conventions/StronglyTypedIdModelConfiguration.cs:29</code>)
           declares <code>configurationBuilder.Properties(identifierType).HaveConversion(converterType, comparerType)</code>
@@ -399,7 +404,7 @@
           <code>TypeConverter</code>-bound parameter as a plain string. Both are registered by <code>AddCommonOpenApi</code>
           on every document the host registers with its own <code>services.AddOpenApi()</code> (since v1.217.0 the
           framework registers no document of its own; see ADR-046)
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:104-105</code>).</p>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:110-111</code>).</p>
           </li>
           <li><p><strong>Mapperly needs nothing in the normal case and one attribute in the other.</strong> A DTO implements
           <code>IBaseDTO&lt;TIdentifierType&gt;</code> over the SAME identifier type its entity uses, so a wrapper maps to
@@ -616,6 +621,21 @@
           <p>Re-anchored: <code>EntityControllerBase.cs:43</code>, <code>StronglyTypedIdTypeConverter.cs:119</code> (<code>RegisterAll</code>),
           <code>DependencyInjection.cs:366</code>, <code>ApplicationDbContext.cs:407-409</code>, <code>QueryFilterService.cs:399-417</code> and
           <code>WebApplicationBuilderExtensions.cs:104-105</code>.</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <p>The decision is unchanged: the framework still ships the capability, the aliases are still the
+          default, and adoption is still zero.</p>
+          <ul>
+          <li><strong>The <code>string</code> identity path is a choice, not a necessity.</strong> Decision point 3 said <code>string</code> takes
+          the identity path because it is the one supported primitive that does not implement
+          <code>IParsable&lt;string&gt;</code>. On net10.0 <code>System.String</code> implements <code>IParsable&lt;string&gt;</code> and
+          <code>ISpanParsable&lt;string&gt;</code> explicitly, so the <code>IParsable</code> leg (<code>StronglyTypedId.cs:193</code>) would accept
+          it; the identity short-circuit (<code>:190-191</code>) stays the code path because the route segment already
+          is the value.</li>
+          <li>Anchors re-verified against current source. Three cited in the Revision (2026-10-01) have moved:
+          <code>AddStronglyTypedIds</code> is now <code>DependencyInjection.cs:376</code>, the registry lookup is
+          <code>ApplicationDbContext.cs:406-408</code>, and the transformer registration is
+          <code>WebApplicationBuilderExtensions.cs:110-111</code>; <code>QueryFilterService.cs:399-417</code> still holds.</li>
+          </ul>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -634,6 +654,7 @@
             <li><a href="#related">Related</a></li>
             <li><a href="#revision-2026-09-19">Revision (2026-09-19)</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             </ul>
           </nav>
         </aside>

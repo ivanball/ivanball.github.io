@@ -241,7 +241,9 @@
           <h2 id="status">Status</h2>
           <p>Accepted (2026-07-28; revised 2026-08-14, 2026-08-18, 2026-08-23, and 2026-09-03).
           Revised 2026-09-22 (the layer rules also ship as compile-time MSBuild targets inside MMCA.Common.Shared; see the Revision below).
-          Revised 2026-09-25 (the live-document OpenAPI guard is reconciled with the committed OpenAPI documents both consumers now gate at build time, and the MMCA.Common.Testing.UI page-test bases for the confirm-email and role-admin pages are recorded; see the Revision (2026-09-25) below).</p>
+          Revised 2026-09-25 (the live-document OpenAPI guard is reconciled with the committed OpenAPI documents both consumers now gate at build time, and the MMCA.Common.Testing.UI page-test bases for the confirm-email and role-admin pages are recorded; see the Revision (2026-09-25) below).
+          Revised 2026-09-10 (the security-headers suite reaches both UI web hosts) and 2026-10-01 (the switchable gateway probe gate and the two full-coverage suites are stated consistently); see those Revisions below.
+          Revised 2026-10-06: the consumers&#39; lockstep <code>MMCA.Common.Shared</code> pin is now 1.232.0 and this Status block lists every Revision section; see the Revision (2026-10-06) below.</p>
           <h2 id="context">Context</h2>
           <p>ADR-015 turned the architecture invariants into build-gating tests, and drew its own boundary
           explicitly: the fitness suite asserts &quot;<strong>structure / registration</strong>, not runtime behavior&quot;
@@ -306,9 +308,9 @@
           <code>ASPNETCORE_ENVIRONMENT=Testing</code> as process environment variables <em>before</em> the host is built
           (<code>SqlServerIntegrationTestFixtureBase.cs:75</code>, <code>:76</code>), lets the host&#39;s own <code>DatabaseInitStrategy=Migrate</code>
           apply the schema when the first client forces the build
-          (<code>SqlServerIntegrationTestFixtureBase.cs:83</code>), resets data between tests with Respawn
-          (<code>SqlServerIntegrationTestFixtureBase.cs:99</code>), and drops the database on disposal
-          (<code>SqlServerIntegrationTestFixtureBase.cs:127</code>). Database-free hosts use
+          (<code>SqlServerIntegrationTestFixtureBase.cs:89</code>), resets data between tests with Respawn
+          (<code>SqlServerIntegrationTestFixtureBase.cs:95</code>, <code>:115</code>), and drops the database on disposal
+          (<code>SqlServerIntegrationTestFixtureBase.cs:132</code>). Database-free hosts use
           <code>ProductionHostApplicationFactory&lt;TEntryPoint&gt;</code> (<code>Fixtures/ProductionHostApplicationFactory.cs:23</code>),
           which pins <code>UseEnvironment(&quot;Production&quot;)</code> (<code>ProductionHostApplicationFactory.cs:37</code>) so the
           production-only branches (restrictive CORS, HSTS emission) are the ones under test, and captures the
@@ -561,6 +563,24 @@
           the ADC Conference 412 test, the seven problem-details subclasses, the gateway subclasses and the
           Store recording forwarder, the decorator subclasses (now under <code>Cqrs/</code>), and the ADR-015 and ADR-046
           cross-references.</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <ul>
+          <li><strong>The lockstep pin has moved; the claim it supports has not.</strong> MMCA.ADC, MMCA.Store and
+          MMCA.Helpdesk all pin <code>MMCA.Common.Shared</code> 1.232.0 now, not the 1.216.0 the 2026-10-01 Revision
+          recorded, at the same lines (<code>MMCA.ADC/Directory.Packages.props:105</code>,
+          <code>MMCA.Store/Directory.Packages.props:8</code>, <code>MMCA.Helpdesk/Directory.Packages.props:84</code>), so every
+          consumer still carries the compile-time layer targets.</li>
+          <li><strong>The Status block now names the 2026-09-10 and 2026-10-01 Revisions</strong>, which existed as body
+          sections but were missing from it.</li>
+          <li><strong>ADC&#39;s local rate-limiting test moved:</strong> the class recorded at <code>UiRateLimitingTests.cs:16</code> in the
+          2026-09-10 Revision is now declared at
+          <code>MMCA.ADC/Tests/Hosts/MMCA.ADC.UI.Web.Tests/UiRateLimitingTests.cs:18</code>; <code>BoundedCircuitHandlerTests.cs:16</code>
+          is unchanged.</li>
+          <li>Anchors re-verified against current source. The <code>SqlServerIntegrationTestFixtureBase</code> citations in
+          the Decision now point at the first client that forces the build and <code>Migrate</code> (<code>:89</code>), the
+          Respawner creation and per-test reset (<code>:95</code>, <code>:115</code>), and the drop inside <code>DisposeAsync</code> (<code>:132</code>);
+          the class (<code>:27</code>) and the two environment variables (<code>:75</code>, <code>:76</code>) were already current.</li>
+          </ul>
           <h2 id="related">Related</h2>
           <p>ADR-015 (the structural / registration fitness layer this complements; its stated non-goal, &quot;not
           runtime behavior&quot;, is exactly this ADR&#39;s scope, and the two tiers ship as two separate packages),
@@ -591,6 +611,7 @@
             <li><a href="#revision-2026-09-22-the-layer-rules-also-ship-as-compile-time-targets">Revision (2026-09-22): the layer rules also ship as compile-time targets</a></li>
             <li><a href="#revision-2026-09-25-committed-openapi-documents-and-page-test-bases-in-testingui">Revision (2026-09-25): committed OpenAPI documents, and page-test bases in Testing.UI</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

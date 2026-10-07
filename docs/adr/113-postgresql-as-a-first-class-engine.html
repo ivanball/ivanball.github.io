@@ -242,7 +242,9 @@
           <p>Accepted (2026-09-09). Extends <a href="006-database-per-service.html">ADR-006</a> (one sealed context class per
           engine) and <a href="018-polyglot-persistence.html">ADR-018</a> (engine as a routing decision) with a fourth
           engine. Revised 2026-10-01 (the Helpdesk canary and the <code>--database postgresql</code> template choice
-          are shipped, the canary as an advisory template-generated job; see Revision below).</p>
+          are shipped, the canary as an advisory template-generated job; see Revision below). Revised
+          2026-10-06: engine behavior is delegated to a <code>PostgreSQLDataSourceEngine</code> in the <code>DataSourceEngines</code>
+          registry rather than per-site switch arms.</p>
           <h2 id="context">Context</h2>
           <p>The framework has shipped three database engines since its first release: SQL Server, Azure Cosmos DB
           and SQLite. Every one of them is reached the same way, because <a href="006-database-per-service.html">ADR-006</a>
@@ -259,7 +261,7 @@
           engine list is the first filter, and the framework was failing it.</p>
           <p>The one-context-per-engine design is what makes closing that gap contained rather than invasive. A
           new engine is not a new abstraction: it is a configuration base, a sealed context, a design-time
-          factory, a branch in each place the engine set is enumerated, an AppHost extension and a health
+          factory, one engine class in the <code>DataSourceEngines</code> registry, an AppHost extension and a health
           check. Nothing in Domain, Application, or any consumer&#39;s handler code has an opinion about it.</p>
           <p>Three things about PostgreSQL are genuinely different from the engines already supported, and each
           one produces a runtime failure rather than a compile error:</p>
@@ -283,7 +285,7 @@
           and differing from it only where the server forces a difference.</strong></p>
           <ol>
           <li><p><strong>The engine enum grows by one member, appended.</strong> <code>DataSource.PostgreSQL</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IDataSourceService.cs:18-22</code>)
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IDataSourceService.cs:16-22</code>)
           is declared last rather than alphabetically. The three existing members are shipped public API
           with fixed ordinal values (<code>CosmosDB = 0</code>, <code>Sqlite = 1</code>, <code>SQLServer = 2</code>), and renumbering them
           would break every consumer that persisted or serialized one. The addition is purely additive:
@@ -294,17 +296,22 @@
           calls <code>UseNpgsql</code> with the resolved connection string, the per-source migrations assembly, the
           configured command timeout and the same retry-on-failure posture <code>SQLServerDbContext</code> uses
           (<code>PostgreSQLDbContext.cs:51-82</code>, retry at <code>:74-77</code>), and suppresses <code>PendingModelChangesWarning</code> for the same
-          microservice-extraction reason (<code>PostgreSQLDbContext.cs:82</code>). <code>PhysicalDbContextFactory</code> gains one switch arm
-          (<code>.../DbContexts/Factory/PhysicalDbContextFactory.cs:47</code>) and
-          <code>ApplyConfigurationsForEntitiesInContext</code> one more
-          (<code>.../DbContexts/ApplicationDbContext.cs:961</code>).</p>
+          microservice-extraction reason (<code>PostgreSQLDbContext.cs:82</code>). Everything else the engine
+          contributes lives in one <code>PostgreSQLDataSourceEngine</code>
+          (<code>.../Persistence/DataSources/Engines/PostgreSQLDataSourceEngine.cs:17</code>), registered in the
+          <code>DataSourceEngines</code> registry (<code>.../DataSources/Engines/DataSourceEngines.cs:19-28</code>):
+          <code>PhysicalDbContextFactory</code> delegates to its <code>CreateDbContext</code>
+          (<code>.../DbContexts/Factory/PhysicalDbContextFactory.cs:32</code>, <code>PostgreSQLDataSourceEngine.cs:85</code>) and
+          <code>ApplyConfigurationsForEntitiesInContext</code> reads its <code>EntityConfigurationInterface</code>
+          (<code>.../DbContexts/ApplicationDbContext.cs:955</code>, <code>PostgreSQLDataSourceEngine.cs:30</code>).</p>
           </li>
           <li><p><strong>The mapping is the SQL Server mapping, not PostgreSQL house style.</strong>
           <code>EntityTypeConfigurationPostgreSQL&lt;TEntity, TIdentifierType&gt;</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeConfiguration/EntityTypeConfigurationPostgreSQL.cs:21-22</code>)
           is a shim carrying <code>[UseDataSource(DataSource.PostgreSQL)]</code>, exactly like its SQL Server and
-          SQLite peers, and the engine-aware base handles PostgreSQL in the SAME switch arm as SQL Server:
-          a table per entity inside the module schema, PascalCase identifiers, an identity key. Moving an
+          SQLite peers, and the engine-aware base delegates to the engine&#39;s <code>ApplyKeyAndTableMapping</code>
+          (<code>EntityTypeConfiguration.cs:77</code>), where PostgreSQL applies the SAME mapping as SQL Server
+          (<code>PostgreSQLDataSourceEngine.cs:92</code>): a table per entity inside the module schema, PascalCase identifiers, an identity key. Moving an
           entity between the two engines is a base-class change with no configuration-body edits, which is
           the ADR-018 promise. <strong>No <code>snake_case</code> naming convention is imposed.</strong> A naming-convention plugin
           is a host-level choice with real migration consequences, and imposing one would make the two
@@ -312,14 +319,18 @@
           </li>
           <li><p><strong>The two predicate differences are handled at their single source.</strong> <code>SoftDeleteFilterSql.Build</code>
           answers <code>&quot;IsDeleted&quot; = false</code> for PostgreSQL and keeps <code>[IsDeleted] = 0</code> for SQL Server
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/SoftDeleteFilterSql.cs:34-47</code>),
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/SoftDeleteFilterSql.cs:35</code>,
+          delegating to the engine&#39;s <code>BuildSoftDeleteFilter</code>, PostgreSQL at
+          <code>PostgreSQLDataSourceEngine.cs:116</code>),
           so the automatic convention and the opt-in <code>HasSoftDeleteFilter</code> extension can never disagree.
           The outbox filters are built through one <code>QuoteColumn</code> helper
-          (<code>.../DbContexts/ApplicationDbContext.cs:619-620</code>, delegating to
-          <code>SoftDeleteFilterSql.QuoteColumn</code>) that returns the bracketed form for every
-          engine except PostgreSQL, so the literals SQL Server and SQLite have always produced are
-          byte-identical. <code>IncludeColumns</code> (<code>.../DbContexts/ApplicationDbContext.cs:645-651</code>) picks the
-          provider&#39;s own <code>IncludeProperties</code> overload for the same reason.</p>
+          (<code>.../DbContexts/ApplicationDbContext.cs:618-619</code>, delegating to
+          <code>SoftDeleteFilterSql.QuoteColumn</code> at <code>SoftDeleteFilterSql.cs:69-70</code> and on to the engine) that
+          returns the bracketed form for every engine except PostgreSQL (<code>PostgreSQLDataSourceEngine.cs:113</code>),
+          so the literals SQL Server and SQLite have always produced are
+          byte-identical. <code>IncludeColumns</code> (<code>.../DbContexts/ApplicationDbContext.cs:644-648</code>) asks the
+          engine for the provider&#39;s own <code>IncludeProperties</code> overload (<code>PostgreSQLDataSourceEngine.cs:109</code>)
+          for the same reason.</p>
           </li>
           <li><p><strong>Timestamps are normalized in the model, never with the process-wide switch.</strong>
           <code>PostgreSQLDbContext.ConfigureConventions</code> maps every <code>DateTime</code> (and, through the same entry,
@@ -334,11 +345,12 @@
           </li>
           <li><p><strong>A PostgreSQL source migrates only when it names a migrations assembly.</strong>
           <code>PhysicalDataSource.UsesMigrations</code> answers true for PostgreSQL only when
-          <code>PostgreSQLMigrationsAssembly</code> is set (<code>.../DataSources/PhysicalDataSource.cs:41-47</code>), which is
+          <code>PostgreSQLMigrationsAssembly</code> is set (<code>.../DataSources/PhysicalDataSource.cs:42-48</code>, the engine
+          declaring <code>MigrationPolicy.WhenAssemblyConfigured</code> at <code>PostgreSQLDataSourceEngine.cs:40</code>), which is
           the SQLite rule rather than the SQL Server one. SQL Server always migrates because hosts have
           depended on that since the first release; PostgreSQL ships with no such host, so a source with
           nothing to apply is created outright by <code>DatabaseInitializationExtensions</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:70-71</code>)
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:93-99</code>)
           instead of being migrated into an empty schema. <code>DesignTimeDbContextHelper.CreatePostgreSQL</code>
           (<code>.../DbContexts/Design/DesignTimeDbContextHelper.cs:74</code>) scaffolds the migrations when a host
           wants them.</p>
@@ -437,10 +449,13 @@
           <li><strong>Npgsql versions on its own cadence.</strong> Its package tracks the EF Core MAJOR (10.x) rather than the
           exact patch the Microsoft-owned providers share, so the dependency sweep must not expect one
           version across all four providers.</li>
-          <li><strong>The engine set is now enumerated in more places.</strong> Every switch over <code>DataSource</code> that previously
-          listed three members lists four, and IDE0072 makes a missed one a build error rather than a silent
-          default. That is the containment the one-context-per-engine design buys: the compiler names the
-          sites a fifth engine would have to touch.</li>
+          <li><strong>The engine set is enumerated in one place.</strong> Engine-specific behavior lives in one
+          <code>IDataSourceEngine</code> implementation per engine, listed once in the <code>DataSourceEngines</code> registry
+          (<code>.../DataSources/Engines/DataSourceEngines.cs:19-28</code>), and every former switch site asks
+          <code>DataSourceEngines.For(engine)</code> instead. That is the containment the one-context-per-engine
+          design buys: a fifth engine is one new engine class plus one registry line
+          (<code>DataSourceEngines.cs:15-16</code>), and an unregistered value throws at <code>For</code>
+          (<code>DataSourceEngines.cs:40-43</code>).</li>
           <li><strong>A namespace-cycle constraint surfaced.</strong> Passing the engine into <code>ConfigureScheduler</code>&#39;s model
           lambda by reading it off the context made that lambda capture <code>this</code>, which the compiler emits as
           a method ON <code>ApplicationDbContext</code> whose <code>EntityTypeBuilder&lt;ScheduledJobEntry&gt;</code> parameter reflects
@@ -470,6 +485,21 @@
           <code>ApplicationDbContext.cs:961</code>, <code>:619-620</code> and <code>:645-651</code>, <code>PhysicalDataSource.cs:41-47</code>, the
           readiness check moved to <code>MMCA.Common.Aspire/Extensions.Health.cs:232</code> and <code>:263</code>, and the
           <code>postgresql-integration</code> job to <code>ci.yml:881</code>. The engine decision and its rationale are unchanged.</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <ul>
+          <li>Engine-specific behavior no longer sits in per-site switches over <code>DataSource</code>: it lives in
+          <code>PostgreSQLDataSourceEngine</code> (<code>.../DataSources/Engines/PostgreSQLDataSourceEngine.cs:17</code>), one of
+          four <code>IDataSourceEngine</code> classes listed in the <code>DataSourceEngines</code> registry
+          (<code>DataSourceEngines.cs:19-28</code>). Decisions 2, 3, 4 and 6 now name the delegation
+          (<code>PhysicalDbContextFactory.cs:32</code>, <code>ApplicationDbContext.cs:955</code>, <code>EntityTypeConfiguration.cs:77</code>,
+          <code>SoftDeleteFilterSql.cs:35</code>, <code>PhysicalDataSource.cs:42-48</code>) and the PostgreSQL implementation of
+          each; the behavior, including the SQL Server mapping PostgreSQL shares, is unchanged.</li>
+          <li>The Context&#39;s list of what a new engine needs and the trade-off on engine enumeration are
+          corrected: a fifth engine is one engine class plus one registry line (<code>DataSourceEngines.cs:15-16</code>),
+          not a new arm in every switch.</li>
+          <li>Anchors re-verified against current source (<code>ApplicationDbContext.cs:618-619</code> and <code>:644-648</code>,
+          <code>IDataSourceService.cs:16-22</code>, <code>DatabaseInitializationExtensions.cs:93-99</code>).</li>
+          </ul>
           <h2 id="related">Related</h2>
           <p><a href="006-database-per-service.html">ADR-006</a> (one sealed context per engine, one instance per database),
           <a href="018-polyglot-persistence.html">ADR-018</a> (the engine axis this record adds a member to),
@@ -499,6 +529,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

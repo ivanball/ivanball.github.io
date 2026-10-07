@@ -248,6 +248,9 @@
           <p>Revised 2026-09-19: the Aspire pin reads 13.5.4, the version every Aspire entry now carries; the
           2026-09-09 root-cause fix is recorded as ADC #189 alone, because the Store PR previously cited
           carried unrelated work.</p>
+          <p>Revised 2026-10-01: decision 9 shows a non-null skip reason in every consumer.</p>
+          <p>Revised 2026-10-06: the ADC gateway test asserts liveness (<code>/alive</code>) rather than the aggregate
+          <code>/health</code>, and the package&#39;s XML documentation now recommends the safe skip branch.</p>
           <h2 id="context">Context</h2>
           <p>The AppHost is the only file that states how a whole stack fits together: which project resources
           exist, which database each one owns, which broker they share, where JWKS discovery points, and the
@@ -290,7 +293,7 @@
           </ol>
           <p>There is a third rule the framework already records and that any shared base must not break: a
           startup gate probes LIVENESS, never readiness
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/H2cHealthCheckExtensions.cs:53</code>). A readiness
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/H2cHealthCheckExtensions.cs:45</code>, <code>:90</code>). A readiness
           endpoint aggregates downstream and warm-up checks, so gating startup on it can deadlock the
           dependency graph.</p>
           <h2 id="decision">Decision</h2>
@@ -302,15 +305,15 @@
           <code>AppHostFixtureBase&lt;TAppHost&gt;</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/Fixtures/AppHostFixtureBase.Generic.cs</code>)
           builds through <code>DistributedApplicationTestingBuilder.CreateAsync&lt;TAppHost&gt;</code> and the non-generic
-          base (<code>.../Fixtures/AppHostFixtureBase.cs:38</code>, <code>InitializeAsync</code> at <code>:102</code>, <code>DisposeAsync</code> at
-          <code>:135</code>) owns the lifecycle. Starting an orchestrator is
+          base (<code>.../Fixtures/AppHostFixtureBase.cs:41</code>, <code>InitializeAsync</code> at <code>:105</code>, <code>DisposeAsync</code> at
+          <code>:138</code>) owns the lifecycle. Starting an orchestrator is
           the most expensive thing in any repo per assertion, so it happens once per collection.</p>
           </li>
           <li><p><strong>Readiness is awaited per resource, inside one shared budget.</strong>
-          <code>WaitForResourcesAsync</code> (<code>.../Fixtures/AppHostFixtureBase.cs:242</code>) asks
+          <code>WaitForResourcesAsync</code> (<code>.../Fixtures/AppHostFixtureBase.cs:245</code>) asks
           <code>ResourceNotificationService.WaitForResourceHealthyAsync</code> for a resource that carries a
-          <code>HealthCheckAnnotation</code> (<code>:264</code>) and <code>WaitForResourceAsync(..., KnownResourceStates.Running)</code> for
-          one that carries none (<code>:269</code>), and it says which of the two it did in the failure message. The
+          <code>HealthCheckAnnotation</code> (<code>:260</code>) and <code>WaitForResourceAsync(..., KnownResourceStates.Running)</code> for
+          one that carries none (<code>:272</code>), and it says which of the two it did in the failure message. The
           budget is a single deadline shared across resources rather than a per-resource allowance
           (<code>.../Fixtures/AppHostReadinessBudget.cs:37</code>, <code>Remaining</code>), because with five resources a
           per-resource budget makes a stack that wedges on the last one take five times as long to say so.
@@ -323,7 +326,7 @@
           <code>AppHostEnvironmentGate.Evaluate</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/Preconditions/AppHostEnvironmentGate.cs:38</code>)
           turns a fixture&#39;s declared requirements into either &quot;go&quot; or one actionable sentence, which the
-          fixture exposes as <code>SkipReason</code> / <code>IsAvailable</code> (<code>.../Fixtures/AppHostFixtureBase.cs:53</code>, <code>:56</code>).
+          fixture exposes as <code>SkipReason</code> / <code>IsAvailable</code> (<code>.../Fixtures/AppHostFixtureBase.cs:56</code>, <code>:59</code>).
           The requirements are an opt-in variable <code>MMCA_APPHOST_TESTS</code> (<code>.../AppHostEnvironmentGate.cs:16</code>),
           a reachable container runtime (<code>.../DockerAvailability.cs:31</code>, a socket and named-pipe probe
           rather than a <code>docker info</code> process launch, because the gate runs in front of a skip decision),
@@ -459,11 +462,13 @@
           one <code>Budget</code> override; the <code>PollUntilHealthyAsync</code> loop is gone, because the base waits on each
           resource&#39;s own health signal instead of polling one endpoint through the gateway; the
           <code>DistributedApplicationTestingBuilder.CreateAsync</code> / <code>BuildAsync</code> / <code>StartAsync</code> / <code>StopAsync</code>
-          sequence is the type parameter; and the single <code>/health</code> assertion is
-          <code>AssertHealthyAsync(&quot;gateway&quot;)</code> (<code>:80</code>) alongside <code>AssertJwksAsync</code> (<code>:93</code>), <code>AssertH2cAsync</code> over
-          four endpoints (<code>:108</code> for the three REST services, <code>:120</code> for Notification&#39;s dedicated <code>grpc</code>
-          endpoint) and <code>AssertDataSourceAsync</code> over four data sources (<code>:135</code>), none of which the earlier
-          project asserted. The workflow job keeps its <code>dotnet dev-certs</code> step
+          sequence is the type parameter; and the single <code>/health</code> assertion is now a liveness assertion,
+          <code>AssertAliveAsync(&quot;gateway&quot;, &quot;http&quot;)</code> (<code>:97</code>), because the gateway&#39;s aggregate <code>/health</code> report
+          probes every backend and answers 503 whenever one downstream probe has not settled (<code>:75-91</code>). It
+          sits alongside <code>AssertJwksAsync</code> (<code>:110</code>), <code>AssertH2cAsync</code> over four endpoints (<code>:125</code> for the
+          three REST services, <code>:137</code> for Notification&#39;s dedicated <code>grpc</code> endpoint) and
+          <code>AssertDataSourceAsync</code> over four data sources (<code>:152</code>), none of which the earlier project
+          asserted. The workflow job keeps its <code>dotnet dev-certs</code> step
           (<code>MMCA.ADC/.github/workflows/cross-service-tests.yml:275</code>) and runs no <code>openssl</code> keypair step
           (<code>:282</code>), since the fixture mints one. MMCA.Store&#39;s tier is the same shape
           (<code>MMCA.Store/Tests/Integration/MMCA.Store.AppHost.SmokeTests/StoreAppHostFixture.cs:23</code>,
@@ -480,12 +485,12 @@
           (<code>MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Aspire.AppHostTests/SampleAppHostFixture.cs:42</code>)
           rather than the other way round.</li>
           <li><strong>The framework carries one more package</strong> (<code>MMCA.Common.Testing.Aspire</code>, listed with the current
-          count in <code>MMCA.Common/FACTS.md:19</code>), and every <code>MMCA.Common.*</code> pin
+          count in <code>MMCA.Common/FACTS.md:40</code>), and every <code>MMCA.Common.*</code> pin
           in each consumer&#39;s <code>Directory.Packages.props</code> moves together at the next release
           (<a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a>).</li>
           <li><strong>Aspire versions are now coupled in one more place.</strong> <code>Aspire.Hosting.Testing</code> is pinned at the
-          same 13.6.0 as every other Aspire entry (<code>MMCA.Common/Directory.Packages.props:371</code>, against
-          <code>Aspire.Hosting</code> at <code>:362</code>), because the
+          same 13.6.0 as every other Aspire entry (<code>MMCA.Common/Directory.Packages.props:368</code>, against
+          <code>Aspire.Hosting</code> at <code>:359</code>), because the
           testing host builds the application model the AppHost package produces; a version split between
           them is a model mismatch rather than an upgrade.</li>
           </ul>
@@ -502,6 +507,22 @@
           (<code>.../AdcAppHostFixture.cs:31</code>). The Aspire pin reads 13.6.0 on every Aspire entry
           (<code>MMCA.Common/Directory.Packages.props:362</code>, <code>:371</code>). Refreshed anchors: <code>ci.yml:958</code> and <code>:1000</code>,
           <code>cross-service-tests.yml:225</code>, <code>:268</code>, <code>:275</code> and <code>:282</code>.</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <p>No decision or rationale changed.</p>
+          <ul>
+          <li>The ADC gateway test is <code>TheGatewayAnswersLiveness</code>, asserting <code>AssertAliveAsync(&quot;gateway&quot;, &quot;http&quot;)</code> rather than <code>AssertHealthyAsync(&quot;gateway&quot;)</code>, because the gateway&#39;s aggregate <code>/health</code>
+          probes every backend inside a short budget
+          (<code>MMCA.ADC/Tests/Integration/MMCA.ADC.AppHost.SmokeTests/AdcAppHostSmokeTests.cs:75-97</code>); the
+          Trade-offs passage now says so.</li>
+          <li>The 2026-10-01 note that the package&#39;s XML documentation recommends the null-forgiven
+          <code>SkipWhen</code> form no longer holds: it now recommends
+          <code>if (!Fixture.IsAvailable) { Assert.Skip(Fixture.SkipReason!); }</code> and warns against <code>SkipWhen</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/Fixtures/AppHostFixtureBase.cs:32-36</code>),
+          where the <code>!</code> is safe because <code>SkipReason</code> is non-null inside that branch.</li>
+          <li>The Aspire pin still reads 13.6.0 (<code>MMCA.Common/Directory.Packages.props:359</code>, <code>:368</code>).</li>
+          <li>Anchors re-verified against current source: <code>AppHostFixtureBase.cs</code>, <code>H2cHealthCheckExtensions.cs</code>,
+          <code>AdcAppHostSmokeTests.cs</code>, <code>Directory.Packages.props</code> and <code>FACTS.md:40</code>.</li>
+          </ul>
           <h2 id="related">Related</h2>
           <p><a href="098-aspire-orchestration-not-testing-or-dashboards.html">ADR-098</a> (the orchestration posture this tier
           tests without changing),
@@ -527,6 +548,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

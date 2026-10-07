@@ -258,7 +258,13 @@
           alongside login and register).
           Revised 2026-09-30 (the global and <code>UserPolicy</code> partitions key on the subject claim first and fall
           back to identity name, because the name claim carries the non-unique full name, so two users with the
-          same name shared one bucket; MMCA.Common v1.213.0).</p>
+          same name shared one bucket; MMCA.Common v1.213.0).
+          Revised 2026-09-10 (both gateways scope <code>auth-tight</code> to the two credential routes, and the
+          trusted-caller client half ships in the framework as <code>AddTrustedCallerHeader</code>).
+          Revised 2026-10-01 (the output-cache list reads as a sample, and the <code>auth-ip</code> no-IP rule no longer
+          claims to mirror the global limiter).
+          Revised 2026-10-06: every ADC service binds the <code>RateLimiting</code> section, and the email-confirmation
+          <code>auth-ip</code> decoration is recorded as owned by the framework base rather than by each app.</p>
           <h2 id="context">Context</h2>
           <p>Every service exposes read and write endpoints to the public internet through the gateway (ADR-008).
           Abusive or runaway clients (scrapers, credential stuffing, retry storms, a buggy SPA stuck in a loop)
@@ -297,7 +303,7 @@
           are served from the output cache (<code>UseOutputCache</code>; ADC&#39;s Conference service defines one
           public-endpoint policy per public aggregate, among them <code>EventsCache</code> / <code>CategoriesCache</code> /
           <code>QuestionsCache</code> / <code>RoomsCache</code>,
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:266-295</code>), and login/registration brute-force is handled by <code>LoginProtectionService</code>
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:267-298</code>), and login/registration brute-force is handled by <code>LoginProtectionService</code>
           (exponential-backoff account lockout after <code>MaxFailedAttempts</code> failed logins, plus per-IP
           registration throttling).</li>
           <li><strong>A per-IP cap on the anonymous authentication endpoints, on by default.</strong> <code>AddCommonRateLimiting</code>
@@ -306,11 +312,15 @@
           Unlike the other named policies it is not left to each app to attach. <code>AuthControllerBase</code>
           (<code>MMCA.Common.API</code>) decorates <code>LoginAsync</code> and <code>RegisterAsync</code>, and
           <code>PasswordResetAuthControllerBase</code> decorates the <code>forgot-password</code> and <code>reset-password</code> actions,
-          all four with <code>[EnableRateLimiting(WebApplicationBuilderExtensions.RateLimitPolicyAuthIp)]</code>, so
-          any consumer that inherits either base gets them without opting in. The apps extend the same
-          policy to the two anonymous email-confirmation actions the framework bases do not own
-          (<code>send-email-confirmation</code> and <code>confirm-email</code> on each <code>EmailConfirmationController</code>, in both
-          Store and ADC Identity). <strong>What an override inherits, settled empirically
+          and <code>EmailConfirmationControllerBase</code> decorates the two anonymous email-confirmation actions,
+          <code>send-email-confirmation</code> and <code>confirm-email</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EmailConfirmationControllerBase.cs:81</code>,
+          <code>:109</code>), all six with <code>[EnableRateLimiting(WebApplicationBuilderExtensions.RateLimitPolicyAuthIp)]</code>,
+          so any consumer that inherits one of those bases gets them without opting in. Store&#39;s and ADC&#39;s
+          Identity <code>EmailConfirmationController</code> derive from that base and add no attribute of their own
+          (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.API/Controllers/EmailConfirmationController.cs:33</code>,
+          <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Controllers/EmailConfirmationController.cs:32</code>).
+          <strong>What an override inherits, settled empirically
           (2026-08-13):</strong> <code>EnableRateLimitingAttribute</code> leaves <code>AttributeUsage.Inherited</code> at its default of
           <code>true</code>, and a derived override therefore still sees the base attribute through
           <code>GetCustomAttributes(inherit: true)</code>, so a bare override very likely retains the policy rather
@@ -329,8 +339,8 @@
           rather than sharing one bucket with every other such request (a deliberate difference from the
           global limiter, which puts an unattributable authenticated request in one shared <code>&quot;authenticated&quot;</code>
           bucket and an unattributable anonymous hub request in one shared <code>&quot;anonymous-hub&quot;</code> bucket,
-          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:62</code>,
-          <code>:152</code>, <code>:284-285</code>); and the default is 30 rather than a tighter 10 for the same shared-IP reason,
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:66</code>,
+          <code>:156</code>, <code>:309-310</code>); and the default is 30 rather than a tighter 10 for the same shared-IP reason,
           since every Server-circuit user&#39;s login leaves from the UI host&#39;s address.</li>
           <li><strong>The remaining named policies are opt-in, per-endpoint tightening.</strong> <code>AddCommonRateLimiting</code> also
           registers <code>FixedPolicy</code> and <code>UserPolicy</code>, which a specific action can apply with
@@ -531,6 +541,44 @@
           is the anonymous exemption, not a no-IP rule. The rate-limiting registration now lives in the
           partial <code>WebApplicationBuilderExtensions.RateLimiting.cs</code>, so the <code>WebApplicationBuilderExtensions.cs</code>
           anchors in the Revisions above are historical and are not rewritten.</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <p><strong>Every ADC service binds the <code>RateLimiting</code> section.</strong> ADC&#39;s Identity and Notification services now
+          call the configuration overload, <code>AddCommonRateLimiting(builder.Configuration)</code>
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:165</code>,
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:144</code>), so their declared limits bind
+          through <code>RateLimitingSettings</code> instead of being ignored by the int overload. The Bicep key moved to the
+          bound property name, <code>RateLimiting__AuthIpPermitLimit</code> (<code>MMCA.ADC/infra/main.bicep:1836</code>, rationale at
+          <code>:1831</code>). The gateway <code>auth-tight</code> anchors in item 4 and in Revision (2026-09-10) point at the current
+          lines.</p>
+          <ul>
+          <li><strong>The email-confirmation <code>auth-ip</code> decoration belongs to the framework, not the apps.</strong> Decision
+          item 3 said each app&#39;s <code>EmailConfirmationController</code> applied the policy to the two actions the
+          framework bases did not own. <code>EmailConfirmationControllerBase</code> now carries the attribute on both
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EmailConfirmationControllerBase.cs:81</code>,
+          <code>:109</code>) and the Store and ADC controllers are subclasses with no attribute of their own, so the
+          Decision now counts six framework-decorated actions.</li>
+          <li><strong>Current locations of facts recorded in the older Revisions</strong> (those sections keep their original
+          anchors). In <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs</code>:
+          <code>IsRateLimitBypassed</code> <code>:46</code>, <code>AnonymousPartition</code> <code>:62</code> (the <code>&quot;anonymous-hub&quot;</code> key <code>:66</code>, the
+          anonymous <code>NoLimiter</code> <code>:72</code>), <code>IsAnonymousHubRequest</code> <code>:82</code>, the <code>__infra</code> <code>NoLimiter</code> <code>:145</code>, the
+          global partition key chain ending in <code>&quot;authenticated&quot;</code> <code>:153-156</code>, <code>AuthIpRateLimitPartition</code> <code>:305</code>
+          (<code>__unknown-ip</code> <code>NoLimiter</code> <code>:310</code>, <code>allowDistributed: false</code> <code>:318</code>), and <code>FixedPolicy</code>
+          <code>allowDistributed: false</code> <code>:414</code>. In <code>RedisFixedWindowRateLimiter.cs</code>: <code>StringIncrementAsync</code>
+          <code>:137</code>, the 65-second <code>KeyExpireAsync</code> <code>:144</code>, the fail-open <code>catch</code> <code>:149</code> and its
+          <code>Interlocked.Exchange</code> warn-once guard <code>:151</code>. <code>MiddlewarePipelineBuilder.IsCleartextHttp2</code> is
+          defined at <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Pipeline/MiddlewarePipelineBuilder.cs:350</code>
+          and used at <code>:86</code>. <code>GatewayRateLimitingSettings.cs</code>: <code>SectionName</code> <code>:51</code>, <code>TrustedCallerHeaderName</code>
+          <code>:126</code>, <code>TrustedCallerSecret</code> <code>:154</code>; <code>GatewayRateLimitingExtensions.cs</code>: <code>FixedTimeEquals</code> <code>:172</code>,
+          wired at <code>:148-149</code>. <code>AddTrustedCallerHeader</code> is at
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:121</code>, called from
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:136</code> and
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:129</code>; Store&#39;s UI section is at
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/appsettings.json:35-36</code>. The trusted-caller secret is
+          injected at <code>MMCA.Store/infra/main.bicep:1959</code> and <code>:2084</code> and <code>MMCA.ADC/infra/main.bicep:2444</code> and
+          <code>:2602</code>.</li>
+          <li>Anchors in the live sections (the Conference output-cache range and the unattributable-bucket
+          anchors in Decision item 3) were re-verified against current source.</li>
+          </ul>
           <h2 id="related">Related</h2>
           <p>ADR-004 (the JWKS/discovery traffic the limiter exempts, and the authenticated principal it keys on),
           ADR-008 (the gateway edge this protects), ADR-017 (request idempotency, the other inbound-edge
@@ -542,15 +590,6 @@
           <code>RateLimitingSettings</code> binds into, and the <code>Distributed</code> degradation that sits outside it), ADR-079
           (the shared middleware pipeline that places <code>UseRateLimiter</code> after authentication and after forwarded
           headers, which is what makes both partition keys resolvable).</p>
-          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
-          <p><strong>Every ADC service binds the <code>RateLimiting</code> section.</strong> ADC&#39;s Identity and Notification services now
-          call the configuration overload, <code>AddCommonRateLimiting(builder.Configuration)</code>
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:165</code>,
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:144</code>), so their declared limits bind
-          through <code>RateLimitingSettings</code> instead of being ignored by the int overload. The Bicep key moved to the
-          bound property name, <code>RateLimiting__AuthIpPermitLimit</code> (<code>MMCA.ADC/infra/main.bicep:1836</code>, rationale at
-          <code>:1831</code>). The gateway <code>auth-tight</code> anchors in item 4 and in Revision (2026-09-10) point at the current
-          lines.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -570,8 +609,8 @@
             <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
             <li><a href="#revision-2026-09-10">Revision (2026-09-10)</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
-            <li><a href="#related">Related</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#related">Related</a></li>
             </ul>
           </nav>
         </aside>

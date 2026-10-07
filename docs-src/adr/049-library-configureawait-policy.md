@@ -2,10 +2,13 @@
 
 ## Status
 Accepted (2026-07-20; measurements re-anchored 2026-08-07, 2026-08-14, 2026-08-18, 2026-08-23,
-2026-08-31, 2026-09-01, 2026-09-03, 2026-09-11 and 2026-09-19).
+2026-08-31, 2026-09-01, 2026-09-03, 2026-09-11, 2026-09-19, 2026-10-01 and 2026-10-06).
 Revised 2026-09-19: the framework site counts and the consumer-scale upper bound are re-measured, and
 the occurrence-versus-line delta still turns on the same two ADC handler lines. The policy, the gate
 and the exemption are unchanged.
+Revised 2026-10-06: the UI exemption is restated as leaving the rule unenforced in mixed UI-package
+code (those packages now call `ConfigureAwait(false)` 154 times), and the drift script is no longer
+credited with guarding the repo-delta section.
 
 ## Context
 MMCA.Common ships as NuGet packages consumed by host applications, not as an application itself.
@@ -34,8 +37,12 @@ application code do not.
 - **UI component packages are excluded deliberately.** The exemption glob covers the whole
   `MMCA.Common.UI*` family, which is three packaged projects, not two: `MMCA.Common.UI` (the Blazor
   component library), `MMCA.Common.UI.Web` (the Blazor Web host services) and `MMCA.Common.UI.Maui`
-  (the MAUI capability adapters). Their continuations must resume on the renderer/UI context;
-  `ConfigureAwait(false)` there would be a bug, not hygiene.
+  (the MAUI capability adapters). Their component code must resume on the renderer/UI context, where
+  `ConfigureAwait(false)` would be a bug, but the packages also hold code that does not (service
+  plumbing, token storage, the server-side same-origin proxy in `MMCA.Common.UI.Web/SameOriginProxy/`)
+  and calls `ConfigureAwait(false)` on purpose. The exemption is therefore a choice to leave the rule
+  unenforced in mixed UI-package code and decide per call site, not a claim that the call is wrong
+  everywhere in those packages.
 - **The application repos keep the baseline.** Store, ADC and Helpdesk are ASP.NET Core hosts
   (plus Blazor/MAUI heads); `CA2007`/`MA0004` stay off in the shared analyzer baseline, per the
   same guidance that libraries and applications have opposite defaults.
@@ -50,9 +57,9 @@ application code do not.
 - **Standard .NET library guidance, applied at the boundary where it holds.** The rule is scoped to
   exactly the code that ships in packages; it is not blanket-applied to the apps, where it would be
   360+ sites of pure noise (measured across Store/ADC before this decision, and the current scale is
-  far past that: a raw `\bawait\b` scan on 2026-10-01 counts 793 occurrences in `MMCA.Store/Source`
-  and 1,490 in `MMCA.ADC/Source`, 2,283 combined, which is the upper bound on the CA2007 sites the
-  rule would open there).
+  far past that: a raw `\bawait\b` scan of `*.cs` on 2026-10-06 counts 815 occurrences in
+  `MMCA.Store/Source` and 1,540 in `MMCA.ADC/Source`, 2,355 combined, which is the upper bound on the
+  CA2007 sites the rule would open there).
 - **Mechanical, with the enforcement and the remediation at different levels.** The build gate is the
   enforced half: a new context-capturing await in packaged non-UI code fails the build, so it costs no
   review effort. The remediation is a convention rather than an artifact: `dotnet format analyzers
@@ -61,13 +68,17 @@ application code do not.
 
 ## Trade-offs
 - **Visual noise in framework source.** Every await in `Source/` (except UI packages) carries
-  `.ConfigureAwait(false)` (324 sites at adoption; 1,115 gated sites as of the 2026-10-01 snapshot,
-  out of 1,234 across `Source/` once the exempt UI packages are counted back in). The gate makes it
-  uniform, so the noise is consistent rather than sporadic.
+  `.ConfigureAwait(false)` (324 sites at adoption; 1,148 gated sites as of the 2026-10-06 snapshot,
+  out of 1,302 across `Source/` once the 154 calls in the exempt UI packages are counted back in).
+  The gate makes it uniform, so the noise is consistent rather than sporadic.
 - **A per-repo delta in an otherwise shared analyzer baseline.** The workspace keeps one
   byte-identical `.editorconfig` baseline across the four repos; this policy lives in the marked
-  repo-delta section of MMCA.Common's file and is verified by the workspace drift script
-  (`Tools\Scripts\compare-analyzer-config.ps1`), so the divergence is documented and guarded.
+  repo-delta section of MMCA.Common's file (`MMCA.Common/.editorconfig:821-836`), so the divergence
+  is documented. It is not mechanically guarded: the workspace drift script
+  (`Tools\Scripts\compare-analyzer-config.ps1`) compares only the lines before the
+  `# REPO-SPECIFIC DELTAS` marker (`Tools/Scripts/compare-analyzer-config.ps1:26-28`), so it guards
+  the shared baseline (including `CA2007` at `none`, `MMCA.Common/.editorconfig:348`) and would not
+  notice the gate at `:832-833` or the exemption at `:835-836` being changed or deleted.
 - **UI exclusion relies on project naming.** The `MMCA.Common.UI*` path glob is what exempts the
   component packages; a renamed or relocated UI project would silently fall under the gate (the
   build would fail loudly on the first missing `ConfigureAwait`, so the failure is visible, just
@@ -500,3 +511,37 @@ history. Framework counts are taken at MMCA.Common `main` `eeb87e6c`; Store coun
    SA1210/SA1211 now sit at `Website/docs-src/guides/common-GETTING-STARTED.md:186` and
    `MMCA.Helpdesk/build/templates/stage.ps1:1236`, superseding the `:162` and `:1235` citations in
    the 2026-09-11 revision.
+
+## Revision (2026-10-06)
+A content correction plus a count and anchor refresh. The gate (`MMCA.Common/.editorconfig:832-833`)
+and the UI exemption (`:835-836`) are unchanged; two statements about them were not accurate.
+
+1. **The UI exemption is not "the call would be a bug" everywhere.** The exempt packages now hold
+   154 `ConfigureAwait(false)` calls across 43 files: `MMCA.Common.UI` 76 across 20 files,
+   `MMCA.Common.UI.Maui` 54 across 19, `MMCA.Common.UI.Web` 24 across 4
+   (`SameOriginProxy/SameOriginApiProxyEndpoint.cs` 15, `SameOriginProxy/SameOriginProxyTransformer.cs` 5,
+   `Services/ServerTokenStorageService.cs` 3, `SameOriginProxy/SessionHandoffEndpoints.cs` 1). Even
+   `ServerTokenStorageService`, which earlier revisions cite as the exemplar of circuit-bound code
+   (its declaration is now at
+   `MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Services/ServerTokenStorageService.cs:30`),
+   calls it at `:99`, `:155` and `:161`. The Decision now describes the exemption as leaving the rule
+   unenforced in mixed UI-package code, and the 2026-08-31 reading that exempt-package growth "is
+   Blazor/MAUI components resuming on the renderer context" does not hold.
+2. **The drift script does not guard this policy.** `Tools/Scripts/compare-analyzer-config.ps1`
+   diffs only the lines before the `# REPO-SPECIFIC DELTAS` marker (`:26-28`), so it guards the
+   shared baseline, not the repo-delta section holding the gate. The Trade-offs entry now says so.
+   The marker comment at `MMCA.Common/.editorconfig:821-824` describes the script accurately.
+3. **Framework site counts.** `MMCA.Common/Source/**/*.cs` holds 1,302 `ConfigureAwait(false)`
+   occurrences across 249 files (no line carries two), 154 of them exempt across 43 files, leaving
+   1,148 under the gate across 206 files.
+4. **Consumer-scale upper bound.** A raw `\bawait\b` scan of `*.cs` gives 815 occurrences across 154
+   files in `MMCA.Store/Source` and 1,540 across 301 files in `MMCA.ADC/Source`, 2,355 combined.
+   The two `await using var claim = await ...` lines are still the only double-await lines,
+   `ScoreEventSessionsInternalCommandHandler.cs:83` (previously `:78`) and
+   `SubmitQuestionHandler.cs:147`, so a per-line scan reports 1,538 for ADC and 2,353 combined;
+   Store has none.
+5. **Anchors re-verified against current source.** `TreatWarningsAsErrors` at
+   `MMCA.Common/Directory.Build.props:7` and `CodeAnalysisTreatWarningsAsErrors` at `:13` hold, and
+   the three `NoWarn` lists now sit at `:30`, `:35` and `:41`, none naming CA2007. The SA1210/SA1211
+   remediation examples sit at `Website/docs-src/guides/common-GETTING-STARTED.md:190` and
+   `MMCA.Helpdesk/build/templates/stage.ps1:1236`; nothing invokes `--diagnostics CA2007`.

@@ -251,6 +251,12 @@
           <p>Revised 2026-09-19 (the consumer-side companion the 2026-09-11 revision described as intended but
           absent is now in MMCA.Store&#39;s <code>main</code>: the Stripe leg has one retry owner. See the Revision
           (2026-09-19) at the end.)</p>
+          <p>Revised 2026-10-01 (current-state sections realigned with the code; no decision change. See the
+          Revision (2026-10-01) at the end.)</p>
+          <p>Revised 2026-10-06: the DR-doc acceptance is described as written rather than signed off, the
+          example consumer and the drill-table mitigation now match MMCA.Store and the <code>dr-freshness</code> gates,
+          and the Stripe retry predicate also treats a client timeout as transient. See the Revision
+          (2026-10-06) at the end.</p>
           <h2 id="context">Context</h2>
           <p>The framework already supplies the <em>mechanisms</em> for surviving partial failure: a standard Polly
           resilience handler (timeout / retry / circuit breaker), the outbox for at-least-once delivery
@@ -269,7 +275,8 @@
           gRPC client registered through the framework&#39;s extension methods (<code>AddTypedGrpcClient</code>,
           <code>AddTypedServiceClient</code>) wires the <strong>standard resilience handler</strong>. <code>AddTypedServiceClient</code> takes
           the global HTTP defaults&#39; timeouts, retry budget and sampling window from <code>HttpResilienceDefaults</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:167-173</code>).
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:170-179</code>), and
+          switches the retry off for POST and PATCH (<code>:177</code>), the same two verbs the Aspire defaults exclude.
           <code>AddTypedGrpcClient</code> reads <code>GrpcResilienceDefaults</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:127-142</code>), which re-exposes
           those same timeouts and retry budget
@@ -279,7 +286,7 @@
           (<code>ResilienceHandlerTests</code> in <code>MMCA.Common.Grpc.Tests</code>) so the policy cannot silently regress.</li>
           <li><strong>Consumers must declare recovery objectives.</strong> Each consuming app documents, in its own
           <code>infra/DISASTER-RECOVERY.md</code>: RTO/RPO per failure scenario, the backup/restore mechanism, and an
-          <strong>explicit, signed-off</strong> acceptance of single-region risk (or a multi-region failover plan).
+          <strong>explicit, written</strong> acceptance of single-region risk (or a multi-region failover plan).
           A restore must be <em>drilled</em>: the DR doc carries a drill-result table that cannot stay empty.</li>
           <li><strong>Graceful degradation is the default posture.</strong> When a synchronous dependency is unreachable,
           the resilience pipeline retries/breaks; cross-service consistency that can be deferred flows through
@@ -311,9 +318,11 @@
           </tr>
           </tbody></table></div>
           <p>ADC <strong>deliberately accepts single-region risk</strong>: sub-hour multi-region failover is not worth the
-          cost/complexity at its scale. A different consumer (e.g. a 24×7 store) is expected to set tighter
-          objectives and a failover plan in its own DR doc: the framework does not mandate one set of numbers,
-          only that the numbers exist and the restore is drilled.</p>
+          cost/complexity at its scale. MMCA.Store, the other consumer, records the same objectives and the
+          same accepted single-region risk in its own DR doc (<code>MMCA.Store/infra/DISASTER-RECOVERY.md:10-15</code>).
+          A consumer with stricter availability needs would set tighter objectives and a failover plan in its
+          own DR doc: the framework does not mandate one set of numbers, only that the numbers exist and the
+          restore is drilled.</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
           <li><strong>Invariant over discipline.</strong> A fitness function turns &quot;remember to add resilience&quot; into a build
@@ -334,10 +343,14 @@
           test (<code>ResilienceCircuitBreakerFaultInjectionTests</code>, same project) drives sustained failures and
           proves the circuit breaker actually trips and short-circuits. <code>AddTypedServiceClient</code> has its own
           registration test
-          (<code>MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Messaging/TypedServiceClientRegistrationTests.cs:15-28</code>),
-          asserting one retry and the 30-second attempt, 90-second total and 60-second sampling values.</li>
-          <li>Per-consumer DR docs can drift from reality; the drill-result table is the mitigation (a stale table
-          is a visible smell).</li>
+          (<code>MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Messaging/TypedServiceClientRegistrationTests.cs:17-31</code>),
+          asserting one retry and the 30-second attempt, 90-second total and 60-second sampling values, plus a
+          theory proving the retry refuses a POST or PATCH replay (<code>:34-55</code>).</li>
+          <li>Per-consumer DR docs can drift from reality. The drill-result table is hand-maintained and lags the
+          drills (its last rows are 2026-08-10 in <code>MMCA.ADC/infra/DISASTER-RECOVERY.md:201</code> and 2026-07-28 in
+          <code>MMCA.Store/infra/DISASTER-RECOVERY.md:212</code>), so it is not the operative mitigation: drill recency
+          is enforced from <code>dr-drill.yml</code> run history by each consumer&#39;s <code>dr-freshness</code> deploy gate
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:896-911</code>, <code>MMCA.Store/.github/workflows/deploy.yml:864</code>).</li>
           <li>A gRPC client that needs bespoke timeouts must override the standard handler explicitly rather than
           opt out of resilience entirely: intentional friction.</li>
           </ul>
@@ -474,6 +487,38 @@
           <code>MMCA.Common/Source/Core/MMCA.Common.AI.OpenAI/OpenAiProviderFactory.cs:42-49</code>), with the SDKs&#39; own
           retry counts left at their defaults. Citations inside the earlier Revision sections are left as
           recorded.</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <p>No decision changes; the current-state sections are brought back in line with the code and the
+          consumer DR docs.</p>
+          <ul>
+          <li>Decision point 2 no longer calls the single-region acceptance &quot;signed-off&quot;: both DR docs state it
+          in writing (<code>MMCA.ADC/infra/DISASTER-RECOVERY.md:23</code>, <code>MMCA.Store/infra/DISASTER-RECOVERY.md:23</code>)
+          but neither records an approver or a sign-off.</li>
+          <li>The &quot;24x7 store&quot; example is replaced: MMCA.Store, the real second consumer, uses the same objectives
+          and calls itself non-24x7-critical (<code>MMCA.Store/infra/DISASTER-RECOVERY.md:10-15</code>).</li>
+          <li>The Trade-offs entry about DR-doc drift no longer names the drill-result table as the mitigation:
+          both tables lag the drills, and recency is enforced by the <code>dr-freshness</code> deploy gate over
+          <code>dr-drill.yml</code> run history.</li>
+          <li>Decision point 1 records that <code>AddTypedServiceClient</code> disables the retry for POST and PATCH
+          (<code>DependencyInjection.Messaging.cs:177</code>), and the Trade-offs entry records the theory that tests it.</li>
+          <li>The Stripe pipeline the 2026-09-11 and 2026-09-19 revisions describe now also treats an
+          <code>OperationCanceledException</code> as transient when the caller&#39;s token is not cancelled (an <code>HttpClient</code>
+          timeout): retry and breaker share <code>IsTransientFailure</code>
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Stripe/StripePaymentService.cs:557-564</code>,
+          the timeout arm at <code>:562</code>). The pipeline itself is at <code>:76-113</code>, and the attempts and delay come
+          from <code>StripeSettings.cs:64</code> and <code>:68</code> (defaults 3 and 500 ms).</li>
+          <li>Current locations of facts recorded in earlier revisions: the outbox broker pipeline field at
+          <code>OutboxProcessor.cs:102</code>, built at <code>:698-709</code>, wrapping the publish at <code>:548-552</code> with the
+          in-process branch at <code>:554-558</code>; the execution-strategy note at <code>IUnitOfWork.cs:47-52</code> and
+          <code>ExecuteInTransactionAsync</code> at <code>:63-65</code>; <code>CreateExecutionStrategy()</code> at <code>DbContextFactory.cs:576</code>;
+          the global handler at <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:49-62</code> inside
+          <code>ConfigureHttpClientDefaults</code> (<code>:39-85</code>), which also reaches gRPC clients, with the gRPC-specific
+          handler layered on top (<code>MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:102-104</code>,
+          <code>:127-142</code>); and the Polly meter wiring in <code>Extensions.Telemetry.cs</code> (meter name <code>:31</code>,
+          <code>resilience.polly.strategy.events</code> <code>:52</code>, <code>AddMeter</code> <code>:322</code>, the duration-histogram opt-in
+          <code>:332</code>, config key <code>:25</code>).</li>
+          <li>Anchors in the live sections were re-verified against current source.</li>
+          </ul>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -493,6 +538,7 @@
             <li><a href="#revision-2026-09-11">Revision (2026-09-11)</a></li>
             <li><a href="#revision-2026-09-19">Revision (2026-09-19)</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             </ul>
           </nav>
         </aside>

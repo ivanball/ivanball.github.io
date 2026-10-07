@@ -132,3 +132,24 @@ is only logged for manual removal (`.../Users/UseCases/SetUserAvatar/SetUserAvat
 `.../Users/UseCases/RemoveUserAvatar/RemoveUserAvatarHandler.cs:78-81`). Deletion is therefore eventual
 and at-least-once once scheduled, not synchronous; the Decision and Consequences bullets above are corrected to say so. The public-read
 container, the random suffix and the cache-TTL bound on staleness are unchanged.
+
+## Revision (2026-10-06)
+No behavior changed; the dated sections above keep the anchors recorded on their dates, and the
+load-bearing ones have moved to:
+
+- Decoded-size guard: the `Image.IdentifyAsync` header read is now at
+  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Storage/ImageSharpImageProcessor.cs:48`,
+  `MaxDecodedPixels` (50,000,000) at `:27`, `MaxDecodedDimension` (20,000) at `:34` (the long-thin
+  rationale is still at `:30`), and the `TooLargeToDecode` predicate at `:115`; the post-decode
+  re-check is at `:70`.
+- The abstract options-carrying `UploadAsync` is at
+  `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Storage/IFileStorageService.cs:37`;
+  `AzureBlobFileStorageService` implements it at
+  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Storage/AzureBlobFileStorageService.cs:28` and
+  writes `ContentDisposition` and `CacheControl` at `:42-43`.
+- The `attempts_exhausted` dead-letter is at
+  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Processing/InternalCommandProcessor.cs:451-457`.
+- The post-commit hook that replace and remove schedule from runs after `SaveChangesAsync` at
+  `MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Crud/MutateEntityHandlerBase.cs:322-325`.
+
+Anchors were re-verified against current source on this date.

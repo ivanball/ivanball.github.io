@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-074: Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-08-13; revised 2026-08-14, 2026-08-18, 2026-08-31). The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release and…">
+  <meta name="description" content="Accepted (2026-08-13; revised 2026-08-14, 2026-08-18, 2026-08-31, 2026-10-01). Revised 2026-10-06: the smart-wait and cron-validation statements now…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/074-recurring-job-scheduler.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-074: Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)">
-  <meta property="og:description" content="Accepted (2026-08-13; revised 2026-08-14, 2026-08-18, 2026-08-31). The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release and…">
+  <meta property="og:description" content="Accepted (2026-08-13; revised 2026-08-14, 2026-08-18, 2026-08-31, 2026-10-01). Revised 2026-10-06: the smart-wait and cron-validation statements now…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/074-recurring-job-scheduler.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-074: Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)">
-  <meta name="twitter:description" content="Accepted (2026-08-13; revised 2026-08-14, 2026-08-18, 2026-08-31). The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release and…">
+  <meta name="twitter:description" content="Accepted (2026-08-13; revised 2026-08-14, 2026-08-18, 2026-08-31, 2026-10-01). Revised 2026-10-06: the smart-wait and cron-validation statements now…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"074 · Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)","item":"https://ivanball.github.io/docs/adr/074-recurring-job-scheduler.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
@@ -239,7 +239,8 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-074-recurring-job-scheduler-persistent-cron-jobs-on-the-outbox-claim-lease-pattern">ADR-074: Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-08-13; revised 2026-08-14, 2026-08-18, 2026-08-31). The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release
+          <p>Accepted (2026-08-13; revised 2026-08-14, 2026-08-18, 2026-08-31, 2026-10-01). Revised 2026-10-06: the
+          smart-wait and cron-validation statements now match the runner&#39;s actual behavior. The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release
           and is opt-in: a host calls <code>AddScheduledJobs(configuration)</code> and sets <code>Scheduler:Enabled</code>. Until it does,
           the framework creates no table and starts no runner.</p>
           <h2 id="context">Context</h2>
@@ -262,10 +263,11 @@
           <h3 id="the-scheduler-is-the-outbox-claim-lease-pattern-applied-to-cron-not-hangfire-and-not-quartznet">The scheduler is the outbox claim-lease pattern applied to cron, not Hangfire and not Quartz.NET</h3>
           <p>A persistent job store plus a single-runner claim lease, reusing the exact idiom the outbox proved. The
           outbox claims a batch with an <code>ExecuteUpdateAsync</code> that sets <code>LockedUntil</code> and <code>LockToken</code> in one statement
-          (<code>.../Persistence/Outbox/Processing/OutboxProcessor.cs:401-405</code>, inside <code>ClaimEligibleAsync</code>, <code>:378</code>) over a shared
-          <code>FilterClaimable</code> predicate that admits only rows whose <code>LockedUntil</code> is null or already in the past
-          (<code>:453-459</code>), then re-reads the claimed
-          set by <code>LockToken</code> so a partial claim processes only its own rows (<code>:413-418</code>). A due job is claimed the same way, so two replicas can
+          (<code>.../Persistence/Outbox/Processing/OutboxProcessor.cs:397-401</code>, inside <code>ClaimEligibleAsync</code>, <code>:370</code>) over a shared
+          <code>FilterClaimable</code> predicate that admits only eligible, unprocessed rows whose <code>LockedUntil</code> is null or already
+          in the past (<code>:449-455</code>; a batch carrying an ordering key claims through <code>FilterUnblocked</code>, which composes it,
+          <code>:393-395</code>, <code>:464</code>), then re-reads the claimed
+          set by <code>LockToken</code> so a partial claim processes only its own rows (<code>:409-417</code>). A due job is claimed the same way, so two replicas can
           never run the same occurrence, and a replica that dies mid-run releases its job when the lease expires.</p>
           <p>Hangfire would have brought its own schema, its own storage abstraction, a dashboard surface to authorize
           and host, and a licensing posture that varies by storage provider. Quartz.NET would have brought a large
@@ -290,8 +292,8 @@
           <code>LastError</code>, <code>LastDurationMs</code>, <code>LockedUntil</code> and <code>LockToken</code> (<code>ScheduledJobEntry.cs:26-74</code>). It is deliberately <strong>not</strong> an <code>IAuditableEntity</code>: it
           self-stamps nothing, it is never soft-deleted, and no global query filter reaches it. That falls out of the
           mapping rather than being asserted: the soft-delete filter is applied only to entity types assignable to
-          <code>IAuditableEntity</code> (<code>.../Persistence/DbContexts/ApplicationDbContext.cs:457</code>, <code>:466</code>), and
-          <code>ConfigureScheduler</code> maps the table with no <code>HasQueryFilter</code> call of its own (<code>:805-841</code>). That is the
+          <code>IAuditableEntity</code> (<code>.../Persistence/DbContexts/ApplicationDbContext.cs:456</code>, <code>:465</code>), and
+          <code>ConfigureScheduler</code> maps the table with no <code>HasQueryFilter</code> call of its own (<code>:802-838</code>). That is the
           <code>OutboxMessage</code> precedent: infrastructure rows are not domain rows.</p>
           <p>The table lives in the <strong>Default</strong> source and only there. The outbox exists once per relational database
           because an outbox row must be written in the same transaction as the aggregate that produced it
@@ -301,9 +303,11 @@
           <h3 id="scheduledjobrunner-is-a-backgroundservice-with-a-smart-wait-not-a-periodicbackgroundservice"><code>ScheduledJobRunner</code> is a <code>BackgroundService</code> with a smart wait, not a <code>PeriodicBackgroundService</code></h3>
           <p><code>ScheduledJobRunner</code> (<code>.../Infrastructure/Scheduling/ScheduledJobRunner.cs</code>) subclasses <code>BackgroundService</code>
           directly, because a fixed period is the wrong shape: after each cycle it waits until the <strong>earliest</strong>
-          <code>NextRunOn</code> across the store, through <code>TimeProvider</code>, capped by the polling interval. That mirrors the
-          outbox smart wait, and it is what keeps a scheduler with one nightly job from waking 2,880 times a day to
-          find nothing due. The cycle is: claim the due jobs with the <code>ExecuteUpdateAsync</code> lease, execute each in a
+          <code>NextRunOn</code> across the store, through <code>TimeProvider</code>, capped by the polling interval and floored at one
+          second (<code>ComputeWaitTime</code>, <code>.../Infrastructure/Scheduling/ScheduledJobRunner.cs:146-160</code>). That mirrors the
+          outbox smart wait: it shortens the sleep when a job falls due before the next poll, so a job starts on time
+          rather than up to one interval late. It does not reduce wakes: because the polling interval is the cap, a
+          host whose only job is nightly still runs a cycle every interval (30 seconds at the default). The cycle is: claim the due jobs with the <code>ExecuteUpdateAsync</code> lease, execute each in a
           fresh scope, record the outcome and duration on the row, compute the next occurrence with Cronos in UTC,
           release the lease.</p>
           <h3 id="a-missed-schedule-runs-once-and-then-advances">A missed schedule runs once and then advances</h3>
@@ -314,8 +318,9 @@
           reconciliation sweep wants current state rather than four replays of it. The cost is in the Trade-offs: a
           job that must run for every window is not served by this scheduler.</p>
           <h3 id="settings-metrics-and-registration">Settings, metrics and registration</h3>
-          <p><code>SchedulerSettings</code> binds the <code>Scheduler</code> section with <code>Enabled</code>, <code>PollingIntervalSeconds</code> (default 30) and
-          <code>LeaseSeconds</code> (default 300), through the mandatory
+          <p><code>SchedulerSettings</code> binds the <code>Scheduler</code> section with <code>Enabled</code>, <code>PollingIntervalSeconds</code> (default 30),
+          <code>LeaseSeconds</code> (default 300) and <code>DataSource</code>, the engine of the Default database that holds the table
+          (default <code>SQLServer</code>; <code>.../Infrastructure/Scheduling/SchedulerSettings.cs:26</code>, <code>:34</code>, <code>:43</code>, <code>:52</code>), through the mandatory
           <code>AddOptions&lt;T&gt;().Bind(...).ValidateDataAnnotations().ValidateOnStart()</code> chain of
           <a href="070-fail-fast-configuration-contract.html">ADR-070</a>, so a malformed scheduler section stops the host at boot
           rather than at 03:00.</p>
@@ -334,8 +339,8 @@
           queue and a schedule has no queue.</p>
           <p>Registration is two calls. <code>AddScheduledJobs(configuration)</code> binds the settings and registers the runner;
           <code>AddScheduledJob&lt;TJob&gt;()</code> adds one job from any module, using the accumulate-across-modules idiom that
-          <code>AddPermissions</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:103</code>)
-          and its <code>EnsurePermissionRegistry</code> helper (<code>:117</code>) already establish. That registration takes <strong>no schedule
+          <code>AddPermissions</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:105</code>)
+          and its <code>EnsurePermissionRegistry</code> helper (<code>:119</code>) already establish. That registration takes <strong>no schedule
           argument</strong> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Jobs.cs:72</code>): the schedule is
           the job&#39;s own <code>CronExpression</code> property, and the one way to retime a shipped job without a release is
           configuration, the <code>Scheduler:Jobs:{Name}:Cron</code> section bound by <code>SchedulerSettings.Jobs</code>
@@ -406,8 +411,12 @@
           so a &quot;3am&quot; job becomes a 4am job for half the year in any zone that observes one. Making it zone-aware
           would put a time zone on every entry and a policy decision on every ambiguous or skipped local hour.</li>
           <li><strong>Nothing enforces that a cron expression is sensible.</strong> A typo that still parses binds a job to a
-          schedule nobody intended, and Cronos parsing at startup is the only check: it catches <code>* * * * ? ?</code> and it
-          cannot catch <code>0 3 * * 1</code> written when <code>0 3 * * *</code> was meant.</li>
+          schedule nobody intended, and Cronos parsing is the only check. It runs when the runner syncs registrations
+          on a cycle (<code>ScheduledJobRunner.cs:295</code>), the first one after a 15-second startup delay (<code>:69</code>), not at host
+          startup, and the override setting carries no validation attribute (<code>SchedulerSettings.cs:74</code>). A malformed
+          expression such as <code>* * * * ? ?</code> does not stop the host: it is logged and its row is parked at
+          <code>DateTime.MaxValue</code> with <code>LastOutcome</code> <code>Skipped</code> (<code>ScheduledJobRunner.cs:296-319</code>, <code>:342-365</code>). Parsing cannot catch <code>0 3 * * 1</code>
+          written when <code>0 3 * * *</code> was meant.</li>
           <li><strong>One runner per host, and it is shared.</strong> A slow job delays the jobs due behind it, exactly as
           <a href="052-background-job-execution.html">ADR-052</a>&#39;s single-reader drain does for its queue.</li>
           </ul>
@@ -421,6 +430,20 @@
           <code>AddScheduledJob&lt;TJob&gt;()</code>, which now lives in <code>DependencyInjection.Jobs.cs:72</code>, <code>ResolveCronExpression</code> and
           <code>SyncRegistrationsAsync</code> (<code>ScheduledJobRunner.cs:170</code>, <code>:267</code>), and the design-time scheduler settings
           (<code>DesignTimeDbContextHelper.cs:160-161</code>).</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <ul>
+          <li>The smart wait no longer claims to stop a one-nightly-job host from waking 2,880 times a day. The polling
+          interval caps the wait (<code>ScheduledJobRunner.cs:146-160</code>), so it shortens a sleep but never removes a wake.</li>
+          <li>The cron trade-off no longer says parsing happens at startup or that it stops a bad expression. Parsing
+          runs per cycle in <code>SyncRegistrationsAsync</code> (<code>ScheduledJobRunner.cs:295</code>), and an unparsable expression
+          parks the row with outcome <code>Skipped</code>.</li>
+          <li>The settings list now names <code>DataSource</code> (<code>SchedulerSettings.cs:52</code>). The <code>FilterClaimable</code> description
+          now also names the eligible-id and unprocessed conditions (<code>OutboxProcessor.cs:453-455</code>), and the keyed
+          <code>FilterUnblocked</code> claim path (<code>:393-395</code>).</li>
+          <li>Anchors re-verified against current source. The anchors in the 2026-10-01 entry above are now stale. The
+          <code>LastError</code> 2048-character cap is at <code>ApplicationDbContext.cs:824</code>, and the other moved anchors are corrected
+          in the body.</li>
+          </ul>
           <h2 id="related">Related</h2>
           <p><a href="003-outbox-dual-dispatch.html">ADR-003</a> (the outbox whose claim-lease idiom and smart wait this reuses
           verbatim, and whose at-least-once posture it inherits along with the idempotency obligation on job bodies),
@@ -452,6 +475,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

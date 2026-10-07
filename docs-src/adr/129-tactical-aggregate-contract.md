@@ -91,8 +91,8 @@ every repo follows, not a test.
   finds a comment through `GetChildOrNotFound` (`:144`). `TicketInvariants` is the static class
   (`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/Tickets/TicketInvariants.cs:16`,
   `Result.Combine` at `:27`, `:33`, `:40`). The ADC and Store aggregates use the same members, for
-  example `Speaker` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:392`,
-  `:452`, `:472`) and `Product`
+  example `Speaker` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:394`,
+  `:454`, `:474`) and `Product`
   (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/Product.cs:407`, `:455`, `:474`).
 - **Adoption: the three application repos subclass the full base unchanged.** MMCA.ADC
   (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Domain/EntityConventionTests.cs:3-6`),
@@ -149,6 +149,12 @@ every repo follows, not a test.
   entirely (`ArchitectureRules.Entities.cs:67-70`), so a factory under another name is unchecked.
 - **The framework's own model is gated more lightly.** MMCA.Common runs the smaller base, so sealing,
   setter, layer-placement and DTO/request rules do not apply to its own concrete Domain types.
+
+## Revision (2026-10-06)
+- No content changes: the contract described above still matches the code.
+- Anchors re-verified against current source; the ADC `Speaker` examples now point at the
+  `SetItems`, `RemoveChildOrNotFound` and `GetChildOrNotFound` call sites (`Speaker.cs:394`, `:454`,
+  `:474`).
 
 ## Related
 [ADR-013](013-result-pattern.md) (the `Result<T>` factories this contract requires),

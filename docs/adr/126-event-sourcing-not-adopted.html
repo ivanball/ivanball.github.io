@@ -244,7 +244,8 @@
           weighed and dropped, the alternative weighed with it, and the one condition that would make it right
           to revisit. The current-state persistence model recorded in <a href="003-outbox-dual-dispatch.html">ADR-003</a>,
           <a href="005-soft-delete-vs-erasure.html">ADR-005</a> and <a href="075-audit-trail.html">ADR-075</a> remains the accepted
-          mechanism.</p>
+          mechanism. Revised 2026-10-01: citations re-anchored. Revised 2026-10-06: the ADR-075 history claim
+          is scoped to opted-in entities, with retention purging only where the host runs the scheduler.</p>
           <h2 id="context">Context</h2>
           <p>Event sourcing keeps an append-only log of the facts that happened to an aggregate and treats that log
           as the system of record. Current state becomes a fold over the log, a &quot;state as of&quot; question is that
@@ -259,9 +260,10 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/AuditableBaseEntity.cs:13</code>, <code>IsDeleted</code> at <code>:20</code>,
           <code>CreatedOn</code> at <code>:25</code>). Deletion is a flag rather than a fact appended to a log: <code>Delete()</code> sets
           <code>IsDeleted = true</code> at <code>:77</code>, and a global query filter hides the row from every normal read
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:454</code>, the filter applied at <code>:466</code>).
-          The audit fields are stamped by the save itself, from the identity the caller passed in
-          (<code>.../DbContexts/ApplicationDbContext.cs:189</code>). ADC&#39;s <code>LivePoll</code> is representative, an aggregate root
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:453</code>, the filter applied at <code>:465</code>).
+          The audit fields are stamped during the save, from the identity the caller passed in: the save records
+          it (<code>.../DbContexts/ApplicationDbContext.cs:194</code>, set at <code>:197</code>) and the audit interceptor reads it back
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/AuditSaveChangesInterceptor.cs:66</code>). ADC&#39;s <code>LivePoll</code> is representative, an aggregate root
           holding its own current status
           (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Domain/LivePolls/LivePoll.cs:18</code>).</p>
           <p>The events those aggregates raise are <strong>notifications, not the record</strong>. <code>IDomainEvent</code> is documented
@@ -273,11 +275,11 @@
           events get is delivery durability, not history. An <code>OutboxMessage</code> row carries the serialized payload
           and the stored event identity
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:15</code>, the
-          identity at <code>:38</code>), the table is mapped on every relational source
-          (<code>.../DbContexts/ApplicationDbContext.cs:664</code>, and per service database in ADC at
+          identity at <code>:40</code>), the table is mapped on every relational source
+          (<code>.../DbContexts/ApplicationDbContext.cs:667</code>, and per service database in ADC at
           <code>MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Conference/Migrations/SQLServerDbContextModelSnapshot.cs:1589</code>),
           the processor drains it
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:57</code>),
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:53</code>),
           and the consume edge de-duplicates it
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Inbox/EfInboxStore.cs:38</code>). A
           processed outbox row is a delivered message; nothing reads it back and no code path rebuilds state
@@ -303,7 +305,9 @@
           rehydration path, a snapshot policy and a projection layer for every read an EF query answers today.</li>
           <li><strong>The history actually asked for is already answered, more cheaply.</strong> &quot;Who changed this and when&quot; is
           the audit fields plus <a href="075-audit-trail.html">ADR-075</a>&#39;s field-level change history, committed in the
-          same transaction as the change; &quot;where did this row go&quot; is soft delete. And
+          same transaction as the change for entities marked <code>IAuditedEntity</code> and purged after the configured
+          retention window only where the host also runs the scheduler; &quot;where did this row go&quot; is soft
+          delete. And
           <a href="005-soft-delete-vs-erasure.html">ADR-005</a> commits to anonymizing personal data on request, which an
           immutable system of record turns into a rewrite rather than an update.</li>
           </ul>
@@ -345,6 +349,20 @@
           <p>No decision or rationale changed. Two citations were re-anchored: the soft-delete global query filter
           now points at <code>ApplySoftDeleteFilters</code> (<code>.../DbContexts/ApplicationDbContext.cs:454</code>, the filter at
           <code>:466</code>), and the outbox processor at its class declaration (<code>.../Outbox/Processing/OutboxProcessor.cs:57</code>).</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <p>No decision changed.</p>
+          <ul>
+          <li>The audit-history rationale is scoped: ADR-075 field-level history covers only entities marked
+          <code>IAuditedEntity</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IAuditedEntity.cs:34</code>), is
+          opt-in (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSettings.cs:26</code>)
+          and is purged after a retention window (<code>:38</code>, 90 days by default) only when the host also runs the
+          scheduler (<code>AddScheduledJobs</code> plus <code>Scheduler:Enabled</code>); without it the value is inert and the table
+          grows (<code>:33-35</code>). ADC&#39;s <code>LivePoll</code> is not marked.</li>
+          <li>Audit stamping is attributed to the interceptor reading the identity the save records, not to the
+          save method itself.</li>
+          <li>Anchors re-verified against current source; the soft-delete filter (<code>:453</code>, <code>:465</code>), outbox mapping
+          (<code>:667</code>), <code>EventType</code> (<code>:40</code>), save (<code>:194</code>) and <code>OutboxProcessor</code> (<code>:53</code>) citations moved.</li>
+          </ul>
           <h2 id="related">Related</h2>
           <p><a href="003-outbox-dual-dispatch.html">ADR-003</a> (at-least-once delivery of domain events, the mechanism a
           per-aggregate event log would duplicate rather than replace),
@@ -374,6 +392,7 @@
             <li><a href="#alternatives-rejected">Alternatives rejected</a></li>
             <li><a href="#when-to-revisit">When to revisit</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

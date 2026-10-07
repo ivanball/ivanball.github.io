@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-125: Parameterized SQL Only, Enforced by a Fitness Gate · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-09-19).">
+  <meta name="description" content="Accepted (2026-09-19). Revised 2026-10-01: citations refreshed and MMCA.Helpdesk counted as the fourth subclassing repo. Revised 2026-10-06: the…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/125-parameterized-sql-only.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-125: Parameterized SQL Only, Enforced by a Fitness Gate">
-  <meta property="og:description" content="Accepted (2026-09-19).">
+  <meta property="og:description" content="Accepted (2026-09-19). Revised 2026-10-01: citations refreshed and MMCA.Helpdesk counted as the fourth subclassing repo. Revised 2026-10-06: the…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/125-parameterized-sql-only.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-125: Parameterized SQL Only, Enforced by a Fitness Gate">
-  <meta name="twitter:description" content="Accepted (2026-09-19).">
+  <meta name="twitter:description" content="Accepted (2026-09-19). Revised 2026-10-01: citations refreshed and MMCA.Helpdesk counted as the fourth subclassing repo. Revised 2026-10-06: the…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"125 · Parameterized SQL Only, Enforced by a Fitness Gate","item":"https://ivanball.github.io/docs/adr/125-parameterized-sql-only.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
@@ -239,7 +239,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-125-parameterized-sql-only-enforced-by-a-fitness-gate">ADR-125: Parameterized SQL Only, Enforced by a Fitness Gate</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-09-19).</p>
+          <p>Accepted (2026-09-19). Revised 2026-10-01: citations refreshed and MMCA.Helpdesk counted as the fourth subclassing repo. Revised 2026-10-06: the relational limit is now a conditional registration that fails at container validation, not a <code>NotSupportedException</code> on the first statement.</p>
           <h2 id="context">Context</h2>
           <p>The supported way to read data is the repository plus specification contract
           (<a href="055-repository-and-specification-contract.html">ADR-055</a>), and LINQ answers almost everything. It does
@@ -260,33 +260,36 @@
           <p>The framework also runs on four engines (<a href="018-polyglot-persistence.html">ADR-018</a>), and one of them has
           no SQL command surface at all, so &quot;raw SQL&quot; cannot be offered as a capability every host has. Before
           v1.192.0 the landing shape for a raw scalar read was four keyless <code>ValReturn&lt;T&gt;</code> entities mapped to no
-          table and queried by nobody (<code>MMCA.Common/CHANGELOG.md:1153-1159</code>); the pair of additions this record
-          covers shipped in v1.192.0 (<code>MMCA.Common/CHANGELOG.md:1038</code>, the interface at <code>:1108-1117</code> and the
-          fitness base at <code>:1118-1121</code>).</p>
+          table and queried by nobody (<code>MMCA.Common/CHANGELOG.md:1494-1500</code>); the pair of additions this record
+          covers shipped in v1.192.0 (<code>MMCA.Common/CHANGELOG.md:1379</code>, the interface at <code>:1449-1458</code> and the
+          fitness base at <code>:1459-1462</code>).</p>
           <h2 id="decision">Decision</h2>
           <p>Give raw SQL exactly one door whose signature makes the unsafe call uncompilable, and ban the four raw
           EF members in module code with a fitness test rather than a guideline.</p>
           <ul>
           <li><strong>The contract accepts <code>FormattableString</code> and nothing else.</strong> <code>IRawSqlQueryExecutor</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IRawSqlQueryExecutor.cs:23</code>)
-          has two entry points, <code>QueryAsync&lt;T&gt;</code> (<code>:31</code>) and <code>QuerySingleOrDefaultAsync&lt;T&gt;</code> (<code>:40</code>), both typed
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IRawSqlQueryExecutor.cs:24</code>)
+          has two entry points, <code>QueryAsync&lt;T&gt;</code> (<code>:31</code>) and <code>QuerySingleOrDefaultAsync&lt;T&gt;</code> (<code>:39</code>), both typed
           <code>FormattableString</code>. A concatenated statement is a <code>string</code> and does not bind to either method, so
           injection on this path is a compile error rather than a review item, and the statement text stays
           stable across calls so the server keeps its plan (<code>:9-15</code>). <code>T</code> is a scalar or an unmapped DTO whose
           properties match the selected columns by name (<code>:26</code>, <code>:34</code>). The interface lives in Application, so
           a module reaches hand-written SQL without referencing EF Core.</li>
           <li><strong>The relational limit is explicit and named, not implied.</strong> <code>EFRawSqlQueryExecutor</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/EFRawSqlQueryExecutor.cs:22</code>)
-          resolves the host&#39;s default physical source (<code>:45</code>) and throws <code>NotSupportedException</code> naming Cosmos
-          DB and the two alternatives when that source is not relational (<code>:46-52</code>), which is the same boundary
-          the interface documents (<code>IRawSqlQueryExecutor.cs:18-20</code>, <code>:30</code>, <code>:39</code>).</li>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/EFRawSqlQueryExecutor.cs:28</code>)
+          resolves the host&#39;s default physical source (<code>:50</code>), and it is registered only when that default
+          source is on a relational engine
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:409</code>, registration at
+          <code>:411</code>). A Cosmos-default host has no registration, so a service that injects the interface there
+          fails when the container is validated rather than on its first statement, which is the same boundary
+          the interface documents (<code>IRawSqlQueryExecutor.cs:17-22</code>) and the executor restates
+          (<code>EFRawSqlQueryExecutor.cs:19-24</code>).</li>
           <li><strong>The statement joins the caller&#39;s unit of work.</strong> The executor takes its context from the scoped
-          <code>IDbContextFactory</code> and calls EF&#39;s <code>Database.SqlQuery&lt;T&gt;</code> on it (<code>EFRawSqlQueryExecutor.cs:54</code>), so
+          <code>IDbContextFactory</code> and calls EF&#39;s <code>Database.SqlQuery&lt;T&gt;</code> on it (<code>EFRawSqlQueryExecutor.cs:51</code>), so
           the read shares the caller&#39;s connection and any transaction an <code>ITransactional</code> command opened. It is
-          registered scoped, as the next registration after the singleton <code>IQueryableExecutor</code> and deliberately not a
-          singleton itself
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:110</code>, the sibling at
-          <code>:105</code> and the reason at <code>:107-109</code>), and is <code>internal</code>,
+          registered scoped, by the call that follows the singleton <code>IQueryableExecutor</code> and deliberately not a
+          singleton itself (<code>DependencyInjection.cs:116</code>, the sibling at <code>:111</code> and the reason at <code>:113-115</code>;
+          the scoped registration itself at <code>:411</code>), and is <code>internal sealed</code> (<code>EFRawSqlQueryExecutor.cs:28</code>),
           so the abstraction is the only public surface.</li>
           <li><strong>The ban is a test, not a paragraph.</strong> <code>ModuleCode_UsesParameterizedSqlOnly</code>
           (<code>RawSqlConventionTestsBase.cs:66</code>) scans the <code>.cs</code> files of every mapped module and fails on member
@@ -306,9 +309,10 @@
           the <code>SET IDENTITY_INSERT</code> statement has no parameterized form, because a T-SQL identifier cannot be a
           command parameter, and the schema and table names are read off EF model metadata rather than caller
           input
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:411-412</code>,
-          the OFF statement at <code>:421-422</code>, the schema and table read at <code>:470-471</code>). That call site also carries the matching Sonar <code>S2077</code> suppression
-          with the same reasoning (<code>:410</code>, restored at <code>:425</code>), so the exemption is stated twice and names its
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:421-423</code>,
+          the OFF statement at <code>:431-433</code>, both built from the identity group&#39;s schema and table at <code>:422</code> and
+          <code>:432</code>). That call site also carries the matching Sonar <code>S2077</code> suppression
+          with the same reasoning (<code>:420</code>, restored at <code>:435</code>), so the exemption is stated twice and names its
           justification in both places. MMCA.ADC declares no override, so it inherits the empty list
           (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Cqrs/RawSqlConventionTests.cs:14-16</code>, with
           the reason written in its class documentation at <code>:10-12</code>), and MMCA.Store declares the empty list
@@ -349,9 +353,10 @@
           the exemption surface is a known, justified constant rather than a growing list.</li>
           <li><strong>Relational-only is a stated limit rather than an assumption.</strong> Under
           <a href="018-polyglot-persistence.html">ADR-018</a> a host can default to Cosmos DB, which speaks its own query
-          language. Naming the engine in the exception is more useful than a provider-level error, and it
-          points at the two real options (express the read with LINQ, or move the entity to a relational
-          source).</li>
+          language. Withholding the registration on such a host turns the limit into a container-validation
+          failure at startup, which is earlier and more useful than a provider-level error on the first
+          statement; the real options stay the same (express the read with LINQ, or move the entity to a
+          relational source).</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
@@ -375,10 +380,11 @@
           projects and test projects are outside it unless a subclass adds them, which is what MMCA.Common&#39;s
           subclass does for the framework projects and MMCA.ADC&#39;s does for its Notification module.</li>
           <li><strong>One source, the default one.</strong> The executor resolves the host&#39;s default physical source
-          (<code>EFRawSqlQueryExecutor.cs:45</code>), so a statement that must run against a named non-default source has
+          (<code>EFRawSqlQueryExecutor.cs:50</code>), so a statement that must run against a named non-default source has
           no route through this interface today.</li>
-          <li><strong>The Cosmos refusal is discovered at runtime</strong> (<code>:46-52</code>). Nothing at compile time tells a module
-          author that the host it will be deployed into defaults to a non-relational engine.</li>
+          <li><strong>The Cosmos refusal is discovered at host startup</strong> (container validation,
+          <code>IRawSqlQueryExecutor.cs:18-21</code>), not at compile time. Nothing at compile time tells a module author
+          that the host it will be deployed into defaults to a non-relational engine.</li>
           </ul>
           <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
           <p>No decision or rationale changed. Citations refreshed: the CHANGELOG anchors (<code>MMCA.Common/CHANGELOG.md:1038</code>,
@@ -388,6 +394,24 @@
           <code>RawSqlConventionTestsBase</code> and leaves <code>AllowedFiles</code> empty
           (<code>MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/ArchitectureTests.cs:186-194</code>), so the
           ratchet still holds one entry across all four repos.</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <ul>
+          <li>The relational limit changed shape in v1.218.0 (<code>MMCA.Common/CHANGELOG.md:286</code>): the executor no
+          longer throws <code>NotSupportedException</code> naming Cosmos DB. It is registered only when the default
+          source is relational (<code>DependencyInjection.cs:409-411</code>), so a Cosmos-default host that injects
+          <code>IRawSqlQueryExecutor</code> fails at container validation. The Decision, Rationale and Trade-offs bullets
+          now say so. The v1.192.0 entry (<code>CHANGELOG.md:1449-1458</code>) still records the original exception, as a
+          dated entry should.</li>
+          <li>The registration is now the <code>AddRawSqlQueryExecutor</code> call after the singleton <code>IQueryableExecutor</code>
+          (<code>DependencyInjection.cs:116</code>, sibling <code>:111</code>, reason <code>:113-115</code>), not a direct scoped registration;
+          the executor is <code>internal sealed</code>.</li>
+          <li>The <code>SET IDENTITY_INSERT</code> statements take their schema and table from the identity group
+          (<code>DbContextFactory.cs:422</code>, <code>:432</code>); the EF metadata origin is stated in the <code>S2077</code> suppression
+          comment (<code>:420</code>).</li>
+          <li>All live-section anchors were re-verified against current source (executor, interface,
+          <code>DependencyInjection.cs</code>, <code>DbContextFactory.cs</code>, CHANGELOG); the 2026-10-01 anchors above are left as
+          recorded on that date.</li>
+          </ul>
           <h2 id="related">Related</h2>
           <p><a href="055-repository-and-specification-contract.html">ADR-055</a> (the repository plus specification path this
           escape hatch sits beside, and the reason the hatch stays narrow),
@@ -415,6 +439,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

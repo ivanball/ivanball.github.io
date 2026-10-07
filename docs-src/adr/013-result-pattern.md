@@ -12,6 +12,11 @@ Revised 2026-08-31: the catch-all exception handler now maps `CrossTenantWriteEx
 ahead of its 500 fallback, so a write refused at the tenant boundary reads as a caller fault.
 Revised 2026-09-03: the error `Code` is gated as a per-repo public vocabulary (one literal code, one
 owning type) by an IL-reading architecture rule.
+Revised 2026-10-01: citations re-anchored after line shifts; no decision changed.
+Revised 2026-10-06: `ErrorType.TooManyRequests` (HTTP 429, gRPC `ResourceExhausted`, severity rank
+45) joins the category set, the catch-all exception handler also answers `BadHttpRequestException`
+with the status it carries (413 for an oversize body), and the UI executor counts Polly's `ExecutionRejectedException` as a
+transport fault.
 
 ## Context
 Operations at every layer fail in *expected* ways: input is invalid, a domain invariant is broken, a
@@ -29,14 +34,19 @@ not exceptions.
 - A `Result` is either success or failure; a failure carries one or more `Error` records (`Code`,
   `Message`, `Type` of type `ErrorType`, optional `Source` / `Target`).
 - `ErrorType` is a **transport-agnostic** category: `Validation`, `Invariant`, `NotFound`, `Conflict`,
-  `Unauthorized`, `Forbidden`, `UnprocessableEntity`, `Failure`, `Unexpected`. The domain never names
-  an HTTP status. `Unexpected` is the one category reserved for a genuine server-side fault (the
-  request was well formed and permitted, the server could not complete it,
+  `Unauthorized`, `Forbidden`, `UnprocessableEntity`, `Failure`, `Unexpected`, `TooManyRequests`. The
+  domain never names an HTTP status. `Unexpected` is the one category reserved for a genuine
+  server-side fault (the request was well formed and permitted, the server could not complete it,
   `MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/ErrorType.cs:36-41`): it maps to HTTP 500
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ErrorHttpMapping.cs:30`) and to gRPC
-  `Internal` (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/ResultGrpcExtensions.cs:47`), and it
-  is explicitly not for business-rule violations, which is what keeps the other eight categories
-  caller-fixable (`ErrorType.cs:38-39`, factory at `.../Shared/Abstractions/Error.cs:114-115`).
+  `Internal` (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/ResultGrpcExtensions.cs:48`), and it
+  is explicitly not for business-rule violations, which is what keeps the other nine categories
+  caller-side (`ErrorType.cs:38-39`, factory at `.../Shared/Abstractions/Error.cs:126-127`).
+  `TooManyRequests` is the temporary refusal (a login or password-change lockout): it maps to HTTP
+  429 (`ErrorHttpMapping.cs:31`) and gRPC `ResourceExhausted` (`ResultGrpcExtensions.cs:49`), and
+  the caller fixes it by retrying later rather than by changing the request (`ErrorType.cs:43-48`,
+  factory at `Error.cs:103-104`). It is appended last so the numeric values of the earlier members
+  do not move.
 - Domain factory methods and mutators return `Result<T>`; application command/query handlers thread
   results through combinators instead of `try`/`catch`. The surface is:
   - **Lifting without naming a factory.** An `Error` converts implicitly to a failed `Result`
@@ -56,40 +66,45 @@ not exceptions.
     and a synchronous binder (`:20-29`, `:39-48`), `MapAsync` (`:58-67`), `TapAsync` (`:77-91`) and
     `MatchAsync` (`:102-113`), so an asynchronous pipeline composes end to end without an intermediate
     `await` and its temporary local between every step. Each awaits the incoming task once and
-    delegates to the same instance combinator, so the short-circuit behavior is identical (`:3-9`).
+    applies the same short-circuit rule as the instance combinators: `BindAsync` and
+    `MapAsync` delegate to them, `TapAsync` runs its asynchronous action inline only on success
+    (`:84-90`), and `MatchAsync` hands the awaited result to the synchronous `Match` (`:111-112`).
   - Every combinator short-circuits: a failed result never invokes the delegate it was handed
     (`Result.cs:279`, `:292`, `:305`, `:339-342`).
 - The transport mapping lives only at the edge. `ApiControllerBase.HandleFailure()`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/ApiControllerBase.cs:35-60`) maps an
-  `ErrorType` to an HTTP status through a `FrozenDictionary` (`ErrorHttpMapping.cs:20-31`, resolved at
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/ApiControllerBase.cs:35-61`) maps an
+  `ErrorType` to an HTTP status through a `FrozenDictionary` (`ErrorHttpMapping.cs:20-32`, resolved at
   `ApiControllerBase.cs:48`) and returns an RFC 9457 ProblemDetails body carrying **all** errors
-  (`:50-58`, projection at `ErrorHttpMapping.cs:61-69`). gRPC does the equivalent over the wire
+  (`:50-58`, projection at `ErrorHttpMapping.cs:62-70`). gRPC does the equivalent over the wire
   (`GrpcResultExceptionInterceptor`, ADR-007) from a mirrored table (`Validation`/`Invariant`/`Failure`
   to `InvalidArgument`, `NotFound` to `NotFound`, `Conflict` to `Aborted`, `Unauthorized` to
   `Unauthenticated`, `Forbidden` to `PermissionDenied`, `UnprocessableEntity` to `FailedPrecondition`,
-  `Unexpected` to `Internal`: `ResultGrpcExtensions.cs:36-48`), so callers keep programming against
-  `Result<T>` across a process boundary.
+  `Unexpected` to `Internal`, `TooManyRequests` to `ResourceExhausted`:
+  `ResultGrpcExtensions.cs:37-50`), so callers keep programming against `Result<T>` across a process
+  boundary.
 - **A failure carrying several errors takes the status of the most severe one, never of the first,
   and both edges rank it the same way.** `Result.Combine` aggregates errors in evaluation order
   (`Result.cs:124-145`), so a positional rule let an incidental validation failure downgrade a real
   403 or 500 to a 400. The ranking is one table in the Shared layer,
-  `ErrorTypeSeverity` (`MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/ErrorTypeSeverity.cs:30`),
-  most to least severe: `Unexpected` (70) > `Unauthorized` (60) > `Forbidden` (50) > `Conflict` (40) >
-  `NotFound` (30) > `UnprocessableEntity` (20) > `Invariant` / `Validation` / `Failure` (one shared
-  rank of 10, `:39-47`), with the reasoning for each rank written onto the type itself (`:16-25`).
-  `MostSevere` keeps the earliest error on a tie (`:69-96`, strict `>` at `:88`) and an unmapped
-  category ranks lowest, so a category added to `ErrorType` without a rank can never silently
-  outrank a real 403 or 500 (`:57`, stated at `:50-53`). The scan is index-based rather than a LINQ
-  `MaxBy` because it runs on every failure response (`:83-84`).
+  `ErrorTypeSeverity` (`MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/ErrorTypeSeverity.cs:31`),
+  most to least severe: `Unexpected` (70) > `Unauthorized` (60) > `Forbidden` (50) >
+  `TooManyRequests` (45) > `Conflict` (40) > `NotFound` (30) > `UnprocessableEntity` (20) >
+  `Invariant` / `Validation` / `Failure` (one shared rank of 10, `:38-50`), with the reasoning for
+  each rank written onto the type itself (`:16-26`; a lockout outranks a conflict because the caller
+  is refused whatever the request says, `:21`). `MostSevere` keeps the earliest error on a tie
+  (`:71-98`, strict `>` at `:90`) and an unmapped category ranks lowest, so a category added to
+  `ErrorType` without a rank can never silently outrank a real 403 or 500 (`:59`, stated at
+  `:52-56`). The scan is index-based rather than a LINQ `MaxBy` because it runs on every failure
+  response (`:85-86`).
 
   **It lives in Shared rather than in one presentation package because two edges consume it.** HTTP
   resolves the status from `ErrorTypeSeverity.MostSevere`
-  (`.../MMCA.Common.API/Middleware/ErrorHttpMapping.cs:50-51`, called from
+  (`.../MMCA.Common.API/Middleware/ErrorHttpMapping.cs:51-52`, called from
   `ApiControllerBase.HandleFailure` at `ApiControllerBase.cs:48`) and gRPC's `ToRpcException` does
-  the same (`.../MMCA.Common.Grpc/ResultGrpcExtensions.cs:121-123`, argued at `:101-115`). Only the
+  the same (`.../MMCA.Common.Grpc/ResultGrpcExtensions.cs:123-125`, argued at `:103-117`). Only the
   *status* is ranked: every error still travels in the ProblemDetails `errors` array
-  (`ErrorHttpMapping.cs:61-69`) and in the gRPC trailers as `error-{i}-code` / `-message` / `-type`
-  (`ResultGrpcExtensions.cs:133-135`). Ranking in one place is what makes the two transports agree;
+  (`ErrorHttpMapping.cs:62-70`) and in the gRPC trailers as `error-{i}-code` / `-message` / `-type`
+  (`ResultGrpcExtensions.cs:135-137`). Ranking in one place is what makes the two transports agree;
   the previous arrangement, with the table inside `MMCA.Common.API`, left gRPC classifying an
   aggregate by its first error while HTTP classified it by its worst.
 - Exceptions are reserved for the genuinely exceptional: programming errors (null-argument guards) and
@@ -120,18 +135,23 @@ not exceptions.
     (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ValidationExceptionHandler.cs:28,33,48-54`).
   - `GlobalExceptionHandler` (registered last) is the catch-all that turns any remaining unhandled
     exception into HTTP 500
-    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/GlobalExceptionHandler.cs:67-80`,
-    status set at `:69`). It maps exactly one exception by type before that fallback: a
+    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/GlobalExceptionHandler.cs:97-110`,
+    status set at `:99`). It maps two exceptions by type before that fallback, both caller faults
+    rather than server faults and both logged at warning rather than error. A
     `CrossTenantWriteException` (the save-time tenant-boundary rejection,
-    `.../MMCA.Common.Infrastructure/Persistence/Interceptors/CrossTenantWriteException.cs:24`) is a
-    caller fault rather than a server fault and is answered with HTTP 400, logged at warning rather
-    than error because a tenant-scoped API refusing an untenanted write is routine (`:47-64`, the
-    warning at `:51`, the 400 at `:53`). The special case sits inside the catch-all rather than in
-    its own handler because the exception derives from `InvalidOperationException`, so no handler
-    ahead of this one claims it, and every other save-time invariant failure of that family still
-    ends at the 500 (`:13-19`). The response body names no tenant id and no entity type: echoing
-    either would tell an unauthorized caller which tenant owns the row it just tried to write, so
-    the detail is a fixed string and the full failure stays in the log (`:31-39`).
+    `.../MMCA.Common.Infrastructure/Persistence/Interceptors/CrossTenantWriteException.cs:24`) is
+    answered with HTTP 400, because a tenant-scoped API refusing an untenanted write is routine
+    (`:52-70`, the warning at `:56`, the 400 at `:58`). The special case sits inside the catch-all
+    rather than in its own handler because the exception derives from `InvalidOperationException`,
+    so no handler ahead of this one claims it, and every other save-time invariant failure of that
+    family still ends at the 500 (`:15-18`). The response body names no tenant id and no entity
+    type: echoing either would tell an unauthorized caller which tenant owns the row it just tried
+    to write, so the detail is a fixed string and the full failure stays in the log (`:36-44`). A
+    `BadHttpRequestException` (a body over the endpoint's request size limit, or an unreadable
+    request) is answered with the status the exception itself carries, passed through unchanged
+    (`:79`, `:86`): a 413 gets a "Payload Too Large" title and detail, and any other status (400 for
+    an unreadable request, or another client status Kestrel assigns) gets the fixed "Bad Request"
+    pair (`:72-95`, the title and detail at `:87-92`).
 
 ### The client half: the UI layer returns `Result` too (2026-08-27)
 
@@ -147,48 +167,61 @@ Two halves make a service method honestly typed, and they are deliberately separ
 - **`ProblemDetailsResultReader` converts a response.**
   (`MMCA.Common/Source/Core/MMCA.Common.Shared/Http/ProblemDetailsResultReader.cs:58`.) It is the
   exact reverse of `ApiControllerBase.HandleFailure`: `ReadAsync(response, ct)` answers a valueless
-  `Result` (`:224`) and `ReadAsync<T>(response, options, ct)` deserializes a 2xx body or parses the
-  failure (`:259`), with the pure `ParseProblemDetails(status, body)` core testable against captured
-  payloads (`:153`). It understands four payload shapes (`:20-49`): the **MMCA error array**, where
+  `Result` (`:253`) and `ReadAsync<T>(response, options, ct)` deserializes a 2xx body or parses the
+  failure (`:288`), with the pure `ParseProblemDetails(status, body)` core testable against captured
+  payloads (`:155`). It understands four payload shapes (`:20-49`): the **MMCA error array**, where
   `code`, `message`, `type`, `source` and `target` all round-trip and `type` parses straight back
-  into `ErrorType` (`:321-356`, the parse at `:405-410`), the ASP.NET Core **validation dictionary**
-  (`:358-384`), **plain ProblemDetails** with no `errors` extension, and a **non-JSON or empty
-  body**, each of the last three synthesizing one error coded `Http.{status}` (`:412-416`, the code built at `:473-474`). Property
-  lookup is case-insensitive on purpose, because a hand-built PascalCase payload would otherwise
-  silently lose every field (`:440-471`). It lives in `MMCA.Common.Shared` and uses nothing beyond
+  into `ErrorType` (`:350-385`, the type read at `:377`, the parse at `:434-439`); the ASP.NET Core
+  **validation dictionary**, which yields one error per message coded `Validation.{property}` (or
+  `Validation` for an empty key) with the category taken from the status (`:387-432`, the code at
+  `:394-396`); **plain ProblemDetails** with no `errors` extension; and a **non-JSON or empty
+  body**. Each of the last two synthesizes one error coded `Http.{status}` (`:157-178`, `:203`,
+  built at `:441-445`, the code at `:502-503`). Property lookup is case-insensitive on purpose,
+  because a hand-built PascalCase payload would otherwise silently lose every field (`:469-500`). It lives in `MMCA.Common.Shared` and uses nothing beyond
   the BCL, because the consumer is `MMCA.Common.UI`, which references Shared only (`:14-19`).
 - **`HttpResultExecutor` converts the absence of one.**
-  (`.../MMCA.Common.UI/Services/Api/HttpResultExecutor.cs:31`.) It does not make the request: it takes
+  (`.../MMCA.Common.UI/Services/Api/HttpResultExecutor.cs:33`.) It does not make the request: it takes
   the caller's whole send-and-read operation as a `Func<Task<Result>>` / `Func<Task<Result<T>>>` and
-  wraps it (`:52`, `:87`), so the two halves compose without either knowing the other's shape. A
+  wraps it (`:54`, `:89`), so the two halves compose without either knowing the other's shape. A
   refused connection, a DNS failure, a dropped socket, an unreadable body (`HttpRequestException`,
-  `IOException`, `JsonException`) becomes a failed `Result` coded `Http.TransportFailure`
-  (`:121-127`, code at `:34`), and an `HttpClient` timeout becomes `Http.Timeout` (`:129-130`, code
-  at `:37`). Anything else is a genuine programming fault and keeps travelling as an exception
-  (`:118-119`). The exception's own text goes on `Error.Source`, never on `Message`, because it is
-  diagnostic detail that is neither localizable nor safe to render (`:124-127`).
+  `IOException`, `JsonException`), or a call the client's resilience pipeline refused to run or
+  finish (Polly's `ExecutionRejectedException`, the base of `TimeoutRejectedException` and
+  `BrokenCircuitException`) becomes a failed `Result` coded `Http.TransportFailure` (`:116-126`,
+  built at `:128-131`, code at `:36`). An `HttpClient` timeout, which surfaces as an
+  `OperationCanceledException` with the caller's token not cancelled, becomes `Http.Timeout`
+  (`:133-134`, code at `:39`); a timeout raised by a Polly strategy instead arrives as a
+  `TimeoutRejectedException` and is classed with the transport faults. Both are built as
+  `Error.Unexpected` (`:131`, `:134`). Anything else is a genuine programming fault and keeps
+  travelling as an exception (`:122-123`). The exception's own text goes on `Error.Source`, never on
+  `Message`, because it is diagnostic detail that is neither localizable nor safe to render
+  (`:128-131`).
 
 **`OperationCanceledException` is the one exception that still crosses the boundary, and that is the
 decision, not an omission.** When the caller's own token is why the operation stopped, the
-cancellation is rethrown (`HttpResultExecutor.cs:65-68`, `:100-103`, argued at `:17-23`): a disposed
+cancellation is rethrown (`HttpResultExecutor.cs:67-70`, `:102-105`, argued at `:18-24`): a disposed
 component or a superseded grid fetch owns its own cancellation and must not have it handed back as
 an error to render. A client timeout raises the same exception type with the token *not* cancelled,
-and that one does become a failure (`:69-72`). The token is also checked before the call, so an
-already-abandoned request never reaches the network (`:59`, `:94`).
+and that one does become a failure (`:71-74`, `:106-109`). The token is also checked before the
+call, so an already-abandoned request never reaches the network (`:61`, `:96`).
 
 **Pages branch; they do not catch.** `ResultUiExtensions`
-(`.../MMCA.Common.UI/Common/ResultUiExtensions.cs:63`) is the page-side idiom, written once so no
+(`.../MMCA.Common.UI/Common/ResultUiExtensions.cs:69`) is the page-side idiom, written once so no
 page hand-rolls it: `TryGetValue` unwraps inside a conditional the way `Dictionary.TryGetValue`
 does, deciding the failing branch on `IsFailure` rather than on the value so a value-type default is
-not mistaken for success (`:82-97`, the overload handing the errors back at `:116`);
-`OnFailureSetError` pushes the composed message into a page field (`:227`) and `NotifyOnFailure`
-raises it as exactly one snackbar, never one per error (`:268`); and `HasErrorType` with
-`IsNotFound` / `IsUnauthorized` lets a page turn a 404 into an empty state and a 401 into a redirect
-instead of an alert (`:307-327`). Messages are localized as resource keys **with pass-through**, so
-one call site handles both an API error the server already translated and a client-side error whose
-`Message` is a key (`:17-23`, `:329-338`, ADR-027), and they are deduplicated and ordered by the
-same `ErrorTypeSeverity` rank the edges use, so a real 403 leads and an incidental validation
-message never buries it (`:145-159`, the ordering at `:155`). The shared `ErrorSummary` component
+not mistaken for success (`:92-107`, the check at `:96-103`, the overload handing the errors back at
+`:126`); `OnFailureSetError` pushes the composed message into a page field (`:237`) and
+`NotifyOnFailure` raises it as exactly one snackbar, never one per error (`:278`); and
+`HasErrorType` with `IsNotFound` / `IsUnauthorized` lets a page turn a 404 into an empty state and
+a 401 into a redirect instead of an alert (`:317-321`, `:329`, `:337`). Messages are localized as
+resource keys **with pass-through**, so one call site handles both an API error the server already
+translated and a client-side error whose `Message` is a key (`:20-24`, `Localize` at `:376-385`,
+ADR-027). The failures the client synthesized itself have no server-phrased message to pass
+through, so they are looked up by their error code instead: a bodiless `Http.{status}` (recognized
+through `ProblemDetailsResultReader.TryGetSynthesizedStatus`), then the generic `Http.Status`
+format, plus `Http.TransportFailure` and `Http.Timeout`, falling back to the English message when
+the localizer has no such key (`:24-28`, `LocalizeError` at `:339-365`). The messages are
+deduplicated and ordered by the same `ErrorTypeSeverity` rank the edges use, so a real 403 leads
+and an incidental validation message never buries it (`:145-169`, the ordering at `:165`). The shared `ErrorSummary` component
 renders the same list as one deduplicating `MudAlert`, taking a failed `Result` and the
 `MudForm.Errors` shape together and rendering nothing at all when there is nothing to say
 (`.../MMCA.Common.UI/Components/Forms/ErrorSummary.razor:8`, both shapes merged at `:87-102`, one message
@@ -198,23 +231,25 @@ inline and several as a list so a screen reader announces them as several items,
 `MobileInfiniteScrollList` takes one page fetcher, `FetchPageResult`, a required delegate returning
 `Task<Result<(IReadOnlyList<TItem> Items, int TotalItems)>>`
 (`.../MMCA.Common.UI/Components/Lists/MobileInfiniteScrollList.razor.cs:37`), and renders the failure's
-localized message beside its inline retry affordance (`:204-209` into `SetLoadFailed`, the message read from the failed
-`Result` at `:281`). A tuple-returning delegate is not offered beside it: a tuple has no way to carry
+localized message beside its inline retry affordance (`:204-210` into `SetLoadFailed` at `:208`, the
+message read from the failed `Result` at `:304`). A tuple-returning delegate is not offered beside it: a tuple has no way to carry
 a failure at all, so the component would be left showing a Retry button that cannot name what it is
 retrying. The delegate is checked at initialization, so a call site that omits it throws instead of
 rendering as a load failure that can never succeed (`:97-109`).
 
 ### The error `Code` is a public vocabulary, gated for uniqueness (2026-09-03)
 
-`Code` is the half of a failure that crosses the wire verbatim (`ErrorHttpMapping.cs:61-69`) and the
+`Code` is the half of a failure that crosses the wire verbatim (`ErrorHttpMapping.cs:62-70`) and the
 key ADR-027 localizes the message by, so a client switches on `Order.NotFound` and a support ticket
 quotes it. Two modules that both ship `Item.Invalid` make that vocabulary ambiguous, and the
 ambiguity only surfaces in production
 (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.ErrorCatalog.cs:31-37`).
 The catalog is therefore frozen the way ADR-010 froze integration-event schemas and ADR-015 Section B
-froze the `.proto` contracts. A Mono.Cecil IL scan reads every `Error` factory call site (`:169`,
-`:206-208`, the recognized members at `:17-29` and `:218-222`) across a repo's per-module Domain and
-Application assemblies only (`:184-189`); `ErrorCodesAreUnique` (`:62`) fails the build when one
+froze the `.proto` contracts. A Mono.Cecil IL scan reads the `Error` factory call sites it
+recognizes (`:169`, `:206-208`, the recognized members at `:17-29` and `:218-222`) across a repo's
+per-module Domain and Application assemblies only (`:184-189`). The recognized set does not yet
+include `Error.TooManyRequests` (`Error.cs:103`), so a call to that factory is neither checked nor
+reported as UNVERIFIABLE, although the list's own summary says every static factory (`:12-13`); `ErrorCodesAreUnique` (`:62`) fails the build when one
 literal code is constructed by more than one declaring type (`:73`), and
 `ErrorCodesUseAnAllowedPrefix` (`:102`) requires the owning prefix. A code built at run time is
 reported as UNVERIFIABLE rather than passed or failed (`:210-213`, `:151-155`). Consumers subclass
@@ -236,7 +271,7 @@ do; MMCA.Common ships no module catalog and self-tests the rules against fixture
   to write is also the correct one.
 - **An aggregate answers with its worst problem.** Ranking the categories makes the status independent
   of the order invariants happen to be evaluated in, which is the one thing a caller cannot see and
-  the one thing `Result.Combine` makes arbitrary (`ErrorHttpMapping.cs:40-47`, restated on the enum
+  the one thing `Result.Combine` makes arbitrary (`ErrorHttpMapping.cs:41-50`, restated on the enum
   itself at `ErrorType.cs:5-8`).
 - **Cheap and predictable.** No throw/catch on the common "won't do it" path.
 - **One wire contract for both channels.** Whether a request ends in a `Result.Failure` mapped by
@@ -261,16 +296,17 @@ do; MMCA.Common ships no module catalog and self-tests the rules against fixture
   otherwise throw.
 - One status still has to stand for a whole list. Severity ranking removes the ordering dependency
   but not the collapse: a failure carrying a 403 and a 400 answers 403, and the 400 is visible only
-  to a client that reads the `errors` array (`ErrorHttpMapping.cs:61-69`). The three 400-mapped
-  categories share one rank (`ErrorTypeSeverity.cs:45-47`), so among them the earliest error still
+  to a client that reads the `errors` array (`ErrorHttpMapping.cs:62-70`). The three 400-mapped
+  categories share one rank (`ErrorTypeSeverity.cs:47-49`), so among them the earliest error still
   wins.
 - **The reverse mapping is lossy on 400, and only on 400.** A client reading an MMCA error array
   gets the original `ErrorType` verbatim, because the edge writes `Type` as a field
-  (`ErrorHttpMapping.cs:61-69`) and the reader parses it back (`ProblemDetailsResultReader.cs:348`,
-  `:405-410`). Every other payload shape (a validation dictionary, a plain ProblemDetails, a
+  (`ErrorHttpMapping.cs:62-70`) and the reader parses it back (`ProblemDetailsResultReader.cs:377`,
+  `:434-439`). Every other payload shape (a validation dictionary, a plain ProblemDetails, a
   non-JSON body) has to derive the category from the status code, and the forward map sends
   `Validation`, `Invariant` **and** `Failure` all to 400, so the reverse can only pick one: it picks
-  `Validation` (`:96-106`, admitted twice at `:50-56` and `:121-124`, pinned by
+  `Validation` (`:96-107`, which also maps 429 back to `TooManyRequests` at `:105`; admitted twice
+  at `:50-56` and `:123-126`, pinned by
   `MMCA.Common/Tests/Core/MMCA.Common.Shared.Tests/Http/ProblemDetailsResultReaderTests.cs:228`).
   A client that needs `Invariant` distinguished from `Validation` must call an endpoint that emits
   the error array, which every `ApiControllerBase` failure does but an escaped exception handled by
@@ -283,7 +319,8 @@ do; MMCA.Common ships no module catalog and self-tests the rules against fixture
 - **An exception reaching a page still costs it the reason.** Where a failed `Result` carries a
   localized message the page can render, an exception that escapes a consumer-supplied fetcher falls
   back to a generic resource string, because its own text is neither translatable nor safe to render
-  (`MobileInfiniteScrollList.razor.cs:228-236`, `SetLoadFailed(failure: null)` at `:235`, the fallback stated at `:273-277`). Returning `Result` is what
+  (`MobileInfiniteScrollList.razor.cs:226-234`, `SetLoadFailed(failure: null)` at `:233`, the
+  fallback stated at `:296-300`, `SetLoadFailed` itself at `:301-305`). Returning `Result` is what
   makes the specific message available at all; nothing forces a call site to produce one.
 - The exception-handler registration order is load-bearing. Because ASP.NET Core stops at the first
   handler that reports the exception handled, a mis-ordered registration (for example the catch-all
@@ -300,6 +337,32 @@ shifts: the gRPC status table, `ToRpcException` ranking and trailer writes in
 `ResultUiExtensions` page helpers; the `ErrorSummary` merge and list rendering; and
 `MobileInfiniteScrollList`, whose failure path now runs through `SetLoadFailed`
 (`MobileInfiniteScrollList.razor.cs:278-282`).
+
+## Revision (2026-10-06)
+The decision is unchanged; additive behavior that had shipped without being recorded is now
+described:
+- `ErrorType` has ten categories: `TooManyRequests` (a lockout) maps to HTTP 429
+  (`ErrorHttpMapping.cs:31`), gRPC `ResourceExhausted` (`ResultGrpcExtensions.cs:49`), severity rank
+  45 between `Forbidden` and `Conflict` (`ErrorTypeSeverity.cs:43`), and back from 429 in the reader
+  (`ProblemDetailsResultReader.cs:105`).
+- `GlobalExceptionHandler` maps two exceptions by type, not one: `BadHttpRequestException` is
+  answered with the status it carries, at warning level, titled "Payload Too Large" for a 413 and
+  "Bad Request" for any other status (`GlobalExceptionHandler.cs:72-95`, the status at `:79`, `:86`).
+- `HttpResultExecutor` also treats Polly's `ExecutionRejectedException` as a transport fault
+  (`HttpResultExecutor.cs:125-126`), so a resilience-pipeline timeout reads as
+  `Http.TransportFailure`; only an `HttpClient` timeout reads as `Http.Timeout`.
+- Corrected: the validation dictionary yields `Validation.{property}` codes, one per message.
+  `Http.{status}` is the fallback code wherever no code is supplied: a plain ProblemDetails, a
+  non-JSON or non-object body, an `errors` extension that parses to nothing (`ProblemDetailsResultReader.cs:178`, `:197-203`),
+  and an MMCA array entry that is a bare string or an object with no `code` (`:366`, `:380`).
+- Added: client-synthesized failures are localized by error code (`ResultUiExtensions.cs:339-365`).
+- Corrected: `TapAsync` and `MatchAsync` do not delegate to the instance combinator of the same
+  name, though they short-circuit identically (`ResultExtensions.cs:84-90`, `:111-112`).
+- Noted: the error-catalog IL scan does not recognize `Error.TooManyRequests`
+  (`ArchitectureRules.ErrorCatalog.cs:17-29`).
+- All live-section anchors were re-verified against current source. The 2026-10-01 anchors for the
+  gRPC table and trailers now read `ResultGrpcExtensions.cs:37-50`, `:123-125`, `:135-137`, and the
+  `SetLoadFailed` failure path `MobileInfiniteScrollList.razor.cs:301-305`.
 
 ## Related
 [ADR-007](007-grpc-extraction.md) (Result over the wire via gRPC, the second edge the shared severity

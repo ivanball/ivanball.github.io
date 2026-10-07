@@ -44,7 +44,7 @@ a shape may evolve. Rubric §6 flags this as the one substantive CQRS/event gap.
   changes and no outbox row migrates: System.Text.Json tolerates the missing field on old payloads and
   the type supplies the default; new rows simply gain `"SchemaVersion":1` (the outbox serializer
   options set no naming policy, so outbox payloads keep PascalCase:
-  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:17-20`, `:140`).
+  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:17-20`, `:142`).
 - **New-type-for-breaking-change** is the only safe option when transport binds by type (MassTransit)
   and consumers are independently deployed: an in-place reshape has no compatibility window.
 
@@ -157,3 +157,17 @@ unwrapping citation moved from `:89` (the recursive walk) to `UnwrapTypeArgument
 Rationale's outbox example now shows `"SchemaVersion":1`, because the outbox serializer options set
 only `ReferenceHandler.IgnoreCycles` and no naming policy
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:17-20`, `:140`).
+
+## Revision (2026-10-06)
+
+No decision, rationale or content changed; one citation moved.
+
+- The outbox serialization call (`JsonSerializer.Serialize(domainEvent, type, SerializerOptions)`) now sits at
+  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:142`, not `:140`;
+  the Rationale citation is updated (the 2026-10-01 Revision keeps `:140` as recorded on that date). The
+  serializer options at `:17-20` are unchanged.
+- The Context's "type string" is, in current code, the stored name from `EventNameResolver.GetStorageName`
+  (`OutboxMessage.cs:141`): the `[EventName]` identity when the event declares one, otherwise the
+  assembly-qualified name. That identity is governed by
+  [ADR-003](003-outbox-dual-dispatch.md); the Context is left as decision-time framing.
+- All other anchors in the live sections were re-verified against current source and still hold.

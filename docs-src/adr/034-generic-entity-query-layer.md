@@ -44,8 +44,8 @@ contract, supplied by two controller bases over a shared query pipeline.
    (plus a `[HttpGet("export")]` CSV action inserted between the paged and lookup
    routes): `[HttpGet]` list (`EntityControllerBase.cs:107`), `[HttpGet("paged")]`
    (`EntityControllerBase.cs:154`), `[HttpGet("lookup")]` for id/name dropdown
-   entries (`EntityControllerBase.cs:308`), and `[HttpGet("{id}")]`
-   (`EntityControllerBase.cs:347`).
+   entries (`EntityControllerBase.cs:317`), and `[HttpGet("{id}")]`
+   (`EntityControllerBase.cs:356`).
 
 2. **Generic write controller.** `AggregateRootEntityControllerBase<TEntity,
    TEntityDTO, TIdentifierType, TCreateRequest>`
@@ -58,14 +58,14 @@ contract, supplied by two controller bases over a shared query pipeline.
    not create a duplicate (ADR-017).
 
 3. **Sparse fieldsets via `fields`.** A comma-separated `fields` query parameter
-   (`EntityControllerBase.cs:111`, `:163`, `:356`) drives a server-side projection:
+   (`EntityControllerBase.cs:111`, `:163`, `:365`) drives a server-side projection:
    `QueryFieldService.ApplyFieldSelection`
-   (`Source/Core/MMCA.Common.Application/Services/QueryFieldService.cs:279`) builds a
+   (`Source/Core/MMCA.Common.Application/Services/QueryFieldService.cs:283`) builds a
    `MemberInit` expression that selects only the requested writable properties
-   (`QueryFieldService.cs:337`) so only those columns leave the database. The
+   (`QueryFieldService.cs:341`) so only those columns leave the database. The
    compiled projections are cached per field set, capped at `MaxCacheEntries` 512
    (`QueryFieldService.cs:39`); once the cache is full, a new field set skips the
-   server-side projection (`QueryFieldService.cs:298-299`) and the response is still
+   server-side projection (`QueryFieldService.cs:302-303`) and the response is still
    trimmed to the requested fields.
 
 4. **Dynamic per-type filtering.** The paged route binds
@@ -154,8 +154,8 @@ contract, supplied by two controller bases over a shared query pipeline.
   type through its registered `IFilterStrategy` rather than free-form expression
   evaluation, and capping rows with `MaxUnboundedResultLimit`
   (`EntityQueryPipeline.cs:23`). Sparse fieldsets reject non-writable properties
-  with `InvalidEntityField` during field validation (`QueryFieldService.cs:517-523`),
-  and the projection itself selects only writable properties (`QueryFieldService.cs:337`).
+  with `InvalidEntityField` during field validation (`QueryFieldService.cs:559-561`),
+  and the projection itself selects only writable properties (`QueryFieldService.cs:341`).
 - **Generic endpoints are less self-documenting than bespoke ones.** One generic
   shape per entity is consistent but conveys less domain intent than a named,
   purpose-built endpoint; the query contract (filter key syntax, operators) must be
@@ -275,3 +275,20 @@ No decision or rationale changed; this records clarifications and refreshed cita
 Citations in Decision, Rationale, Trade-offs and Related were rebased to their current lines
 (`EntityControllerBase.cs`, `QueryFieldService.cs`, `QueryFilterService.cs`, `EntityQueryPipeline.cs`,
 `EntityQueryService.cs`). Anchors inside the earlier Revision sections are left as recorded.
+
+## Revision (2026-10-06)
+No decision, rationale or behavior changed; this pass refreshes citations from an ADR audit.
+
+1. **Anchors recorded in earlier Revision sections have moved.** They stay as recorded; the current
+   locations are: the fast-path predicate `TryGetFastPathIncludes` is declared at
+   `Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:196`, called from the by-id fast
+   path at `:164`, and sends a read with unsupported includes back to the pipeline at `:219-222`;
+   `EFReadRepository.GetAllForLookupAsync` applies `MaxUnboundedResultLimit` at
+   `Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:246`; the
+   `MaxCacheEntries` cap is documented at `QueryFieldService.cs:328` and `:619`; the projection-cache
+   skip is at `QueryFieldService.cs:302-303`, the writable-only projection at `:341`, and the
+   non-writable `InvalidEntityField` rejection at `:559-561`.
+
+Anchors in Decision and Trade-offs were re-verified against current source and rebased
+(`EntityControllerBase.cs`, `QueryFieldService.cs`). Anchors inside the earlier Revision sections are
+left as recorded.

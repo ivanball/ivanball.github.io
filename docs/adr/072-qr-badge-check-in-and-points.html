@@ -250,7 +250,9 @@
           MMCA.Common&#39;s <code>IUniqueConstraintViolationDetector</code> (which matches provider error numbers first and
           message text only as a fallback), the leaderboard total is summed by the database rather than folded
           in memory, and a batch feedback path joined the two single-answer raise sites. Every decision above
-          still holds; only the passages that describe those four facts, and the citations throughout, move.</p>
+          still holds; only the passages that describe those four facts, and the citations throughout, move.
+          Revised (2026-10-01): a fourth handler (the event-side batch path) raises the feedback events.
+          Revised 2026-10-06: the question award runs through <code>BestEffort.ExecuteAsync</code>, the scanner reports a non-badge QR as a skipped outcome, and a rejoin of an erased leaderboard row is refused.</p>
           <h2 id="context">Context</h2>
           <p>ADC wanted two conference-day capabilities that turn out to be one mechanism. Organizers want to know
           who actually attended which session, which the schedule cannot tell them: a bookmark is an intention and
@@ -299,7 +301,7 @@
           take a typed value and the scanner can reject a foreign QR by prefix.</li>
           </ul>
           <h3 id="organizers-scan-attendees-with-two-recorded-self-service-exceptions">Organizers scan attendees, with two recorded self-service exceptions</h3>
-          <p><code>/check-in</code> (<code>.../Engagement.UI/Pages/CheckIns/CheckInScan.razor:1-2</code>) is <code>[Authorize(Roles = &quot;Organizer&quot;)]</code>
+          <p><code>/check-in</code> (<code>.../Engagement.UI/Pages/CheckIns/CheckInScan.razor:1-2</code>) is <code>[Authorize(Roles = RoleNames.Organizer)]</code>
           and its writes carry <code>[HasPermission(EngagementPermissions.CheckInManage)]</code>
           (<code>&quot;engagement:checkin:manage&quot;</code>, <code>.../Engagement.Shared/Authorization/EngagementPermissions.cs:23</code>,
           applied at <code>.../Engagement.API/Controllers/CheckInsController.cs:79</code>, <code>:103</code>, <code>:183</code>). The attendee&#39;s page
@@ -317,10 +319,11 @@
           <code>.../CheckIns/UseCases/RecordRoomCheckIn/RecordRoomCheckInHandler.cs:53</code>). For these rows the two
           parties are the same person, which the aggregate says outright (<code>CheckIn.cs:46-49</code>).</p>
           <p>The scan surface adapts to the head rather than branching on platform, per ADR-071:
-          <code>ScannerAvailable =&gt; Scanner.IsSupported</code> (<code>CheckInScan.razor.cs:41</code>) gates the camera card
+          <code>ScannerAvailable =&gt; Scanner.IsSupported</code> (<code>CheckInScan.razor.cs:46</code>) gates the camera card
           (<code>CheckInScan.razor:69</code>), while the manual attendee-search panel is <strong>always</strong> rendered, because on a web
-          or Windows head that search <em>is</em> the check-in surface (<code>CheckInScan.razor:113-116</code>). The scan loop
-          discards a non-badge QR and keeps scanning rather than failing (<code>CheckInScan.razor.cs:130-136</code>).</p>
+          or Windows head that search <em>is</em> the check-in surface (<code>CheckInScan.razor:113-118</code>). The scan loop
+          does not fail on a non-badge QR: it reports it to the operator as a skipped <code>NotABadge</code> outcome and
+          keeps scanning (<code>CheckInScan.razor.cs:135-144</code>, the outcome at <code>:141</code>).</p>
           <h3 id="one-checkin-aggregate-carrying-a-scope">One <code>CheckIn</code> aggregate carrying a scope</h3>
           <p><code>CheckInScope</code> is <code>Event = 0</code> / <code>Session = 1</code> / <code>Sponsor = 2</code>
           (<code>.../Engagement.Shared/CheckIns/CheckInScope.cs:14</code>, <code>:17</code>, <code>:23</code>), and one aggregate covers all
@@ -429,8 +432,8 @@
           <code>SponsorId</code> proved that: it was added as an optional last parameter (<code>:31</code>), so consumers keep
           deserializing payloads that predate it. It is ADC&#39;s first broker self-consumption: the Engagement
           service both publishes and consumes it
-          (<code>.../Services/MMCA.ADC.Engagement.Service/Program.cs:269-278</code> for the reasoning, <code>:286-289</code> for the
-          four <code>RegisterIntegrationEventConsumer&lt;T&gt;</code> calls inside <code>AddBrokerMessaging</code>).</p>
+          (<code>.../Services/MMCA.ADC.Engagement.Service/Program.cs:275-284</code> for the reasoning, <code>:292-295</code> for the
+          four <code>RegisterIntegrationEventConsumer&lt;T&gt;</code> calls inside <code>AddBrokerMessaging</code> at <code>:290</code>).</p>
           <p>The two feedback events are new to the Conference module
           (<code>.../Conference.Shared/Sessions/IntegrationEvents/SessionFeedbackSubmitted.cs:20-26</code>,
           <code>.../Conference.Shared/Events/IntegrationEvents/EventFeedbackSubmitted.cs:19-24</code>) and are raised on the
@@ -444,20 +447,25 @@
           <code>BatchAddEventQuestionAnswersHandler.cs:150-152</code>). One feedback form therefore produces one event
           per answer row on either path, and the shared subject key collapses them to one award.</p>
           <p><code>QuestionAsked</code> rides the existing in-module <code>SessionQuestionChanged</code> domain event, filtered to
-          <code>DomainEntityState.Added</code> (<code>.../Points/DomainEventHandlers/SessionQuestionSubmittedPointsHandler.cs:60-64</code>),
-          keyed by session rather than by question (<code>:85</code>).</p>
+          <code>DomainEntityState.Added</code> (<code>.../Points/DomainEventHandlers/SessionQuestionSubmittedPointsHandler.cs:66-70</code>),
+          keyed by session rather than by question (<code>:95</code>).</p>
           <h3 id="the-leaderboard-is-opt-in-and-opting-in-is-a-row">The leaderboard is opt-in, and opting in is a row</h3>
           <p><code>LeaderboardOptIn</code> (<code>.../Engagement.Domain/Points/LeaderboardOptIn.cs:32</code>, <code>:35</code>) holds <code>UserId</code> and a
           <code>DisplayName</code> snapshot, resolved server-side from the caller&#39;s token claims rather than accepted from the
-          request body (<code>SetLeaderboardParticipationHandler.cs:150-197</code>, the three claim lookups at <code>:168-170</code>;
-          the request carries only <code>Participate</code>, <code>:50-52</code>).
-          Opting out soft-deletes the row (<code>LeaveAsync</code>, <code>:130-148</code>, <code>active.Delete()</code> at <code>:142</code>) and rejoining
-          reactivates it (<code>JoinAsync</code>, <code>:60-124</code>, the reactivation at <code>:98</code>, the BR-135 pattern), so nobody&#39;s name is on the board without a
-          live opt-in. Erasure is a separate, irreversible promise: <code>EraseDisplayName()</code> (<code>LeaderboardOptIn.cs:119-130</code>)
+          request body (<code>SetLeaderboardParticipationHandler.cs:180-211</code>, the three claim lookups at <code>:182-184</code>;
+          the request carries only <code>Participate</code>, <code>.../Engagement.Shared/Points/SetLeaderboardParticipationRequest.cs:11</code>,
+          dispatched at <code>SetLeaderboardParticipationHandler.cs:53-55</code>).
+          Opting out soft-deletes the row (<code>LeaveAsync</code>, <code>:144-162</code>, <code>active.Delete()</code> at <code>:156</code>) and rejoining
+          reactivates it (<code>JoinAsync</code>, <code>:62-128</code>, the reactivation at <code>:100</code>, the BR-135 pattern), so nobody&#39;s name is on the board without a
+          live opt-in. A row whose name was erased is terminal: rejoining it returns <code>Forbidden</code>
+          <code>Points.AccountErased</code> instead of reactivating (<code>:89-98</code>). A join that loses a race to a concurrent
+          identical join (a unique-index violation on the insert path, or a concurrency conflict on the
+          reactivate path) is treated as the already-on-board success (<code>IsLostJoinRace</code>, <code>:136-138</code>, catch filter
+          at <code>:117</code>). Erasure is a separate, irreversible promise: <code>EraseDisplayName()</code> (<code>LeaderboardOptIn.cs:119-130</code>)
           overwrites the published name in place when the account behind it is erased, and it is driven by a fourth
-          broker consumer, <code>UserDeleted</code> -&gt; <code>UserDeletedPointsHandler</code> (<code>Program.cs:289</code>, the mapping documented at
-          <code>:261-263</code>), because the published name is the one piece of personal data the Identity-side erasure cannot
-          reach across the database boundary (<code>Program.cs:265-267</code>). The row itself survives (anonymize-in-place,
+          broker consumer, <code>UserDeleted</code> -&gt; <code>UserDeletedPointsHandler</code> (<code>Program.cs:295</code>, the mapping documented at
+          <code>:267-269</code>), because the published name is the one piece of personal data the Identity-side erasure cannot
+          reach across the database boundary (<code>Program.cs:271-273</code>). The row itself survives (anonymize-in-place,
           ADR-005). <code>GetLeaderboard</code>
           (<code>.../Points/UseCases/GetLeaderboard/GetLeaderboardHandler.cs</code>) reads only opted-in users&#39; entries
           (<code>:39-46</code>), asks the database for one grouped <code>SUM</code> per attendee rather than reading the ledger rows
@@ -469,9 +477,11 @@
           retired on its own: <code>Engagement.SponsorVisits</code> (<code>.../Engagement.Shared/EngagementFeatures.cs:59</code>) and
           <code>Engagement.RoomCheckIn</code> (<code>:71</code>). GDPR export is extended in the
           same pass: <code>user_engagement_export.proto</code> gains <code>points_entries</code>, <code>leaderboard_opt_in</code> and
-          <code>leaderboard_display_name</code> (<code>:34-41</code>) plus an <code>EngagementPointsEntryExportItem</code> message (<code>:63-80</code>); the
+          <code>leaderboard_display_name</code> (<code>:34-41</code>) plus an <code>EngagementPointsEntryExportItem</code> message (<code>:70-87</code>); the
           check-in history followed as <code>check_ins = 6</code> (<code>:45</code>) with an <code>EngagementCheckInExportItem</code> message
-          (<code>:82-101</code>) carrying scope, event, session and sponsor.</p>
+          (<code>:89-108</code>) carrying scope, event, session and sponsor. The same contract now also carries
+          <code>poll_votes = 7</code> and <code>question_upvotes = 8</code> (<code>:49</code>, <code>:52</code>; messages at <code>:110-116</code> and <code>:118-123</code>),
+          which belong to the live-poll and question-upvote features rather than to this record.</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
           <li><strong>An opaque credential makes the server the only interpreter.</strong> A JWT or HMAC badge would verify
@@ -526,10 +536,13 @@
           possession.</li>
           <li><strong><code>QuestionAsked</code> is at-most-once and says so.</strong> It rides an in-process domain event dispatched after
           commit, so a crash in that window loses one five-point award and nothing else: no question is lost
-          and no total is corrupted (<code>SessionQuestionSubmittedPointsHandler.cs:30-39</code>). The body is
-          additionally wrapped in a best-effort, CA1031-suppressed catch (<code>:92-97</code>), so a failing award never
-          fails the question that already committed. Only that pre-dispatch crash is silent; every path that
-          declines to award logs it, at a level matching how surprising it is (<code>:41-44</code>, <code>:100-110</code>).
+          and no total is corrupted (<code>SessionQuestionSubmittedPointsHandler.cs:32-40</code>). The award additionally
+          runs through MMCA.Common&#39;s <code>BestEffort.ExecuteAsync</code> (<code>:82-102</code>, ADR-096), so a failing award never
+          fails the question that already committed: a thrown award is logged as a Warning and counted on
+          <code>besteffort.dispatch.failed</code>, and only the caller&#39;s own cancellation is rethrown
+          (<code>MMCA.Common.Application/Services/BestEffort.cs:59</code>, <code>:70</code>, <code>:108</code>). Only that pre-dispatch crash
+          is silent; every path that declines to award logs it, at a level matching how surprising it is
+          (<code>:42-47</code>, <code>:105-112</code>).
           Promotion to an integration event is a one-file change per side, deliberately deferred: five points
           do not justify an outbox row per question.</li>
           <li><strong>The feature flags gate the surface, not the ledger.</strong> <code>[FeatureGate]</code> sits on the controllers and the
@@ -544,9 +557,12 @@
           references neither EF Core nor SqlClient, so it cannot read a provider error number itself. It asks
           someone who can: <code>IUniqueConstraintViolationDetector</code>
           (<code>MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IUniqueConstraintViolationDetector.cs:31</code>) is
-          constructor-injected into all three ADC handlers that can lose an insert race, so <code>PointsAwarder</code>
-          (<code>:32</code>, catch filter at <code>:75</code>), <code>SetLeaderboardParticipationHandler</code> (<code>:34</code>, <code>:115</code>) and
-          <code>GetOrCreateMyBadgeHandler</code> (<code>:21</code>, <code>:54</code>) classify one way rather than three. The registered
+          constructor-injected into the handlers on this surface that can lose an insert race, so <code>PointsAwarder</code>
+          (<code>:32</code>, catch filter at <code>:75</code>), <code>SetLeaderboardParticipationHandler</code> (<code>:35</code>, catch filter at <code>:117</code>,
+          the detector call at <code>:137</code>, alongside <code>IConcurrencyConflictDetector</code> at <code>:36</code>) and
+          <code>GetOrCreateMyBadgeHandler</code> (<code>:21</code>, <code>:54</code>) classify one way rather than three; other Engagement
+          handlers outside this record inject it the same way (<code>CreateBookmarkHandler.cs:20</code>,
+          <code>CastVoteHandler.cs:25</code>, <code>ToggleUpvoteHandler.cs:22</code>). The registered
           implementation walks the inner exception chain matching <strong>SQL Server error numbers 2601 and 2627
           first</strong> (<code>MMCA.Common.Infrastructure/Persistence/SqlServerUniqueConstraintViolationDetector.cs:34</code>,
           <code>:37</code>, <code>:50-54</code>), and falls back to the message text &quot;duplicate key&quot; or &quot;UNIQUE constraint failed&quot;
@@ -569,9 +585,10 @@
           a session earns nothing, which is the anti-farming rule working as designed and also a small
           disincentive at exactly the moment a room is warming up.</li>
           <li><strong>The export carries the activity as a number.</strong> <code>activity_type</code> is an <code>int32</code> rather than a proto enum
-          (<code>user_engagement_export.proto:70</code>, with the reasoning at <code>:64-69</code>), because proto3 forces a zero member
+          (<code>user_engagement_export.proto:77</code>, with the reasoning at <code>:71-76</code>), because proto3 forces a zero member
           and 0 is reserved as &quot;unset&quot; on the C# side, so a reader of the raw export sees <code>3</code> rather than
-          <code>SessionFeedback</code>. The check-in export item repeats the trade for <code>scope</code> (<code>:82-86</code>).</li>
+          <code>SessionFeedback</code>. The check-in export item repeats the trade for <code>scope</code> (<code>:93</code>, reasoning at
+          <code>:90-92</code>).</li>
           </ul>
           <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
           <p>One content fact changed and is corrected in place in the Decision: a fourth handler raises the
@@ -586,6 +603,26 @@
           <code>CheckInsController.cs</code>, <code>EngagementFeatures.cs</code>, <code>RecordRoomCheckInHandler.cs</code>,
           <code>CheckInScan.razor(.cs)</code>, <code>SetLeaderboardParticipationHandler.cs</code>, the two single-answer feedback
           handlers and the Engagement service <code>Program.cs</code>.</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <p>Content corrections, made in place; no decision or rationale changed:</p>
+          <ul>
+          <li>The <code>QuestionAsked</code> award no longer has a hand-written CA1031-suppressed catch: it runs through
+          MMCA.Common&#39;s <code>BestEffort.ExecuteAsync</code> (ADR-096), which logs a Warning, counts
+          <code>besteffort.dispatch.failed</code> and rethrows only the caller&#39;s cancellation. The best-effort semantics
+          are unchanged.</li>
+          <li>The <code>/check-in</code> scan loop now reports a non-badge QR to the operator as a <code>NotABadge</code> outcome before
+          continuing, rather than discarding it silently; the page&#39;s role attribute uses the
+          <code>RoleNames.Organizer</code> constant.</li>
+          <li><code>SetLeaderboardParticipationHandler</code> refuses to reactivate an erased opt-in (<code>Points.AccountErased</code>)
+          and also classifies a lost reactivation race through <code>IConcurrencyConflictDetector</code>.</li>
+          <li><code>IUniqueConstraintViolationDetector</code> is no longer injected into only three handlers; the
+          Trade-offs passage now names the other Engagement handlers that inject it (outside Engagement,
+          Conference&#39;s <code>CreateSessionHandler.cs:27</code> injects it too).</li>
+          <li>The GDPR export contract gained <code>poll_votes</code> and <code>question_upvotes</code>, noted in the Decision.</li>
+          </ul>
+          <p>Every path:line anchor in the live sections was re-verified against current source and refreshed
+          (<code>Program.cs</code>, <code>SetLeaderboardParticipationHandler.cs</code>, <code>SessionQuestionSubmittedPointsHandler.cs</code>,
+          <code>CheckInScan.razor(.cs)</code> and <code>user_engagement_export.proto</code>).</p>
           <h2 id="related">Related</h2>
           <p><a href="071-barcode-scanning-and-qr-display.html">ADR-071</a> (the framework halves this consumes: the QR component on
           <code>/my-badge</code> and the scanner capability behind <code>/check-in</code>),
@@ -615,6 +652,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

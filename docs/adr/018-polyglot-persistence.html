@@ -253,15 +253,21 @@
           &quot;engines never collapse into each other&quot; rule in Decision item 4 now has one bounded exception. See
           the Revision at the end.
           Revised 2026-09-09: a fourth engine, PostgreSQL, joins the set
-          (<a href="113-postgresql-as-a-first-class-engine.html">ADR-113</a>). It takes the same switch arm as SQL Server in
-          the engine-aware configuration base
-          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeConfiguration/EntityTypeConfiguration.cs:84-85</code>),
+          (<a href="113-postgresql-as-a-first-class-engine.html">ADR-113</a>). It takes a mapping identical to SQL Server&#39;s
+          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/Engines/PostgreSQLDataSourceEngine.cs:92-106</code>
+          against <code>SQLServerDataSourceEngine.cs:94-107</code>), applied through the engine-aware configuration base
+          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeConfiguration/EntityTypeConfiguration.cs:77</code>),
           so the <code>[UseDataSource]</code> axis grows by one member.
           Revised 2026-09-11: the Decision below now reads four engines throughout. The 2026-09-09 note also
           claimed no Decision item changed, which was wrong: the engine enum, the context list, the
           connection-string keys and the health-check rule each name PostgreSQL today. ADR-113 owns the
           PostgreSQL specifics (provider, naming conventions, migrations); this record keeps only the shape of
-          the engine axis.</p>
+          the engine axis.
+          Revised 2026-10-01: statements that overreached the code were corrected (Cosmos has no outbox, the
+          entity registry is built lazily) and citations refreshed.
+          Revised 2026-10-06: per-engine behavior now lives in an internal engine registry
+          (<code>DataSourceEngines</code>), and Cosmos&#39;s missing outbox follows from its non-relational capability rather
+          than a <code>SupportsOutbox</code> member.</p>
           <h2 id="context">Context</h2>
           <p>ADR-006 (database-per-service) splits storage along the <strong>Name</strong> axis: several physically separate
           databases, all on the same engine (SQL Server), one per service. A second, orthogonal axis is the
@@ -288,15 +294,23 @@
           above it are shipped public API whose ordinal values consumers have persisted
           (<code>Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IDataSourceService.cs:6-23</code>).
           <code>DataSourceKey(Engine, Name)</code> identifies a physical source: the <strong>Name</strong> axis is ADR-006, the
-          <strong>Engine</strong> axis is this ADR.</li>
+          <strong>Engine</strong> axis is this ADR. What each engine does (connection-string and migrations-assembly keys,
+          key and table mapping, substitution priority, capabilities such as being relational) lives in one
+          registry, <code>DataSourceEngines</code>, with one <code>IDataSourceEngine</code> per engine
+          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/Engines/DataSourceEngines.cs:19-28</code>).
+          The registry and the interface are internal (<code>DataSourceEngines.cs:19</code>, <code>IDataSourceEngine.cs:18</code>),
+          not a consumer extension point: the engine set is a closed enum only Common extends
+          (<code>DataSourceEngines.cs:9-12</code>), and adding an engine takes a new <code>DataSource</code> member, a context class,
+          an <code>IDataSourceEngine</code> class, and one line in <code>Registered</code> (<code>:15-16</code>).</li>
           <li><strong>Engine is a one-line declaration on the entity&#39;s configuration.</strong> A configuration derives from an
           engine shim base (<code>EntityTypeConfigurationSQLServer</code> / <code>EntityTypeConfigurationPostgreSQL</code> /
           <code>EntityTypeConfigurationCosmos</code> / <code>EntityTypeConfigurationSqlite</code>), or annotates
           <code>[UseDataSource(DataSource.X)]</code> directly
           (<code>Source/Core/MMCA.Common.Infrastructure/UseDataSourceAttribute.cs:13</code>). The
-          engine-aware <code>EntityTypeConfiguration&lt;TEntity, TId&gt;</code> reads that attribute and applies the matching
-          mapping (table + schema for SQL Server and PostgreSQL, which share one switch arm, table for
-          SQLite, container + partition key for Cosmos) plus
+          engine-aware <code>EntityTypeConfiguration&lt;TEntity, TId&gt;</code> reads that attribute
+          (<code>EntityTypeConfiguration.cs:43-46</code>) and hands the mapping to that engine
+          (<code>:77</code>): table + schema for SQL Server and PostgreSQL, whose two mappings are deliberately
+          identical, table for SQLite, container + partition key for Cosmos, plus
           the right key generation (server identity, vs. client-side <code>CosmosIntIdValueGenerator</code>, vs. never).
           The configuration <strong>body is portable</strong>: moving an entity between engines is a single attribute
           change with no body edits.</li>
@@ -308,11 +322,13 @@
           per physical (engine, name) source.</li>
           <li><strong>Configuration drives routing.</strong> <code>DataSourceResolver</code> builds a per-engine logical-to-physical map
           from the engine-specific connection strings (<code>SQLServerConnectionString</code> /
-          <code>PostgreSQLConnectionString</code> / <code>CosmosConnectionString</code> / <code>SqliteConnectionString</code>, one switch arm
-          each at <code>DataSourceResolver.cs:478-485</code> for the top-level section and <code>:487-494</code> for a named entry,
+          <code>PostgreSQLConnectionString</code> / <code>CosmosConnectionString</code> / <code>SqliteConnectionString</code>, each read by
+          its engine: <code>DataSourceResolver.cs:499-500</code> for the top-level section and <code>:502-503</code> for a named
+          entry delegate to the registry, for example <code>SQLServerDataSourceEngine.cs:52-63</code>,
           plus <code>CosmosDatabaseName</code> and a migrations assembly for the
           two server engines, <code>SQLServerMigrationsAssembly</code> and <code>PostgreSQLMigrationsAssembly</code>, which SQLite
-          and Cosmos leave empty at the top level (<code>:247-254</code>) and which a named entry can override per source
+          and Cosmos leave empty at the top level (<code>DataSourceResolver.cs:254</code>, <code>:286-287</code>;
+          <code>SqliteDataSourceEngine.cs:74</code>, <code>CosmosDataSourceEngine.cs:73</code>) and which a named entry can override per source
           (<code>DataSourceEntrySettings.cs:35</code>, <code>:62</code>); a named entry also carries a <code>SqliteMigrationsAssembly</code>
           (<code>DataSourceEntrySettings.cs:53</code>, read at <code>DataSourceResolver.cs:428</code>)), read from either
           configuration shape: the top-level <code>ConnectionStrings</code> section, or a named entry under <code>DataSources</code>.
@@ -321,7 +337,7 @@
           database on it, that database is the host&#39;s single database and becomes <code>Default</code>, which is what lets
           a host declare its databases only under <code>DataSources</code> and still route the framework-owned tables
           (outbox, inbox, scheduled jobs, audit trail) that resolve to the <code>Default</code> name
-          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/DataSourceResolver.cs:202-237</code>).
+          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/DataSourceResolver.cs:218-276</code>).
           Several distinct databases with no top-level value leave <code>Default</code> empty, since there is no single
           answer: a genuinely multi-database host names the one it wants shared by adding a
           <code>DataSources:Default</code> entry. Logical names with no entry for an engine collapse onto that engine&#39;s
@@ -338,12 +354,15 @@
           <li><strong>Cosmos specifics.</strong> All of a module&#39;s entities share one container (so intra-module relationships
           and the navigation populators work), the entity Id is the partition key, Ids are generated client-side
           (<code>CosmosIntIdValueGenerator</code>, since a document store has no server identity), and relational-only
-          constructs (indexes) are stripped at model-build time. Cosmos has no outbox table: <code>CosmosDbContext</code>
-          reports <code>SupportsOutbox =&gt; false</code> and dispatches its events in-process only
-          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/CosmosDbContext.cs:119-121</code>, <code>:128-129</code>),
-          the save interceptor skips the outbox for it
+          constructs (indexes) are stripped at model-build time. Cosmos has no outbox table: its engine is
+          registered as non-relational
+          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/Engines/CosmosDataSourceEngine.cs:44</code>),
+          <code>CosmosDbContext</code> ignores the outbox and internal-command tables and skips the base model
+          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/CosmosDbContext.cs:123-127</code>, <code>:139-143</code>),
+          so its events dispatch in-process only: the save interceptor writes outbox rows only for a relational
+          engine
           (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:236</code>),
-          and <code>BrokerEventBus</code> throws when the outbox target lacks outbox support
+          and <code>BrokerEventBus</code> throws when the outbox target is not relational
           (<code>Source/Core/MMCA.Common.Infrastructure/Messaging/BrokerEventBus.cs:70-77</code>).</li>
           <li><strong>The host surface reads the same two shapes.</strong> The Aspire AppHost helpers
           <code>With{SQLServer,PostgreSQL,Cosmos,Sqlite}DataSource</code> inject the <code>DataSources__{logicalName}__*</code>
@@ -463,6 +482,27 @@
           switch arm (<code>EntityTypeConfiguration.cs:84-85</code>), the connection-string switches
           (<code>DataSourceResolver.cs:478-485</code>, <code>:487-494</code>), and the health-check code, which moved from
           <code>Extensions.cs</code> into the partial <code>Extensions.Health.cs</code>.</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <p>No decision changed; the per-engine code moved behind an internal registry and this pass follows it.</p>
+          <ul>
+          <li>Decision item 1 now names the <code>DataSourceEngines</code> registry of <code>IDataSourceEngine</code> implementations
+          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/Engines/DataSourceEngines.cs:19-28</code>)
+          and says it is internal, not a consumer extension point (<code>:9-12</code>).</li>
+          <li>Item 2 and the Status no longer describe a switch arm shared by SQL Server and PostgreSQL:
+          <code>EntityTypeConfiguration.cs:77</code> delegates to the engine, and the two engines carry identical
+          mappings (<code>SQLServerDataSourceEngine.cs:94-107</code>, <code>PostgreSQLDataSourceEngine.cs:92-106</code>).</li>
+          <li>Item 4 no longer describes connection-string switch arms: the resolver delegates each read to the
+          engine (<code>DataSourceResolver.cs:499-503</code>).</li>
+          <li>Item 6 no longer cites a <code>SupportsOutbox</code> member, which no longer exists: Cosmos is registered as
+          non-relational (<code>CosmosDataSourceEngine.cs:44</code>), and both the save interceptor and <code>BrokerEventBus</code>
+          gate on that capability.</li>
+          <li>The 2026-08-29 substitution behavior is unchanged, at new locations: the preference order is now
+          derived from each engine&#39;s <code>SubstitutionPriority</code> (<code>DataSourceResolver.cs:35-36</code>, picked at <code>:80</code>
+          through <code>:164-168</code>), the configured engines are computed after the per-engine maps are built
+          (<code>:74-79</code>, predicate <code>:174-179</code>), the substitution itself is at <code>:96</code> and <code>:127-128</code>, and the startup
+          message is at <code>:505</code>.</li>
+          <li>Anchors in the live sections were re-verified against current source.</li>
+          </ul>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -481,6 +521,7 @@
             <li><a href="#related">Related</a></li>
             <li><a href="#revision-2026-08-29-engine-substitution-for-a-single-engine-host">Revision (2026-08-29): engine substitution for a single-engine host</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             </ul>
           </nav>
         </aside>

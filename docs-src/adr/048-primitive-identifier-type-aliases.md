@@ -21,6 +21,12 @@ Revised 2026-09-19 (recount): Conference's alias file now declares nineteen alia
 and the Decision's last bullet were also corrected: concrete wrapper-struct identifiers now exist in
 Common's test tree, so what is zero is adoption in the four `Source` trees, not existence. See the Revision
 (2026-09-19) at the end.
+Revised 2026-10-01 (the Trade-offs entry on identifier swapping now names both `Guid`-backed aliases, and
+the Conference and ADC/Store `Directory.Build.props` citations were re-anchored; see the Revision
+(2026-10-01) at the end).
+Revised 2026-10-06: the Status block now lists the 2026-10-01 revision, and the Common
+`Directory.Build.props` and `AuthenticationServiceBase` citations were re-anchored; see the Revision
+(2026-10-06) at the end.
 **Revisited by [ADR-085](085-identifier-type-aliases-revisited.md) (2026-08-18)**: the wrapper-struct
 alternative this record deferred was re-evaluated, priced, and deferred again, now against named
 revisit triggers instead of open-endedly. The decision below is unchanged; see the Revision
@@ -64,7 +70,7 @@ not as a wrapper struct.
   (`Source/Core/MMCA.Common.Domain/Entities/AuditableBaseEntity.cs:27,31`), and constrains the user
   type parameter of `AuthenticationServiceBase<TUser>`
   (`where TUser : AuditableAggregateRootEntity<UserIdentifierType>, IAuthUser`,
-  `Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:85`), with each consuming
+  `Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:72`), with each consuming
   app supplying the concrete `User` entity that satisfies it.
   Consumers follow the same pattern: ADC Identity
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/MMCA.ADC.Identity.GlobalUsings.IdentifierType.cs:2`),
@@ -82,7 +88,7 @@ not as a wrapper struct.
 - **Aliases are linked solution-wide via `Directory.Build.props`.** Each `GlobalUsings.*.cs` file is
   pulled into every project with a `<Compile Include ... Link=... />` block, so the alias is visible
   everywhere without a project reference: Common
-  (`MMCA.Common/Directory.Build.props:128-138`), ADC
+  (`MMCA.Common/Directory.Build.props:131-141`), ADC
   (`MMCA.ADC/Directory.Build.props:125-139`), Store (`MMCA.Store/Directory.Build.props:129-140`). Adding a
   solution-wide alias is a new `GlobalUsings.*.cs` plus a matching `<Compile Include>` line, nothing more.
 - **The alias flows unchanged through every layer.** Tracing the ADC `User` aggregate: the domain
@@ -294,3 +300,16 @@ The Decision's Conference citation is re-anchored to the alias lines
 comment), which the Revision (2026-09-19) reported but had not applied. The `Directory.Build.props` alias
 link blocks moved without their content changing: ADC is at `MMCA.ADC/Directory.Build.props:125-139` and
 Store at `MMCA.Store/Directory.Build.props:129-140`.
+
+## Revision (2026-10-06)
+No decision and no rationale changed.
+
+- The Status block omitted the Revision (2026-10-01); it is now listed there.
+- The Common `Directory.Build.props` alias link blocks moved without their content changing and are at
+  `MMCA.Common/Directory.Build.props:131-141`, the Common counterpart the Revision (2026-10-01) left
+  stale when it re-anchored ADC and Store.
+- The `AuthenticationServiceBase<TUser>` constraint is unchanged and now sits at
+  `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:72`; the Decision
+  is re-anchored (the `:85` recorded in the Revision (2026-09-11) stays as recorded on that date).
+- Every other anchor in the Context and Decision sections was re-verified against current source and
+  holds.

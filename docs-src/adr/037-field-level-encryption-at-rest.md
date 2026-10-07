@@ -18,7 +18,7 @@ never recovered. Erasure (ADR-005) **removes or anonymizes** personal data on a 
 Neither covers the case of a field that must stay **retrievable in plaintext to the application** yet
 be **unreadable in the database itself**: an at-rest, reversible, column-level confidentiality control.
 ADR-005 already names this converter as the mechanism for erasure fields "that must remain retrievable"
-(`Website/docs-src/adr/005-soft-delete-vs-erasure.md:23`), and `SECURITY.md:36` lists it in the security model, so the
+(`Website/docs-src/adr/005-soft-delete-vs-erasure.md:25`), and `SECURITY.md:36` lists it in the security model, so the
 capability is referenced across the docs but was never recorded as a decision.
 
 The framework ships the plumbing for this, an EF Core value converter that encrypts and decrypts string
@@ -47,8 +47,8 @@ rest with authenticated encryption, applied per property in an entity configurat
    null-checks the array (`ArgumentNullException.ThrowIfNull`, `EncryptedStringConverter.cs:129`) and throws
    `ArgumentException` on any other length (`EncryptedStringConverter.cs:130`, `:132`), and the key-ring path
    applies the same rule per entry (`EncryptedStringConverter.cs:166`, `:168`). `GenerateKey()` produces a
-   cryptographically random 32-byte key via `RandomNumberGenerator.GetBytes(32)`
-   (`EncryptedStringConverter.cs:125`). The envelope sizes are fixed constants: `VersionSize = 1`
+   cryptographically random 32-byte key via `RandomNumberGenerator.GetBytes(KeySize)`
+   (`EncryptedStringConverter.cs:125`, with `KeySize = 32` at `:84`). The envelope sizes are fixed constants: `VersionSize = 1`
    (`EncryptedStringConverter.cs:75`), `NonceSize = 12` (96 bits, NIST recommended,
    `EncryptedStringConverter.cs:78`) and `TagSize = 16` (128 bits, `EncryptedStringConverter.cs:81`).
 
@@ -177,7 +177,7 @@ rest with authenticated encryption, applied per property in an entity configurat
   no entity configuration wires it, so the encrypt/decrypt round-trip, the tag-validated integrity path, and
   the key-length guard are exercised only by `EncryptedStringConverterTests` and not by any deployed column.
   ADR-005 names this converter as the mechanism for erasure fields that must remain retrievable
-  (`Website/docs-src/adr/005-soft-delete-vs-erasure.md:23`), but that pairing is available, not yet applied. This is the same
+  (`Website/docs-src/adr/005-soft-delete-vs-erasure.md:25`), but that pairing is available, not yet applied. This is the same
   shipped-but-unadopted posture ADR-018 records for polyglot persistence.
 - **Encrypted columns are not queryable.** The random nonce (`EncryptedStringConverter.cs:193`) makes
   ciphertext non-deterministic, so there is no equality filter, index seek, sort, or join on an encrypted
@@ -216,7 +216,7 @@ rest with authenticated encryption, applied per property in an entity configurat
 
 ## Related
 ADR-005 (soft-delete vs erasure: the other sensitive-data control, which names this converter as the
-mechanism for erasure fields that must stay retrievable, `Website/docs-src/adr/005-soft-delete-vs-erasure.md:23`), ADR-032
+mechanism for erasure fields that must stay retrievable, `Website/docs-src/adr/005-soft-delete-vs-erasure.md:25`), ADR-032
 (password hashing: the one-way credential counterpart in the same Infrastructure layer, which already calls
 this converter "the at-rest counterpart to hashing credentials"), ADR-018 (polyglot persistence: the
 shipped, tested, but unadopted precedent this record mirrors). This ADR backs the one-line "Field encryption"
@@ -298,3 +298,18 @@ Context, Trade-offs and Related now point at the record's canonical home and cur
 as the mechanism for erasure fields that must remain retrievable. The changelog anchor inside the
 2026-08-15 revision is left as a historical record: the `[1.153.0]` heading now sits at
 `MMCA.Common/CHANGELOG.md:2978`, and that entry still does not name the converter.
+
+## Revision (2026-10-06)
+Anchor-only refresh; no decision, rationale or trade-off changed.
+- The three live citations of ADR-005 (Context, Trade-offs, Related) now point at
+  `Website/docs-src/adr/005-soft-delete-vs-erasure.md:25`, where Decision item 2 still names
+  `EncryptedStringConverter` as the mechanism for erasure fields that must remain retrievable.
+- Decision item 2 now quotes the key-generation call as written, `RandomNumberGenerator.GetBytes(KeySize)`
+  (`EncryptedStringConverter.cs:125`), with `KeySize = 32` at `EncryptedStringConverter.cs:84`; the key
+  size is unchanged.
+- The `[1.153.0]` changelog heading cited in the two revisions above now sits at
+  `MMCA.Common/CHANGELOG.md:3319`; that entry still does not name the converter. Both earlier anchors are
+  left as recorded.
+- Every other `EncryptedStringConverter.cs` and `EncryptedStringConverterTests.cs` anchor was re-verified
+  against current source and still holds; adoption is still zero (no reference to the type in Store, ADC
+  or Helpdesk).

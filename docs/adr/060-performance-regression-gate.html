@@ -244,7 +244,9 @@
           <code>ci.yml</code> line anchors for the <code>performance-smoke</code> job, which had shifted by about two lines).
           Revised 2026-09-25 (records that MMCA.ADC and MMCA.Store gate every production deploy on the
           recency of their k6 load-test run through a <code>load-freshness</code> job in <code>deploy.needs</code>; the load-test and
-          <code>ci.yml</code> citations are re-anchored).</p>
+          <code>ci.yml</code> citations are re-anchored).
+          Revised 2026-10-01 (the consumer <code>load-freshness</code> jobs call the shared <code>freshness-gate</code> composite
+          action; citations re-anchored).</p>
           <h2 id="context">Context</h2>
           <p>Rubric section 12 asks for hot-path efficiency that is <strong>measured, not assumed</strong>
           (<code>Website/docs-src/governance/ArchitectureEvaluationCriteria.md:386</code>). MMCA.Common has a
@@ -336,15 +338,15 @@
           on a schedule and on demand, not on a pull request (<code>MMCA.ADC/.github/workflows/load-test.yml:13-23</code>,
           <code>MMCA.Store/.github/workflows/load-test.yml:11-21</code>). Both consumers gate every production deploy on
           that run&#39;s recency: a <code>load-freshness</code> job fails the deploy when the latest successful <code>load-test.yml</code>
-          run is older than 35 days (ADC <code>MMCA.ADC/.github/workflows/deploy.yml:875</code>, window at <code>:890</code>; Store
-          <code>MMCA.Store/.github/workflows/deploy.yml:848</code>, window at <code>:863</code>). Both jobs call the shared composite
-          action <code>ivanball/MMCA.Common/.github/actions/freshness-gate@main</code> (ADC <code>deploy.yml:886</code>, Store
-          <code>deploy.yml:859</code>), which queries the latest successful run
-          (<code>MMCA.Common/.github/actions/freshness-gate/action.yml:185-187</code>) and fails when its age in whole
-          days exceeds the window (<code>action.yml:134-143</code>), and the <code>deploy</code> job lists it in <code>needs</code> (ADC
-          <code>deploy.yml:1185</code>, Store <code>deploy.yml:1136</code>). A break-glass skip exists and refuses to fire without a
-          written justification (<code>action.yml:93-98</code>; the deploy workflows pass <code>skip</code> and
-          <code>skip-justification</code> at ADC <code>deploy.yml:892-893</code>, Store <code>deploy.yml:865-866</code>).
+          run is older than 35 days (ADC <code>MMCA.ADC/.github/workflows/deploy.yml:922</code>, window at <code>:937</code>; Store
+          <code>MMCA.Store/.github/workflows/deploy.yml:890</code>, window at <code>:905</code>). Both jobs call the shared composite
+          action <code>ivanball/MMCA.Common/.github/actions/freshness-gate@main</code> (ADC <code>deploy.yml:933</code>, Store
+          <code>deploy.yml:901</code>) in its default success mode (no <code>required-jobs</code> input), which queries the latest
+          successful run (<code>MMCA.Common/.github/actions/freshness-gate/action.yml:214-217</code>) and fails when its
+          age in whole days exceeds the window (<code>action.yml:137-146</code>), and the <code>deploy</code> job lists it in <code>needs</code>
+          (ADC <code>deploy.yml:1242</code>, Store <code>deploy.yml:1187</code>). A break-glass skip exists and refuses to fire
+          without a written justification (<code>action.yml:96-101</code>; the deploy workflows pass <code>skip</code> and
+          <code>skip-justification</code> at ADC <code>deploy.yml:939-940</code>, Store <code>deploy.yml:907-908</code>).
           That makes the k6 run a standing precondition of shipping, not a per-PR measurement: it proves
           capacity was checked within the window, not that the change being deployed kept it. MMCA.Helpdesk
           has neither. The client-side
@@ -431,6 +433,16 @@
           <code>performance-smoke</code> job in <code>ci.yml</code> (<code>:355-356</code>, <code>:359</code>, <code>:383</code>, <code>:385-386</code>, <code>:388</code>, <code>:391</code>, <code>:397</code>),
           <code>release.yml:52,186</code>, <code>CONTRIBUTING.md:203</code>, and the consumer <code>load-freshness</code> and <code>deploy.needs</code>
           lines.</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <ul>
+          <li>No decision or rationale changed. The Decision paragraph now notes that both consumer
+          <code>load-freshness</code> jobs call the shared action in its default success mode (no <code>required-jobs</code>
+          input); the action also offers a required-jobs mode that this gate does not use.</li>
+          <li>The Status block now lists the 2026-10-01 revision, which it had omitted.</li>
+          <li>Anchors re-verified against current source: ADC <code>deploy.yml:922,933,937,939-940,1242</code>, Store
+          <code>deploy.yml:890,901,905,907-908,1187</code>, and <code>action.yml:214-217</code> (query), <code>:137-146</code> (age check),
+          <code>:96-101</code> (justification check). The 2026-10-01 anchors above are kept as recorded on that date.</li>
+          </ul>
           <h2 id="related">Related</h2>
           <p>ADR-015 (structural fitness functions, which explicitly stop at structure and registration; this is
           their runtime-cost counterpart), ADR-038 (the other build-gating control set, applied to supply-chain
@@ -454,6 +466,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

@@ -5,6 +5,8 @@ Accepted (2026-07-02).
 Revised 2026-09-07 (a conditional write always stamps the aggregate root, so `If-Match` is enforced
 even when only child rows changed, and a concurrency-conflict detector joins the infrastructure
 contracts).
+Revised 2026-10-01 (current-state corrections and refreshed citations, no decision changed).
+Revised 2026-10-06: the RowVersion mapping and the PostgreSQL/SQLite re-stamp are selected by the engine's declared `RowVersionStrategy` capability rather than by provider, and stale citations were refreshed.
 ## Context
 Every mutable aggregate in the framework is edited through a load-modify-save handler: the update use
 case fetches the tracked entity, applies the request, and calls `SaveChangesAsync`. With one shared
@@ -41,9 +43,11 @@ stale update fails inside the UPDATE statement.
   row can be reached without a second generic parameter. EF configures the property on **every**
   non-owned `IAuditableEntity` in `ConfigureConcurrencyTokens`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:588`,
-  called from `OnModelCreating` at `:421`): SQL Server maps it to a server-generated `rowversion`
-  (`IsRowVersion`, `:601`), other relational providers map it as a plain application-managed token
-  (`IsConcurrencyToken`, `:605`). EF then includes the token in every UPDATE/DELETE `WHERE` clause
+  called from `OnModelCreating` at `:420`). The mapping keys on the engine's declared capability
+  (`Engine.Capabilities.RowVersion == RowVersionStrategy.StoreGenerated`, `:591`) rather than on the
+  provider: SQL Server, the one engine declaring `StoreGenerated`, maps it to a server-generated
+  `rowversion` (`IsRowVersion`, `:601`), and the other relational engines map it as a plain
+  application-managed token (`IsConcurrencyToken`, `:605`). EF then includes the token in every UPDATE/DELETE `WHERE` clause
   and raises `DbUpdateConcurrencyException` when it matches no row.
 - **A read carries the token; a write does not.** `IConcurrencyAware`
   (`MMCA.Common/Source/Core/MMCA.Common.Shared/DTOs/IConcurrencyAware.cs:15`) declares a
@@ -51,16 +55,17 @@ stale update fails inside the UPDATE statement.
   client can be rendered with its version. An update request implements nothing of the kind: the
   precondition travels in the header alone (`:9-14`).
 - **The read emits a weak `ETag`.** `EntityControllerBase.GetByIdAsync`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:352`) calls
-  `SetConcurrencyETag(result.Value)` (`:373`), which renders the served row's token as
-  `W/"<base64>"` (`:408`, formatted and written to the response at `:416` by `ConcurrencyETag.Format`,
-  `MMCA.Common/Source/Core/MMCA.Common.Shared/Http/ConcurrencyETag.cs:40`). Weak is the honest
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:361`) calls
+  `SetConcurrencyETag(result.Value)` (`:382`), which (`:417`) renders the served row's token as
+  `W/"<base64>"` (formatted by `ConcurrencyETag.Format`,
+  `MMCA.Common/Source/Core/MMCA.Common.Shared/Http/ConcurrencyETag.cs:40`, and written to the
+  response at `:425`). Weak is the honest
   strength: the tag identifies the row's version, not a byte-exact representation, and the same row
   legitimately serializes differently under a `fields=` projection. Those shaped responses are seen
-  through rather than skipped: `ReadRowVersion` (`:425`) reads the typed property when the payload is
+  through rather than skipped: `ReadRowVersion` (`:434`) reads the typed property when the payload is
   the DTO and falls back to a dictionary lookup keyed by JSON name when it is a projection
-  (`:430-433`). The property is resolved once per closed controller type (`:382`), and a DTO type
-  with no token makes the method a no-op (`:410-411`). It is `protected` so a hand-written read
+  (`:439-442`). The property is resolved once per closed controller type (`:391`), and a DTO type
+  with no token makes the method a no-op (`:419-420`). It is `protected` so a hand-written read
   action can emit the same header instead of re-implementing the format, which is where the two
   would drift and a precondition would quietly stop working.
 - **`[SupportsIfMatch]` decodes the header, and nothing else carries the token.**
@@ -99,18 +104,18 @@ stale update fails inside the UPDATE statement.
   (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IRepository.cs:408`)
   applies the caller's token as the tracked entity's **original** `RowVersion`; the `EFRepository`
   implementation writes it to `Entry(entity).Property(nameof(RowVersion)).OriginalValue`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFRepository.cs:82`).
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFRepository.cs:81-83`).
   The shared write workflow calls it right after loading the aggregate and before the mutation runs
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Crud/MutateEntityHandlerBase.cs:294`), so
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Crud/MutateEntityHandlerBase.cs:300`), so
   EF compares the client's token against the row's current value inside the UPDATE statement,
   atomically, with no read-then-check race.
 - **Child entities are reached by the `IRowVersioned` overload.** The first overload is typed to the
   repository's aggregate root (`TEntity`), so a child edit (a `ProductVariant` under a `Product`)
   cannot receive a token through it. A second overload,
   `SetOriginalRowVersion(IRowVersioned childEntity, byte[] rowVersion)` (`IRepository.cs:419`,
-  implemented at `EFRepository.cs:86`), accepts any tracked auditable entity instead, and an update
+  implemented at `EFRepository.cs:87`), accepts any tracked auditable entity instead, and an update
   handler that mutates children through the aggregate's repository stamps each child itself. Both
-  overloads reject a null token (`EFRepository.cs:78`, `:89`): there is no value that means "skip
+  overloads reject a null token (`EFRepository.cs:79`, `:90`): there is no value that means "skip
   the check".
 - **A fitness function keeps the token out of the body.**
   `ArchitectureRules.UpdateRequestsAreNotConcurrencyAware`
@@ -126,9 +131,9 @@ stale update fails inside the UPDATE statement.
 - **The UI speaks the same format.** `ConcurrencyETag` lives in `MMCA.Common.Shared.Http` rather than
   in the API package precisely so both ends of the exchange can use it: the API reads an `If-Match`
   value with it and the UI writes one. `EntityServiceBase.UpdateAsync`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/EntityServiceBase.cs:176`) passes
-  `ConcurrencyTagOf(entity)` (`:197`) as the write's `If-Match` (`:184`), and the request client sets
-  the header (`:398`), so a Blazor page conditions its writes with no per-page code.
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/EntityServiceBase.cs:188`) passes
+  `ConcurrencyTagOf(entity)` (`:209`) as the write's `If-Match` (`:196`), and the request client
+  (`CreateRequestClientAsync`, `:403`) sets the header (`:424`), so a Blazor page conditions its writes with no per-page code.
 - **Every auditable table carries the column.** The token exists in the database or it does not
   exist at all: each database's migrations add the `RowVersion` column to every table mapped from an
   auditable entity, typed `rowversion` in SQL Server, alongside the audit columns of the same base
@@ -197,10 +202,12 @@ stale update fails inside the UPDATE statement.
   mutable request that does not follow that suffix is outside its scope.
 - **Cross-engine asymmetry.** SQL Server gets a server-generated `rowversion`; SQLite and other
   relational providers get an application-managed `IsConcurrencyToken` over the same `byte[]`, and
-  on PostgreSQL and SQLite `AuditSaveChangesInterceptor` writes a fresh random value on every insert
-  and every update
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/AuditSaveChangesInterceptor.cs:59`,
-  `:74`, `:83`, `:103`); the update re-stamp is what lets the next stale writer's `WHERE` clause miss.
+  on PostgreSQL and SQLite (the engines declaring `RowVersionStrategy.ClientStamped`)
+  `AuditSaveChangesInterceptor` writes a fresh random value (`Guid.NewGuid().ToByteArray()`) on
+  every insert and every update
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/AuditSaveChangesInterceptor.cs:67`
+  for the capability gate, `:88` on insert, `:97` on update, `StampRowVersion` at `:113-117`); the
+  update re-stamp is what lets the next stale writer's `WHERE` clause miss.
   Cosmos gets no framework concurrency token at all: `CosmosDbContext.OnModelCreating`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/CosmosDbContext.cs:124-151`)
   calls neither the base nor `ConfigureConcurrencyTokens`, and no ETag concurrency is configured
@@ -252,6 +259,26 @@ or otherwise (`CosmosDbContext.cs:124-151`). Refreshed anchors: `ApplicationDbCo
 `:421`, `:601`, `:605`), `EntityControllerBase.cs` (`:352`, `:373`, `:408`, `:416`, `:425`,
 `:430-433`, `:382`, `:410-411`), `IRepository.cs` (`:408`, `:419`), `MutateEntityHandlerBase.cs:294`
 and `EntityServiceBase.cs:398`. Anchors inside the 2026-09-07 Revision are left as recorded.
+
+## Revision (2026-10-06)
+No decision changed.
+
+- The concurrency-token mapping is selected by the engine's declared capability, not by a provider
+  check: `ConfigureConcurrencyTokens` maps `IsRowVersion` when
+  `Engine.Capabilities.RowVersion == RowVersionStrategy.StoreGenerated`
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:591`),
+  which only the SQL Server engine declares, and `AuditSaveChangesInterceptor` re-stamps only when
+  the engine declares `RowVersionStrategy.ClientStamped`
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/AuditSaveChangesInterceptor.cs:67`),
+  which PostgreSQL and SQLite declare. Decision and Trade-offs now say so.
+- Facts recorded only in earlier Revisions whose anchors moved: `TouchConcurrencyToken` is now at
+  `IRepository.cs:442`, `EFRepository.cs:98` and `MutateEntityHandlerBase.cs:320` (inside
+  `if (conditionalWrite)` at `:319`); ADC's lost-claim handling in `RefreshFromSessionizeHandler.cs`
+  is the `IsConcurrencyConflict` catch at `:90` returning the throttled answer at `:95`; the
+  interceptor re-stamps on insert at `AuditSaveChangesInterceptor.cs:88` and on update at `:97`.
+- Anchors in Decision and Trade-offs (`ApplicationDbContext.cs`, `EntityControllerBase.cs`,
+  `EFRepository.cs`, `MutateEntityHandlerBase.cs`, `EntityServiceBase.cs`,
+  `AuditSaveChangesInterceptor.cs`) were re-verified against current source and refreshed.
 
 ## Related
 ADR-017 (HTTP request idempotency, which dedups retries of the **same** request, the mirror-image

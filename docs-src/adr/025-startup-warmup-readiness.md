@@ -120,13 +120,13 @@ gets it.
   the rest of the subsystem: caught, logged at warning level, never fatal (`:141-146`, `:205-207`). Both
   production apps subclass and register it: ADC in Conference
   (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/SelfHttpOutputCacheWarmupTask.cs:22`, registered
-  at `Program.cs:308`), Engagement (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/SelfHttpWarmupTask.cs:23`,
-  `Program.cs:156`) and Identity (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/SelfHttpWarmupTask.cs:23`,
-  `Program.cs:168`); Store in Catalog
+  at `Program.cs:311`), Engagement (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/SelfHttpWarmupTask.cs:23`,
+  `Program.cs:160`) and Identity (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/SelfHttpWarmupTask.cs:23`,
+  `Program.cs:174`); Store in Catalog
   (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/SelfHttpOutputCacheWarmupTask.cs:23`,
-  `Program.cs:183`), Identity (`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/SelfHttpOutputCacheWarmupTask.cs:25`,
-  `Program.cs:144`) and Sales (`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/SelfHttpOutputCacheWarmupTask.cs:26`,
-  `Program.cs:157`).
+  `Program.cs:184`), Identity (`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/SelfHttpOutputCacheWarmupTask.cs:25`,
+  `Program.cs:145`) and Sales (`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/SelfHttpOutputCacheWarmupTask.cs:26`,
+  `Program.cs:158`).
 - **Extensible per host.** `AddWarmupReadiness()` registers the gate, the runner, the readiness health
   check, and the built-in OIDC task; a host adds its own pre-fetches (output cache, reference data) with
   `AddWarmupTask<T>()`, which is also how a `SelfHttpWarmupTaskBase` subclass enters the run.
@@ -199,6 +199,11 @@ No decision or rationale changed. Citations were refreshed: the `/health/ready` 
 Polly total-request timeout is assigned at `Extensions.cs:53`; the `SelfHttpWarmupTaskBase` public API
 starts at `PublicAPI.Shipped.txt:129-131`; and the per-host `AddWarmupTask` registrations moved to
 ADC Conference `Program.cs:308`, Engagement `:156`, Identity `:168` and Store Catalog `:183`, Sales `:157`.
+
+## Revision (2026-10-06)
+No decision or rationale changed. The per-host `AddWarmupTask` registrations moved again and are now
+ADC Conference `Program.cs:311`, Engagement `:160`, Identity `:174` and Store Catalog `Program.cs:184`,
+Identity `:145`, Sales `:158`. Anchors were re-verified against current source.
 
 ## Related
 ADR-004 (the OIDC discovery document the built-in task pre-fetches, and the auth-side view of the same
