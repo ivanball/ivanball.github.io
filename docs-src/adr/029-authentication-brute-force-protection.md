@@ -250,20 +250,6 @@ No behavior changed; this pass corrected anchors only.
   `HybridCacheService.cs`, `PasswordHasher.cs`) was re-verified against current source and is
   unchanged.
 
-## Alternatives rejected
-- **Making the failed-attempt and registration counters atomic.** The increment in
-  `DistributedCacheService.IncrementAsync` is a read-modify-write through `IDistributedCache` and is
-  knowingly not atomic (Common v1.125.2, PR #119). It once used Redis `INCR`, which is atomic but
-  writes a Redis **string**, while `StackExchangeRedisCache` stores every entry as a Redis **hash**,
-  so the next read of that key returned `WRONGTYPE` and answered 500 from both registration and
-  login. Two remedies were weighed on 2026-07-25 and both declined: a Lua script written against the
-  hash layout, and moving these counters off `IDistributedCache` so both sides speak Redis strings.
-  The residual weakness is narrow. Concurrent guesses can overwrite each other's increments, so a
-  parallel burst can stay under `MaxFailedAttempts`, but sequential guessing (what credential
-  stuffing against one account actually looks like) still trips the lockout. The comments in
-  `LoginProtectionService.IncrementFailedAttemptsAsync` and the v1.126.0 CHANGELOG entry record the
-  accepted final state, not a TODO: cite this section rather than re-opening the finding.
-
 ## Revision (2026-10-07)
 Re-verified against current source. The lockout model, the backoff formula, the registration
 throttle, the non-atomic counters and the fail-open posture are unchanged. What moved is the HTTP
@@ -293,6 +279,20 @@ answer to a lockout, which the 2026-10-03 and 2026-10-06 revisions did not recor
    Decision anchor was re-pointed; `:253` falls inside its remarks), with both legs still past L1
    (the read at `:271` through `SharedStoreReadOptions`, `:86-90`; the write at `:280`). The `:253` anchor in the 2026-10-01 Revision and the "unchanged" note in the 2026-10-06
    Revision record those passes as written.
+
+## Alternatives rejected
+- **Making the failed-attempt and registration counters atomic.** The increment in
+  `DistributedCacheService.IncrementAsync` is a read-modify-write through `IDistributedCache` and is
+  knowingly not atomic (Common v1.125.2, PR #119). It once used Redis `INCR`, which is atomic but
+  writes a Redis **string**, while `StackExchangeRedisCache` stores every entry as a Redis **hash**,
+  so the next read of that key returned `WRONGTYPE` and answered 500 from both registration and
+  login. Two remedies were weighed on 2026-07-25 and both declined: a Lua script written against the
+  hash layout, and moving these counters off `IDistributedCache` so both sides speak Redis strings.
+  The residual weakness is narrow. Concurrent guesses can overwrite each other's increments, so a
+  parallel burst can stay under `MaxFailedAttempts`, but sequential guessing (what credential
+  stuffing against one account actually looks like) still trips the lockout. The comments in
+  `LoginProtectionService.IncrementFailedAttemptsAsync` and the v1.126.0 CHANGELOG entry record the
+  accepted final state, not a TODO: cite this section rather than re-opening the finding.
 
 ## Related
 ADR-019 (the layered limiter: a principal-keyed global cap that exempts this anonymous surface, its
