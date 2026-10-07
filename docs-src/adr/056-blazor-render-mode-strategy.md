@@ -16,7 +16,8 @@ inheritors from source and set the count to twenty (thirteen in ADC, seven in St
 routable, matching the inventory ADR-094 records. Revised 2026-10-01: split the prerender-skip guard
 into four stated reasons and re-anchored the citations. Revised 2026-10-06: corrected the rationale for
 skipping the prerender fetch on detail pages, recorded the framework's `UserAdminList` as a further
-inheritor of the list-page base, and re-anchored the citations to current source.
+inheritor of the list-page base, and re-anchored the citations to current source. Revised 2026-10-07:
+anchors refreshed after the v1.233.0 release.
 
 ## Context
 Both web applications are Blazor Web Apps: a static server-rendered (SSR) prerender pass produces the
@@ -27,14 +28,14 @@ authentication, localization, theming, data fetching, and the test suite.
 
 Four accepted ADRs already reason about that transition and each treats it as **given context** rather
 than deciding it: ADR-022 solves `[Authorize]` on fresh GETs by reading an HttpOnly cookie "during SSR
-prerender" (`022-browser-session-cookie-auth.md:18`); ADR-027 states that its hard part is flowing one
+prerender" (`022-browser-session-cookie-auth.md:23-24`); ADR-027 states that its hard part is flowing one
 culture decision through "a Blazor `InteractiveAuto` app (SSR prerender, InteractiveServer circuit,
 InteractiveWebAssembly client)" (`027-multi-locale-i18n.md:13-16`); ADR-028 repeats the same three-phase
 premise for the theme and records that "there is no free no-flash for InteractiveAuto"
-(`028-dark-theme-mode.md:11-15`, `028-dark-theme-mode.md:75`); ADR-051 builds the whole client token
+(`028-dark-theme-mode.md:11-15`, `028-dark-theme-mode.md:84`); ADR-051 builds the whole client token
 lifecycle around three heads with three storage stories and ends with "the UI code above them never
-branches on render mode" (`051-client-auth-token-lifecycle.md:13-28`,
-`051-client-auth-token-lifecycle.md:39`). ADR-042 covers the MAUI head and never mentions render modes at
+branches on render mode" (`051-client-auth-token-lifecycle.md:22-31`,
+`051-client-auth-token-lifecycle.md:44`). ADR-042 covers the MAUI head and never mentions render modes at
 all. So four decisions depend on a render-mode policy that no ADR states, and the policy itself is only
 discoverable by reading two `App.razor` files, two AppHosts, two CI workflows, and one framework base
 class. This ADR states it.
@@ -61,7 +62,7 @@ layer rather than by weakening the render mode.
   both sides of the pipeline: `AddInteractiveServerComponents()` + `AddInteractiveWebAssemblyComponents()`
   at service registration and `AddInteractiveServerRenderMode()` + `AddInteractiveWebAssemblyRenderMode()`
   on `MapRazorComponents<App>()`
-  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:71-73`, `Program.cs:324-326`;
+  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:71-73`, `Program.cs:327-329`;
   `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:77-79`, `Program.cs:276-278`).
 - **Prerendering stays enabled.** No host anywhere in the workspace passes `prerender: false` or
   constructs a render mode with prerendering disabled; every render mode in use is the stock static
@@ -148,7 +149,7 @@ layer rather than by weakening the render mode.
   `E2E:ForceServer` returns `InteractiveServer`; ADC additionally honors `E2E:ForceWebAssembly`, which
   returns `InteractiveWebAssembly` and wins if both are set (`MMCA.ADC/.../App.razor:66-77`,
   `MMCA.Store/.../App.razor:38-41`). Those config keys are injected only by the AppHosts, and only when the
-  matching environment variable is present (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:400-427`,
+  matching environment variable is present (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:403-430`,
   `MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:404-412`). In CI only `E2E_FORCE_SERVER` is
   exported (`MMCA.ADC/.github/workflows/e2e.yml:226`, `MMCA.Store/.github/workflows/e2e.yml:229`);
   ADC's workflow deliberately does **not** set `E2E_FORCE_WASM` and records why
@@ -168,14 +169,14 @@ layer rather than by weakening the render mode.
   `InteractiveServer`-only (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Gallery/Components/App.razor:21`,
   `App.razor:25`, `MMCA.Common/Tests/Presentation/MMCA.Common.UI.Gallery/GalleryHost.cs:129-130`). ADR-028
   already noted Helpdesk's status ("As an `InteractiveServer`-only host it has no WASM boundary",
-  `028-dark-theme-mode.md:60`); this ADR makes it part of the record rather than an aside.
+  `028-dark-theme-mode.md:69`); this ADR makes it part of the record rather than an aside.
 
 ## Rationale
 - **`InteractiveAuto` gets both halves without asking page authors to choose.** The first visit gets the
   Server circuit's immediate interactivity while the WASM bundle downloads in the background; return
   visits run client-side and stop consuming a server circuit. Because the mode is applied at the root
   router, no page has to opt in or know which runtime it is in, which is the same posture ADR-051 takes
-  for tokens (`051-client-auth-token-lifecycle.md:39`).
+  for tokens (`051-client-auth-token-lifecycle.md:44`).
 - **Keeping prerender is not negotiable, so the double fetch had to be fixed instead.** Prerender is the
   entire reason ADR-022's SSR cookie scheme exists, and it is what makes public browse pages render
   without waiting on a runtime boot. Disabling it would have removed the duplicate fetch by removing the
@@ -215,7 +216,7 @@ layer rather than by weakening the render mode.
   away from, so a regression specific to the WASM handover cannot be caught by that gate. The Core Web
   Vitals numbers carry the same caveat in their own remarks: they "reflect Server-mode
   prerender-then-hydrate under runner contention, not production's InteractiveAuto on real hardware"
-  (`MMCA.ADC/Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/WebVitalsTests.cs:17-20`). The pseudo-localization
+  (`MMCA.ADC/Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/WebVitalsTests.cs:18-21`). The pseudo-localization
   suite likewise had to route its activation through the culture cookie because the pinned circuit reads
   cookies but not the original query string
   (`MMCA.ADC/Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/PseudoLocalizationTests.cs:17-21`).
@@ -224,7 +225,7 @@ layer rather than by weakening the render mode.
   (deliberately), and a fourth host could differ by accident.
 - **A first-paint flash remains for anything restored after hydration.** ADR-028's theme read runs in
   `OnAfterRenderAsync` and deliberately not during prerender, so `InteractiveAuto` still permits a brief
-  wrong-theme paint (`028-dark-theme-mode.md:38-45`, `028-dark-theme-mode.md:75`); the render-mode
+  wrong-theme paint (`028-dark-theme-mode.md:38-45`, `028-dark-theme-mode.md:84`); the render-mode
   choice does not close that gap, it defines it.
 
 ## Revision (2026-10-01)
@@ -255,6 +256,18 @@ enforcement target, `Error.razor`, both AppHosts, both `e2e.yml` workflows, and 
   files, host `Program.cs` ranges, `Routes.razor`, `DataGridListPageBase`, the detail-page guards,
   `ADCHome`, the WASM client culture calls, `Error.razor`, both AppHosts, the gallery `App.razor` and
   `WebVitalsTests.cs`). The 2026-10-01 entry's anchors stand as recorded on that date.
+
+## Revision (2026-10-07)
+Re-verified against current source. No decision, rationale, count or adoption changed; only anchors
+moved.
+
+1. Anchors re-verified against current source: the ADC host `MapRazorComponents<App>()` mapping with
+   both render modes (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:327-329`), the ADC AppHost
+   E2E flag block (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:403-430`), the Core Web Vitals
+   caveat quote (`MMCA.ADC/Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/WebVitalsTests.cs:18-21`), and the
+   cross-ADR quotes in ADR-022 (`022-browser-session-cookie-auth.md:23-24`), ADR-028
+   (`028-dark-theme-mode.md:69`, `028-dark-theme-mode.md:84`) and ADR-051
+   (`051-client-auth-token-lifecycle.md:22-31`, `051-client-auth-token-lifecycle.md:44`).
 
 ## Related
 ADR-022 (reads the HttpOnly session cookie during the SSR prerender pass this decision keeps enabled),

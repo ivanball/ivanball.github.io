@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -248,7 +249,8 @@
           (<a href="113-postgresql-as-a-first-class-engine.html">ADR-113</a>), so the per-engine context set is
           SQL Server / Cosmos / SQLite / PostgreSQL; the one-instance-per-database rule below is unchanged.
           Revised 2026-10-06: the <code>AtlDevCon</code> bacpac was deleted on 2026-10-03, so no pre-cutover rollback
-          copy exists; the four live <code>ADC_*</code> databases rely on their own PITR plus LTR.</p>
+          copy exists; the four live <code>ADC_*</code> databases rely on their own PITR plus LTR.
+          Revised 2026-10-07: anchors refreshed after the v1.233.0 release.</p>
           <h2 id="context">Context</h2>
           <p>When the modules were first extracted into independently-deployable services, all services in an
           app still pointed at a <strong>single shared SQL database</strong> with a single <code>OutboxMessages</code> table. That
@@ -278,7 +280,7 @@
           longer declares it. That bacpac was itself deleted permanently on 2026-10-03 (blob soft delete and
           versioning were off), so there is no restore path to the pre-cutover <code>AtlDevCon</code> data; its contents
           had already been copied into the per-service databases at cutover, and those four databases keep
-          their own PITR plus LTR (<code>MMCA.ADC/infra/main.bicep:921</code>, <code>MMCA.ADC/infra/main.bicep:966</code>,
+          their own PITR plus LTR (<code>MMCA.ADC/infra/main.bicep:937</code>, <code>MMCA.ADC/infra/main.bicep:982</code>,
           <code>MMCA.ADC/infra/POST-CUTOVER-atldevcon-downgrade.md:103</code>, <code>MMCA.ADC/infra/DISASTER-RECOVERY.md:27</code>).</li>
           <li><strong>Per-source outbox.</strong> Each database has its own <code>OutboxMessages</code>; the <code>OutboxProcessor</code> drains
           only the sources its host owns, so no service ever sees another&#39;s rows.</li>
@@ -314,6 +316,17 @@
           recorded on that date.</li>
           <li>Anchors re-verified against current source.</li>
           </ul>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. The decision is unchanged: four per-service <code>ADC_*</code> databases,
+          no <code>AtlDevCon</code> database or bacpac, and PITR plus LTR as the only restore path. Only the
+          <code>infra/main.bicep</code> anchors moved; the 2026-10-06 revision above keeps the anchors it recorded.</p>
+          <ol>
+          <li>Anchors re-verified against current source: the <code>AtlDevCon</code> archived-and-dropped note with the
+          2026-10-03 bacpac deletion at <code>MMCA.ADC/infra/main.bicep:937</code> (was <code>:921</code>), the
+          <code>serviceDatabaseLtr</code> policy (weekly <code>P4W</code>, monthly <code>P12M</code>, yearly <code>P1Y</code>) at
+          <code>MMCA.ADC/infra/main.bicep:982</code> (was <code>:966</code>); <code>MMCA.ADC/infra/POST-CUTOVER-atldevcon-downgrade.md:103</code>
+          and <code>MMCA.ADC/infra/DISASTER-RECOVERY.md:27</code> are unchanged.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -330,6 +343,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             </ul>
           </nav>
         </aside>

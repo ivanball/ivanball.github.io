@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -247,7 +248,8 @@
           longer assembly-qualified-name-only, so the aliasing trade-off is narrower than recorded, and three
           citations are re-anchored after the flat-namespace split): see the revision at the end.
           Revised 2026-10-01: citations refreshed only. Revised 2026-10-06: a terminal unresolvable-type
-          miss leaves <code>ProcessedOn</code> null rather than stamping it, so the row stays listed and replayable.</p>
+          miss leaves <code>ProcessedOn</code> null rather than stamping it, so the row stays listed and replayable.
+          Revised 2026-10-07: anchors refreshed after the v1.233.0 release.</p>
           <h2 id="context">Context</h2>
           <p>ADR-010 splits event evolution into a signal and a discipline. The signal (<code>SchemaVersion</code>, a
           fitness-function-gated property on every integration event) shipped with ADR-010 itself. The
@@ -420,6 +422,24 @@ x.RegisterUpcastedIntegrationEventConsumer&lt;ProductVariantChanged&gt;(); <span
           at <code>:530</code>, the <code>HandleUnresolvableType</code> call at <code>:533</code>, the method at <code>:658</code>, and the reason tag
           at <code>:678</code>. <code>AddEventUpcaster</code> remains at <code>DependencyInjection.Extensibility.cs:81</code>.</li>
           </ul>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. The decision, the mechanism, both delivery paths, and the
+          terminal unresolvable-type behavior recorded by the 2026-10-06 revision are unchanged; only line
+          anchors in <code>OutboxProcessor.cs</code> moved. Anchors inside the earlier revisions are left as recorded.</p>
+          <ol>
+          <li><strong>Anchors re-verified against current source:</strong> In
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs</code>,
+          the <code>DeserializeEvent</code> call is at <code>:513</code>, the <code>HandleUnresolvableType</code> call at <code>:516</code>, and the
+          method at <code>:828</code>, with its XML doc at <code>:812-822</code> (<code>ProcessedOn</code> stays null, <code>:818-819</code>). The
+          terminal miss sets <code>RetryCount</code> to <code>MaxRetries</code> and clears <code>LockedUntil</code> at <code>:843-844</code>, and the
+          dead-letter counter increment is at <code>:845-848</code> with the <code>reason</code> <code>type_unresolvable</code> tag at
+          <code>:848</code>. In <code>OutboxMessage.cs</code>, <code>FromDomainEvent</code> (<code>:133</code>) stores <code>GetStorageName</code> at <code>:141</code>,
+          <code>DeserializeEvent</code> (<code>:168</code>) calls <code>ResolveEventType</code> (<code>:191</code>), and the fallback is at <code>:201</code>.
+          <code>AddEventUpcaster</code> remains at <code>DependencyInjection.Extensibility.cs:81</code> (singleton via
+          <code>TryAddEnumerable</code> at <code>:86</code>). The Decision section paths for <code>IEventUpcaster</code>,
+          <code>EventUpcasterRegistry</code>, <code>IntegrationEventConsumerExtensions</code> and <code>ArchitectureRules.Upcasters.cs</code>
+          are unchanged.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -438,6 +458,7 @@ x.RegisterUpcastedIntegrationEventConsumer&lt;ProductVariantChanged&gt;(); <span
             <li><a href="#revision-2026-09-03">Revision (2026-09-03)</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             </ul>
           </nav>
         </aside>

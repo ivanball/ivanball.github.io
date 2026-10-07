@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -239,7 +240,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-122-dev-only-relaxations-are-environment-gated-and-fail-closed">ADR-122: Dev-Only Relaxations Are Environment-Gated and Fail Closed</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-09-11). Revised 2026-10-01: citations re-anchored. Revised 2026-10-06: the plain-check inventory adds the Development-only design-time database skip.</p>
+          <p>Accepted (2026-09-11). Revised 2026-10-01: citations re-anchored. Revised 2026-10-06: the plain-check inventory adds the Development-only design-time database skip. Revised 2026-10-07: the inventory names the <code>!IsProduction()</code> OpenAPI and Scalar mappings as outside the rule, the UI-side null-aware pseudo-locale check, and the Serilog file sink as out of scope.</p>
           <h2 id="context">Context</h2>
           <p>Several capabilities are useful locally and dangerous in a deployed environment: EF Core rendering
           parameter values into logs and exception messages, an SMTP session that skips TLS, prompt and
@@ -279,9 +280,11 @@
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.Authentication.cs:64-66</code>),
           with a startup-warning filter registered when a non-Development host opts out (<code>:68-72</code>).</p>
           <p><strong>The remaining environment-conditional relaxations are plain <code>IsDevelopment()</code> checks, not
-          fail-closed gates</strong>, and this record names them as such: each reads a non-nullable environment the
-          host always supplies, so there is no unknown case for them to close against. They are listed here so
-          the inventory is complete, not to claim a guarantee their code does not make.</p>
+          fail-closed gates</strong>, and this record names them as such: each server-side check reads a non-nullable
+          environment the host always supplies, so there is no unknown case for them to close against (the one
+          UI-side check, noted under the pseudo-locale, reads a nullable environment and treats null as not
+          Development). They are listed here so the Development-gated inventory is complete, not to claim a
+          guarantee their code does not make.</p>
           <ul>
           <li>CORS: the pipeline selects <code>CorsPolicyAllowAll</code> in Development and <code>CorsPolicyAllowSpecificOrigins</code>
           otherwise (<code>.../Startup/Pipeline/MiddlewarePipelineBuilder.cs:99-101</code>); the allow-any policy is
@@ -298,15 +301,31 @@
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Security/BlazorCspPolicyProvider.cs:41</code>). See
           ADR-023.</li>
           <li>Pseudo-locale: added to the supported cultures and accepted by <code>/culture/set</code> only in Development
-          (<code>.../Startup/WebApplicationExtensions.cs:80-82</code>, <code>:119-122</code>).</li>
+          (<code>.../Startup/WebApplicationExtensions.cs:80-82</code>, <code>:119-122</code>). The culture switcher offers it in
+          the menu only when <code>Services.GetService&lt;IHostEnvironment&gt;()?.IsDevelopment() == true</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Globalization/CultureSwitcher.razor:24-27</code>), so
+          a WASM render, which registers no <code>IHostEnvironment</code> (<code>:21-22</code>), does not offer it; the WASM bootstrap takes the
+          decision as an explicit <code>allowPseudoLocale</code> argument from the host
+          (<code>.../MMCA.Common.UI/Services/Culture/MmcaCultureBootstrap.cs:41</code>, documented at <code>:31-34</code>).</li>
           <li>Design-time database skip: database initialization returns early only when the host is
           Development and the <code>OpenApiDesignTimeKey</code> setting is true
-          (<code>.../Startup/DatabaseInitializationExtensions.cs:153</code>), so a build-time OpenAPI run does not
+          (<code>.../Startup/DatabaseInitializationExtensions.cs:174-177</code>), so a build-time OpenAPI run does not
           touch a database.</li>
           </ul>
+          <p>Two endpoint mappings are gated on <code>!IsProduction()</code> rather than on Development, so they do not
+          follow this record&#39;s rule: in a host that calls them, Staging or any environment name other than
+          <code>Production</code> gets them. <code>MapCommonOpenApi</code> maps the OpenAPI document with <code>AllowAnonymous()</code>
+          (<code>.../Startup/Endpoints/OpenApiEndpointExtensions.cs:62</code>, <code>:74</code>), and the ADC and Store service
+          hosts call it. <code>MapCommonScalarUi</code> maps the Scalar reference UI under the same check (<code>:91-93</code>); it
+          is documented as opt-in (<code>:81-82</code>) and no consumer host calls it today. Both expose API
+          description, not data. ADR-046 documents the OpenAPI document&#39;s posture; no ADR covers the Scalar
+          UI. They are named here so the inventory states where the rule does not apply.</p>
           <p>The Serilog minimum level (<code>Debug</code> in Development, <code>Information</code> otherwise,
-          <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Logging/SerilogHostExtensions.cs:77</code>) is also
-          environment-conditional but relaxes no security control, so it is not part of this inventory.</p>
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Logging/SerilogHostExtensions.cs:77</code>) and the
+          rolling file sink (written outside Production, <code>ShouldWriteFileSink</code> at <code>:87-88</code>, see ADR-041) are
+          also environment-conditional but relax no security control, so they are not part of this inventory.
+          The same holds for the error page&#39;s Development guidance block, which adds static text only
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Components/Pages/Error.razor:37</code>).</p>
           <p>The two fail-closed gates that are pure functions are unit-tested on exactly the closing case: the
           EF gate with no environment registered is false
           (<code>MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/SensitiveDataLoggingGateTests.cs:45-46</code>,
@@ -357,6 +376,24 @@
           <code>Secure</code> flag to <code>SessionCookieJar.cs:64</code>, and HSTS to <code>SecurityHeaders.cs:175</code>; all other
           citations still hold.</li>
           </ul>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. The rule, the three fail-closed gates and the Development-gated
+          plain checks are unchanged; the inventory now states where the rule does not apply and covers two
+          branches it omitted.</p>
+          <ol>
+          <li>The two endpoint mappings gated on <code>!IsProduction()</code> rather than Development are named as
+          outside the rule: <code>MapCommonOpenApi</code> maps the document anonymously
+          (<code>OpenApiEndpointExtensions.cs:62</code>, <code>:74</code>), cross-referenced to ADR-046, and the opt-in
+          <code>MapCommonScalarUi</code> maps the Scalar UI (<code>:91-93</code>), which no consumer host calls.</li>
+          <li>The pseudo-locale bullet adds the UI-side check: <code>CultureSwitcher.razor:24-27</code> reads a nullable
+          <code>IHostEnvironment</code> and offers the pseudo-locale only when it is Development, and the WASM
+          bootstrap takes an explicit <code>allowPseudoLocale</code> argument (<code>MmcaCultureBootstrap.cs:41</code>). The
+          &quot;non-nullable environment&quot; sentence is now scoped to the server-side checks.</li>
+          <li>The out-of-scope sentence adds the Serilog file sink (<code>SerilogHostExtensions.cs:87-88</code>) beside
+          the minimum level (<code>:77</code>), and the error page&#39;s static Development guidance (<code>Error.razor:37</code>).</li>
+          <li>Anchors re-verified against current source: the design-time database skip moved to
+          <code>DatabaseInitializationExtensions.cs:174-177</code>; all other citations still hold.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="070-fail-fast-configuration-contract.html">ADR-070</a> (binds and validates settings at startup; this
           record governs when a validated setting may be honored),
@@ -365,7 +402,9 @@
           <a href="120-governed-chat-client-boundary.html">ADR-120</a> (the chat client whose prompt and completion
           telemetry the AI gate protects), <a href="024-push-notifications.html">ADR-024</a> (the notification use case
           whose email channel rides the SMTP transport gated here),
-          <a href="027-multi-locale-i18n.html">ADR-027</a> (the pseudo-locale that is Development-only).</p>
+          <a href="027-multi-locale-i18n.html">ADR-027</a> (the pseudo-locale that is Development-only),
+          <a href="046-http-api-versioning.html">ADR-046</a> (the OpenAPI document mapped outside Production),
+          <a href="041-observability-and-telemetry.html">ADR-041</a> (the Serilog level and file sink named out of scope).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -383,6 +422,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

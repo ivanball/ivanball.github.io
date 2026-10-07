@@ -10,6 +10,7 @@ Revised 2026-10-01 (a schedule outside a transaction now signals the processor w
 is due, and the two processors share one polling implementation; see Revision below).
 Revised 2026-10-06: a schedule enrolled in a transaction now owes a processor wake that the unit of
 work releases once after a successful commit and drops on rollback.
+Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 
 ## Context
 The framework has had two ways to move work off the request thread and neither of them is a job
@@ -20,7 +21,7 @@ The **transactional outbox** ([ADR-003](003-outbox-dual-dispatch.md)) carries *e
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:15`) is
 written by the domain-event interceptor inside the same transaction as the aggregate change, and
 `OutboxProcessor`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:53`)
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:56`)
 drains one table per relational source with a claim lease, exponential backoff, dead-lettering and
 OpenTelemetry instrumentation. It answers "this happened, tell whoever cares". It does not answer
 "do this later", and bending it to do so means expressing an instruction as an event, which is
@@ -89,13 +90,13 @@ aborts schedules nothing.
 **3. One table per relational source, mapped unconditionally.** `InternalCommandMessage`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/InternalCommandMessage.cs:21`)
 is configured in `ApplicationDbContext.ConfigureInternalCommands`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:751`)
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:752`)
 alongside the outbox and inbox, with three filtered indexes for the poll, the retention sweep and the
 dead-letter view. It takes the engine the model is being built for and runs its partial-index
 predicates through the same `QuoteColumn`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:618`)
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:619`)
 and `IncludeColumns`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:644`)
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:645`)
 helpers [ADR-113](113-postgresql-as-a-first-class-engine.md) introduced for the outbox, so PostgreSQL
 gets double-quoted identifiers while every other engine keeps the bracketed literal it has always
 produced. `PostgreSQLDbContext` calls `base.OnModelCreating`, so the fourth engine needs no
@@ -143,11 +144,11 @@ fact that will not change.
 Settings live under `InternalCommands`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Administration/InternalCommandsSettings.cs:15`)
 and mirror `OutboxSettings` where the semantics match: `BatchSize` 50 (`:31`), `MaxAttempts` 5
-(`:39`), `LeaseSeconds` 300 (`:69`), `RetryBackoffBaseSeconds` 10 (`:78`), `RetentionDays` 7 (`:94`),
-`CleanupIntervalHours` 6 (`:109`). Two values deliberately differ. `ProcessingDelaySeconds` defaults
-to `0` rather than the outbox's 5 (`:58`), because that delay exists to bound a race with the
+(`:39`), `LeaseSeconds` 300 (`:70`), `RetryBackoffBaseSeconds` 10 (`:79`), `RetentionDays` 7 (`:95`),
+`CleanupIntervalHours` 6 (`:110`). Two values deliberately differ. `ProcessingDelaySeconds` defaults
+to `0` rather than the outbox's 5 (`:59`), because that delay exists to bound a race with the
 in-process fast path that dispatches an event before the processor can, and the queue has no such
-fast path. `MaxRetryBackoffSeconds` (600, `:87`) is a separate ceiling rather than the lease, because
+fast path. `MaxRetryBackoffSeconds` (600, `:88`) is a separate ceiling rather than the lease, because
 a job queue wants a long lease for slow handlers and a short ceiling on how long a transient failure
 parks a command, where the outbox caps its backoff at `LeaseSeconds` and gets one number for both.
 
@@ -222,12 +223,12 @@ fallback.** The enrolled row raises no signal at enrollment, because a signal be
 buys a poll against a transaction that has not committed; the wake is owed instead and released once
 after the commit succeeds (Decision 2). Anything that wake does not reach is discovered by the next
 poll. `InternalCommands:PollingIntervalSeconds` ships at 2
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Administration/InternalCommandsSettings.cs:49`),
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Administration/InternalCommandsSettings.cs:50`),
 which is the same default `OutboxSettings` ships
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxSettings.cs:31`),
 so the divergence is a deployment decision rather than a framework one: ADC and Store both run the
-queue at 60 seconds (`MMCA.ADC/infra/main.bicep:1726`, `MMCA.Store/infra/main.bicep:1500`) while
-pushing the outbox to 300 (`MMCA.ADC/infra/main.bicep:1720`, `MMCA.Store/infra/main.bicep:1493`).
+queue at 60 seconds (`MMCA.ADC/infra/main.bicep:1750`, `MMCA.Store/infra/main.bicep:1500`) while
+pushing the outbox to 300 (`MMCA.ADC/infra/main.bicep:1744`, `MMCA.Store/infra/main.bicep:1493`).
 A host that raises the interval to cut idle polling accepts that much latency on any
 transaction-scheduled work the post-commit wake does not reach.
 
@@ -274,6 +275,24 @@ and `:1699`).
   `PollingLoop` call sites recorded in the 2026-10-01 revision are now `OutboxProcessor.cs:107` and
   `InternalCommandProcessor.cs:76`, and its `payload_invalid` anchor is now
   `InternalCommandProcessor.cs:374`.
+
+## Revision (2026-10-07)
+Re-verified against current source. The decision, the five parts, every `InternalCommandsSettings`
+default (`BatchSize` 50, `MaxAttempts` 5, `PollingIntervalSeconds` 2, `ProcessingDelaySeconds` 0,
+`LeaseSeconds` 300, `RetryBackoffBaseSeconds` 10, `MaxRetryBackoffSeconds` 600, `RetentionDays` 7,
+`CleanupIntervalHours` 6) and the deployed 60-second queue and 300-second outbox intervals in ADC and
+Store are unchanged; only line anchors moved.
+
+1. Anchors re-verified against current source: `OutboxProcessor`
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:56`,
+   its `PollingLoop.RunAsync` call now at `:110`), `ConfigureInternalCommands`, `QuoteColumn` and
+   `IncludeColumns`
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:752`,
+   `:619`, `:645`), the `InternalCommandsSettings` members
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Administration/InternalCommandsSettings.cs:50`,
+   `:59`, `:70`, `:79`, `:88`, `:95`, `:110`), and the ADC polling settings
+   (`MMCA.ADC/infra/main.bicep:1750` for the queue and `:1744` for the outbox). The 2026-10-01 and
+   2026-10-06 revisions keep their dated anchors as written.
 
 ## Related
 [ADR-003](003-outbox-dual-dispatch.md) (the claim-lease, backoff and dead-letter machinery this

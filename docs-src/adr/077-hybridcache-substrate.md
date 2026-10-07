@@ -4,7 +4,7 @@
 Accepted (2026-08-13). **Amends [ADR-026](026-caching-strategy.md)**: Tier 1's substrate gains a third
 implementation beside `MemoryCacheService` and `DistributedCacheService`. It is opt-in through
 `AddCommonHybridCache(...)`; with no call the default path is byte-identical to today, so the release is
-non-breaking. Revised 2026-10-01 (single-use records read through an L1-bypassing `GetFromSharedStoreAsync`, and consumers opt in through a Redis-guarded wrapper; see Revision below). Revised 2026-10-06: the ADR-029 registration counter also reads through `GetFromSharedStoreAsync`, so the member is no longer single-use-only.
+non-breaking. Revised 2026-10-01 (single-use records read through an L1-bypassing `GetFromSharedStoreAsync`, and consumers opt in through a Redis-guarded wrapper; see Revision below). Revised 2026-10-06: the ADR-029 registration counter also reads through `GetFromSharedStoreAsync`, so the member is no longer single-use-only. Revised 2026-10-07: the login-lockout flag and the soft-deleted-user marker also read through `GetFromSharedStoreAsync` (seven callers), and the source anchors are refreshed after the v1.233.0 release.
 
 **Scope note (2026-08-18).** This record is Tier 1 only: the Status and Context sections above scope it to
 ADR-026's Tier 1 substrate, and the Related entry for ADR-040 leaves the Tier 2 output-cache edge untouched.
@@ -69,29 +69,29 @@ and nothing else, so what this substrate writes is exactly what it evicts.
 ### `ICacheService` gains a default `GetOrCreateAsync`
 `ICacheService`
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/ICacheService.cs`, `GetAsync` at `:17`,
-`SetAsync` at `:72`, `RemoveAsync` at `:82`, `RemoveByPrefixAsync` at `:88`) gains
-`GetOrCreateAsync<T>(key, factory, expiration?, cancellationToken)` (`:145`) as a **default interface member**,
-following the `IncrementAsync` precedent at `:105` precisely because that precedent proved the shape is
+`SetAsync` at `:75`, `RemoveAsync` at `:85`, `RemoveByPrefixAsync` at `:91`) gains
+`GetOrCreateAsync<T>(key, factory, expiration?, cancellationToken)` (`:148`) as a **default interface member**,
+following the `IncrementAsync` precedent at `:108` precisely because that precedent proved the shape is
 non-breaking: no existing implementer, in the framework or in a consumer, has to change. The same
 interface also carries two further default members, `TryGetAsync` (`:34`) and `GetFromSharedStoreAsync`
-(`:62`). The default implementation is a presence check through `TryGetAsync` (`:155`), so a cached
-`default(T)` counts as a hit, then take the key's stripe (`:159`) from the `CacheKeyLocks` holder over a
-`KeyedSemaphoreStripe` (`:189-193`, the `QueryCacheKeyLocks` pattern), double-check with `TryGetAsync`
-(`:163`), call the factory, set. Every backing store therefore gets the
+(`:65`). The default implementation is a presence check through `TryGetAsync` (`:158`), so a cached
+`default(T)` counts as a hit, then take the key's stripe (`:162`) from the `CacheKeyLocks` holder over a
+`KeyedSemaphoreStripe` (`:192-195`, the `QueryCacheKeyLocks` pattern), double-check with `TryGetAsync`
+(`:166`), call the factory, set. Every backing store therefore gets the
 process-local stampede protection the query decorator already has, and `HybridCacheService` can override
 the member with its native two-level primitive.
 
 ### `HybridCacheService`
 A new `internal sealed partial class HybridCacheService : ICacheService`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:44`) implements the
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:48`) implements the
 interface over `HybridCache`. It takes its dependencies through a primary constructor,
 `(HybridCache hybrid, ILogger<HybridCacheService> logger, IConnectionMultiplexer? connectionMultiplexer = null, CacheKeyNamespace? keyNamespace = null, IOptions<CacheSettings>? cacheSettings = null)`
-(`:44-49`), the last three optional because a host without Redis still resolves the service, prefix eviction
+(`:48-53`), the last three optional because a host without Redis still resolves the service, prefix eviction
 is the only operation that needs the multiplexer, and a directly constructed instance falls back to
-`new CacheSettings()` (`:100`) for its TTL policy. The registration passes all three explicitly rather than
+`new CacheSettings()` (`:104`) for its TTL policy. The registration passes all three explicitly rather than
 leaving them to the container, the settings included (`DependencyInjection.Caching.cs:178`), so a registered service
 reads its durations from the bound `Cache` section rather than from the defaults. It is `partial` for the
-`LoggerMessage` source generator (`:349-362`), not because the type is split across hand-written files.
+`LoggerMessage` source generator (`:360-373`), not because the type is split across hand-written files.
 
 - **`GetAsync` is a read that never writes.** It calls `HybridCache.GetOrCreateAsync` with
   `HybridCacheEntryFlags.DisableUnderlyingData` (a shipped 9.0 GA API), which suppresses the factory and
@@ -99,34 +99,40 @@ reads its durations from the bound `Cache` section rather than from the defaults
   replica's L1, so the next read of that key costs no hop. The call is wrapped fail-soft: any fault logs a
   warning, self-heal-deletes the key, and returns the default.
 - **`SetAsync` maps expiration to both levels**, with `LocalCacheExpiration` set to
-  `min(local ceiling, expiration)` (`:324`), the local ceiling being `Cache:LocalCacheDuration`
-  (`CacheSettings.cs:42`) when set and otherwise the 30-second `LocalCacheDefault` (`HybridCacheService.cs:62`), read at
-  `HybridCacheService.cs:319`. A shorter caller TTL applies at both levels; a longer one still leaves the L1 copy bounded at
+  `min(local ceiling, expiration)` (`:335`), the local ceiling being `Cache:LocalCacheDuration`
+  (`CacheSettings.cs:42`) when set and otherwise the 30-second `LocalCacheDefault` (`HybridCacheService.cs:66`), read at
+  `HybridCacheService.cs:330`. A shorter caller TTL applies at both levels; a longer one still leaves the L1 copy bounded at
   the local ceiling.
 - **`IncrementAsync` bypasses L1 on both legs** (`DisableLocalCacheRead | DisableLocalCacheWrite`), keeping
   today's L2-only read-modify-write semantics exactly. A counter served from a replica's local cache
   ignores the other replicas' increments, which on the ADR-029 brute-force path means a lockout that never
   triggers. ADR-026 accepted an occasional lost increment; it did not accept a counter that reads its own
   stale copy for up to 30 seconds.
-- **`GetFromSharedStoreAsync` reads from L2 alone.** The override (`:150-169`) uses
-  `SharedStoreReadOptions` (`:82-87`), the read-only flag plus `DisableLocalCacheRead | DisableLocalCacheWrite`,
+- **`GetFromSharedStoreAsync` reads from L2 alone.** The override (`:154-173`) uses
+  `SharedStoreReadOptions` (`:86-91`), the read-only flag plus `DisableLocalCacheRead | DisableLocalCacheWrite`,
   so a record another replica already consumed (or a value another replica changed) is a miss or the shared
   value here rather than a stale local copy. Four single-use records read through it: the OAuth
   exchange code
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/OAuthControllerBase.cs:205`), the
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/OAuthControllerBase.cs:273`), the
   password-reset token (`PasswordResetTokenService.cs:128`), the email-confirmation token
   (`EmailConfirmationTokenService.cs:90`) and the two-factor time step (`TwoFactorAuthenticator.cs:105`).
   So does one counter: the ADR-029 per-IP registration limit reads its count through it
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:138`), because
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:141`), because
   `IncrementAsync` writes L2 only and a plain `GetAsync` would let a replica's L1 copy pin the first count it
-  saw, so the limit would not trip while that copy lived.
+  saw, so the limit would not trip while that copy lived. Two cross-replica flags read through it as well,
+  because the replica that reads them may not be the one that cleared or set them: the ADR-029 login-lockout
+  flag (`LoginProtectionService.cs:59`), which a reset clears only from the resetting replica's L1, and the
+  soft-deleted-user marker
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/SoftDeletedUserMiddleware.cs:92`), which
+  whichever replica handled the delete writes (and which, on the Identity host, the middleware also writes
+  when its validator finds the user deleted, `SoftDeletedUserMiddleware.cs:15-17`).
 - **`RemoveByPrefixAsync` reuses the existing SCAN machinery**, extracted out of `DistributedCacheService`
   into a shared internal `RedisPrefixScanner`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/RedisPrefixScanner.cs`) that both services
   call, so both evict through one implementation and the existing Redis-tier tests over
   `DistributedCacheService` prove the extraction is behavior-identical. The scan pattern is the
   caller's prefix qualified into this keyspace, `{namespace}hc:{prefix}*`
-  (`HybridCacheService.cs:208-227`, built at `:222`), this service's own keyspace and no other. The
+  (`HybridCacheService.cs:219-238`, built at `:233`), this service's own keyspace and no other. The
   delete is a caller-supplied callback, and here it is `hybrid.RemoveAsync` rather than a raw key delete,
   because a raw delete would clear L2 and leave the calling replica's L1 copy serving the value it just
   invalidated.
@@ -199,7 +205,8 @@ does not (no Redis, so it stays on the memory substrate).
 - **Single-use records stay out of that window only when read through `GetFromSharedStoreAsync`.** The
   framework's own single-use reads (OAuth exchange code, password reset, email confirmation, two-factor time
   step) bypass L1, so their replay exposure is bounded by the record's removal; the registration-limit
-  counter read takes the same path. A caller that reads a
+  counter read, the login-lockout flag and the soft-deleted-user marker take the same path. A caller that
+  reads a
   replay-guard value through plain `GetAsync` can still be served a stale local copy for up to
   `LocalCacheExpiration`.
 - **`AddCommonHybridCache` overwrites a host's own `ICacheService`.** `RemoveAll<ICacheService>()` is what
@@ -246,6 +253,28 @@ disjoint keyspace, opt-in registration and counter-path L1 bypass are unchanged.
 - Anchors re-verified against current source; the consumer examples are now
   `MMCA.ADC.Conference.Service/Program.cs:203` and `MMCA.Store.Catalog.Service/Program.cs:108` (four ADC
   hosts and three Store hosts, unchanged).
+
+## Revision (2026-10-07)
+Re-verified against current source. The disjoint `hc:` keyspace, opt-in registration through the
+Redis-guarded wrapper, the counter-path L1 bypass, the constructor shape and the consumer adoption (four ADC
+hosts, three Store hosts, none in MMCA.Helpdesk) are unchanged. What moved is the `GetFromSharedStoreAsync`
+caller list, which v1.233.0 (Common #520) extended, and most line anchors.
+1. `GetFromSharedStoreAsync` now has seven callers in Common: v1.233.0 (#520) moved two cross-replica flag
+   reads from `GetAsync` onto it, joining the four single-use records and the registration counter:
+   `LoginProtectionService.CheckLockoutAsync` reads the ADR-029 lockout flag
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:59`), and
+   `SoftDeletedUserMiddleware` reads the soft-deleted-user marker
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/SoftDeletedUserMiddleware.cs:92`). The
+   Decision and Trade-offs entries now say so.
+2. Anchors re-verified against current source: `ICacheService.cs` `SetAsync` `:75`, `RemoveAsync` `:85`,
+   `RemoveByPrefixAsync` `:91`, `IncrementAsync` `:108`, `GetOrCreateAsync` `:148`, `GetFromSharedStoreAsync`
+   `:65`, presence check `:158`, stripe `:162`, double-check `:166`, `CacheKeyLocks` `:192-195`;
+   `HybridCacheService.cs` class and constructor `:48-53`, `LocalCacheDefault` `:66`,
+   `SharedStoreReadOptions` `:86-91`, `new CacheSettings()` `:104`, `GetFromSharedStoreAsync` override
+   `:154-173`, `RemoveByPrefixAsync` `:219-238` (pattern built at `:233`), local ceiling read at `:330` and
+   applied at `:335`, `LoggerMessage` partials `:360-373`; `OAuthControllerBase.cs:273`;
+   `LoginProtectionService.cs:141` for the registration count. The `DependencyInjection.Caching.cs`,
+   `DistributedCacheService.cs`, `CacheSettings.cs:42` and consumer `Program.cs` anchors are unchanged.
 
 ## Related
 [ADR-026](026-caching-strategy.md) (amended by this record: its Tier 1 substrate gains a third

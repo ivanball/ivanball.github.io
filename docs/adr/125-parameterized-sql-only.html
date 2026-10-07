@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -239,7 +240,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-125-parameterized-sql-only-enforced-by-a-fitness-gate">ADR-125: Parameterized SQL Only, Enforced by a Fitness Gate</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-09-19). Revised 2026-10-01: citations refreshed and MMCA.Helpdesk counted as the fourth subclassing repo. Revised 2026-10-06: the relational limit is now a conditional registration that fails at container validation, not a <code>NotSupportedException</code> on the first statement.</p>
+          <p>Accepted (2026-09-19). Revised 2026-10-01: citations refreshed and MMCA.Helpdesk counted as the fourth subclassing repo. Revised 2026-10-06: the relational limit is now a conditional registration that fails at container validation, not a <code>NotSupportedException</code> on the first statement. Revised 2026-10-07: the Cosmos-default failure is an unresolved-service error raised at startup only where the container is validated on build (Development under the default builder) and otherwise on first resolution, and the CHANGELOG anchors are refreshed after the v1.233.0 release.</p>
           <h2 id="context">Context</h2>
           <p>The supported way to read data is the repository plus specification contract
           (<a href="055-repository-and-specification-contract.html">ADR-055</a>), and LINQ answers almost everything. It does
@@ -260,9 +261,9 @@
           <p>The framework also runs on four engines (<a href="018-polyglot-persistence.html">ADR-018</a>), and one of them has
           no SQL command surface at all, so &quot;raw SQL&quot; cannot be offered as a capability every host has. Before
           v1.192.0 the landing shape for a raw scalar read was four keyless <code>ValReturn&lt;T&gt;</code> entities mapped to no
-          table and queried by nobody (<code>MMCA.Common/CHANGELOG.md:1494-1500</code>); the pair of additions this record
-          covers shipped in v1.192.0 (<code>MMCA.Common/CHANGELOG.md:1379</code>, the interface at <code>:1449-1458</code> and the
-          fitness base at <code>:1459-1462</code>).</p>
+          table and queried by nobody (<code>MMCA.Common/CHANGELOG.md:1519-1525</code>); the pair of additions this record
+          covers shipped in v1.192.0 (<code>MMCA.Common/CHANGELOG.md:1404</code>, the interface at <code>:1474-1483</code> and the
+          fitness base at <code>:1484-1487</code>).</p>
           <h2 id="decision">Decision</h2>
           <p>Give raw SQL exactly one door whose signature makes the unsafe call uncompilable, and ban the four raw
           EF members in module code with a fitness test rather than a guideline.</p>
@@ -273,7 +274,7 @@
           <code>FormattableString</code>. A concatenated statement is a <code>string</code> and does not bind to either method, so
           injection on this path is a compile error rather than a review item, and the statement text stays
           stable across calls so the server keeps its plan (<code>:9-15</code>). <code>T</code> is a scalar or an unmapped DTO whose
-          properties match the selected columns by name (<code>:26</code>, <code>:34</code>). The interface lives in Application, so
+          properties match the selected columns by name (<code>:27</code>, <code>:34</code>). The interface lives in Application, so
           a module reaches hand-written SQL without referencing EF Core.</li>
           <li><strong>The relational limit is explicit and named, not implied.</strong> <code>EFRawSqlQueryExecutor</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/EFRawSqlQueryExecutor.cs:28</code>)
@@ -281,9 +282,15 @@
           source is on a relational engine
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:409</code>, registration at
           <code>:411</code>). A Cosmos-default host has no registration, so a service that injects the interface there
-          fails when the container is validated rather than on its first statement, which is the same boundary
-          the interface documents (<code>IRawSqlQueryExecutor.cs:17-22</code>) and the executor restates
-          (<code>EFRawSqlQueryExecutor.cs:19-24</code>).</li>
+          fails with an unresolved-service error rather than on its first statement. The interface
+          (<code>IRawSqlQueryExecutor.cs:17-22</code>), the executor (<code>EFRawSqlQueryExecutor.cs:19-24</code>) and the
+          registration method (<code>DependencyInjection.cs:391-396</code>) all document the missing registration, and
+          all three word the timing as &quot;when the container is validated&quot;, which is narrower than what the
+          hosts do. No host in the four repos sets <code>ValidateOnBuild</code> itself, and the hosts that register the
+          executor build through <code>WebApplication.CreateBuilder</code> (for example
+          <code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:12</code>), so the container is validated at
+          startup only where the default builder turns validation on (the Development environment), and
+          elsewhere the error appears the first time a dependent service is resolved.</li>
           <li><strong>The statement joins the caller&#39;s unit of work.</strong> The executor takes its context from the scoped
           <code>IDbContextFactory</code> and calls EF&#39;s <code>Database.SqlQuery&lt;T&gt;</code> on it (<code>EFRawSqlQueryExecutor.cs:51</code>), so
           the read shares the caller&#39;s connection and any transaction an <code>ITransactional</code> command opened. It is
@@ -353,8 +360,9 @@
           the exemption surface is a known, justified constant rather than a growing list.</li>
           <li><strong>Relational-only is a stated limit rather than an assumption.</strong> Under
           <a href="018-polyglot-persistence.html">ADR-018</a> a host can default to Cosmos DB, which speaks its own query
-          language. Withholding the registration on such a host turns the limit into a container-validation
-          failure at startup, which is earlier and more useful than a provider-level error on the first
+          language. Withholding the registration on such a host turns the limit into a dependency-resolution
+          failure (at startup where the container is validated, otherwise when the first dependent service
+          is resolved), which is earlier and more legible than a provider-level error on the first
           statement; the real options stay the same (express the read with LINQ, or move the entity to a
           relational source).</li>
           </ul>
@@ -382,9 +390,11 @@
           <li><strong>One source, the default one.</strong> The executor resolves the host&#39;s default physical source
           (<code>EFRawSqlQueryExecutor.cs:50</code>), so a statement that must run against a named non-default source has
           no route through this interface today.</li>
-          <li><strong>The Cosmos refusal is discovered at host startup</strong> (container validation,
-          <code>IRawSqlQueryExecutor.cs:18-21</code>), not at compile time. Nothing at compile time tells a module author
-          that the host it will be deployed into defaults to a non-relational engine.</li>
+          <li><strong>The Cosmos refusal is discovered at run time, not at compile time.</strong> The missing registration is
+          documented (<code>IRawSqlQueryExecutor.cs:18-21</code>), but it surfaces as a resolution failure: at host
+          startup only where the container is validated on build (the Development environment under the
+          default builder), otherwise on the first resolution of a dependent service. Nothing at compile
+          time tells a module author that the host it will be deployed into defaults to a non-relational engine.</li>
           </ul>
           <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
           <p>No decision or rationale changed. Citations refreshed: the CHANGELOG anchors (<code>MMCA.Common/CHANGELOG.md:1038</code>,
@@ -412,6 +422,32 @@
           <code>DependencyInjection.cs</code>, <code>DbContextFactory.cs</code>, CHANGELOG); the 2026-10-01 anchors above are left as
           recorded on that date.</li>
           </ul>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. The decision, the executor, the interface, the fitness base, the
+          one-entry <code>AllowedFiles</code> ratchet and every consumer subclass are unchanged. Three things moved: the
+          timing of the Cosmos-default failure was stated more strongly than the hosts support, the <code>T</code>-shape
+          anchor on <code>QueryAsync&lt;T&gt;</code> was one line early, and every CHANGELOG anchor shifted by 25 lines when the
+          v1.232.1 and v1.233.0 entries (<code>MMCA.Common/CHANGELOG.md:7-31</code>) landed above v1.192.0.</p>
+          <ol>
+          <li>The Cosmos-default failure is an unresolved-service error whose timing depends on the host. No host
+          in the four repos sets <code>ValidateOnBuild</code> (no match in any of their source trees); the hosts that
+          register the executor build through <code>WebApplication.CreateBuilder</code> (for example
+          <code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:12</code>), whose default validates the container
+          on build only in the Development environment. Elsewhere the error surfaces the first time a
+          dependent service is resolved. The Decision, Rationale and Trade-offs bullets now say so; the
+          registration itself is unchanged (<code>DependencyInjection.cs:409-411</code>). The source comments still say
+          &quot;fails when the container is validated&quot; (<code>IRawSqlQueryExecutor.cs:21</code>,
+          <code>EFRawSqlQueryExecutor.cs:22-23</code>, <code>DependencyInjection.cs:394-395</code>), which is the narrower wording
+          this revision corrects; they are left for a source change.</li>
+          <li>The <code>QueryAsync&lt;T&gt;</code> row-shape <code>typeparam</code> is at <code>IRawSqlQueryExecutor.cs:27</code>, not <code>:26</code> (the
+          method <code>summary</code>).</li>
+          <li>Anchors re-verified against current source: the v1.192.0 header (<code>MMCA.Common/CHANGELOG.md:1404</code>),
+          the <code>IRawSqlQueryExecutor</code> entry (<code>:1474-1483</code>, still ending on the original
+          <code>NotSupportedException</code> sentence at <code>:1483</code>), the <code>RawSqlConventionTestsBase</code> entry
+          (<code>:1484-1487</code>) and the <code>ValReturn&lt;T&gt;</code> removal (<code>:1519-1525</code>). The v1.218.0 conditional registration
+          bullet cited by the 2026-10-06 revision is now <code>:311</code>; that revision, and the 2026-10-06 sentence in
+          Status, are left as recorded on their date.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="055-repository-and-specification-contract.html">ADR-055</a> (the repository plus specification path this
           escape hatch sits beside, and the reason the hatch stays narrow),
@@ -440,6 +476,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -240,7 +241,9 @@
           <h1 id="adr-074-recurring-job-scheduler-persistent-cron-jobs-on-the-outbox-claim-lease-pattern">ADR-074: Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)</h1>
           <h2 id="status">Status</h2>
           <p>Accepted (2026-08-13; revised 2026-08-14, 2026-08-18, 2026-08-31, 2026-10-01). Revised 2026-10-06: the
-          smart-wait and cron-validation statements now match the runner&#39;s actual behavior. The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release
+          smart-wait and cron-validation statements now match the runner&#39;s actual behavior. Revised 2026-10-07:
+          the consumer-adoption statement now names every host that calls <code>AddScheduledJobs</code> and the combined
+          audit-trail migrations that create the table. The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release
           and is opt-in: a host calls <code>AddScheduledJobs(configuration)</code> and sets <code>Scheduler:Enabled</code>. Until it does,
           the framework creates no table and starts no runner.</p>
           <h2 id="context">Context</h2>
@@ -263,11 +266,11 @@
           <h3 id="the-scheduler-is-the-outbox-claim-lease-pattern-applied-to-cron-not-hangfire-and-not-quartznet">The scheduler is the outbox claim-lease pattern applied to cron, not Hangfire and not Quartz.NET</h3>
           <p>A persistent job store plus a single-runner claim lease, reusing the exact idiom the outbox proved. The
           outbox claims a batch with an <code>ExecuteUpdateAsync</code> that sets <code>LockedUntil</code> and <code>LockToken</code> in one statement
-          (<code>.../Persistence/Outbox/Processing/OutboxProcessor.cs:397-401</code>, inside <code>ClaimEligibleAsync</code>, <code>:370</code>) over a shared
+          (<code>.../Persistence/Outbox/Processing/OutboxProcessor.cs:357-361</code>, inside <code>ClaimEligibleAsync</code>, <code>:330</code>) over a shared
           <code>FilterClaimable</code> predicate that admits only eligible, unprocessed rows whose <code>LockedUntil</code> is null or already
-          in the past (<code>:449-455</code>; a batch carrying an ordering key claims through <code>FilterUnblocked</code>, which composes it,
-          <code>:393-395</code>, <code>:464</code>), then re-reads the claimed
-          set by <code>LockToken</code> so a partial claim processes only its own rows (<code>:409-417</code>). A due job is claimed the same way, so two replicas can
+          in the past (<code>:409-415</code>; a batch carrying an ordering key claims through <code>FilterUnblocked</code>, which composes it,
+          <code>:353-355</code>, <code>:429</code>), then re-reads the claimed
+          set by <code>LockToken</code> so a partial claim processes only its own rows (<code>:369-374</code>). A due job is claimed the same way, so two replicas can
           never run the same occurrence, and a replica that dies mid-run releases its job when the lease expires.</p>
           <p>Hangfire would have brought its own schema, its own storage abstraction, a dashboard surface to authorize
           and host, and a licensing posture that varies by storage provider. Quartz.NET would have brought a large
@@ -292,8 +295,8 @@
           <code>LastError</code>, <code>LastDurationMs</code>, <code>LockedUntil</code> and <code>LockToken</code> (<code>ScheduledJobEntry.cs:26-74</code>). It is deliberately <strong>not</strong> an <code>IAuditableEntity</code>: it
           self-stamps nothing, it is never soft-deleted, and no global query filter reaches it. That falls out of the
           mapping rather than being asserted: the soft-delete filter is applied only to entity types assignable to
-          <code>IAuditableEntity</code> (<code>.../Persistence/DbContexts/ApplicationDbContext.cs:456</code>, <code>:465</code>), and
-          <code>ConfigureScheduler</code> maps the table with no <code>HasQueryFilter</code> call of its own (<code>:802-838</code>). That is the
+          <code>IAuditableEntity</code> (<code>.../Persistence/DbContexts/ApplicationDbContext.cs:457</code>, <code>:466</code>), and
+          <code>ConfigureScheduler</code> maps the table with no <code>HasQueryFilter</code> call of its own (<code>:803-839</code>). That is the
           <code>OutboxMessage</code> precedent: infrastructure rows are not domain rows.</p>
           <p>The table lives in the <strong>Default</strong> source and only there. The outbox exists once per relational database
           because an outbox row must be written in the same transaction as the aggregate that produced it
@@ -360,8 +363,11 @@
           <h3 id="the-framework-dogfoods-it">The framework dogfoods it</h3>
           <p><code>AuditTrailCleanupJob</code>, the retention purge of <a href="075-audit-trail.html">ADR-075</a>, ships as the framework&#39;s first
           <code>IScheduledJob</code>, so the contract is exercised by the package that defines it before any application depends
-          on it. In the consumer sweep, ADC, Store and Helpdesk all call <code>AddScheduledJobs</code>, each adding one migration
-          on its Default source.</p>
+          on it. ADC, Store and Helpdesk all call <code>AddScheduledJobs</code>: ADC in three of its four service hosts (not
+          Notification), Store in all three, Helpdesk in its single service host. The migration set of each host that
+          calls it adds the <code>ScheduledJobs</code> table once, in a migration shared with the <a href="075-audit-trail.html">ADR-075</a>
+          audit trail rather than a scheduler-only one, so ADC and Store carry three such migrations each and
+          Helpdesk one.</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
           <li><strong>The lease is already proven under production load.</strong> Multi-replica correctness for recurring work is the
@@ -444,6 +450,30 @@
           <code>LastError</code> 2048-character cap is at <code>ApplicationDbContext.cs:824</code>, and the other moved anchors are corrected
           in the body.</li>
           </ul>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. No decision, rationale or trade-off changed; the claim lease, the
+          soft-delete exclusion and the <code>ConfigureScheduler</code> mapping behave as described. The consumer-adoption
+          statement moved; the outbox anchors in the body moved with the v1.233.0 release and the context anchors
+          with v1.232.1.</p>
+          <ol>
+          <li>The dogfooding paragraph no longer says each consumer added one migration on its Default source. ADC
+          calls <code>AddScheduledJobs</code> in three of its four service hosts, not Notification (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:245</code>,
+          <code>MMCA.ADC.Conference.Service/Program.cs:350</code>, <code>MMCA.ADC.Engagement.Service/Program.cs:197</code>), Store in three
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:234</code>,
+          <code>MMCA.Store.Sales.Service/Program.cs:209</code>, <code>MMCA.Store.Identity.Service/Program.cs:196</code>), and Helpdesk in
+          its one service host (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:91</code>). The table is created by
+          migrations combined with the audit trail: ADC <code>20260814114610</code>, <code>20260814114613</code> and
+          <code>20260814114616_AddAuditTrailAndScheduler</code>, Store <code>20260814114204</code>, <code>20260814114208</code> and
+          <code>20260814114212_AddAuditTrail</code>, Helpdesk <code>20260814112727_CommonV1150AuditTrailSchedulerAndTenancy</code>.</li>
+          <li>Anchors re-verified against current source: the outbox claim <code>ExecuteUpdateAsync</code>
+          (<code>OutboxProcessor.cs:357-361</code>) inside <code>ClaimEligibleAsync</code> (<code>:330</code>), <code>FilterClaimable</code> (<code>:409-415</code>), the
+          keyed <code>FilterUnblocked</code> branch (<code>:353-355</code>) composing it (<code>:429</code>), the partial-claim re-read by <code>LockToken</code>
+          (<code>:369-374</code>), the soft-delete filter (<code>ApplicationDbContext.cs:457</code>, <code>:466</code>), <code>ConfigureScheduler</code>
+          (<code>:803-839</code>), and the <code>LastError</code> 2048-character cap (<code>:825</code>). The 2026-10-01 and 2026-10-06 entries
+          above are left as written: their <code>OutboxProcessor.cs</code> anchors and the <code>ApplicationDbContext.cs</code> <code>:824</code>
+          and <code>:805-841</code> anchors are stale, while their <code>ScheduledJobRunner.cs</code>, <code>SchedulerSettings.cs</code> and
+          <code>ApplicationDbContext.cs:457</code>/<code>:466</code> anchors are current.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="003-outbox-dual-dispatch.html">ADR-003</a> (the outbox whose claim-lease idiom and smart wait this reuses
           verbatim, and whose at-least-once posture it inherits along with the idempotency obligation on job bodies),
@@ -476,6 +506,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

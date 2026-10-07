@@ -30,6 +30,7 @@ Revised 2026-10-06 (the inbox row commits atomically with a handler's mutations 
 that saves on the consumer's own scope; the framework's `ScopedIntegrationEventHandlerBase` handlers
 save on a scope of their own, so for them the row is written by `CompleteAsync` after they succeed
 and the crash window stays open; see the Revision (2026-10-06) at the end).
+Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 
 ## Context
 ADR-003 makes integration-event delivery **at-least-once**: the outbox guarantees a published event
@@ -112,7 +113,7 @@ ADC Conference consumes `UserRegistered` and `UserDeleted`
 (`MMCA.ADC.Conference.Service/ConferenceBrokerConsumers.cs:34-35`) and chains a third broker consumer
 beside them, `RegisterOutputCacheEvictionConsumer()` (`MMCA.ADC.Conference.Service/ConferenceBrokerConsumers.cs:37`), and ADC
 Engagement consumes four events, `AttendeeCheckedIn`, `SessionFeedbackSubmitted`,
-`EventFeedbackSubmitted` and `UserDeleted` (`MMCA.ADC.Engagement.Service/Program.cs:292-295`), the
+`EventFeedbackSubmitted` and `UserDeleted` (`MMCA.ADC.Engagement.Service/Program.cs:293-296`), the
 first of which is ADC's first **self-consumption** over the broker: Engagement publishes
 `AttendeeCheckedIn` and consumes it back, which is precisely the shape a redelivery would double-count,
 so the inbox is load-bearing there rather than decorative. Store Sales consumes three events,
@@ -426,3 +427,19 @@ No decision changed; one claim is narrowed to what the code does.
   registration now lives in `DependencyInjection.Messaging.cs`.
 - Anchors in the live sections (Status, Decision, Rationale) were re-verified against current
   source.
+
+## Revision (2026-10-07)
+Re-verified against current source. No decision changed: the inbox still resolves ON for a broker
+transport, the row is still staged by `TryBeginAsync` and closed out by `CompleteAsync`, the unique
+`IX_InboxMessages_MessageId` index is still the race guard, and the consumer inventory (five of the
+seven service hosts consume from the broker, every host sets `EnableInbox: true`) is unchanged. One
+live-section anchor moved; older Revision sections keep their original anchors.
+
+1. Anchors re-verified against current source: ADC Engagement registers its four consumers
+   (`AttendeeCheckedIn`, `SessionFeedbackSubmitted`, `EventFeedbackSubmitted`, `UserDeleted`, same
+   set and order) at `MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:293-296`, so the
+   Decision cites that range. The other live anchors hold as written:
+   `DependencyInjection.Messaging.cs:202-209`, `:52-55` and `:118`;
+   `.../Messaging/MessageBusSettings.cs:141`; `IntegrationEventConsumer.cs:77-81` and `:123`;
+   `ScopedIntegrationEventHandlerBase.cs:14-16` and `:51`; the ADC Identity, ADC Conference, Store
+   Sales and Store Catalog consumer registrations; and the seven `EnableInbox` appsettings lines.

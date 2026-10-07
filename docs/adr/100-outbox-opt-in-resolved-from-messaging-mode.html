@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -247,7 +248,8 @@
           <code>MessageBusSettings</code>, registration, startup-guard and model-configuration citations, which have
           moved; the guard now lives in the <code>DependencyInjection.Messaging.cs</code> partial). Revised 2026-10-01 (re-anchored the startup-guard and
           model-configuration citations and named the guard&#39;s second call site). Revised 2026-10-06: Decision 1
-          now scopes the explicit-value-wins rule to the in-process transport, as its cited source does.</p>
+          now scopes the explicit-value-wins rule to the in-process transport, as its cited source does.
+          Revised 2026-10-07: anchors refreshed after the v1.233.0 release.</p>
           <h2 id="context">Context</h2>
           <p>ADR-003 gives every host a transactional outbox: domain and integration events are written to
           <code>OutboxMessages</code> in the same transaction as the aggregate changes, <code>OutboxProcessor</code> publishes them,
@@ -291,10 +293,10 @@
           <li><p><strong>The row writes are gated at both write points</strong>, not only the background services:
           <code>InProcessEventBus</code> takes its direct-dispatch branch when the outbox is off, with no rows, no save
           and no processor to retry (<code>Source/Core/MMCA.Common.Infrastructure/Messaging/InProcessEventBus.cs:43</code>,
-          branch at <code>:81-85</code>, documented at <code>:70-74</code>), and <code>DomainEventSaveChangesInterceptor</code> captures and
+          branch at <code>:82-86</code>, documented at <code>:70-74</code>), and <code>DomainEventSaveChangesInterceptor</code> captures and
           dispatches in-process without writing rows
-          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:55</code>,
-          contract at <code>:42-45</code>). Both fall back to the outbox path when no options are resolvable, so a
+          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:54</code>,
+          flag at <code>:64</code>, contract at <code>:46-50</code>, row-writing gate at <code>:257</code>). Both fall back to the outbox path when no options are resolvable, so a
           container that binds neither keeps the previous behavior. This is the same branch a context
           without outbox support (Cosmos) already took, reached by a second condition rather than a new one.</p>
           </li>
@@ -319,8 +321,8 @@
           </li>
           <li><p><strong>The EF model does not change.</strong> <code>OutboxMessage</code> is configured in <code>OnModelCreating</code> for every
           relational provider
-          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:416</code>,
-          <code>ConfigureOutbox</code> called at <code>:423</code>, configuration at <code>:661-714</code>),
+          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:417</code>,
+          <code>ConfigureOutbox</code> called at <code>:424</code>, configuration at <code>:662-715</code>),
           independent of the setting. Flipping the flag in either direction is a configuration change and a
           restart, with no migration in any consumer.</p>
           </li>
@@ -384,6 +386,19 @@
           <code>DependencyInjection.cs:217-225</code>, guard <code>DependencyInjection.Messaging.cs:202</code>, second call site
           <code>:60</code>, <code>OnModelCreating</code> at <code>ApplicationDbContext.cs:416</code>); no decision or rationale changed.</li>
           </ul>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. No decision, default or rationale changed: both write points
+          still take the direct-dispatch branch when the outbox resolves off, both still fall back to the
+          outbox path (<code>?? true</code>) when no options are resolvable, and <code>ConfigureOutbox</code> is still called
+          unconditionally for every relational engine. Only line anchors in Decisions 3 and 6 moved.</p>
+          <ol>
+          <li>Anchors re-verified against current source: <code>InProcessEventBus.cs:43</code> (flag, unchanged), branch
+          <code>:82-86</code> (was <code>:81-85</code>), doc <code>:70-74</code> (unchanged); <code>DomainEventSaveChangesInterceptor.cs:54</code>
+          (class, was <code>:55</code>), <code>_outboxEnabled</code> at <code>:64</code>, <code>messageBusOptions</code> contract <code>:46-50</code> (was
+          <code>:42-45</code>), row-writing gate <code>:257</code>; <code>ApplicationDbContext.cs:417</code> (<code>OnModelCreating</code>, was <code>:416</code>),
+          <code>ConfigureOutbox</code> call <code>:424</code> (was <code>:423</code>), body <code>:662-715</code> (was <code>:661-714</code>), Cosmos skip
+          documented at <code>:654</code>.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="003-outbox-dual-dispatch.html">ADR-003</a> (the outbox itself: the dual-dispatch contract, the processor,
           the retry and dead-letter policy, all unchanged for a host that runs it),
@@ -413,6 +428,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

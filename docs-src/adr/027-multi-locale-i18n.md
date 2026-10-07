@@ -1,7 +1,7 @@
 # ADR-027: Multi-Locale Internationalization (Supersedes ADR-011)
 
 ## Status
-Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, 2026-07-09, 2026-07-29, and 2026-09-15: the MudBlazor localization interceptor is replaced so no dependency assigns the current culture on a hybrid head; corrected 2026-08-01: the pseudo-locale CI gate is required on all three browser engines, and the hybrid applier sets only the thread defaults; revised 2026-10-01: four statements corrected to match the code; revised 2026-10-06: displayed times follow the viewer's clock except a conference schedule, which follows the event's own time zone (Decision 11), and client-synthesized HTTP failures localize by error code). **Supersedes [ADR-011](011-single-locale-i18n.md)** (single-locale by design).
+Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, 2026-07-09, 2026-07-29, and 2026-09-15: the MudBlazor localization interceptor is replaced so no dependency assigns the current culture on a hybrid head; corrected 2026-08-01: the pseudo-locale CI gate is required on all three browser engines, and the hybrid applier sets only the thread defaults; revised 2026-10-01: four statements corrected to match the code; revised 2026-10-06: displayed times follow the viewer's clock except a conference schedule, which follows the event's own time zone (Decision 11), and client-synthesized HTTP failures localize by error code; revised 2026-10-07: when the caller supplies a localizer, a code-keyed client failure resolves from the framework's own `SharedResource` pair before the English fallback, and the stale "only coverage collection is chromium-only" note on the pseudo-locale gate is removed). **Supersedes [ADR-011](011-single-locale-i18n.md)** (single-locale by design).
 
 ## Context
 ADR-011 recorded single-locale (en-US) as a deliberate, *revisitable* non-goal and sketched what
@@ -112,7 +112,7 @@ machine `Code`, which makes server-side error localization a keyed lookup rather
    horizontally under the ~40% expansion (the layout-tolerance criterion). The gate is **required on
    all three browser engines**, not just one: `ui-e2e` is a `chromium, firefox, webkit` matrix whose
    legs are each a required merge check, and the run step executes the whole E2E project on every leg
-   with no per-class or per-browser filter (only coverage collection is chromium-only). A leak-guard
+   with no per-class or per-browser filter. A leak-guard
    test asserts the sentinel is absent under `en-US`. Production hosts are unchanged: they keep
    `qps-Ploc` Development-only.
 
@@ -144,12 +144,19 @@ machine `Code`, which makes server-side error localization a keyed lookup rather
    shared `ErrorSummary` component, each resolving every message as a resource key **with
    pass-through** so an already-translated server message renders as-is and a client-side message
    that happens to be a key gets translated
-   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/ResultUiExtensions.cs:19-29`, the
-   pass-through lookup at `:376-385`). The one exception is a failure the client synthesized itself,
+   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/ResultUiExtensions.cs:23-33`, the
+   pass-through lookup at `:407-416`). The one exception is a failure the client synthesized itself,
    with no server-phrased message to pass through (a bodiless HTTP status, a transport failure, a
    client timeout): `LocalizeError` looks that up by its error **code** instead (`Http.{status}`, then
-   the generic `Http.Status` format, `Http.TransportFailure`, `Http.Timeout`), falling back to the
-   English message when no key exists (`:339-365`, the code branches at `:346-362`).
+   the generic `Http.Status` format, `Http.TransportFailure`, `Http.Timeout`). When the caller
+   supplies a localizer, each code lookup tries that localizer, then the framework's own
+   `SharedResource` pair for the current UI culture (`:377-396`, the `ResourceManager` at `:84`), and
+   falls back to the English message only when neither holds the key (`:350-373`, the code branches
+   at `:360-370`). The localizer parameter is optional and defaults to `null`, and with no localizer
+   `LocalizeError` returns the error's English `Message` at once, without consulting `SharedResource`
+   (`:352-355`). A transport or timeout failure
+   is re-keyed only when its message is the executor's own English sentence, so a caller that reuses
+   one of those codes with a message of its own keeps that message (`:400-405`).
    `ErrorMessages.LoadError` / `SaveError` / `DeleteError` cover the narrow
    remainder, and the type says so: they are for the exceptions a page can still raise on its own
    behalf (a JS-interop failure, a mapping bug, a callback the page supplied), never for a server
@@ -317,6 +324,28 @@ fallback (`WebApplicationExtensions.cs:73-93`). Refreshed anchors: `ProblemDetai
   `ProblemDetailsResultReader.cs:373-385` (the 2026-10-01 `:344-356` is stale), `ResultUiExtensions.cs:19-29`
   and `:376-385` (the 2026-10-01 `:329-338` is stale); the MudBlazor 9.11.0 pin recorded above now sits
   at `MMCA.Common/Directory.Packages.props:176`.
+
+## Revision (2026-10-07)
+Re-verified against current source. No decision or rationale changed; Decision 9 now states the
+shared-resource fallback for code-keyed failures, and one Decision 8 parenthetical is removed.
+
+1. Decision 9: when the caller supplies a localizer, a client-synthesized failure's code is looked
+   up in that localizer, then in the framework `SharedResource` pair for the current UI culture, and
+   only then falls back to the English message
+   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/ResultUiExtensions.cs:377-396`, the
+   `ResourceManager` at `:84`); with no localizer (the parameter defaults to `null`) the English
+   message is returned at once and `SharedResource` is not consulted (`:352-355`). The keys ship in
+   both cultures: `Http.Status` (`.../MMCA.Common.UI/Resources/SharedResource.resx:799`), the twelve
+   `Http.{status}` keys (`:802-832`), `Http.TransportFailure` (`:835`) and `Http.Timeout` (`:838`),
+   at the same lines in `SharedResource.es.resx`. A transport or timeout failure is re-keyed only when its message is the
+   executor's own English sentence (`ResultUiExtensions.cs:400-405`).
+2. Decision 8: the `ui-e2e` job has no coverage step on any leg, and its run step is identical on
+   every leg apart from `E2E_BROWSER` (`MMCA.Common/.github/workflows/ci.yml:287-292`), so the
+   "only coverage collection is chromium-only" parenthetical is removed.
+3. Anchors re-verified against current source: `ResultUiExtensions.cs:23-33` (the Localization
+   remarks) and `:407-416` (the pass-through `Localize` helper), replacing the 2026-10-06 `:19-29`
+   and `:376-385`; `LocalizeError` at `:350-373` with its code branches at `:360-370` (were
+   `:339-365` and `:346-362`).
 
 ## Related
 [ADR-011](011-single-locale-i18n.md) (superseded), [ADR-013](013-result-pattern.md) (the `Error.Code`

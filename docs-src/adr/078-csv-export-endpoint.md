@@ -10,6 +10,7 @@ Store) re-baseline their snapshots in the sweep. What it returns is not automati
 export is fail-closed, and a derivative that declares no row scope and does not opt in through
 `AllowUnscopedExport` answers 403 `Export.RowScopeRequired`.
 Revised 2026-10-06: the export is fail-closed since v1.218.0 (an unscoped derivative must opt in through `AllowUnscopedExport` or get 403), and since v1.219.0 each page is rendered into memory and written to the response with awaited writes only.
+Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 
 ## Context
 The request is "export what you filtered". The generic entity surface of
@@ -140,12 +141,13 @@ rows really are visible to every caller allowed to reach it opts in with `=> tru
 administrator opts in for that role only (Store's `OrdersController` and `ShoppingCartsController`).
 
 ### The CSV writer is in-house
-`CsvWriter` (internal static, `Source/Presentation/MMCA.Common.API/Export/CsvWriter.cs:42`) implements
+`CsvWriter` (internal static, `Source/Presentation/MMCA.Common.API/Export/CsvWriter.cs:44`) implements
 RFC 4180: quote a field when it contains the separator, a quote, or a line break; escape an embedded quote by
 doubling it; terminate rows with CRLF; lead with a UTF-8 BOM. The BOM is **unconditional**, not a setting
-(`CsvWriter.cs:44-53`). It is written once by the exporter at `EntityCsvExporter.cs:162`, through the
+(`CsvWriter.cs:46-55`). It is written once by the exporter at `EntityCsvExporter.cs:162` (through
+`WriteByteOrderMark`, `CsvWriter.cs:82`), via the
 page-buffer `StreamWriter` constructed with `CsvWriter.Utf8NoPreamble` (`EntityCsvExporter.cs:135`, encoding at
-`CsvWriter.cs:63`), so the encoding emits no preamble of its own and the file gets exactly one BOM rather
+`CsvWriter.cs:65`), so the encoding emits no preamble of its own and the file gets exactly one BOM rather
 than two. Without it Excel reads a UTF-8 file in
 the machine's ANSI code page and every accented character becomes mojibake on the desktops these exports are
 opened on; three bytes is a cheaper price than a flag nobody would find in time, and the parsers that show a
@@ -260,8 +262,8 @@ Helpdesk subclasses no `OpenApiContractTestsBase` and has no snapshots to move.
   `Controllers/Sponsors/SponsorsController.cs:69` among others), opt their privileged readers in through
   `AllowUnscopedExport` (for example `EventsController.cs:80`, `SessionsController.cs:93`,
   `SessionQuestionAnswersController.cs:121`), and keep their `Forbid` gates on
-  bulk export anyway (`Controllers/Events/EventsController.cs:146-149`,
-  `Controllers/Sessions/SessionsController.cs:256-259`): a deliberate
+  bulk export anyway (`Controllers/Events/EventsController.cs:147-150`,
+  `Controllers/Sessions/SessionsController.cs:258-261`): a deliberate
   privileged-reader-only policy on a whole-catalog file, not a gap in what the framework can scope.
   v1.151.0 also hardened the formatter: binary and collection properties produce no column instead of
   rendering type names (`IsExportableType`, `EntityCsvExporter.cs:239-242`, which excludes `byte[]`, `ReadOnlyMemory<byte>` and
@@ -285,7 +287,7 @@ Helpdesk subclasses no `OpenApiContractTestsBase` and has no snapshots to move.
   separator, and encoding all become framework correctness obligations covered by framework tests. The
   spreadsheet formula-injection question (a cell whose value begins with `=`, `+`, `-`, or `@`) is answered
   by the shipped writer, and answered in the exposed direction: it does **not** prefix or otherwise
-  neutralize such values (`Export/CsvWriter.cs:35-40`), because CSV is treated here as a data-faithful
+  neutralize such values (`Export/CsvWriter.cs:38-41`), because CSV is treated here as a data-faithful
   format and mangling a field that opens with a minus sign would corrupt legitimate negative numbers. The
   price is a known spreadsheet risk carried by every consumer: a host that opens untrusted exports has to
   import them as text rather than double-click them.
@@ -336,6 +338,21 @@ build-time OpenAPI documents that list the added `/export` paths
   `ReadOnlyMemory<byte>` (`:239-242`).
 - Every `path:line` anchor in the live sections was re-verified against current source and re-anchored
   where the code had moved.
+
+## Revision (2026-10-07)
+Re-verified against current source. No decision, default or rationale changed: the dedicated route, the
+page loop, the fail-closed unscoped export, the unconditional BOM, the absence of formula-injection
+neutralization and the ADC privileged-reader `Forbid` gates all hold as written. Only line anchors moved.
+
+1. Anchors re-verified against current source: the `CsvWriter` declaration at
+   `MMCA.Common/Source/Presentation/MMCA.Common.API/Export/CsvWriter.cs:44`, the BOM constant and its
+   remarks at `:46-55`, `Utf8NoPreamble` at `:65`, `WriteByteOrderMark` at `:82` and the
+   formula-injection paragraph at `:38-41` (`EntityCsvExporter.cs:135` and `:162` unchanged); the ADC
+   `Forbid` gates at
+   `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Events/EventsController.cs:147-150`
+   and `Controllers/Sessions/SessionsController.cs:258-261`. The CHANGELOG anchors in the 2026-10-06
+   revision have since moved (v1.218.0 fail-closed export at `MMCA.Common/CHANGELOG.md:314`,
+   `AllowUnscopedExport` at `:329`; v1.219.0 awaited writes at `:294`) and stay as written there.
 
 ## Related
 [ADR-034](034-generic-entity-query-layer.md) (the generic entity surface and query contract this extends,

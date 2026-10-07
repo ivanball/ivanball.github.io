@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -264,7 +265,10 @@
           Revised 2026-10-01 (the output-cache list reads as a sample, and the <code>auth-ip</code> no-IP rule no longer
           claims to mirror the global limiter).
           Revised 2026-10-06: every ADC service binds the <code>RateLimiting</code> section, and the email-confirmation
-          <code>auth-ip</code> decoration is recorded as owned by the framework base rather than by each app.</p>
+          <code>auth-ip</code> decoration is recorded as owned by the framework base rather than by each app.
+          Revised 2026-10-07: the distributed limiter&#39;s Redis partition key is qualified by the application
+          namespace (MMCA.Common v1.232.0), so by default two MMCA applications sharing one Redis no longer
+          share counters.</p>
           <h2 id="context">Context</h2>
           <p>Every service exposes read and write endpoints to the public internet through the gateway (ADR-008).
           Abusive or runaway clients (scrapers, credential stuffing, retry storms, a buggy SPA stuck in a loop)
@@ -303,7 +307,7 @@
           are served from the output cache (<code>UseOutputCache</code>; ADC&#39;s Conference service defines one
           public-endpoint policy per public aggregate, among them <code>EventsCache</code> / <code>CategoriesCache</code> /
           <code>QuestionsCache</code> / <code>RoomsCache</code>,
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:267-298</code>), and login/registration brute-force is handled by <code>LoginProtectionService</code>
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:269-300</code>), and login/registration brute-force is handled by <code>LoginProtectionService</code>
           (exponential-backoff account lockout after <code>MaxFailedAttempts</code> failed logins, plus per-IP
           registration throttling).</li>
           <li><strong>A per-IP cap on the anonymous authentication endpoints, on by default.</strong> <code>AddCommonRateLimiting</code>
@@ -579,6 +583,48 @@
           <li>Anchors in the live sections (the Conference output-cache range and the unattributable-bucket
           anchors in Decision item 3) were re-verified against current source.</li>
           </ul>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. The layering, every default, the <code>auth-ip</code> surface, the
+          fail-open posture and both gateways&#39; <code>auth-tight</code> scoping are unchanged. One storage detail of the
+          distributed limiter moved, and the anchors that drifted since the 2026-10-06 audit are re-pointed.</p>
+          <ol>
+          <li><strong>The Redis partition key is namespaced per application</strong> (SEC-Common-53, shipped in MMCA.Common
+          v1.232.0). The framework builds
+          each <code>RedisFixedWindowRateLimiter</code> with the partition key <code>{namespace}:{scope}:{partition}</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:254</code>,
+          rationale at <code>:247-249</code>), where the namespace is <code>Cache:KeyPrefix</code> with its trailing colon
+          trimmed, or <code>ApplicationNamespace.Resolve</code> when no prefix is set (<code>:199-205</code>). That matches how
+          the distributed cache resolves its own prefix: a configured <code>Cache:KeyPrefix</code> as is, else the
+          application namespace plus <code>:</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/CacheKeyPrefix.cs:73-88</code>). The limiter still prefixes <code>rl:</code> and appends the
+          Unix minute (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/RateLimiting/RedisFixedWindowRateLimiter.cs:132</code>,
+          documented at <code>:24-26</code>), so the stored key is <code>rl:{namespace}:{scope}:{partition}:{unixMinute}</code>.
+          By default, two MMCA applications pointed at one Redis therefore do not share a counter. Two
+          hosts that set the same <code>Cache:KeyPrefix</code> or <code>Application:Namespace</code> share a namespace on
+          purpose (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/CacheKeyPrefix.cs:37-40</code>,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/ApplicationNamespace.cs:22-25</code>),
+          and a host with no application name falls back to <code>app</code> (<code>ApplicationNamespace.cs:34</code>, <code>:67</code>).
+          The <code>rl:</code> keyspace
+          the Related section names still holds.</li>
+          <li><strong>The Conference output-cache range drifted after the 2026-10-06 audit.</strong> The range was correct
+          when that audit re-verified it; MMCA.ADC #255 later moved it by two lines through comment edits
+          higher in the file. The <code>AddPublicEndpointPolicy</code> calls now run from <code>ConferencePublicCache</code>
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:269</code>) to <code>BookmarkCountsCache</code>
+          (<code>:300</code>), and the four sampled names are all present (<code>EventsCache</code> <code>:270</code>, <code>RoomsCache</code> <code>:278</code>,
+          <code>CategoriesCache</code> <code>:279</code>, <code>QuestionsCache</code> <code>:280</code>); Decision item 2 now cites <code>:269-300</code>. The
+          unattributable-bucket anchors in Decision item 3 were and remain correct (<code>&quot;anonymous-hub&quot;</code> <code>:66</code>,
+          <code>&quot;authenticated&quot;</code> <code>:156</code>, <code>__unknown-ip</code> <code>NoLimiter</code> <code>:310</code> in <code>WebApplicationBuilderExtensions.RateLimiting.cs</code>).</li>
+          <li>Anchors re-verified against current source: <code>AddTrustedCallerHeader</code> is called from
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:137</code> (Store <code>:129</code> and the definition at
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:121</code> unchanged).
+          <code>CredentialRoutes_CarryTheTightRateLimiterPolicy</code> is declared at
+          <code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/MmcaGatewayTests.cs:144</code>, with the per-route
+          assertion loop at <code>:155-161</code> and the exact-set <code>BeEquivalentTo</code> assertion at <code>:163-168</code>, still
+          pinning both directions. <code>RateLimiting__AuthIpPermitLimit</code> is at <code>MMCA.ADC/infra/main.bicep:1868</code>
+          (value <code>&#39;300&#39;</code> inside the <code>conferenceMode</code> block, rationale at <code>:1863-1865</code>), and the ADC
+          <code>GatewayRateLimiting__TrustedCallerSecret</code> injections are at <code>:2491</code> and <code>:2650</code> (Store
+          <code>MMCA.Store/infra/main.bicep:1959</code> and <code>:2084</code> unchanged).</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-004 (the JWKS/discovery traffic the limiter exempts, and the authenticated principal it keys on),
           ADR-008 (the gateway edge this protects), ADR-017 (request idempotency, the other inbound-edge
@@ -586,7 +632,7 @@
           on the login and register endpoints the <code>auth-ip</code> cap also covers, and the reason <code>auth-ip</code> stays
           local), ADR-026 (the
           Redis the distributed limiter reuses, and the <code>IncrementAsync</code> storage-format lesson the raw <code>INCR</code>
-          here avoids by owning its own <code>rl:</code> keyspace), ADR-070 (the fail-fast configuration contract
+          here avoids by owning its own <code>rl:</code> keyspace, qualified per application), ADR-070 (the fail-fast configuration contract
           <code>RateLimitingSettings</code> binds into, and the <code>Distributed</code> degradation that sits outside it), ADR-079
           (the shared middleware pipeline that places <code>UseRateLimiter</code> after authentication and after forwarded
           headers, which is what makes both partition keys resolvable).</p>
@@ -610,6 +656,7 @@
             <li><a href="#revision-2026-09-10">Revision (2026-09-10)</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

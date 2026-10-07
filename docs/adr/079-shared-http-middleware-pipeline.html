@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -253,7 +254,7 @@
           <code>MiddlewarePipelineBuilder.cs</code>, <code>WebApplicationExtensions.cs</code> and UI-host anchors that change moved are
           refreshed. Revised 2026-10-01 (anchor refresh only). Revised 2026-10-06: the soft-deleted-user check
           is recorded as still honoring the shared deleted-user marker on hosts without a validator, rather than
-          as a no-op there.</p>
+          as a no-op there. Revised 2026-10-07: anchors refreshed after the v1.233.0 release.</p>
           <h2 id="context">Context</h2>
           <p>In ASP.NET Core, middleware order is behavior, not style: a rate limiter placed before authentication
           partitions every request as anonymous, an HTTPS redirect placed in front of a gRPC call breaks the
@@ -330,7 +331,7 @@
           plaintext (SEC-Common-44). The predicate is <code>public</code> so a host that rebuilds this step through the
           configure overload reuses it rather than reinventing the weaker check (<code>:345-349</code>).</li>
           <li><strong>The soft-deleted-user check sits between the limiter and authorization.</strong>
-          <code>SoftDeletedUserMiddleware</code> (<code>Source/Presentation/MMCA.Common.API/Middleware/SoftDeletedUserMiddleware.cs:33</code>)
+          <code>SoftDeletedUserMiddleware</code> (<code>Source/Presentation/MMCA.Common.API/Middleware/SoftDeletedUserMiddleware.cs:37</code>)
           is the <code>SoftDeletedUserFilter</code> step (<code>MiddlewarePipelineBuilder.cs:123-125</code>), after <code>RateLimiting</code>
           and before <code>Authorization</code>, so a revoked account is rejected before any endpoint authorizes it
           (ADR-047).</li>
@@ -355,17 +356,17 @@
           <code>SoftDeletedUserMiddleware</code> (the <code>SoftDeletedUserFilter</code> step, <code>:123-125</code>) are always in the chain:
           the first passes the request straight through unless <code>Tenancy:Enabled</code> is set
           (<code>Middleware/TenantResolutionMiddleware.cs:62</code>). The second resolves <code>ISoftDeletedUserValidator</code>
-          lazily (remarks at <code>Middleware/SoftDeletedUserMiddleware.cs:51-59</code>, the <code>GetService</code> call at <code>:111</code>)
+          lazily (remarks at <code>Middleware/SoftDeletedUserMiddleware.cs:49-57</code>, the <code>GetService</code> call at <code>:114</code>)
           rather than taking it as a parameter, so a host with no implementation registered does not fail.
-          It is not a pure no-op there, though: an unauthenticated request passes straight through (<code>:75-82</code>),
-          but an authenticated one still reads the shared deleted-user cache marker (<code>:84-100</code>) and is
-          answered 401 when the marker is set (<code>:102-109</code>); only a cache miss with no validator passes through
-          (<code>:112-118</code>). Either way the pipeline is literally one shape on every host rather than a per-host
+          It is not a pure no-op there, though: an unauthenticated request passes straight through (<code>:72-80</code>),
+          but an authenticated one still reads the shared deleted-user cache marker (<code>:82-103</code>) and is
+          answered 401 when the marker is set (<code>:105-112</code>); only a cache miss with no validator passes through
+          (<code>:114-122</code>). Either way the pipeline is literally one shape on every host rather than a per-host
           permutation.</li>
           <li><strong>Every REST/gRPC host calls it.</strong> All seven extracted services in the two production apps: ADC
           Identity (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:356</code>), ADC Conference
-          (<code>MMCA.ADC.Conference.Service/Program.cs:446</code>), ADC Engagement
-          (<code>MMCA.ADC.Engagement.Service/Program.cs:324</code>), ADC Notification
+          (<code>MMCA.ADC.Conference.Service/Program.cs:448</code>), ADC Engagement
+          (<code>MMCA.ADC.Engagement.Service/Program.cs:325</code>), ADC Notification
           (<code>MMCA.ADC.Notification.Service/Program.cs:269</code>), Store Catalog
           (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:320</code>), Store Identity
           (<code>MMCA.Store.Identity.Service/Program.cs:299</code>) and Store Sales
@@ -387,11 +388,11 @@
           <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:150-173</code>), and the UI hosts hand-compose their own,
           reusing two pieces of this pipeline through public methods. The first is the forwarded-headers posture,
           opened first in each UI pipeline via <code>UseCommonUiForwardedHeaders()</code>
-          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:207</code>,
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:210</code>,
           <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:200</code>), which applies the same
           <code>CommonForwardedHeaders.Create()</code> options the <code>ForwardedHeaders</code> step uses
           (<code>Startup/CommonForwardedHeadersExtensions.cs:24-25</code>). The second is the localization half via
-          <code>UseCommonRequestLocalization()</code> (<code>MMCA.ADC.UI.Web/Program.cs:235</code>, <code>MMCA.Store.UI.Web/Program.cs:233</code>),
+          <code>UseCommonRequestLocalization()</code> (<code>MMCA.ADC.UI.Web/Program.cs:238</code>, <code>MMCA.Store.UI.Web/Program.cs:233</code>),
           which is the public method the pipeline&#39;s <code>RequestLocalization</code> step calls
           (<code>MiddlewarePipelineBuilder.cs:47</code>, <code>WebApplicationExtensions.cs:73</code>).</p>
           <h2 id="rationale">Rationale</h2>
@@ -421,7 +422,7 @@
           parameters, so the escape hatch was all-or-nothing: stop calling it and re-implement the chain,
           which is what the Blazor UI hosts still deliberately do,
           <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:200,204,233</code>,
-          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:207,213,235</code>). Both are addressed by the revision
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:210,216,238</code>). Both are addressed by the revision
           above: <code>MiddlewarePipelineOrderTestsBase</code> turns a reorder into a red test, <code>Build()</code> turns a
           misordered customization into a startup failure, and the configure overload makes the escape hatch
           scoped instead of all-or-nothing. What remains true: the fitness function is opt-in per repo. All
@@ -446,7 +447,7 @@
           (<code>CommonForwardedHeaders.cs:19-20</code>).</li>
           <li><strong>Security-response headers are not in this pipeline.</strong> ADR-023&#39;s <code>UseCommonSecurityHeaders</code> is applied
           by the gateways and UI hosts only (<code>MMCA.ADC.Gateway/Program.cs:170</code>, <code>MMCA.Store.Gateway/Program.cs:159</code>,
-          <code>MMCA.ADC.UI.Web/Program.cs:213</code>, <code>MMCA.Store.UI.Web/Program.cs:204</code>). A service host exposed directly,
+          <code>MMCA.ADC.UI.Web/Program.cs:216</code>, <code>MMCA.Store.UI.Web/Program.cs:204</code>). A service host exposed directly,
           without a gateway in front, would serve responses without them.</li>
           <li><strong>One step in the fixed order is currently dead weight.</strong> The pre-forwarded scheme/host capture
           (the <code>PreForwardedCapture</code> step, <code>MiddlewarePipelineBuilder.cs:49-62</code>) writes
@@ -482,6 +483,22 @@
           subclass path (now under <code>Conformance/</code>), the ADC gateway chain (<code>:160-234</code>, security headers
           <code>:170</code>), and the UI-host forwarded-headers, security-headers and localization lines.</li>
           </ul>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. No decision, behavior or rationale changed: the eighteen-step
+          order, the startup invariants, the soft-deleted-user marker behavior on hosts without a validator,
+          the eight <code>UseCommonMiddlewarePipeline()</code> call sites and the UI-host reuse all hold as written. Only
+          line anchors moved.</p>
+          <ol>
+          <li>Anchors re-verified against current source: the <code>SoftDeletedUserMiddleware</code> class
+          (<code>SoftDeletedUserMiddleware.cs:37</code>), its lazy-resolution remarks (<code>:49-57</code>), unauthenticated
+          pass-through (<code>:72-80</code>), shared-store marker read (<code>:82-103</code>), 401 on the marker (<code>:105-112</code>),
+          <code>GetService</code> call (<code>:114</code>) and no-validator pass-through (<code>:114-122</code>); the ADC Conference
+          (<code>MMCA.ADC.Conference.Service/Program.cs:448</code>) and Engagement
+          (<code>MMCA.ADC.Engagement.Service/Program.cs:325</code>) call sites, the other six confirmed unchanged; and
+          the ADC UI host&#39;s <code>UseCommonUiForwardedHeaders()</code> (<code>MMCA.ADC.UI.Web/Program.cs:210</code>),
+          <code>UseCommonSecurityHeaders()</code> (<code>:216</code>) and <code>UseCommonRequestLocalization()</code> (<code>:238</code>), with the
+          Store UI host confirmed unchanged at <code>:200</code>, <code>:204</code> and <code>:233</code>.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="014-cqrs-decorator-pipeline.html">ADR-014</a> (the in-process sibling: one fixed decorator order for commands
           and queries), <a href="019-rate-limiting.html">ADR-019</a> (depends on forwarded headers before the limiter and on the
@@ -509,6 +526,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

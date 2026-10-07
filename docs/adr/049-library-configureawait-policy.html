@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -240,13 +241,15 @@
           <h1 id="adr-049-library-scoped-configureawaitfalse-policy-ca2007">ADR-049: Library-Scoped ConfigureAwait(false) Policy (CA2007)</h1>
           <h2 id="status">Status</h2>
           <p>Accepted (2026-07-20; measurements re-anchored 2026-08-07, 2026-08-14, 2026-08-18, 2026-08-23,
-          2026-08-31, 2026-09-01, 2026-09-03, 2026-09-11, 2026-09-19, 2026-10-01 and 2026-10-06).
+          2026-08-31, 2026-09-01, 2026-09-03, 2026-09-11, 2026-09-19, 2026-10-01, 2026-10-06 and 2026-10-07).
           Revised 2026-09-19: the framework site counts and the consumer-scale upper bound are re-measured, and
           the occurrence-versus-line delta still turns on the same two ADC handler lines. The policy, the gate
           and the exemption are unchanged.
           Revised 2026-10-06: the UI exemption is restated as leaving the rule unenforced in mixed UI-package
           code (those packages now call <code>ConfigureAwait(false)</code> 154 times), and the drift script is no longer
-          credited with guarding the repo-delta section.</p>
+          credited with guarding the repo-delta section.
+          Revised 2026-10-07: the consumer-scale figure is re-measured after ADC growth (ADC 1,544 occurrences,
+          2,359 combined) and the <code>.editorconfig</code> gate and exemption anchors are refreshed.</p>
           <h2 id="context">Context</h2>
           <p>MMCA.Common ships as NuGet packages consumed by host applications, not as an application itself.
           Library code that awaits without <code>ConfigureAwait(false)</code> captures the caller&#39;s <code>SynchronizationContext</code>
@@ -293,8 +296,8 @@
           <li><strong>Standard .NET library guidance, applied at the boundary where it holds.</strong> The rule is scoped to
           exactly the code that ships in packages; it is not blanket-applied to the apps, where it would be
           360+ sites of pure noise (measured across Store/ADC before this decision, and the current scale is
-          far past that: a raw <code>\bawait\b</code> scan of <code>*.cs</code> on 2026-10-06 counts 815 occurrences in
-          <code>MMCA.Store/Source</code> and 1,540 in <code>MMCA.ADC/Source</code>, 2,355 combined, which is the upper bound on the
+          far past that: a raw <code>\bawait\b</code> scan of <code>*.cs</code> on 2026-10-07 counts 815 occurrences in
+          <code>MMCA.Store/Source</code> and 1,544 in <code>MMCA.ADC/Source</code>, 2,359 combined, which is the upper bound on the
           CA2007 sites the rule would open there).</li>
           <li><strong>Mechanical, with the enforcement and the remediation at different levels.</strong> The build gate is the
           enforced half: a new context-capturing await in packaged non-UI code fails the build, so it costs no
@@ -309,12 +312,12 @@
           The gate makes it uniform, so the noise is consistent rather than sporadic.</li>
           <li><strong>A per-repo delta in an otherwise shared analyzer baseline.</strong> The workspace keeps one
           byte-identical <code>.editorconfig</code> baseline across the four repos; this policy lives in the marked
-          repo-delta section of MMCA.Common&#39;s file (<code>MMCA.Common/.editorconfig:821-836</code>), so the divergence
+          repo-delta section of MMCA.Common&#39;s file (<code>MMCA.Common/.editorconfig:821-838</code>), so the divergence
           is documented. It is not mechanically guarded: the workspace drift script
           (<code>Tools\Scripts\compare-analyzer-config.ps1</code>) compares only the lines before the
           <code># REPO-SPECIFIC DELTAS</code> marker (<code>Tools/Scripts/compare-analyzer-config.ps1:26-28</code>), so it guards
           the shared baseline (including <code>CA2007</code> at <code>none</code>, <code>MMCA.Common/.editorconfig:348</code>) and would not
-          notice the gate at <code>:832-833</code> or the exemption at <code>:835-836</code> being changed or deleted.</li>
+          notice the gate at <code>:834-835</code> or the exemption at <code>:837-838</code> being changed or deleted.</li>
           <li><strong>UI exclusion relies on project naming.</strong> The <code>MMCA.Common.UI*</code> path glob is what exempts the
           component packages; a renamed or relocated UI project would silently fall under the gate (the
           build would fail loudly on the first missing <code>ConfigureAwait</code>, so the failure is visible, just
@@ -780,6 +783,36 @@
           remediation examples sit at <code>Website/docs-src/guides/common-GETTING-STARTED.md:190</code> and
           <code>MMCA.Helpdesk/build/templates/stage.ps1:1236</code>; nothing invokes <code>--diagnostics CA2007</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. The policy, the gate and the UI exemption are unchanged, and the
+          framework site counts in the Trade-offs entry were not re-measured this pass. What moved is the
+          consumer-scale figure, which grew with new ADC code, and the <code>.editorconfig</code> anchors.</p>
+          <ol>
+          <li><strong>The consumer-scale figure is re-measured.</strong> ADC grew by four <code>await</code> lines since the 2026-10-06
+          pass (1,538 matching lines then, 1,542 now, still across 301 files), so its occurrence count moves
+          from 1,540 to 1,544. A per-file line count understates occurrences only where a line holds two
+          tokens: <code>SubmitQuestionHandler.cs</code> reports 9 lines but holds 10 <code>await</code> tokens. Measured
+          2026-10-07, a raw <code>\bawait\b</code> scan of
+          <code>*.cs</code> gives 1,542 matching lines across 301 files in <code>MMCA.ADC/Source</code> and 815 across 154 files
+          in <code>MMCA.Store/Source</code>. The only double-await lines are still the two
+          <code>await using var claim = await distributedLock</code> lines,
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsInternalCommandHandler.cs:83</code>
+          and
+          <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs:147</code>,
+          so ADC holds 1,544 occurrences and the combined figure is 2,359 occurrences (2,357 matching
+          lines). Store has no double-await line, so its 815 is the same both ways. The Rationale now
+          carries the occurrence figures. Raw <code>await</code> still overcounts CA2007 sites, so this remains an
+          upper bound.</li>
+          <li><strong>Anchors re-verified against current source:</strong> the <code>MMCA.Common/.editorconfig</code> rationale comment
+          block grew to <code>:827-833</code>, moving the <code>[Source/**.cs]</code> gate to <code>:834-835</code> and the
+          <code>[Source/Presentation/MMCA.Common.UI*/**.cs]</code> exemption to <code>:837-838</code> (previously <code>:832-833</code> and
+          <code>:835-836</code>), so the repo-delta section now spans <code>:821-838</code>; the shared-baseline <code>CA2007</code> <code>none</code>
+          stays at <code>:348</code> and the marker naming <code>Tools\Scripts\compare-analyzer-config.ps1</code> at <code>:821-824</code>.
+          <code>Tools/Scripts/compare-analyzer-config.ps1:26-28</code> still slices only the lines before the marker.
+          <code>TreatWarningsAsErrors</code> at <code>MMCA.Common/Directory.Build.props:7</code>,
+          <code>CodeAnalysisTreatWarningsAsErrors</code> at <code>:13</code>, and the three <code>NoWarn</code> lists at <code>:30</code>, <code>:35</code> and
+          <code>:41</code> (none naming CA2007) hold.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -807,6 +840,7 @@
             <li><a href="#revision-2026-09-19">Revision (2026-09-19)</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             </ul>
           </nav>
         </aside>

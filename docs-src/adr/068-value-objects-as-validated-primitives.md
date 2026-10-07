@@ -11,7 +11,7 @@ Revised 2026-09-25 (the shipped `OwnsAddress` helper named beside `OwnsMoney`: S
 maps through it; the Store, ADC and `EntityTypeBuilderExtensions` anchors refreshed). As of
 2026-10-01 Store follows that call with a second `OwnsOne` block that overrides the helper's unicode
 facet, and the `with`-expression path around the `Money` sugar is named (see Revision below).
-Revised 2026-10-06: a serialized `Money.Zero()` now JSON round-trips, because both currency converters read the empty code back as the sentinel and `Money`'s JSON read refuses that sentinel beside a non-zero amount, so the 2026-10-01 round-trip flag is resolved; anchors refreshed.
+Revised 2026-10-06: a serialized `Money.Zero()` now JSON round-trips, because both currency converters read the empty code back as the sentinel and `Money`'s JSON read refuses that sentinel beside a non-zero amount, so the 2026-10-01 round-trip flag is resolved; anchors refreshed. Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 
 ## Context
 A domain model has two kinds of small type: the **identity** of a thing, and a **value** the thing
@@ -86,7 +86,7 @@ Model a domain value that carries an invariant as an **immutable record value ob
   flattens `Money` into a `decimal(18,2)` amount column (precision pinned at `:78`) plus a
   three-character non-unicode ISO 4217 code column (`:76-88`) and sets the navigation's requiredness
   from one parameter (`:91`). Its sibling
-  `OwnsAddress` (`:131`, shipped in v1.192.0, `MMCA.Common/CHANGELOG.md:1439`) flattens `Address` into
+  `OwnsAddress` (`:131`, shipped in v1.192.0, `MMCA.Common/CHANGELOG.md:1464`) flattens `Address` into
   six non-unicode columns whose lengths come from `AddressInvariants` and of which only `AddressLine1`
   is required (`:142-171`), names them from an optional prefix (`AddressLine1`, `AddressCity`, and so on
   by default, `:133`, joined at `:191-194`) and defaults the navigation to optional (`:134`, applied at
@@ -119,7 +119,7 @@ Model a domain value that carries an invariant as an **immutable record value ob
   `CurrencyJsonConverter.cs:26-27`), so a serialized `Money.Zero()` round-trips. Because the
   `[JsonConstructor]` bypasses `Create`, `Money` implements `IJsonOnDeserialized` (`Money.cs:22,70-76`)
   and throws `JsonException` when a non-zero amount arrives with the sentinel (shipped in v1.232.0,
-  `MMCA.Common/CHANGELOG.md:30`). `DateRange` and `DateTimeRange` carry no serialization annotations.
+  `MMCA.Common/CHANGELOG.md:55`). `DateRange` and `DateTimeRange` carry no serialization annotations.
 - **gRPC is mapped by hand, not inferred.** `Money` crosses a service boundary as a purpose-built
   `MoneyV1` message with a **string** amount (proto has no decimal) and a currency code
   (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Contracts/Protos/product_variants.proto:115,117,120`),
@@ -158,7 +158,7 @@ Model a domain value that carries an invariant as an **immutable record value ob
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/Event.cs:59`, validated
   through `Email.Create` on both the create and update paths (`:186-194`, `:264-272`) and assigned at
   `:144,292`, mapped at
-  `.../Conference.Infrastructure/Persistence/EntityConfiguration/Events/EventConfiguration.cs:60-62`).
+  `.../Conference.Infrastructure/Persistence/EntityConfiguration/Events/EventConfiguration.cs:64-66`).
   With that third site ADC's Domain carries no primitive email property left, matching Store. Two
   details are worth recording because they look like leftovers and are not: the column is unchanged
   (`nvarchar(255)`, still nullable) so the conversion needed no migration, and
@@ -179,7 +179,7 @@ Model a domain value that carries an invariant as an **immutable record value ob
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/Event.cs:45`,
   `Activities/Activity.cs:45`) stay one free-text string on purpose: a display line that carries the
   venue name, with no invariant beyond its length
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/Events/EventConfiguration.cs:45-46`),
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/Events/EventConfiguration.cs:49-50`),
   so the structured `Address` would impose a shape the data does not have. ADC's Start/End pairs stay
   primitive too (`Events/Event.cs:33-36`, `Activities/Activity.cs:33-36`, `Sessions/Session.cs:31-34`):
   their only rule is order, enforced by `CommonInvariants.EnsureEndIsNotBeforeStart`
@@ -275,6 +275,14 @@ but partial"; it now closes that Decision bullet. (4) The ADC social-login path 
 (`CreateExternal`, `User.cs:264`). Anchors were re-verified against current source across Common,
 Store and ADC, including the `Currency.cs`, `Money.cs`, `PublicAPI.Shipped.txt`,
 `EntityTypeBuilderExtensions.cs`, `OwnsMoneyTests.cs:120` and `CHANGELOG.md:1439` anchors.
+
+## Revision (2026-10-07)
+Re-verified against current source. No decision changed and no behavior, default, count or adoption
+site moved; only line anchors drifted. (1) Anchors re-verified against current source: the `Money`
+JSON-read refusal bullet sits at `MMCA.Common/CHANGELOG.md:55` (inside `[1.232.0]`), the
+`OwnsAddress` bullet at `MMCA.Common/CHANGELOG.md:1464` (inside `[1.192.0]`), the ADC
+`OrganizerContactEmail` conversion at `EventConfiguration.cs:64-66` and the ADC `VenueAddress`
+length at `EventConfiguration.cs:49-50`.
 
 ## Related
 ADR-048 (the deliberate opposite call for identifiers: primitives behind aliases, wrapper structs

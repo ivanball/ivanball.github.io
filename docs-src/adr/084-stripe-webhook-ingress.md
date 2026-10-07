@@ -7,6 +7,7 @@ secret is shared through the distributed cache, cancelling a payable order expir
 session, and reconciliation sweeps stranded unpaid orders).
 Revised 2026-10-01 (current-state sections re-anchored and the shared signing secret described).
 Revised 2026-10-06: the minted signing secret is never printed (an operator reveals it in the Stripe Dashboard), and the paid-order short-circuit covers every status past `Paid`.
+Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 ## Context
 Four ADRs already cover how a message crosses a boundary in this workspace. ADR-003 decides how an
 event leaves a service (outbox, at-least-once). ADR-021 decides how a redelivered broker message is
@@ -314,6 +315,31 @@ The ingress contract is unchanged. Corrections to the current-state sections:
 
 All `path:line` citations in Status, Context, Decision, Rationale and Trade-offs were re-verified
 against current source and re-anchored where they had moved.
+
+## Revision (2026-10-07)
+Re-verified against current source. The ingress contract, the Decision, the Rationale and the
+Trade-offs are unchanged, and their citations still hold. Only anchors inside the earlier dated
+revisions have moved; those revisions stay as written, and the current locations are recorded here.
+
+1. Anchors re-verified against current source:
+   - The 2026-09-07 item 3 cancel behavior: the guard is at
+     `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/Cancel/CancelOrderHandler.cs:106`
+     inside `RetirePaymentSessionAsync` (`:104-140`), the expiry runs through
+     `PaymentSessionRetirement.RetireAsync` (`:116`), the `PaymentAlreadyCompleted` refusal is at
+     `:126-132`, and the read and expire failure logs are at `:121` and `:136`; the constant is
+     still at `OrderCancellationErrorCodes.cs:18`.
+   - The 2026-09-07 item 4 default: `StuckAgeMinutes` defaults to 30 at
+     `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Reconciliation/PaymentReconciliationSettings.cs:48`
+     (range `[Range(5, 10080)]` at `:47`); the class-two description is at
+     `PaymentReconciliationService.cs:29-41` and the Cancelled-over-PaymentFailed reasoning at
+     `:43-50`.
+   - The 2026-10-01 items 1 to 3: in
+     `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Stripe/StripeWebhookRegistrationService.cs`
+     the shared-secret adoption is at `:115-120`, the shared-store write and then the provider
+     assignment at `:202-203`, the creation log call and declaration at `:205,308-309`, and the
+     existing-endpoint trust check at `:146`; in `ProcessPaymentWebhookHandler.cs` the paid
+     short-circuit is at `:84-92`, the `PaymentProof` check at `:101-108` and the refund log for a
+     different payment intent at `:124-134`.
 
 ## Related
 ADR-003 (outbound at-least-once delivery, the other end of the same family), ADR-021 (broker-side

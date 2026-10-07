@@ -2,7 +2,9 @@
 
 ## Status
 Accepted (2026-08-13; revised 2026-08-14, 2026-08-18, 2026-08-31, 2026-10-01). Revised 2026-10-06: the
-smart-wait and cron-validation statements now match the runner's actual behavior. The implementation lands in the MMCA.Common "enterprise capability wave" release
+smart-wait and cron-validation statements now match the runner's actual behavior. Revised 2026-10-07:
+the consumer-adoption statement now names every host that calls `AddScheduledJobs` and the combined
+audit-trail migrations that create the table. The implementation lands in the MMCA.Common "enterprise capability wave" release
 and is opt-in: a host calls `AddScheduledJobs(configuration)` and sets `Scheduler:Enabled`. Until it does,
 the framework creates no table and starts no runner.
 
@@ -30,11 +32,11 @@ scheduling product (Hangfire or Quartz.NET) or to extend the durable polling loo
 ### The scheduler is the outbox claim-lease pattern applied to cron, not Hangfire and not Quartz.NET
 A persistent job store plus a single-runner claim lease, reusing the exact idiom the outbox proved. The
 outbox claims a batch with an `ExecuteUpdateAsync` that sets `LockedUntil` and `LockToken` in one statement
-(`.../Persistence/Outbox/Processing/OutboxProcessor.cs:397-401`, inside `ClaimEligibleAsync`, `:370`) over a shared
+(`.../Persistence/Outbox/Processing/OutboxProcessor.cs:357-361`, inside `ClaimEligibleAsync`, `:330`) over a shared
 `FilterClaimable` predicate that admits only eligible, unprocessed rows whose `LockedUntil` is null or already
-in the past (`:449-455`; a batch carrying an ordering key claims through `FilterUnblocked`, which composes it,
-`:393-395`, `:464`), then re-reads the claimed
-set by `LockToken` so a partial claim processes only its own rows (`:409-417`). A due job is claimed the same way, so two replicas can
+in the past (`:409-415`; a batch carrying an ordering key claims through `FilterUnblocked`, which composes it,
+`:353-355`, `:429`), then re-reads the claimed
+set by `LockToken` so a partial claim processes only its own rows (`:369-374`). A due job is claimed the same way, so two replicas can
 never run the same occurrence, and a replica that dies mid-run releases its job when the lease expires.
 
 Hangfire would have brought its own schema, its own storage abstraction, a dashboard surface to authorize
@@ -63,8 +65,8 @@ carries `JobName` (the primary key), `CronExpression`, `NextRunOn`, `LastRunOn`,
 `LastError`, `LastDurationMs`, `LockedUntil` and `LockToken` (`ScheduledJobEntry.cs:26-74`). It is deliberately **not** an `IAuditableEntity`: it
 self-stamps nothing, it is never soft-deleted, and no global query filter reaches it. That falls out of the
 mapping rather than being asserted: the soft-delete filter is applied only to entity types assignable to
-`IAuditableEntity` (`.../Persistence/DbContexts/ApplicationDbContext.cs:456`, `:465`), and
-`ConfigureScheduler` maps the table with no `HasQueryFilter` call of its own (`:802-838`). That is the
+`IAuditableEntity` (`.../Persistence/DbContexts/ApplicationDbContext.cs:457`, `:466`), and
+`ConfigureScheduler` maps the table with no `HasQueryFilter` call of its own (`:803-839`). That is the
 `OutboxMessage` precedent: infrastructure rows are not domain rows.
 
 The table lives in the **Default** source and only there. The outbox exists once per relational database
@@ -139,8 +141,11 @@ model diverges from the runtime model and `dotnet ef` breaks for every consumer.
 ### The framework dogfoods it
 `AuditTrailCleanupJob`, the retention purge of [ADR-075](075-audit-trail.md), ships as the framework's first
 `IScheduledJob`, so the contract is exercised by the package that defines it before any application depends
-on it. In the consumer sweep, ADC, Store and Helpdesk all call `AddScheduledJobs`, each adding one migration
-on its Default source.
+on it. ADC, Store and Helpdesk all call `AddScheduledJobs`: ADC in three of its four service hosts (not
+Notification), Store in all three, Helpdesk in its single service host. The migration set of each host that
+calls it adds the `ScheduledJobs` table once, in a migration shared with the [ADR-075](075-audit-trail.md)
+audit trail rather than a scheduler-only one, so ADC and Store carry three such migrations each and
+Helpdesk one.
 
 ## Rationale
 - **The lease is already proven under production load.** Multi-replica correctness for recurring work is the
@@ -221,6 +226,30 @@ soft-delete filter and `ConfigureScheduler` (`ApplicationDbContext.cs:457`, `:46
 - Anchors re-verified against current source. The anchors in the 2026-10-01 entry above are now stale. The
   `LastError` 2048-character cap is at `ApplicationDbContext.cs:824`, and the other moved anchors are corrected
   in the body.
+
+## Revision (2026-10-07)
+Re-verified against current source. No decision, rationale or trade-off changed; the claim lease, the
+soft-delete exclusion and the `ConfigureScheduler` mapping behave as described. The consumer-adoption
+statement moved; the outbox anchors in the body moved with the v1.233.0 release and the context anchors
+with v1.232.1.
+
+1. The dogfooding paragraph no longer says each consumer added one migration on its Default source. ADC
+   calls `AddScheduledJobs` in three of its four service hosts, not Notification (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:245`,
+   `MMCA.ADC.Conference.Service/Program.cs:350`, `MMCA.ADC.Engagement.Service/Program.cs:197`), Store in three
+   (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:234`,
+   `MMCA.Store.Sales.Service/Program.cs:209`, `MMCA.Store.Identity.Service/Program.cs:196`), and Helpdesk in
+   its one service host (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:91`). The table is created by
+   migrations combined with the audit trail: ADC `20260814114610`, `20260814114613` and
+   `20260814114616_AddAuditTrailAndScheduler`, Store `20260814114204`, `20260814114208` and
+   `20260814114212_AddAuditTrail`, Helpdesk `20260814112727_CommonV1150AuditTrailSchedulerAndTenancy`.
+2. Anchors re-verified against current source: the outbox claim `ExecuteUpdateAsync`
+   (`OutboxProcessor.cs:357-361`) inside `ClaimEligibleAsync` (`:330`), `FilterClaimable` (`:409-415`), the
+   keyed `FilterUnblocked` branch (`:353-355`) composing it (`:429`), the partial-claim re-read by `LockToken`
+   (`:369-374`), the soft-delete filter (`ApplicationDbContext.cs:457`, `:466`), `ConfigureScheduler`
+   (`:803-839`), and the `LastError` 2048-character cap (`:825`). The 2026-10-01 and 2026-10-06 entries
+   above are left as written: their `OutboxProcessor.cs` anchors and the `ApplicationDbContext.cs` `:824`
+   and `:805-841` anchors are stale, while their `ScheduledJobRunner.cs`, `SchedulerSettings.cs` and
+   `ApplicationDbContext.cs:457`/`:466` anchors are current.
 
 ## Related
 [ADR-003](003-outbox-dual-dispatch.md) (the outbox whose claim-lease idiom and smart wait this reuses

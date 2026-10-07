@@ -4,7 +4,7 @@
 Accepted (2026-08-23). Revised 2026-08-31. Revised 2026-09-19. Revised 2026-09-25 (the ADR-054 cross-reference is
 re-anchored onto that record's current best-effort trade-off). Revised 2026-10-01. Revised 2026-10-06:
 adoption is thirteen call sites with the ADC points award, and every Store Catalog controller evicts
-both catalog tags.
+both catalog tags. Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 
 ## Context
 A command that has already committed often has follow-up work attached to it: evict the output-cache
@@ -15,9 +15,9 @@ back, retry or 500 an operation whose real work already succeeded.
 
 Five records each answer that question locally, for their own feature, and each answer is right:
 ADR-024 makes a push delivery failure non-fatal and records `MarkAsFailed` instead
-(`024-push-notifications.md:65-67`), ADR-026 makes cross-service cache eviction best-effort so a broken
+(`024-push-notifications.md:74-77`), ADR-026 makes cross-service cache eviction best-effort so a broken
 eviction store cannot dead-letter a coherence hint, ADR-076 degrades a data-subject export per section
-rather than failing the package (`076-data-subject-export.md:82-83`), ADR-091 composes the reset email in
+rather than failing the package (`076-data-subject-export.md:87-89`), ADR-091 composes the reset email in
 the handler and delivers it best-effort, "awaited and its failure caught, logged and swallowed"
 (`091-cache-backed-password-reset.md:81-86`), and ADR-054 makes compensation best-effort per order
 line (`054-saga-compensation-and-reconciliation.md:252-263`). What none of them decides is the **policy**:
@@ -25,8 +25,8 @@ which failures may be swallowed at all, at what severity, whether cancellation c
 and how a swallow is made visible to somebody who is not reading the log. Answered per call site, that
 produces a repo full of hand-rolled `catch (Exception)` blocks, each choosing its own severity, its
 own treatment of cancellation and its own decision to count nothing. ADR-041 records the counter this
-record's helper emits and notes that it is wired to no alert (`041-observability-and-telemetry.md:235-240`,
-`:258-261`), but it records the instrument, not the contract behind it.
+record's helper emits and notes that it is wired to no alert (`041-observability-and-telemetry.md:243-252`,
+`:270-273`), but it records the instrument, not the contract behind it.
 
 ## Decision
 One framework helper defines the contract, and a swallow that does not go through it is a deliberate,
@@ -78,8 +78,8 @@ Adoption today is **thirteen call sites**: seven in ADC Engagement, five in Stor
 eviction helper. The ADC seven are the
 live-channel drain worker, whose operation name is the prefix `live-channel-publish:` plus the work
 item's event name and whose own catch turns the rethrown cancellation into a quiet stop
-(`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/Live/LiveChannelPublishProcessor.cs:36`,
-`:45-58`, `:60-65`); three session-question broadcasts, `session-question-submit-broadcast`
+(`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/Live/LiveChannelPublishProcessor.cs:46`,
+`:120-121`, `:96-101`); three session-question broadcasts, `session-question-submit-broadcast`
 (`.../SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs:41`, call at `:206`, which enqueues
 onto the live-channel publish queue at `:217-218` rather than publishing inline),
 `session-question-moderation-broadcast` (`.../UseCases/Moderate/ModerateQuestionHandler.cs:31`, call at
@@ -177,7 +177,7 @@ the inventory record by hand (`:99-100`, the `[LoggerMessage]` at `:110-113`).
   (`.../Submit/SubmitQuestionHandler.cs:200-202`).
 - **The counter is failure-only and alerts on nothing.** A healthy system emits zero, and zero is
   indistinguishable from a host that never wired the meter. ADR-041 puts it in exactly that gap
-  (`041-observability-and-telemetry.md:258-261`).
+  (`041-observability-and-telemetry.md:270-273`).
 - **The meter name is a duplicated literal.** `MMCA.Common.Aspire` subscribes it by string because that
   package has no reference to Application (`BestEffort.cs:89-92`, `Extensions.Telemetry.cs:313`), so a rename has
   to move in two places or the metric silently stops being exported.
@@ -218,6 +218,17 @@ No decision or rationale changed; the adoption inventory is corrected again.
   the non-reuse: the handler's comment justifies only the broad catch (`OutputCacheEvictionHandler.cs:58-59`).
 - Anchors re-verified against current source: the ADR-026, ADR-054 and ADR-091 cross-references,
   `AddVariantHandler` and the seven controller lines.
+
+## Revision (2026-10-07)
+Re-verified against current source. No decision, rationale or adoption count changed; only anchors
+moved.
+- Anchors re-verified against current source: the live-channel drain worker's operation-name prefix
+  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/Live/LiveChannelPublishProcessor.cs:46`),
+  its `BestEffort.ExecuteAsync` call (`:120-121`) and the quiet-stop catch for the rethrown
+  cancellation (`:96-101`); the ADR-024 non-fatal delivery bullet (`024-push-notifications.md:74-77`);
+  the ADR-076 per-section degradation section (`076-data-subject-export.md:87-89`); and the ADR-041
+  counter record and its failure-only, no-alert paragraph (`041-observability-and-telemetry.md:243-252`,
+  `:270-273`).
 
 ## Related
 [ADR-024](024-push-notifications.md) (push delivery failure is non-fatal and recorded rather than

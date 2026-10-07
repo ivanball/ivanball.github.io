@@ -18,7 +18,7 @@ the OAuth custom-scheme returnUrl allowlist in `CompleteAsync`, the app-associat
 (`Source/Presentation/MMCA.Common.UI.Maui/Capabilities/Auth/MauiExternalAuthBroker.cs:20`). The ADC
 consumer's deep-link wave has shipped: `MMCA.ADC.UI.Web` serves the two well-known association
 documents through the shared helper
-(`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:293`), the Identity service allow-lists the
+(`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:296`), the Identity service allow-lists the
 `atldevcon` scheme (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:89-91`, the
 entry at `:90`), and
 the native heads register the callback: iOS carries both the custom-scheme URL type
@@ -29,8 +29,8 @@ Android registers the custom-scheme `WebAuthenticatorCallbackActivity`
 Android's `AutoVerify` https App Links intent filter is in place too, declared as a C# attribute on
 `MainActivity` rather than in XML
 (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/Android/MainActivity.cs:29-35`, with the public web
-host constant at `:43` and the verified link reduced to path plus query at `:82`, shape-checked at
-`:96` and published to `IDeepLinkDispatcher` at `:101`). The filter claims only the deep-linkable
+host constant at `:44` and the verified link reduced to path plus query at `:83`, shape-checked at
+`:97-100` and published to `IDeepLinkDispatcher` at `:102`). The filter claims only the deep-linkable
 path prefixes (`/conference/`, `/happening-now`, `/feedback/`, `/auth/oauth-complete`, at `:34`),
 the same set the iOS `applinks` components declare, so any other page on the host stays in the
 browser. The checked-in
@@ -58,7 +58,9 @@ sections, the MAUI head's `PublicSite:BaseUrl` line and the two `MainActivity` p
 moved; see Revision below). Revised 2026-10-01 (MMCA.Common anchors re-pinned; see Revision below).
 Revised 2026-10-06: the native completion now round-trips a per-attempt `state` value that the shared
 completion page checks before exchanging the code, and the Android App Links filter claims only the
-deep-linkable path prefixes; see Revision below.
+deep-linkable path prefixes; see Revision below. Revised 2026-10-07: anchors refreshed after the v1.233.0
+release, and the hostname trade-off no longer calls the `MainActivity` cutover comment a two-spot
+note, since it now names the same three binary spots.
 ## Context
 Three mobile flows all need a URL to leave the web world and land inside the MAUI app:
 
@@ -85,8 +87,8 @@ single-use code and the UI exchanges it out-of-band via POST.
   `atldevcon://oauth-complete`), the completion redirect (and completion errors) target that URL
   instead of `OAuth:UIBaseUrl`, carrying the same single-use code plus the client's round-tripped
   `state` value when one was supplied (both targets get the same suffix:
-  `Source/Presentation/MMCA.Common.API/Controllers/OAuthControllerBase.cs:170-176`, the state read
-  back from the challenge properties at `:124` and `:160-161`). The redirect echoes the
+  `Source/Presentation/MMCA.Common.API/Controllers/OAuthControllerBase.cs:209-215`, the state read
+  back from the challenge properties by `ReadChallengeState` at `:163`, the helper at `:199-200`). The redirect echoes the
   client's `Uri.OriginalString` because URI normalization would append a trailing slash and native
   callback matching can be exact. `http`/`https` schemes never match even if listed, so web
   destinations always flow through the pinned base URL and the allowlist cannot become an open
@@ -108,7 +110,7 @@ single-use code and the UI exchanges it out-of-band via POST.
   `ExchangeOAuthCodeAsync`
   (`Source/Presentation/MMCA.Common.UI/Services/Auth/AuthUIService.cs:76`) POSTs the existing
   anonymous `auth/oauth/exchange` through the shared `AuthenticateAsync` helper (`:84`, the helper
-  itself at `:275`), which stores the pair via `ITokenStorageService` (`:303`), so the
+  itself at `:294`), which stores the pair via `ITokenStorageService` (`:322`), so the
   single-use-code contract lives in exactly one place. This rides behind the `IExternalAuthBroker`
   contract
   (ADR-042); the default broker is unavailable, which keeps the shared Login page on its anchor
@@ -140,16 +142,16 @@ single-use code and the UI exchanges it out-of-band via POST.
   `appsettings.json` (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/appsettings.json:33`, compiled in as an
   `EmbeddedResource` per `MMCA.ADC.UI.csproj:134`), a raw literal in the iOS associated-domains
   array (`Platforms/iOS/Entitlements.plist:11`), and the `PublicWebHost` compile-time constant that
-  feeds the Android intent-filter attribute (`Platforms/Android/MainActivity.cs:43`). Only the first
+  feeds the Android intent-filter attribute (`Platforms/Android/MainActivity.cs:44`). Only the first
   is read through configuration; the two native manifests take literals, because neither an
   entitlement nor an attribute argument can read config. A cutover is therefore a three-spot edit
-  plus a rebuild, not a setting change (the comment at `MainActivity.cs:41-42` still describes it as
-  touching two spots), plus the two verification commands in
+  plus a rebuild, not a setting change (the comment at `MainActivity.cs:41-43` names the same three
+  binary spots), plus the two verification commands in
   `MMCA.ADC/Docs/MobileReleaseRunbook.md:48` and `:52`, which repeat the host but ship nothing; a
   custom domain is the durable fix.
 - A custom-scheme URI's host and path are attacker-choosable on a device with a hostile app
   registered for the same scheme (scheme hijack). Accepted: the redirect carries only a two-minute
-  single-use code (`OAuthControllerBase.cs:59`) plus the client's own `state` value, the exchange is
+  single-use code (`OAuthControllerBase.cs:75`) plus the client's own `state` value, the exchange is
   one-shot, the completion page refuses a code that no attempt on this device started
   (`OAuthComplete.razor:75`), and platform app-link verification does not exist for custom schemes
   anywhere.
@@ -427,3 +429,31 @@ code.
    `OnCreate` publish `:49`, `OnNewIntent` publish `:66`, `PublishDeepLink` `:69-102`, the two-spot
    comment `:41-42`); in Common, `AuthUIService`'s helper (`:275`) and `SetTokensAsync` (`:303`).
    Every live citation above is updated; the dated entries keep the values they recorded.
+
+## Revision (2026-10-07)
+Re-verified against current source. The decision, the allowlist behavior, the two-minute
+single-use code, the per-attempt `state` round trip and the path-scoped Android filter are
+unchanged; MMCA.Common and MMCA.ADC anchors moved, and one ADC comment the hostname trade-off
+described as stale has been corrected in the code.
+
+1. **The `MainActivity` cutover comment names three binary spots.** The trade-off said the comment
+   still described a cutover as touching two spots. It now reads "a custom-domain cutover touches
+   these three binary spots ... plus the verification URLs in Docs/MobileReleaseRunbook.md"
+   (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/Android/MainActivity.cs:41-43`), matching the
+   ADR's own count, so the trade-off no longer flags it as a documentation lag.
+2. **Anchors re-verified against current source:** in Common,
+   `Source/Presentation/MMCA.Common.API/Controllers/OAuthControllerBase.cs`:
+   `OAuthExchangeCodeLifetime` (two minutes) `:75`, `ReadChallengeState` call `:163` and helper
+   `:199-200`, `BuildSuccessRedirectUrl` defined `:202` and called `:193`, the shared `stateSuffix`
+   and both targets `:209-215`, the http/https rejection `:375-376`, `AppendQuery`'s
+   `OriginalString` echo `:388-394`, and `clientState` stashed by `ChallengeProvider` at `:409`;
+   `Source/Presentation/MMCA.Common.UI/Services/Auth/AuthUIService.cs`: `ExchangeOAuthCodeAsync`
+   `:76`, its POST `:84`, the `AuthenticateAsync` helper `:294`, `SetTokensAsync` `:322`. In ADC,
+   `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs`: ADR-043 block comment `:289-294`,
+   `GetSection("AppAssociation")` `:295`, `MapAppAssociationEndpoints` `:296`, package-id comment
+   `:298-301`, `AndroidPackageName` `:302`, `AndroidCertFingerprints` `:303`, `AppleAppId` `:304`,
+   `AppleAppLinkComponents` `:305` (still the same set as the Android `DataPathPrefixes`);
+   `Platforms/Android/MainActivity.cs`: intent filter `:29-35` with `DataPathPrefixes` `:34` and
+   `AutoVerify` `:35`, `PublicWebHost` `:44`, `OnCreate` publish `:50`, `OnNewIntent` publish `:67`,
+   `PublishDeepLink` `:70-103`, route reduction `:83`, shape check `:97-100`, publish `:102`. Every
+   live citation above is updated; the dated entries keep the values they recorded.

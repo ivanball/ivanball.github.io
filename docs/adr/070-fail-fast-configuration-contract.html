@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -261,7 +262,9 @@
           types and four custom validators; source citations re-anchored). Revised 2026-10-06 (inventory re-counted:
           thirty-three framework registrations with <code>SecurityHeadersSettings</code> and <code>SameOriginApiProxySettings</code> now on
           the chain, eleven framework bindings deliberately off it, five custom <code>IValidateOptions&lt;T&gt;</code>, and each
-          Identity <code>AuthenticationService</code> now takes a single <code>IOptions&lt;T&gt;</code>; source citations re-anchored).</p>
+          Identity <code>AuthenticationService</code> now takes a single <code>IOptions&lt;T&gt;</code>; source citations re-anchored).
+          Revised 2026-10-07: <code>LegalAcceptanceOptions</code> now states its off-chain reason in a comment at the call
+          site rather than only in XML remarks, and anchors were refreshed after the v1.233.0 release.</p>
           <h2 id="context">Context</h2>
           <p>Every host in the workspace reads a dozen or more configuration sections: connection strings, SMTP,
           JWT key material, outbox tuning, message-bus provider, module enablement, page-size limits. A settings
@@ -310,7 +313,7 @@
           (<code>DependencyInjection.Jobs.cs:39-42</code>), <code>TwoFactorSettings</code> in <code>AddTwoFactorAuthentication</code>
           (<code>DependencyInjection.Auth.cs:42-45</code>), <code>EmailConfirmationSettings</code> in <code>AddEmailConfirmation</code>
           (<code>DependencyInjection.Auth.cs:70-73</code>), <code>PermissionGrantSettings</code> in <code>AddStoredPermissionGrants</code>
-          (<code>DependencyInjection.Auth.cs:138-141</code>), <code>AuditTrailSettings</code> in <code>AddAuditTrail</code>
+          (<code>DependencyInjection.Auth.cs:141-144</code>), <code>AuditTrailSettings</code> in <code>AddAuditTrail</code>
           (<code>DependencyInjection.Jobs.cs:110-113</code>), <code>TenancySettings</code> in <code>AddMultiTenancy</code>
           (<code>DependencyInjection.cs:278-281</code>, the method starting at <code>:276</code>), and <code>PushNotificationSettings</code> in <code>AddPushNotifications</code>
           (<code>DependencyInjection.Notifications.cs:43-46</code>). The two cache sections take the chain only when the
@@ -351,7 +354,7 @@
           both sections before it builds the host&#39;s <code>ModuleLoader</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/ModuleHostExtensions.cs:61-64</code> and <code>:69-72</code>,
           the method starting at <code>:51</code>), so ADC&#39;s four services
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:369-371</code>, and the comment at <code>:360</code>
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:371-373</code>, and the comment at <code>:362</code>
           says what the call binds) and Store&#39;s three
           (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:125-127</code>) each declare the two
           sections in a single line of host code. The Helpdesk monolith seed still writes both chains out in its
@@ -407,9 +410,10 @@
           block, the reason at <code>:56-57</code>), and the two client-side sections whose absence leaves the compiled-in
           defaults, the staleness policy <code>UiReadCacheOptions</code> (<code>:63-64</code>) and <code>NotificationBellOptions</code>
           (<code>:66-67</code>). <code>LegalAcceptanceOptions</code> binds the same way inside the opt-in <code>AddLegalAcceptance</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Auth.cs:106-107</code>), because
-          registration asks for acceptance only while <code>Legal:CurrentTermsVersion</code> is set; its reason sits in
-          the method&#39;s XML remarks (<code>:100-101</code>) rather than in a comment at the call.
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Auth.cs:109-110</code>), because
+          its one setting has no invalid value (any version string turns the feature on, null or whitespace
+          turns it off); the reason sits in a comment at the call (<code>:106-108</code>), and the method&#39;s XML remarks
+          (<code>:100-101</code>) add that registration asks for acceptance only while <code>Legal:CurrentTermsVersion</code> is set.
           <code>NativePushSettings</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:84-85</code>)
           and <code>FileStorageSettings</code> (<code>:116-117</code>) bind the same way inside their opt-in registration methods,
           both of which read the section back and turn themselves into a no-op when it is absent or incomplete,
@@ -437,7 +441,7 @@
           </ul>
           <p><strong>Every layer reads a bound section the same way.</strong> Inside Infrastructure and API that is a constructor
           or per-request <code>IOptions&lt;T&gt;</code>: <code>OutboxProcessor</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:56</code>),
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:59</code>),
           <code>BrokerEventBus</code> (<code>.../Messaging/BrokerEventBus.cs:35</code>), <code>LoginProtectionService</code>
           (<code>.../Auth/LoginProtectionService.cs:30</code>), <code>RsaJwksProvider</code> (<code>.../Auth/RsaJwksProvider.cs:14</code>),
           <code>SQLServerDbContext</code> (<code>.../Persistence/DbContexts/SQLServerDbContext.cs:36</code>), and <code>IdempotencyFilter</code>
@@ -454,7 +458,7 @@
           <code>IOptions&lt;EmailConfirmationSettings&gt;</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:71</code>),
           <code>AuthSessionIssuer</code> takes <code>IOptions&lt;RefreshSessionSettings&gt;</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Sessions/AuthSessionIssuer.cs:42</code>),
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Sessions/AuthSessionIssuer.cs:44</code>),
           <code>AuthenticationValidators</code> takes an optional <code>IOptions&lt;LegalAcceptanceOptions&gt;</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationValidators.cs:28</code>), the shared
           <code>ForgotPasswordHandlerBase</code> takes <code>IOptions&lt;PasswordResetSettings&gt;</code>
@@ -544,8 +548,11 @@
           not a gate, which is weaker than the invariant-over-discipline posture ADR-015 applies elsewhere. A
           section added without the chain fails silently, which is to say it fails later. Eleven framework bindings
           and two consumer-host bindings sit off the chain by choice, and nothing in the build distinguishes
-          those from a section whose author simply forgot: only the comment beside each one does (and for
-          <code>LegalAcceptanceOptions</code>, only the XML remarks on its registration method).</li>
+          those from a section whose author simply forgot: only a source comment near each one does (one comment
+          covers both client-side UI sections, and for <code>NativePushSettings</code> and <code>FileStorageSettings</code> the reason
+          sits only in the XML summary of the registration method,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:76-78</code> and
+          <code>:109-110</code>).</li>
           <li><strong>Bad configuration becomes a crash loop, not a degraded start.</strong> A deployed replica with a missing
           required value never reaches the warm-up and readiness machinery of ADR-025: it terminates at host build.
           That is the intended trade (no half-configured replica serves traffic), but it means a configuration
@@ -639,6 +646,25 @@
           <li><code>UiRateLimitingSettings</code> re-anchored to <code>UiRateLimitingExtensions.cs:180-183</code>; every other citation was
           re-verified against current source and re-anchored in place.</li>
           </ul>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. The decision, the rationale and every count are unchanged
+          (thirty-three framework registrations, eleven framework exceptions, five custom validators); one
+          exception&#39;s description moved.</p>
+          <ol>
+          <li><code>LegalAcceptanceOptions</code> now carries its reason in a comment at the call
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Auth.cs:106-108</code>, the
+          binding at <code>:109-110</code>): the one setting has no invalid value. The XML remarks (<code>:100-101</code>) remain,
+          so the Decision no longer says the reason sits only there. The Trade-offs caveat now names
+          <code>NativePushSettings</code> and <code>FileStorageSettings</code> instead: they bind with no comment at the call
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:84-85</code>,
+          <code>:116-117</code>), their reason only in the XML summary of each registration method (<code>:76-78</code>,
+          <code>:109-110</code>).</li>
+          <li>Anchors re-verified against current source: <code>PermissionGrantSettings</code>
+          (<code>DependencyInjection.Auth.cs:141-144</code>), ADC Conference.Service <code>AddModuleHost</code>
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:371-373</code>, the comment at <code>:362</code>),
+          <code>OutboxProcessor</code> (<code>.../Persistence/Outbox/Processing/OutboxProcessor.cs:59</code>) and
+          <code>AuthSessionIssuer</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Sessions/AuthSessionIssuer.cs:44</code>).</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-025 (startup warm-up and readiness gating: this contract decides what happens <em>before</em> a host reaches
           that machinery), ADR-031 (feature flags read from configuration, whose section this contract governs the
@@ -662,6 +688,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

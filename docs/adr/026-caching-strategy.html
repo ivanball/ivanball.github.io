@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -275,7 +276,10 @@
           Revised 2026-10-06: the client tier invalidates after any write that may have landed, not only after
           a successful one, the default TTL is host-configurable through <code>Cache:DefaultDuration</code>, and ADC
           Conference&#39;s eleven-of-twelve count is scoped to its public-read policies beside the built-in
-          <code>ConferenceCache</code> policy. See the Revision (2026-10-06) at the end.</p>
+          <code>ConferenceCache</code> policy. See the Revision (2026-10-06) at the end.
+          Revised 2026-10-07: with Redis configured, the 30-second local expiration is also the cross-replica
+          backstop, because a <code>HybridCacheService</code> removal does not reach other replicas&#39; L1 copies; anchors
+          refreshed after the v1.233.0 release.</p>
           <h2 id="context">Context</h2>
           <p>The framework needs caching in two distinct places. Inside the application pipeline, query results
           are memoized and invalidated on mutation (the Caching decorators of ADR-014, keyed by
@@ -348,7 +352,13 @@
           <code>MMCA.Common.Infrastructure/Caching/DistributedCacheService.cs:72</code>). The same section carries an
           optional L1 ceiling for <code>HybridCacheService</code> (<code>CacheSettings.cs:42</code>) and the populate-lock timeout
           (<code>:57</code>). The short default means even a prefix invalidation that cannot reach every replica (memory mode, or
-          distributed mode without a multiplexer) self-heals within seconds.</li>
+          distributed mode without a multiplexer) self-heals within seconds. The same holds for
+          <code>HybridCacheService</code> with Redis configured: a removal clears L2 and this process&#39;s L1, but other
+          replicas&#39; L1 copies keep serving the removed value until their local expiration lapses, for up to
+          <code>Cache:LocalCacheDuration</code> (30 seconds by default,
+          <code>MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:66</code>; the L1 lifetime is the shorter of the
+          entry TTL and that ceiling, <code>:330-335</code>) (<code>:192-195</code> for <code>RemoveAsync</code>, <code>:210-212</code> for
+          <code>RemoveByPrefixAsync</code>).</li>
           </ul>
           <h3 id="tier-2-an-http-output-cache-edge">Tier 2: an HTTP output-cache edge</h3>
           <ul>
@@ -384,17 +394,17 @@
           policies use the plain overload and cache every caller alike
           (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:152</code>, <code>:153</code>, <code>:159</code>, <code>:162</code>).
           ADC Conference uses the bypass overload for eleven of its twelve public-read policies
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:267-268</code>, <code>:274-281</code> and <code>:298</code>), passing an
-          <code>adminBypassRoles</code> array projected from <code>ConferenceReadAudience.PrivilegedRoles</code> (<code>:266</code>), the same
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:269-270</code>, <code>:276-283</code> and <code>:300</code>), passing an
+          <code>adminBypassRoles</code> array projected from <code>ConferenceReadAudience.PrivilegedRoles</code> (<code>:268</code>), the same
           list the API layer&#39;s visibility checks read, because those roles receive an elevated payload
           (unpublished rows) that must never be stored under a key the public shares. So &quot;cache authenticated
           requests too&quot; holds for the attendee and anonymous traffic that is the conference-day load, and stops
-          at the privileged reader. The one public-read policy with no bypass list, <code>NowNextCache</code> (<code>:284</code>),
+          at the privileged reader. The one public-read policy with no bypass list, <code>NowNextCache</code> (<code>:286</code>),
           returns the same payload to every role. Conference also registers a thirteenth named policy,
-          <code>ConferenceCache</code>, through the plain built-in <code>AddPolicy</code> (<code>:236</code>), not through
+          <code>ConferenceCache</code>, through the plain built-in <code>AddPolicy</code> (<code>:237-238</code>), not through
           <code>AddPublicEndpointPolicy</code>: it keeps the built-in default semantics (no caching for an
           <code>Authorization</code>-carrying request) because a permission-gated controller also references it, and
-          a public-read policy must never back a permission-gated endpoint (<code>:231-235</code>).</li>
+          a public-read policy must never back a permission-gated endpoint (<code>:232-236</code>).</li>
           <li><strong>The output-cache store itself is Redis-backed wherever a service runs more than one replica.</strong>
           <code>AddOutputCache</code> defaults to a per-replica in-memory store, so a tag eviction reaches only the replica
           that served the mutation. Both adopters register a shared store through the framework wrapper
@@ -445,7 +455,8 @@
           generation is captured before the GET at <code>:273</code> and <code>UiReadCache.Set</code> drops the value if
           <code>InvalidatePrefix</code> or <code>Clear</code> moved it, <code>UiReadCache.cs:119-122</code>); and <code>AuthUIService</code> empties the
           cache on sign-out and on an unrefreshable session
-          (<code>MMCA.Common.UI/Services/Auth/AuthUIService.cs:374</code> and <code>:171</code>), which is what
+          (<code>MMCA.Common.UI/Services/Auth/AuthUIService.cs:393</code>, inside the private <code>SignOutLocallyAsync</code> at
+          <code>:379</code> that both logout and revoke-all-sessions reach, and <code>:190</code>), which is what
           keeps one account&#39;s reads from outliving its session where the scope does.</li>
           <li><strong>Shipped and registered, adopted by no app.</strong> <code>EntityServiceBase</code> takes the cache as an optional
           constructor parameter defaulting to <code>null</code> (<code>MMCA.Common.UI/Services/Api/EntityServiceBase.cs:47</code>,
@@ -475,10 +486,17 @@
           <ul>
           <li><strong>Memory mode is per-replica.</strong> In the in-process store each replica caches independently; a
           scaled-out deployment that did not wire Redis would see cross-replica staleness bounded only by the
-          TTL. The framework&#39;s answer is to register a distributed cache once scaled out (both apps do).</li>
+          TTL. The framework&#39;s answer is to register a distributed cache once scaled out (both apps do), which
+          bounds cross-replica staleness rather than removing it: with Redis configured each replica still
+          holds an L1 copy, and an eviction on one replica leaves the others&#39; copies serving for up to
+          <code>Cache:LocalCacheDuration</code> (<code>MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:30-32</code>,
+          <code>:192-195</code>; see the next bullet).</li>
           <li><strong>Distributed prefix invalidation needs the multiplexer, and every service registers it through one
-          framework wrapper.</strong> <code>DistributedCacheService</code> can only scan-and-delete by prefix when an
-          <code>IConnectionMultiplexer</code> is in the container. Putting it there is no longer each host&#39;s business:
+          framework wrapper.</strong> Both distributed substrates can only scan-and-delete by prefix when an
+          <code>IConnectionMultiplexer</code> is in the container: <code>DistributedCacheService</code>, and the one that runs once
+          Redis is configured, <code>HybridCacheService.RemoveByPrefixAsync</code>
+          (<code>MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:219-237</code>), which without a multiplexer
+          warns once and returns (<code>:221-228</code>). Putting it there is no longer each host&#39;s business:
           <code>builder.AddRedisCaching()</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Caching/RedisCachingExtensions.cs:57</code>) registers the
           distributed cache (<code>:64</code>) and the client (<code>:65</code>) together, both with <code>DisableHealthChecks = true</code>, and
@@ -500,16 +518,24 @@
           guarded <code>AddCommonHybridCacheWhenRedisConfigured(...)</code> helper (Tier 1 above). Those
           seven are the whole set: a sweep of both repos&#39; <code>Source/</code> trees finds no eighth <code>AddRedisCaching</code> call and no direct
           <code>AddRedisDistributedCache</code> / <code>AddRedisClient</code> call outside the wrapper. So whenever Redis is
-          configured, prefix-based invalidation against Redis is live and cached entries are evicted on write;
-          the 30s TTL is the backstop only for the no-Redis case (memory mode), where prefix removal self-heals
-          within seconds instead. Single-key <code>RemoveAsync</code> is unaffected in either mode.</li>
+          configured, prefix-based invalidation against Redis is live and the shared L2 entries are evicted
+          on write. Eviction does not reach every copy, though: with Redis configured the live substrate is
+          <code>HybridCacheService</code>, and another replica&#39;s L1 copy keeps serving a removed value, for a single key
+          or a prefix alike, until its local expiration lapses (for up to <code>Cache:LocalCacheDuration</code>, 30 seconds by
+          default, <code>MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:192-195</code> and <code>:210-212</code>); a read
+          that must see a removal everywhere goes through <code>GetFromSharedStoreAsync</code> (<code>:154</code>). So the 30-second
+          bound is the cross-replica backstop in hybrid mode as well as the whole answer in memory mode, where
+          prefix removal self-heals within seconds instead.</li>
           <li><strong>Distributed mode pays serialization and a network hop.</strong> Values cross the wire as JSON; large or
           hot objects cost more than the in-process path.</li>
           <li><strong>Counter increments are not atomic, and that is the accepted position.</strong>
           <code>ICacheService.IncrementAsync</code> is a default interface member implemented as a read-modify-write
-          (<code>MMCA.Common.Application/Interfaces/ICacheService.cs:105</code>), and <code>DistributedCacheService</code> overrides it
+          (<code>MMCA.Common.Application/Interfaces/ICacheService.cs:108</code>), and <code>DistributedCacheService</code> overrides it
           with the same read-modify-write shape rather than Redis <code>INCR</code>
-          (<code>MMCA.Common.Infrastructure/Caching/DistributedCacheService.cs:153</code>). The reason is a storage
+          (<code>MMCA.Common.Infrastructure/Caching/DistributedCacheService.cs:153</code>). With Redis configured the
+          override that runs is <code>HybridCacheService.IncrementAsync</code>
+          (<code>MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:264</code>), also a read-modify-write, with both
+          legs on L2 only (remarks at <code>:243-248</code>). The reason is a storage
           format mismatch, documented at the implementation
           (<code>MMCA.Common.Infrastructure/Caching/DistributedCacheService.cs:134-152</code>): <code>INCR</code> writes a Redis
           string, while <code>StackExchangeRedisCache</code> stores every entry as a Redis hash (<code>absexp</code> / <code>sldexp</code> /
@@ -520,8 +546,8 @@
           can undercount under genuinely concurrent increments, and an occasional lost increment is the accepted
           cost of a counter that is always readable. One caveat for a reader who goes to the interface first:
           its <code>&lt;remarks&gt;</code> still anticipates the opposite outcome (backing stores that can do better with Redis
-          <code>INCR</code> override it, <code>MMCA.Common.Application/Interfaces/ICacheService.cs:100-104</code>, the sentence at
-          <code>:103</code>). No implementation
+          <code>INCR</code> override it, <code>MMCA.Common.Application/Interfaces/ICacheService.cs:103-107</code>, the sentence at
+          <code>:106</code>), and its <code>&lt;summary&gt;</code> opens with &quot;Atomically increments&quot; (<code>:94</code>). No implementation
           does, and the one that could deliberately does not, for the storage-format reason above. Read that
           comment as an option the framework declined, not as a description of a shipped override; the
           implementation&#39;s own <code>&lt;remarks&gt;</code> is the accurate one.</li>
@@ -1149,6 +1175,43 @@
           <code>:28-31</code>, <code>RedisCachingExtensions.cs:57</code>, <code>:59</code>, <code>:64</code>, <code>:65</code>, <code>:91</code>, <code>:94</code>, <code>:99</code>, and
           <code>EntityServiceBase.cs:47</code> and <code>:58</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. The two tiers, the substrate selection, the seven-service Redis
+          and hybrid wiring, ADC Conference&#39;s eleven-of-twelve bypass count and the client tier are unchanged.
+          One behavior description moved, the anchors in three files shifted, and new <code>HybridCacheService</code>
+          citations were added.</p>
+          <ol>
+          <li><strong>Eviction in hybrid mode does not reach other replicas&#39; L1.</strong> The Trade-offs said that whenever
+          Redis is configured cached entries are evicted on write and the 30-second TTL is the backstop only
+          for memory mode. With Redis configured the live substrate is <code>HybridCacheService</code>, and its
+          <code>RemoveAsync</code> and <code>RemoveByPrefixAsync</code> clear L2 and this process&#39;s L1 only: other replicas&#39; L1
+          copies keep serving the removed value for up to <code>Cache:LocalCacheDuration</code> (30 seconds by
+          default, <code>MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:66</code>; the L1 lifetime is the
+          shorter of the entry TTL and that ceiling, <code>:330-335</code>; remarks at <code>:192-195</code> and <code>:210-212</code>, and
+          the class remarks at <code>:30-32</code>). Registering Redis therefore bounds cross-replica staleness rather
+          than removing it, and the prefix scan that runs is <code>HybridCacheService.RemoveByPrefixAsync</code>
+          (<code>:219-237</code>, a warn-once no-op without a multiplexer at <code>:221-228</code>). A read that must see a removal everywhere goes
+          through <code>GetFromSharedStoreAsync</code> (<code>:154</code>). The Tier 1 TTL bullet and the Trade-offs bullet now say
+          so; <a href="077-hybridcache-substrate.html">ADR-077</a> owns the substrate itself.</li>
+          <li><strong>The interface caveat names both stale comments.</strong> Besides the <code>&lt;remarks&gt;</code> sentence anticipating
+          a Redis <code>INCR</code> override (<code>MMCA.Common.Application/Interfaces/ICacheService.cs:106</code>), the member&#39;s
+          <code>&lt;summary&gt;</code> opens with &quot;Atomically increments&quot; (<code>:94</code>). Neither describes shipped behavior: the
+          default member, <code>DistributedCacheService</code>&#39;s override
+          (<code>MMCA.Common.Infrastructure/Caching/DistributedCacheService.cs:153</code>) and the override that runs
+          with Redis configured, <code>HybridCacheService.IncrementAsync</code>
+          (<code>MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:264</code>, L2-only, remarks at <code>:243-248</code>),
+          are all read-modify-write.</li>
+          <li><strong>Anchors re-verified against current source:</strong> ADC Conference <code>adminBypassRoles</code> at
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:268</code>, its bypass policies at
+          <code>:269-270</code>, <code>:276-283</code> and <code>:300</code>, <code>NowNextCache</code> at <code>:286</code>, <code>ConferenceCache</code>&#39;s <code>AddPolicy</code> at
+          <code>:237-238</code> and its comment at <code>:232-236</code>; <code>ICacheService.IncrementAsync</code> at
+          <code>MMCA.Common.Application/Interfaces/ICacheService.cs:108</code>, its <code>&lt;remarks&gt;</code> at <code>:103-107</code>;
+          <code>AuthUIService</code>&#39;s read-cache clears at <code>MMCA.Common.UI/Services/Auth/AuthUIService.cs:393</code> (sign-out,
+          inside <code>SignOutLocallyAsync</code> at <code>:379</code>, reached from <code>:101</code> and <code>:144</code>) and <code>:190</code> (unrefreshable
+          session). The 2026-08-18 anchors for <code>RegisterOutputCacheEvictionConsumer</code>,
+          <code>RegisterUpcastedIntegrationEventConsumer&lt;TEvent&gt;</code> and the <code>MMCA.Common.OutputCache</code> meter
+          subscription are already re-pointed in the Revision (2026-10-06) and are left as written there.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -1181,6 +1244,7 @@
             <li><a href="#revision-2026-09-25">Revision (2026-09-25)</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             </ul>
           </nav>
         </aside>

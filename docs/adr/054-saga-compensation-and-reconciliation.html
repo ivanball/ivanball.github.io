@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -270,7 +271,8 @@
           ADC&#39;s one compensating step (the session-asset orphan-blob delete, ADR-123); every Store citation is
           re-anchored (<code>CheckOutHandler</code>, <code>OrderCancelledSagaHandler</code>, <code>OrderPaymentFailedSagaHandler</code>,
           <code>Order</code>, <code>InventoryRestorationDomainService</code>, <code>appsettings.json</code>, <code>maxReplicas</code>).
-          Revised (2026-10-01): the restoration marker and the stock increase now commit in one transaction, marker first, with the stock moved by an atomic relative update, so the Decision and Rationale bullets are corrected and a trade-off records the discarded failed <code>Result</code>; <code>CancelOrderHandler</code> retires the session through <code>PaymentSessionRetirement</code>, the reconciliation pass is gated by <code>PaymentProof</code>, and <code>PeriodicBackgroundService</code> moved with Common now subclassing it; two Revision (2026-09-11) statements are marked as no longer holding; every current-state citation is re-anchored. See the Revision below.</p>
+          Revised (2026-10-01): the restoration marker and the stock increase now commit in one transaction, marker first, with the stock moved by an atomic relative update, so the Decision and Rationale bullets are corrected and a trade-off records the discarded failed <code>Result</code>; <code>CancelOrderHandler</code> retires the session through <code>PaymentSessionRetirement</code>, the reconciliation pass is gated by <code>PaymentProof</code>, and <code>PeriodicBackgroundService</code> moved with Common now subclassing it; two Revision (2026-09-11) statements are marked as no longer holding; every current-state citation is re-anchored. See the Revision below.
+          Revised 2026-10-07: anchors refreshed after the v1.233.0 release.</p>
           <h2 id="context">Context</h2>
           <p>Checkout spans a boundary no transaction covers. <code>CheckOutHandler</code> commits the order insert, the cart
           transition and the atomic conditional stock decrements in one local transaction
@@ -348,10 +350,10 @@
           (<code>MMCA.Common/.../DbContexts/Factory/DbContextFactory.cs:615-621</code>). Same database, one transaction: the marker
           cannot exist without the writes it guards, and the writes cannot land unmarked.</li>
           <li><strong>Redelivery is the retry mechanism.</strong> A failing in-process handler leaves its outbox row
-          unprocessed (<code>MMCA.Common/.../Interceptors/DomainEventSaveChangesInterceptor.cs:332-360</code>, the catch at
-          <code>:346-354</code>) and the <code>OutboxProcessor</code> re-dispatches the pure domain event on a later cycle
-          (<code>MMCA.Common/.../Outbox/Processing/OutboxProcessor.cs:556-557</code>), with the bounded retries, backoff and
-          dead-lettering ADR-003 already defines (<code>OutboxProcessor.cs:586-596,620-634,662-679</code>). The framework packages that failure mode and only that
+          unprocessed (<code>MMCA.Common/.../Interceptors/DomainEventSaveChangesInterceptor.cs:369-400</code>, the catch at
+          <code>:383-394</code>) and the <code>OutboxProcessor</code> re-dispatches the pure domain event on a later cycle
+          (<code>MMCA.Common/.../Outbox/Processing/OutboxProcessor.cs:520</code>, the dispatch at <code>:694</code>), with the bounded retries, backoff and
+          dead-lettering ADR-003 already defines (<code>OutboxProcessor.cs:534-544,568-578,858-859</code>). The framework packages that failure mode and only that
           one: <code>SafeDomainEventHandler&lt;TDomainEvent&gt;</code> runs the subclass inside an exception filter whose
           <code>LogAndRethrow</code> writes one error line and always returns <code>false</code>, so the exception keeps
           propagating, with <code>OperationCanceledException</code> excluded because a host shutdown is not a delivery
@@ -515,7 +517,7 @@
           handlers after it, and a redelivery re-runs the ones that already succeeded. The blast radius is
           wider than the one event: the interceptor dispatches every local event of a save in a single call
           and marks their outbox rows processed only afterwards
-          (<code>MMCA.Common/.../Interceptors/DomainEventSaveChangesInterceptor.cs:336-341</code>), so a throw skips
+          (<code>MMCA.Common/.../Interceptors/DomainEventSaveChangesInterceptor.cs:373-378</code>), so a throw skips
           that mark for the whole batch and every local event written by that save is redelivered, not just
           the one whose handler failed. Every handler on a shared event must therefore be idempotent against
           both a repeat of its own event and a repeat of every sibling event of the same save, or must
@@ -642,6 +644,20 @@
           <code>PaymentReconciliationSettingsValidator</code> is registered at <code>:74</code>.</li>
           <li>Every other citation in the current-state sections was re-verified against current source.</li>
           </ul>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. No behaviour changed: a failing in-process handler still leaves
+          its local outbox rows unprocessed, the interceptor still dispatches every local event of a save in one
+          call before marking any row processed, and the <code>OutboxProcessor</code> still re-dispatches with bounded
+          retries, backoff and dead-lettering. Only the Common line numbers moved.</p>
+          <ol>
+          <li>Anchors re-verified against current source: <code>DomainEventSaveChangesInterceptor</code> (<code>FlushStateAsync</code>
+          now <code>:369-400</code>, the catch that logs, releases the local lease and signals at <code>:383-394</code>, the
+          dispatch and <code>OutboxFinalizer.MarkProcessedAsync</code> at <code>:373-378</code>) and <code>OutboxProcessor</code> (the
+          per-row <code>DeliverAsync</code> call at <code>:520</code>, its <code>dispatcher.DispatchAsync</code> at <code>:694</code>, the retry
+          increment and backoff re-lease at <code>:534-544</code>, the retries-exhausted dead-letter metric at
+          <code>:568-578</code>, <code>ComputeRetryBackoffSeconds</code> at <code>:858-859</code>). The Revision (2026-09-11) citations of
+          <code>CheckOutHandler</code> keep the line numbers of that date, as the Revision (2026-10-01) states.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-003 (the outbox delivery and retry this leans on for compensation redelivery; this record says
           what the redelivered handler must do), ADR-006 (which accepts &quot;no cross-database transaction&quot; as a
@@ -673,6 +689,7 @@
             <li><a href="#revision-2026-09-11-the-unpaid-order-deadline-moves-onto-the-order-and-the-sweep-becomes-its-backstop">Revision (2026-09-11): the unpaid-order deadline moves onto the order, and the sweep becomes its backstop</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

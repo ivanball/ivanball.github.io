@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -249,7 +250,7 @@
           maps through it; the Store, ADC and <code>EntityTypeBuilderExtensions</code> anchors refreshed). As of
           2026-10-01 Store follows that call with a second <code>OwnsOne</code> block that overrides the helper&#39;s unicode
           facet, and the <code>with</code>-expression path around the <code>Money</code> sugar is named (see Revision below).
-          Revised 2026-10-06: a serialized <code>Money.Zero()</code> now JSON round-trips, because both currency converters read the empty code back as the sentinel and <code>Money</code>&#39;s JSON read refuses that sentinel beside a non-zero amount, so the 2026-10-01 round-trip flag is resolved; anchors refreshed.</p>
+          Revised 2026-10-06: a serialized <code>Money.Zero()</code> now JSON round-trips, because both currency converters read the empty code back as the sentinel and <code>Money</code>&#39;s JSON read refuses that sentinel beside a non-zero amount, so the 2026-10-01 round-trip flag is resolved; anchors refreshed. Revised 2026-10-07: anchors refreshed after the v1.233.0 release.</p>
           <h2 id="context">Context</h2>
           <p>A domain model has two kinds of small type: the <strong>identity</strong> of a thing, and a <strong>value</strong> the thing
           carries. ADR-048 recorded the identity half: identifiers stay primitives named through a global-using
@@ -320,7 +321,7 @@
           flattens <code>Money</code> into a <code>decimal(18,2)</code> amount column (precision pinned at <code>:78</code>) plus a
           three-character non-unicode ISO 4217 code column (<code>:76-88</code>) and sets the navigation&#39;s requiredness
           from one parameter (<code>:91</code>). Its sibling
-          <code>OwnsAddress</code> (<code>:131</code>, shipped in v1.192.0, <code>MMCA.Common/CHANGELOG.md:1439</code>) flattens <code>Address</code> into
+          <code>OwnsAddress</code> (<code>:131</code>, shipped in v1.192.0, <code>MMCA.Common/CHANGELOG.md:1464</code>) flattens <code>Address</code> into
           six non-unicode columns whose lengths come from <code>AddressInvariants</code> and of which only <code>AddressLine1</code>
           is required (<code>:142-171</code>), names them from an optional prefix (<code>AddressLine1</code>, <code>AddressCity</code>, and so on
           by default, <code>:133</code>, joined at <code>:191-194</code>) and defaults the navigation to optional (<code>:134</code>, applied at
@@ -353,7 +354,7 @@
           <code>CurrencyJsonConverter.cs:26-27</code>), so a serialized <code>Money.Zero()</code> round-trips. Because the
           <code>[JsonConstructor]</code> bypasses <code>Create</code>, <code>Money</code> implements <code>IJsonOnDeserialized</code> (<code>Money.cs:22,70-76</code>)
           and throws <code>JsonException</code> when a non-zero amount arrives with the sentinel (shipped in v1.232.0,
-          <code>MMCA.Common/CHANGELOG.md:30</code>). <code>DateRange</code> and <code>DateTimeRange</code> carry no serialization annotations.</li>
+          <code>MMCA.Common/CHANGELOG.md:55</code>). <code>DateRange</code> and <code>DateTimeRange</code> carry no serialization annotations.</li>
           <li><strong>gRPC is mapped by hand, not inferred.</strong> <code>Money</code> crosses a service boundary as a purpose-built
           <code>MoneyV1</code> message with a <strong>string</strong> amount (proto has no decimal) and a currency code
           (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Contracts/Protos/product_variants.proto:115,117,120</code>),
@@ -392,7 +393,7 @@
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/Event.cs:59</code>, validated
           through <code>Email.Create</code> on both the create and update paths (<code>:186-194</code>, <code>:264-272</code>) and assigned at
           <code>:144,292</code>, mapped at
-          <code>.../Conference.Infrastructure/Persistence/EntityConfiguration/Events/EventConfiguration.cs:60-62</code>).
+          <code>.../Conference.Infrastructure/Persistence/EntityConfiguration/Events/EventConfiguration.cs:64-66</code>).
           With that third site ADC&#39;s Domain carries no primitive email property left, matching Store. Two
           details are worth recording because they look like leftovers and are not: the column is unchanged
           (<code>nvarchar(255)</code>, still nullable) so the conversion needed no migration, and
@@ -413,7 +414,7 @@
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/Event.cs:45</code>,
           <code>Activities/Activity.cs:45</code>) stay one free-text string on purpose: a display line that carries the
           venue name, with no invariant beyond its length
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/Events/EventConfiguration.cs:45-46</code>),
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/Events/EventConfiguration.cs:49-50</code>),
           so the structured <code>Address</code> would impose a shape the data does not have. ADC&#39;s Start/End pairs stay
           primitive too (<code>Events/Event.cs:33-36</code>, <code>Activities/Activity.cs:33-36</code>, <code>Sessions/Session.cs:31-34</code>):
           their only rule is order, enforced by <code>CommonInvariants.EnsureEndIsNotBeforeStart</code>
@@ -510,6 +511,13 @@
           (<code>CreateExternal</code>, <code>User.cs:264</code>). Anchors were re-verified against current source across Common,
           Store and ADC, including the <code>Currency.cs</code>, <code>Money.cs</code>, <code>PublicAPI.Shipped.txt</code>,
           <code>EntityTypeBuilderExtensions.cs</code>, <code>OwnsMoneyTests.cs:120</code> and <code>CHANGELOG.md:1439</code> anchors.</p>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. No decision changed and no behavior, default, count or adoption
+          site moved; only line anchors drifted. (1) Anchors re-verified against current source: the <code>Money</code>
+          JSON-read refusal bullet sits at <code>MMCA.Common/CHANGELOG.md:55</code> (inside <code>[1.232.0]</code>), the
+          <code>OwnsAddress</code> bullet at <code>MMCA.Common/CHANGELOG.md:1464</code> (inside <code>[1.192.0]</code>), the ADC
+          <code>OrganizerContactEmail</code> conversion at <code>EventConfiguration.cs:64-66</code> and the ADC <code>VenueAddress</code>
+          length at <code>EventConfiguration.cs:49-50</code>.</p>
           <h2 id="related">Related</h2>
           <p>ADR-048 (the deliberate opposite call for identifiers: primitives behind aliases, wrapper structs
           rejected, because identifiers cross process boundaries constantly and carry no invariant), ADR-115
@@ -533,6 +541,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

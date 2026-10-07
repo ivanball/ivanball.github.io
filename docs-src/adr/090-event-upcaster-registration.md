@@ -10,6 +10,7 @@ longer assembly-qualified-name-only, so the aliasing trade-off is narrower than 
 citations are re-anchored after the flat-namespace split): see the revision at the end.
 Revised 2026-10-01: citations refreshed only. Revised 2026-10-06: a terminal unresolvable-type
 miss leaves `ProcessedOn` null rather than stamping it, so the row stays listed and replayable.
+Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 
 ## Context
 ADR-010 splits event evolution into a signal and a discipline. The signal (`SchemaVersion`, a
@@ -186,3 +187,21 @@ No decision, mechanism, or rationale changed.
   (`:191`), and the fallback is at `:201`. In `OutboxProcessor.cs`, the `DeserializeEvent` call is
   at `:530`, the `HandleUnresolvableType` call at `:533`, the method at `:658`, and the reason tag
   at `:678`. `AddEventUpcaster` remains at `DependencyInjection.Extensibility.cs:81`.
+
+## Revision (2026-10-07)
+Re-verified against current source. The decision, the mechanism, both delivery paths, and the
+terminal unresolvable-type behavior recorded by the 2026-10-06 revision are unchanged; only line
+anchors in `OutboxProcessor.cs` moved. Anchors inside the earlier revisions are left as recorded.
+
+1. **Anchors re-verified against current source:** In
+   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs`,
+   the `DeserializeEvent` call is at `:513`, the `HandleUnresolvableType` call at `:516`, and the
+   method at `:828`, with its XML doc at `:812-822` (`ProcessedOn` stays null, `:818-819`). The
+   terminal miss sets `RetryCount` to `MaxRetries` and clears `LockedUntil` at `:843-844`, and the
+   dead-letter counter increment is at `:845-848` with the `reason` `type_unresolvable` tag at
+   `:848`. In `OutboxMessage.cs`, `FromDomainEvent` (`:133`) stores `GetStorageName` at `:141`,
+   `DeserializeEvent` (`:168`) calls `ResolveEventType` (`:191`), and the fallback is at `:201`.
+   `AddEventUpcaster` remains at `DependencyInjection.Extensibility.cs:81` (singleton via
+   `TryAddEnumerable` at `:86`). The Decision section paths for `IEventUpcaster`,
+   `EventUpcasterRegistry`, `IntegrationEventConsumerExtensions` and `ArchitectureRules.Upcasters.cs`
+   are unchanged.

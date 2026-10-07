@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html" aria-current="page">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -243,7 +244,7 @@
           2026-10-06: the release status now records v1.218.0 as shipped. Refines <a href="018-polyglot-persistence.html">ADR-018</a> (engine as
           a routing decision) and <a href="113-postgresql-as-a-first-class-engine.html">ADR-113</a> (the fourth engine)
           without changing <a href="006-database-per-service.html">ADR-006</a> (one sealed context class per engine, one
-          instance per database).</p>
+          instance per database). Revised 2026-10-07: anchors refreshed after the v1.233.0 release.</p>
           <h2 id="context">Context</h2>
           <p>MMCA.Common persists through four engines named by one shipped public enum, <code>DataSource</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IDataSourceService.cs:6</code>):
@@ -364,11 +365,11 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:61</code>).
           The resolver orders substitution by <code>SubstitutionPriority</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/DataSourceResolver.cs:36</code>)
-          and reads migration policy and connection strings through the engine (<code>:393</code>, <code>:450</code>, <code>:470</code>,
-          <code>:500</code>, <code>:503</code>); <code>PhysicalDataSource.UsesMigrations</code> switches on <code>Migrations</code>
+          and reads migration policy and connection strings through the engine (<code>:394</code>, <code>:451</code>, <code>:471</code>,
+          <code>:501</code>, <code>:504</code>); <code>PhysicalDataSource.UsesMigrations</code> switches on <code>Migrations</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/PhysicalDataSource.cs:42</code>);
           the row-version mapping and stamp read <code>RowVersion</code>
-          (<code>ApplicationDbContext.cs:591</code>,
+          (<code>ApplicationDbContext.cs:592</code>,
           <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/AuditSaveChangesInterceptor.cs:67</code>);
           include support reads <code>IsRelational</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/DataSourceService.cs:32</code>);
@@ -381,9 +382,9 @@
           </li>
           <li><p><strong>Outbox support is the engine&#39;s relational flag.</strong> <code>ApplicationDbContext.SupportsOutbox</code> is gone;
           the outbox routing decision reads <code>context.Engine.Capabilities.IsRelational</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/InProcessEventBus.cs:81</code>,
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/InProcessEventBus.cs:82</code>,
           <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/BrokerEventBus.cs:70</code>,
-          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:236</code>).</p>
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:257</code>).</p>
           </li>
           <li><p><strong>Explicit-key insert is engine-neutral at the API.</strong> <code>IUnitOfWork.RequestIdentityInsert</code> is renamed
           <code>RequestExplicitKeyInsert</code>, with no alias
@@ -420,7 +421,7 @@
           and <code>DataSourceEntrySettings</code> still carry one named property per engine (for example
           <code>ConnectionStringSettings.cs:18</code>, <code>:28</code>, <code>:40</code>, <code>:43</code>;
           <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/DataSourceEntrySettings.cs:22</code>,
-          <code>:28</code>, <code>:38</code>, <code>:56</code>), and each engine reads its own (<code>SQLServerDataSourceEngine.cs:52-70</code>). A fifth
+          <code>:28</code>, <code>:40</code>, <code>:58</code>), and each engine reads its own (<code>SQLServerDataSourceEngine.cs:52-70</code>). A fifth
           engine adds one property per settings class.</p>
           </li>
           </ul>
@@ -522,6 +523,20 @@
           <code>AuditSaveChangesInterceptor.cs:67</code>, the factory&#39;s dialect use to <code>DbContextFactory.cs:293</code> and
           <code>RequestExplicitKeyInsert</code> to <code>DbContextFactory.cs:322</code>, behavior unchanged.</li>
           </ul>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. The decision, the engine contract, the capabilities table and
+          the call sites that read engine facts are unchanged; only line anchors moved.</p>
+          <ol>
+          <li>Anchors re-verified against current source: the v1.218.0 release heading is
+          <code>MMCA.Common/CHANGELOG.md:304</code> (the <code>:279</code> cited in the Status block and the 2026-10-06 revision
+          falls inside the 1.219.0 section); the resolver reads migration policy and connection strings at
+          <code>DataSourceResolver.cs:394</code>, <code>:451</code>, <code>:471</code>, <code>:501</code>, <code>:504</code>; the row-version mapping reads
+          <code>RowVersion</code> at <code>ApplicationDbContext.cs:592</code>; the outbox routing reads <code>IsRelational</code> at
+          <code>InProcessEventBus.cs:82</code> and <code>DomainEventSaveChangesInterceptor.cs:257</code> (<code>BrokerEventBus.cs:70</code>
+          unchanged); and the <code>DataSourceEntrySettings</code> connection-string properties sit at
+          <code>DataSourceEntrySettings.cs:22</code> (Cosmos), <code>:28</code> (PostgreSQL), <code>:40</code> (SQLite) and <code>:58</code>
+          (SQL Server).</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="006-database-per-service.html">ADR-006</a> (one sealed context per engine),
           <a href="018-polyglot-persistence.html">ADR-018</a> (engines behind one model and the resolver),
@@ -549,6 +564,7 @@
             <li><a href="#alternatives-rejected">Alternatives rejected</a></li>
             <li><a href="#consequences">Consequences</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

@@ -39,6 +39,9 @@ suppressed at its own declaration; see Revision below).
 Revised 2026-10-06: the ADR-115 rule runs in three of the four repos rather than every repo, the
 idempotency gate is exercised by MMCA.Common's own controllers, and the baseline and proto fixture
 figures are re-counted. See Revision (2026-10-06) at the end.
+Revised 2026-10-07: MMCA.Common runs a second architecture map, `FrameworkModuleArchitectureMap`, over
+its own aggregates, the shipped baselines are re-counted against v1.233.0, and the anchors that moved
+are refreshed.
 
 ## Context
 The codebase rests on invariants that are easy to state and easy to erode by accident: clean-
@@ -63,14 +66,17 @@ Enforce architectural invariants as **automated checks that gate the build**, in
    and localization in two rules: resx translation-coverage and no-hardcoded-UI-literal text, among
    others) plus
    abstract `*TestsBase` classes parameterized by an `IArchitectureMap`. Each repo
-   (Common / Store / ADC / Helpdesk) supplies a single `IArchitectureMap` implementation
+   (Common / Store / ADC / Helpdesk) supplies a primary `IArchitectureMap` implementation
    (`CommonArchitectureMap`, `StoreArchitectureMap`, `AdcArchitectureMap`, `HelpdeskArchitectureMap`)
-   declaring its layer and module assemblies, then inherits the test bases. The same rules run
-   identically everywhere via NetArchTest over the compiled assemblies.
+   declaring its layer and module assemblies, then inherits the test bases. MMCA.Common adds a second
+   map, `FrameworkModuleArchitectureMap`, that registers its own Shared, Domain and Application
+   assemblies as one module named `Framework` so the module-scoped DDD rules run over the aggregates
+   the framework ships (see the Revision (2026-10-07) at the end). The same rules run identically
+   everywhere via NetArchTest over the compiled assemblies.
 
 These tests run inside the normal `dotnet test` / CI tier, so a violated invariant fails CI like any
 other test (the whole-solution run that carries them is additionally floored at
-`--minimum-expected-tests 2000`, `.github/workflows/ci.yml:161`, so a discovery or filter regression
+`--minimum-expected-tests 2000`, `.github/workflows/ci.yml:163`, so a discovery or filter regression
 that silently drops the suite fails the job instead of passing green on a handful of tests). Centralizing the rules in a package, rather than copying them per repo, means a new
 invariant is written once and inherited by every consumer.
 
@@ -642,6 +648,48 @@ statements and lists the anchors that moved, leaving the earlier entries as writ
   qualified name `:329-336`, transparent `oneof` `:271-273`. The `.editorconfig` anchors in the
   2026-10-01 entry, the `ci.yml:161` floor, and the Status block's `FACTS.md:51` / `:54` pointers still
   resolve.
+
+## Revision (2026-10-07): Common's second architecture map, re-counted baselines, moved anchors
+Re-verified against current source. No rule family joined or left the library and no decision changed:
+the two enforcement layers plus the public API gate, the `--minimum-expected-tests 2000` floor and the
+RS rule severities are as the earlier entries describe. One structural statement in the Decision was
+incomplete, the baselines moved with the v1.233.0 release (`MMCA.Common/FACTS.md:14`), and several
+anchors drifted, including some the 2026-10-06 entry said still resolve.
+
+1. **MMCA.Common supplies two architecture maps, not one.** Besides `CommonArchitectureMap`
+   (`Tests/Architecture/MMCA.Common.Architecture.Tests/CommonArchitectureMap.cs:15`), it ships
+   `FrameworkModuleArchitectureMap`
+   (`Tests/Architecture/MMCA.Common.Architecture.Tests/Domain/EntityModel/FrameworkModuleArchitectureMap.cs:16`),
+   which registers the framework's Shared, Domain and Application assemblies as one module named
+   `Framework` (`:19`, `:25-27`) and keeps Infrastructure a framework layer (`:28`). Its purpose, per
+   its XML doc (`:5-15`), is that the module-scoped DDD rules (sealed entities, no public setters, no
+   public aggregate constructors, immutable DTOs, commands, queries and domain events) are vacuous
+   under `CommonArchitectureMap`, where the same assemblies are framework layers, and actually run
+   over the aggregates the framework ships under this map. `ImmutabilityTests`
+   (`.../Domain/EntityModel/ImmutabilityTests.cs:11-13`) and `EntityConventionTests`
+   (`.../Domain/EntityModel/EntityConventionTests.cs:12-14`) subclass their bases over it. The Decision's
+   "single `IArchitectureMap` implementation" is corrected in place to a primary map per repo plus this
+   second one in MMCA.Common.
+2. **The shipped baselines hold 8,260 declarations across 8,281 non-empty lines** in the 21
+   `PublicAPI.Shipped.txt` files, each carrying exactly one `#nullable enable` header (the 2026-10-06
+   entry read 8,254 across 8,275 against v1.232.0). The 21-pair count stands, the `MMCA.Common`
+   metapackage's shipped file (`Source/MMCA.Common/PublicAPI.Shipped.txt:1`) is still the only
+   header-only shipped file, and all 21 `PublicAPI.Unshipped.txt` files still hold the header alone.
+3. **Anchors re-verified against current source:** the whole-solution test step is
+   `.github/workflows/ci.yml:154-163`, its docs-only guard `:155`, the "~2,254" comment `:160` and the
+   `--minimum-expected-tests 2000` floor `:163` (the Decision's citation is re-anchored in place); the
+   restore guard `:124`, the build step `:134-136` with its guard `:135`, and the unguarded FACTS gate
+   `:118-121` still resolve. The `ui-e2e` run is now a direct
+   `dotnet test --project Tests/Presentation/MMCA.Common.UI.E2E.Tests/...` with
+   `--minimum-expected-tests 1` at `ci.yml:292` (step name `:287`). In `MMCA.Common/.editorconfig`:
+   the PublicApiAnalyzers overrides header `:888-894`, the RS0026 / RS0027 rationale (19 shipped
+   members) `:896-900` with both set to `error` at `:901-902`, RS0041 `none` at `:906` (its comment
+   `:903-905`), and RS0051-RS0056 `none` at `:907-914`. The v1.153.0 changelog heading is
+   `CHANGELOG.md:3344` and its "Three new build gates" bullet `:3399-3405` (PublicApiAnalyzers on
+   `:3403`). The framework client's hub method constants are
+   `Source/Presentation/MMCA.Common.UI/Services/Notifications/NotificationHubService.cs:49-50`;
+   `[HubMethodName]` at `NotificationHub.cs:127` and `:144` and `Context.ConnectionAborted` at `:136`
+   and `:150` still resolve. The Status block's `FACTS.md:51` / `:54` pointers still resolve.
 
 ## Related
 ADR-009 (resilience gate), ADR-010 (event-version gate), ADR-016 (MassTransit pin gate, and the

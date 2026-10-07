@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -244,7 +245,8 @@
           engine. Revised 2026-10-01 (the Helpdesk canary and the <code>--database postgresql</code> template choice
           are shipped, the canary as an advisory template-generated job; see Revision below). Revised
           2026-10-06: engine behavior is delegated to a <code>PostgreSQLDataSourceEngine</code> in the <code>DataSourceEngines</code>
-          registry rather than per-site switch arms.</p>
+          registry rather than per-site switch arms. Revised 2026-10-07: anchors refreshed after the
+          v1.233.0 release.</p>
           <h2 id="context">Context</h2>
           <p>The framework has shipped three database engines since its first release: SQL Server, Azure Cosmos DB
           and SQLite. Every one of them is reached the same way, because <a href="006-database-per-service.html">ADR-006</a>
@@ -303,7 +305,7 @@
           <code>PhysicalDbContextFactory</code> delegates to its <code>CreateDbContext</code>
           (<code>.../DbContexts/Factory/PhysicalDbContextFactory.cs:32</code>, <code>PostgreSQLDataSourceEngine.cs:85</code>) and
           <code>ApplyConfigurationsForEntitiesInContext</code> reads its <code>EntityConfigurationInterface</code>
-          (<code>.../DbContexts/ApplicationDbContext.cs:955</code>, <code>PostgreSQLDataSourceEngine.cs:30</code>).</p>
+          (<code>.../DbContexts/ApplicationDbContext.cs:956</code>, <code>PostgreSQLDataSourceEngine.cs:30</code>).</p>
           </li>
           <li><p><strong>The mapping is the SQL Server mapping, not PostgreSQL house style.</strong>
           <code>EntityTypeConfigurationPostgreSQL&lt;TEntity, TIdentifierType&gt;</code>
@@ -324,11 +326,11 @@
           <code>PostgreSQLDataSourceEngine.cs:116</code>),
           so the automatic convention and the opt-in <code>HasSoftDeleteFilter</code> extension can never disagree.
           The outbox filters are built through one <code>QuoteColumn</code> helper
-          (<code>.../DbContexts/ApplicationDbContext.cs:618-619</code>, delegating to
-          <code>SoftDeleteFilterSql.QuoteColumn</code> at <code>SoftDeleteFilterSql.cs:69-70</code> and on to the engine) that
+          (<code>.../DbContexts/ApplicationDbContext.cs:619-620</code>, delegating to
+          <code>SoftDeleteFilterSql.QuoteColumn</code> at <code>SoftDeleteFilterSql.cs:70-71</code> and on to the engine) that
           returns the bracketed form for every engine except PostgreSQL (<code>PostgreSQLDataSourceEngine.cs:113</code>),
           so the literals SQL Server and SQLite have always produced are
-          byte-identical. <code>IncludeColumns</code> (<code>.../DbContexts/ApplicationDbContext.cs:644-648</code>) asks the
+          byte-identical. <code>IncludeColumns</code> (<code>.../DbContexts/ApplicationDbContext.cs:645-649</code>) asks the
           engine for the provider&#39;s own <code>IncludeProperties</code> overload (<code>PostgreSQLDataSourceEngine.cs:109</code>)
           for the same reason.</p>
           </li>
@@ -350,7 +352,7 @@
           the SQLite rule rather than the SQL Server one. SQL Server always migrates because hosts have
           depended on that since the first release; PostgreSQL ships with no such host, so a source with
           nothing to apply is created outright by <code>DatabaseInitializationExtensions</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:93-99</code>)
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:90-105</code>)
           instead of being migrated into an empty schema. <code>DesignTimeDbContextHelper.CreatePostgreSQL</code>
           (<code>.../DbContexts/Design/DesignTimeDbContextHelper.cs:74</code>) scaffolds the migrations when a host
           wants them.</p>
@@ -379,7 +381,7 @@
           <code>Tests/Core/MMCA.Common.Infrastructure.PostgreSQL.Tests</code> is a Testcontainers project outside
           <code>MMCA.Common.slnx</code> (the posture <code>Tests/Core/MMCA.Common.Infrastructure.Redis.Tests</code> established:
           Docker-gated, own CI job, kept out of the fast solution-wide unit loop), run by the
-          <code>postgresql-integration</code> CI job (<code>MMCA.Common/.github/workflows/ci.yml:881</code>). It creates the whole
+          <code>postgresql-integration</code> CI job (<code>MMCA.Common/.github/workflows/ci.yml:828</code>). It creates the whole
           schema, round-trips an auditable entity&#39;s UTC audit stamps, proves a soft-deleted row is hidden AND
           frees its unique slot, writes and drains the outbox row of a local domain event, and writes the
           outbox row of an integration event and asserts it stays pending for <code>OutboxProcessor</code>
@@ -500,6 +502,17 @@
           <li>Anchors re-verified against current source (<code>ApplicationDbContext.cs:618-619</code> and <code>:644-648</code>,
           <code>IDataSourceService.cs:16-22</code>, <code>DatabaseInitializationExtensions.cs:93-99</code>).</li>
           </ul>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. The engine decision, its rationale and every behavior described
+          above are unchanged; only line anchors moved.</p>
+          <ol>
+          <li>Anchors re-verified against current source: <code>ApplicationDbContext.cs:956</code>
+          (<code>EntityConfigurationInterface</code>, Decision 2), <code>ApplicationDbContext.cs:619-620</code> (<code>QuoteColumn</code>) and
+          <code>:645-649</code> (<code>IncludeColumns</code>, Decision 4), <code>SoftDeleteFilterSql.cs:70-71</code> (<code>QuoteColumn</code>; <code>Build</code>
+          stays at <code>:35</code>), <code>DatabaseInitializationExtensions.cs:90-105</code> (the migration-less loop, its
+          <code>UsesMigrations</code> skip at <code>:99</code> and <code>EnsureCreatedAsync</code> at <code>:104-105</code>, Decision 6), and the
+          <code>postgresql-integration</code> job at <code>MMCA.Common/.github/workflows/ci.yml:828</code> (Decision 9).</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="006-database-per-service.html">ADR-006</a> (one sealed context per engine, one instance per database),
           <a href="018-polyglot-persistence.html">ADR-018</a> (the engine axis this record adds a member to),
@@ -530,6 +543,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

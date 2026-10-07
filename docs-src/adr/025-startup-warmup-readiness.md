@@ -12,7 +12,8 @@ the framework owns the Redis registration so that the untagged health check an A
 adds cannot reach `/health/ready` (see Context and Decision). Revised 2026-09-19: `/health` and
 `/health/ready` are served from a short-TTL single-flight report cache (`MapCachedHealthChecks` over
 `CachedHealthReportProvider`, 5 seconds by default), so an anonymous flood costs one probe round per
-window rather than one per request; `/alive` stays uncached (see Decision).
+window rather than one per request; `/alive` stays uncached (see Decision). Revised 2026-10-07: anchors
+refreshed after the v1.233.0 release.
 
 ## Context
 On the Azure Container Apps Consumption plan a replica that has been idle is CPU-throttled, and a
@@ -120,7 +121,7 @@ gets it.
   the rest of the subsystem: caught, logged at warning level, never fatal (`:141-146`, `:205-207`). Both
   production apps subclass and register it: ADC in Conference
   (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/SelfHttpOutputCacheWarmupTask.cs:22`, registered
-  at `Program.cs:311`), Engagement (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/SelfHttpWarmupTask.cs:23`,
+  at `Program.cs:313`), Engagement (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/SelfHttpWarmupTask.cs:23`,
   `Program.cs:160`) and Identity (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/SelfHttpWarmupTask.cs:23`,
   `Program.cs:174`); Store in Catalog
   (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/SelfHttpOutputCacheWarmupTask.cs:23`,
@@ -204,6 +205,18 @@ ADC Conference `Program.cs:308`, Engagement `:156`, Identity `:168` and Store Ca
 No decision or rationale changed. The per-host `AddWarmupTask` registrations moved again and are now
 ADC Conference `Program.cs:311`, Engagement `:160`, Identity `:174` and Store Catalog `Program.cs:184`,
 Identity `:145`, Sales `:158`. Anchors were re-verified against current source.
+
+## Revision (2026-10-07)
+Re-verified against current source. No decision or rationale changed: the readiness gate, the
+120-second per-task ceiling, the PING-class rule and the six production `SelfHttpWarmupTaskBase`
+subclasses are as recorded. Only the ADC Conference registration moved.
+
+1. Anchors re-verified against current source: ADC Conference
+   `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:313` (was `:311`, which the
+   2026-10-06 revision recorded); unchanged and re-checked: ADC Engagement `Program.cs:160`, Identity
+   `:174`, Store Catalog `Program.cs:184`, Identity `:145`, Sales `:158`, the six subclass declarations
+   (ADC `:22`, `:23`, `:23`; Store `:23`, `:25`, `:26`), `Extensions.Health.cs:154-156` and
+   `WarmupHostedService.cs:42`, `:53`, `:69`.
 
 ## Related
 ADR-004 (the OIDC discovery document the built-in task pre-fetches, and the auth-side view of the same

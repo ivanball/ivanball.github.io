@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -242,7 +243,7 @@
           <p>Accepted (2026-09-12). Extends <a href="045-managed-file-storage-and-avatars.html">ADR-045</a> from images to
           documents: the framework gains a document content sniffer, a blob-name sanitizer and stored response
           headers, and ADC gains a <code>SessionAsset</code> aggregate that uses them. ADR-045&#39;s avatar-only scope
-          statement (&quot;no other managed uploads exist&quot;) is superseded by this record. Revised 2026-10-01 (the upload-options overload is abstract and the template enables on-upload malware scanning by default; see Revision below). Revised 2026-10-06: all three delete paths schedule blob removal inside the delete&#39;s transaction, so there is no post-commit tail.</p>
+          statement (&quot;no other managed uploads exist&quot;) is superseded by this record. Revised 2026-10-01 (the upload-options overload is abstract and the template enables on-upload malware scanning by default; see Revision below). Revised 2026-10-06: all three delete paths schedule blob removal inside the delete&#39;s transaction, so there is no post-commit tail. Revised 2026-10-07: anchors refreshed after the v1.233.0 release.</p>
           <h2 id="context">Context</h2>
           <p>A speaker finishes a talk and forty people want the deck. Until now ADC&#39;s only answer was
           <code>Session.ResourceLinks</code>, a free-text field imported from Sessionize: the speaker types URLs into
@@ -350,10 +351,10 @@
           safe precisely because a blob name carries a fresh asset id and therefore never changes content.</p>
           <p><strong>5. Storage reuses ADR-045 with its own container, and downloads go straight to the blob.</strong> The
           Conference service registers the same <code>AddAzureBlobFileStorage</code>
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:357</code>) against a new <strong>public-read
-          <code>session-assets</code> container</strong> on the existing storage account (<code>MMCA.ADC/infra/main.bicep:1308-1314</code>,
-          container name injected at <code>:1995</code>); the account-scoped data-plane grant already covers it, so no
-          second role assignment (<code>:1341-1349</code>, comment at <code>:1334-1336</code>). The blob name is
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:359</code>) against a new <strong>public-read
+          <code>session-assets</code> container</strong> on the existing storage account (<code>MMCA.ADC/infra/main.bicep:1328-1334</code>,
+          container name injected at <code>:2029</code>); the account-scoped data-plane grant already covers it, so no
+          second role assignment (<code>:1362-1370</code>, comment at <code>:1355-1357</code>). The blob name is
           <code>{eventId}/{sessionId}/{assetId}/{sanitized-file-name}</code>
           (<code>UploadSessionAssetHandler.cs:90-94</code>), which is what makes a public container acceptable: the GUID
           segment is unguessable, so holding one asset URL reveals nothing about any other. Attendees download
@@ -362,9 +363,9 @@
           <code>SessionAsset.StorageNotConfigured</code> while links keep working (<code>:56-62</code>), which is the local-dev
           posture. Optional on-upload malware scanning (Microsoft Defender for Storage) is available behind the
           bicep parameter <code>enableSessionAssetMalwareScanning</code>, <strong>defaulting to true</strong>
-          (<code>MMCA.ADC/infra/main.bicep:136</code>, resource at <code>:1361-1377</code>): the deploy identity&#39;s Contributor role covers
-          the settings write (comment at <code>:1351-1360</code>), and the per-GB scanning cost is bounded by a
-          50 GB monthly cap (<code>:1369</code>). Production diverges from the template: an <code>az rest</code> read of the
+          (<code>MMCA.ADC/infra/main.bicep:136</code>, resource at <code>:1382-1398</code>): the deploy identity&#39;s Contributor role covers
+          the settings write (comment at <code>:1372-1381</code>), and the per-GB scanning cost is bounded by a
+          50 GB monthly cap (<code>:1390</code>). Production diverges from the template: an <code>az rest</code> read of the
           account&#39;s <code>defenderForStorageSettings/current</code> on 2026-10-01 returned Defender for Storage enabled
           but <code>malwareScanning.onUpload.isEnabled=false</code> (<code>capGBPerMonth=-1</code>). It is defence in depth behind the content gate, not the primary
           control.</p>
@@ -522,6 +523,21 @@
           Conference service registration, bicep container, grant and scanning resource, Gateway body-size
           raise, delete handlers).</li>
           </ul>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. The decision, the six parts, the limits and the trade-offs are
+          unchanged, and the template still enables on-upload scanning with the 50 GB cap while the recorded
+          production read (2026-10-01) is not re-checked here; only line numbers moved, and the 2026-10-06
+          statement that every live-section anchor had been re-verified no longer holds for the anchors below.</p>
+          <ol>
+          <li>Anchors re-verified against current source: the Conference service registration
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:359</code>; the public-read container
+          <code>MMCA.ADC/infra/main.bicep:1328-1334</code> (name <code>:1330</code>, <code>publicAccess: &#39;Blob&#39;</code> <code>:1332</code>), its
+          container name injected at <code>:2029</code>; the account-scoped grant <code>:1362-1370</code> with its coverage
+          comment at <code>:1355-1357</code>; the scanning resource <code>:1382-1398</code> (cap <code>:1390</code>, Contributor comment
+          <code>:1372-1381</code>); the v1.210.0 breaking change at <code>MMCA.Common/CHANGELOG.md:697-698</code> (release
+          heading <code>:635</code>); and the public download list at <code>PublicSessionDetail.razor:121</code>, after the
+          <code>ResourceLinks</code> row at <code>:111-113</code>.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="045-managed-file-storage-and-avatars.html">ADR-045</a> (the storage abstraction, the image path this
           record is the document sibling of, and the avatar-only scope statement this supersedes),
@@ -549,6 +565,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -256,7 +257,9 @@
           <code>MapReverseProxy</code> to the host, so the decision below stays consumer-side; see
           <a href="088-gateway-edge-responsibilities.html">ADR-088</a>.)
           The Context below records the prior state that motivated the change; the Decision describes what each
-          gateway does today.</p>
+          gateway does today. Revised 2026-10-07: Store&#39;s gateway comment now agrees with its 15-route table,
+          so the Rationale no longer cites it as a live off-by-N example, and the ADC AppHost and bicep anchors
+          in the Context are refreshed.</p>
           <h2 id="context">Context</h2>
           <p>Before this record, both gateways built their route table by hand, in code. ADC made 26
           <code>MapForwarder</code> calls and Store made 10. Neither host called <code>AddReverseProxy</code> or <code>LoadFromConfig</code>, and neither <code>appsettings.json</code> had
@@ -287,10 +290,10 @@
           was pinned by no test at all.</p>
           <p><strong>What is genuinely elsewhere is not the route table, and that distinction is worth recording</strong>,
           because it is the duplication a reader assumes exists. The Aspire AppHost holds references and
-          start-ordering (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:345-353</code>,
+          start-ordering (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:348-356</code>,
           <code>MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:307-313</code>) and the bicep templates hold
           <code>services__&lt;name&gt;__http__0</code> environment variables on the gateway container app
-          (<code>MMCA.ADC/infra/main.bicep:2421-2424</code>, <code>MMCA.Store/infra/main.bicep:1943-1945</code>). Both are <strong>address
+          (<code>MMCA.ADC/infra/main.bicep:2468-2471</code>, <code>MMCA.Store/infra/main.bicep:1943-1945</code>). Both are <strong>address
           books</strong>: service name to URL, with no path prefix anywhere in them. They answer &quot;where does
           <code>conference</code> resolve&quot; and never &quot;what reaches conference&quot;, so neither is a second route table and
           neither should become one.</p>
@@ -417,11 +420,12 @@
           hand-typed list closes the code-versus-test half of that and not the comment half: a comment is
           still an ungated description of the table. ADC&#39;s <code>RouteMapTests</code> label (&quot;17 REST controllers +
           SessionSelection&quot;) currently agrees with its 18 conference entries
-          (<code>MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/RouteMapTests.cs:146-164</code>), but nothing holds it there,
-          and Store&#39;s gateway comment describes the <code>ReverseProxy</code> section as &quot;ten routes, three clusters&quot;
-          (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:115</code>) above a table of 15 routes
-          (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:51-144</code>), so the off-by-N recurs, just
-          no longer load-bearing.</li>
+          (<code>MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/RouteMapTests.cs:146-164</code>), and Store&#39;s gateway
+          comment describing the <code>ReverseProxy</code> section as &quot;fifteen routes, three clusters&quot;
+          (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:115</code>) agrees with its table of 15 routes
+          (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:51-144</code>). Both agree because someone
+          corrected them by hand, not because anything holds them there: the next route added without a
+          comment edit reopens the gap, just no longer load-bearing.</li>
           <li><strong>A route table is data, and data belongs in configuration.</strong> Nothing in a forwarder registration is
           a decision the compiler can check anyway: the path is a string, the destination is a string, the
           cluster name is a string. Writing them as C# buys a build step and no verification.</li>
@@ -494,6 +498,24 @@
           wiring (<code>Program.cs:148-151</code>) and <code>MapReverseProxy</code> (<code>:234</code>), both AppHost gateway blocks, and both
           bicep gateway address books. Store gateway <code>Program.cs</code> citations still hold.</li>
           </ul>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. No decision changed: the AppHost gateway blocks still hold no
+          route or path data, only <code>WithReference</code>, <code>WaitFor</code> ordering and endpoint and health wiring
+          (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:348-359</code>,
+          <code>MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:307-315</code>), and the bicep gateway address books still carry bare
+          <code>http://&lt;app&gt;</code> destinations with no path prefix. One current-state statement moved: the Rationale&#39;s
+          example of an ungated comment drifting from the table no longer holds for Store.</p>
+          <ol>
+          <li>Store&#39;s gateway comment now describes the <code>ReverseProxy</code> section as &quot;fifteen routes, three
+          clusters&quot; (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:115</code>), which agrees with its 15
+          configured routes. The Rationale now records both consumers&#39; labels as agreeing by hand-correction
+          rather than by any gate, so the comment half of the drift stays ungated.</li>
+          <li>Anchors re-verified against current source: the ADC AppHost gateway block
+          (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:348-356</code>) and the ADC bicep gateway address
+          book (<code>MMCA.ADC/infra/main.bicep:2468-2471</code>) are re-pointed in the Context; the Store AppHost
+          (<code>MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:307-313</code>) and Store bicep
+          (<code>MMCA.Store/infra/main.bicep:1943-1945</code>) anchors still hold.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="008-service-extraction-topology.html">ADR-008</a> (amended: the Gateway keeps the route-to-service map it
           was given, now expressed as configuration rather than as forwarder registrations),
@@ -528,6 +550,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

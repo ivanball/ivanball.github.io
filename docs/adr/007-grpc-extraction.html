@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -244,7 +245,8 @@
           type triggers yet). Revised 2026-09-04: the <code>*.Contracts</code> gRPC adapter is named for what it is, the
           module&#39;s <strong>Anti-Corruption Layer</strong>; no code changed. Revised 2026-10-06: the <code>[ServiceContract]</code> ratchet
           is now triggered (ADC marks six interfaces and Store four), a second fitness rule keeps their
-          implementations non-public, and the h2c, JWKS and disabled-stub bullets are narrowed to current wiring.</p>
+          implementations non-public, and the h2c, JWKS and disabled-stub bullets are narrowed to current wiring.
+          Revised 2026-10-07: anchors refreshed after the v1.233.0 release.</p>
           <h2 id="context">Context</h2>
           <p>Once modules became separate service processes, the in-process interface calls between them (e.g.
           Conference → Engagement&#39;s <code>IBookmarkCountService</code>, Engagement → Conference&#39;s
@@ -288,7 +290,7 @@
           <code>:109</code>). Under the AppHost the authority is wired by <code>WithJwksDiscovery(identity, gateway)</code>, whose
           gateway argument is optional (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:309-311</code>);
           in production the bicep points the authority straight at Identity&#39;s internal cleartext URL with
-          <code>RequireHttpsMetadata=false</code>, not through the gateway (<code>MMCA.ADC/infra/main.bicep:1969</code>, <code>:1973</code>;
+          <code>RequireHttpsMetadata=false</code>, not through the gateway (<code>MMCA.ADC/infra/main.bicep:2003</code>, <code>:2007</code>;
           <code>MMCA.Store/infra/main.bicep:1684</code>, <code>:1689</code>).</li>
           <li><strong>Disabled-module stubs</strong>: when a multi-module host runs with a peer module switched off,
           <code>ModuleLoader</code> registers that module&#39;s <code>Disabled*</code> stubs so resolution always succeeds
@@ -325,7 +327,7 @@
           <code>IUserNotificationExportService.cs:13</code>) and Store four (<code>IProductVariantService.cs:33</code>,
           <code>IUserCatalogExportService.cs:19</code>, <code>IUserSalesExportService.cs:20</code>, <code>ICustomerService.cs:25</code>), all
           with the parameterless form, so none passes a version. MMCA.Common and Helpdesk mark nothing
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/ServiceContractAttribute.cs:11</code>), so
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/ServiceContractAttribute.cs:12-13</code>), so
           there the rules stay a ratchet that passes without asserting anything.</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
@@ -359,6 +361,18 @@
           an <code>Http2</code>-only <code>grpc</code> endpoint).</li>
           <li>Anchors re-verified against current source.</li>
           </ul>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. The decision, the JWKS wiring and the <code>[ServiceContract]</code>
+          adoption are unchanged: ADC production bicep still sets the authority to Identity&#39;s internal
+          cleartext URL with <code>RequireHttpsMetadata=false</code>, and MMCA.Common and Helpdesk still mark no type.
+          Only anchors moved.</p>
+          <ol>
+          <li>Anchors re-verified against current source: ADC JWKS authority and <code>RequireHttpsMetadata</code>
+          re-pointed to <code>MMCA.ADC/infra/main.bicep:2003</code>, <code>:2007</code> (the same pair repeats at <code>:2139</code>,
+          <code>:2143</code> and <code>:2293</code>, <code>:2297</code>); the &quot;MMCA.Common applies to no type&quot; remark re-pointed to
+          <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/ServiceContractAttribute.cs:12-13</code>;
+          Store&#39;s <code>MMCA.Store/infra/main.bicep:1684</code>, <code>:1689</code> still hold.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -375,6 +389,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             </ul>
           </nav>
         </aside>

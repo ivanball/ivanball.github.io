@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -252,7 +253,8 @@
           in memory, and a batch feedback path joined the two single-answer raise sites. Every decision above
           still holds; only the passages that describe those four facts, and the citations throughout, move.
           Revised (2026-10-01): a fourth handler (the event-side batch path) raises the feedback events.
-          Revised 2026-10-06: the question award runs through <code>BestEffort.ExecuteAsync</code>, the scanner reports a non-badge QR as a skipped outcome, and a rejoin of an erased leaderboard row is refused.</p>
+          Revised 2026-10-06: the question award runs through <code>BestEffort.ExecuteAsync</code>, the scanner reports a non-badge QR as a skipped outcome, and a rejoin of an erased leaderboard row is refused.
+          Revised 2026-10-07: anchors refreshed after the v1.233.0 release.</p>
           <h2 id="context">Context</h2>
           <p>ADC wanted two conference-day capabilities that turn out to be one mechanism. Organizers want to know
           who actually attended which session, which the schedule cannot tell them: a bookmark is an intention and
@@ -432,8 +434,8 @@
           <code>SponsorId</code> proved that: it was added as an optional last parameter (<code>:31</code>), so consumers keep
           deserializing payloads that predate it. It is ADC&#39;s first broker self-consumption: the Engagement
           service both publishes and consumes it
-          (<code>.../Services/MMCA.ADC.Engagement.Service/Program.cs:275-284</code> for the reasoning, <code>:292-295</code> for the
-          four <code>RegisterIntegrationEventConsumer&lt;T&gt;</code> calls inside <code>AddBrokerMessaging</code> at <code>:290</code>).</p>
+          (<code>.../Services/MMCA.ADC.Engagement.Service/Program.cs:276-285</code> for the reasoning, <code>:293-296</code> for the
+          four <code>RegisterIntegrationEventConsumer&lt;T&gt;</code> calls inside <code>AddBrokerMessaging</code> at <code>:291</code>).</p>
           <p>The two feedback events are new to the Conference module
           (<code>.../Conference.Shared/Sessions/IntegrationEvents/SessionFeedbackSubmitted.cs:20-26</code>,
           <code>.../Conference.Shared/Events/IntegrationEvents/EventFeedbackSubmitted.cs:19-24</code>) and are raised on the
@@ -463,9 +465,9 @@
           reactivate path) is treated as the already-on-board success (<code>IsLostJoinRace</code>, <code>:136-138</code>, catch filter
           at <code>:117</code>). Erasure is a separate, irreversible promise: <code>EraseDisplayName()</code> (<code>LeaderboardOptIn.cs:119-130</code>)
           overwrites the published name in place when the account behind it is erased, and it is driven by a fourth
-          broker consumer, <code>UserDeleted</code> -&gt; <code>UserDeletedPointsHandler</code> (<code>Program.cs:295</code>, the mapping documented at
-          <code>:267-269</code>), because the published name is the one piece of personal data the Identity-side erasure cannot
-          reach across the database boundary (<code>Program.cs:271-273</code>). The row itself survives (anonymize-in-place,
+          broker consumer, <code>UserDeleted</code> -&gt; <code>UserDeletedPointsHandler</code> (<code>Program.cs:296</code>, the mapping documented at
+          <code>:268-270</code>), because the published name is the one piece of personal data the Identity-side erasure cannot
+          reach across the database boundary (<code>Program.cs:272-274</code>). The row itself survives (anonymize-in-place,
           ADR-005). <code>GetLeaderboard</code>
           (<code>.../Points/UseCases/GetLeaderboard/GetLeaderboardHandler.cs</code>) reads only opted-in users&#39; entries
           (<code>:39-46</code>), asks the database for one grouped <code>SUM</code> per attendee rather than reading the ledger rows
@@ -623,6 +625,18 @@
           <p>Every path:line anchor in the live sections was re-verified against current source and refreshed
           (<code>Program.cs</code>, <code>SetLeaderboardParticipationHandler.cs</code>, <code>SessionQuestionSubmittedPointsHandler.cs</code>,
           <code>CheckInScan.razor(.cs)</code> and <code>user_engagement_export.proto</code>).</p>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. No decision, rationale, behavior or count changed: the Engagement
+          service still self-consumes <code>AttendeeCheckedIn</code> through the broker, registers the same four consumers
+          inside <code>AddBrokerMessaging</code>, and drives the leaderboard display-name erasure from <code>UserDeleted</code>. Only the
+          Engagement service <code>Program.cs</code> anchors moved, each by one line.</p>
+          <ol>
+          <li>Anchors re-verified against current source: in
+          <code>Source/Services/MMCA.ADC.Engagement.Service/Program.cs</code>, the self-consumption reasoning is
+          <code>:276-285</code>, <code>AddBrokerMessaging</code> is <code>:291</code>, the four <code>RegisterIntegrationEventConsumer&lt;T&gt;</code> calls are
+          <code>:293-296</code> (<code>UserDeleted</code> at <code>:296</code>), the <code>UserDeleted</code> mapping comment is <code>:268-270</code>, and the
+          erasure rationale is <code>:272-274</code>.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="071-barcode-scanning-and-qr-display.html">ADR-071</a> (the framework halves this consumes: the QR component on
           <code>/my-badge</code> and the scanner capability behind <code>/check-in</code>),
@@ -653,6 +667,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

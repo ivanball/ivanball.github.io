@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -241,7 +242,8 @@
           <h2 id="status">Status</h2>
           <p>Accepted (2026-09-11). Supersedes <a href="052-background-job-execution.html">ADR-052</a>.
           Revised 2026-10-01: the scoring trigger&#39;s feature gate and failure path, and ADR-025&#39;s place among the framework hosted services.
-          Revised 2026-10-06: the scoring trigger&#39;s event-existence 404 and the handler&#39;s current retry remarks.</p>
+          Revised 2026-10-06: the scoring trigger&#39;s event-existence 404 and the handler&#39;s current retry remarks.
+          Revised 2026-10-07: the live drain&#39;s bounded shutdown flush (complete the queue, then publish what remains within a 5-second budget) and its <code>WaitToReadAsync</code> loop.</p>
           <h2 id="context">Context</h2>
           <p>ADR-052 ran two different kinds of work through one mechanism: ephemeral broadcasts that must not
           put a gRPC round trip on the hot path of a vote, and an AI scoring pass that takes minutes and issues
@@ -284,29 +286,51 @@
           applied by <code>Channel.CreateBounded</code> at <code>:33</code>).</li>
           <li><strong>The full mode is <code>DropOldest</code>, and the drop is invisible to the caller.</strong> Under backpressure the
           freshest broadcast is worth more than the oldest and the request path must never block
-          (<code>BoundedChannelFullMode.DropOldest</code> at <code>LiveChannelPublishQueue.cs:36</code>). <code>TryWrite</code> then <strong>always</strong>
-          returns true, because the mode evicts to make room, so <code>Enqueue</code> does not check it (<code>:55</code>, <code>:58</code>)
-          and no caller can learn from a return value that anything was discarded. The channel&#39;s
-          <code>itemDropped</code> callback (<code>:40</code>) is therefore the only real signal, and it is wired to both an
-          <code>Interlocked</code> counter and a <code>Warning</code> log naming the channel, the event and the running total
-          (<code>:61-64</code>, message at <code>:67-70</code>), with the total exposed as <code>DroppedCount</code> (<code>:47</code>).
+          (<code>BoundedChannelFullMode.DropOldest</code> at <code>LiveChannelPublishQueue.cs:36</code>). Until the queue is
+          completed at host shutdown (<code>Complete()</code> at <code>:66</code>), <code>TryWrite</code> <strong>always</strong> returns true, because the
+          mode evicts to make room; after completion a write is refused silently. <code>Enqueue</code> does not check it
+          either way (<code>:56</code>, <code>TryWrite</code> at <code>:59</code>), so no caller can learn from a return value that anything
+          was discarded. The channel&#39;s <code>itemDropped</code> callback (<code>:40</code>) is therefore the only real signal, and
+          it is wired to both an <code>Interlocked</code> counter and a <code>Warning</code> log naming the channel, the event and
+          the running total (<code>OnItemDropped</code> at <code>:68-72</code>, increment at <code>:70</code>, log call at <code>:71</code>, message at
+          <code>:76</code>), with the total exposed as <code>DroppedCount</code> (<code>:47</code>).
           The full mode is a per-job choice, not a rule: a job whose requests coalesce may use a capacity-one
           channel with <code>DropWrite</code> instead, as ADC&#39;s bookmark cache-eviction signal does
           (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/UserSessionBookmarks/Services/BookmarkCacheEvictionSignal.cs:27-30</code>),
           where any number of requests made while one is pending collapse into it and the drop is the intent.</li>
           <li><strong>A <code>BackgroundService</code> drain per queue</strong>, <code>SingleReader</code> (<code>LiveChannelPublishQueue.cs:37</code>),
-          consuming with <code>ReadAllAsync(stoppingToken)</code>
-          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/Live/LiveChannelPublishProcessor.cs:41</code>,
-          the <code>BackgroundService</code> base at <code>:33</code>, registered by
+          consuming with a <code>WaitToReadAsync(stoppingToken)</code> loop. The live drain also tests the stopping
+          token before each <code>TryRead</code>
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/Live/LiveChannelPublishProcessor.cs:85-86</code>,
+          test and <code>TryRead</code> at <code>:90</code>; the <code>BackgroundService</code> base at <code>:43</code>, registered by
           <code>AddHostedService&lt;LiveChannelPublishProcessor&gt;()</code> at
-          <code>MMCA.ADC.Engagement.Infrastructure/DependencyInjection.cs:23</code>). Because it is a hosted service the
-          host owns the work: shutdown cancels it and waits for it to unwind. The drain is a singleton, so it
-          resolves scoped services through <code>IServiceScopeFactory</code> per item
-          (<code>LiveChannelPublishProcessor.cs:50</code>).</li>
+          <code>MMCA.ADC.Engagement.Infrastructure/DependencyInjection.cs:23</code>). The test and the read are two
+          separate steps, so a stop that lands between them still dequeues one item onto a cancelled token.
+          The bookmark eviction drain reads with no stop test, which is fine for a capacity-one signal
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/Caching/BookmarkCacheEvictionProcessor.cs:56-60</code>).
+          Because it is a hosted service the
+          host owns the work. The drain is a singleton, so it resolves scoped services through
+          <code>IServiceScopeFactory</code> per item (<code>CreateAsyncScope</code> at <code>LiveChannelPublishProcessor.cs:126</code>).</li>
+          <li><strong>Shutdown flushes rather than drops, inside one bounded budget.</strong> The live drain overrides
+          <code>StopAsync</code> (<code>LiveChannelPublishProcessor.cs:52-78</code>): it completes the queue first (<code>:56</code>), so the
+          remaining items are a finite set, then gives the whole stop one <code>ShutdownDrainBudget</code> of 5 seconds
+          (<code>:49</code>, applied at <code>:58</code>). Within that budget it cancels the stopping token and waits for
+          <code>ExecuteAsync</code> to return (<code>base.StopAsync</code> at <code>:63</code>). That cancellation aborts the publish in
+          progress rather than letting it finish: the drain publishes on the stopping token (<code>:92</code>),
+          <code>BestEffort</code> passes it through and rethrows the cancellation
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/BestEffort.cs:57-63</code>), and the gRPC
+          adapter forwards it to the call and turns <code>Cancelled</code> into an <code>OperationCanceledException</code>
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Contracts/LiveChannelPublisherGrpcAdapter.cs:49-53</code>).
+          That item was already dequeued, so it is lost. Then, only if
+          the worker has let go of the single reader, publishes the remaining items in FIFO order on its own
+          token (<code>DrainRemainingAsync</code> at <code>:70</code>, defined at <code>:105</code>), because the stopping token is already
+          cancelled. Anything still queued when the budget runs out is counted and logged as a <code>Warning</code>
+          (<code>:73-77</code>, message at <code>:136-139</code>) and abandoned. The flush is best effort: it narrows the loss at a
+          deploy or scale-in, it does not make the queue durable.</li>
           <li><strong>One failure posture per drain, stated once.</strong> Each item runs inside <code>BestEffort.ExecuteAsync</code>
-          (<code>LiveChannelPublishProcessor.cs:45</code>) so one failed publish cannot kill the loop, and shutdown
+          (<code>LiveChannelPublishProcessor.cs:121</code>) so one failed publish cannot kill the loop, and shutdown
           cancellation is handled on its own arm that returns quietly instead of recording an error
-          (<code>:60-65</code>).</li>
+          (<code>:96-101</code>, with a second arm for an exhausted budget in <code>DrainRemainingAsync</code> at <code>:114-117</code>).</li>
           <li><strong>Post-commit work is enqueued after the write is durable, never beside it.</strong> The failure this
           rules out is enqueuing while the write can still be undone, which leaves the queued work describing
           state that never persisted. Two shapes satisfy it and both are in use:<ul>
@@ -364,7 +388,9 @@
           <ul>
           <li><strong>The host lifetime is the point.</strong> A <code>BackgroundService</code> is the only in-process shape the host can
           cancel and await. Everything else in the decision follows from wanting that, and a deploy or an
-          Azure Container Apps scale-in then unwinds the drain instead of tearing it down mid-item.</li>
+          Azure Container Apps scale-in then cancels the drain through its stopping token (which aborts the
+          one publish in progress) and gets a bounded chance to publish what is still queued, since those
+          are broadcasts attendees have not yet seen.</li>
           <li><strong>The queue is where the policy lives.</strong> Capacity, full mode and the drop accounting are properties
           of the work, and putting them in the queue type means a caller cannot get them wrong: it calls
           <code>Enqueue</code> and the queue decides what happens under pressure.</li>
@@ -379,11 +405,16 @@
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
-          <li><strong>In-process only.</strong> The queue does not survive a restart and does not span replicas. Accepted
-          because every job left here is ephemeral by definition. Work that must survive a crash belongs in
-          the outbox (ADR-003) or the internal-command queue (ADR-114), not here.</li>
+          <li><strong>In-process only.</strong> The queue does not survive a restart and does not span replicas. The
+          shutdown flush covers what is still queued at a graceful stop within its 5-second budget only; a
+          crash, a stop that outlasts the budget, or a write after the queue is completed still loses
+          items, and even a stop well inside the budget loses the item being published when it lands,
+          because the stopping token cancels that publish and nothing retries it
+          (<code>LiveChannelPublishProcessor.cs:63</code>, <code>:92</code>, <code>:96-101</code>). Accepted because
+          every job left here is ephemeral by definition. Work that must survive a crash belongs in the
+          outbox (ADR-003) or the internal-command queue (ADR-114), not here.</li>
           <li><strong>Drops are silent at the call site.</strong> The producer has no way to know, and the counter
-          (<code>LiveChannelPublishQueue.cs:47</code>) and the <code>Warning</code> line (<code>:67-70</code>) only help someone who goes
+          (<code>LiveChannelPublishQueue.cs:47</code>) and the <code>Warning</code> line (<code>:76</code>) only help someone who goes
           looking at logs. A sustained backlog shows up as UI staleness before it shows up as an alert.</li>
           <li><strong>A drain is a serialization point.</strong> One reader means a slow item delays the queue behind it. That
           is harmless for broadcasts at the observed conference-day load; a job kind that needs parallelism
@@ -428,6 +459,40 @@
           <p>Anchors in the live sections were re-verified against current source and refreshed (the trigger&#39;s
           <code>ScheduleAsync</code>, <code>HandleFailure</code>, <code>Accepted()</code> and <code>[FeatureGate]</code> lines, the scoring handler&#39;s
           claim, TTL, wait and loser lines, and the <code>MutateEntityHandlerBase</code> save, log and hook lines).</p>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. The decision (bounded <code>DropOldest</code> channel, single-reader
+          hosted drain, post-commit enqueue, must-run work on ADR-114) is unchanged; what moved is the live
+          drain&#39;s loop and shutdown behavior, which the Decision, Rationale and Trade-offs now record.</p>
+          <ol>
+          <li>The drain no longer consumes with <code>ReadAllAsync</code>: it loops on <code>WaitToReadAsync(stoppingToken)</code>
+          and tests the stop before each <code>TryRead</code>, which narrows (but, as two separate steps, does not
+          close) the window in which an item is dequeued after the stop
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/Live/LiveChannelPublishProcessor.cs:85-90</code>).
+          The bookmark eviction drain has no such test
+          (<code>.../Caching/BookmarkCacheEvictionProcessor.cs:56-60</code>).</li>
+          <li>Shutdown flushes rather than only cancelling: <code>StopAsync</code> (<code>LiveChannelPublishProcessor.cs:52-78</code>)
+          completes the queue (<code>:56</code>, <code>LiveChannelPublishQueue.Complete()</code> at
+          <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/Live/LiveChannelPublishQueue.cs:66</code>),
+          shares one 5-second <code>ShutdownDrainBudget</code> (<code>:49</code>, <code>:58</code>) across <code>base.StopAsync</code> (<code>:63</code>) and
+          <code>DrainRemainingAsync</code> (<code>:70</code>, defined at <code>:105</code>), and logs whatever it abandons (<code>:73-77</code>,
+          message at <code>:136-139</code>). <code>base.StopAsync</code> cancels the publish in progress rather than letting it
+          finish (<code>:92</code>; <code>BestEffort.cs:57-63</code>; <code>LiveChannelPublisherGrpcAdapter.cs:49-53</code>), so that item
+          is lost. The Rationale and the &quot;In-process only&quot; trade-off state the flush and its limits.</li>
+          <li><code>TryWrite</code> always succeeds only until the queue is completed; a write after completion is refused
+          silently (remarks at <code>LiveChannelPublishQueue.cs:50-55</code>). <code>Enqueue</code> still does not check it.</li>
+          <li>Anchors re-verified against current source: <code>Enqueue</code> (<code>LiveChannelPublishQueue.cs:56</code>),
+          <code>TryWrite</code> (<code>:59</code>), <code>OnItemDropped</code> (<code>:68-72</code>, increment <code>:70</code>, log call <code>:71</code>), the drop
+          message (<code>:76</code>, also in Trade-offs); the <code>BackgroundService</code> base
+          (<code>LiveChannelPublishProcessor.cs:43</code>), <code>CreateAsyncScope</code> (<code>:126</code>), <code>BestEffort.ExecuteAsync</code>
+          (<code>:121</code>) and the cancellation arm (<code>:96-101</code>). Unchanged and confirmed: <code>Capacity</code> (<code>:18</code>),
+          <code>CreateBounded</code> (<code>:33</code>), <code>DropOldest</code> (<code>:36</code>), <code>SingleReader</code> (<code>:37</code>), <code>itemDropped</code> (<code>:40</code>),
+          <code>DroppedCount</code> (<code>:47</code>), both hosted-service registrations
+          (<code>MMCA.ADC.Engagement.Infrastructure/DependencyInjection.cs:23-24</code>), the queue singletons
+          (<code>MMCA.ADC.Engagement.Application/DependencyInjection.cs:53-54</code>), the bookmark signal&#39;s
+          <code>DropWrite</code> channel (<code>BookmarkCacheEvictionSignal.cs:27-30</code>), the domain event handler and
+          command handler enqueue lines, and the <code>MutateEntityHandlerBase</code> (<code>:339</code>, <code>:322</code>, <code>:325</code>) and
+          <code>TransactionalCommandDecorator</code> (<code>:30</code>) lines.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="114-internal-commands-durable-job-queue.html">ADR-114</a> (the durable, leased, retrying queue that owns
           expensive and must-run work),
@@ -456,6 +521,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

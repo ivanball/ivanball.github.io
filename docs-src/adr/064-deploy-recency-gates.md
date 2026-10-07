@@ -34,6 +34,8 @@ Revised 2026-10-01 (the four gate bodies now run as one shared composite action 
 so the per-repo copies and their message differences are gone; see Revision below).
 Revised 2026-10-06: the job-reading gates now page an unfiltered run listing and filter completed runs client-side (MMCA.Common v1.220.0), and every citation is re-anchored.
 Revised 2026-10-07: the four gates now run as the four steps of one `freshness` job that skips a docs-only push, `backend-test-gate` is retired in both repos, and the success-only lookup filters client-side (see Revision below).
+Revised 2026-10-07: the Rationale's API-cost sentence now states the bounded read count and the
+per-repo job timeout, and the Decision notes that both CONTRIBUTING files still name the gates as jobs.
 
 ## Context
 A production rollout in both deployed apps waits on a list of jobs in `deploy.needs`
@@ -57,7 +59,7 @@ leaving the deploy-path `e2e-gate` chromium-only
 Monday for the drill (`MMCA.ADC/.github/workflows/dr-drill.yml:32`,
 `MMCA.Store/.github/workflows/dr-drill.yml:33`), monthly for the load test
 (`load-test.yml:23`, Store `:21`), weeknights for the broker tier
-(`MMCA.ADC/.github/workflows/cross-service-tests.yml:31`,
+(`MMCA.ADC/.github/workflows/cross-service-tests.yml:32`,
 `MMCA.Store/.github/workflows/cross-service-tests.yml:35`), and alternating weekly crons for the two
 non-chromium engines, Monday firefox and Thursday webkit
 (`MMCA.ADC/.github/workflows/e2e.yml:49-50`, `MMCA.Store/.github/workflows/e2e.yml:46-47`).
@@ -202,7 +204,10 @@ real run on each non-chromium browser engine happened recently enough to still m
   later one. Neither enumeration is exhaustive: ADC's at `CONTRIBUTING.md:42-44` stops at
   `cross-service-freshness` and Store's at `:42-43` names only `dr-freshness` and `load-freshness`, so
   the generic "the freshness gates" sentence (`MMCA.ADC/CONTRIBUTING.md:111`,
-  `MMCA.Store/CONTRIBUTING.md:118`) is what covers `cross-browser-freshness` in both.
+  `MMCA.Store/CONTRIBUTING.md:118`) is what covers `cross-browser-freshness` in both. Both files still
+  treat the gates as jobs: the earlier passages name them by their step ids, and the later sentence
+  lists "the freshness gates" among the push-only jobs; the one job that actually runs is `freshness` (`MMCA.ADC/.github/workflows/deploy.yml:817`,
+  `MMCA.Store/.github/workflows/deploy.yml:774`).
 
 **Adoption is the two deployed apps, and all four gates are the same shape in both.** The
 `deploy.needs` lists are not identical, because ADC carries `ai-eval-gate` and Store does not:
@@ -246,9 +251,13 @@ packages on a tag rather than deploying a service, and none of those files runs 
   age comparison is what converts an artifact into something that can say no.
 - **The expensive verification stays off the deploy path.** Running the restore, the k6 scenario or a
   Testcontainers broker tier per deploy would add minutes and real Azure or Docker cost to every
-  rollout, and the broker tier could not run there at all. One or two Actions API reads inside a
-  five-minute job buys the same guarantee at effectively zero marginal cost, which is exactly why the
-  gate is affordable enough to keep enabled.
+  rollout, and the broker tier could not run there at all. A bounded set of Actions API reads (at most
+  five listing pages per gate in the success and same-run modes, and per required job in the per-job
+  mode the cross-browser gate uses, plus one jobs read per scanned run per required job,
+  `MMCA.Common/.github/actions/freshness-gate/action.yml:164,190,193,236-239`) inside a job with a 5-minute
+  timeout in ADC and 10 in Store (`MMCA.ADC/.github/workflows/deploy.yml:821`,
+  `MMCA.Store/.github/workflows/deploy.yml:777`) buys the same guarantee at effectively zero marginal
+  cost, which is exactly why the gate is affordable enough to keep enabled.
 - **Fail on absence, because a vacuous gate is worse than none.** A gate that passes when it finds
   nothing reads as evidence while proving nothing, so an empty query result exits 1 rather than 0.
 - **Job-level truth for the broker and cross-browser gates.** The run conclusion is wrong in both
@@ -388,6 +397,26 @@ deploy gates with no consumer-side change. Whether that is deliberate is not det
   are deleted.
 - Decision, Adoption, Rationale and Trade-offs are re-anchored onto the current `deploy.yml` and action
   lines.
+
+Re-verified against current source after the v1.233.0 release. The gates, windows, `deploy.needs`
+counts (8 in ADC, 7 in Store, `MMCA.ADC/.github/workflows/deploy.yml:1145`,
+`MMCA.Store/.github/workflows/deploy.yml:1083`) and the break-glass contract are unchanged; the
+counts and anchors quoted in the earlier dated Status sentences and Revision sections are
+historical and are left as written.
+
+1. Rationale no longer says "one or two Actions API reads inside a five-minute job": a gate reads at
+   most five listing pages, once per required job in the per-job mode the cross-browser gate uses
+   (`MMCA.ADC/.github/workflows/deploy.yml:927`, `MMCA.Store/.github/workflows/deploy.yml:877`), and
+   adds one jobs read per scanned run per required job
+   (`MMCA.Common/.github/actions/freshness-gate/action.yml:164,190,193,236-239`), and the `freshness` job timeout
+   is 5 minutes in ADC and 10 in Store (`MMCA.ADC/.github/workflows/deploy.yml:821`,
+   `MMCA.Store/.github/workflows/deploy.yml:777`).
+2. Decision now notes that both `CONTRIBUTING.md` files still list the gates by step id as though
+   each were a job (`MMCA.ADC/CONTRIBUTING.md:42-44`, `MMCA.Store/CONTRIBUTING.md:42-43`) and list
+   "the freshness gates" among the push-only jobs (`MMCA.ADC/CONTRIBUTING.md:111`,
+   `MMCA.Store/CONTRIBUTING.md:118`), while the job that runs is `freshness`.
+3. Anchors re-verified against current source: the weeknight broker cron is
+   `MMCA.ADC/.github/workflows/cross-service-tests.yml:32` (Store `:35` unchanged).
 
 ## Related
 ADR-009 (states the recovery objectives and requires that a restore be drilled and recorded; this

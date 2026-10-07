@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -257,6 +258,7 @@
           example consumer and the drill-table mitigation now match MMCA.Store and the <code>dr-freshness</code> gates,
           and the Stripe retry predicate also treats a client timeout as transient. See the Revision
           (2026-10-06) at the end.</p>
+          <p>Revised 2026-10-07: anchors refreshed after the v1.233.0 release.</p>
           <h2 id="context">Context</h2>
           <p>The framework already supplies the <em>mechanisms</em> for surviving partial failure: a standard Polly
           resilience handler (timeout / retry / circuit breaker), the outbox for at-least-once delivery
@@ -350,7 +352,7 @@
           drills (its last rows are 2026-08-10 in <code>MMCA.ADC/infra/DISASTER-RECOVERY.md:201</code> and 2026-07-28 in
           <code>MMCA.Store/infra/DISASTER-RECOVERY.md:212</code>), so it is not the operative mitigation: drill recency
           is enforced from <code>dr-drill.yml</code> run history by each consumer&#39;s <code>dr-freshness</code> deploy gate
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:896-911</code>, <code>MMCA.Store/.github/workflows/deploy.yml:864</code>).</li>
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:830-839</code>, <code>MMCA.Store/.github/workflows/deploy.yml:788-796</code>).</li>
           <li>A gRPC client that needs bespoke timeouts must override the standard handler explicitly rather than
           opt out of resilience entirely: intentional friction.</li>
           </ul>
@@ -519,6 +521,30 @@
           <code>:332</code>, config key <code>:25</code>).</li>
           <li>Anchors in the live sections were re-verified against current source.</li>
           </ul>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. No decision, default or rationale changes: the outbox broker
+          breaker, the Stripe single-retry-owner pipeline, the Polly meter wiring and both consumers&#39;
+          <code>dr-freshness</code> gates all behave as recorded. Only line positions moved, after the v1.233.0 release,
+          including several the 2026-10-06 revision listed as current.</p>
+          <ol>
+          <li>Anchors re-verified against current source: the Trade-offs <code>dr-freshness</code> gates now at
+          <code>MMCA.ADC/.github/workflows/deploy.yml:830-839</code> and <code>MMCA.Store/.github/workflows/deploy.yml:788-796</code>
+          (both over <code>dr-drill.yml</code> with an 8-day window, <code>:838-839</code> and <code>:795-796</code>); the outbox broker
+          pipeline field at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:105</code>,
+          built by <code>BuildBrokerPublishPipeline</code> at <code>:868-879</code>, wrapping the broker publish at <code>:685-689</code> with
+          the in-process dispatch branch outside it at <code>:691-695</code>, and <code>BrokenCircuitException</code> recognized in
+          the ordinary failure path at <code>:554</code>; the broker breaker&#39;s fault-injection test at
+          <code>MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Outbox/Processing/OutboxProcessorTests.cs:665</code>;
+          the Stripe pipeline at
+          <code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Stripe/StripePaymentService.cs:76-113</code>
+          (retry <code>:77</code>, breaker <code>:94</code>, shared <code>IsTransientFailure</code> at <code>:557</code>), with <code>RetryMaxAttempts</code> and
+          <code>RetryDelayMs</code> at <code>.../Payments/Stripe/StripeSettings.cs:64</code> and <code>:68</code> and <code>RequestTimeoutSeconds</code>
+          at <code>:44</code>; and the Polly meter wiring in
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.Telemetry.cs</code> (meter name <code>:31</code>,
+          <code>resilience.polly.strategy.events</code> <code>:52</code>, <code>AddMeter</code> <code>:322</code>, the duration-histogram opt-in <code>:332</code>,
+          config key <code>:25</code>). Citations inside the earlier Revision sections are left as recorded.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -539,6 +565,7 @@
             <li><a href="#revision-2026-09-19">Revision (2026-09-19)</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             </ul>
           </nav>
         </aside>

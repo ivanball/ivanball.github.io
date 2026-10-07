@@ -2,13 +2,15 @@
 
 ## Status
 Accepted (2026-07-20; measurements re-anchored 2026-08-07, 2026-08-14, 2026-08-18, 2026-08-23,
-2026-08-31, 2026-09-01, 2026-09-03, 2026-09-11, 2026-09-19, 2026-10-01 and 2026-10-06).
+2026-08-31, 2026-09-01, 2026-09-03, 2026-09-11, 2026-09-19, 2026-10-01, 2026-10-06 and 2026-10-07).
 Revised 2026-09-19: the framework site counts and the consumer-scale upper bound are re-measured, and
 the occurrence-versus-line delta still turns on the same two ADC handler lines. The policy, the gate
 and the exemption are unchanged.
 Revised 2026-10-06: the UI exemption is restated as leaving the rule unenforced in mixed UI-package
 code (those packages now call `ConfigureAwait(false)` 154 times), and the drift script is no longer
 credited with guarding the repo-delta section.
+Revised 2026-10-07: the consumer-scale figure is re-measured after ADC growth (ADC 1,544 occurrences,
+2,359 combined) and the `.editorconfig` gate and exemption anchors are refreshed.
 
 ## Context
 MMCA.Common ships as NuGet packages consumed by host applications, not as an application itself.
@@ -57,8 +59,8 @@ application code do not.
 - **Standard .NET library guidance, applied at the boundary where it holds.** The rule is scoped to
   exactly the code that ships in packages; it is not blanket-applied to the apps, where it would be
   360+ sites of pure noise (measured across Store/ADC before this decision, and the current scale is
-  far past that: a raw `\bawait\b` scan of `*.cs` on 2026-10-06 counts 815 occurrences in
-  `MMCA.Store/Source` and 1,540 in `MMCA.ADC/Source`, 2,355 combined, which is the upper bound on the
+  far past that: a raw `\bawait\b` scan of `*.cs` on 2026-10-07 counts 815 occurrences in
+  `MMCA.Store/Source` and 1,544 in `MMCA.ADC/Source`, 2,359 combined, which is the upper bound on the
   CA2007 sites the rule would open there).
 - **Mechanical, with the enforcement and the remediation at different levels.** The build gate is the
   enforced half: a new context-capturing await in packaged non-UI code fails the build, so it costs no
@@ -73,12 +75,12 @@ application code do not.
   The gate makes it uniform, so the noise is consistent rather than sporadic.
 - **A per-repo delta in an otherwise shared analyzer baseline.** The workspace keeps one
   byte-identical `.editorconfig` baseline across the four repos; this policy lives in the marked
-  repo-delta section of MMCA.Common's file (`MMCA.Common/.editorconfig:821-836`), so the divergence
+  repo-delta section of MMCA.Common's file (`MMCA.Common/.editorconfig:821-838`), so the divergence
   is documented. It is not mechanically guarded: the workspace drift script
   (`Tools\Scripts\compare-analyzer-config.ps1`) compares only the lines before the
   `# REPO-SPECIFIC DELTAS` marker (`Tools/Scripts/compare-analyzer-config.ps1:26-28`), so it guards
   the shared baseline (including `CA2007` at `none`, `MMCA.Common/.editorconfig:348`) and would not
-  notice the gate at `:832-833` or the exemption at `:835-836` being changed or deleted.
+  notice the gate at `:834-835` or the exemption at `:837-838` being changed or deleted.
 - **UI exclusion relies on project naming.** The `MMCA.Common.UI*` path glob is what exempts the
   component packages; a renamed or relocated UI project would silently fall under the gate (the
   build would fail loudly on the first missing `ConfigureAwait`, so the failure is visible, just
@@ -545,3 +547,33 @@ and the UI exemption (`:835-836`) are unchanged; two statements about them were 
    the three `NoWarn` lists now sit at `:30`, `:35` and `:41`, none naming CA2007. The SA1210/SA1211
    remediation examples sit at `Website/docs-src/guides/common-GETTING-STARTED.md:190` and
    `MMCA.Helpdesk/build/templates/stage.ps1:1236`; nothing invokes `--diagnostics CA2007`.
+
+## Revision (2026-10-07)
+Re-verified against current source. The policy, the gate and the UI exemption are unchanged, and the
+framework site counts in the Trade-offs entry were not re-measured this pass. What moved is the
+consumer-scale figure, which grew with new ADC code, and the `.editorconfig` anchors.
+
+1. **The consumer-scale figure is re-measured.** ADC grew by four `await` lines since the 2026-10-06
+   pass (1,538 matching lines then, 1,542 now, still across 301 files), so its occurrence count moves
+   from 1,540 to 1,544. A per-file line count understates occurrences only where a line holds two
+   tokens: `SubmitQuestionHandler.cs` reports 9 lines but holds 10 `await` tokens. Measured
+   2026-10-07, a raw `\bawait\b` scan of
+   `*.cs` gives 1,542 matching lines across 301 files in `MMCA.ADC/Source` and 815 across 154 files
+   in `MMCA.Store/Source`. The only double-await lines are still the two
+   `await using var claim = await distributedLock` lines,
+   `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsInternalCommandHandler.cs:83`
+   and
+   `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs:147`,
+   so ADC holds 1,544 occurrences and the combined figure is 2,359 occurrences (2,357 matching
+   lines). Store has no double-await line, so its 815 is the same both ways. The Rationale now
+   carries the occurrence figures. Raw `await` still overcounts CA2007 sites, so this remains an
+   upper bound.
+2. **Anchors re-verified against current source:** the `MMCA.Common/.editorconfig` rationale comment
+   block grew to `:827-833`, moving the `[Source/**.cs]` gate to `:834-835` and the
+   `[Source/Presentation/MMCA.Common.UI*/**.cs]` exemption to `:837-838` (previously `:832-833` and
+   `:835-836`), so the repo-delta section now spans `:821-838`; the shared-baseline `CA2007` `none`
+   stays at `:348` and the marker naming `Tools\Scripts\compare-analyzer-config.ps1` at `:821-824`.
+   `Tools/Scripts/compare-analyzer-config.ps1:26-28` still slices only the lines before the marker.
+   `TreatWarningsAsErrors` at `MMCA.Common/Directory.Build.props:7`,
+   `CodeAnalysisTreatWarningsAsErrors` at `:13`, and the three `NoWarn` lists at `:30`, `:35` and
+   `:41` (none naming CA2007) hold.

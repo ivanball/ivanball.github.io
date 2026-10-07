@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -247,11 +248,12 @@
           CI <code>build-and-test</code> and release <code>publish</code>, not every job in either workflow).
           Revised 2026-09-22 (build-provenance attestations on every released nupkg; the audit and SBOM gates are shared composite actions consumed by ADC and Store; see the Revision below).
           Revised 2026-10-01 (current-state sections re-anchored to the composite actions; see the Revision below).
-          Revised 2026-10-06: the SQLitePCLRaw pin is recorded at its current version (3.0.5) and both projects that reference it, and <code>wasm-payload-budget</code> joins the first-party actions consumers reference by branch.</p>
+          Revised 2026-10-06: the SQLitePCLRaw pin is recorded at its current version (3.0.5) and both projects that reference it, and <code>wasm-payload-budget</code> joins the first-party actions consumers reference by branch.
+          Revised 2026-10-07: anchors refreshed after the v1.233.0 release, and the 2026-09-07 record of two <code>dotnet-coverage</code> installs is updated: the second install has since been removed, leaving the single pinned install in CI <code>build-and-test</code>.</p>
           <h2 id="context">Context</h2>
           <p>MMCA.Common is a published framework: on every <code>v*</code> tag (release.yml:3-5) it packs its NuGet packages
-          and pushes them to both GitHub Packages (release.yml:117-118) and nuget.org through OIDC trusted
-          publishing (release.yml:129-138), where the two production apps and the reference seed consume
+          and pushes them to both GitHub Packages (release.yml:119-120) and nuget.org through OIDC trusted
+          publishing (release.yml:122-140), where the two production apps and the reference seed consume
           them. A published framework is a supply-chain amplifier: a vulnerable, substituted, or unreproducible
           dependency does not stay in one repo, it ships downstream to every consumer. Rubric §32 (Dependency &amp;
           Supply-Chain Management) is weighted higher for exactly this reason: its default weight rises to 3 for
@@ -271,13 +273,13 @@
           posture ADR-015 applies to architecture rules. Four controls, each a hard gate:</p>
           <ol>
           <li><p><strong>A CycloneDX SBOM is a hard release gate.</strong> The release workflow calls the shared
-          <code>cyclonedx-sbom</code> composite action with output directory <code>./sbom</code> (release.yml:104-108), which
+          <code>cyclonedx-sbom</code> composite action with output directory <code>./sbom</code> (release.yml:106-110), which
           installs the CycloneDX tool (.github/actions/cyclonedx-sbom/action.yml:51-52) and generates a JSON
           software bill of materials for the whole solution (action.yml:66). It then fails the release
           (<code>exit 1</code>) when the BOM file is missing or empty (<code>test -s &quot;$bom&quot;</code>, action.yml:68) or lists zero
           components (action.yml:69-71), and the upload step sets <code>if-no-files-found: error</code>
-          (release.yml:110-115, and release.yml:226-231 in <code>publish-maui</code>). The step runs as a blocking gate
-          (release.yml:100-103), so every published version ships a verifiable SBOM or no packages are pushed.</p>
+          (release.yml:112-117, and release.yml:228-233 in <code>publish-maui</code>). The step runs as a blocking gate
+          (release.yml:102-105), so every published version ships a verifiable SBOM or no packages are pushed.</p>
           </li>
           <li><p><strong>NuGet lock files are committed for reproducible restores.</strong> <code>RestorePackagesWithLockFile</code> is set
           repo-wide (Directory.Build.props:8), so each project records its full resolved transitive graph in a
@@ -286,9 +288,9 @@
           the versions CI vets and the release packs are the ones on record.</p>
           </li>
           <li><p><strong>CI fails on any non-suppressed vulnerable package.</strong> The audit step calls the shared
-          <code>nuget-vulnerability-audit</code> composite action (ci.yml:138-146; skipped with the rest of the code jobs
+          <code>nuget-vulnerability-audit</code> composite action (ci.yml:138-148; skipped with the rest of the code jobs
           on a docs-only change, ci.yml:139), and the release <code>publish</code> job runs the same action before Test
-          and Pack (release.yml:75-82), so an advisory published between the PR run and the tag also stops the
+          and Pack (release.yml:75-84), so an advisory published between the PR run and the tag also stops the
           push. The action runs <code>dotnet list &lt;solution&gt; package --vulnerable --include-transitive</code>
           (.github/actions/nuget-vulnerability-audit/action.yml:54) and fails the build (<code>exit 1</code>) on any
           vulnerable-package row (action.yml:85-91). Accepted advisories are the sole
@@ -324,7 +326,7 @@
           <ul>
           <li><strong>Provenance is a gate, not a document.</strong> A hard-failing SBOM step means the bill of materials
           cannot silently go missing on a release: the artifact is produced or the release stops
-          (.github/actions/cyclonedx-sbom/action.yml:68-71, release.yml:115). That is the §32 provenance criterion enforced, not merely asserted
+          (.github/actions/cyclonedx-sbom/action.yml:68-71, release.yml:117). That is the section 32 provenance criterion enforced, not merely asserted
           (ArchitectureEvaluationCriteria.md:852).</li>
           <li><strong>One accept-list, re-applied where the tool ignores it.</strong> The audit keeps <code>Directory.Build.props</code>
           as the only place an advisory is accepted, and re-reads that file in CI precisely because
@@ -461,13 +463,43 @@
           <li>Anchors in the live sections were re-verified against current source; SECURITY.md&#39;s supply-chain
           section moved to <code>SECURITY.md:44-53</code>.</li>
           </ul>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. No decision, gate or rationale changed: the SBOM gate, the two
+          locked-mode restores, the fail-closed audit in both CI and the release <code>publish</code> job, and nuget.org
+          source mapping all hold, and both consumers still reference the four first-party actions
+          (<code>nuget-vulnerability-audit</code>, <code>cyclonedx-sbom</code>, <code>freshness-gate</code>, <code>wasm-payload-budget</code>) <code>@main</code>.
+          One fact recorded in an earlier Revision moved, and the workflow anchors shifted.</p>
+          <ol>
+          <li><strong><code>dotnet-coverage</code> is installed once, not twice.</strong> CI installs it pinned at <code>--version 18.11.0</code>
+          in <code>build-and-test</code> only (<code>MMCA.Common/.github/workflows/ci.yml:152</code>); no other job in <code>ci.yml</code>
+          installs it, so the second location recorded in the 2026-09-07 and 2026-10-06 Revisions no longer
+          exists.</li>
+          <li>Anchors re-verified against current source:<ul>
+          <li><code>release.yml</code>: tag trigger <code>:5</code>; release audit step <code>:79-84</code> (comment from <code>:75</code>), before Test
+          <code>:86</code> and Pack <code>:91</code>; attest <code>:98</code>, <code>:215</code>; SBOM gate comment <code>:102-105</code>, Generate SBOM
+          <code>:106-110</code> (<code>uses</code> <code>:107</code>) and <code>:219-226</code> (<code>uses</code> <code>:223</code>) in <code>publish-maui</code>; Upload SBOM
+          <code>:112-117</code> (<code>if-no-files-found: error</code> at <code>:117</code>) and <code>:228-233</code>; GitHub Packages push
+          <code>:119-120</code>; nuget.org block <code>:122-140</code> (<code>NuGet/login</code> <code>:133</code>, <code>:247</code>; push <code>:140</code>); checkout
+          <code>:26</code>, <code>:161</code>; <code>environment: release</code> <code>:19</code>, <code>:154</code>; locked restore <code>:66</code>; cache-key comments
+          naming <code>--locked-mode</code> <code>:55</code>, <code>:191</code>.</li>
+          <li><code>ci.yml</code>: checkout <code>:51</code>, setup-dotnet <code>:99</code>, <code>actions/cache</code> <code>:270</code>; locked restore <code>:132</code>,
+          Build <code>--no-restore</code> <code>:136</code>; audit step <code>:138-148</code> (<code>uses</code> <code>:144</code>, docs-only guard <code>:139</code>);
+          cache-key comments naming <code>--locked-mode</code> <code>:106</code>, <code>:197</code>, <code>:249</code>, <code>:328</code>, <code>:492</code>, <code>:660</code>,
+          <code>:807</code>.</li>
+          <li>Consumers: <code>MMCA.Store/.github/workflows/deploy.yml</code> <code>wasm-payload-budget</code> <code>:511</code>, audit <code>:558</code>,
+          SBOM <code>:572</code>, <code>freshness-gate</code> <code>:792</code>, <code>:811</code>, <code>:832</code>, <code>:864</code>;
+          <code>MMCA.ADC/.github/workflows/deploy.yml</code> <code>wasm-payload-budget</code> <code>:481</code>, audit <code>:595</code>, SBOM <code>:610</code>,
+          <code>freshness-gate</code> <code>:835</code>, <code>:854</code>, <code>:877</code>, <code>:917</code>.</li>
+          </ul>
+          </li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-016 (lockstep versioning + the MassTransit-v8 license pin; this record extends dependency
           governance from versioning and licensing into supply-chain provenance and integrity), ADR-015
           (architecture invariants enforced as build-gating fitness functions; the same gate-the-build posture
           applied here to dependencies), ADR-010 (integration-event schema versioning; another release-discipline
           control that turns a contract into an enforced signal). See SECURITY.md (&quot;Dependency &amp; supply-chain
-          security&quot;, SECURITY.md:44-53) for the consumer-facing summary and rubric §32
+          security&quot;, SECURITY.md:44-53) for the consumer-facing summary and rubric section 32
           (ArchitectureEvaluationCriteria.md:843-861) for the evaluation criteria.</p>
           
         <div class="doc-foot btn-row">
@@ -488,6 +520,7 @@
             <li><a href="#revision-2026-09-22-attestations-and-one-implementation-of-each-gate">Revision (2026-09-22): attestations, and one implementation of each gate</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

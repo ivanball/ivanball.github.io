@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -276,7 +277,10 @@
           suppressed at its own declaration; see Revision below).
           Revised 2026-10-06: the ADR-115 rule runs in three of the four repos rather than every repo, the
           idempotency gate is exercised by MMCA.Common&#39;s own controllers, and the baseline and proto fixture
-          figures are re-counted. See Revision (2026-10-06) at the end.</p>
+          figures are re-counted. See Revision (2026-10-06) at the end.
+          Revised 2026-10-07: MMCA.Common runs a second architecture map, <code>FrameworkModuleArchitectureMap</code>, over
+          its own aggregates, the shipped baselines are re-counted against v1.233.0, and the anchors that moved
+          are refreshed.</p>
           <h2 id="context">Context</h2>
           <p>The codebase rests on invariants that are easy to state and easy to erode by accident: clean-
           architecture layer flow (Domain depends on nothing above it), module isolation (no module reaches into
@@ -299,14 +303,17 @@
           and localization in two rules: resx translation-coverage and no-hardcoded-UI-literal text, among
           others) plus
           abstract <code>*TestsBase</code> classes parameterized by an <code>IArchitectureMap</code>. Each repo
-          (Common / Store / ADC / Helpdesk) supplies a single <code>IArchitectureMap</code> implementation
+          (Common / Store / ADC / Helpdesk) supplies a primary <code>IArchitectureMap</code> implementation
           (<code>CommonArchitectureMap</code>, <code>StoreArchitectureMap</code>, <code>AdcArchitectureMap</code>, <code>HelpdeskArchitectureMap</code>)
-          declaring its layer and module assemblies, then inherits the test bases. The same rules run
-          identically everywhere via NetArchTest over the compiled assemblies.</li>
+          declaring its layer and module assemblies, then inherits the test bases. MMCA.Common adds a second
+          map, <code>FrameworkModuleArchitectureMap</code>, that registers its own Shared, Domain and Application
+          assemblies as one module named <code>Framework</code> so the module-scoped DDD rules run over the aggregates
+          the framework ships (see the Revision (2026-10-07) at the end). The same rules run identically
+          everywhere via NetArchTest over the compiled assemblies.</li>
           </ol>
           <p>These tests run inside the normal <code>dotnet test</code> / CI tier, so a violated invariant fails CI like any
           other test (the whole-solution run that carries them is additionally floored at
-          <code>--minimum-expected-tests 2000</code>, <code>.github/workflows/ci.yml:161</code>, so a discovery or filter regression
+          <code>--minimum-expected-tests 2000</code>, <code>.github/workflows/ci.yml:163</code>, so a discovery or filter regression
           that silently drops the suite fails the job instead of passing green on a handful of tests). Centralizing the rules in a package, rather than copying them per repo, means a new
           invariant is written once and inherited by every consumer.</p>
           <h2 id="rationale">Rationale</h2>
@@ -832,6 +839,48 @@
           2026-10-01 entry, the <code>ci.yml:161</code> floor, and the Status block&#39;s <code>FACTS.md:51</code> / <code>:54</code> pointers still
           resolve.</li>
           </ul>
+          <h2 id="revision-2026-10-07-commons-second-architecture-map-re-counted-baselines-moved-anchors">Revision (2026-10-07): Common&#39;s second architecture map, re-counted baselines, moved anchors</h2>
+          <p>Re-verified against current source. No rule family joined or left the library and no decision changed:
+          the two enforcement layers plus the public API gate, the <code>--minimum-expected-tests 2000</code> floor and the
+          RS rule severities are as the earlier entries describe. One structural statement in the Decision was
+          incomplete, the baselines moved with the v1.233.0 release (<code>MMCA.Common/FACTS.md:14</code>), and several
+          anchors drifted, including some the 2026-10-06 entry said still resolve.</p>
+          <ol>
+          <li><strong>MMCA.Common supplies two architecture maps, not one.</strong> Besides <code>CommonArchitectureMap</code>
+          (<code>Tests/Architecture/MMCA.Common.Architecture.Tests/CommonArchitectureMap.cs:15</code>), it ships
+          <code>FrameworkModuleArchitectureMap</code>
+          (<code>Tests/Architecture/MMCA.Common.Architecture.Tests/Domain/EntityModel/FrameworkModuleArchitectureMap.cs:16</code>),
+          which registers the framework&#39;s Shared, Domain and Application assemblies as one module named
+          <code>Framework</code> (<code>:19</code>, <code>:25-27</code>) and keeps Infrastructure a framework layer (<code>:28</code>). Its purpose, per
+          its XML doc (<code>:5-15</code>), is that the module-scoped DDD rules (sealed entities, no public setters, no
+          public aggregate constructors, immutable DTOs, commands, queries and domain events) are vacuous
+          under <code>CommonArchitectureMap</code>, where the same assemblies are framework layers, and actually run
+          over the aggregates the framework ships under this map. <code>ImmutabilityTests</code>
+          (<code>.../Domain/EntityModel/ImmutabilityTests.cs:11-13</code>) and <code>EntityConventionTests</code>
+          (<code>.../Domain/EntityModel/EntityConventionTests.cs:12-14</code>) subclass their bases over it. The Decision&#39;s
+          &quot;single <code>IArchitectureMap</code> implementation&quot; is corrected in place to a primary map per repo plus this
+          second one in MMCA.Common.</li>
+          <li><strong>The shipped baselines hold 8,260 declarations across 8,281 non-empty lines</strong> in the 21
+          <code>PublicAPI.Shipped.txt</code> files, each carrying exactly one <code>#nullable enable</code> header (the 2026-10-06
+          entry read 8,254 across 8,275 against v1.232.0). The 21-pair count stands, the <code>MMCA.Common</code>
+          metapackage&#39;s shipped file (<code>Source/MMCA.Common/PublicAPI.Shipped.txt:1</code>) is still the only
+          header-only shipped file, and all 21 <code>PublicAPI.Unshipped.txt</code> files still hold the header alone.</li>
+          <li><strong>Anchors re-verified against current source:</strong> the whole-solution test step is
+          <code>.github/workflows/ci.yml:154-163</code>, its docs-only guard <code>:155</code>, the &quot;~2,254&quot; comment <code>:160</code> and the
+          <code>--minimum-expected-tests 2000</code> floor <code>:163</code> (the Decision&#39;s citation is re-anchored in place); the
+          restore guard <code>:124</code>, the build step <code>:134-136</code> with its guard <code>:135</code>, and the unguarded FACTS gate
+          <code>:118-121</code> still resolve. The <code>ui-e2e</code> run is now a direct
+          <code>dotnet test --project Tests/Presentation/MMCA.Common.UI.E2E.Tests/...</code> with
+          <code>--minimum-expected-tests 1</code> at <code>ci.yml:292</code> (step name <code>:287</code>). In <code>MMCA.Common/.editorconfig</code>:
+          the PublicApiAnalyzers overrides header <code>:888-894</code>, the RS0026 / RS0027 rationale (19 shipped
+          members) <code>:896-900</code> with both set to <code>error</code> at <code>:901-902</code>, RS0041 <code>none</code> at <code>:906</code> (its comment
+          <code>:903-905</code>), and RS0051-RS0056 <code>none</code> at <code>:907-914</code>. The v1.153.0 changelog heading is
+          <code>CHANGELOG.md:3344</code> and its &quot;Three new build gates&quot; bullet <code>:3399-3405</code> (PublicApiAnalyzers on
+          <code>:3403</code>). The framework client&#39;s hub method constants are
+          <code>Source/Presentation/MMCA.Common.UI/Services/Notifications/NotificationHubService.cs:49-50</code>;
+          <code>[HubMethodName]</code> at <code>NotificationHub.cs:127</code> and <code>:144</code> and <code>Context.ConnectionAborted</code> at <code>:136</code>
+          and <code>:150</code> still resolve. The Status block&#39;s <code>FACTS.md:51</code> / <code>:54</code> pointers still resolve.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-009 (resilience gate), ADR-010 (event-version gate), ADR-016 (MassTransit pin gate, and the
           lockstep release cadence the public API baseline is pinned to), ADR-006/007/008 (the transport and
@@ -866,6 +915,7 @@
             <li><a href="#revision-2026-09-19-the-gate-covers-eighteen-projects-and-the-unshipped-side-nearly-doubled">Revision (2026-09-19): the gate covers eighteen projects, and the unshipped side nearly doubled</a></li>
             <li><a href="#revision-2026-10-01-rs0026--rs0027-become-errors-the-baselines-roll-over-citations-move">Revision (2026-10-01): RS0026 / RS0027 become errors, the baselines roll over, citations move</a></li>
             <li><a href="#revision-2026-10-06-the-adr-115-rules-reach-commons-own-idempotency-gate-re-counted-baselines">Revision (2026-10-06): the ADR-115 rule&#39;s reach, Common&#39;s own idempotency gate, re-counted baselines</a></li>
+            <li><a href="#revision-2026-10-07-commons-second-architecture-map-re-counted-baselines-moved-anchors">Revision (2026-10-07): Common&#39;s second architecture map, re-counted baselines, moved anchors</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

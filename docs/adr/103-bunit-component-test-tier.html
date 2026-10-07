@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -246,7 +247,8 @@
           real authorization service, so a component test can assert a role denial; see Revision below).
           Revised 2026-10-06: the helper&#39;s call-site count refreshed and two omitted registrations recorded (the
           base&#39;s <code>ViewerTimeZone</code> default and the ADC Conference subclass&#39;s inert event lookup). See Revision
-          (2026-10-06) at the end.</p>
+          (2026-10-06) at the end. Revised 2026-10-07: anchors refreshed after the v1.233.0 release. See Revision
+          (2026-10-07) at the end.</p>
           <h2 id="context">Context</h2>
           <p>Three test tiers in this workspace are decided in writing and one is not. ADR-015 gates <strong>structure</strong>
           with NetArchTest. ADR-058 ships the <strong>runtime conformance</strong> suites as abstract bases in
@@ -281,7 +283,7 @@
           symbols, so a move off that line changes this file and no other
           (<code>BunitComponentTestBase.cs:30-35</code>). The line is pinned at <code>bunit</code> 2.11.3 in each repo&#39;s central
           package file (<code>MMCA.Common/Directory.Packages.props:234-235</code>,
-          <code>MMCA.ADC/Directory.Packages.props:32</code>, <code>MMCA.Store/Directory.Packages.props:58</code>), and the
+          <code>MMCA.ADC/Directory.Packages.props:32</code>, <code>MMCA.Store/Directory.Packages.props:54</code>), and the
           package carries a direct <code>AngleSharp</code> pin because central package management does not pin
           transitives (<code>MMCA.Common.Testing.UI.csproj:15-17</code>).</li>
           <li><strong>MudBlazor services plus the ADR-067 facades, registered once.</strong> The constructor calls
@@ -415,7 +417,7 @@
           (<code>MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/MMCA.ADC.Conference.UI.Tests.csproj:10</code>),
           so each repo&#39;s central package file names the number
           (<code>MMCA.Common/Directory.Packages.props:235</code>, <code>MMCA.ADC/Directory.Packages.props:32</code>,
-          <code>MMCA.Store/Directory.Packages.props:58</code>) and three files have to agree. The <code>AngleSharp</code> advisory
+          <code>MMCA.Store/Directory.Packages.props:54</code>) and three files have to agree. The <code>AngleSharp</code> advisory
           pin does not spread that way: it is named once, in <code>MMCA.Common/Directory.Packages.props:240</code>, and
           reaches consumers transitively through the package&#39;s own direct reference
           (<code>MMCA.Common.Testing.UI.csproj:17</code>).</li>
@@ -504,6 +506,15 @@
           (<code>BunitComponentTestBase.cs</code>, <code>MMCA.Common.Testing.UI.csproj</code>, <code>DependencyInjection.cs:159,227-230</code>,
           <code>MMCA.Common/Directory.Packages.props:234-235,240</code>, <code>MMCA.Common.UI.Tests.csproj:27</code>, the ADC
           Conference subclass at <code>BunitTestBase.cs:24-68</code>).</p>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p><strong>The decision and the mechanism are unchanged.</strong> Re-verified against current source: <code>bunit</code> is
+          still pinned at 2.11.3 in all three central package files, and the <code>AngleSharp</code> pin is still named
+          only in MMCA.Common&#39;s. Only the MMCA.Store anchor for the <code>bunit</code> pin moved.</p>
+          <ol>
+          <li>Anchors re-verified against current source: <code>MMCA.Store/Directory.Packages.props:54</code> (was <code>:58</code>,
+          in the Decision bullet and the per-repo pin trade-off), <code>MMCA.Common/Directory.Packages.props:234-235,240</code>
+          and <code>MMCA.ADC/Directory.Packages.props:32</code> (unchanged).</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -524,6 +535,7 @@
             <li><a href="#revision-2026-09-19">Revision (2026-09-19)</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             </ul>
           </nav>
         </aside>

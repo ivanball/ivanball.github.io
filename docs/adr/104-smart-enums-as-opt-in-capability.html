@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -245,7 +246,9 @@
           adopted by nothing, with the cheap default left exactly where it is.
           Revised 2026-09-19: Context corrected to state what <code>ValueObjectsAreImmutableSealedInShared</code> actually
           asserts (sealed, Shared-layer assembly, no public mutable setters). The rule carries no <code>record</code>
-          check.</p>
+          check.
+          Revised 2026-10-07: Decision point 13 now separates code references from comment-only mentions of
+          <code>Enumeration&lt;T&gt;</code>; adoption remains zero.</p>
           <h2 id="context">Context</h2>
           <p>A bounded set of named values shows up everywhere in this workspace: the state that triggered a
           domain event, an error category, a rate-limiting algorithm, a message-bus provider, a JWT signing
@@ -383,10 +386,13 @@
           </li>
           <li><p><strong>Adoption is zero and this record says so.</strong> No production type in MMCA.Common, MMCA.Store,
           MMCA.ADC, MMCA.Helpdesk or the MMCA.ECommerce sample derives from <code>Enumeration&lt;T&gt;</code>. The only
-          types that reference it at all are the base file itself, the EF converters, the <code>AddAPI</code>
-          registration and the three test files; the only derivations are the five private fixtures in
-          those tests (<code>EnumerationTests.cs:122</code>, <code>:134</code>, <code>EnumerationSerializationTests.cs:111</code>, <code>:122</code>,
-          <code>EnumerationValueConverterTests.cs:89</code>).</p>
+          code that references it is the base file itself, the EF converters, the <code>AddAPI</code> registration
+          of its JSON converter factory (<code>DependencyInjection.cs:19</code>, <code>:59</code>) and the three test files.
+          Everywhere else it appears only as text, in comments and in one <code>SuppressMessage</code>
+          justification string, as the precedent the strongly typed identifiers and the entity base cite
+          (for example <code>IStronglyTypedId.cs:54</code>, <code>BaseEntity.cs:31</code>, <code>:50</code>). The only derivations are the five private
+          fixtures in those tests (<code>EnumerationTests.cs:122</code>, <code>:134</code>,
+          <code>EnumerationSerializationTests.cs:111</code>, <code>:122</code>, <code>EnumerationValueConverterTests.cs:89</code>).</p>
           </li>
           </ol>
           <h2 id="rationale">Rationale</h2>
@@ -473,6 +479,26 @@
           <li>The <code>PublicAPI.Shipped.txt</code> ranges moved: Shared <code>:567-572</code>, <code>:763-767</code>, <code>:991-993</code>; Infrastructure <code>:356-357</code>, <code>:360-361</code>. They still hold eighteen declarations.</li>
           <li>Anchors in Context, Decision, Rationale and Trade-offs were re-verified against current source; <code>Enumeration.cs:11</code> and <code>:26-34</code> are unchanged.</li>
           </ul>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. No decision or rationale changed, and adoption is still zero:
+          no type in MMCA.ADC, MMCA.Store or MMCA.Helpdesk derives from <code>Enumeration&lt;T&gt;</code>, and the only
+          derivations in MMCA.Common remain the five private test fixtures. One statement corrected.</p>
+          <ol>
+          <li>Decision point 13 said the only types referencing <code>Enumeration&lt;T&gt;</code> at all were the base file, the
+          EF converters, the <code>AddAPI</code> registration and the three test files. Code references are confined
+          to those, but the type is also named as text elsewhere: the strongly typed identifier interface
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Identifiers/IStronglyTypedId.cs:54</code>), the entity base
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/BaseEntity.cs:31</code>, plus a
+          <code>SuppressMessage</code> justification string at <code>:50</code>), the strongly typed
+          identifier fitness rule
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Domain/ArchitectureRules.StronglyTypedIds.cs:30</code>)
+          and two identifier tests (<code>MMCA.Common/Tests/Core/MMCA.Common.Shared.Tests/Identifiers/TestIdentifiers.cs:8</code>,
+          <code>StronglyTypedIdSerializationTests.cs:99</code>). None is a code dependency; Decision point 13 now
+          says so.</li>
+          <li>Anchors re-verified against current source: <code>DependencyInjection.cs:59</code> (factory registration),
+          <code>EnumerationTests.cs:122</code>, <code>:134</code>, <code>EnumerationSerializationTests.cs:111</code>, <code>:122</code> and
+          <code>EnumerationValueConverterTests.cs:89</code> (the five fixtures), all unchanged.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="037-field-level-encryption-at-rest.html">ADR-037</a> (the precedent for recording a shipped, tested and
           unadopted framework capability as a decision rather than leaving it to read as unfinished adoption),
@@ -503,6 +529,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -257,7 +258,8 @@
           Revised 2026-10-01 for v1.217.0 (the host registers the single <code>v1</code> OpenAPI document itself and
           <code>AddCommonOpenApi</code> only configures it; per-version documents are gone; see the Revision (2026-10-01,
           v1.217.0) below).
-          Revised 2026-10-06: the registration also adds <code>ApiVersionReportingResultFilter</code> as a global MVC filter so output-cached responses keep the version headers; re-anchored the citations.</p>
+          Revised 2026-10-06: the registration also adds <code>ApiVersionReportingResultFilter</code> as a global MVC filter so output-cached responses keep the version headers; re-anchored the citations.
+          Revised 2026-10-07: anchors re-verified against current source after the v1.233.0 release, no decision change.</p>
           <h2 id="context">Context</h2>
           <p>The framework&#39;s REST surface is served by controllers hosted in extracted service processes behind a
           YARP gateway. As those services evolve, a response shape has to be able to change without breaking a
@@ -507,6 +509,24 @@
           <code>:308</code>).</li>
           <li>Anchors in Decision, Trade-offs and Related were re-verified against current source.</li>
           </ul>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. No decision, rationale or trade-off changed, and every anchor in
+          Decision, Trade-offs and Related still resolves. Line numbers cited inside the earlier dated
+          revisions (host registrations, the design-time skip helper, both <code>deploy.yml</code> gates and both
+          <code>Directory.Build.props</code> blocks) have since moved and are left as recorded.</p>
+          <ol>
+          <li>Anchors re-verified against current source: <code>AddCommonApiVersioning</code>
+          (<code>WebApplicationBuilderExtensions.cs:39</code>, comment <code>:41</code>-<code>:43</code>, options <code>:46</code>-<code>:48</code>, explorer
+          <code>:49</code>-<code>:53</code>, result filter <code>:58</code>-<code>:60</code>), <code>AddCommonOpenApi</code> (<code>WebApplicationBuilderExtensions.cs:101</code>,
+          doc comment <code>:87</code>-<code>:100</code>), <code>MapCommonOpenApi</code> (<code>OpenApiEndpointExtensions.cs:60</code>, guard <code>:62</code>, throw
+          <code>:64</code>-<code>:72</code>, <code>.AllowAnonymous()</code> <code>:74</code>), <code>ApiVersionReportingResultFilter.cs:21</code>,
+          <code>ServiceInfoControllerBase.cs:30</code>, <code>:39</code>, <code>:40</code>, <code>:45</code>, <code>:46</code>, <code>:51</code>, <code>:54</code>, both subclasses
+          (<code>ServiceInfoController.cs:17</code>, <code>:18</code>, <code>:19</code>, <code>:23</code> in ADC Conference and Store Catalog),
+          <code>ServiceInfoVersioningContractTestsBase.cs:20</code>, <code>:39</code>, <code>:55</code>, <code>ApiVersioningTests.cs:14</code>,
+          <code>OpenApiContractTestsBase.cs:31</code>, <code>EntityControllerBase.cs:31-33</code>, and the <code>AddCommonApiVersioning</code>
+          host call sites (ADC Conference <code>Program.cs:219</code>, Identity <code>:154</code>, Engagement <code>:150</code>, Notification
+          <code>:139</code>; Store Catalog <code>:140</code>, Sales <code>:147</code>, Identity <code>:134</code>; Helpdesk Web <code>Program.cs:35</code>).</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-010 (integration-event schema versioning: the asynchronous, <code>SchemaVersion</code>-carried,
           consumer-resolved axis this deliberately contrasts with; HTTP versioning here is request-time and
@@ -537,6 +557,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-01-v12170-the-host-registers-the-openapi-document">Revision (2026-10-01, v1.217.0): the host registers the OpenAPI document</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

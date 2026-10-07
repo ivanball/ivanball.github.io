@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -256,7 +257,7 @@
           (<code>Source/Presentation/MMCA.Common.UI.Maui/Capabilities/Auth/MauiExternalAuthBroker.cs:20</code>). The ADC
           consumer&#39;s deep-link wave has shipped: <code>MMCA.ADC.UI.Web</code> serves the two well-known association
           documents through the shared helper
-          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:293</code>), the Identity service allow-lists the
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:296</code>), the Identity service allow-lists the
           <code>atldevcon</code> scheme (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:89-91</code>, the
           entry at <code>:90</code>), and
           the native heads register the callback: iOS carries both the custom-scheme URL type
@@ -267,8 +268,8 @@
           Android&#39;s <code>AutoVerify</code> https App Links intent filter is in place too, declared as a C# attribute on
           <code>MainActivity</code> rather than in XML
           (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/Android/MainActivity.cs:29-35</code>, with the public web
-          host constant at <code>:43</code> and the verified link reduced to path plus query at <code>:82</code>, shape-checked at
-          <code>:96</code> and published to <code>IDeepLinkDispatcher</code> at <code>:101</code>). The filter claims only the deep-linkable
+          host constant at <code>:44</code> and the verified link reduced to path plus query at <code>:83</code>, shape-checked at
+          <code>:97-100</code> and published to <code>IDeepLinkDispatcher</code> at <code>:102</code>). The filter claims only the deep-linkable
           path prefixes (<code>/conference/</code>, <code>/happening-now</code>, <code>/feedback/</code>, <code>/auth/oauth-complete</code>, at <code>:34</code>),
           the same set the iOS <code>applinks</code> components declare, so any other page on the host stays in the
           browser. The checked-in
@@ -296,7 +297,9 @@
           moved; see Revision below). Revised 2026-10-01 (MMCA.Common anchors re-pinned; see Revision below).
           Revised 2026-10-06: the native completion now round-trips a per-attempt <code>state</code> value that the shared
           completion page checks before exchanging the code, and the Android App Links filter claims only the
-          deep-linkable path prefixes; see Revision below.</p>
+          deep-linkable path prefixes; see Revision below. Revised 2026-10-07: anchors refreshed after the v1.233.0
+          release, and the hostname trade-off no longer calls the <code>MainActivity</code> cutover comment a two-spot
+          note, since it now names the same three binary spots.</p>
           <h2 id="context">Context</h2>
           <p>Three mobile flows all need a URL to leave the web world and land inside the MAUI app:</p>
           <ol>
@@ -323,8 +326,8 @@
           <code>atldevcon://oauth-complete</code>), the completion redirect (and completion errors) target that URL
           instead of <code>OAuth:UIBaseUrl</code>, carrying the same single-use code plus the client&#39;s round-tripped
           <code>state</code> value when one was supplied (both targets get the same suffix:
-          <code>Source/Presentation/MMCA.Common.API/Controllers/OAuthControllerBase.cs:170-176</code>, the state read
-          back from the challenge properties at <code>:124</code> and <code>:160-161</code>). The redirect echoes the
+          <code>Source/Presentation/MMCA.Common.API/Controllers/OAuthControllerBase.cs:209-215</code>, the state read
+          back from the challenge properties by <code>ReadChallengeState</code> at <code>:163</code>, the helper at <code>:199-200</code>). The redirect echoes the
           client&#39;s <code>Uri.OriginalString</code> because URI normalization would append a trailing slash and native
           callback matching can be exact. <code>http</code>/<code>https</code> schemes never match even if listed, so web
           destinations always flow through the pinned base URL and the allowlist cannot become an open
@@ -346,7 +349,7 @@
           <code>ExchangeOAuthCodeAsync</code>
           (<code>Source/Presentation/MMCA.Common.UI/Services/Auth/AuthUIService.cs:76</code>) POSTs the existing
           anonymous <code>auth/oauth/exchange</code> through the shared <code>AuthenticateAsync</code> helper (<code>:84</code>, the helper
-          itself at <code>:275</code>), which stores the pair via <code>ITokenStorageService</code> (<code>:303</code>), so the
+          itself at <code>:294</code>), which stores the pair via <code>ITokenStorageService</code> (<code>:322</code>), so the
           single-use-code contract lives in exactly one place. This rides behind the <code>IExternalAuthBroker</code>
           contract
           (ADR-042); the default broker is unavailable, which keeps the shared Login page on its anchor
@@ -380,16 +383,16 @@
           <code>appsettings.json</code> (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/appsettings.json:33</code>, compiled in as an
           <code>EmbeddedResource</code> per <code>MMCA.ADC.UI.csproj:134</code>), a raw literal in the iOS associated-domains
           array (<code>Platforms/iOS/Entitlements.plist:11</code>), and the <code>PublicWebHost</code> compile-time constant that
-          feeds the Android intent-filter attribute (<code>Platforms/Android/MainActivity.cs:43</code>). Only the first
+          feeds the Android intent-filter attribute (<code>Platforms/Android/MainActivity.cs:44</code>). Only the first
           is read through configuration; the two native manifests take literals, because neither an
           entitlement nor an attribute argument can read config. A cutover is therefore a three-spot edit
-          plus a rebuild, not a setting change (the comment at <code>MainActivity.cs:41-42</code> still describes it as
-          touching two spots), plus the two verification commands in
+          plus a rebuild, not a setting change (the comment at <code>MainActivity.cs:41-43</code> names the same three
+          binary spots), plus the two verification commands in
           <code>MMCA.ADC/Docs/MobileReleaseRunbook.md:48</code> and <code>:52</code>, which repeat the host but ship nothing; a
           custom domain is the durable fix.</li>
           <li>A custom-scheme URI&#39;s host and path are attacker-choosable on a device with a hostile app
           registered for the same scheme (scheme hijack). Accepted: the redirect carries only a two-minute
-          single-use code (<code>OAuthControllerBase.cs:59</code>) plus the client&#39;s own <code>state</code> value, the exchange is
+          single-use code (<code>OAuthControllerBase.cs:75</code>) plus the client&#39;s own <code>state</code> value, the exchange is
           one-shot, the completion page refuses a code that no attempt on this device started
           (<code>OAuthComplete.razor:75</code>), and platform app-link verification does not exist for custom schemes
           anywhere.</li>
@@ -662,6 +665,34 @@
           comment <code>:41-42</code>); in Common, <code>AuthUIService</code>&#39;s helper (<code>:275</code>) and <code>SetTokensAsync</code> (<code>:303</code>).
           Every live citation above is updated; the dated entries keep the values they recorded.</li>
           </ol>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. The decision, the allowlist behavior, the two-minute
+          single-use code, the per-attempt <code>state</code> round trip and the path-scoped Android filter are
+          unchanged; MMCA.Common and MMCA.ADC anchors moved, and one ADC comment the hostname trade-off
+          described as stale has been corrected in the code.</p>
+          <ol>
+          <li><strong>The <code>MainActivity</code> cutover comment names three binary spots.</strong> The trade-off said the comment
+          still described a cutover as touching two spots. It now reads &quot;a custom-domain cutover touches
+          these three binary spots ... plus the verification URLs in Docs/MobileReleaseRunbook.md&quot;
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/Android/MainActivity.cs:41-43</code>), matching the
+          ADR&#39;s own count, so the trade-off no longer flags it as a documentation lag.</li>
+          <li><strong>Anchors re-verified against current source:</strong> in Common,
+          <code>Source/Presentation/MMCA.Common.API/Controllers/OAuthControllerBase.cs</code>:
+          <code>OAuthExchangeCodeLifetime</code> (two minutes) <code>:75</code>, <code>ReadChallengeState</code> call <code>:163</code> and helper
+          <code>:199-200</code>, <code>BuildSuccessRedirectUrl</code> defined <code>:202</code> and called <code>:193</code>, the shared <code>stateSuffix</code>
+          and both targets <code>:209-215</code>, the http/https rejection <code>:375-376</code>, <code>AppendQuery</code>&#39;s
+          <code>OriginalString</code> echo <code>:388-394</code>, and <code>clientState</code> stashed by <code>ChallengeProvider</code> at <code>:409</code>;
+          <code>Source/Presentation/MMCA.Common.UI/Services/Auth/AuthUIService.cs</code>: <code>ExchangeOAuthCodeAsync</code>
+          <code>:76</code>, its POST <code>:84</code>, the <code>AuthenticateAsync</code> helper <code>:294</code>, <code>SetTokensAsync</code> <code>:322</code>. In ADC,
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs</code>: ADR-043 block comment <code>:289-294</code>,
+          <code>GetSection(&quot;AppAssociation&quot;)</code> <code>:295</code>, <code>MapAppAssociationEndpoints</code> <code>:296</code>, package-id comment
+          <code>:298-301</code>, <code>AndroidPackageName</code> <code>:302</code>, <code>AndroidCertFingerprints</code> <code>:303</code>, <code>AppleAppId</code> <code>:304</code>,
+          <code>AppleAppLinkComponents</code> <code>:305</code> (still the same set as the Android <code>DataPathPrefixes</code>);
+          <code>Platforms/Android/MainActivity.cs</code>: intent filter <code>:29-35</code> with <code>DataPathPrefixes</code> <code>:34</code> and
+          <code>AutoVerify</code> <code>:35</code>, <code>PublicWebHost</code> <code>:44</code>, <code>OnCreate</code> publish <code>:50</code>, <code>OnNewIntent</code> publish <code>:67</code>,
+          <code>PublishDeepLink</code> <code>:70-103</code>, route reduction <code>:83</code>, shape check <code>:97-100</code>, publish <code>:102</code>. Every
+          live citation above is updated; the dated entries keep the values they recorded.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -686,6 +717,7 @@
             <li><a href="#revision-2026-09-25">Revision (2026-09-25)</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             </ul>
           </nav>
         </aside>

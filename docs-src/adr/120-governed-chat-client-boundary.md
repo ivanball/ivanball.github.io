@@ -52,6 +52,10 @@ hardening, refreshed citations).
 Revised 2026-10-06: the Anthropic SDK pin reads 12.53.0, and every live-section anchor is re-verified
 against current source.
 
+Revised 2026-10-07: `PiiRedactionGuardrail` also redacts tool results and tool-call arguments that
+arrive as `JsonElement` values (since v1.232.0), and its anchors and the CHANGELOG release anchors
+are refreshed.
+
 ## Context
 Rubric section 16, AI-Native Application Architecture, asks one question of a product feature that
 calls a language model: is that dependency governed like any other external system, meaning
@@ -206,11 +210,13 @@ start, and the evaluation harness ships beside the package.**
    refused at registration with the one-line fix in the message
    (`DependencyInjection.cs:208-217`, both refusals in `RefuseAnUngovernedHost` at `:202`). The
    framework ships two content policies that answer that refusal on their own. The first,
-   `PiiRedactionGuardrail` (`Guardrails/PiiRedactionGuardrail.cs:41`), removes email addresses and
-   North American phone numbers from every outgoing message, including reasoning text, string tool
-   results and the string arguments of tool calls (`:72-82`, `:109-128`, `:137`), leaves the
-   application's own `Instructions` alone (`:36-38`), and is registered as one singleton under both
-   contracts by `AddPiiRedactionGuardrail()`
+   `PiiRedactionGuardrail` (`Guardrails/PiiRedactionGuardrail.cs:40`), removes email addresses and
+   North American phone numbers from every outgoing message, including reasoning text, tool results
+   and the arguments of tool calls (`:71-81`, `:108-127`, `:136-137`), whether those arrive as
+   strings or as `JsonElement` values, where only string values are rewritten and property names,
+   numbers and booleans are copied as they are (`:112`, `:129-134`, `RedactJson` at `:144`). It
+   leaves the application's own `Instructions` alone (`:35-37`), and is registered as one singleton
+   under both contracts by `AddPiiRedactionGuardrail()`
    (`Guardrails/GuardrailServiceCollectionExtensions.cs:33`, `:37-41`).
    Contact details are one of the two judgements the framework is willing to make for every
    application: they are never evidence for anything a model is asked, so the judgement does not
@@ -239,8 +245,8 @@ start, and the evaluation harness ships beside the package.**
    `AddContentPolicyGuardrail(IConfiguration)` (`GuardrailServiceCollectionExtensions.cs:62`)
    registers one singleton under both interfaces (`:72-76`), so registering it satisfies
    `Ai:RequireGuardrail` exactly as the PII policy does. `PiiRedactionGuardrail` ships from
-   MMCA.Common v1.207.0 and `ContentPolicyGuardrail` from v1.208.0 (`MMCA.Common/CHANGELOG.md:773`,
-   `:727`).
+   MMCA.Common v1.207.0 and `ContentPolicyGuardrail` from v1.208.0 (`MMCA.Common/CHANGELOG.md:798`,
+   `:752`).
 
 8. **The configuration surface is one section, validated, and the switch is the registration.**
    `AiSettings` (`MMCA.Common/Source/Core/MMCA.Common.AI/AiSettings.cs:22`) binds `Ai` (`:25`) and
@@ -372,7 +378,7 @@ start, and the evaluation harness ships beside the package.**
   (`DependencyInjection.cs:36-39`). The provider span is absent on a hit, so the two are
   distinguishable, but a spend graph read without that context over-reports.
 - **The framework ships two content policies, and both are narrow.** Contact-detail redaction
-  (`PiiRedactionGuardrail.cs:41`) and the injection and blocked-response policy
+  (`PiiRedactionGuardrail.cs:40`) and the injection and blocked-response policy
   (`ContentPolicyGuardrail.cs:64`) are shipped because neither judgement varies by application: a
   phone number is never evidence for anything a model is asked, and an imperative aimed at the model
   is never the input's own argument. The built-in marker list stays deliberately small (eight
@@ -461,6 +467,22 @@ Anthropic SDK pin (12.52.0).
   `BoundedChatClient`, `IChatGuardrail`, `PiiRedactionGuardrail`, `MMCA.Common.AI.Testing.csproj`,
   the `[1.207.0]` block of `MMCA.Common/UPGRADING.md` (`:471-520`), ADC's `SessionScoringService`
   and the Conference host's `Program.cs`.
+
+## Revision (2026-10-07)
+Re-verified against current source. No decision, rationale or trade-off changed in direction; the
+PII policy's scope grew and the release anchors moved when the v1.233.0 and v1.232.1 CHANGELOG
+blocks landed above them.
+
+1. Decision item 7 now states that `PiiRedactionGuardrail` redacts tool results and tool-call
+   arguments that arrive as `JsonElement` values as well as strings, rewriting only string values
+   (`MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/PiiRedactionGuardrail.cs:112`, `:129-134`,
+   `RedactJson` at `:144`), released in v1.232.0 (`MMCA.Common/CHANGELOG.md:46`, M195).
+2. Anchors re-verified against current source: `PiiRedactionGuardrail` (class at `:40`, also in
+   the Trade-offs, patterns at `:71-81`, content switch at `:108-127`, `RedactText` at `:136-137`,
+   the `Instructions` remark at `:35-37`), and the release entries for `PiiRedactionGuardrail` and
+   `ContentPolicyGuardrail` (`MMCA.Common/CHANGELOG.md:798`, `:752`). The v1.213.0 hardening the
+   2026-10-01 revision records now sits at `CHANGELOG.md:530`, `:531` and `:541`; the earlier
+   revisions keep their anchors as written.
 
 ## Related
 [ADR-111](111-ai-session-scoring-governance.md) (the record this one extends: every scoring-specific

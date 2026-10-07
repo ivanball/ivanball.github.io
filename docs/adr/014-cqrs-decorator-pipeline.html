@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -266,7 +267,7 @@
           <code>DependencyInjection.cs</code>, <code>DependencyInjection.ModuleScanning.cs</code> and <code>DependencyInjection.Crud.cs</code>).
           Revised 2026-10-01 (the record states where each kind of validation lives: UI form models, the
           Validating decorator with its coverage fitness gate, and domain factories; see Revision below).
-          Revised 2026-10-06: the Decision states the shipped seven-decorator command chain and six-decorator query chain instead of the pre-2026-08-18 order.</p>
+          Revised 2026-10-06: the Decision states the shipped seven-decorator command chain and six-decorator query chain instead of the pre-2026-08-18 order. Revised 2026-10-07: anchors refreshed after the v1.233.0 release.</p>
           <h2 id="context">Context</h2>
           <p>Commands and queries share cross-cutting concerns: validation, transactions, cache invalidation,
           logging / timing, and feature gating. Putting that logic inside each handler scatters it, makes the
@@ -311,8 +312,8 @@
           (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:132</code>). The seven production service hosts
           compose the same sequence through <code>AddMmcaApplicationPipeline(pipeline =&gt; ...)</code> instead, which runs it
           in order and seals it (see the Revision (2026-08-26) below): ADC Identity / Conference / Engagement /
-          Notification (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:324</code>, <code>...Conference.Service/Program.cs:414</code>,
-          <code>...Engagement.Service/Program.cs:285</code>, <code>...Notification.Service/Program.cs:227</code>) and Store Identity /
+          Notification (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:324</code>, <code>...Conference.Service/Program.cs:416</code>,
+          <code>...Engagement.Service/Program.cs:286</code>, <code>...Notification.Service/Program.cs:227</code>) and Store Identity /
           Catalog / Sales (<code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:236</code>,
           <code>...Catalog.Service/Program.cs:256</code>, <code>...Sales.Service/Program.cs:236</code>). Only that decorators-last
           ordering is load-bearing; the relative position of <code>AddInfrastructure</code>/<code>AddAPI</code> is not.</li>
@@ -707,6 +708,18 @@
           single member <code>string Permission { get; }</code> at <code>:41</code>; behavior is unchanged.</li>
           <li>Anchors in the live sections were re-verified against current source.</li>
           </ul>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. The decision, both decorator chains
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:134-140</code>, <code>:143-148</code>) and the
+          validation homes are unchanged; only two <code>AddMmcaApplicationPipeline</code> call sites moved. Stale anchors
+          inside the earlier Revision sections are left as historical records.</p>
+          <ol>
+          <li>Anchors re-verified against current source: in the Decision, ADC Conference
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:416</code>) and Engagement
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:286</code>) are re-pointed; ADC Identity
+          <code>:324</code> and Notification <code>:227</code>, Store Identity <code>:236</code>, Catalog <code>:256</code> and Sales <code>:236</code>, and
+          <code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:132</code> still match.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -732,6 +745,7 @@
             <li><a href="#revision-2026-09-25">Revision (2026-09-25)</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             </ul>
           </nav>
         </aside>

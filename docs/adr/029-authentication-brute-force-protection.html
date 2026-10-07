@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -256,7 +257,10 @@
           failed-attempt counter after a password reset).
           Revised 2026-10-01 (change-password is a third framework call site, with a principal-keyed counter; every ADC and Store service host calls <code>AddCommonHybridCacheWhenRedisConfigured</code>, so with Redis configured the counters run through <code>HybridCacheService.IncrementAsync</code>; see Revision below).
           Revised 2026-10-03 (the counters fail open with a Warning log when the cache is unavailable, instead of
-          answering 500; see Revision below).</p>
+          answering 500; see Revision below).
+          Revised 2026-10-07: a login or change-password lockout answers 429 <code>Auth.TooManyAttempts</code> (an
+          <code>Error.TooManyRequests</code>, since Common 1.219.0) rather than a uniform 401, while the registration throttle
+          still answers 401; see Revision below.</p>
           <h2 id="context">Context</h2>
           <p>ADR-019&#39;s global rate limiter is <strong>principal-keyed</strong>: it caps requests per authenticated principal,
           and anonymous traffic is exempt with one metered exception, the configured real-time hub path
@@ -289,10 +293,13 @@
           on the exponent is load-bearing: C# masks int shift counts to 5 bits, so an unclamped <code>1 &lt;&lt; 31</code> is
           negative and <code>1 &lt;&lt; 32</code> wraps back to 1, silently shrinking (or negating) the lockout TTL for a
           sufficiently persistent attacker. <code>1 &lt;&lt; 30</code> already exceeds any permitted <code>MaxLockoutSeconds</code>, so deep
-          excess always lands on the cap. <code>CheckLockoutAsync(email)</code> returns <code>Result.Failure(Error.Unauthorized( &quot;Auth.TooManyAttempts&quot;, …))</code> while locked, and <code>ResetFailedAttemptsAsync(email)</code> clears both the
+          excess always lands on the cap. <code>CheckLockoutAsync(email)</code> returns <code>Result.Failure(Error.TooManyRequests( &quot;Auth.TooManyAttempts&quot;, ...))</code> while locked
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:68</code>), which the
+          edge answers as <code>429</code>, and <code>ResetFailedAttemptsAsync(email)</code> clears both the
           attempt and lockout keys on a successful login.</li>
           <li><strong>Registration throttle (IP-keyed).</strong> <code>CheckRegistrationRateLimitAsync(ip)</code> fails with
-          <code>Error.Unauthorized(&quot;Auth.RegistrationRateLimitExceeded&quot;, …)</code> once <code>MaxRegistrationsPerIpPerHour</code>
+          <code>Error.Unauthorized(&quot;Auth.RegistrationRateLimitExceeded&quot;, ...)</code> (<code>LoginProtectionService.cs:150</code>,
+          so <code>401</code>) once <code>MaxRegistrationsPerIpPerHour</code>
           (default 10) registrations from one IP land inside <code>RegistrationRateLimitWindowMinutes</code> (default 60);
           <code>IncrementRegistrationCountAsync(ip)</code> bumps the per-IP counter. A missing/empty IP is a deliberate
           <strong>no-op (fail-open)</strong>.</li>
@@ -320,7 +327,7 @@
           <code>AddCommonHybridCache</code> (which replaces whatever <code>ICacheService</code> was registered) or its guarded form
           <code>AddCommonHybridCacheWhenRedisConfigured</code>, which registers it only when the Redis connection string
           is set (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:200-212</code>),
-          overrides it (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:253</code>) with the
+          overrides it (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:264</code>) with the
           same read-modify-write shape and additionally forces both legs past the in-process L1: an L1 hit would
           let a replica read a stale counter and write it back near its starting value, which is a security
           control quietly weakened by a cache optimization. The accepted cost, in the code&#39;s own words: parallel attempts can overwrite each
@@ -332,8 +339,13 @@
           <li><strong>Counters are cache-scoped and TTL-bounded.</strong> They live in the same swappable <code>ICacheService</code>
           substrate as ADR-026 (in-process memory in the monolith, distributed/Redis when wired) and self-expire
           via cache TTL: a lockout is inherently ephemeral, so expiry <em>is</em> the reset.</li>
-          <li><strong>Returns <code>Result</code> (ADR-013)</strong>, so the HTTP edge maps every failure to a uniform <code>401</code> without the
-          endpoint special-casing it.</li>
+          <li><strong>Returns <code>Result</code> (ADR-013)</strong>, so the HTTP edge maps each failure by its error type without the
+          endpoint special-casing it: <code>AuthenticationServiceBase</code> passes the lockout error through unchanged
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:139</code>) and
+          <code>ApiControllerBase.HandleFailure</code> resolves the status through <code>ErrorHttpMapping</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/ApiControllerBase.cs:48</code>), so a
+          login or change-password lockout answers <code>429</code> (<code>ErrorHttpMapping.cs:31</code>) and the registration
+          throttle answers <code>401</code> (<code>:26</code>).</li>
           <li><strong>Centralized in framework code, not in consumer code.</strong> The login and registration call sequence
           lives in <code>AuthenticationServiceBase&lt;TUser&gt;</code> (<code>MMCA.Common.Application.Auth</code>): <code>CheckLockoutAsync</code>
           before credential validation, <code>IncrementFailedAttemptsAsync</code> on each failed attempt,
@@ -360,8 +372,8 @@
           against one account</em> (keyed on the submitted email, so it holds however many addresses the attempts
           come from) plus signups per IP over an hour rather than a minute. The keys differ and so does the
           response shape: the limiters reject at the middleware with <code>429</code> and no auth outcome, while these
-          checks return a <code>Result</code> failure the edge maps to the same uniform <code>401</code> as a bad password. Three
-          mechanisms by design, not one.</li>
+          checks return a <code>Result</code> failure carrying an auth error code (<code>Auth.TooManyAttempts</code>, answered
+          <code>429</code>; <code>Auth.RegistrationRateLimitExceeded</code>, answered <code>401</code>). Three mechanisms by design, not one.</li>
           <li><strong>Cache-backed, no new table.</strong> Reusing ADR-026&#39;s substrate means the protection scales from monolith
           to distributed with no schema and no per-handler branching, and a lockout&#39;s natural lifetime is a TTL,
           not a row to clean up.</li>
@@ -383,7 +395,7 @@
           spelling the victim uses to lock them out. That is the same targeted-DoS trade below, not a new one:
           the alternative was a lockout that did not hold at all.</li>
           <li><strong>Email-keyed lockout is a targeted-DoS lever.</strong> An attacker can lock a <em>known</em> account out by
-          deliberately failing its logins. The short backoff cap (default 300s) and the generic 401 bound the
+          deliberately failing its logins. The short backoff cap (default 300s) bounds the
           harm, but it is an accepted availability-for-security trade.</li>
           <li><strong>IP-keyed registration throttle is coarse.</strong> Shared NAT/proxy IPs throttle innocents together, and
           per-attacker IP rotation evades it; it is fail-open on a missing IP. It raises the cost of bulk signup,
@@ -489,10 +501,41 @@
           <code>LoginProtectionService.IncrementFailedAttemptsAsync</code> and the v1.126.0 CHANGELOG entry record the
           accepted final state, not a TODO: cite this section rather than re-opening the finding.</li>
           </ul>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. The lockout model, the backoff formula, the registration
+          throttle, the non-atomic counters and the fail-open posture are unchanged. What moved is the HTTP
+          answer to a lockout, which the 2026-10-03 and 2026-10-06 revisions did not record.</p>
+          <ol>
+          <li><strong>A lockout answers <code>429</code>, not <code>401</code>.</strong> <code>CheckLockoutAsync</code> fails with
+          <code>Error.TooManyRequests(&quot;Auth.TooManyAttempts&quot;, ...)</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:68</code>); the error
+          code is unchanged, the error type is not (Common 1.219.0, <code>MMCA.Common/CHANGELOG.md:286</code>).
+          <code>AuthenticationServiceBase.LoginAsync</code> returns that error unchanged
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:139</code>), as does
+          <code>ChangePasswordHandlerBase</code> (<code>ChangePasswordHandlerBase.cs:89-92</code>), and
+          <code>ApiControllerBase.HandleFailure</code> resolves the status through <code>ErrorHttpMapping</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/ApiControllerBase.cs:48</code>), which maps
+          <code>TooManyRequests</code> to <code>429</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ErrorHttpMapping.cs:31</code>).
+          The Decision, the &quot;Returns <code>Result</code>&quot; bullet, the ADR-019 comparison in Rationale and the
+          targeted-DoS trade-off were corrected: the edge no longer maps every failure to one uniform <code>401</code>.</li>
+          <li><strong>The registration throttle still answers <code>401</code>.</strong> <code>CheckRegistrationRateLimitAsync</code> fails with
+          <code>Error.Unauthorized(&quot;Auth.RegistrationRateLimitExceeded&quot;, ...)</code> (<code>LoginProtectionService.cs:150</code>),
+          mapped to <code>401</code> (<code>ErrorHttpMapping.cs:26</code>).</li>
+          <li><strong>The <code>auth-ip</code> list in Related is complete.</strong> Besides login and register
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AuthControllerBase.cs:72</code>, <code>:96</code>) and
+          the password-reset pair (<code>PasswordResetAuthControllerBase.cs:78</code>, <code>:102</code>), the policy also sits on
+          the two email-confirmation endpoints (<code>EmailConfirmationControllerBase.cs:81</code>, <code>:109</code>).</li>
+          <li>Anchors re-verified against current source: <code>HybridCacheService.IncrementAsync</code> is declared at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:264</code> (the
+          Decision anchor was re-pointed; <code>:253</code> falls inside its remarks), with both legs still past L1
+          (the read at <code>:271</code> through <code>SharedStoreReadOptions</code>, <code>:86-90</code>; the write at <code>:280</code>). The <code>:253</code> anchor in the 2026-10-01 Revision and the &quot;unchanged&quot; note in the 2026-10-06
+          Revision record those passes as written.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-019 (the layered limiter: a principal-keyed global cap that exempts this anonymous surface, its
           one metered anonymous exception being the real-time hub paths, plus the per-IP <code>auth-ip</code> window that
-          now sits on these two endpoints and on the password-reset pair),
+          now sits on these two endpoints, on the password-reset pair and on the two email-confirmation
+          endpoints),
           ADR-026 (the <code>ICacheService</code> substrate these counters live in),
           ADR-013 (the <code>Result</code> / <code>Error</code> the checks return),
           ADR-022 (the browser session-cookie auth flow these endpoints sit behind).</p>
@@ -516,6 +559,7 @@
             <li><a href="#revision-2026-10-03">Revision (2026-10-03)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#alternatives-rejected">Alternatives rejected</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

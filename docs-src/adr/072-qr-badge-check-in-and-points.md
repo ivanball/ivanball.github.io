@@ -15,6 +15,7 @@ in memory, and a batch feedback path joined the two single-answer raise sites. E
 still holds; only the passages that describe those four facts, and the citations throughout, move.
 Revised (2026-10-01): a fourth handler (the event-side batch path) raises the feedback events.
 Revised 2026-10-06: the question award runs through `BestEffort.ExecuteAsync`, the scanner reports a non-badge QR as a skipped outcome, and a rejoin of an erased leaderboard row is refused.
+Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 
 ## Context
 ADC wanted two conference-day capabilities that turn out to be one mechanism. Organizers want to know
@@ -170,8 +171,8 @@ as the row (ADR-003), and it carries `Scope` as a **string** (`:26`) so a new sc
 `SponsorId` proved that: it was added as an optional last parameter (`:31`), so consumers keep
 deserializing payloads that predate it. It is ADC's first broker self-consumption: the Engagement
 service both publishes and consumes it
-(`.../Services/MMCA.ADC.Engagement.Service/Program.cs:275-284` for the reasoning, `:292-295` for the
-four `RegisterIntegrationEventConsumer<T>` calls inside `AddBrokerMessaging` at `:290`).
+(`.../Services/MMCA.ADC.Engagement.Service/Program.cs:276-285` for the reasoning, `:293-296` for the
+four `RegisterIntegrationEventConsumer<T>` calls inside `AddBrokerMessaging` at `:291`).
 
 The two feedback events are new to the Conference module
 (`.../Conference.Shared/Sessions/IntegrationEvents/SessionFeedbackSubmitted.cs:20-26`,
@@ -204,9 +205,9 @@ identical join (a unique-index violation on the insert path, or a concurrency co
 reactivate path) is treated as the already-on-board success (`IsLostJoinRace`, `:136-138`, catch filter
 at `:117`). Erasure is a separate, irreversible promise: `EraseDisplayName()` (`LeaderboardOptIn.cs:119-130`)
 overwrites the published name in place when the account behind it is erased, and it is driven by a fourth
-broker consumer, `UserDeleted` -> `UserDeletedPointsHandler` (`Program.cs:295`, the mapping documented at
-`:267-269`), because the published name is the one piece of personal data the Identity-side erasure cannot
-reach across the database boundary (`Program.cs:271-273`). The row itself survives (anonymize-in-place,
+broker consumer, `UserDeleted` -> `UserDeletedPointsHandler` (`Program.cs:296`, the mapping documented at
+`:268-270`), because the published name is the one piece of personal data the Identity-side erasure cannot
+reach across the database boundary (`Program.cs:272-274`). The row itself survives (anonymize-in-place,
 ADR-005). `GetLeaderboard`
 (`.../Points/UseCases/GetLeaderboard/GetLeaderboardHandler.cs`) reads only opted-in users' entries
 (`:39-46`), asks the database for one grouped `SUM` per attendee rather than reading the ledger rows
@@ -364,6 +365,18 @@ Content corrections, made in place; no decision or rationale changed:
 Every path:line anchor in the live sections was re-verified against current source and refreshed
 (`Program.cs`, `SetLeaderboardParticipationHandler.cs`, `SessionQuestionSubmittedPointsHandler.cs`,
 `CheckInScan.razor(.cs)` and `user_engagement_export.proto`).
+
+## Revision (2026-10-07)
+Re-verified against current source. No decision, rationale, behavior or count changed: the Engagement
+service still self-consumes `AttendeeCheckedIn` through the broker, registers the same four consumers
+inside `AddBrokerMessaging`, and drives the leaderboard display-name erasure from `UserDeleted`. Only the
+Engagement service `Program.cs` anchors moved, each by one line.
+
+1. Anchors re-verified against current source: in
+   `Source/Services/MMCA.ADC.Engagement.Service/Program.cs`, the self-consumption reasoning is
+   `:276-285`, `AddBrokerMessaging` is `:291`, the four `RegisterIntegrationEventConsumer<T>` calls are
+   `:293-296` (`UserDeleted` at `:296`), the `UserDeleted` mapping comment is `:268-270`, and the
+   erasure rationale is `:272-274`.
 
 ## Related
 [ADR-071](071-barcode-scanning-and-qr-display.md) (the framework halves this consumes: the QR component on

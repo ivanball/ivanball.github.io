@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -245,7 +246,9 @@
           to revisit. The current-state persistence model recorded in <a href="003-outbox-dual-dispatch.html">ADR-003</a>,
           <a href="005-soft-delete-vs-erasure.html">ADR-005</a> and <a href="075-audit-trail.html">ADR-075</a> remains the accepted
           mechanism. Revised 2026-10-01: citations re-anchored. Revised 2026-10-06: the ADR-075 history claim
-          is scoped to opted-in entities, with retention purging only where the host runs the scheduler.</p>
+          is scoped to opted-in entities, with retention purging only where the host runs the scheduler. Revised 2026-10-07: the rationale acknowledges ADC&#39;s append-only points ledger and why it
+          is not event sourcing, and the Marten rejection separates framework PostgreSQL support (ADR-113)
+          from production, where no deployment runs a PostgreSQL server.</p>
           <h2 id="context">Context</h2>
           <p>Event sourcing keeps an append-only log of the facts that happened to an aggregate and treats that log
           as the system of record. Current state becomes a fold over the log, a &quot;state as of&quot; question is that
@@ -260,7 +263,7 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/AuditableBaseEntity.cs:13</code>, <code>IsDeleted</code> at <code>:20</code>,
           <code>CreatedOn</code> at <code>:25</code>). Deletion is a flag rather than a fact appended to a log: <code>Delete()</code> sets
           <code>IsDeleted = true</code> at <code>:77</code>, and a global query filter hides the row from every normal read
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:453</code>, the filter applied at <code>:465</code>).
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:454</code>, the filter applied at <code>:466</code>).
           The audit fields are stamped during the save, from the identity the caller passed in: the save records
           it (<code>.../DbContexts/ApplicationDbContext.cs:194</code>, set at <code>:197</code>) and the audit interceptor reads it back
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/AuditSaveChangesInterceptor.cs:66</code>). ADC&#39;s <code>LivePoll</code> is representative, an aggregate root
@@ -276,12 +279,12 @@
           and the stored event identity
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:15</code>, the
           identity at <code>:40</code>), the table is mapped on every relational source
-          (<code>.../DbContexts/ApplicationDbContext.cs:667</code>, and per service database in ADC at
-          <code>MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Conference/Migrations/SQLServerDbContextModelSnapshot.cs:1589</code>),
+          (<code>.../DbContexts/ApplicationDbContext.cs:668</code>, and per service database in ADC at
+          <code>MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Conference/Migrations/SQLServerDbContextModelSnapshot.cs:1590</code>),
           the processor drains it
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:53</code>),
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:56</code>),
           and the consume edge de-duplicates it
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Inbox/EfInboxStore.cs:38</code>). A
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Inbox/EfInboxStore.cs:41</code>). A
           processed outbox row is a delivered message; nothing reads it back and no code path rebuilds state
           from one.</p>
           <h2 id="decision">Decision</h2>
@@ -296,7 +299,17 @@
           <li><strong>No workload asks the question event sourcing answers.</strong> Neither ADC nor MMCA.Store has an
           aggregate that needs replayable per-aggregate history or a &quot;state as of&quot; query. Engagement data is a
           live tally read as it stands, and Store&#39;s order flow answers questions about the order as it is now
-          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/LivePolls/UseCases/GetPollResults/GetPollResultsHandler.cs:23</code>).</li>
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/LivePolls/UseCases/GetPollResults/GetPollResultsHandler.cs:23</code>).
+          The nearest shape is Engagement&#39;s points ledger: <code>PointsEntry</code> is append-only, with no mutators, so
+          a total is the sum of its entries
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Domain/Points/PointsEntry.cs:12</code>), the one
+          write that does move a total being the soft delete or erasure of an entry (<code>:26-27</code>). That is not
+          event sourcing: each entry is its own current-state aggregate row, not an event replayed to rebuild
+          some other aggregate, and the total is a query over the rows the soft-delete filter leaves visible
+          rather than a fold into a rehydrated state. Nor does it meet the revisit trigger below: it is marked
+          <code>IAuditedEntity</code> (<code>:31</code>) because it decides a prize-bearing leaderboard, so that the append-only
+          rule can be proven rather than asserted (<code>:24-25</code>), and the <a href="075-audit-trail.html">ADR-075</a> trail
+          answers that need without a replayable stream.</li>
           <li><strong>The per-aggregate log would duplicate the outbox.</strong> The facts an aggregate would append to its
           stream are the domain events it already serializes into <code>OutboxMessages</code>, and the outbox does not go
           away, because it exists for at-least-once delivery rather than for history. The result is two durable
@@ -324,9 +337,15 @@
           <ul>
           <li><strong>Marten on PostgreSQL, weighed 2026-09-22 and rejected.</strong> Marten is the credible .NET event store
           and the specific option this record weighed. It was dropped on two grounds rather than on taste. It
-          requires PostgreSQL, which no production source here runs, so adopting it means adding an engine
-          beside the existing relational and Cosmos sources (<a href="018-polyglot-persistence.html">ADR-018</a>,
-          <a href="006-database-per-service.html">ADR-006</a>). And its own outbox and projection machinery would sit beside
+          requires PostgreSQL. The framework already supports PostgreSQL as an engine
+          (<a href="113-postgresql-as-a-first-class-engine.html">ADR-113</a>,
+          <code>MMCA.Common/Directory.Packages.props:63</code>), and the provider ships in every consumer as a direct
+          dependency of <code>MMCA.Common.Infrastructure</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj:47</code>), but no
+          production deployment runs a PostgreSQL server and no production entity routes to a
+          non-SQL-Server engine (<a href="018-polyglot-persistence.html">ADR-018</a>). So Marten would add no engine to the
+          framework, but it would add a deployed PostgreSQL server for the adopting module&#39;s database
+          (<a href="006-database-per-service.html">ADR-006</a>). And its own outbox and projection machinery would sit beside
           <a href="003-outbox-dual-dispatch.html">ADR-003</a>&#39;s outbox and <a href="021-consumer-inbox-idempotency.html">ADR-021</a>&#39;s
           inbox rather than replace them, leaving two delivery mechanisms with two dead-letter destinations.</li>
           <li><strong>A hand-written append-only event table over the existing SQL Server sources.</strong> Cheaper to start and
@@ -363,6 +382,34 @@
           <li>Anchors re-verified against current source; the soft-delete filter (<code>:453</code>, <code>:465</code>), outbox mapping
           (<code>:667</code>), <code>EventType</code> (<code>:40</code>), save (<code>:194</code>) and <code>OutboxProcessor</code> (<code>:53</code>) citations moved.</li>
           </ul>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. The decision (event sourcing not adopted) and the revisit trigger
+          are unchanged; two rationale statements were made precise and six body anchors re-pointed, after
+          source commits on 2026-10-07 shifted the lines they cited.</p>
+          <ol>
+          <li>The &quot;no workload asks for replayable history&quot; rationale now names ADC Engagement&#39;s <code>PointsEntry</code>,
+          an append-only ledger whose total is the sum of its entries
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Domain/Points/PointsEntry.cs:12</code>), with
+          soft delete or erasure as the one write that moves a total (<code>:26-27</code>), and states why it is not
+          event sourcing (each entry is a current-state aggregate row, not an event replayed to rebuild
+          another aggregate) and why it does not meet the revisit trigger: it is marked <code>IAuditedEntity</code>
+          (<code>:31</code>) so the append-only rule can be proven (<code>:24-25</code>), which the ADR-075 trail already answers.</li>
+          <li>The Marten rejection no longer says PostgreSQL is absent here. The framework supports it as an
+          engine (<a href="113-postgresql-as-a-first-class-engine.html">ADR-113</a>,
+          <code>MMCA.Common/Directory.Packages.props:63</code>), and the provider ships transitively in every consumer
+          through <code>MMCA.Common.Infrastructure.csproj:47</code>, but no production deployment runs a PostgreSQL
+          server and no production entity routes to a non-SQL-Server engine
+          (<a href="018-polyglot-persistence.html">ADR-018</a>). Marten would add a deployed PostgreSQL server for the
+          adopting module, not a new framework engine.</li>
+          <li>Anchors re-verified against current source: <code>ApplySoftDeleteFilters</code>
+          (<code>.../DbContexts/ApplicationDbContext.cs:454</code>, the filter at <code>:466</code>), the <code>OutboxMessages</code> table
+          mapping in <code>ConfigureOutbox</code> (<code>:668</code>), <code>OutboxProcessor</code> class declaration
+          (<code>.../Outbox/Processing/OutboxProcessor.cs:56</code>), <code>EfInboxStore</code> class declaration
+          (<code>.../Persistence/Inbox/EfInboxStore.cs:41</code>), and ADC&#39;s <code>OutboxMessages</code> table mapping
+          (<code>SQLServerDbContextModelSnapshot.cs:1590</code>). The earlier values <code>:453</code>, <code>:465</code>, <code>:667</code>, <code>:53</code>,
+          <code>EfInboxStore.cs:38</code> and snapshot <code>:1589</code> (and the 2026-10-01 <code>:57</code>) are superseded by these;
+          <code>EventType</code> (<code>OutboxMessage.cs:40</code>) and the save (<code>ApplicationDbContext.cs:194</code>) hold.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="003-outbox-dual-dispatch.html">ADR-003</a> (at-least-once delivery of domain events, the mechanism a
           per-aggregate event log would duplicate rather than replace),
@@ -393,6 +440,7 @@
             <li><a href="#when-to-revisit">When to revisit</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

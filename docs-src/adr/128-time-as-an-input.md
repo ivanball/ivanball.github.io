@@ -1,13 +1,13 @@
 # ADR-128: Time as an Input (No Ambient Clock Reads in Domain and Application)
 
 ## Status
-Accepted (2026-10-01). Revised 2026-10-06: async-lambda clock reads are attributed to, and exempted with, their source member.
+Accepted (2026-10-01). Revised 2026-10-06: async-lambda clock reads are attributed to, and exempted with, their source member. Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 
 ## Context
 Expiry windows, payment deadlines, discount windows, overdue checks and cutoffs are business rules,
 and every one of them branches on "now". When the rule reads `DateTime.UtcNow` itself, a test cannot
 choose which side of the branch it lands on: the branch is either untested or tested by sleeping
-(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Domain/ArchitectureRules.ClockReads.cs:30-36`).
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Domain/ArchitectureRules.ClockReads.cs:29-37`).
 .NET already ships the input that removes the problem, `TimeProvider`, which a handler can take by
 injection and a test can replace with a fake clock.
 
@@ -33,32 +33,32 @@ instant as a parameter. The rule is an IL-scanning fitness test, shipped once in
 - **Five getters are banned.** `DateTime.UtcNow`, `DateTime.Now`, `DateTime.Today`,
   `DateTimeOffset.UtcNow` and `DateTimeOffset.Now`, matched as (declaring type, getter) pairs
   (`ArchitectureRules.ClockReads.cs:20-27`) by ordinal comparison of the callee name and declaring
-  type full name (`:120-127`).
+  type full name (`:123-130`).
 - **Scope is the map's Domain and Application layers.** `DomainAndApplicationDoNotReadTheClock`
-  (`ArchitectureRules.ClockReads.cs:56`) collects the assemblies the repo's `IArchitectureMap`
-  registers under `Layer.Domain` and `Layer.Application` (`:65-70`). Infrastructure, API and UI code
+  (`ArchitectureRules.ClockReads.cs:59`) collects the assemblies the repo's `IArchitectureMap`
+  registers under `Layer.Domain` and `Layer.Application` (`:68-73`). Infrastructure, API and UI code
   is outside the rule.
-- **The scan reads IL, not source.** Each assembly is opened with Mono.Cecil (`:78`) and every method
-  body of every type is searched (`:80`, `:104`), which includes lambdas and async or iterator state
+- **The scan reads IL, not source.** Each assembly is opened with Mono.Cecil (`:81`) and every method
+  body of every type is searched (`:83`, `:107`), which includes lambdas and async or iterator state
   machines whether the compiler emits them as nested types or as methods on the declaring type. A read
   in a lambda or in an async or iterator method is attributed back to the member the developer wrote,
   recovered from the generated name past every leading angle bracket, walking up generated nested
-  types before falling back to the method name (`:129-171`), so the report reads
-  `Type.Member reads DateTime.UtcNow` (`:114`). The name is cut at the first `>` after the leading
-  brackets (`:158-170`), so the doubly bracketed state machine of an async lambda or async local
+  types before falling back to the method name (`:132-174`), so the report reads
+  `Type.Member reads DateTime.UtcNow` (`:117`). The name is cut at the first `>` after the leading
+  brackets (`:159-173`), so the doubly bracketed state machine of an async lambda or async local
   function is attributed to the member that wrote it.
 - **A vacuous scan is a failure.** A map that yields no Domain or Application assembly fails with that
-  explanation rather than passing (`:72-73`).
+  explanation rather than passing (`:75-76`).
 - **The failure message is the instruction.** It names the fix (inject `TimeProvider`, pass the instant
-  into the domain method) and the escape hatch (allowlist the type or `Type.Member`) (`:85-88`).
+  into the domain method) and the escape hatch (allowlist the type or `Type.Member`) (`:86-91`).
 - **The framework exemption is exactly one type, built into the rule.** The constant
   `DomainEventOccurrenceStamp` is the type full name `MMCA.Common.Domain.DomainEvents.BaseDomainEvent`
-  (`ArchitectureRules.ClockReads.cs:14`), prepended to every caller's allowlist (`:63`), so no map has
-  to repeat it. Because the exemption is keyed on the owning type (`:98-102`), it covers the
+  (`ArchitectureRules.ClockReads.cs:14`), prepended to every caller's allowlist (`:66`), so no map has
+  to repeat it. Because the exemption is keyed on the owning type (`:101-105`), it covers the
   `DateOccurred` initializer compiled into `BaseDomainEvent` and nothing declared on a derived event.
 - **The allowlist is an adoption ratchet.** Entries are a type full name, a namespace prefix, or one
-  member written `Namespace.Type.Member` (`:45-48`); a member entry is matched by ordinal equality on
-  `{owner}.{member}` (`:107`) and exempts that member's lambda, async-method and async-lambda bodies
+  member written `Namespace.Type.Member` (`:48-51`); a member entry is matched by ordinal equality on
+  `{owner}.{member}` (`:110`) and exempts that member's lambda, async-method and async-lambda bodies
   with it. The base
   exposes it as `AllowedClockReaders`, empty by default
   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Domain/ClockReadTestsBase.cs:24`),
@@ -113,17 +113,17 @@ instant as a parameter. The rule is an IL-scanning fitness test, shipped once in
   `TimeProvider.System.GetUtcNow()`, `Environment.TickCount`, `Stopwatch`) is not matched
   (`ArchitectureRules.ClockReads.cs:20-27`), so the rule stops the common accident rather than proving
   the code is clock-free.
-- **Infrastructure, API and UI are not scanned** (`:65-66`). Audit stamping and other infrastructure
+- **Infrastructure, API and UI are not scanned** (`:68-69`). Audit stamping and other infrastructure
   timestamps are expected to use an injected `TimeProvider` (`BaseDomainEvent.cs:22-23`), but this rule
   does not check that.
 - **`DateOccurred` stays non-deterministic in tests.** Because the stamp is taken at construction, a test
   asserting an exact occurrence instant has to set it through the `init` accessor
   (`BaseDomainEvent.cs:28`) rather than through a fake clock.
 - **The scan only covers assemblies present on disk.** Assemblies whose location is empty or missing
-  are dropped before the scan (`ArchitectureRules.ClockReads.cs:68`); the vacuous-scan check fires only
-  when none remain (`:72-73`).
+  are dropped before the scan (`ArchitectureRules.ClockReads.cs:71`); the vacuous-scan check fires only
+  when none remain (`:75-76`).
 - **A type or namespace entry exempts more than one read.** A type entry exempts every member of that
-  type and a namespace entry every type under it (`:45-48`, `:98-102`), which is wider than a member
+  type and a namespace entry every type under it (`:48-51`, `:101-105`), which is wider than a member
   entry; Store uses the narrow form.
 - **MMCA.Helpdesk is unguarded.** As the reference app and template source, it hands an adopter no
   clock-read test until it subclasses the base.
@@ -138,6 +138,25 @@ instant as a parameter. The rule is an IL-scanning fitness test, shipped once in
   (`ClockReadTests.cs:53-62`); the Decision bullet lists it.
 - CHANGELOG citations now name versions only, since the file grows at the top every release.
 - Every remaining `path:line` anchor was re-verified against current source.
+
+## Revision (2026-10-07)
+Re-verified against current source. The decision, the five banned getters, the scope, the
+attribution, the single framework exemption and the adoption picture (Common and ADC with no
+exemptions, Store with one member entry, Helpdesk not adopting) are unchanged. Only line anchors into
+`ArchitectureRules.ClockReads.cs` moved, by about three lines below the getter table, so the 2026-10-06
+statement that every anchor was re-verified no longer held for that file.
+
+1. Anchors re-verified against current source:
+   `ArchitectureRules.ClockReads.cs:29-37` (Context summary), `:59` (rule method), `:68-73`
+   (Domain and Application assembly collection), `:68-69` (Infrastructure, API and UI out of scope),
+   `:71` (file-exists filter), `:75-76` (vacuous-scan check), `:81` (`ReadModule`), `:83` (type scan),
+   `:107` (method-body loop), `:86-91` (failure message), `:66` (allowlist prepend), `:101-105` (owner
+   exemption), `:48-51` (allowlist entry forms), `:110` (member match), `:117` (report format),
+   `:123-130` (getter match), `:132-174` (source-member attribution), `:159-173` (name cut). Unchanged
+   and confirmed: `ArchitectureRules.ClockReads.cs:7-13`, `:14`, `:20-27`, `:33-35`, `:40-43`;
+   `BaseDomainEvent.cs:18-25`, `:28`; `ClockReadTestsBase.cs:10-12`, `:15`, `:17`, `:24`, `:26-28`;
+   the Common, ADC and Store `ClockReadTests.cs` anchors. The anchors inside the 2026-10-06 revision
+   stay as written.
 
 ## Related
 [ADR-015](015-architecture-fitness-functions.md) (the fitness-function style and the shared

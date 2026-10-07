@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -267,7 +268,8 @@
           Revised 2026-10-06 (the inbox row commits atomically with a handler&#39;s mutations only for a handler
           that saves on the consumer&#39;s own scope; the framework&#39;s <code>ScopedIntegrationEventHandlerBase</code> handlers
           save on a scope of their own, so for them the row is written by <code>CompleteAsync</code> after they succeed
-          and the crash window stays open; see the Revision (2026-10-06) at the end).</p>
+          and the crash window stays open; see the Revision (2026-10-06) at the end).
+          Revised 2026-10-07: anchors refreshed after the v1.233.0 release.</p>
           <h2 id="context">Context</h2>
           <p>ADR-003 makes integration-event delivery <strong>at-least-once</strong>: the outbox guarantees a published event
           is not lost, and the MassTransit broker redelivers on consumer failure. At-least-once means a
@@ -346,7 +348,7 @@
           (<code>MMCA.ADC.Conference.Service/ConferenceBrokerConsumers.cs:34-35</code>) and chains a third broker consumer
           beside them, <code>RegisterOutputCacheEvictionConsumer()</code> (<code>MMCA.ADC.Conference.Service/ConferenceBrokerConsumers.cs:37</code>), and ADC
           Engagement consumes four events, <code>AttendeeCheckedIn</code>, <code>SessionFeedbackSubmitted</code>,
-          <code>EventFeedbackSubmitted</code> and <code>UserDeleted</code> (<code>MMCA.ADC.Engagement.Service/Program.cs:292-295</code>), the
+          <code>EventFeedbackSubmitted</code> and <code>UserDeleted</code> (<code>MMCA.ADC.Engagement.Service/Program.cs:293-296</code>), the
           first of which is ADC&#39;s first <strong>self-consumption</strong> over the broker: Engagement publishes
           <code>AttendeeCheckedIn</code> and consumes it back, which is precisely the shape a redelivery would double-count,
           so the inbox is load-bearing there rather than decorative. Store Sales consumes three events,
@@ -653,6 +655,22 @@
           <li>Anchors in the live sections (Status, Decision, Rationale) were re-verified against current
           source.</li>
           </ul>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. No decision changed: the inbox still resolves ON for a broker
+          transport, the row is still staged by <code>TryBeginAsync</code> and closed out by <code>CompleteAsync</code>, the unique
+          <code>IX_InboxMessages_MessageId</code> index is still the race guard, and the consumer inventory (five of the
+          seven service hosts consume from the broker, every host sets <code>EnableInbox: true</code>) is unchanged. One
+          live-section anchor moved; older Revision sections keep their original anchors.</p>
+          <ol>
+          <li>Anchors re-verified against current source: ADC Engagement registers its four consumers
+          (<code>AttendeeCheckedIn</code>, <code>SessionFeedbackSubmitted</code>, <code>EventFeedbackSubmitted</code>, <code>UserDeleted</code>, same
+          set and order) at <code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:293-296</code>, so the
+          Decision cites that range. The other live anchors hold as written:
+          <code>DependencyInjection.Messaging.cs:202-209</code>, <code>:52-55</code> and <code>:118</code>;
+          <code>.../Messaging/MessageBusSettings.cs:141</code>; <code>IntegrationEventConsumer.cs:77-81</code> and <code>:123</code>;
+          <code>ScopedIntegrationEventHandlerBase.cs:14-16</code> and <code>:51</code>; the ADC Identity, ADC Conference, Store
+          Sales and Store Catalog consumer registrations; and the seven <code>EnableInbox</code> appsettings lines.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -675,6 +693,7 @@
             <li><a href="#revision-2026-09-11">Revision (2026-09-11)</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             </ul>
           </nav>
         </aside>

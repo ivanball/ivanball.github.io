@@ -1,7 +1,7 @@
 # ADR-106: C# Extension Members as the Public DI Registration Surface
 
 ## Status
-Accepted (2026-09-01; counts re-measured 2026-10-01). Revised 2026-10-06: counts re-measured against current source, and ADC's broker selection is now credited to the framework rather than to an ADC block.
+Accepted (2026-09-01; counts re-measured 2026-10-01). Revised 2026-10-06: counts re-measured against current source, and ADC's broker selection is now credited to the framework rather than to an ADC block. Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 
 ## Context
 Every host in this workspace boots the same way: a `Program.cs` calls a short list of `Add*` methods
@@ -140,9 +140,9 @@ method is what keeps the choice reversible, and the public-API baselines record 
    `:81`). For an extension member the baseline holds a container line plus a member line, and a
    separate classic static line carrying a `this` parameter. `AddApplication` appears as
    `MMCA.Common.Application.DependencyInjection.extension(...IServiceCollection!).AddApplication()`
-   (`Application/PublicAPI.Shipped.txt:257`, container at `:256`) and as
+   (`Application/PublicAPI.Shipped.txt:260`, container at `:259`) and as
    `static MMCA.Common.Application.DependencyInjection.AddApplication(this ...IServiceCollection! services)`
-   (`:1238`). Across the repo there are 290 `.extension` lines in 17 `PublicAPI.Shipped.txt` files,
+   (`:1241`). Across the repo there are 290 `.extension` lines in 17 `PublicAPI.Shipped.txt` files,
    covering 17 packages, and none in any `PublicAPI.Unshipped.txt`. Gateway's surface is shipped like
    the rest: both shapes of `UseCommonForwardedHeaders` sit in `Gateway/PublicAPI.Shipped.txt:12` and
    `:98`, and its `PublicAPI.Unshipped.txt` is a single line.
@@ -188,7 +188,7 @@ method is what keeps the choice reversible, and the public-API baselines record 
     `public R M(...)` inside `extension(T x)` becomes `public static R M(this T x, ...)`, with the
     method names, parameters and return types unchanged. That is exactly the form the baselines
     already record on their `static ...(this ...)` lines
-    (`Application/PublicAPI.Shipped.txt:1238-1250`), so the public API a
+    (`Application/PublicAPI.Shipped.txt:1241-1253`), so the public API a
     consumer binds to would not move and no `Program.cs` line would change. The single exception is
     the extension property in Decision point 8, whose classic form is `get_IsIdValueGenerated(Type)`
     rather than a `this`-marked method.
@@ -218,14 +218,14 @@ method is what keeps the choice reversible, and the public-API baselines record 
 ## Trade-offs
 - **A preview language feature under a floating SDK is a moving target.** No `global.json` pins an
   SDK version and CI installs `dotnet-version: '10.0.x'` (`MMCA.Common/.github/workflows/ci.yml:101`
-  and ten more, `release.yml:50`, `:184`), so the compiler and the analyzers that interpret these
+  and ten more, `release.yml:50`, `:186`), so the compiler and the analyzers that interpret these
   blocks can change on any patch release with no repo edit. That is not hypothetical: the IDE0051
   suppressions record behavior that differs between SDK 10.0.201 and the 10.0.104 the same comment
   names (`Infrastructure/DependencyInjection.Messaging.cs:224`).
 - **Method to property inside a block is a binary break, and it does not look like one.** Both are
   members of the same block and the source edit is two words, but the emitted classic member changes
   from `Name(this T)` to `get_Name(T)` (`Domain/PublicAPI.Shipped.txt:111` beside `:293`, against
-  `Application/PublicAPI.Shipped.txt:257` beside `:1238`). RS0017 catches the removal at build time in
+  `Application/PublicAPI.Shipped.txt:260` beside `:1241`). RS0017 catches the removal at build time in
   MMCA.Common; a consumer that had already compiled against the old member does not get that warning.
 - **Analyzers do not fully understand the shape.** CA1708 is wrong on every block it flags (27
   type-level suppressions) and IDE0051 is wrong across the block boundary (nine more). Each
@@ -291,6 +291,16 @@ No decision or rationale changed; the counts and one attribution were corrected 
   `:496`) and the two `#pragma` pairs.
 - Every remaining line anchor in Context, Decision, Rationale and Trade-offs was re-verified against
   current source and moved where the code moved.
+
+## Revision (2026-10-07)
+Re-verified against current source. No decision, rationale, count or trade-off changed: the DI surface
+is still written as `extension(T)` blocks under `LangVersion preview` and both emitted shapes are still
+baselined. Only line anchors moved after the v1.233.0 release.
+1. Anchors re-verified against current source: the `AddApplication` extension member is at
+   `MMCA.Common/Source/Core/MMCA.Common.Application/PublicAPI.Shipped.txt:260` (container at `:259`) and
+   its classic static form at `:1241`, so the classic `DependencyInjection` block runs `:1241-1253`
+   (ending at `VerifyDecoratorPipeline`); `dotnet-version: '10.0.x'` in
+   `MMCA.Common/.github/workflows/release.yml` is at `:50` and `:186`.
 
 ## Related
 [ADR-015](015-architecture-fitness-functions.md) (the RS0016/RS0017 baseline that freezes both

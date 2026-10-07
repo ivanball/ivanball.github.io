@@ -30,6 +30,7 @@ entity registry is built lazily) and citations refreshed.
 Revised 2026-10-06: per-engine behavior now lives in an internal engine registry
 (`DataSourceEngines`), and Cosmos's missing outbox follows from its non-relational capability rather
 than a `SupportsOutbox` member.
+Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 
 ## Context
 ADR-006 (database-per-service) splits storage along the **Name** axis: several physically separate
@@ -88,21 +89,21 @@ per entity configuration.
 4. **Configuration drives routing.** `DataSourceResolver` builds a per-engine logical-to-physical map
    from the engine-specific connection strings (`SQLServerConnectionString` /
    `PostgreSQLConnectionString` / `CosmosConnectionString` / `SqliteConnectionString`, each read by
-   its engine: `DataSourceResolver.cs:499-500` for the top-level section and `:502-503` for a named
+   its engine: `DataSourceResolver.cs:500-501` for the top-level section and `:503-504` for a named
    entry delegate to the registry, for example `SQLServerDataSourceEngine.cs:52-63`,
    plus `CosmosDatabaseName` and a migrations assembly for the
    two server engines, `SQLServerMigrationsAssembly` and `PostgreSQLMigrationsAssembly`, which SQLite
-   and Cosmos leave empty at the top level (`DataSourceResolver.cs:254`, `:286-287`;
+   and Cosmos leave empty at the top level (`DataSourceResolver.cs:255`, `:287-288`;
    `SqliteDataSourceEngine.cs:74`, `CosmosDataSourceEngine.cs:73`) and which a named entry can override per source
-   (`DataSourceEntrySettings.cs:35`, `:62`); a named entry also carries a `SqliteMigrationsAssembly`
-   (`DataSourceEntrySettings.cs:53`, read at `DataSourceResolver.cs:428`)), read from either
+   (`DataSourceEntrySettings.cs:37`, `:64`); a named entry also carries a `SqliteMigrationsAssembly`
+   (`DataSourceEntrySettings.cs:55`, read by its engine at `SqliteDataSourceEngine.cs:77-80`)), read from either
    configuration shape: the top-level `ConnectionStrings` section, or a named entry under `DataSources`.
    Either shape supplies an engine's `Default` source on its own. The top-level value is the first
    answer; where it names nothing for that engine and the named entries declare exactly one distinct
    database on it, that database is the host's single database and becomes `Default`, which is what lets
    a host declare its databases only under `DataSources` and still route the framework-owned tables
    (outbox, inbox, scheduled jobs, audit trail) that resolve to the `Default` name
-   (`Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/DataSourceResolver.cs:218-276`).
+   (`Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/DataSourceResolver.cs:219-277`).
    Several distinct databases with no top-level value leave `Default` empty, since there is no single
    answer: a genuinely multi-database host names the one it wants shared by adding a
    `DataSources:Default` entry. Logical names with no entry for an engine collapse onto that engine's
@@ -126,7 +127,8 @@ per entity configuration.
    (`Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/CosmosDbContext.cs:123-127`, `:139-143`),
    so its events dispatch in-process only: the save interceptor writes outbox rows only for a relational
    engine
-   (`Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:236`),
+   (`Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:257`,
+   the synchronous save path at `:141`),
    and `BrokerEventBus` throws when the outbox target is not relational
    (`Source/Core/MMCA.Common.Infrastructure/Messaging/BrokerEventBus.cs:70-77`).
 7. **The host surface reads the same two shapes.** The Aspire AppHost helpers
@@ -273,3 +275,29 @@ No decision changed; the per-engine code moved behind an internal registry and t
   (`:74-79`, predicate `:174-179`), the substitution itself is at `:96` and `:127-128`, and the startup
   message is at `:505`.
 - Anchors in the live sections were re-verified against current source.
+
+## Revision (2026-10-07)
+
+Re-verified against current source. No decision changed: the engine registry, the default-seed rule,
+the per-entry migrations assemblies, the relational-only outbox and the 2026-08-29 substitution rule
+all behave as described. Only line anchors moved, including several the 2026-10-06 pass reported as
+re-verified when they were not.
+
+1. Decision item 4 now cites the engine that reads a named entry's `SqliteMigrationsAssembly`
+   (`Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/Engines/SqliteDataSourceEngine.cs:77-80`):
+   the resolver never names that property and reaches it through
+   `GetMigrationsAssembly` (`DataSourceResolver.cs:429`, `:458-459`).
+2. Decision item 6 now also cites the synchronous save path's relational gate
+   (`DomainEventSaveChangesInterceptor.cs:141`) next to the outbox-write gate (`:257`).
+3. The 2026-08-29 substitution behavior sits at these current locations: the preference order from
+   each engine's `SubstitutionPriority` (`DataSourceResolver.cs:35-36`; SQL Server 0 at
+   `SQLServerDataSourceEngine.cs:29`, PostgreSQL 1 at `PostgreSQLDataSourceEngine.cs:27`, SQLite 2
+   at `SqliteDataSourceEngine.cs:26`, Cosmos 3 at `CosmosDataSourceEngine.cs:28`), the per-engine
+   map loop (`DataSourceResolver.cs:75-78`), the configured engines (`:80`, predicate `:175-180`),
+   the pick (`:81` through `:165-169`), the substitution call and body (`:97`, `:128-129`), the
+   no-database case that substitutes nothing (`:47-52`, `:165-169`, `:129`), and the startup message
+   (`:506`).
+4. Anchors re-verified against current source: `DataSourceResolver.cs:500-501` and `:503-504`
+   (connection-string reads), `:219-277` (default seed), `:255` and `:287-288` (top-level migrations
+   assembly), `DataSourceEntrySettings.cs:37`, `:55`, `:64` (per-entry migrations assemblies), and
+   `DomainEventSaveChangesInterceptor.cs:257` (relational outbox gate).

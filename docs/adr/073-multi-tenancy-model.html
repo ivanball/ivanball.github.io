@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -271,7 +272,8 @@
           tenant-unaware factory is now <code>PhysicalDbContextFactory</code>; see Revision below).
           Revised 2026-10-06: the background-work targets come from <code>TenantDataSourceTargets.Expand</code> (not
           <code>ExpandRelational</code>), and the DB-per-tenant section now names the second context guard and the per-row
-          outbox scope.</p>
+          outbox scope.
+          Revised 2026-10-07: anchors refreshed after the v1.233.0 release.</p>
           <h2 id="context">Context</h2>
           <p>MMCA.Common already partitions data along two axes and neither of them is a tenant. ADR-006 partitions by
           <strong>source name</strong> (every entity resolves to a <code>DataSourceKey(Engine, Name)</code>, each module or service owning
@@ -279,11 +281,11 @@
           to&quot;, had no recorded answer, which meant every consumer that ever needed one would invent it: a <code>TenantId</code>
           column here, a <code>Where</code> clause in each handler there, and one forgotten handler is a customer data leak.</p>
           <p>The framework does have the machinery this needs, built for a different reason. <code>ApplySoftDeleteFilters</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:453</code>,
-          called from <code>OnModelCreating</code> (<code>:416</code>) at <code>:418</code>) proves that a global predicate applied by expression tree
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:454</code>,
+          called from <code>OnModelCreating</code> (<code>:417</code>) at <code>:419</code>) proves that a global predicate applied by expression tree
           to every matching entity type makes an invariant unforgettable, and EF10&#39;s <strong>named</strong> query filters
-          (<code>modelBuilder.Entity(clrType).HasQueryFilter(SoftDeleteFilterName, filter)</code>, <code>:465</code>, the name itself a
-          constant at <code>:474</code>) mean a second filter can be added beside the first rather than replacing it. The
+          (<code>modelBuilder.Entity(clrType).HasQueryFilter(SoftDeleteFilterName, filter)</code>, <code>:466</code>, the name itself a
+          constant at <code>:475</code>) mean a second filter can be added beside the first rather than replacing it. The
           interceptor pipeline resolved in <code>OnConfiguring</code> (declared at <code>:290</code>, the interceptor block at <code>:297-322</code>) proves that a write-side rule can be enforced
           once for every context.</p>
           <p>That left a specific set of open questions: whether a tenant is a row discriminator or a database, what
@@ -402,24 +404,24 @@
           <h3 id="background-work-drains-and-migrates-per-tenant">Background work drains and migrates per tenant</h3>
           <p><code>OutboxProcessor</code> and <code>OutboxCleanupService</code> enumerate <code>(source, tenant?)</code> pairs from <code>TenancySettings</code>
           (<code>TenantDataSourceTargets.Expand</code>,
-          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/TenantDataSourceTargets.cs:51</code>,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/TenantDataSourceTargets.cs:52</code>,
           reached through <code>FrameworkTableTargets.Relational</code> (<code>FrameworkTableTargets.cs:44</code>, <code>:63</code>), which
-          <code>OutboxProcessor.GetOutboxTargets</code> (<code>OutboxProcessor.cs:141-142</code>) and
+          <code>OutboxProcessor.GetOutboxTargets</code> (<code>OutboxProcessor.cs:144-145</code>) and
           <code>OutboxCleanupService.GetRelationalTargets</code> (<code>OutboxCleanupService.cs:192</code>) call: one shared target per
           source plus one target per tenant that overrides that source) and call <code>ITenantContext.SetTenant</code> inside
           the per-target scope before obtaining the context, through the shared <code>CreateTenantScope</code> helper
-          (<code>TenantDataSourceTargets.cs:99-118</code>, which sets the tenant under <code>AmbientOrigin.Suppress</code> at <code>:104</code>;
-          called at <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:181</code>
+          (<code>TenantDataSourceTargets.cs:100-119</code>, which sets the tenant under <code>AmbientOrigin.Suppress</code> at <code>:105</code>;
+          called at <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:184</code>
           and <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxCleanupService.cs:98</code>), so the
-          factory routes to the tenant&#39;s database and the claim-lease update (<code>OutboxProcessor.cs:397-401</code>, the <code>ExecuteUpdateAsync</code>
-          that sets <code>LockedUntil</code> and <code>LockToken</code> at <code>:399</code>) runs against the right rows. The processor also opens a
-          fresh tenant scope per dispatched row through the same helper (<code>OutboxProcessor.cs:516</code>), on which the
+          factory routes to the tenant&#39;s database and the claim-lease update (<code>OutboxProcessor.cs:358-359</code>, the <code>ExecuteUpdateAsync</code>
+          that sets <code>LockedUntil</code> and <code>LockToken</code> at <code>:359</code>) runs against the right rows. The processor also opens a
+          fresh tenant scope per dispatched row through the same helper (<code>OutboxProcessor.cs:498</code>), on which the
           row&#39;s stored origin is restored before dispatch. Routing does not depend on a tenant
           column, but the row does carry one: <code>OutboxMessage.TenantId</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:95</code>, assigned from the origin at
           <code>:146</code>) is a nullable string mapped with a 64-character, non-Unicode limit
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:681</code>,
-          the length from <code>TenantIdMaxLength</code> at <code>:483</code>),
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:682</code>,
+          the length from <code>TenantIdMaxLength</code> at <code>:484</code>),
           and it records the tenant the row was written under so delivery can restore it (see the Revision
           (2026-09-11)).</p>
           <p><code>InitializeDatabaseAsync</code> gains a per-tenant pass: a fresh scope per tenant, <code>SetTenant</code>, then the same
@@ -604,6 +606,31 @@
           <li>Every <code>path:line</code> anchor in the live sections was re-verified against current source and re-anchored
           where it had moved.</li>
           </ul>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. The decision is unchanged: the tenant filter still composes with
+          soft-delete by name, background work still drains per <code>(source, tenant?)</code> target through
+          <code>TenantDataSourceTargets.Expand</code> and <code>CreateTenantScope</code>, and the processor still restores each row&#39;s
+          stored origin on a fresh per-row tenant scope. Only line numbers moved, plus one correction to a note
+          in the Revision (2026-10-01).</p>
+          <ol>
+          <li><strong>The <code>TenantDataSourceTargets</code> remarks are no longer stale.</strong> The Revision (2026-10-01) recorded
+          that the file&#39;s remarks still said the outbox had no tenant column. They now say the outbox&#39;s
+          <code>TenantId</code> column exists and does not partition the drain, because it records the raising scope&#39;s
+          tenant and the processor restores it around each row&#39;s delivery
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/TenantDataSourceTargets.cs:31-34</code>).
+          That section keeps its wording as written.</li>
+          <li>Anchors re-verified against current source: <code>ApplySoftDeleteFilters</code> <code>ApplicationDbContext.cs:454</code>,
+          <code>OnModelCreating</code> <code>:417</code> calling it at <code>:419</code> (and <code>ApplyTenantFilters</code> at <code>:420</code>), the named
+          <code>HasQueryFilter</code> at <code>:466</code>, <code>SoftDeleteFilterName</code> at <code>:475</code>, the <code>OutboxMessage.TenantId</code> mapping at
+          <code>:682</code> with <code>TenantIdMaxLength</code> at <code>:484</code>; <code>TenantDataSourceTargets.Expand</code>
+          <code>TenantDataSourceTargets.cs:52</code>, <code>CreateTenantScope</code> <code>:100-119</code> with <code>AmbientOrigin.Suppress</code> at
+          <code>:105</code>; <code>OutboxProcessor.GetOutboxTargets</code> <code>OutboxProcessor.cs:144-145</code>, the per-target
+          <code>CreateTenantScope</code> call at <code>:184</code>, the claim-lease <code>ExecuteUpdateAsync</code> at <code>:358-359</code> (<code>LockedUntil</code>
+          and <code>LockToken</code> at <code>:359</code>), the per-row scope at <code>:498</code> and <code>AmbientOrigin.Restore</code> at <code>:505-511</code>.
+          For the dated revisions, which keep their anchors as written: <code>OutboxMessage.TenantId</code> is at
+          <code>OutboxMessage.cs:95</code> and mapped at <code>ApplicationDbContext.cs:682</code>; the processor restore is at
+          <code>OutboxProcessor.cs:505-511</code>; <code>CreateTenantScope</code> is at <code>TenantDataSourceTargets.cs:100-119</code>.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -623,6 +650,7 @@
             <li><a href="#revision-2026-09-11">Revision (2026-09-11)</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             </ul>
           </nav>
         </aside>

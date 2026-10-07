@@ -20,7 +20,10 @@ shell-level gallery classes the record had never listed, `ShellPagesE2ETests` an
 `MobileNavKeyboardE2ETests`, are added to the narrative; no decision changed. Revised 2026-10-01: citations
 re-anchored to current source; no decision changed. Revised 2026-10-06: the deploy-gate narrative now records
 the `cross-browser-freshness` gate that enforces firefox and webkit recency on both deploys, and ADC's
-`ProfileManagementTests` base is named precisely (`AdcE2ETestBase`); no decision changed.
+`ProfileManagementTests` base is named precisely (`AdcE2ETestBase`); no decision changed. Revised
+2026-10-07: the CI workflow prune of that day folded `cross-browser-freshness` into a single `freshness` job
+that the `deploy` needs list names, so the record now cites it as a step of that job, and the CI and
+deploy anchors are refreshed after that prune; no decision changed.
 
 ## Context
 Accessibility was documented before it was enforced. The narrative guide
@@ -81,19 +84,20 @@ the package's own workflow bases, and wire it as a required merge check and a de
   `MudTablePager` exposes no `Label`/`aria-label` parameter, so it is not fixable from app markup
   (`:26-33`). Every other WCAG 2.1 AA rule still runs on those pages.
 - **Common gates it cross-browser as a required merge check.** The `ui-e2e` job
-  (`MMCA.Common/.github/workflows/ci.yml:248`) builds the out-of-slnx gallery plus E2E project and runs
-  the axe scans across a `chromium, firefox, webkit` matrix (`:257`), one engine per leg via
-  `E2E_BROWSER` (`:321`), with `fail-fast: false` so each engine reports independently (`:255`). All
+  (`MMCA.Common/.github/workflows/ci.yml:223`) builds the out-of-slnx gallery plus E2E project and runs
+  the axe scans across a `chromium, firefox, webkit` matrix (`:232`), one engine per leg via
+  `E2E_BROWSER` (`:291`), with `fail-fast: false` so each engine reports independently (`:230`). All
   three contexts block merges (`MMCA.Common/CONTRIBUTING.md:63-64`, enumerated in the branch-protection
   payload at `:198-200`).
 - **Both deployed apps gate the deploy on it.** The `e2e-gate` jobs
-  (`MMCA.ADC/.github/workflows/deploy.yml:874`, `MMCA.Store/.github/workflows/deploy.yml:841`) call the
-  reusable `e2e.yml` workflow (ADC `:886`, Store `:853`) chromium-only (ADC `:888`, Store `:855`) against
-  the full Aspire stack, and the `deploy` job waits on that gate (ADC `:1242`, Store `:1187`). The same
-  `deploy` needs list also carries a `cross-browser-freshness` gate (ADC `:1000`, Store `:954`) that
-  launches no browser: it asserts that the scheduled firefox and webkit `e2e.yml` legs (Monday firefox,
-  Thursday webkit) each have a recent successful run, so engine coverage beyond chromium gates the deploy
-  by recency rather than per commit (ADC rationale at `:978-999`, Store at `:945-953`).
+  (`MMCA.ADC/.github/workflows/deploy.yml:792`, `MMCA.Store/.github/workflows/deploy.yml:751`) call the
+  reusable `e2e.yml` workflow (ADC `:804`, Store `:762`) chromium-only (ADC `:806`, Store `:764`) against
+  the full Aspire stack, and the `deploy` job waits on that gate (ADC `:1145`, Store `:1083`). The same
+  `deploy` needs list also carries the `freshness` job (ADC `:1145`, Store `:1083`), whose
+  `cross-browser-freshness` step (ADC `:909`, Store `:856`) launches no browser: it asserts that the
+  scheduled firefox and webkit `e2e.yml` legs (Monday firefox, Thursday webkit) each have a recent
+  successful run, so engine coverage beyond chromium gates the deploy by recency rather than per commit
+  (ADC rationale at `:893-908`, Store at `:848-855`).
 - **The gate already owns design-token decisions.** Contrast values in the shared theme are set to
   what the scan will accept, with the ratio recorded in place: light-palette `WarningContrastText`
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Theme/MMCATheme.cs:36`, rationale at `:28-34`,
@@ -183,8 +187,8 @@ accessibility gate today.
   not machine-checkable and are covered by the manual screen-reader checklist in
   [common-ACCESSIBILITY.md](../guides/common-ACCESSIBILITY.md), which is a periodic human pass, not a gate.
 - **The deploy gate is ui-scoped and may legitimately skip.** Both apps gate `e2e-gate` on a `ui` change
-  filter (ADC `deploy.yml:885`, Store `deploy.yml:852`), and `deploy` accepts `success` or `skipped` for it
-  (ADC `:1287`, Store `:1228`), so a backend-only or infra-only deploy ships without a browser scan. That
+  filter (ADC `deploy.yml:803`, Store `deploy.yml:761`), and `deploy` accepts `success` or `skipped` for it
+  (ADC `:1182`, Store `:1116`), so a backend-only or infra-only deploy ships without a browser scan. That
   is the intended cost trade (a backend change cannot alter rendered markup) with the post-deploy smoke
   gate as backstop, but it does mean "deployed" does not always mean "axe ran on this commit".
 - **Consumer breadth is hand-maintained.** Nothing forces a new page into `AccessibilityTests`, so
@@ -217,6 +221,25 @@ No decision or rationale changed.
   `:539`/`:542`), and the ADC and Store `deploy.yml` gate, reusable-workflow, browser, filter, needs and
   acceptance lines (ADC `:874`, `:886`, `:888`, `:885`, `:1242`, `:1287`; Store `:841`, `:853`, `:855`,
   `:852`, `:1187`, `:1228`).
+
+## Revision (2026-10-07)
+Re-verified against current source. No decision or rationale changed: Common still gates the gallery
+scans across all three engines, both apps still gate the deploy on a chromium-only `e2e-gate` that may
+legitimately skip, and the scheduled firefox and webkit legs still gate it by recency. What moved is
+how that recency check sits in the deploy graph, plus the line anchors.
+1. The 2026-10-07 CI workflow prune merged the separate freshness jobs, `cross-browser-freshness`
+   among them, into one `freshness` job, so the check is no longer its own entry in the `deploy` needs
+   list (it was when the 2026-10-06 revision was written). The needs list now names the `freshness` job
+   (ADC `MMCA.ADC/.github/workflows/deploy.yml:1145`, Store `MMCA.Store/.github/workflows/deploy.yml:1083`),
+   and `cross-browser-freshness` is one step inside that job (ADC `:909`, Store `:856`), with its rationale comment at ADC `:893-908` and Store
+   `:848-855`. The Monday firefox / Thursday webkit recency semantics are unchanged (ADC `:899`, Store
+   `:850`).
+2. Anchors re-verified against current source: the Common `ui-e2e` job (`ci.yml:223`), its
+   `fail-fast: false` (`:230`), browser matrix (`:232`) and `E2E_BROWSER` (`:291`); the ADC and Store
+   `e2e-gate` jobs (ADC `deploy.yml:792`, Store `deploy.yml:751`), their `ui` filter (ADC `:803`, Store
+   `:761`), reusable `e2e.yml` call (ADC `:804`, Store `:762`) and chromium-only browsers (ADC `:806`,
+   Store `:764`); the `deploy` needs lists (ADC `:1145`, Store `:1083`) and their `success`-or-`skipped`
+   acceptance of `e2e-gate` (ADC `:1182`, Store `:1116`).
 
 ## Related
 ADR-015 (architecture fitness functions: the structural tier this parallels at the browser tier, and the

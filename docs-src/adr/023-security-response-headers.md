@@ -20,6 +20,7 @@ Revised 2026-10-01 (a custom provider registered after `AddCommonSecurityHeaders
 `AddSingleton` still wins; only a late `TryAdd` registration loses to the static default).
 Revised 2026-10-06 (credential paths also answer `Pragma: no-cache`, re-apply their cache headers at
 response start over a weaker downstream value, and have their prefixes validated at startup).
+Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 ## Context
 Every client-facing host (the YARP Gateway and the Blazor UI web host in each app) must stamp the same
 hardened HTTP response headers: `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`,
@@ -276,6 +277,29 @@ the forwarded-headers posture are recorded.
    sits between the security headers and the HTTPS redirect. The ordering is unchanged.
 3. Anchors in the live sections were re-verified against current source; the Trade-offs anchors
    moved.
+
+## Revision (2026-10-07)
+
+Re-verified against current source. No decision, rationale or trade-off changed, and the live-section
+anchors (`SecurityHeaders.cs:288`, `:265-266`, `:83-84`; `DependencyInjection.cs:77`, `:56-58`) still
+hold. What moved is the ADC Blazor host: its `Program.cs` lines shifted after the 2026-10-06
+revision, so the anchors that revision recorded for it are stale, and one validator anchor from the
+2026-09-19 revision is stated more precisely here.
+
+1. **The `frame-src` validator checks are spread over three places, not one.** `ForbiddenCharacters`
+   (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Security/BlazorCspSettingsValidator.cs:19`)
+   refuses only `*`, `'`, `"`, `;`, `,`, `@`, `?` and `#` (the last three cover user info, query and
+   fragment). Whitespace is refused separately (`:43`), the https scheme is required at `:52` and the
+   root-only path at `:54`, all inside `IsValidOrigin` (`:40-55`). The refused set the 2026-09-19
+   revision lists is unchanged.
+2. Anchors re-verified against current source: in the ADC Blazor host
+   (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs`), `AddCommonBlazorCsp` is at `:194` and
+   `AddCommonSecurityHeaders` at `:195`, `UseCommonUiForwardedHeaders()` at `:210`,
+   `UseCommonSecurityHeaders()` at `:216`, `UseUiRateLimiting()` at `:221` and
+   `UseHttpsRedirection()` at `:234`, with the rationale comments at `:183-193` (CSP and HSTS),
+   `:199-209` (forwarded headers), `:212-215` (security headers, no `UseHsts`) and `:218-220` (rate
+   limiter). The ordering is unchanged: forwarded headers, then security headers, then rate limiting,
+   then the HTTPS redirect.
 
 ## Related
 ADR-019 (rate limiting, the other always-on edge protection living in the same Aspire layer), ADR-022

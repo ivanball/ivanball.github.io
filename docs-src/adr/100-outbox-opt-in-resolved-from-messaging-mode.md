@@ -10,6 +10,7 @@ so this is a configuration decision and never a migration. Revised 2026-09-25 (r
 moved; the guard now lives in the `DependencyInjection.Messaging.cs` partial). Revised 2026-10-01 (re-anchored the startup-guard and
 model-configuration citations and named the guard's second call site). Revised 2026-10-06: Decision 1
 now scopes the explicit-value-wins rule to the in-process transport, as its cited source does.
+Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 
 ## Context
 ADR-003 gives every host a transactional outbox: domain and integration events are written to
@@ -58,10 +59,10 @@ something, keep the schema, and refuse the one combination that cannot work.
 3. **The row writes are gated at both write points**, not only the background services:
    `InProcessEventBus` takes its direct-dispatch branch when the outbox is off, with no rows, no save
    and no processor to retry (`Source/Core/MMCA.Common.Infrastructure/Messaging/InProcessEventBus.cs:43`,
-   branch at `:81-85`, documented at `:70-74`), and `DomainEventSaveChangesInterceptor` captures and
+   branch at `:82-86`, documented at `:70-74`), and `DomainEventSaveChangesInterceptor` captures and
    dispatches in-process without writing rows
-   (`Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:55`,
-   contract at `:42-45`). Both fall back to the outbox path when no options are resolvable, so a
+   (`Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:54`,
+   flag at `:64`, contract at `:46-50`, row-writing gate at `:257`). Both fall back to the outbox path when no options are resolvable, so a
    container that binds neither keeps the previous behavior. This is the same branch a context
    without outbox support (Cosmos) already took, reached by a second condition rather than a new one.
 
@@ -86,8 +87,8 @@ something, keep the schema, and refuse the one combination that cannot work.
 
 6. **The EF model does not change.** `OutboxMessage` is configured in `OnModelCreating` for every
    relational provider
-   (`Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:416`,
-   `ConfigureOutbox` called at `:423`, configuration at `:661-714`),
+   (`Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:417`,
+   `ConfigureOutbox` called at `:424`, configuration at `:662-715`),
    independent of the setting. Flipping the flag in either direction is a configuration change and a
    restart, with no migration in any consumer.
 
@@ -147,6 +148,19 @@ citations in Decision 6 (`ApplicationDbContext.cs:417`, `ConfigureOutbox` call `
 - Anchors in Decisions 2, 4 and 6 re-verified against current source and updated (registration
   `DependencyInjection.cs:217-225`, guard `DependencyInjection.Messaging.cs:202`, second call site
   `:60`, `OnModelCreating` at `ApplicationDbContext.cs:416`); no decision or rationale changed.
+
+## Revision (2026-10-07)
+Re-verified against current source. No decision, default or rationale changed: both write points
+still take the direct-dispatch branch when the outbox resolves off, both still fall back to the
+outbox path (`?? true`) when no options are resolvable, and `ConfigureOutbox` is still called
+unconditionally for every relational engine. Only line anchors in Decisions 3 and 6 moved.
+
+1. Anchors re-verified against current source: `InProcessEventBus.cs:43` (flag, unchanged), branch
+   `:82-86` (was `:81-85`), doc `:70-74` (unchanged); `DomainEventSaveChangesInterceptor.cs:54`
+   (class, was `:55`), `_outboxEnabled` at `:64`, `messageBusOptions` contract `:46-50` (was
+   `:42-45`), row-writing gate `:257`; `ApplicationDbContext.cs:417` (`OnModelCreating`, was `:416`),
+   `ConfigureOutbox` call `:424` (was `:423`), body `:662-715` (was `:661-714`), Cosmos skip
+   documented at `:654`.
 
 ## Related
 [ADR-003](003-outbox-dual-dispatch.md) (the outbox itself: the dual-dispatch contract, the processor,

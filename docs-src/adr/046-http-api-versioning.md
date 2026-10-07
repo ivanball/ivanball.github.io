@@ -20,6 +20,7 @@ Revised 2026-10-01 for v1.217.0 (the host registers the single `v1` OpenAPI docu
 `AddCommonOpenApi` only configures it; per-version documents are gone; see the Revision (2026-10-01,
 v1.217.0) below).
 Revised 2026-10-06: the registration also adds `ApiVersionReportingResultFilter` as a global MVC filter so output-cached responses keep the version headers; re-anchored the citations.
+Revised 2026-10-07: anchors re-verified against current source after the v1.233.0 release, no decision change.
 
 ## Context
 The framework's REST surface is served by controllers hosted in extracted service processes behind a
@@ -283,6 +284,25 @@ the framework.
   and `MMCA.Store/.github/workflows/deploy.yml:290` (count check `:299`-`:301`, diff `:303`, upload
   `:308`).
 - Anchors in Decision, Trade-offs and Related were re-verified against current source.
+
+## Revision (2026-10-07)
+
+Re-verified against current source. No decision, rationale or trade-off changed, and every anchor in
+Decision, Trade-offs and Related still resolves. Line numbers cited inside the earlier dated
+revisions (host registrations, the design-time skip helper, both `deploy.yml` gates and both
+`Directory.Build.props` blocks) have since moved and are left as recorded.
+
+1. Anchors re-verified against current source: `AddCommonApiVersioning`
+   (`WebApplicationBuilderExtensions.cs:39`, comment `:41`-`:43`, options `:46`-`:48`, explorer
+   `:49`-`:53`, result filter `:58`-`:60`), `AddCommonOpenApi` (`WebApplicationBuilderExtensions.cs:101`,
+   doc comment `:87`-`:100`), `MapCommonOpenApi` (`OpenApiEndpointExtensions.cs:60`, guard `:62`, throw
+   `:64`-`:72`, `.AllowAnonymous()` `:74`), `ApiVersionReportingResultFilter.cs:21`,
+   `ServiceInfoControllerBase.cs:30`, `:39`, `:40`, `:45`, `:46`, `:51`, `:54`, both subclasses
+   (`ServiceInfoController.cs:17`, `:18`, `:19`, `:23` in ADC Conference and Store Catalog),
+   `ServiceInfoVersioningContractTestsBase.cs:20`, `:39`, `:55`, `ApiVersioningTests.cs:14`,
+   `OpenApiContractTestsBase.cs:31`, `EntityControllerBase.cs:31-33`, and the `AddCommonApiVersioning`
+   host call sites (ADC Conference `Program.cs:219`, Identity `:154`, Engagement `:150`, Notification
+   `:139`; Store Catalog `:140`, Sales `:147`, Identity `:134`; Helpdesk Web `Program.cs:35`).
 
 ## Related
 ADR-010 (integration-event schema versioning: the asynchronous, `SchemaVersion`-carried,

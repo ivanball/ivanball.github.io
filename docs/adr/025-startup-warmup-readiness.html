@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -250,7 +251,8 @@
           adds cannot reach <code>/health/ready</code> (see Context and Decision). Revised 2026-09-19: <code>/health</code> and
           <code>/health/ready</code> are served from a short-TTL single-flight report cache (<code>MapCachedHealthChecks</code> over
           <code>CachedHealthReportProvider</code>, 5 seconds by default), so an anonymous flood costs one probe round per
-          window rather than one per request; <code>/alive</code> stays uncached (see Decision).</p>
+          window rather than one per request; <code>/alive</code> stays uncached (see Decision). Revised 2026-10-07: anchors
+          refreshed after the v1.233.0 release.</p>
           <h2 id="context">Context</h2>
           <p>On the Azure Container Apps Consumption plan a replica that has been idle is CPU-throttled, and a
           scale-from-zero or scaled-out replica starts cold. The first authenticated request on such a replica
@@ -355,7 +357,7 @@
           the rest of the subsystem: caught, logged at warning level, never fatal (<code>:141-146</code>, <code>:205-207</code>). Both
           production apps subclass and register it: ADC in Conference
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/SelfHttpOutputCacheWarmupTask.cs:22</code>, registered
-          at <code>Program.cs:311</code>), Engagement (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/SelfHttpWarmupTask.cs:23</code>,
+          at <code>Program.cs:313</code>), Engagement (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/SelfHttpWarmupTask.cs:23</code>,
           <code>Program.cs:160</code>) and Identity (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/SelfHttpWarmupTask.cs:23</code>,
           <code>Program.cs:174</code>); Store in Catalog
           (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/SelfHttpOutputCacheWarmupTask.cs:23</code>,
@@ -440,6 +442,18 @@
           <p>No decision or rationale changed. The per-host <code>AddWarmupTask</code> registrations moved again and are now
           ADC Conference <code>Program.cs:311</code>, Engagement <code>:160</code>, Identity <code>:174</code> and Store Catalog <code>Program.cs:184</code>,
           Identity <code>:145</code>, Sales <code>:158</code>. Anchors were re-verified against current source.</p>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. No decision or rationale changed: the readiness gate, the
+          120-second per-task ceiling, the PING-class rule and the six production <code>SelfHttpWarmupTaskBase</code>
+          subclasses are as recorded. Only the ADC Conference registration moved.</p>
+          <ol>
+          <li>Anchors re-verified against current source: ADC Conference
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:313</code> (was <code>:311</code>, which the
+          2026-10-06 revision recorded); unchanged and re-checked: ADC Engagement <code>Program.cs:160</code>, Identity
+          <code>:174</code>, Store Catalog <code>Program.cs:184</code>, Identity <code>:145</code>, Sales <code>:158</code>, the six subclass declarations
+          (ADC <code>:22</code>, <code>:23</code>, <code>:23</code>; Store <code>:23</code>, <code>:25</code>, <code>:26</code>), <code>Extensions.Health.cs:154-156</code> and
+          <code>WarmupHostedService.cs:42</code>, <code>:53</code>, <code>:69</code>.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-004 (the OIDC discovery document the built-in task pre-fetches, and the auth-side view of the same
           cold-start), ADR-009 (the Polly resilience pipeline that absorbs the lazy retry when the gate opens
@@ -463,6 +477,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

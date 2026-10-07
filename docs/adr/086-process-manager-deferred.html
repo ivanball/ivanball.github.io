@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -245,7 +246,11 @@
           <a href="054-saga-compensation-and-reconciliation.html">ADR-054</a> remains the accepted mechanism until then.
           Revised (2026-09-11): the first per-instance scheduled deadline now exists in MMCA.Store, built on
           ADR-114&#39;s internal-command queue rather than on a state machine, which retires one of the three
-          absent properties without meeting this record&#39;s trigger; the deferral stands. See the Revision below.</p>
+          absent properties without meeting this record&#39;s trigger; the deferral stands. See the Revision below.
+          Revised 2026-10-07: the in-process provider is not MassTransit, so a state machine needs a broker
+          provider (or a new in-process MassTransit registration) to ride, and the EF saga repository would be
+          a fourth MassTransit package that the v8 pin gate covers only once its id is added; the deferral
+          stands.</p>
           <h2 id="context">Context</h2>
           <p><a href="054-saga-compensation-and-reconciliation.html">ADR-054</a> decided how this workspace achieves
           cross-boundary consistency without two-phase commit: <strong>choreography</strong>. Each step of a workflow raises
@@ -299,10 +304,14 @@
           machine</strong>, not a hand-rolled orchestrator and not a third-party workflow engine:</p>
           <ul>
           <li><strong><code>MassTransitStateMachine&lt;TInstance&gt;</code> for the definition.</strong> The transport abstraction
-          (<a href="066-broker-transport-selection.html">ADR-066</a>) is already MassTransit across all three providers
-          (<code>InProcess</code>, RabbitMQ locally, Azure Service Bus in production), so the state machine rides the
-          bus that already exists. Introducing a second coordination technology beside it would mean two
-          retry models, two dead-letter destinations and two sets of transport configuration.</li>
+          (<a href="066-broker-transport-selection.html">ADR-066</a>) is MassTransit for both broker providers (RabbitMQ
+          locally, Azure Service Bus in production), so in a broker deployment the state machine rides the
+          bus that already exists. The <code>InProcess</code> provider is not MassTransit: <code>AddBrokerMessaging</code> returns
+          before <code>AddMassTransit</code> is ever called, and the bus is the hand-written <code>InProcessMessageBus</code>
+          dispatching through <code>IDomainEventDispatcher</code>. A coordinator therefore needs a broker provider, or
+          a MassTransit registration added for the in-process mode, before it has a bus to ride. Introducing
+          a second coordination technology beside MassTransit would mean two retry models, two dead-letter
+          destinations and two sets of transport configuration.</li>
           <li><strong>Durable correlation state per workflow instance.</strong> One row per running workflow, keyed by a
           <code>CorrelationId</code>, carrying the current state and whatever the workflow needs to remember between
           steps. It belongs in the owning service&#39;s own database
@@ -326,8 +335,10 @@
           <p>MassTransit is <strong>pinned to v8</strong> and the pin is a build gate
           (<a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a>): <code>MassTransit</code>, <code>MassTransit.RabbitMQ</code> and
           <code>MassTransit.Azure.ServiceBus.Core</code> are all held at 8.5.11 in
-          <code>MMCA.Common/Directory.Packages.props:124-126</code>, because v9 requires a commercial license. The v8 saga
-          state machine and its EF Core saga repository are fully capable, so the pin does not block the design;
+          <code>MMCA.Common/Directory.Packages.props:124-126</code>, because v9 requires a commercial license. The design
+          assumes the v8 saga state machine and its EF Core saga repository are sufficient, an assumption no
+          source here exercises (no saga type and no <code>MassTransit.EntityFrameworkCore</code> version exists in any
+          repo), so the pin is not known to block the design;
           what it blocks is assuming a future v9 feature, and it means the coordinator inherits the pin&#39;s own
           risk. If v8 stops receiving security fixes, a process manager built on it is inside the blast radius
           of that migration rather than beside it. That is a reason to build the coordinator when a workflow
@@ -344,8 +355,10 @@
           simpler option being tolerated. Checkout&#39;s saga state is two fields on <code>Order</code>, and an orchestrator
           would introduce a state row that duplicates them, with the two able to disagree. ADR-054&#39;s argument
           is sound and this record does not weaken it.</li>
-          <li><strong>The coordinator is cheap to add and expensive to have prematurely.</strong> A saga state machine is a
-          class, a migration and a repository registration on infrastructure that already exists. What is
+          <li><strong>The coordinator is cheap to add and expensive to have prematurely.</strong> In a broker deployment a
+          saga state machine is a class, a migration, one new package and a repository registration on a
+          MassTransit bus that already exists; under the <code>InProcess</code> provider it also needs a MassTransit
+          registration that does not exist today. What is
           expensive is the standing cost: a second persistence model, a second failure mode (a stuck instance
           that is neither running nor complete), and a second place to look during an incident. Nothing today
           earns that.</li>
@@ -354,7 +367,9 @@
           a placement, a licensing constraint and a relationship to ADR-054, which is most of the design work.</li>
           <li><strong>Naming the trigger keeps the deferral falsifiable.</strong> &quot;We do not need one yet&quot; is a claim that can
           be checked against a workflow inventory. Without the three-part test above it is a preference.</li>
-          <li><strong>One coordination technology, chosen for the transport already in place.</strong> Reaching for a workflow
+          <li><strong>One coordination technology, chosen for the transport the broker providers already use.</strong> The
+          <code>InProcess</code> provider has no MassTransit bus, so this holds for broker deployments; a monolith
+          deployment adopting the coordinator takes on MassTransit either way. Reaching for a workflow
           engine outside the bus would add an operational dependency to two production deployments to solve a
           problem neither currently has.</li>
           </ul>
@@ -425,6 +440,39 @@
           <code>deadlineScheduler.ArmAsync</code> call there (<code>CheckOutHandler.cs:180</code>) that delegates to
           <code>CheckOutDeadlineScheduler</code>, which schedules the <code>ExpireUnpaidOrderInternalCommand</code>
           (<code>.../ShoppingCarts/UseCases/CheckOut/CheckOutDeadlineScheduler.cs:55-56</code>).</p>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. The deferral, its trigger, the coordinator&#39;s shape and the v8
+          licensing constraint are unchanged, and the absence evidence still holds. One statement in the
+          Decision was wrong and is corrected in place: MassTransit is the transport for the two broker
+          providers only, not for all three. The statements that depended on it (the v8 saga repository&#39;s
+          capability, the coordinator&#39;s cost, one coordination technology) are qualified to match.</p>
+          <ol>
+          <li><strong>The in-process provider is not MassTransit.</strong> <code>AddBrokerMessaging</code> returns early when the
+          provider is <code>InProcess</code>, before <code>AddMassTransit</code> is reached
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:52-55</code>,
+          <code>AddMassTransit</code> at <code>:64</code>, and the switch&#39;s <code>InProcess</code> arm notes the short-circuit at <code>:342-344</code>).
+          In that mode the bus is <code>InProcessMessageBus</code>, which dispatches through <code>IDomainEventDispatcher</code>
+          (<code>.../Messaging/InProcessMessageBus.cs:19-26</code>). A saga state machine therefore has a bus to ride
+          only under RabbitMQ or Azure Service Bus; the modular-monolith deployment would need a broker
+          provider or a new in-process MassTransit registration first. The Decision bullet now says so.</li>
+          <li><strong>The EF saga repository is not yet a dependency.</strong> The pin covers exactly three packages,
+          <code>MassTransit</code>, <code>MassTransit.RabbitMQ</code> and <code>MassTransit.Azure.ServiceBus.Core</code>, all at 8.5.11
+          (<code>MMCA.Common/Directory.Packages.props:124-126</code>), and no <code>MassTransit.EntityFrameworkCore</code>
+          version is declared there. Building the coordinator adds a fourth MassTransit package, and the
+          build gate that holds the pin checks a fixed list of exactly those three ids
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/DependencyVersionTestsBase.cs:17-22</code>,
+          loop at <code>:27-35</code>), so the new package is guarded only once its id is added to
+          <code>MassTransitPackageIds</code>. Whether the v8 saga repository is sufficient is a library claim no
+          source here exercises, so the Decision now states it as an assumption, and the Rationale bullets
+          on cost and on one coordination technology are qualified for the <code>InProcess</code> provider.</li>
+          <li>Anchors re-verified against current source: the 2026-09-11 Revision&#39;s
+          <code>CheckOutHandler.cs:178-184,226-229</code> is kept as written; the file now has 214 lines, the arm call
+          is the single line <code>CheckOutHandler.cs:180</code> (comment at <code>:176-179</code>, return at <code>:182</code>), and the
+          scheduling it delegates to is <code>CheckOutDeadlineScheduler.cs:55-58</code>. The Context anchors hold:
+          <code>PaymentReconciliationService.cs:69</code> (class) and <code>:75</code> (<code>PeriodicBackgroundService</code> base),
+          <code>RefreshSessionCleanupService.cs:53</code>, <code>PermissionGrantRefreshService.cs:36</code>,
+          <code>InternalCommandCleanupService.cs:46</code>, <code>OutboxCleanupService.cs:49</code>.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="054-saga-compensation-and-reconciliation.html">ADR-054</a> (the accepted mechanism this record defers an
           alternative to: choreographed compensation, the persisted aggregate marker, and the reconciliation
@@ -459,6 +507,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-09-11-the-first-per-instance-deadline-exists-and-it-is-not-a-state-machine">Revision (2026-09-11): the first per-instance deadline exists, and it is not a state machine</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

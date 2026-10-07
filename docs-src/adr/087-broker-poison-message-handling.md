@@ -9,6 +9,7 @@ backoff and dead-letter ladder is reused unchanged rather than amended, and
 posture is also unchanged, recorded below as an explicit rejection rather than an omission.
 Revised 2026-10-01: broker wiring and Aspire meter citations moved, and the meter-count sentence corrected.
 Revised 2026-10-06: the circuit-breaker search now names its one non-breaker hit in `HttpResultExecutor.cs`.
+Revised 2026-10-07: the breaker scope now notes that monolith integration events pass through it via `InProcessMessageBus` (so failing in-process handlers can open it), the database posture names both relational engines and the Sqlite and Cosmos contexts that run on the provider default, the circuit-open log latch is stated per data source, and `OutboxProcessor.cs` anchors are refreshed.
 
 ## Context
 Delivery in this workspace has always been at-least-once with retries on both legs: the outbox
@@ -43,8 +44,8 @@ Service Bus, the production transport, has native scheduled delivery and needs n
 
 ## Decision
 Three changes, each scoped to one failure: second-level redelivery configured per transport, a fault
-consumer with its own meter, and a circuit breaker around the outbox's broker publish and nothing
-else.
+consumer with its own meter, and a circuit breaker around the outbox's integration-event publish
+(the broker hop in a distributed host) and nothing else.
 
 ### Second-level redelivery is transport-aware, and the flag exists only because of RabbitMQ
 `MessageBusSettings` gains two members. `EnableDelayedRedelivery`
@@ -107,32 +108,45 @@ name is duplicated as a literal in `MMCA.Common.Aspire`
 declaration records in its own doc comment at `BrokerMetrics.cs:9-11`) so the Aspire service defaults
 can subscribe to it without a package reference.
 
-### A circuit breaker around the outbox broker publish, and nothing else
+### A circuit breaker around the outbox integration-event publish, and nothing else
 `OutboxProcessor` holds a per-instance Polly `ResiliencePipeline`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:102`,
-built at `:698-709`) and wraps **exactly one call** in it: `state.Bus.PublishAsync(state.Event, ct)`
-(`:548-552`). The in-process dispatch branch is deliberately outside it (`:544-547`, `:554-558`), no
-database call is inside the delegate, and the intent is stated at the field (`:90-101`, "never the
-database calls" at `:91`).
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:105`,
+built at `:868-879`) and wraps **exactly one call** in it: `state.Bus.PublishAsync(state.Event, ct)`
+inside `DeliverAsync` (`:676-696`, the `ExecuteAsync` at `:685-689`, the publish at `:687`). The
+branch for a domain event that is not an integration event (`IDomainEventDispatcher`, `:691-695`) is
+outside it, no database call is inside the delegate, and the intent is stated at the field
+(`:93-104`, "never the database calls" at `:94`). The wrapped call is `IMessageBus.PublishAsync`, so
+what sits behind the breaker is whichever bus the host registers: the broker in a distributed host,
+and `InProcessMessageBus`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/InProcessMessageBus.cs:19`, the default
+`TryAddScoped` registration at `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:321`)
+in a monolith. That bus calls the same `IDomainEventDispatcher` (`InProcessMessageBus.cs:25`), so in a
+monolith integration events pass through the breaker and only the non-integration domain-event branch
+is outside it. The inline comment at `OutboxProcessor.cs:682-684` ("Only the broker hop is wrapped",
+because an in-process call "has no transport to be dead") describes the distributed case only; in a
+monolith the wrapped call is itself an in-process dispatch.
 
 Its parameters live in `MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/BrokerResilienceDefaults.cs`
 (`:24`) as static properties: `FailureRatio` 0.5 (`:32`), `MinimumThroughput` 10 (`:40`),
 `SamplingDuration` 30 seconds (`:47`), `BreakDuration` 15 seconds (`:55`). The pipeline is a breaker
 with **no retry strategy paired with it** (`BrokerResilienceDefaults.cs:17-22`,
-`OutboxProcessor.cs:93-94`), because the outbox already is the retry: adding a Polly retry inside a
+`OutboxProcessor.cs:96-97`), because the outbox already is the retry: adding a Polly retry inside a
 loop that re-leases and retries would multiply the attempt count without changing the outcome.
-`ShouldHandle` excludes `OperationCanceledException` (`:706-707`) so a host shutdown never counts
+`ShouldHandle` excludes `OperationCanceledException` (`:876-877`) so a host shutdown never counts
 toward opening the circuit.
 
 **`BrokenCircuitException` follows the ordinary failure path.** It is caught by the same
-`catch (Exception ex)` as any publish failure (`:584`), increments `RetryCount` (`:586`), records
-`LastError` (`:587`) and re-leases the row with the usual backoff (`:595-596`); it dead-letters only
-on `RetryCount >= MaxRetries` like everything else (`:620`). Only observability differs: the run sets
-`circuitOpen` (`:606`), increments `broker.circuit.open.count` (`:609-611`), writes one
-`LogBrokerCircuitOpen` line **per batch** rather than per message (`:508`, `:614-618`), and suppresses the
-per-message retry log for those rows (`:631-635`). A short-circuited publish is a failed publish, not a
-new category of one; what the breaker buys is that it fails in microseconds instead of a connection
-timeout, and that the log volume during an outage is one line per batch instead of one per message.
+`catch (Exception ex)` as any publish failure (`:532`, after the shutdown-cancellation rethrow at
+`:524-531`), increments `RetryCount` (`:534`), records `LastError` (`:535`) and re-leases the row with
+the usual backoff (`:543-544`); it dead-letters only on `RetryCount >= MaxRetries` like everything else
+(`:568`). Only observability differs: the run sets `circuitOpen` (`:554`), increments
+`broker.circuit.open.count` (`:557-559`), writes one `LogBrokerCircuitOpen` line naming the data source
+**per batch** rather than per message (latch at `:480`, logged at `:562-566`, defined at `:945-946`),
+and suppresses the per-message retry log for those rows (`:579-583`). A batch here is one
+`DispatchMessagesAsync` call for one data-source target (`:467-474`), and each row's outcome is
+persisted by `RecordOutcomeAsync` outside the `try` (`:592`). A short-circuited publish is a failed publish, not a
+new category of one; what the breaker buys in a distributed host is that it fails in microseconds
+instead of a connection timeout, and that the log volume during an outage is one line per batch instead of one per message.
 
 ### A database circuit breaker was considered and rejected in this wave
 The obvious symmetric move is a breaker on the query path, so a failing database sheds load instead of
@@ -145,7 +159,8 @@ otherwise only the HTTP and gRPC standard resilience handlers and the defaults t
 `MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/GrpcResilienceDefaults.cs:21`,
 `MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:49,52`), plus one doc comment that
 names `BrokenCircuitException` as a client-side transport fault the UI result executor classifies
-(`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/HttpResultExecutor.cs:122`), which is
+(`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/HttpResultExecutor.cs:124`, in the
+doc comment at `:118-126` on `IsTransportFault` at `:127-128`), which is
 not a breaker. There is no breaker in any persistence path and none is added here.
 
 The reason is that EF Core's connection resiliency and a Polly breaker do not compose: the
@@ -159,8 +174,13 @@ is why `DbContextFactory` materializes the strategy explicitly
 already being retried inside the strategy would either count one logical failure many times or force
 the strategy to be replaced. That
 is an EF execution-strategy rework, a much larger change than a breaker, and it is not what this wave
-was for. **The EF retry strategy plus `CommandTimeoutSeconds` (`SQLServerDbContext.cs:55`) remains the
-database resilience posture**, recorded here so the asymmetry is a decision rather than an oversight.
+was for. **The EF retry strategy plus `CommandTimeoutSeconds` remains the database resilience
+posture** on both relational engines (SQL Server at `SQLServerDbContext.cs:55`, `:63-66`; PostgreSQL at
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/PostgreSQLDbContext.cs:66`,
+`:74-77`, the same 5 retries and 10-second maximum delay), recorded here so the asymmetry is a decision
+rather than an oversight. The Sqlite and Cosmos contexts (`SqliteDbContext.cs`, `CosmosDbContext.cs`)
+configure neither an EF retry strategy nor a command timeout, so on those engines the posture is the
+provider default.
 
 ## Rationale
 - **The transport asymmetry follows a real capability difference, not a preference.** RabbitMQ needs a
@@ -181,7 +201,9 @@ database resilience posture**, recorded here so the asymmetry is a decision rath
 - **A breaker on the publish is worth it precisely because the outbox already retries.** The breaker
   adds no delivery guarantee at all. It converts a broker outage from N connection timeouts per batch
   into N microsecond short-circuits, and the log from one line per message into one per batch. That is
-  a cost and a noise fix, and it is honest to describe it as only that.
+  a cost and a noise fix, and it is honest to describe it as only that. It holds for a host with a
+  broker; in a monolith there is no connection to time out, so the latency saving does not apply
+  and the breaker's remaining effect is the one recorded under Trade-offs.
 - **Feeding `BrokenCircuitException` into the normal path keeps one retry ladder.** A special case
   would give short-circuited rows a different retry count, a different backoff, or a different
   dead-letter threshold, and the outbox would then have two failure taxonomies to reason about during
@@ -215,9 +237,18 @@ database resilience posture**, recorded here so the asymmetry is a decision rath
   (`Extensions.Telemetry.cs:311`) can drift from the Infrastructure declaration with no compiler error and
   no test: the symptom would be a meter that exports nothing.
 - **The breaker is per processor instance, so its state is not shared.** The pipeline is a per-instance
-  field (`OutboxProcessor.cs:102`, rationale `:95-100`), so with N replicas the broker sees up to N
+  field (`OutboxProcessor.cs:105`, rationale `:98-103`), so with N replicas the broker sees up to N
   independent circuits and the effective failure threshold is N times the configured one, the same
   per-replica caveat ADR-019 records for the rate limiter.
+- **In a monolith, failing handlers can open a "broker" circuit in a host with no broker.**
+  `DomainEventDispatcher.DispatchAsync`
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Services/DomainEventDispatcher.cs:46-86`) has no
+  catch, so an exception from an in-process integration-event handler surfaces through
+  `InProcessMessageBus` into the breaker, and `ShouldHandle` counts every exception except
+  cancellation (`OutboxProcessor.cs:876-877`). Enough handler failures inside the sampling window open
+  the circuit for 15 seconds, deferring every integration event from that processor (not only the
+  failing type), incrementing `broker.circuit.open.count` (`:557-559`) and writing the Warning
+  "Broker circuit is open for data source ..." (`:562-566`, `:945`) although no broker exists.
 - **Fifteen seconds of break can be worse than none for a slow broker.** With a 0.5 failure ratio over
   a 30-second window and a 10-request minimum, a broker that is degraded rather than down trips the
   circuit repeatedly, and each open period defers work the processor would partly have completed. The
@@ -251,6 +282,44 @@ breaker" finding unchanged.
   handler at `:170-179`, and `DbContextFactory.cs:576` replaces `:605` (both recorded in the 2026-10-01
   Revision); the `OutboxProcessor.cs`, `IntegrationEventConsumerExtensions.cs` and `IUnitOfWork.cs`
   citations in the live sections are refreshed.
+
+## Revision (2026-10-07)
+Re-verified against current source. No decision changed: the outbox still holds a breaker-only
+Polly pipeline with no retry strategy, `BrokenCircuitException` still follows the ordinary failure
+path, and there is still no breaker in any persistence path. What moved is the `OutboxProcessor.cs`
+layout (the publish now sits in `DeliverAsync`, and each row's outcome is persisted by
+`RecordOutcomeAsync`), plus three clarifications the earlier text left implicit; the first narrows
+the publish rationale to distributed hosts and adds one trade-off.
+
+1. The breaker wraps `IMessageBus.PublishAsync`
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:687`),
+   so in a monolith, where the registered bus is `InProcessMessageBus`
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/InProcessMessageBus.cs:19`, registered
+   by default at `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:321`) and
+   dispatches through `IDomainEventDispatcher` (`InProcessMessageBus.cs:25`), integration events still
+   pass through it; only the non-integration domain-event branch (`OutboxProcessor.cs:691-695`) is
+   outside it. The Decision heading and intro now say "integration-event publish" rather than "broker
+   publish", the inline comment at `OutboxProcessor.cs:682-684` is recorded as describing the
+   distributed case only, the Rationale's connection-timeout argument is scoped to hosts with a
+   broker, and a Trade-off records that `DomainEventDispatcher.DispatchAsync`
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/Services/DomainEventDispatcher.cs:46-86`, no
+   catch) lets failing in-process handlers open the circuit, with the counter (`:557-559`) and the
+   "Broker circuit is open" Warning (`:945`) firing in a host with no broker.
+2. The database posture is engine-specific: SQL Server (`SQLServerDbContext.cs:55`, `:63-66`) and
+   PostgreSQL (`PostgreSQLDbContext.cs:66`, `:74-77`) both set `CommandTimeoutSeconds` and
+   `EnableRetryOnFailure` with 5 retries and a 10-second maximum delay, while the Sqlite and Cosmos
+   contexts configure neither and run on whatever the provider defaults to.
+3. The circuit-open log latch is per `DispatchMessagesAsync` call, which is one data-source target
+   (`OutboxProcessor.cs:467-474`, latch at `:480`), and the log line names that data source
+   (`:945-946`).
+4. Anchors re-verified against current source: in `OutboxProcessor.cs` the pipeline field is at `:105`
+   (summary `:93-104`, "never the database calls" `:94`, no-retry text `:96-97`, per-instance rationale
+   `:98-103`), `BuildBrokerPublishPipeline` at `:868-879` with `ShouldHandle` at `:876-877`,
+   `DeliverAsync` at `:676-696` (`ExecuteAsync` `:685-689`, intent comment `:682-684`), and the failure
+   path at `:524-531` (shutdown rethrow), `:532`, `:534`, `:535`, `:543-544`, `:554`, `:557-559`,
+   `:562-566`, `:568`, `:579-583` and `:592`; the `HttpResultExecutor.cs` doc-comment hit is at `:124`
+   (comment `:118-126`, `IsTransportFault` `:127-128`), not `:122`, which also supersedes the `:122`
+   recorded in the 2026-10-06 Revision.
 
 ## Related
 [ADR-003](003-outbox-dual-dispatch.md) (the outbox publish leg this breaker wraps, and the retry,

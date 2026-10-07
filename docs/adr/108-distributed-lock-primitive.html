@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -249,13 +250,15 @@
           anchor were re-pinned). Revised 2026-10-01 (adoption is four call sites, the fourth being the
           framework&#39;s password-reset token redemption, and the key namespace now defaults to the host&#39;s
           application namespace; see Revision below). Revised 2026-10-06: ADC&#39;s service ceiling is now
-          2 replicas by default and 4 in conference mode, and the Redis lock suite has seven cases, not six.</p>
+          2 replicas by default and 4 in conference mode, and the Redis lock suite has seven cases, not six.
+          Revised 2026-10-07: adoption is five call sites, the fifth being the framework&#39;s OAuth exchange-code
+          redemption in <code>OAuthControllerBase</code>, which ADC&#39;s OAuth controller wires with the lock.</p>
           <h2 id="context">Context</h2>
           <p>Both deployed apps run more than one replica of every service. ADC&#39;s Conference container app
-          (<code>MMCA.ADC/infra/main.bicep:1890</code>) scales with <code>minReplicas: 1</code> and
-          <code>maxReplicas: conferenceScaledMaxReplicas</code> (scale at <code>:2033</code>), which is 2 by default and 4 in
-          conference mode (<code>:191</code>); Identity and Engagement scale the same way (<code>:1882</code>, <code>:2166</code>) and
-          Notification at a fixed <code>maxReplicas: 2</code> (<code>:2341</code>). Anything in the framework that
+          (<code>MMCA.ADC/infra/main.bicep:1922</code>) scales with <code>minReplicas: 1</code> and
+          <code>maxReplicas: conferenceScaledMaxReplicas</code> (scale at <code>:2067</code>), which is 2 by default and 4 in
+          conference mode (<code>:192</code>); Identity and Engagement scale the same way (<code>:1914</code>, <code>:2202</code>) and
+          Notification at a fixed <code>maxReplicas: 2</code> (<code>:2388</code>). Anything in the framework that
           relies on &quot;only one of these runs at a time&quot; therefore runs once per replica unless the exclusion
           lives somewhere all the replicas can see.</p>
           <p>The in-process tools do not reach that far. A <code>SemaphoreSlim</code>, or the striped <code>KeyedSemaphoreStripe</code>
@@ -263,8 +266,8 @@
           callers inside one process only. The framework already had a second, stronger answer for durable
           queue work: a database claim-lease. <code>OutboxProcessor</code> stamps <code>LockedUntil</code> and a <code>LockToken</code> in a
           conditional <code>ExecuteUpdateAsync</code> so exactly one replica wins a row
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:370</code>,
-          claim at <code>:397-401</code>), and <code>ScheduledJobRunner</code> does the same on <code>ScheduledJobEntry</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:330</code>,
+          claim at <code>:357-361</code>), and <code>ScheduledJobRunner</code> does the same on <code>ScheduledJobEntry</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Scheduling/ScheduledJobRunner.cs:410</code>, claim at
           <code>:437-445</code>). That pattern needs a row to claim.</p>
           <p>Some critical sections have no such row. The API idempotency filter&#39;s window between executing an
@@ -290,7 +293,7 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/IDistributedLock.cs:30</code>) exposes only
           <code>TryAcquireAsync(string key, TimeSpan ttl, TimeSpan wait, CancellationToken)</code> returning
           <code>Task&lt;IAsyncDisposable?&gt;</code> (<code>:59-63</code>). The interface is public and frozen in the API baseline
-          (<code>Application/PublicAPI.Shipped.txt:318-319</code>); both implementations are <code>internal sealed</code> in
+          (<code>Application/PublicAPI.Shipped.txt:321-322</code>); both implementations are <code>internal sealed</code> in
           Infrastructure, so a consumer binds to the contract and never to a backend.</p>
           </li>
           <li><p><strong>Best-effort, stated on the type.</strong> The contract documents itself as &quot;a best-effort lock, not a
@@ -319,7 +322,11 @@
           per-acquisition random token (<code>:59</code>). Release evaluates a Lua script that deletes the key only when
           its stored value still equals that token (<code>:36-37</code>, run at <code>:113-115</code>), which is what makes the
           release owner-scoped. A result of 0 means the holder&#39;s TTL had already lapsed, and it is logged as
-          a warning that the section was not exclusive for all of it (<code>:84</code>, <code>:117-122</code>). Keys carry a
+          a warning that the section was not exclusive for all of it (<code>:84</code>, <code>:117-122</code>). A fault during
+          release (a Redis exception or timeout) is caught and logged as a warning rather than thrown
+          (<code>:87-88</code>, <code>:124-129</code>): the release runs after the guarded work has already committed, and the
+          key expires on its own TTL, so a failed release never turns completed work into a failure
+          (<code>:106-110</code>). Keys carry a
           <code>lock:</code> prefix so locks cannot collide with cache entries in a shared instance (<code>:30</code>), qualified
           by the same cache key namespace the cache uses (<code>:55</code>, <code>CacheKeyNamespace.Qualify</code> at
           <code>Infrastructure/Caching/CacheKeyPrefix.cs:91</code>). Waiting polls every 50ms (<code>:40</code>). Single-instance
@@ -367,13 +374,13 @@
           </li>
           <li><p><strong>The choose-between rule.</strong> Work that already owns a durable row uses the claim-lease: the
           outbox and the scheduler both stamp <code>LockedUntil</code> plus a <code>LockToken</code> in a conditional update whose
-          predicate is the exclusion (<code>OutboxProcessor.cs:397-401</code>, <code>ScheduledJobRunner.cs:437-445</code>), which
+          predicate is the exclusion (<code>OutboxProcessor.cs:357-361</code>, <code>ScheduledJobRunner.cs:437-445</code>), which
           survives a Redis outage and needs no extra dependency. <code>IDistributedLock</code> is for a section whose
           state is not a row it can conditionally update: a cache entry, an external paid API call, a pass
           over rows it does not own. Inventing a row purely to hold a lease is not the answer for those, and
           neither is holding a database transaction open across the work.</p>
           </li>
-          <li><p><strong>Adoption is exactly these four call sites.</strong> The third is ADC&#39;s question submit cap:
+          <li><p><strong>Adoption is exactly these five call sites.</strong> The third is ADC&#39;s question submit cap:
           <code>SubmitQuestionHandler</code> takes the lock as a constructor dependency
           (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs:34</code>)
           and serializes the per-(session, user) open-question cap, whose count-then-insert is not one
@@ -387,9 +394,17 @@
           second TTL (<code>:41</code>) and a 5 second wait (<code>:43</code>), so two concurrent redemptions of one token do not
           both succeed while the lock holds (best-effort per point 2: a holder paused past the TTL, or a host
           on the process-local fallback of point 7, is not excluded across replicas); a redemption that cannot take the lock is answered as an invalid token (<code>:109-112</code>).
+          The fifth is the framework&#39;s OAuth exchange-code redemption: <code>OAuthControllerBase</code> takes an
+          optional lock as its fourth constructor argument
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/OAuthControllerBase.cs:54</code>) and, when
+          one is supplied, reads and burns the single-use code under <code>lock:{cacheKey}</code> (<code>:253-264</code>) with a
+          10 second TTL (<code>:80</code>) and a 5 second wait (<code>:81</code>); a redeem that cannot take the lock is answered
+          as an invalid code (<code>:256-259</code>), and with no lock the read-then-burn runs unlocked, single-use per
+          replica only (<code>:245-248</code>). ADC&#39;s <code>OAuthController</code> passes the lock through
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Controllers/OAuthController.cs:25</code>).
           No other MMCA.Common component, and nothing in MMCA.Store or MMCA.Helpdesk, takes a lock today.
           The primitive is shipped and registered in every host that calls <code>AddInfrastructure</code>, and used in
-          four places. That an application takes no lock
+          five places. That an application takes no lock
           of its own is the rule applied, not a gap to close: a lock is reached for only when there is
           duplicate work to collapse that persistence cannot guard (point 2), and work that owns a durable
           row takes the claim-lease instead (point 11). An adoption difference between the two apps is
@@ -444,14 +459,15 @@
           <code>adc</code> and the same <code>Cache:KeyPrefix</code> of <code>adc:</code>
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/appsettings.json:38</code>, <code>:45</code>, and the same in the
           Identity, Engagement and Notification service hosts) and share one Redis instance
-          (<code>MMCA.ADC/infra/main.bicep:1410</code>, injected per app at <code>:1735</code>, <code>:1967</code>, <code>:2102</code>, <code>:2254</code>). Two ADC
+          (<code>MMCA.ADC/infra/main.bicep:1434</code>, injected per app as <code>ConnectionStrings__redis</code> at <code>:1759</code>,
+          <code>:1999</code>, <code>:2136</code>, <code>:2290</code>). Two ADC
           services choosing the same logical key would collide, and today only the callers&#39; key shapes
           prevent it.</li>
           <li><strong>409 is a real cost to a caller.</strong> The idempotency filter answers a duplicate whose original is
           still in flight with a conflict rather than a longer wait (<code>IdempotencyFilter.cs:262-271</code>), so the
           client has to retry. That is deliberate, but it is behavior the TTL and wait pairing tunes rather
           than removes.</li>
-          <li><strong>Four consumers is a thin evidence base.</strong> The contract&#39;s edges (TTL loss, wait expiry, idempotent
+          <li><strong>Five consumers is a thin evidence base.</strong> The contract&#39;s edges (TTL loss, wait expiry, idempotent
           disposal) are exercised by unit tests against a mocked <code>IDatabase</code>
           (<code>Infrastructure.Tests/Concurrency/RedisDistributedLockTests.cs:60-202</code>, seven cases) and by the
           in-process tests, not against a live Redis under failover. The behavior most likely to matter in
@@ -488,6 +504,28 @@
           <code>AddInfrastructure</code>, the DI tests, the Redis release script, the scoring handler, the outbox
           claim, and the ADC Bicep Redis resource and injections.</li>
           </ul>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. The primitive, its contract, the in-process implementation, the
+          registration and the choose-between rule are unchanged; adoption grew by one framework call site,
+          and the Redis release now absorbs its own faults.</p>
+          <ol>
+          <li>Point 12 and the Trade-offs consumer count now name five call sites, not four. The fifth is
+          <code>OAuthControllerBase</code>, which takes an optional <code>IDistributedLock</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/OAuthControllerBase.cs:54</code>) and,
+          when given one, reads and burns the single-use exchange code under <code>lock:{cacheKey}</code>
+          (<code>:253-264</code>, 10 second TTL at <code>:80</code>, 5 second wait at <code>:81</code>); ADC&#39;s <code>OAuthController</code> supplies it
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Controllers/OAuthController.cs:25</code>).
+          MMCA.Store and MMCA.Helpdesk still take no lock and declare no <code>OAuthControllerBase</code> subclass.</li>
+          <li>Anchors re-verified against current source: the public API baseline
+          (<code>Application/PublicAPI.Shipped.txt:321-322</code>), the outbox claim (<code>OutboxProcessor.cs:330</code>,
+          conditional update at <code>:357-361</code>), and the ADC Bicep Conference app (<code>main.bicep:1922</code>), its scale
+          (<code>:2067</code>), <code>conferenceScaledMaxReplicas</code> (<code>:192</code>), the Identity and Engagement scale lines
+          (<code>:1914</code>, <code>:2202</code>), Notification&#39;s fixed ceiling (<code>:2388</code>), the Redis resource (<code>:1434</code>) and its
+          per-app <code>ConnectionStrings__redis</code> environment injections (<code>:1759</code>, <code>:1999</code>, <code>:2136</code>, <code>:2290</code>).</li>
+          <li>Point 6 now records that a fault during the Redis release is caught and logged as a warning
+          instead of propagating (<code>RedisDistributedLock.cs:87-88</code>, <code>:124-129</code>), so a failed release never
+          fails work that already committed; the key still expires on its TTL.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="017-request-idempotency.html">ADR-017</a> (the HTTP idempotency filter, the first consumer, whose
           409-on-lock-miss this record explains), <a href="026-caching-strategy.html">ADR-026</a> (the cache registration
@@ -515,6 +553,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

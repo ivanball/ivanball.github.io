@@ -7,6 +7,7 @@ even when only child rows changed, and a concurrency-conflict detector joins the
 contracts).
 Revised 2026-10-01 (current-state corrections and refreshed citations, no decision changed).
 Revised 2026-10-06: the RowVersion mapping and the PostgreSQL/SQLite re-stamp are selected by the engine's declared `RowVersionStrategy` capability rather than by provider, and stale citations were refreshed.
+Revised 2026-10-07: MMCA.Helpdesk also subclasses `ConcurrencyConventionTestsBase` (three consumers), MMCA.Common's own subclass is recorded as vacuous (its map declares no module layer), and stale anchors were refreshed against current source.
 ## Context
 Every mutable aggregate in the framework is edited through a load-modify-save handler: the update use
 case fetches the tracked entity, applies the request, and calls `SaveChangesAsync`. With one shared
@@ -42,12 +43,12 @@ stale update fails inside the UPDATE statement.
   declared in `MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IRowVersioned.cs`) so a child
   row can be reached without a second generic parameter. EF configures the property on **every**
   non-owned `IAuditableEntity` in `ConfigureConcurrencyTokens`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:588`,
-  called from `OnModelCreating` at `:420`). The mapping keys on the engine's declared capability
-  (`Engine.Capabilities.RowVersion == RowVersionStrategy.StoreGenerated`, `:591`) rather than on the
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:589`,
+  called from `OnModelCreating` at `:421`). The mapping keys on the engine's declared capability
+  (`Engine.Capabilities.RowVersion == RowVersionStrategy.StoreGenerated`, `:592`) rather than on the
   provider: SQL Server, the one engine declaring `StoreGenerated`, maps it to a server-generated
-  `rowversion` (`IsRowVersion`, `:601`), and the other relational engines map it as a plain
-  application-managed token (`IsConcurrencyToken`, `:605`). EF then includes the token in every UPDATE/DELETE `WHERE` clause
+  `rowversion` (`IsRowVersion`, `:602`), and the other relational engines map it as a plain
+  application-managed token (`IsConcurrencyToken`, `:606`). EF then includes the token in every UPDATE/DELETE `WHERE` clause
   and raises `DbUpdateConcurrencyException` when it matches no row.
 - **A read carries the token; a write does not.** `IConcurrencyAware`
   (`MMCA.Common/Source/Core/MMCA.Common.Shared/DTOs/IConcurrencyAware.cs:15`) declares a
@@ -98,7 +99,7 @@ stale update fails inside the UPDATE statement.
   `ProblemDetailsFactory`, so they carry the same `traceId`/`requestId` diagnostics as every other
   problem response on the surface, and each carries the standard `errors` extension with a stable
   code: `Concurrency.PreconditionRequired` (`:169`), `Concurrency.MalformedIfMatch` (`:181`),
-  `Concurrency.PreconditionFailed` (`:192`).
+  `Concurrency.PreconditionFailed` (`:193`).
 - **`SetOriginalRowVersion` is the persistence extension point.**
   `IWriteRepository.SetOriginalRowVersion(TEntity, byte[])`
   (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IRepository.cs:408`)
@@ -124,10 +125,19 @@ stale update fails inside the UPDATE statement.
   any that **does** implement `IConcurrencyAware`, because a token in the body would give the same
   check a second, competing source. `ConcurrencyConventionTestsBase` exposes it as a single `[Fact]`
   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Domain/ConcurrencyConventionTestsBase.cs:14`),
-  and **both** consumers subclass it
+  and all three consumers subclass it
   (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Domain/ConcurrencyConventionTests.cs:3`,
-  `MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Domain/ConcurrencyConventionTests.cs:3`, each
-  supplying its own `IArchitectureMap`). A module with no mutable aggregate is legitimately vacuous.
+  `MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Domain/ConcurrencyConventionTests.cs:3`,
+  `MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/ArchitectureTests.cs:56`, where
+  `TicketUpdateRequest` is the request it inspects), each supplying its own `IArchitectureMap`. A
+  module with no mutable aggregate is legitimately vacuous. MMCA.Common subclasses it as well
+  (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Domain/ConcurrencyConventionTests.cs:12`,
+  over `CommonArchitectureMap`, `:14`), but that run checks nothing: the rule reads only
+  `ModuleApplication()`, which keeps layers with a non-empty module
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureMapBase.cs:42`, `:102`),
+  and `CommonArchitectureMap` declares only framework layers
+  (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/CommonArchitectureMap.cs:21-27`). A
+  framework `*UpdateRequest` carrying a body token would not fail it.
 - **The UI speaks the same format.** `ConcurrencyETag` lives in `MMCA.Common.Shared.Http` rather than
   in the API package precisely so both ends of the exchange can use it: the API reads an `If-Match`
   value with it and the UI writes one. `EntityServiceBase.UpdateAsync`
@@ -170,7 +180,8 @@ stale update fails inside the UPDATE statement.
   returned). Answering 409 for a failed precondition would make `If-Match` a decorative alias for an
   ordinary state conflict.
 - **Invariant over discipline (ADR-015).** The `*UpdateRequest` naming convention is checked
-  mechanically in both consumers, so a newly added mutable request cannot reintroduce a body token by
+  mechanically in all three consumers (ADC, Store, Helpdesk) over their module Application
+  assemblies, so a newly added mutable request cannot reintroduce a body token by
   an author simply reaching for the interface. This is the same posture the framework prefers
   elsewhere.
 
@@ -209,7 +220,7 @@ stale update fails inside the UPDATE statement.
   for the capability gate, `:88` on insert, `:97` on update, `StampRowVersion` at `:113-117`); the
   update re-stamp is what lets the next stale writer's `WHERE` clause miss.
   Cosmos gets no framework concurrency token at all: `CosmosDbContext.OnModelCreating`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/CosmosDbContext.cs:124-151`)
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/CosmosDbContext.cs:119-146`)
   calls neither the base nor `ConfigureConcurrencyTokens`, and no ETag concurrency is configured
   anywhere in the framework, so `[SupportsIfMatch]` over a Cosmos-mapped entity stamps an original
   value on a property EF does not compare.
@@ -279,6 +290,32 @@ No decision changed.
 - Anchors in Decision and Trade-offs (`ApplicationDbContext.cs`, `EntityControllerBase.cs`,
   `EFRepository.cs`, `MutateEntityHandlerBase.cs`, `EntityServiceBase.cs`,
   `AuditSaveChangesInterceptor.cs`) were re-verified against current source and refreshed.
+
+## Revision (2026-10-07)
+Re-verified against current source. No decision changed: the token mapping, the header-only
+transport, the three status codes, the original-value stamp and the Cosmos gap all hold as written.
+One adoption statement was incomplete and several anchors had moved.
+
+1. **The convention test has three consumers, and the framework's own run is vacuous.** Besides
+   ADC and Store, MMCA.Helpdesk subclasses `ConcurrencyConventionTestsBase` over
+   `TicketUpdateRequest`
+   (`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/ArchitectureTests.cs:56`).
+   MMCA.Common's own architecture tests subclass it too
+   (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Domain/ConcurrencyConventionTests.cs:12`,
+   over `CommonArchitectureMap` at `:14`), but the rule reads only module Application assemblies
+   (`ArchitectureMapBase.cs:102`) and that map declares none (`CommonArchitectureMap.cs:21-27`), so
+   the run passes over an empty set. Decision and Rationale now say so.
+2. Anchors re-verified against current source: `ApplicationDbContext.cs` `ConfigureConcurrencyTokens`
+   at `:589`, called from `OnModelCreating` at `:421`, the `StoreGenerated` check at `:592`,
+   `IsRowVersion` at `:602`, `IsConcurrencyToken` at `:606` (the values the 2026-10-06 Revision
+   recorded at `:591` and the 2026-10-01 Revision at `:588`/`:601`/`:605` are one line behind);
+   `SupportsIfMatchAttribute.cs` `Concurrency.PreconditionFailed` at `:193` (one line on);
+   `CosmosDbContext.OnModelCreating` at `CosmosDbContext.cs:119-146` (five lines earlier than the
+   2026-10-01 Revision's `:124-151`), still with no
+   `base.OnModelCreating` call (the explanatory comment is at `:139`) and no
+   `ConfigureConcurrencyTokens` call. The 2026-10-01 Revision's `EntityControllerBase.cs:352`,
+   `MutateEntityHandlerBase.cs:294` and `EntityServiceBase.cs:398` are now `:361`, `:300` and `:403`,
+   the values the Decision already cites.
 
 ## Related
 ADR-017 (HTTP request idempotency, which dedups retries of the **same** request, the mirror-image

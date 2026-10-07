@@ -8,15 +8,17 @@ same tag, through the same workflow) and inherits
 everything else, and adds one more entry to the set a consumer sweeps together). The authoritative
 package list and count live in
 [FACTS.md](https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md); this record does not restate
-them.
+them. Revised 2026-10-07: the lockstep rationale now says the metapackage sets its six dependencies
+as minimum-version floors rather than exact pins, and the host claim says application hosts depend
+on all six mostly transitively; anchors refreshed after the v1.233.0 release.
 
 ## Context
 ADR-053 made the install path credential-free: `dotnet add package MMCA.Common.API` works for anyone,
 from nuget.org, with no token and no hand-written `nuget.config`. What it did not shorten is the
-number of lines that follow. A standard application host references six packages before it references
-anything of its own, and their names are the layer names, so the list reads as the architecture but
-also as six chances to get an incomplete set: an app that takes Application and Infrastructure but
-not API compiles until the first controller, and one that omits Aspire compiles until
+number of lines that follow. A standard application pins six packages before it pins anything of
+its own (its application hosts depend on all six, mostly transitively), and their names are the
+layer names, so the list reads as the architecture but also as six chances to get an incomplete
+set: an app that takes Application and Infrastructure but not API compiles until the first controller, and one that omits Aspire compiles until
 `AddServiceDefaults`.
 
 The friction lands hardest exactly where this release is trying to lower the floor. A reader
@@ -69,15 +71,24 @@ Publish a metapackage named `MMCA.Common` that carries dependencies and no code.
 - **The common case should cost one line.** Six references is not hard, it is repetitive and
   order-independent noise that a reader has to verify rather than read, and getting it wrong fails
   later than it should.
-- **The set is not arbitrary.** Every application host in this workspace takes exactly these six.
-  Bundling a set that real hosts already take together is a shortcut, not a new opinion about what
-  belongs where.
+- **The set is not arbitrary.** Every application in this workspace pins all six under Central
+  Package Management (among its other `MMCA.Common.*` entries), and its application hosts (API,
+  service and Blazor web hosts, not the YARP gateway, which takes only `MMCA.Common.Aspire` and
+  `MMCA.Common.Gateway`) end up depending on all six, although none references all of them
+  directly: a host references `MMCA.Common.Aspire` (plus `MMCA.Common.API` in the ADC and Store
+  Blazor web hosts) and receives the other layers transitively through its module projects or the
+  API package's own dependencies. Bundling a set that real hosts already depend on together is a
+  shortcut, not a new opinion about what belongs where.
 - **A code-free package cannot drift from the layers.** With no assembly, there is nothing for the
   metapackage to expose, deprecate or version independently: it is a list of dependencies, and the
   layer rules keep being enforced by the packages it points at.
 - **Lockstep makes it safe.** Because every package ships at one version from one tag (ADR-016), the
-  metapackage can pin its six dependencies at exactly its own version with no risk of the set
-  disagreeing, and a consumer bumping it bumps all six.
+  metapackage declares its six dependencies at a minimum of its own version (plain
+  `ProjectReference` items packed as NuGet floors, not exact `[X]` ranges), and a consumer bumping it
+  raises all six. The floor does not forbid a consumer from also pinning a layer entry above the
+  metapackage (the layers also take each other as floors, so raising one above a directly pinned
+  layer it depends on is an NU1605 downgrade error instead); ADR-016's one-pass sweep, not the
+  metapackage, keeps the set in agreement.
 - **Excluding the specialised packages keeps the bundle honest.** A metapackage that also pulled UI
   and Testing would put MudBlazor and Playwright into a headless API host, which is the failure mode
   that makes people distrust metapackages in the first place.
@@ -89,20 +100,58 @@ Publish a metapackage named `MMCA.Common` that carries dependencies and no code.
   a replacement for it. Nothing in the bundle relaxes the no-phased-rollout rule.
 - **It hides which layer a type came from.** Part of the value of the split is that a
   `PackageReference` list states the layers a project participates in. A single reference gives that
-  up, which matters most in the project where it matters least (the host, which takes all of them
-  anyway).
+  up, which matters most in the project where it matters least (the host, which depends on all of
+  them anyway).
 - **It can pull more than a project needs.** A host that genuinely wants no Aspire dependency should
   keep the explicit five rather than take the bundle: the metapackage has one shape, and trimming it
   per consumer would defeat the point.
 - **NU5128 is suppressed rather than avoided.** The suppression is scoped to this project and
   justified in place, but it is a warning switched off, and a future genuine packaging problem in
   this project would have to be caught by the pack output rather than by the build.
-- **No consumer exercises it.** The package-consumption CI job packs every package
-  (`MMCA.Common/.github/workflows/ci.yml:724`), so a pack break is caught, but it never restores the
-  metapackage: its throwaway consumer references only `MMCA.Common.API`, `MMCA.Common.Infrastructure`
-  and `MMCA.Common.Testing.Architecture` (`:759-761`), and the `MMCA.Common.*` source-mapping pattern
-  (`:743`) would not route the bare `MMCA.Common` id. No application in this workspace builds against the metapackage today, so
-  its ergonomics are asserted rather than demonstrated. That is a deliberate consequence of point 6.
+- **No consumer exercises it.** The package-consumption CI job packs every package in
+  `MMCA.Common.slnx` (`MMCA.Common/.github/workflows/ci.yml:671`), the metapackage included, so a
+  pack break is caught, but it never restores the metapackage: its throwaway consumer references
+  only `MMCA.Common.API`, `MMCA.Common.Infrastructure` and `MMCA.Common.Testing.Architecture`
+  (`:706-708`), its layer-rule probes take only Domain, Application and Infrastructure (`:750-757`),
+  and the `MMCA.Common.*` source-mapping pattern (`:690`) would not route the bare `MMCA.Common` id.
+  No application in this workspace builds against the metapackage today, so its ergonomics are
+  asserted rather than demonstrated. That is a deliberate consequence of point 6.
+
+## Revision (2026-10-07)
+Re-verified against current source. The decision is unchanged: `MMCA.Common` still bundles Shared,
+Domain, Application, Infrastructure, API and Aspire in layer order
+(`MMCA.Common/Source/MMCA.Common/MMCA.Common.csproj:26-31`), still ships no assembly (`:9`) with
+NU5128 suppressed in this project alone (`:14`), and no application or CI consumer restores it. Two
+rationale statements were stated more strongly than source supports and are corrected in place.
+
+1. **The six dependencies are floors, not exact pins.** The metapackage references the six through
+   plain `ProjectReference` items (`MMCA.Common/Source/MMCA.Common/MMCA.Common.csproj:26-31`), which
+   NuGet packs as bare `version="X"` dependencies, a minimum-inclusive range, and nothing in
+   `MMCA.Common/Directory.Build.props` rewrites them to exact `[X]` ranges. The floor equals the
+   metapackage's own version, so bumping it raises all six, but a consumer can still pin a layer
+   entry above the metapackage without a restore error, unless it also pins, at the old version, a
+   layer the raised one depends on (the layers take each other as floors too, for example
+   `MMCA.Common/Source/Presentation/MMCA.Common.API/MMCA.Common.API.csproj:33-34`, so that case is
+   an NU1605 downgrade). Agreement of the set comes from the ADR-016 one-pass sweep, and the
+   Rationale bullet now says so.
+2. **Hosts depend on the six mostly transitively.** No host in ADC, Store or MMCA.Helpdesk
+   references all six directly, and the ADC and Store gateway hosts depend on none of the layers
+   below Aspire (they take only `MMCA.Common.Aspire` and `MMCA.Common.Gateway`,
+   `MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/MMCA.ADC.Gateway.csproj:3-4`); the Context, Rationale
+   and Trade-offs now say application hosts depend on all six. The Helpdesk web host references
+   only `MMCA.Common.Aspire`
+   (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/MMCA.Helpdesk.Web.csproj:10`) and gets the other
+   layers through its module and migrations `ProjectReference` items (`:13-14`); the ADC and Store
+   Blazor web hosts reference Aspire and API
+   (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/MMCA.ADC.UI.Web.csproj:14-15`,
+   `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/MMCA.Store.UI.Web.csproj:16-17`). What every
+   application does take as a set is the six `PackageVersion` pins
+   (`MMCA.Helpdesk/Directory.Packages.props:84-89`). The Rationale bullet now states that.
+3. Anchors re-verified against current source: the pack step is
+   `MMCA.Common/.github/workflows/ci.yml:671` (it packs every `MMCA.Common.slnx` package, the
+   metapackage included), the throwaway consumer's three `PackageReference` items are `:706-708`,
+   the layer-rule probes that also never take the bare id are `:750-757`, and the `MMCA.Common.*`
+   source-mapping pattern is `:690`.
 
 ## Related
 [ADR-053](053-dual-registry-package-publishing.md) (dual-registry publishing, which the metapackage

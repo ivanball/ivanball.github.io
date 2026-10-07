@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -240,7 +241,8 @@
           <h1 id="adr-037-field-level-encryption-at-rest-aes-256-gcm-ef-converter">ADR-037: Field-Level Encryption at Rest (AES-256-GCM EF Converter)</h1>
           <h2 id="status">Status</h2>
           <p>Accepted (2026-07-06; revised 2026-07-24, 2026-07-25, 2026-08-15, 2026-08-18). Revised 2026-08-18: the
-          versioned-envelope converter is no longer unpublished, it is included in v1.153.0; adoption stays zero.</p>
+          versioned-envelope converter is no longer unpublished, it is included in v1.153.0; adoption stays zero.
+          Revised 2026-10-07: anchors refreshed after the v1.233.0 release.</p>
           <h2 id="context">Context</h2>
           <p>Transparent database encryption (TDE) protects the data files as a whole, but it decrypts
           transparently for anyone who can query the database, so a leaked backup restored on a compromised
@@ -540,6 +542,15 @@
           against current source and still holds; adoption is still zero (no reference to the type in Store, ADC
           or Helpdesk).</li>
           </ul>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. Anchor-only refresh; no decision, rationale, trade-off or adoption
+          fact changed. The converter is still absent from the changelog and adoption is still zero.</p>
+          <ol>
+          <li>Anchors re-verified against current source: the <code>[1.153.0]</code> changelog heading cited in the three
+          revisions above now sits at <code>MMCA.Common/CHANGELOG.md:3344</code> (the section runs to the <code>[1.152.0]</code>
+          heading at <code>MMCA.Common/CHANGELOG.md:3426</code>), and <code>EncryptedStringConverter</code> still has no match
+          anywhere in the changelog. The earlier anchors are left as recorded.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -561,6 +572,7 @@
             <li><a href="#revision-2026-08-15">Revision (2026-08-15)</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             </ul>
           </nav>
         </aside>

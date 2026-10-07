@@ -5,24 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
-  <title>ADR-005: Soft-Delete vs. Right-to-Erasure · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted. Updated 2026-06-27 (documented the [Pii] → IAnonymizable build-time guard and PiiRedactor). Updated 2026-08-26 (DeletedOn/DeletedBy stamps,…">
-  <link rel="canonical" href="https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html">
+  <title>ADR-132: Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-10-07). The policy predates this record: all four .NET repos have built this way for some time, and this is the first written decision…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/132-build-strictness-analyzer-policy.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
-  <meta property="og:title" content="ADR-005: Soft-Delete vs. Right-to-Erasure">
-  <meta property="og:description" content="Accepted. Updated 2026-06-27 (documented the [Pii] → IAnonymizable build-time guard and PiiRedactor). Updated 2026-08-26 (DeletedOn/DeletedBy stamps,…">
-  <meta property="og:url" content="https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html">
+  <meta property="og:title" content="ADR-132: Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors">
+  <meta property="og:description" content="Accepted (2026-10-07). The policy predates this record: all four .NET repos have built this way for some time, and this is the first written decision…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/132-build-strictness-analyzer-policy.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="ADR-005: Soft-Delete vs. Right-to-Erasure">
-  <meta name="twitter:description" content="Accepted. Updated 2026-06-27 (documented the [Pii] → IAnonymizable build-time guard and PiiRedactor). Updated 2026-08-26 (DeletedOn/DeletedBy stamps,…">
+  <meta name="twitter:title" content="ADR-132: Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors">
+  <meta name="twitter:description" content="Accepted (2026-10-07). The policy predates this record: all four .NET repos have built this way for some time, and this is the first written decision…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"005 · Soft-Delete vs. Right-to-Erasure","item":"https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html"}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors","item":"https://ivanball.github.io/docs/adr/132-build-strictness-analyzer-policy.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
   <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -90,7 +90,7 @@
         <span aria-hidden="true">/</span>
         <a href="../../docs/adr/index.html">Architecture Decision Records</a>
         <span aria-hidden="true">/</span>
-        <span class="current">005 · Soft-Delete vs. Right-to-Erasure</span>
+        <span class="current">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</span>
         <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
       </nav>
       <div class="doc-layout doc-layout--toc">
@@ -104,7 +104,7 @@
         <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
         <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
         <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
-        <li><a href="005-soft-delete-vs-erasure.html" aria-current="page">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
         <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
         <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
         <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
@@ -231,108 +231,164 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
-        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html" aria-current="page">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
     </aside>
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
-          <h1 id="adr-005-soft-delete-vs-right-to-erasure">ADR-005: Soft-Delete vs. Right-to-Erasure</h1>
+          <h1 id="adr-132-build-strictness-analyzers-at-error-severity-a-shared-baseline-and-ci-test-floors">ADR-132: Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted. Updated 2026-06-27 (documented the <code>[Pii]</code> → <code>IAnonymizable</code> build-time guard and <code>PiiRedactor</code>).
-          Updated 2026-08-26 (<code>DeletedOn</code>/<code>DeletedBy</code> stamps, the <code>DeleteChildren</code> cascade helper, and a
-          hard-delete fitness rule).
-          Updated 2026-09-07 (a pseudonymous key kept through anonymization must not appear on an
-          anonymous surface; Store&#39;s public review list is served through a contract that declares none).
-          Updated 2026-10-01 (corrected the <code>DeleteChildren</code> composition description; citations refreshed).
-          Revised 2026-10-06: Store&#39;s public review contract carries no reviewer name either, and the interceptor and controller anchors were refreshed.</p>
+          <p>Accepted (2026-10-07). The policy predates this record: all four .NET repos have built this way for
+          some time, and this is the first written decision for it rather than the start of the practice.</p>
           <h2 id="context">Context</h2>
-          <p>The framework&#39;s default deletion model is <strong>soft-delete</strong>: <code>AuditableBaseEntity.Delete()</code> sets <code>IsDeleted = true</code> and EF Core global query filters exclude the row from normal queries. The row (including any personal data it holds) stays in the database indefinitely, which is exactly what audit, referential integrity, and &quot;undelete&quot; (BR-135) require.</p>
-          <p>This conflicts with data-subject <strong>erasure</strong> rights (GDPR Art. 17 right-to-be-forgotten, CCPA deletion): when a person requests deletion, their personal data must actually be removed or anonymized, not merely hidden. Soft-delete alone is therefore non-compliant for personal data, and a consumer app&#39;s published privacy policy (e.g. a &quot;we delete your data within 30 days&quot; promise) cannot be honored by soft-delete.</p>
-          <p>A second source of retained personal data is the <strong>outbox</strong>: processed <code>OutboxMessage</code> rows hold serialized event payloads that may contain personal data and were previously never purged (ADR-003).</p>
+          <p>Four repos (<code>MMCA.Common</code>, <code>MMCA.ADC</code>, <code>MMCA.Store</code>, <code>MMCA.Helpdesk</code>) share one framework, one set of
+          conventions, and a large share of their code is written or edited by agents. A convention that lives
+          only in prose is applied unevenly; a convention the compiler enforces is applied on every build. Two
+          gaps follow from that. First, a warning that does not fail the build is a warning nobody reads, and
+          four repos with four slightly different rule sets mean that code which is clean in one repo fails in
+          another when it moves. Second, a green CI run proves only that the tests which ran passed: a broken
+          filter, a discovery failure, or a deleted test project can turn a suite into zero tests and still
+          report success, and coverage can erode one untested change at a time with no single PR looking
+          responsible.</p>
+          <p>Several existing records already lean on this posture without stating it:
+          <a href="015-architecture-fitness-functions.html">ADR-015</a> (fitness tests as executable conventions),
+          <a href="049-library-configureawait-policy.html">ADR-049</a> (CA2007 is only meaningful because it errors),
+          <a href="109-feature-by-folder-convention.html">ADR-109</a> (IDE0130 under TreatWarningsAsErrors), and the other CI
+          gates (<a href="060-performance-regression-gate.html">ADR-060</a>, <a href="063-accessibility-conformance-gate.html">ADR-063</a>,
+          <a href="092-web-vitals-budget-gate.html">ADR-092</a>). This record states the policy they assume.</p>
           <h2 id="decision">Decision</h2>
-          <p>Separate the two concerns and provide an extension point for each, rather than overloading soft-delete:</p>
           <ol>
-          <li><strong>Soft-delete stays the default</strong> for lifecycle/state management (hide + retain + undelete). It is explicitly <em>not</em> a privacy mechanism. Three things make the lifecycle half complete rather than merely a flag:<ul>
-          <li><strong>The deletion is stamped like any other audit fact.</strong> <code>IAuditableEntity</code> carries <code>DeletedOn</code> and <code>DeletedBy</code> beside <code>CreatedOn/By</code> and <code>LastModifiedOn/By</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IAuditableEntity.cs:26,29</code>, implemented at <code>.../Entities/AuditableBaseEntity.cs:39,45</code>), so &quot;when was this deleted, and by whom&quot; is answerable from the row rather than from an audit-trail lookup (ADR-075). The domain does not write them: the clock and the current user live in infrastructure, so <code>AuditSaveChangesInterceptor</code> stamps them from the <code>IsDeleted</code> <strong>transition</strong> (<code>.../MMCA.Common.Infrastructure/Persistence/Interceptors/AuditSaveChangesInterceptor.cs:125-144</code>, called at <code>:87</code> and <code>:96</code>, prior value read at <code>:121-123</code>) and clears them on the reverse one (<code>Undelete</code>, BR-135, <code>AuditableBaseEntity.cs:89</code>). Driving it from the transition rather than from the value is what keeps a later update to an already-deleted row from re-stamping it, exactly as <code>CreatedOn/By</code> survive every update (<code>AuditSaveChangesInterceptor.cs:15-19</code>, <code>:126-128</code>, early return at <code>:137-140</code>, <code>CreatedOn/By</code> pinned at <code>:91-92</code>; the domain-side note at <code>AuditableBaseEntity.cs:60-64</code>).</li>
-          <li><strong>Cascading to children is a framework helper, not a loop per aggregate.</strong> <code>AuditableAggregateRootEntity.DeleteChildren&lt;TChild, TChildId&gt;(children)</code> (<code>.../Domain/Entities/AuditableAggregateRootEntity.cs:275-294</code>) deletes every still-active child and aggregates the failures into one <code>Result</code> via <code>Result.Combine</code> (ADR-013, <code>:293</code>). Already-deleted children are skipped rather than reported, so re-deleting a parent is idempotent with respect to its children instead of surfacing an <code>AlreadyDeleted</code> error a caller cannot act on (<code>:285-288</code>, reasoning at <code>:253-257</code>). An aggregate composes it as <code>Result.Combine(DeleteChildren&lt;OrderLine, OrderLineIdentifierType&gt;(_lines), base.Delete())</code> (<code>:264</code>), so a failing child fails the whole cascade&#39;s <code>Result</code>. Both arguments are evaluated before <code>Combine</code> runs (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/Result.cs:124</code>), so the root&#39;s in-memory <code>IsDeleted</code> is set even when a child fails; what keeps the cascade atomic is that the caller does not save a failed <code>Result</code>.</li>
-          <li><strong>A hard delete is a reviewable exception, enforced by a fitness rule.</strong> <code>ArchitectureRules.HardDeletesOnlyInAllowedTypes</code> (<code>.../Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Domain/ArchitectureRules.SoftDelete.cs:62</code>, surfaced through <code>.../Bases/Domain/SoftDeleteEnforcementTestsBase.cs:17,29-31</code>, whose <code>AllowedHardDeleteTypes</code> is empty by default and therefore bans hard deletes outright until a repo names its exceptions, <code>:27</code>) fails the build when EF Core&#39;s erasing members (<code>DbSet.Remove</code>/<code>RemoveRange</code>, <code>DbContext.Remove</code>/<code>RemoveRange</code>, <code>ExecuteDelete</code>/<code>ExecuteDeleteAsync</code>: <code>ArchitectureRules.SoftDelete.cs:10-11</code>, scoped to the entity-set declaring types at <code>:18-24</code>) are called from a type outside the repo&#39;s allowlist, which is the short list of places where erasing a row IS the requirement: retention purge jobs, outbox and audit-trail cleanup, and the erasure handlers below (<code>:26-34</code>, <code>SoftDeleteEnforcementTestsBase.cs:21-26</code>). Neither NetArchTest nor reflection can see a call inside a method body, so the rule reads IL through the Mono.Cecil that NetArchTest already carries and matches callees by full name, which keeps the testing package&#39;s zero-reference stance toward EF Core (<code>ArchitectureRules.SoftDelete.cs:36-43</code>, the callee test at <code>:124</code>). It sees only direct calls: a hard delete reached through a repo-owned interface is caught at the implementing type, so that implementation goes on the allowlist and the abstraction stays usable (<code>:51-56</code>).</li>
-          </ul>
-          </li>
-          <li><strong>Erasure is an explicit, additive capability.</strong> Aggregates that store personal data implement <code>IAnonymizable</code> (<code>MMCA.Common.Domain.Interfaces</code>). An application-layer erasure handler loads the aggregate, calls <code>Anonymize()</code> (idempotent, returns <code>Result</code>), and saves: overwriting personal fields in place so foreign keys and the audit trail survive. Fields that must remain retrievable are persisted through the AES-256-GCM <code>EncryptedStringConverter</code>.</li>
-          <li><strong>Outbox retention is bounded.</strong> <code>OutboxCleanupService</code> purges processed outbox rows older than <code>Outbox:RetentionDays</code> (default 7; set <code>0</code> to disable) across every relational data source, so event payloads are not retained indefinitely.</li>
-          <li><strong>A build-time guard backs the per-entity opt-in.</strong> Domain properties holding data-subject personal data are marked <code>[Pii]</code> (<code>MMCA.Common.Domain.Attributes.PiiAttribute</code>, property-targeted). A fitness function (<code>ArchitectureRules.EntitiesWithPiiImplementAnonymizable</code>, surfaced through <code>PiiConventionTestsBase</code>) <strong>fails the build</strong> if any Domain entity declaring a <code>[Pii]</code> property does not implement <code>IAnonymizable</code>, so &quot;this aggregate holds personal data but has no erasure path&quot; is caught by tooling, not by review. The companion <code>PiiRedactor</code> (<code>MMCA.Common.Domain.Privacy</code>) masks the same <code>[Pii]</code>-marked members when an entity is written to a log or telemetry attribute, so personal data does not leak through diagnostics.</li>
+          <li><strong>Warnings are errors, for the compiler and for code analysis alike.</strong> Every repo&#39;s root
+          <code>Directory.Build.props</code> sets <code>TreatWarningsAsErrors</code> and <code>CodeAnalysisTreatWarningsAsErrors</code> to
+          <code>true</code> (<code>MMCA.Common/Directory.Build.props:7</code>, <code>:13</code>; <code>MMCA.ADC/Directory.Build.props:10</code>, <code>:13</code>;
+          <code>MMCA.Store/Directory.Build.props:10</code>, <code>:13</code>; <code>MMCA.Helpdesk/Directory.Build.props:13</code>, <code>:16</code>).
+          All four also pin <code>AnalysisLevel</code> to <code>latest</code>, set <code>AnalysisMode</code> to <code>All</code> and turn on
+          <code>EnforceCodeStyleInBuild</code> (<code>MMCA.Common/Directory.Build.props:11</code>, <code>:12</code>, <code>:14</code>;
+          <code>MMCA.ADC/Directory.Build.props:11</code>, <code>:12</code>, <code>:14</code>; <code>MMCA.Store/Directory.Build.props:11</code>, <code>:12</code>,
+          <code>:14</code>; <code>MMCA.Helpdesk/Directory.Build.props:14</code>, <code>:15</code>, <code>:17</code>), so IDE-only style rules run in the
+          command-line build too.</li>
+          <li><strong>Five third-party analyzer packages run on every project in the strict build.</strong> Meziantou,
+          Microsoft.VisualStudio.Threading, Roslynator, SonarAnalyzer and StyleCop are referenced from the
+          root props of each repo (<code>MMCA.Common/Directory.Build.props:109-125</code>,
+          <code>MMCA.ADC/Directory.Build.props:101-117</code>, <code>MMCA.Store/Directory.Build.props:105-121</code>,
+          <code>MMCA.Helpdesk/Directory.Build.props:33-49</code>). Two kinds of project are outside it. Docker Compose
+          <code>.dcproj</code> projects are excluded by the condition on that item group
+          (<code>MMCA.Common/Directory.Build.props:108</code>, <code>MMCA.ADC/Directory.Build.props:100</code>,
+          <code>MMCA.Store/Directory.Build.props:104</code>, <code>MMCA.Helpdesk/Directory.Build.props:32</code>), because they
+          have no compiler to run an analyzer in. Common&#39;s two build tools, the FACTS generator and the perf
+          gate, are isolated from the strict build through <code>MMCA.Common/build/Directory.Build.props</code>
+          (<code>MMCA.Common/build/facts/facts.csproj:5</code>) and turn off <code>TreatWarningsAsErrors</code>,
+          <code>EnforceCodeStyleInBuild</code> and <code>RunAnalyzers</code> (<code>MMCA.Common/build/facts/facts.csproj:14-16</code>,
+          <code>MMCA.Common/build/perfgate/perfgate.csproj:14-16</code>). The packages are pinned
+          through Central Package Management (<code>MMCA.Common/Directory.Packages.props:223</code>, <code>:229-232</code>;
+          <code>MMCA.ADC/Directory.Packages.props:42-46</code>; <code>MMCA.Store/Directory.Packages.props:61-64</code>, <code>:73</code>;
+          <code>MMCA.Helpdesk/Directory.Packages.props:35-39</code>). The pins are per repo and are not required to
+          match: at the time of writing Common carries Meziantou <code>3.0.294</code> and Roslynator <code>5.0.1</code> while the
+          three consumers carry <code>3.0.290</code> and <code>5.0.0</code>.</li>
+          <li><strong>Every analyzer diagnostic defaults to error severity.</strong> The shared <code>.editorconfig</code> block sets
+          <code>dotnet_analyzer_diagnostic.severity = error</code> (<code>MMCA.Common/.editorconfig:312</code>, the same line in
+          <code>MMCA.ADC/.editorconfig:312</code>, <code>MMCA.Store/.editorconfig:312</code> and <code>MMCA.Helpdesk/.editorconfig:312</code>);
+          individual rules are then relaxed or disabled by name, with the reason beside them, rather than
+          the default being lowered.</li>
+          <li><strong>One analyzer baseline, shared above a marker.</strong> Each repo&#39;s root <code>.editorconfig</code> states the
+          contract at its head (<code>MMCA.Common/.editorconfig:5</code>) and carries the <code># REPO-SPECIFIC DELTAS</code>
+          marker at <code>:821</code> in all four files (<code>MMCA.ADC/.editorconfig:821</code>, <code>MMCA.Store/.editorconfig:821</code>,
+          <code>MMCA.Helpdesk/.editorconfig:821</code>). Everything above the marker is meant to be identical across
+          the four repos; per-repo overrides go below it.</li>
+          <li><strong>The shared block is checked by a script, and an edit to it triggers a reminder.</strong>
+          <code>Tools/Scripts/compare-analyzer-config.ps1</code> (workspace root) reads all four files as lines
+          (<code>:25</code>), finds the marker (<code>:19</code>, <code>:26</code>), keeps the lines above it (<code>:28</code>), compares each slice
+          against Common&#39;s with <code>Compare-Object</code> (<code>:34</code>), and exits <code>1</code> when a line appears on one side only
+          (<code>:47</code>); it reported no such line on 2026-10-07. The check is line-set equality, not byte equality:
+          reading by line drops line endings, and a default <code>Compare-Object</code> is case-insensitive and does not
+          compare line order, so a CRLF/LF difference, a case-only change or a reordered block passes. The
+          post-edit hook does not run
+          the script itself: on an edit to any of the four <code>.editorconfig</code> files it emits a FOLLOW-UP
+          REQUIRED message naming the script and the obligation to mirror an above-marker change
+          (<code>.claude/hooks/post-edit-followups.sh:23-26</code>).</li>
+          <li><strong>CI asserts a minimum test count, so an empty run fails.</strong> The solution-wide unit runs carry
+          <code>--minimum-expected-tests</code>: Common <code>2000</code> (<code>MMCA.Common/.github/workflows/ci.yml:163</code>, and again
+          in <code>release.yml:89</code>), ADC <code>5000</code> (<code>MMCA.ADC/.github/workflows/deploy.yml:353</code>), Store <code>2650</code>
+          (<code>MMCA.Store/.github/workflows/deploy.yml:338</code>), Helpdesk <code>1</code>
+          (<code>MMCA.Helpdesk/.github/workflows/ci.yml:104</code>). The integration tiers carry their own (ADC <code>450</code> at
+          <code>MMCA.ADC/.github/workflows/deploy.yml:716</code>, Store <code>250</code> at
+          <code>MMCA.Store/.github/workflows/deploy.yml:676</code>), as do Common&#39;s gallery E2E (<code>ci.yml:292</code>), Redis
+          (<code>:826</code>), per-engine PostgreSQL and SQL Server (<code>:863</code>, <code>:903</code>) and AppHost (<code>:950</code>) jobs,
+          Common&#39;s Helpdesk canary (<code>ci.yml:527</code>, <code>40</code>)
+          and both consumers&#39; cross-service jobs
+          (<code>MMCA.ADC/.github/workflows/cross-service-tests.yml:110</code>, <code>:169</code>;
+          <code>MMCA.Store/.github/workflows/cross-service-tests.yml:114</code>, <code>:167</code>). Adoption is not universal: the
+          ADC and Store browser E2E runs carry no floor (<code>MMCA.ADC/.github/workflows/e2e.yml:335-337</code>,
+          <code>MMCA.Store/.github/workflows/e2e.yml:394-397</code>), and ADC&#39;s live AI judge omits it on purpose,
+          because without its API key every case skips (<code>MMCA.ADC/.github/workflows/deploy.yml:544-546</code>).</li>
+          <li><strong>CI enforces a line-coverage floor on the unit tier, not the merged report.</strong> Common gates the
+          unit, architecture and bUnit tier with generated code excluded at <code>68.3</code> percent
+          (<code>MMCA.Common/.github/workflows/ci.yml:395-396</code>, comparison at <code>:409</code>), and says why the merged
+          report is not used: the gallery E2E tier dilutes it (<code>:395</code>). ADC gates its own code (filtered to
+          <code>MMCA.ADC.*</code> minus the test, <code>*.Service</code> host and <code>*.Contracts</code> assemblies,
+          <code>MMCA.ADC/.github/workflows/deploy.yml:391</code>) at <code>55.5</code> percent line coverage (<code>:393</code>, comparison at
+          <code>:395</code>) and adds an Application-layer branch floor of <code>77.5</code> percent (<code>:429</code>, <code>:431</code>). Store does
+          the same over <code>MMCA.Store.*</code> minus tests and <code>*.Contracts</code> (<code>MMCA.Store/.github/workflows/deploy.yml:372</code>)
+          at <code>51.6</code> percent line (<code>:374</code>, <code>:376</code>) and <code>72.8</code> percent Application-layer branch (<code>:407</code>, <code>:409</code>). Both consumer floors fail
+          closed when the coverage file is missing (<code>MMCA.ADC/.github/workflows/deploy.yml:385</code>,
+          <code>MMCA.Store/.github/workflows/deploy.yml:368</code>). Helpdesk has no coverage floor in its CI. The
+          values are configuration and change by ratchet; current test counts and measured coverage belong
+          to <code>MMCA.Common/FACTS.md</code> and are not restated here.</li>
           </ol>
-          <p>The framework provides the <strong>extension points</strong> (<code>IAnonymizable</code>, <code>OutboxCleanupService</code>, <code>PiiRedactor</code>) and a <strong>build-time guard</strong> (the <code>[Pii]</code> → <code>IAnonymizable</code> fitness rule); each consumer app owns the <strong>policy</strong>: which properties are <code>[Pii]</code>, the erasure orchestration/endpoint (data-subject request handling), and any data-subject access/export endpoint, because the personal-data model lives in the consumer (e.g. ADC&#39;s <code>User</code>).</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
-          <li><strong>Right tool per concern</strong>: soft-delete answers &quot;is this record active?&quot;; erasure answers &quot;has this person&#39;s data been removed?&quot;. Conflating them (e.g. hard-deleting inside <code>Delete()</code>) would break audit, undelete, and referential integrity.</li>
-          <li><strong>Audit-preserving</strong>: anonymize-in-place keeps the row and its audit fields, satisfying both erasure and accountability obligations simultaneously.</li>
-          <li><strong>Idempotent + Result-based</strong>: matches the framework&#39;s domain conventions and tolerates retried erasure requests.</li>
-          <li><strong>Bounded retention</strong>: the cleanup service closes the &quot;outbox grows forever / retains PII forever&quot; gap noted in ADR-003 without changing delivery semantics.</li>
+          <li><strong>Errors are feedback that cannot be skipped.</strong> An analyzer error sits inside the build loop, names
+          the rule and the line, and needs no reviewer, which makes it the cheapest available enforcement for
+          a convention and the one an agent cannot route around by not noticing.</li>
+          <li><strong>Error-by-default with named relaxations keeps the exceptions visible.</strong> Starting from
+          <code>dotnet_analyzer_diagnostic.severity = error</code> means every rule that does not apply here is turned
+          off by name with a reason, so the exception list is reviewable rather than implied by silence.</li>
+          <li><strong>One baseline makes code portable across the four repos.</strong> Code moved from a consumer into Common
+          (or copied from the Helpdesk template into a new app) meets the same rules on arrival, and a fix
+          for an analyzer finding is the same fix everywhere.</li>
+          <li><strong>A mechanical comparison beats a remembered one.</strong> A changed or missing rule line in an 800-line
+          file is invisible to a reader; <code>compare-analyzer-config.ps1</code> makes it a one-command check with an
+          exit code (for line content, not for case, order or line endings).</li>
+          <li><strong>Count floors turn &quot;zero tests ran&quot; into a failure.</strong> A discovery or filter breakage is otherwise
+          indistinguishable from a passing suite.</li>
+          <li><strong>Unit-tier coverage is the stable number to gate.</strong> It moves with code that has tests, not with
+          how much of the UI an E2E gallery happened to exercise, so a drop is a real regression.</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
-          <li>Erasure is opt-in per entity, but the opt-in is <strong>guarded</strong>: an aggregate exposing a <code>[Pii]</code>-marked property that does not implement <code>IAnonymizable</code> fails the architecture fitness test, so the &quot;holds personal data but is not erasable&quot; gap surfaces at build time rather than in a manual personal-data inventory. The residual risk shifts to <em>marking</em>: an entity that holds personal data on an <strong>unmarked</strong> property is invisible to the guard, so consumers still own the discipline of applying <code>[Pii]</code> to genuine data-subject fields.</li>
-          <li>Anonymization is irreversible by design and is not the same operation as undelete.</li>
-          <li>The framework cannot, on its own, make a consumer compliant: the consumer must still wire the erasure handler, the data-subject request flow, and access/export. This ADR provides the extension points, not the policy.</li>
-          <li>The default 7-day outbox retention is a <strong>behavior change</strong>: consumers upgrading the framework begin purging processed outbox rows older than 7 days unless they set <code>Outbox:RetentionDays = 0</code>.</li>
-          <li>The <code>DeletedOn</code>/<code>DeletedBy</code> stamps are <strong>two new nullable columns on every auditable table</strong>, so adopting the framework version that introduced them costs one scaffolded migration per consumer database. They are additive (expand only, no ADR-057 override needed) and they are not backfilled: rows soft-deleted before the migration keep null stamps forever, so the pair answers &quot;who deleted this&quot; only from that point on.</li>
-          <li>The fitness rule turns &quot;we soft-delete, mostly&quot; into a <strong>reviewed inventory</strong>, not into a guarantee. It sees direct IL calls in the assemblies the repo&#39;s architecture map registers, so raw SQL, a stored procedure, or a delete issued from an unmapped assembly is invisible to it, and an allowlist entry covers every erasing call in the named type rather than the one that was reviewed.</li>
+          <li><strong>Build time.</strong> Five analyzer packages plus code-style enforcement on every project in the strict build lengthen every
+          build, locally and in CI.</li>
+          <li><strong>Suppression pressure.</strong> Error severity makes suppressing a rule the fastest way to green, and a
+          suppression added to make something pass looks the same in a diff as a deliberate relaxation. The
+          defense is review of <code>.editorconfig</code> and <code>NoWarn</code> changes, not this policy.</li>
+          <li><strong>CI-only analyzer failures.</strong> Local <code>local.props</code> source mode can build green while package-mode
+          CI fails on an analyzer, so a green local build is not proof of a green CI run, and some changes
+          need a CI round-trip to surface their findings.</li>
+          <li><strong>A shared-block edit is a four-repo change.</strong> Any edit above the marker must be mirrored into the
+          other three repos, each through its own PR, or <code>compare-analyzer-config.ps1</code> reports drift. The
+          hook only reminds; it does not block.</li>
+          <li><strong>Analyzer pins drift between repos.</strong> The baseline is shared but the package versions are not, so
+          a rule can behave differently in Common than in a consumer until the consumers are bumped.</li>
+          <li><strong>Floors lag and can be gamed.</strong> A count floor set below the real count lets a large deletion pass,
+          a coverage floor kept two points under the measured value absorbs small regressions, and both rise
+          only when someone ratchets them. Coverage measures lines executed, not behavior asserted, so a test
+          that runs code without checking it raises the number. Floors are also uneven: the ADC and Store browser E2E
+          runs carry no count floor (Common&#39;s gallery E2E does), and Helpdesk&#39;s coverage is not gated.</li>
           </ul>
-          <h2 id="revision-2026-09-07">Revision (2026-09-07)</h2>
-          <p>Anonymization keeps the row and its foreign keys: <code>Anonymize()</code> overwrites the personal fields and
-          leaves the entity&#39;s relationships intact, because the aggregate still has to hang off the order and
-          the customer it belongs to. That is deliberate, and it creates one rule this record did not state.</p>
-          <p><strong>A pseudonymous key retained through anonymization must never be projected onto an anonymous
-          surface.</strong> A customer id or an order id is not personal data on its own, but on a public list it
-          re-attaches every &quot;anonymized&quot; row to the same subject, and to that subject&#39;s other rows, for any
-          reader. Anonymization that a caller can undo by grouping is not anonymization.</p>
-          <p>Store&#39;s anonymous review list is the worked case (SEC-Store-07 / SEC-Store-18). The read is served
-          through <code>PublicProductReviewDTO</code>
-          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Reviews/PublicProductReviewDTO.cs:30</code>),
-          which declares the product id, rating, title, body, reviewer name, status and timestamps (<code>:33-60</code>)
-          and no <code>CustomerId</code> and no <code>OrderId</code>. The controller closes the anonymous paged endpoint over that
-          type rather than over the owner-facing DTO
-          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ReviewsController.cs:58</code>,
-          <code>:94-99</code>), and the caller&#39;s <code>sortColumn</code> is validated against the same type (<code>:107</code>), so the public
-          shape bounds both what is returned and what can be ordered on.</p>
-          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
-          <p>No decision changed. One description in Decision 1 was corrected: it said composing
-          <code>Result.Combine(DeleteChildren&lt;...&gt;(_lines), base.Delete())</code> aborts the cascade &quot;before the root is
-          touched&quot;. <code>Result.Combine</code> takes <code>params ReadOnlySpan&lt;Result&gt;</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/Result.cs:124</code>), so both arguments are
-          evaluated first and <code>base.Delete()</code> sets the root&#39;s <code>IsDeleted</code> in memory even when a child fails;
-          the failure surfaces through the combined <code>Result</code>, and the caller not saving it is what keeps the
-          cascade atomic (the framework&#39;s own wording at
-          <code>MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/AuditableAggregateRootEntity.cs:260-261</code> claims
-          only that a failing child aborts the cascade). Citations refreshed: <code>AuditSaveChangesInterceptor.cs</code>
-          (<code>:116-130</code>, <code>:73</code>, <code>:82</code>, <code>:108-109</code>, <code>:15-19</code>, <code>:123-126</code>), <code>AuditableAggregateRootEntity.cs</code>
-          (<code>:275-294</code>, <code>:293</code>, <code>:285-288</code>, <code>:253-257</code>, <code>:264</code>), and the fitness-rule paths, which moved under
-          <code>Rules/Domain/</code> and <code>Bases/Domain/</code> with their line anchors unchanged.</p>
-          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
-          <p>No decision changed. Two facts recorded in the 2026-09-07 Revision were corrected against source:</p>
-          <ul>
-          <li><code>PublicProductReviewDTO</code> carries <strong>no reviewer name</strong>, not only no <code>CustomerId</code> and no <code>OrderId</code>:
-          its doc says so (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Reviews/PublicProductReviewDTO.cs:8</code>,
-          <code>:16-18</code>, an anonymous visitor never sees a byline, so on the cached list the name only leaked).
-          It declares the id, row version, product id, rating, title, body, status and the two timestamps
-          (<code>:33-57</code>); the type is still declared at <code>:30</code>.</li>
-          <li>In <code>ReviewsController.cs</code> the public query service is the constructor parameter at <code>:57</code>, the
-          anonymous paged endpoint is <code>:88-99</code> (<code>[AllowAnonymous]</code> at <code>:89</code>, signature at <code>:93-99</code>, the
-          public query service called at <code>:105</code>), and <code>sortColumn</code> is validated by
-          <code>QueryFieldService.Validate&lt;PublicProductReviewDTO&gt;</code> at <code>:101</code> (<code>:107</code> only defaults it to
-          <code>CreatedOn</code>).</li>
-          </ul>
-          <p>Anchors were re-verified against current source. The interceptor anchors in Decision 1 moved
-          (<code>AuditSaveChangesInterceptor.cs:125-144</code>, <code>:87</code>, <code>:96</code>, <code>:121-123</code>, <code>:126-128</code>, <code>:91-92</code>; <code>:15-19</code>
-          unchanged), which supersedes the interceptor list recorded in the 2026-10-01 Revision; the
-          <code>AuditableBaseEntity.cs</code> and <code>AuditableAggregateRootEntity.cs</code> anchors are unchanged.</p>
+          <h2 id="related">Related</h2>
+          <p><a href="015-architecture-fitness-functions.html">ADR-015</a> (fitness tests, the other executable-convention
+          layer), <a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a> (lockstep package versioning, which
+          governs the <code>MMCA.Common.*</code> pins but not the analyzer pins here),
+          <a href="049-library-configureawait-policy.html">ADR-049</a> (CA2007, enforced only because it errors),
+          <a href="060-performance-regression-gate.html">ADR-060</a>, <a href="063-accessibility-conformance-gate.html">ADR-063</a> and
+          <a href="092-web-vitals-budget-gate.html">ADR-092</a> (the other CI gates),
+          <a href="109-feature-by-folder-convention.html">ADR-109</a> (IDE0130 under TreatWarningsAsErrors).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
-          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/005-soft-delete-vs-erasure.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/132-build-strictness-analyzer-policy.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
         </div>
         </article>
         <aside class="doc-aside" id="doc-rail">
@@ -344,9 +400,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
-            <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
-            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
-            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#related">Related</a></li>
             </ul>
           </nav>
         </aside>

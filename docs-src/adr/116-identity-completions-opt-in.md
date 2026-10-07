@@ -7,6 +7,7 @@ credential, notification and shell pages, and it now names `UserAdminList<TUser>
 routeless administration component). Revised 2026-10-01 (item 10 now records that `MMCA.Common.UI`
 ships the email confirmation page; see Revision below). Revised 2026-10-06: item 13 records versioned
 Terms of Service acceptance as a fifth opt-in completion of the same shape (see Revision below).
+Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 Layers stored permission grants over
 [ADR-020](020-permission-based-authorization.md)'s compiled registry and extends the shared sign-in
 workflow of [ADR-050](050-jwt-refresh-token-rotation.md) with optional collaborators.
@@ -109,10 +110,10 @@ same one.**
    the whole opt-in: `AddStoredPermissionGrants(configuration)` registers the marker
    `PermissionGrantModelGate`
    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Auth/PermissionGrantModelGate.cs:19`,
-   `.../Infrastructure/DependencyInjection.Auth.cs:144`), and `ApplicationDbContext` resolves that marker
+   `.../Infrastructure/DependencyInjection.Auth.cs:147`), and `ApplicationDbContext` resolves that marker
    with `GetService` and maps the table only when it is present AND this context instance targets the
    physical source named by `Authentication:PermissionGrants:DataSourceName`
-   (`.../Persistence/DbContexts/ApplicationDbContext.cs:913-918`, applied at `:936-944`). No consumer calls the model-builder
+   (`.../Persistence/DbContexts/ApplicationDbContext.cs:914-919`, applied at `:937-945`). No consumer calls the model-builder
    extension by hand, a host that never opts in keeps a byte-identical model, and the other databases
    in an opted-in host stay unchanged because one database owns the rows (the refresh-session
    precedent).
@@ -128,7 +129,7 @@ same one.**
    `IPermissionGrantCache` (`.../Auth/Permissions/IPermissionGrantCache.cs:21`), rebuilt by a hosted
    service on `Authentication:PermissionGrants:CacheSeconds`
    (`.../Auth/Permissions/PermissionGrantSettings.cs:12`, `:25`) and immediately by
-   `IPermissionGrantCacheInvalidator` (`.../Auth/Permissions/IPermissionGrantCache.cs:51`) after an
+   `IPermissionGrantCacheInvalidator` (`.../Auth/Permissions/IPermissionGrantCache.cs:53`) after an
    edit. A cold cache grants nothing, which is the safe direction, and the compiled layer answers
    from the first request either way.
 
@@ -158,7 +159,7 @@ same one.**
 8. **Three separate DI calls, none of them in `AddInfrastructure`.**
    `AddTwoFactorAuthentication(config)`
    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Auth.cs:40`),
-   `AddEmailConfirmation(config)` (`:68`) and `AddStoredPermissionGrants(config)` (`:136`) are opted
+   `AddEmailConfirmation(config)` (`:68`) and `AddStoredPermissionGrants(config)` (`:139`) are opted
    into one at a time. Registering a service is still not the same as changing behaviour: two-factor
    only reaches sign-in once the app passes the resolved authenticator to its base constructor, and
    confirmation only gates sign-in once `RequireConfirmedEmail` is set AND the app's `User` implements
@@ -256,7 +257,7 @@ same one.**
     service, and it routes a subclass of `LegalAcceptanceControllerBase`
     (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Legal/LegalAcceptanceControllerBase.cs:45`).
     The version is the server's: at registration the client sends only an `AcceptedTerms` flag and the
-    server stamps its own configured version (`MMCA.Common/CHANGELOG.md:205`), a `POST` naming any
+    server stamps its own configured version (`MMCA.Common/CHANGELOG.md:230`), a `POST` naming any
     other version is refused with `Legal.VersionNotCurrent`
     (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Legal/LegalAcceptancePolicy.cs:33`), and
     both controller answers pass through `LegalAcceptancePolicy.Normalize` (`:47`), which re-derives
@@ -265,7 +266,7 @@ same one.**
     (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/Legal/TermsAcceptanceGate.razor.cs:29`)
     is a layout component the host adds itself; its dialog cannot be dismissed (no backdrop click,
     Escape, close on navigation or close button, `:39-42`), so a user whose accepted version is no
-    longer current re-accepts or signs out. It shipped in 1.223.0 (`MMCA.Common/CHANGELOG.md:199`).
+    longer current re-accepts or signs out. It shipped in 1.223.0 (`MMCA.Common/CHANGELOG.md:224`).
     MMCA.ADC adopts it
     (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:241`,
     `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:35`,
@@ -320,7 +321,7 @@ opt-in posture above:
 - Adopting the `PermissionGrants` table is a migration in the consumer's Identity database, as
   `RefreshSessions` was. `AddStoredPermissionGrants(configuration)` is what maps it, and only in the
   context whose physical source `Authentication:PermissionGrants:DataSourceName` names
-  (`.../Persistence/DbContexts/ApplicationDbContext.cs:913-918`), so a host that never opts in gets no
+  (`.../Persistence/DbContexts/ApplicationDbContext.cs:914-919`), so a host that never opts in gets no
   table in any of its databases and an opted-in host gets it in exactly one.
 - A permission granted by a stored row reaches another service only through a token claim, so it lands
   on the holder's next sign-in rather than within `CacheSeconds`. That is the same latency a role
@@ -355,6 +356,24 @@ anchors in the Context and items 1 to 12 point at their current lines.
   `UPGRADING.md:803`.
 - Line anchors in the Context, items 2, 3, 5, 8, 9, 10, 11 and 12, and the Trade-offs were
   re-verified against current source and refreshed.
+
+## Revision (2026-10-07)
+Re-verified against current source. The decision, the five opt-in completions and their behaviour
+are unchanged: `AddStoredPermissionGrants` still registers the `PermissionGrantModelGate` marker,
+and `ApplicationDbContext` still maps the grant table only when that marker resolves AND the context
+targets the source named by `Authentication:PermissionGrants:DataSourceName`. Only line anchors
+moved.
+
+1. Anchors re-verified against current source: `AddStoredPermissionGrants` is
+   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Auth.cs:139` and the gate
+   registration `:147` (`AddTwoFactorAuthentication` `:40`, `AddEmailConfirmation` `:68`,
+   `AddLegalAcceptance` `:104` and the no-`ILegalAcceptanceService` note `:93-95` are unchanged);
+   the gate logic is
+   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:914-919`,
+   applied at `:937-945`; `IPermissionGrantCacheInvalidator` is
+   `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Permissions/IPermissionGrantCache.cs:53`;
+   and in item 13 the server-stamped version is `MMCA.Common/CHANGELOG.md:230` and the 1.223.0
+   release is `MMCA.Common/CHANGELOG.md:224`. Items 5, 6, 8 and 13 and the Trade-offs now cite these.
 
 ## Related
 [ADR-020](020-permission-based-authorization.md) (the compiled role-to-permission registry stored

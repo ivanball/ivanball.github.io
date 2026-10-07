@@ -18,7 +18,9 @@ behavior **around** the route table and never the table itself, leaving `LoadFro
 `MapReverseProxy` to the host, so the decision below stays consumer-side; see
 [ADR-088](088-gateway-edge-responsibilities.md).)
 The Context below records the prior state that motivated the change; the Decision describes what each
-gateway does today.
+gateway does today. Revised 2026-10-07: Store's gateway comment now agrees with its 15-route table,
+so the Rationale no longer cites it as a live off-by-N example, and the ADC AppHost and bicep anchors
+in the Context are refreshed.
 
 ## Context
 Before this record, both gateways built their route table by hand, in code. ADC made 26
@@ -53,10 +55,10 @@ was pinned by no test at all.
 
 **What is genuinely elsewhere is not the route table, and that distinction is worth recording**,
 because it is the duplication a reader assumes exists. The Aspire AppHost holds references and
-start-ordering (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:345-353`,
+start-ordering (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:348-356`,
 `MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:307-313`) and the bicep templates hold
 `services__<name>__http__0` environment variables on the gateway container app
-(`MMCA.ADC/infra/main.bicep:2421-2424`, `MMCA.Store/infra/main.bicep:1943-1945`). Both are **address
+(`MMCA.ADC/infra/main.bicep:2468-2471`, `MMCA.Store/infra/main.bicep:1943-1945`). Both are **address
 books**: service name to URL, with no path prefix anywhere in them. They answer "where does
 `conference` resolve" and never "what reaches conference", so neither is a second route table and
 neither should become one.
@@ -193,11 +195,12 @@ declarative shape makes the difference a diff instead of an archaeology exercise
   hand-typed list closes the code-versus-test half of that and not the comment half: a comment is
   still an ungated description of the table. ADC's `RouteMapTests` label ("17 REST controllers +
   SessionSelection") currently agrees with its 18 conference entries
-  (`MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/RouteMapTests.cs:146-164`), but nothing holds it there,
-  and Store's gateway comment describes the `ReverseProxy` section as "ten routes, three clusters"
-  (`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:115`) above a table of 15 routes
-  (`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:51-144`), so the off-by-N recurs, just
-  no longer load-bearing.
+  (`MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/RouteMapTests.cs:146-164`), and Store's gateway
+  comment describing the `ReverseProxy` section as "fifteen routes, three clusters"
+  (`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:115`) agrees with its table of 15 routes
+  (`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:51-144`). Both agree because someone
+  corrected them by hand, not because anything holds them there: the next route added without a
+  comment edit reopens the gap, just no longer load-bearing.
 - **A route table is data, and data belongs in configuration.** Nothing in a forwarder registration is
   a decision the compiler can check anyway: the path is a string, the destination is a string, the
   cluster name is a string. Writing them as C# buys a build step and no verification.
@@ -268,6 +271,24 @@ books, and both `RouteMapTests` suites.
 - Anchors were re-verified against current source and re-anchored where they had moved: ADC gateway
   wiring (`Program.cs:148-151`) and `MapReverseProxy` (`:234`), both AppHost gateway blocks, and both
   bicep gateway address books. Store gateway `Program.cs` citations still hold.
+
+## Revision (2026-10-07)
+Re-verified against current source. No decision changed: the AppHost gateway blocks still hold no
+route or path data, only `WithReference`, `WaitFor` ordering and endpoint and health wiring
+(`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:348-359`,
+`MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:307-315`), and the bicep gateway address books still carry bare
+`http://<app>` destinations with no path prefix. One current-state statement moved: the Rationale's
+example of an ungated comment drifting from the table no longer holds for Store.
+
+1. Store's gateway comment now describes the `ReverseProxy` section as "fifteen routes, three
+   clusters" (`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:115`), which agrees with its 15
+   configured routes. The Rationale now records both consumers' labels as agreeing by hand-correction
+   rather than by any gate, so the comment half of the drift stays ungated.
+2. Anchors re-verified against current source: the ADC AppHost gateway block
+   (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:348-356`) and the ADC bicep gateway address
+   book (`MMCA.ADC/infra/main.bicep:2468-2471`) are re-pointed in the Context; the Store AppHost
+   (`MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:307-313`) and Store bicep
+   (`MMCA.Store/infra/main.bicep:1943-1945`) anchors still hold.
 
 ## Related
 [ADR-008](008-service-extraction-topology.md) (amended: the Gateway keeps the route-to-service map it
