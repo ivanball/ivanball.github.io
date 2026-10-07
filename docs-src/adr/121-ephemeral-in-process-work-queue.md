@@ -2,6 +2,8 @@
 
 ## Status
 Accepted (2026-09-11). Supersedes [ADR-052](052-background-job-execution.md).
+Revised 2026-10-01: the scoring trigger's feature gate and failure path, and ADR-025's place among the framework hosted services.
+Revised 2026-10-06: the scoring trigger's event-existence 404 and the handler's current retry remarks.
 
 ## Context
 ADR-052 ran two different kinds of work through one mechanism: ephemeral broadcasts that must not
@@ -13,17 +15,19 @@ the difference between them.
 The expensive half has moved out. Session scoring is scheduled as a durable internal command
 ([ADR-114](114-internal-commands-durable-job-queue.md)): the trigger endpoint writes a row through
 `IInternalCommandScheduler.ScheduleAsync`
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs:132-136`)
-and answers `202 Accepted` once the row is written (`:144`), with a failed schedule surfaced through
-`HandleFailure` (`:138-141`) and a `[FeatureGate(ConferenceFeatures.SessionScoring)]` gate (`:125`)
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs:148-152`)
+and answers `202 Accepted` once the row is written (`:160`), with a failed schedule surfaced through
+`HandleFailure` (`:156`), an unknown event answered 404 by an existence check before anything is
+scheduled (`:143-146`), and a `[FeatureGate(ConferenceFeatures.SessionScoring)]` gate (`:134`)
 answering 404 while the flag is off, and the framework's leased, retrying,
 dead-lettering processor runs the pass. Duplicate runs are held off across replicas by a per-event
 `IDistributedLock` claim taken inside the handler
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsInternalCommandHandler.cs:78-80`,
-`ClaimTimeToLive` of 15 minutes at `:56`, `ClaimWait` of `TimeSpan.Zero` at `:63`), and the loser of
-that claim logs and returns `Result.Success()` (`:82-86`). The handler says where its retries come
-from: the framework's backoff and attempt ceiling "replaces the local three-attempt requeue the
-in-process queue carried" (`:28`).
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsInternalCommandHandler.cs:83-85`,
+`ClaimTimeToLive` of 15 minutes at `:61`, `ClaimWait` of `TimeSpan.Zero` at `:68`), and the loser of
+that claim logs and returns `Result.Success()` (`:87-91`). The handler's remarks say where its
+retries come from: the framework's processor completes a row only on a successful result, and
+anything else consumes an attempt, backs off, and dead-letters at `InternalCommands:MaxAttempts`
+(`:23-27`).
 
 What remains is the half that was always a good fit for a channel: ephemeral, best-effort work owned
 by one process, where a lost item costs a missed UI refresh and nothing else. This record is scoped
@@ -88,9 +92,9 @@ starts an untracked `Task` from a request, and nothing that must run lands here.
     marker at `.../UseCases/Markers/ITransactional.cs:6`); no Engagement command implements it, so for
     these handlers `SaveChangesAsync` **is** the commit. Three of the four sites get the ordering
     structurally, because a `MutateEntityHandlerBase` subclass
-    (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Crud/MutateEntityHandlerBase.cs:333`,
+    (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Crud/MutateEntityHandlerBase.cs:339`,
     over the shared `MutateEntityHandlerCore` at `:52`) holds no save of its own: the base saves at
-    `:316`, logs at `:318` and then awaits the `OnMutatedAsync` post-save hook at `:319`, and the
+    `:322`, logs at `:324` and then awaits the `OnMutatedAsync` post-save hook at `:325`, and the
     enqueue is the body of that hook. `CloseLivePollHandler` declares the base at
     `.../LivePolls/UseCases/Close/CloseLivePollHandler.cs:24` and enqueues from the hook at `:73`
     (queue write at `:94-95`); `OpenLivePollHandler` at
@@ -169,6 +173,24 @@ hosted services rather than the only other one (for example `OutboxProcessor` at
 `ScheduleAsync` call, the scoring handler's claim, TTL, wait and loser lines (the cache evict at
 `ScoreEventSessionsInternalCommandHandler.cs:76` now precedes the claim), the Engagement queue
 registrations, and the `TransactionalCommandDecorator` pass-through.
+
+## Revision (2026-10-06)
+No decision or rationale changed. Corrections this pass:
+- The scoring trigger now checks that the event exists before scheduling and answers an unknown
+  event with 404 through `HandleFailure`
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs:143-146`);
+  the Context paragraph records it.
+- The scoring handler no longer carries the quoted "replaces the local three-attempt requeue" remark;
+  Context now paraphrases its current retry remarks
+  (`ScoreEventSessionsInternalCommandHandler.cs:23-27`) instead of quoting removed wording.
+- The hosted services the 2026-10-01 revision cites now register at `OutboxProcessor`
+  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:219` and
+  `InternalCommandProcessor` `.../DependencyInjection.Jobs.cs:176` (`WarmupHostedService` is
+  unchanged at `MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:102`).
+
+Anchors in the live sections were re-verified against current source and refreshed (the trigger's
+`ScheduleAsync`, `HandleFailure`, `Accepted()` and `[FeatureGate]` lines, the scoring handler's
+claim, TTL, wait and loser lines, and the `MutateEntityHandlerBase` save, log and hook lines).
 
 ## Related
 [ADR-114](114-internal-commands-durable-job-queue.md) (the durable, leased, retrying queue that owns

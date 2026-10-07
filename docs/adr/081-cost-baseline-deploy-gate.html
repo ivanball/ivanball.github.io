@@ -261,7 +261,9 @@
           because Store&#39;s header carries three passages ADC&#39;s does not. The gate mechanism, the <code>2</code> ceiling and
           the per-repo SQL tier sets are unchanged.
           Revised 2026-10-01 (Store&#39;s SQL check now reads the service objective and accepts only Basic or
-          Standard S0, closing the S0-to-S3 gap; see Revision below).</p>
+          Standard S0, closing the S0-to-S3 gap; see Revision below).
+          Revised 2026-10-06: ADC&#39;s dated conference-mode window is recorded as a sanctioned per-repo
+          difference in the gate, and Common&#39;s workflow list now includes <code>load-tests.yml</code>.</p>
           <h2 id="context">Context</h2>
           <p>Both deployed apps run a deliberately small production footprint: every Container App is declared with
           <code>maxReplicas: 2</code> (ADC&#39;s scaled apps read <code>conferenceScaledMaxReplicas</code>, which <code>conferenceMode</code> raises to 4,
@@ -395,8 +397,8 @@
           and is therefore blind by design to the 2026-09-02 container right-size (<code>:15-17</code>), and a
           <code>(Mirrors MMCA.ADC.)</code> marker on the <code>workflow_call</code> trigger (<code>:25</code>). MMCA.Helpdesk and MMCA.Common
           carry no <code>cost-guard.yml</code> and no deploy workflow at all: Helpdesk&#39;s <code>.github/workflows/</code> holds <code>ci.yml</code>,
-          <code>release-templates.yml</code> and the two Claude workflows, and Common&#39;s holds <code>ci.yml</code>, <code>release.yml</code> and
-          the same two, so neither has a rollout for this gate to block.</p>
+          <code>release-templates.yml</code> and the two Claude workflows, and Common&#39;s holds <code>ci.yml</code>, <code>release.yml</code>,
+          <code>load-tests.yml</code> and the same two, so neither has a rollout for this gate to block.</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
           <li><strong>Configuration drift is the leading indicator; spend is the lagging one.</strong> The budget notification
@@ -490,6 +492,9 @@
           <a href="038-supply-chain-provenance.html">ADR-038</a> (the other result-based job in the same <code>deploy.needs</code>
           list).</p>
           <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <p><strong>Common&#39;s workflow list is corrected.</strong> <code>MMCA.Common/.github/workflows/</code> holds five files: <code>ci.yml</code>,
+          <code>release.yml</code>, <code>load-tests.yml</code> and the two Claude workflows; the Adoption paragraph had omitted
+          <code>load-tests.yml</code>. The conclusion is unchanged: Common has no <code>cost-guard.yml</code> and no deploy workflow.</p>
           <p><strong>ADC&#39;s conference-mode window is a sanctioned per-repo difference.</strong> ADC declares its conference-day
           surge in IaC: <code>conferenceMode</code> (<code>MMCA.ADC/infra/main.bicep:157</code>) sets <code>conferenceScaledMaxReplicas</code> to
           4 instead of 2 (<code>:191</code>), the scaled apps read it (for example <code>:1882</code>), and it lifts the attendee

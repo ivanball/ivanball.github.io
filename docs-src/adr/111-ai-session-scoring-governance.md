@@ -3,21 +3,21 @@
 ## Status
 Accepted (2026-09-04). **Extended by [ADR-120](120-governed-chat-client-boundary.md)** (2026-09-11): the rules here that belong to *calling a model* rather than to *scoring a session* (a bounded call, a versioned and hashed prompt contract, token metering tagged by model and prompt version, the isolation of the provider SDK) ship as the optional framework package `MMCA.Common.AI`. This record is not superseded: the scoring-specific rules below, the prompt-change protocol, the two evaluation tiers, the input and output guardrails and the budgeted ceiling alert all stand. **Revised 2026-09-11**: that migration has shipped. The scorer is constructed over the governed `IChatClient` and keeps `IAiScoringService`, `PromptVersion` and the evaluation gate, so decisions 1, 2, 7 and 8 below read against the framework client: the service constructs no `HttpClient`, defines no counters, and token usage is metered by the framework on the `MMCA.Common.AI` meter, which is what the ceiling alert now queries. Decision 9 changed with it: the hosted drain and the crash-recovery sweep are gone, replaced by the [ADR-114](114-internal-commands-durable-job-queue.md) internal-command pipeline, and the trigger endpoint answers 202 for every pass it schedules, and only while the session-scoring feature flag is on.
 
-**Revised 2026-09-21 (MMCA.Common v1.207.0)**: the feature names no vendor. The implementation is `SessionScoringService`, the provider is an adapter package selected by `Ai:Provider`, contact-detail removal moved out of the service and onto the framework's `PiiRedactionGuardrail` at the pipeline boundary, the golden corpus records `ChatResponse` documents rather than a provider wire format, and the token-ceiling alert moved into the `sloAlertSpecs` loop so the runbook-pairing gate covers it. These ADC changes shipped in the consumer PR that followed the v1.207.0 release and are merged to ADC `main`. Revised 2026-10-01 (the guardrails are one module-owned composition of three, adding the framework content policy and a response gate that now owns refusal, empty and malformed-answer handling, and both evaluation tiers, golden replay and the live judge, run that same composition; see Revision below).
+**Revised 2026-09-21 (MMCA.Common v1.207.0)**: the feature names no vendor. The implementation is `SessionScoringService`, the provider is an adapter package selected by `Ai:Provider`, contact-detail removal moved out of the service and onto the framework's `PiiRedactionGuardrail` at the pipeline boundary, the golden corpus records `ChatResponse` documents rather than a provider wire format, and the token-ceiling alert moved into the `sloAlertSpecs` loop so the runbook-pairing gate covers it. These ADC changes shipped in the consumer PR that followed the v1.207.0 release and are merged to ADC `main`. Revised 2026-10-01 (the guardrails are one module-owned composition of three, adding the framework content policy and a response gate that now owns refusal, empty and malformed-answer handling, and both evaluation tiers, golden replay and the live judge, run that same composition; see Revision below). Revised 2026-10-06: the trigger answers 404 for an unknown event before scheduling, failed sessions are retried and re-paid up to the processor's attempt limit, and the paid-tier path filter is stated as the three folders it covers.
 
 ## Context
 MMCA.ADC ships one product feature that calls a language model. An organizer, looking at the session
 selection dashboard for an event, can trigger an AI scoring pass that rates every non-service session
 of that event on six criteria and a penalty, and the resulting numbers are what the program committee
 argues over when it accepts or declines a talk. Each scored session is one paid call to whichever
-provider `Ai:Provider` names, Anthropic today (`MMCA.ADC.Conference.Service/appsettings.json:94`).
+provider `Ai:Provider` names, Anthropic today (`MMCA.ADC.Conference.Service/appsettings.json:97`).
 The key has been a deployed parameter of the Conference container app since 2026-04-04. It travels as
-the Key Vault secret `anthropic-api-key` (`MMCA.ADC/infra/main.bicep:1617`, container-app secret
-reference at `:1880`) into the container environment variable `Ai__ApiKey` (`:1960`), which is the
+the Key Vault secret `anthropic-api-key` (`MMCA.ADC/infra/main.bicep:1644`, container-app secret
+reference at `:1919`) into the container environment variable `Ai__ApiKey` (`:1999`), which is the
 framework's `Ai:ApiKey` and the only AI credential name the host reads: `Ai:Enabled` is derived from
 the key's presence rather than configured, so a host with no key starts with scoring unavailable
 instead of failing validation on a required-when-enabled value it cannot supply
-(`MMCA.ADC.Conference.Service/Program.cs:130-135`). The secret keeps its `anthropic-api-key` name on
+(`MMCA.ADC.Conference.Service/Program.cs:131-136`). The secret keeps its `anthropic-api-key` name on
 purpose: the credential itself is an Anthropic one, and renaming a live secret buys nothing
 (`infra/main.bicep:74`).
 
@@ -36,12 +36,12 @@ Application layer never saw an HTTP client. Everything else was implicit:
   the model id was persisted.
 - Nothing tested the behavior. Unit tests covered parsing, clamping and failure handling, so a prompt
   edit, a model deprecation or a provider-side contract change would have shipped through a fully
-  green CI leg (`MMCA.ADC/.github/workflows/deploy.yml:490-493`).
+  green CI leg.
 - The user message was `Title: ...` and `Description: ...` labelled lines assembled from text a
   stranger typed into a public call-for-papers form. A description could open with its own `Title:`
   line and there was nothing in the format that said which one the reviewer should believe (the
   delimited envelope that replaced it is at
-  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/SessionScoringService.cs:281-285`).
+  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/SessionScoringService.cs:291-295`).
 - Speaker bios pasted from a resume went to a third-party model with their email addresses and phone
   numbers intact.
 - Spend was visible only as a per-session log line. Nothing aggregated tokens, and nothing alerted on
@@ -62,7 +62,7 @@ budgeted ceiling.**
    declared in Application, so nothing above Infrastructure knows a provider exists. The contract is
    that the method never throws for a scoring failure: failure is a `Success = false` result (shape
    at `:84`). `SessionScoringService` is the only implementation
-   (`MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/SessionScoringService.cs:46-49`), and its
+   (`MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/SessionScoringService.cs:47-50`), and its
    name says what it does rather than who answers it: the credential, the base address, the provider
    SDK, the per-call timeout and the tool gate belong to the framework's governed `IChatClient`
    (ADR-120), configured under the `Ai` section and registered by the host, so nothing in this module
@@ -70,28 +70,30 @@ budgeted ceiling.**
    (`MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:36-50`). The client is resolved with
    `GetService` rather than `GetRequiredService`, because a host with `Ai:Enabled` false or no key
    registers no client at all; that null **is** the disabled path, and scoring answers a failed
-   result and calls nothing (`DependencyInjection.cs:42-50`, `SessionScoringService.cs:21-25`,
-   disabled branch at `:102-106`).
+   result and calls nothing (`DependencyInjection.cs:42-50`, `SessionScoringService.cs:22-27`,
+   disabled branch at `:103-107`).
 
 2. **The model id is a constant on the implementation, and changing it is a prompt-contract event.**
-   `ModelIdValue` is `claude-haiku-4-5` (`SessionScoringService.cs:63`). It is one of the four
-   components of the module's single `PromptContract` (`:92-93`), so the port's `ModelId` reads off
-   that contract (`:73`), the contract supplies it on every request (`:114`), and the framework tags
-   it onto every usage measurement (`:51-56`, `:143-149`). The deployed `Ai:Model` and the pinned
+   `ModelIdValue` is `claude-haiku-4-5` (`SessionScoringService.cs:64`). It is one of the four
+   components of the module's single `PromptContract` (`:93-94`), so the port's `ModelId` reads off
+   that contract (`:74`), the contract supplies it on every request (`:115`), and the framework tags
+   it onto every usage measurement (`:52-57`, `:152-159`). The deployed `Ai:Model` and the pinned
    `ModelIdValue` mean different things and agree only by construction, so a test reads the host's
    own copied `appsettings.json` and asserts they are equal, because a configuration drift would
    leave every stored score claiming a model that never produced it
    (`MMCA.ADC.Conference.Scoring.Evaluation.Tests/PromptContractTests.cs:139-157`,
-   `appsettings.json:95`). A model swap moves the per-token price and the scores at once, so the rule
+   `appsettings.json:98`). A model swap moves the per-token price and the scores at once, so the rule
    is the same as for a prompt edit: run the live judge against the new model and review the drift
    case by case before merging, because nothing in the golden replay can see a model change (its
    responses are recorded).
 
 3. **The prompt is versioned, the version is persisted, and a hash test enforces the bump.**
    `PromptVersion` is a dated `yyyy-MM-dd.N` string, currently `2026-09-04.1`
-   (`SessionScoringService.cs:219`, read back off the contract at `:84`), and its documented scope is
+   (`SessionScoringService.cs:229`, read back off the contract at `:85`), and its documented scope is
    any change to the system prompt, the user-prompt assembly, the speaker formatting or the
-   structured-output schema (`:76-83`, restated on the port at `IAiScoringService.cs:30`). It is
+   structured-output schema (`:77-84`). The port's own remarks on `PromptVersion`
+   (`IAiScoringService.cs:24-26`, member at `:30`) also still list the redaction rules applied to
+   submitted text as a bump trigger, which no longer applies: redaction left the scorer (decision 4). It is
    stored beside the model id on every score: `SessionAiScore.ModelUsed`
    (`MMCA.ADC.Conference.Domain/Sessions/SessionAiScore.cs:43`) and `SessionAiScore.PromptVersion`
    (`:52`), both assigned by the factory (`:114-115`). The column is `nvarchar(32)` added expand-only
@@ -99,7 +101,7 @@ budgeted ceiling.**
    rather than as an empty string that would be indistinguishable from a bug
    (`MMCA.ADC.Migrations.SqlServer.Conference/Migrations/20260905004525_AddSessionAiScorePromptVersion.cs:19-26`).
    `SessionScoringService.RenderPrompt` renders the exact system-plus-user pair the service would
-   send, without calling the model (`:325-332`), and `PromptContractTests` hashes it with SHA-256 for
+   send, without calling the model (`:335-342`), and `PromptContractTests` hashes it with SHA-256 for
    one canonical proposal fixed in the test file rather than read from the corpus, comparing against
    `Golden/prompt-versions.json` (`PromptContractTests.cs:47-66`, canonical input at `:37-45`,
    hashing at `:101-102`). Two failures are possible and both are deliberate: the hash for the
@@ -157,55 +159,58 @@ budgeted ceiling.**
    then `AddMmcaChatClient(configuration)`, stating no model, no ceiling and no timeout of its own, so
    a configuration change reaches this tier without an edit (`:99-112`). In CI the `ai-eval-gate` job
    runs the free tier on every code deploy with `--minimum-expected-tests 1`, so a discovery breakage
-   reds the gate instead of reporting a vacuous pass (`.github/workflows/deploy.yml:517-519`, step at
-   `:542-549`), and adds the paid tier only when the `changes` job's `scoring` output is true, which
-   the path filter sets for the scoring infrastructure folder and its neighbours (`:71`, `:162-170`,
-   step at `:551-564`). `ai-eval-gate` is in `deploy.needs` and in the `deploy` job's `if` (`:1185`,
-   `:1232`).
+   reds the gate instead of reporting a vacuous pass (`.github/workflows/deploy.yml:558-560`, step at
+   `:583-590`), and adds the paid tier only when the `changes` job's `scoring` output is true, which
+   the path filter sets for three folders only: the scoring infrastructure folder, the
+   `ScoreEventSessions` use-case folder and the evaluation test project (`:71`, `:162-171`, step at
+   `:592-605`). The filter is narrow on purpose, so a change to the guardrail composition in
+   `DependencyInjection.cs`, to the host's `Ai` or `ContentPolicy` configuration, to `Program.cs` or
+   to the `MMCA.Common.AI` package version does not run the paid tier. `ai-eval-gate` is in
+   `deploy.needs` and in the `deploy` job's `if` (`:1242`, `:1289`).
 
 6. **Input guardrails: delimit, escape, instruct, redact.** The user message is an XML-shaped envelope
    rather than labelled lines: `<session_proposal>` wrapping `<session_title>`,
    `<session_description>` and a `<speakers>` block of `<speaker>` elements
-   (`SessionScoringService.cs:281-285`, speakers at `:289`). Every submitted value is escaped
+   (`SessionScoringService.cs:291-295`, speakers at `:299-325`). Every submitted value is escaped
    first, and because angle brackets are the only characters that can forge a delimiter, replacing
    `<` and `>` with their entities is the whole containment story: a submitted `</session_title>`
-   arrives as text and closes nothing (`:335-340`). The system brief ends with a named constant,
-   `UntrustedInputBrief` (`:264-271`), which declares everything inside the tags to be untrusted data
+   arrives as text and closes nothing (`:344-350`). The system brief ends with a named constant,
+   `UntrustedInputBrief` (`:274-281`), which declares everything inside the tags to be untrusted data
    rather than instructions, says the only instructions the model obeys are the ones in the brief,
    tells it to ignore any role change or claim of authority inside the tags, wires an injection
    attempt straight to the existing 1.0 penalty so the model applies a rule instead of making a
    judgement call, and states that angle brackets inside values are escaped. It is a separate constant
    only so the evaluation suite can assert on it by name; it is concatenated into `SystemPrompt` and
-   is never sent alone (`:223-249`, concatenation at `:249`). Redaction is no longer a step this
+   is never sent alone (`:233-259`, concatenation at `:259`). Redaction is no longer a step this
    service performs, and neither is any other policy: the host calls `AddConferenceAiGuardrails`, the
-   module's single guardrail composition (`MMCA.ADC.Conference.Service/Program.cs:151`,
+   module's single guardrail composition (`MMCA.ADC.Conference.Service/Program.cs:152`,
    `MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:85-102`). On the request side it
    registers the framework's `PiiRedactionGuardrail`, which carries the same email and phone patterns
    and rewrites every outgoing message inside the governed pipeline, so contact-detail removal is a
    policy the feature cannot bypass rather than a call it has to remember (`DependencyInjection.cs:95`,
-   `MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/PiiRedactionGuardrail.cs:39`, placeholders at
-   `:41-42`, patterns at `:74` and `:80`, applied at `:125-126`), and the framework's
+   `MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/PiiRedactionGuardrail.cs:41`, placeholders at
+   `:43-44`, patterns at `:73` and `:79`, applied at `:137-138`), and the framework's
    `ContentPolicyGuardrail` in `Redact` mode, which neutralizes an instruction-override phrase inside
    a proposal before the call while the rest of the submission is still scored on its merits
    (`DependencyInjection.cs:96`,
    `MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/ContentPolicyGuardrail.cs:64`, mode check at
-   `:119`, configured at `appsettings.json:104-106`). On the response side it registers the module's
+   `:119`, configured at `appsettings.json:107-109`). On the response side it registers the module's
    `SessionScoreResponseGuardrail` (decision 7; `DependencyInjection.cs:99`). Registering them also
    satisfies `Ai:RequireGuardrail`, which defaults to true, so an enabled host that inspects nothing
-   is a startup failure rather than a finding (`Program.cs:142-151`). The composition must run before
+   is a startup failure rather than a finding (`Program.cs:143-151`). The composition must run before
    `AddMmcaChatClient`, which reads the guardrail descriptors to decide whether to compose the
-   guardrail layer at all (`DependencyInjection.cs:77-83`, `Program.cs:153`). A speaker's name
+   guardrail layer at all (`DependencyInjection.cs:77-83`, `Program.cs:154`). A speaker's name
    survives both the escape and the guardrail: it is the published conference record and the only
-   handle the credibility criterion has on a track record (`SessionScoringService.cs:300-305`). The
+   handle the credibility criterion has on a track record (`SessionScoringService.cs:310-315`). The
    phone pattern is deliberately narrow rather than "any run of digits", because a bio legitimately
-   contains years, team sizes and throughput figures (`PiiRedactionGuardrail.cs:80`).
+   contains years, team sizes and throughput figures (`PiiRedactionGuardrail.cs:79`).
 
 7. **Output guardrail: the response is schema-constrained, and anything else is a failure.** The
-   request sets `ChatResponseFormat.ForJsonSchema` over the score schema (`:116`, schema built at
-   `:362`) whose object declares `additionalProperties: false`, six numeric criteria, a `penalty`
+   request sets `ChatResponseFormat.ForJsonSchema` over the score schema (`:117`, schema built at
+   `:370-372`) whose object declares `additionalProperties: false`, six numeric criteria, a `penalty`
    enumerated to 0, 0.5 or 1, and a `reasoning` string, with all eight required. The output ceiling
    is a named constant, 256 tokens, which the framework's `Ai:MaxOutputTokens` clamps again at its
-   own boundary (`:65-70`, `:115`). The answer is judged at the pipeline boundary rather than in the
+   own boundary (`:66-71`, `:116`). The answer is judged at the pipeline boundary rather than in the
    scorer: `SessionScoreResponseGuardrail`
    (`MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/SessionScoreResponseGuardrail.cs:34`) blocks
    a refusal, counting both the normalized `ContentFilter` finish reason and the provider's raw
@@ -214,14 +219,14 @@ budgeted ceiling.**
    block as the JSON object, so prose, fences, truncation or an incomplete object are blocked rather
    than salvaged (`:108-123`). The scorer catches the resulting `ChatGuardrailException` on the same
    failed-result path it takes for a provider exception and logs the reason the guardrail reported
-   (`SessionScoringService.cs:125-133`). Its own parse stays fail-closed, so a caller composing the
+   (`SessionScoringService.cs:126-134`). Its own parse stays fail-closed, so a caller composing the
    scorer without the governed pipeline still gets a failed result rather than an exception
-   (`:157-171`). A partial object, any of the six sub-scores or the penalty missing, is a failed
+   (`:167-181`). A partial object, any of the six sub-scores or the penalty missing, is a failed
    parse and not a success with defaults clamped up to the minimum, which is why every sub-score is
-   nullable on the response record (`:173-189`, record at `AiScoreResponse.cs:22`, nullable members
+   nullable on the response record (`:183-199`, record at `AiScoreResponse.cs:22`, nullable members
    at `:29-53`). The weighted overall is computed in our code from the sub-scores the model returned,
-   never taken from the model (`SessionScoringService.cs:191-204`), and every value is clamped to 1.0
-   through 10.0 (`:342`).
+   never taken from the model (`SessionScoringService.cs:201-209`), and every value is clamped to 1.0
+   through 10.0 (`:352`).
 
 8. **Cost: the framework meters the tokens, and a budgeted ceiling alert watches the total.** The
    service defines no counters and no meter of its own. Token usage rides the governed pipeline:
@@ -229,46 +234,54 @@ budgeted ceiling.**
    `mmca.ai.output_tokens` on the `MMCA.Common.AI` meter, tagged `model`, `prompt_name`,
    `prompt_version` and `provider`, and the prompt contract is what supplies those identity tags, so
    the spend graph attributes tokens to this prompt rather than to "the Conference service"
-   (`SessionScoringService.cs:143-149`, `PromptName` at `:51-56`, contract at `:86-93`, meter turned
-   on for export at `Program.cs:155-173`). Those tags are exactly what changes spend: a model swap
+   (`SessionScoringService.cs:152-159`, `PromptName` at `:52-57`, contract at `:87-94`, meter turned
+   on for export at `Program.cs:156-174`). Those tags are exactly what changes spend: a model swap
    moves the per-token price, a prompt revision moves the token count. What stays local is per-session
-   forensics, one usage log line per response including the ones that go on to fail (`:146-149`,
-   message at `:398-399`). In production the framework counters reach App Insights, where a scheduled
+   forensics, one usage log line per response including the ones that go on to fail (`:156-159`,
+   message at `:408-409`). In production the framework counters reach App Insights, where a scheduled
    query rule sums both over a rolling two-day window and fires when the total crosses
    `aiScoringTokenCeiling`, defaulted to 2,000,000 tokens, the envelope of one full pass
-   (`MMCA.ADC/infra/main.bicep:77`, `:78`, query at `:442`, threshold at `:445`). The rule is an
-   entry in the same `sloAlertSpecs` list as the request and resilience SLOs rather than a rule
-   declared on its own (`:439-451`, loop at `:455`), so the architecture gate that pairs every
+   (`MMCA.ADC/infra/main.bicep:77`, `:78`, query at `:468`, threshold at `:471`). The rule is an
+   entry in the same `sloAlertSpecs` list (`:388`) as the request and resilience SLOs rather than a rule
+   declared on its own (`:465-477`, loop at `:481`), so the architecture gate that pairs every
    alert with a runbook heading covers it: `MinimumAlertSpecs` is 5
    (`Tests/Architecture/MMCA.ADC.Architecture.Tests/Governance/ObservabilityConventionTests.cs:14`)
    and the paired heading is `adc-prod-alert-ai-scoring-token-ceiling-v2`
    (`infra/OPERATIONS.md:111`). The entry is the one that needs a different cadence from the
    15-minute default, so the loop reads `windowSize`, `evaluationFrequency` and `autoMitigate`
-   per-entry with the list default as a fallback (`:447-449`, defaults at `:485-489`). It is severity
-   3, not a page: a budget breach is a cost signal, nothing is down (`:446`, `:423-424`). It is
-   enabled only when a key is deployed (`:450`, `:159`, `:472`), because with no key the feature is
+   per-entry with the list default as a fallback (`:473-475`, defaults at `:511-515`). It is severity
+   3, not a page: a budget breach is a cost signal, nothing is down (`:472`, `:449-450`). It is
+   enabled only when a key is deployed (`:476`, `:162`, `:498`), because with no key the feature is
    inert and the rule could only ever evaluate zero.
 
 9. **The trigger is human-initiated and permission-gated, and nothing starts unrequested paid work.**
    The only entry point is `POST /SessionSelection/score/{eventId}`
-   (`MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs:124`) on a controller
-   gated by `[HasPermission(ConferencePermissions.SessionSelectionManage)]` (`:32`). It schedules a
-   durable internal command, `ScoreEventSessionsInternalCommand` (ADR-114), and answers 202: the pass
-   runs off the request path, and a schedule failure is the only thing that can turn a scheduled call
-   into an error (`:132-144`, reasoning at `:101-104`). The endpoint also carries
+   (`MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs:133`) on a controller
+   gated by `[HasPermission(ConferencePermissions.SessionSelectionManage)]` (`:34`). It first checks
+   that the event exists and answers the dashboard's event-not-found 404 for an unknown or
+   soft-deleted id, because the pass would otherwise find no sessions and complete as a silent no-op
+   (`:142-146`, reasoning at `:127-130`). It then schedules a durable internal command,
+   `ScoreEventSessionsInternalCommand` (ADR-114), and answers 202: the pass runs off the request path,
+   and past the existence check a schedule failure is the only thing that can turn a scheduled call
+   into an error (`:138-161`, schedule at `:148-152`, failure branch at `:154-157`, off-request-path
+   202 at `:103-108`, schedule-failure reasoning at `:135`). The endpoint also carries
    `[FeatureGate(ConferenceFeatures.SessionScoring)]`, so with the flag off the trigger is refused at
    the endpoint rather than told 202 for work the processor would refuse minutes later, while the
-   dashboard and the stored scores stay readable (`:125`, reasoning at `:114-121`). Deduplication
+   dashboard and the stored scores stay readable (`:134`, reasoning at `:117-125`). Deduplication
    belongs to the handler rather than to the endpoint. `ScoreEventSessionsInternalCommandHandler`
    claims the event on a cross-replica `IDistributedLock` (ADR-108) with a 15-minute time-to-live and
    a zero wait, so a duplicate trigger logs and completes rather than queuing behind the pass already
    running or paying for the same provider calls twice
-   (`MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsInternalCommandHandler.cs:42`,
-   time-to-live at `:56`, wait at `:63`, claim at `:79`). Durability, the claim lease and the retry
+   (`MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsInternalCommandHandler.cs:47`,
+   time-to-live at `:61`, wait at `:68`, claim at `:83-85`). Durability, the claim lease and the retry
    backoff are the framework internal-command processor's, so the module carries no hosted drain and
    no crash-recovery sweep of its own
-   (`MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:51-56`). Nothing else starts a paid
-   pass: no schedule, no event handler, no background heuristic.
+   (`MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:51-56`). One consequence is paid: the
+   handler returns a failure when every session failed (`AiScoring.AllFailed`) or some did
+   (`AiScoring.PartialFailure`), so the processor retries the command and re-pays for the failed
+   sessions only, up to `InternalCommands:MaxAttempts`, before dead-lettering it (`:95-118`, remarks
+   at `:23-33`). Apart from those retries of a requested pass, nothing else starts a paid pass: no
+   schedule, no event handler, no background heuristic.
 
 ## Rationale
 - **A version you do not persist is not a version.** The prompt version is worth something only
@@ -315,12 +328,14 @@ budgeted ceiling.**
 - **An alert declared outside the list is an alert the pairing gate cannot see.** Moving the ceiling
   into `sloAlertSpecs` costs three optional per-entry fields and buys the same runbook guarantee
   every other production alert carries.
-- **The endpoint returning 202 for every scheduled pass is the honest answer.** The endpoint knows
-  only that the command was written down. Whether a pass is already running is the claim's answer,
+- **The endpoint returning 202 for every scheduled pass is the honest answer.** Beyond the event
+  existing, which it checks before scheduling, the endpoint knows only that the command was written
+  down. Whether a pass is already running is the claim's answer,
   minutes later and on another replica, so reporting a conflict at the boundary would be a guess
   dressed as a status code.
 - **The human trigger is the real spend control.** No schedule, no event handler and no background
-  heuristic starts a paid pass. The ceiling alert is a backstop for a runaway or repeated pass, not
+  heuristic starts a paid pass; the only unrequested calls are the processor's bounded retries of a
+  pass a human requested, and they re-pay only for the sessions that failed. The ceiling alert is a backstop for a runaway or repeated pass, not
   the primary defence.
 
 ## Trade-offs
@@ -331,7 +346,7 @@ budgeted ceiling.**
 - **The live judge costs money and needs the key in CI.** The test reads the provider-neutral
   `AI_API_KEY` (`LiveJudgeTests.cs:41`), which the workflow maps from the repository secret, still
   named `ANTHROPIC_API_KEY` because it holds an Anthropic credential
-  (`.github/workflows/deploy.yml:564`). That is one more place the credential exists. The step
+  (`.github/workflows/deploy.yml:605`). That is one more place the credential exists. The step
   deliberately omits `--minimum-expected-tests`, so on a repo with the secret absent every case skips
   and the step is green: the gate reports "judged nothing" rather than failing, and the reader has to
   look at the skip count to know which happened.
@@ -355,18 +370,18 @@ budgeted ceiling.**
   10-digit North American shape by design, so an international number, a spelled-out address or a
   social handle passes through unredacted, and the narrowness that protects the credibility evidence
   is the same narrowness that limits the coverage. Changing either pattern is now a framework release
-  rather than a module edit (`PiiRedactionGuardrail.cs:74`, `:80`).
+  rather than a module edit (`PiiRedactionGuardrail.cs:73`, `:79`).
 - **The ceiling is a two-day rolling total evaluated every twelve hours, not a monthly budget.**
   Azure scheduled query rules evaluate at most two days of data, and a self-resolving (stateful) rule
   may not evaluate less often than every twelve hours, so the guard is sized to one legitimate pass
   rather than a month of spend: a repeated or runaway pass inside two days trips it, while slow
-  accumulation across a month does not (`infra/main.bicep:426-436`, values at `:447-449`). A single
+  accumulation across a month does not (`infra/main.bicep:452-462`, values at `:473-475`). A single
   runaway pass can spend its whole way through the envelope inside an hour, and the alert notices on
   the next evaluation, at most twelve hours later. It is a budget guard, not a circuit breaker:
   nothing stops the calls.
 - **Cost visibility depends on the metrics export staying on.** The counters ride an application
   meter, which the http-client and runtime instrument toggles do not touch
-  (`infra/main.bicep:419-421`), but an export path that breaks makes the alert evaluate zero and look
+  (`infra/main.bicep:445-447`), but an export path that breaks makes the alert evaluate zero and look
   healthy.
 - **A duplicate trigger is invisible to the organizer.** The endpoint answers 202 for every pass it
   schedules while the flag is on, so a second click reports acceptance and the skip is visible only in the
@@ -400,6 +415,26 @@ trade-offs are updated to match; the code anchors in the current-state sections 
 re-anchored to current source (the Context citation of the ADC scorecard header is a pointer to that
 dated document, not a current-state claim), and the Status no longer describes the v1.207.0 ADC changes as
 unmerged.
+
+## Revision (2026-10-06)
+- The trigger endpoint checks that the event exists before scheduling and answers a 404 for an
+  unknown or soft-deleted id (`SessionSelectionController.cs:142-146`); decision 9 and the endpoint
+  Rationale bullet now say so.
+- The internal-command handler returns a failure on an all-failed or partial pass, so the processor
+  retries and re-pays for the failed sessions up to `InternalCommands:MaxAttempts`
+  (`ScoreEventSessionsInternalCommandHandler.cs:95-118`); decision 9 and the spend-control
+  Rationale bullet now name that bounded retry spend.
+- The paid-tier path filter covers three folders only (`deploy.yml:168-170`); decision 5 no longer
+  says "and its neighbours" and names what the filter leaves out.
+- The port's `PromptVersion` remarks still list redaction rules as a bump trigger
+  (`IAiScoringService.cs:24-26`); decision 3 no longer calls them a restatement of the
+  implementation's scope.
+- The Context citation of the green CI leg (`deploy.yml:490-493`) no longer points at a test step,
+  so it is dropped; the statement is historical.
+- Code anchors in the current-state sections (Context, decisions 1 to 9, Trade-offs) were
+  re-verified against current source and re-anchored. The 2026-10-01 Revision's anchors stay as
+  recorded; their current homes are `Program.cs:152`, `appsettings.json:107-109`,
+  `SessionScoringService.cs:126-134` and `SessionSelectionController.cs:134`.
 
 ## Related
 [ADR-110](110-rubric-v2-category-realignment.md) (the rubric category this record answers: section 16,

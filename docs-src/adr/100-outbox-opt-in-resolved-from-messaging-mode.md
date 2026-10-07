@@ -7,7 +7,9 @@ three-valued resolution precedent [ADR-021](021-consumer-inbox-idempotency.md) s
 EF model is unchanged: the `OutboxMessages` table stays mapped on every relational source either way,
 so this is a configuration decision and never a migration. Revised 2026-09-25 (re-anchored the
 `MessageBusSettings`, registration, startup-guard and model-configuration citations, which have
-moved; the guard now lives in the `DependencyInjection.Messaging.cs` partial).
+moved; the guard now lives in the `DependencyInjection.Messaging.cs` partial). Revised 2026-10-01 (re-anchored the startup-guard and
+model-configuration citations and named the guard's second call site). Revised 2026-10-06: Decision 1
+now scopes the explicit-value-wins rule to the in-process transport, as its cited source does.
 
 ## Context
 ADR-003 gives every host a transactional outbox: domain and integration events are written to
@@ -42,15 +44,16 @@ something, keep the schema, and refuse the one combination that cannot work.
    `MessageBusSettings.EnableOutbox` (`Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:167`)
    carries the explicit override; `IsOutboxEnabled` (`:175`) is the resolved posture every framework
    component reads: `EnableOutbox ?? Provider != MessageBusProvider.InProcess`. That is character for
-   character the inbox rule two properties above it (`:141`). An explicit value wins in both
-   directions, so a monolith that wants at-least-once delivery across a crash sets
-   `MessageBus:EnableOutbox=true` and gets the full outbox back (`:159-161`).
+   character the inbox rule two properties above it (`:141`). An explicit value wins for the
+   in-process transport, in both directions, so a monolith that wants at-least-once delivery across a
+   crash sets `MessageBus:EnableOutbox=true` and gets the full outbox back; an explicit `false` under
+   a broker is refused instead (`:159-163`, see Decision 4).
 
 2. **Resolution happens once, at registration.** `AddInfrastructure` binds the section, and on the
    enabled path registers `OutboxProcessor` and `OutboxCleanupService`; on the disabled path it
    registers neither and adds `OutboxDisabledNoticeService` instead
-   (`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:203-215`, reasoning at
-   `:197-202`).
+   (`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:217-225`, settings read at
+   `:213-214`, reasoning at `:207-212`).
 
 3. **The row writes are gated at both write points**, not only the background services:
    `InProcessEventBus` takes its direct-dispatch branch when the outbox is off, with no rows, no save
@@ -65,9 +68,9 @@ something, keep the schema, and refuse the one combination that cannot work.
 4. **A broker with the outbox explicitly disabled fails at startup.**
    `EnsureOutboxAvailableForProvider` throws when the provider is anything other than `InProcess` and
    `EnableOutbox` is explicitly `false`
-   (`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:196`, guard at `:198`,
-   throw at `:200-201`; called from `DependencyInjection.cs:205` and from `AddBrokerMessaging` at
-   `DependencyInjection.Messaging.cs:59`, so a broker host that skips `AddInfrastructure` still fails
+   (`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:202`, guard at `:204`,
+   throw at `:206-207`; called from `DependencyInjection.cs:215` and from `AddBrokerMessaging` at
+   `DependencyInjection.Messaging.cs:60`, so a broker host that skips `AddInfrastructure` still fails
    at startup). The message names the
    mechanism (`BrokerEventBus` writes the rows, `OutboxProcessor` publishes them), the consequence
    (every cross-service event dropped silently) and the fix. Leaving the setting unset under a broker
@@ -83,8 +86,8 @@ something, keep the schema, and refuse the one combination that cannot work.
 
 6. **The EF model does not change.** `OutboxMessage` is configured in `OnModelCreating` for every
    relational provider
-   (`Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:417`,
-   `ConfigureOutbox` called at `:424`, configuration at `:664-717`),
+   (`Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:416`,
+   `ConfigureOutbox` called at `:423`, configuration at `:661-714`),
    independent of the setting. Flipping the flag in either direction is a configuration change and a
    restart, with no migration in any consumer.
 
@@ -136,6 +139,14 @@ No decision or rationale changed. Re-anchored the startup-guard citations in Dec
 citations in Decision 6 (`ApplicationDbContext.cs:417`, `ConfigureOutbox` call `:424`, body
 `:664-717`), which moved again. Decision 4 now also names the guard's second call site,
 `AddBrokerMessaging` (`DependencyInjection.Messaging.cs:59`), which was already in the code.
+
+## Revision (2026-10-06)
+- Decision 1 said an explicit `EnableOutbox` value wins in both directions; the cited settings doc
+  scopes that to the in-process transport, and an explicit `false` under a broker is refused at
+  registration (`MessageBusSettings.cs:159-163`). Decision 1 now says so and points to Decision 4.
+- Anchors in Decisions 2, 4 and 6 re-verified against current source and updated (registration
+  `DependencyInjection.cs:217-225`, guard `DependencyInjection.Messaging.cs:202`, second call site
+  `:60`, `OnModelCreating` at `ApplicationDbContext.cs:416`); no decision or rationale changed.
 
 ## Related
 [ADR-003](003-outbox-dual-dispatch.md) (the outbox itself: the dual-dispatch contract, the processor,

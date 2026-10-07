@@ -245,7 +245,9 @@
           protected environment plus a merged-main assertion).
           Revised 2026-09-19 (locked-mode restore described at its actual scope: the two explicit restore steps,
           CI <code>build-and-test</code> and release <code>publish</code>, not every job in either workflow).
-          Revised 2026-09-22 (build-provenance attestations on every released nupkg; the audit and SBOM gates are shared composite actions consumed by ADC and Store; see the Revision below).</p>
+          Revised 2026-09-22 (build-provenance attestations on every released nupkg; the audit and SBOM gates are shared composite actions consumed by ADC and Store; see the Revision below).
+          Revised 2026-10-01 (current-state sections re-anchored to the composite actions; see the Revision below).
+          Revised 2026-10-06: the SQLitePCLRaw pin is recorded at its current version (3.0.5) and both projects that reference it, and <code>wasm-payload-budget</code> joins the first-party actions consumers reference by branch.</p>
           <h2 id="context">Context</h2>
           <p>MMCA.Common is a published framework: on every <code>v*</code> tag (release.yml:3-5) it packs its NuGet packages
           and pushes them to both GitHub Packages (release.yml:117-118) and nuget.org through OIDC trusted
@@ -261,7 +263,7 @@
           establish provenance and integrity, an SBOM release gate, committed lock files, a CI vulnerability
           audit, and package source mapping, already live in the release and CI workflows,
           <code>Directory.Build.props</code>, and <code>nuget.config</code>, and are summarized for consumers in SECURITY.md
-          (SECURITY.md:43-52). No ADR owned them as a single coherent posture. This record does, and it exceeds
+          (SECURITY.md:44-53). No ADR owned them as a single coherent posture. This record does, and it exceeds
           ADR-016&#39;s scope: ADR-016 gestures at lock files as sweep mechanics, this ADR owns supply-chain
           integrity as the decision.</p>
           <h2 id="decision">Decision</h2>
@@ -298,8 +300,10 @@
           advisory GHSA-2m69-gcr7-jv3q (CVE-2025-6965), was suppressed from 2026-06-19 while SQLitePCLRaw
           shipped no patched build. SQLitePCLRaw 2.1.12 (published 2026-07-14) delivered the patched build, so
           the suppression was removed on 2026-07-20 and replaced with a direct fix: a
-          <code>SQLitePCLRaw.bundle_e_sqlite3</code> pin tracked in <code>Directory.Packages.props</code> (Directory.Packages.props:58-62),
-          referenced directly by <code>MMCA.Common.Infrastructure</code> (MMCA.Common.Infrastructure.csproj:38-40) so the
+          <code>SQLitePCLRaw.bundle_e_sqlite3</code> pin tracked in <code>Directory.Packages.props</code>, currently at version 3.0.5
+          (Directory.Packages.props:58, rationale comment :54-57), referenced directly by
+          <code>MMCA.Common.Infrastructure</code> (MMCA.Common.Infrastructure.csproj:40-42) and by <code>MMCA.Common.Aspire</code>
+          (MMCA.Common.Aspire.csproj:69-73, for the copy <code>AspNetCore.HealthChecks.Sqlite</code> pulls in) so the
           patched version flows to consumers through the published package graph, the same pattern used for
           the MessagePack pin. This complements the build-time audit: <code>NuGetAudit</code> with <code>NuGetAuditMode=all</code>
           (Directory.Build.props:9-10)
@@ -431,13 +435,39 @@
           restores (<code>ci.yml:132</code>, <code>release.yml:66</code>), the upload step (<code>release.yml:110-115</code>, <code>:226-231</code>) and
           <code>MMCA.Common.Infrastructure.csproj:38-40</code>. Anchors inside the earlier Revision sections are left as
           recorded.</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <ul>
+          <li>The SQLite fix in Decision 3 now names the pin&#39;s current version, 3.0.5
+          (<code>Directory.Packages.props:58</code>), and the second project that references it directly,
+          <code>MMCA.Common.Aspire</code> (<code>MMCA.Common.Aspire.csproj:73</code>), beside <code>MMCA.Common.Infrastructure</code>
+          (<code>MMCA.Common.Infrastructure.csproj:42</code>).</li>
+          <li>The branch-referenced first-party actions number four, not three: <code>wasm-payload-budget</code> is also
+          consumed <code>@main</code> (<code>MMCA.Store/.github/workflows/deploy.yml:510</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:478</code>).
+          Current consumer locations of the others: audit and SBOM at Store <code>deploy.yml:617</code>, <code>:642</code> and ADC
+          <code>deploy.yml:647</code>, <code>:672</code>; <code>freshness-gate</code> at Store <code>deploy.yml:876</code>, <code>:901</code>, <code>:929</code>, <code>:968</code> and ADC
+          <code>deploy.yml:908</code>, <code>:933</code>, <code>:962</code>, <code>:1014</code>.</li>
+          <li>Facts recorded in the 2026-09-07 Revision still hold at moved anchors. Every <code>uses:</code> remains
+          SHA-pinned (CI checkout <code>ci.yml:51</code>, setup-dotnet <code>:99</code>, cache <code>:223</code>; release checkout
+          <code>release.yml:26</code>, <code>:159</code>, attest <code>:96</code>, <code>:213</code>, <code>NuGet/login</code> <code>:131</code>, <code>:245</code>). CycloneDX is no
+          longer installed in <code>release.yml</code>: both release jobs call the <code>cyclonedx-sbom</code> action
+          (<code>release.yml:105</code>, <code>:221</code>), whose <code>tool-version</code> input defaults to 6.2.0
+          (<code>.github/actions/cyclonedx-sbom/action.yml:29</code>) and installs at <code>action.yml:51-52</code>;
+          <code>dotnet-coverage --version 18.11.0</code> is at <code>ci.yml:150</code>, <code>:314</code>. The two locked restores are
+          <code>ci.yml:132</code> (Build <code>--no-restore</code> at <code>:136</code>) and <code>release.yml:66</code>; the cache-key comments naming
+          <code>--locked-mode</code> sit at <code>ci.yml:106</code>, <code>:195</code>, <code>:274</code>, <code>:373</code>, <code>:545</code>, <code>:713</code>, <code>:860</code> and
+          <code>release.yml:55</code>, <code>:189</code>. The fail-closed audit logic lives in the composite action
+          (<code>.github/actions/nuget-vulnerability-audit/action.yml:63-68</code>, header check <code>:69-73</code>,
+          accept-list <code>:74-84</code>). The release jobs declare <code>environment: release</code> at <code>release.yml:19</code>, <code>:152</code>.</li>
+          <li>Anchors in the live sections were re-verified against current source; SECURITY.md&#39;s supply-chain
+          section moved to <code>SECURITY.md:44-53</code>.</li>
+          </ul>
           <h2 id="related">Related</h2>
           <p>ADR-016 (lockstep versioning + the MassTransit-v8 license pin; this record extends dependency
           governance from versioning and licensing into supply-chain provenance and integrity), ADR-015
           (architecture invariants enforced as build-gating fitness functions; the same gate-the-build posture
           applied here to dependencies), ADR-010 (integration-event schema versioning; another release-discipline
           control that turns a contract into an enforced signal). See SECURITY.md (&quot;Dependency &amp; supply-chain
-          security&quot;, SECURITY.md:43-52) for the consumer-facing summary and rubric §32
+          security&quot;, SECURITY.md:44-53) for the consumer-facing summary and rubric §32
           (ArchitectureEvaluationCriteria.md:843-861) for the evaluation criteria.</p>
           
         <div class="doc-foot btn-row">
@@ -457,6 +487,7 @@
             <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
             <li><a href="#revision-2026-09-22-attestations-and-one-implementation-of-each-gate">Revision (2026-09-22): attestations, and one implementation of each gate</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

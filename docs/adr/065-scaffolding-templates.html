@@ -260,24 +260,29 @@
           (128 tests), and every staging, README, template and CI anchor were re-taken at HEAD. Revised
           2026-09-19: the seed&#39;s fitness map declares 25 sealed subclasses rather than 24
           (<code>FeatureFlagLifecycleTests</code> joined it), and the seed no longer documents a run count of its own, so
-          the generated-app test figure is stated only as unpinned on both sides.</p>
+          the generated-app test figure is stated only as unpinned on both sides. Revised 2026-10-01: the
+          frozen wire contract is keyed by each event&#39;s <code>[EventName]</code> value and its failure points at
+          <code>MMCA_CONTRACT_SNAPSHOT_OUT</code> rather than printing the live value. Revised 2026-10-06: the seed
+          measurements were re-taken at MMCA.Helpdesk <code>f6ef4b0</code>, and <code>Directory.Build.targets</code> is now a 7-line
+          import of the local-source swap MMCA.Common ships rather than the swap itself.</p>
           <h2 id="context">Context</h2>
           <p><a href="../guides/common-BUILD-BY-HAND.html">Build by hand</a> is accurate and complete, and phases 1 through 6
           of it are transcription work (<code>common-BUILD-BY-HAND.md:98</code> through <code>:1255</code>). Its own instruction for
-          the load-bearing parts is &quot;copy <code>MMCA.Helpdesk/Directory.Build.props</code>&quot; (<code>:170</code>), &quot;copy MMCA.ADC&#39;s
+          the load-bearing parts is &quot;copy <code>MMCA.Helpdesk/Directory.Build.props</code>&quot; (<code>:171</code>), &quot;copy MMCA.ADC&#39;s
           <code>.editorconfig</code> verbatim&quot; (<code>:116</code>), &quot;copy the relevant rows from MMCA.ADC/Directory.Packages.props&quot;
           (<code>:159</code>). That walkthrough was the whole of
           <a href="../guides/common-GETTING-STARTED.html">Getting Started</a> when this decision was taken; Getting Started
           is now the six-step <code>dotnet new install MMCA.Templates</code> path
           (<code>common-GETTING-STARTED.md:10-22</code>) and the by-hand transcription moved to its own guide.</p>
           <p>Measured against MMCA.Helpdesk, the deliberately minimal seed, a brand-new app on the framework
-          starts by hand-creating <strong>12 projects, 136 files, and 11,532 lines</strong> before a line of its own
-          business logic. The method, re-run on 2026-10-01 and stated here so the figures can be reproduced
-          rather than trusted: every tracked file under <code>Source/</code> and <code>Tests/</code> (129 files, 10,394 lines), plus
-          the seven root build files below (1,138 lines). Those
+          starts by hand-creating <strong>12 projects, 137 files, and 11,571 lines</strong> before a line of its own
+          business logic. The method, re-run on 2026-10-06 at MMCA.Helpdesk <code>f6ef4b0</code> and stated here so the
+          figures can be reproduced rather than trusted: every tracked file under <code>Source/</code> and <code>Tests/</code> (130
+          files, 10,500 lines), plus the seven root build files below (1,071 lines). Those
           seven are an 827-line <code>.editorconfig</code>, a 100-line <code>Directory.Packages.props</code> carrying 58 pins,
-          a 77-line <code>Directory.Build.props</code>, the 74-line local-source swap in <code>Directory.Build.targets</code>,
-          <code>global.json</code>, <code>nuget.config</code>, and the solution file. Under <code>Source/</code> and <code>Tests/</code> sit the module
+          a 77-line <code>Directory.Build.props</code>, a 7-line <code>Directory.Build.targets</code> that imports the local-source
+          swap from MMCA.Common&#39;s <code>build/LocalSource/MMCA.Common.LocalSource.targets</code>
+          (<code>Directory.Build.targets:6</code>), <code>global.json</code>, <code>nuget.config</code>, and the solution file. Under <code>Source/</code> and <code>Tests/</code> sit the module
           project set, the vertical slice, the migrations project and its design-time factory, two hosts, the
           Aspire AppHost, three <code>.resx</code> pairs, and the architecture map with its fitness subclasses.</p>
           <p>Several of those lines are load-bearing and quiet about it. <code>AddApplicationDecorators()</code> must be the
@@ -490,6 +495,19 @@
           (136 files, 11,532 lines; 129 files, 10,394 lines under <code>Source/</code> and <code>Tests/</code>), and the
           build-by-hand, staging, FACTS and required-check citations were re-anchored (the required check now
           reads from <code>MMCA.Helpdesk/AGENTS.md:104</code>, since that repo&#39;s <code>CLAUDE.md</code> imports <code>AGENTS.md</code>).</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <p>No decision or rationale changed.</p>
+          <ul>
+          <li>The seed measurements were re-taken at MMCA.Helpdesk <code>f6ef4b0</code> with the same method: 130 files and
+          10,500 lines under <code>Source/</code> and <code>Tests/</code>, plus 1,071 lines across the seven root build files, for
+          137 files and 11,571 lines. The method still reproduces the 2026-10-01 pair at <code>b9c97e9</code>; only the
+          tree moved (one new test file, <code>TicketsExportScopeTests.cs</code>, and growth elsewhere).</li>
+          <li><code>Directory.Build.targets</code> is no longer the 74-line local-source swap: it is 7 lines and imports
+          <code>build/LocalSource/MMCA.Common.LocalSource.targets</code> from the sibling MMCA.Common checkout
+          (<code>Directory.Build.targets:6</code>). The 2026-10-01 root-file total (1,138 lines) predated that change.</li>
+          <li>Anchors were re-verified against current source; the build-by-hand copy instruction for
+          <code>Directory.Build.props</code> moved to <code>common-BUILD-BY-HAND.md:171</code>.</li>
+          </ul>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -505,6 +523,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             </ul>
           </nav>
         </aside>

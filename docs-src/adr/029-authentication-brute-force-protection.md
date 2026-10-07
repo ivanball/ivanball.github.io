@@ -137,8 +137,8 @@ table.
   cache does not aggregate an attacker hitting different replicas. The answer is the same as ADR-026:
   register a distributed cache once scaled out. Both apps do: every ADC and Store service host calls
   `AddCommonHybridCacheWhenRedisConfigured` (for example
-  `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:133`,
-  `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:101`), so with Redis configured
+  `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:138`,
+  `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:102`), so with Redis configured
   the counters run through `HybridCacheService.IncrementAsync`.
 - **Normalization widens the DoS lever slightly.** Collapsing every spelling onto one counter is what
   makes the lockout enforceable, and it also means an attacker no longer needs to guess the exact
@@ -221,6 +221,23 @@ own in-process state and is unaffected by the outage (it is deliberately never R
 also the posture the framework already takes for the distributed request limiter,
 `RedisFixedWindowRateLimiter`, which permits the request and logs a warning on a Redis fault. The cost is that a lockout already in force is
 not enforced during the outage; the Warning log makes that window visible.
+
+## Revision (2026-10-06)
+No behavior changed; this pass corrected anchors only.
+
+- The Trade-offs examples of a host calling `AddCommonHybridCacheWhenRedisConfigured` now point at
+  `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:138` and
+  `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:102`.
+- The login-path order recorded in the 2026-09-07 Revision still holds (credential check, verify,
+  gate); its anchors in
+  `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs` have moved and
+  now read: `HasStoredCredential` check `:153` (defined `:607`), `BurnPasswordVerificationCost` call
+  `:155` (defined `:615`, throwaway verify `:624`), password verify `:161`, failed-attempt increment
+  `:163`, `Auth.InvalidCredentials` `:158` and `:165`, `ValidateLoginCandidateAsync` gate call `:172`
+  (hook declared `:581`).
+- Every other live anchor (`ChangePasswordHandlerBase.cs`, `DependencyInjection.Caching.cs`,
+  `HybridCacheService.cs`, `PasswordHasher.cs`) was re-verified against current source and is
+  unchanged.
 
 ## Alternatives rejected
 - **Making the failed-attempt and registration counters atomic.** The increment in

@@ -259,6 +259,12 @@
           and the Decision&#39;s last bullet were also corrected: concrete wrapper-struct identifiers now exist in
           Common&#39;s test tree, so what is zero is adoption in the four <code>Source</code> trees, not existence. See the Revision
           (2026-09-19) at the end.
+          Revised 2026-10-01 (the Trade-offs entry on identifier swapping now names both <code>Guid</code>-backed aliases, and
+          the Conference and ADC/Store <code>Directory.Build.props</code> citations were re-anchored; see the Revision
+          (2026-10-01) at the end).
+          Revised 2026-10-06: the Status block now lists the 2026-10-01 revision, and the Common
+          <code>Directory.Build.props</code> and <code>AuthenticationServiceBase</code> citations were re-anchored; see the Revision
+          (2026-10-06) at the end.
           <strong>Revisited by <a href="085-identifier-type-aliases-revisited.html">ADR-085</a> (2026-08-18)</strong>: the wrapper-struct
           alternative this record deferred was re-evaluated, priced, and deferred again, now against named
           revisit triggers instead of open-endedly. The decision below is unchanged; see the Revision
@@ -300,7 +306,7 @@
           (<code>Source/Core/MMCA.Common.Domain/Entities/AuditableBaseEntity.cs:27,31</code>), and constrains the user
           type parameter of <code>AuthenticationServiceBase&lt;TUser&gt;</code>
           (<code>where TUser : AuditableAggregateRootEntity&lt;UserIdentifierType&gt;, IAuthUser</code>,
-          <code>Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:85</code>), with each consuming
+          <code>Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:72</code>), with each consuming
           app supplying the concrete <code>User</code> entity that satisfies it.
           Consumers follow the same pattern: ADC Identity
           (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/MMCA.ADC.Identity.GlobalUsings.IdentifierType.cs:2</code>),
@@ -318,7 +324,7 @@
           <li><strong>Aliases are linked solution-wide via <code>Directory.Build.props</code>.</strong> Each <code>GlobalUsings.*.cs</code> file is
           pulled into every project with a <code>&lt;Compile Include ... Link=... /&gt;</code> block, so the alias is visible
           everywhere without a project reference: Common
-          (<code>MMCA.Common/Directory.Build.props:128-138</code>), ADC
+          (<code>MMCA.Common/Directory.Build.props:131-141</code>), ADC
           (<code>MMCA.ADC/Directory.Build.props:125-139</code>), Store (<code>MMCA.Store/Directory.Build.props:129-140</code>). Adding a
           solution-wide alias is a new <code>GlobalUsings.*.cs</code> plus a matching <code>&lt;Compile Include&gt;</code> line, nothing more.</li>
           <li><strong>The alias flows unchanged through every layer.</strong> Tracing the ADC <code>User</code> aggregate: the domain
@@ -515,6 +521,19 @@
           comment), which the Revision (2026-09-19) reported but had not applied. The <code>Directory.Build.props</code> alias
           link blocks moved without their content changing: ADC is at <code>MMCA.ADC/Directory.Build.props:125-139</code> and
           Store at <code>MMCA.Store/Directory.Build.props:129-140</code>.</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <p>No decision and no rationale changed.</p>
+          <ul>
+          <li>The Status block omitted the Revision (2026-10-01); it is now listed there.</li>
+          <li>The Common <code>Directory.Build.props</code> alias link blocks moved without their content changing and are at
+          <code>MMCA.Common/Directory.Build.props:131-141</code>, the Common counterpart the Revision (2026-10-01) left
+          stale when it re-anchored ADC and Store.</li>
+          <li>The <code>AuthenticationServiceBase&lt;TUser&gt;</code> constraint is unchanged and now sits at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:72</code>; the Decision
+          is re-anchored (the <code>:85</code> recorded in the Revision (2026-09-11) stays as recorded on that date).</li>
+          <li>Every other anchor in the Context and Decision sections was re-verified against current source and
+          holds.</li>
+          </ul>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -536,6 +555,7 @@
             <li><a href="#revision-2026-09-11">Revision (2026-09-11)</a></li>
             <li><a href="#revision-2026-09-19">Revision (2026-09-19)</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             </ul>
           </nav>
         </aside>

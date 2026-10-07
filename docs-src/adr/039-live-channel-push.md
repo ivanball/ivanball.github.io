@@ -131,3 +131,16 @@ What a signed-in client is allowed to subscribe to, and how much it may hold ope
    surface (`GET /api/livepolls/manage`,
    `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:183`)
    still returns every state to a caller who passes that check.
+
+## Revision (2026-10-06)
+No content change: the channel model, the per-user connection cap and its default are as recorded
+on 2026-09-07. Two anchors recorded in that section have moved:
+
+- The `MaxConnectionsPerUser` default of 20 is now declared at
+  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/PushNotificationSettings.cs:46`
+  (its `Range(0, 10_000)` bound at `:45`).
+- The refusal of a connection past the cap is now in `NotificationHub.OnConnectedAsync`
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/NotificationHub.cs:61`), which
+  reads the cap at `:63`, compares at `:69` and throws `HubException` at `:74`.
+
+Anchors were re-verified against current source.

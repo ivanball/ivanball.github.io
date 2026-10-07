@@ -1,7 +1,7 @@
 # ADR-122: Dev-Only Relaxations Are Environment-Gated and Fail Closed
 
 ## Status
-Accepted (2026-09-11).
+Accepted (2026-09-11). Revised 2026-10-01: citations re-anchored. Revised 2026-10-06: the plain-check inventory adds the Development-only design-time database skip.
 
 ## Context
 Several capabilities are useful locally and dangerous in a deployed environment: EF Core rendering
@@ -41,8 +41,8 @@ documentation:
 
 `RequireHttpsMetadata` on forwarded JWT bearer is the hybrid the SMTP gate was modelled on: explicit
 argument, then configuration, then `!environment.IsDevelopment()`
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.Authentication.cs:63-65`),
-with a startup-warning filter registered when a non-Development host opts out (`:67-71`).
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.Authentication.cs:64-66`),
+with a startup-warning filter registered when a non-Development host opts out (`:68-72`).
 
 **The remaining environment-conditional relaxations are plain `IsDevelopment()` checks, not
 fail-closed gates**, and this record names them as such: each reads a non-nullable environment the
@@ -51,20 +51,28 @@ the inventory is complete, not to claim a guarantee their code does not make.
 
 - CORS: the pipeline selects `CorsPolicyAllowAll` in Development and `CorsPolicyAllowSpecificOrigins`
   otherwise (`.../Startup/Pipeline/MiddlewarePipelineBuilder.cs:99-101`); the allow-any policy is
-  registered at `.../Startup/WebApplicationBuilderExtensions.cs:139-142` behind an analyzer
-  suppression that states the scope (`:138`). The Aspire gateway takes the same shape on its default
+  registered at `.../Startup/WebApplicationBuilderExtensions.cs:145-148` behind an analyzer
+  suppression that states the scope (`:144`). The Aspire gateway takes the same shape on its default
   policy (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/GatewayCorsExtensions.cs:34-42`). See
   ADR-082.
 - Cookie `Secure` flag: `Secure = !environment.IsDevelopment()` for the session cookies
-  (`.../MMCA.Common.API/SessionCookies/SessionCookieJar.cs:34`) and for the culture cookie
+  (`.../MMCA.Common.API/SessionCookies/SessionCookieJar.cs:64`) and for the culture cookie
   (`.../Startup/WebApplicationExtensions.cs:134`).
 - HSTS: `_enableHsts = options.Value.EnableHsts && !environment.IsDevelopment()`
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Security/SecurityHeaders.cs:170`), so Development
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Security/SecurityHeaders.cs:175`), so Development
   is the only way to suppress it once a host enables it. CSP is built from the same flag
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Security/BlazorCspPolicyProvider.cs:41`). See
   ADR-023.
 - Pseudo-locale: added to the supported cultures and accepted by `/culture/set` only in Development
   (`.../Startup/WebApplicationExtensions.cs:80-82`, `:119-122`).
+- Design-time database skip: database initialization returns early only when the host is
+  Development and the `OpenApiDesignTimeKey` setting is true
+  (`.../Startup/DatabaseInitializationExtensions.cs:153`), so a build-time OpenAPI run does not
+  touch a database.
+
+The Serilog minimum level (`Debug` in Development, `Information` otherwise,
+`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Logging/SerilogHostExtensions.cs:77`) is also
+environment-conditional but relaxes no security control, so it is not part of this inventory.
 
 The two fail-closed gates that are pure functions are unit-tested on exactly the closing case: the
 EF gate with no environment registered is false
@@ -103,6 +111,17 @@ warning filter, now in the partial file `WebApplicationBuilderExtensions.Authent
 (`WebApplicationBuilderExtensions.cs:139-142`, suppression `:138`), the culture cookie `Secure` flag
 (`WebApplicationExtensions.cs:134`), the pseudo-locale check (`:119-122`), and the CSP flag
 (`BlazorCspPolicyProvider.cs:41`).
+
+## Revision (2026-10-06)
+- The plain-check inventory gained the design-time database skip
+  (`DatabaseInitializationExtensions.cs:153`), a Development-only branch it previously omitted, and
+  now names the Serilog minimum level (`SerilogHostExtensions.cs:77`) as environment-conditional but
+  out of scope.
+- Anchors re-verified against current source: `RequireHttpsMetadata` resolution and warning filter
+  moved to `WebApplicationBuilderExtensions.Authentication.cs:64-66` and `:68-72`, the allow-any CORS
+  policy to `WebApplicationBuilderExtensions.cs:145-148` (suppression `:144`), the session cookie
+  `Secure` flag to `SessionCookieJar.cs:64`, and HSTS to `SecurityHeaders.cs:175`; all other
+  citations still hold.
 
 ## Related
 [ADR-070](070-fail-fast-configuration-contract.md) (binds and validates settings at startup; this

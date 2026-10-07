@@ -1,8 +1,8 @@
 # ADR-130: Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)
 
 ## Status
-Accepted (2026-10-01). Targeted at MMCA.Common v1.218.0, which is unreleased at the time of writing
-(the CHANGELOG carries no entry for it yet). Refines [ADR-018](018-polyglot-persistence.md) (engine as
+Accepted (2026-10-01). Shipped in MMCA.Common v1.218.0 (`MMCA.Common/CHANGELOG.md:279`). Revised
+2026-10-06: the release status now records v1.218.0 as shipped. Refines [ADR-018](018-polyglot-persistence.md) (engine as
 a routing decision) and [ADR-113](113-postgresql-as-a-first-class-engine.md) (the fourth engine)
 without changing [ADR-006](006-database-per-service.md) (one sealed context class per engine, one
 instance per database).
@@ -79,7 +79,7 @@ registry keyed by the shipped enum. Call sites read engine facts; they no longer
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/PhysicalDataSource.cs:42`);
   the row-version mapping and stamp read `RowVersion`
   (`ApplicationDbContext.cs:591`,
-  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/AuditSaveChangesInterceptor.cs:59`);
+  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/AuditSaveChangesInterceptor.cs:67`);
   include support reads `IsRelational`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/DataSourceService.cs:32`);
   context creation, key mapping and the soft-delete SQL call the behaviour hooks
@@ -99,13 +99,13 @@ registry keyed by the shipped enum. Call sites read engine facts; they no longer
   documented at `:38-44`), and so are `IDbContextFactory`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/IDbContextFactory.cs:40`)
   and `DbContextFactory`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:321`).
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:322`).
   The engine-specific half is `IExplicitKeyInsertDialect`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/Engines/IExplicitKeyInsertDialect.cs:13`),
   which finds the per-table groups (`:21`, grouped as `ExplicitKeyInsertGroup`,
   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/Engines/ExplicitKeyInsertGroup.cs:12`)
   and builds the toggle statement (`:28`); the factory keeps the engine-neutral rounds (`:5-11`) and
-  uses the dialect only when the engine has one (`DbContextFactory.cs:292`). SQL Server is its own
+  uses the dialect only when the engine has one (`DbContextFactory.cs:293`). SQL Server is its own
   dialect (`SQLServerDataSourceEngine.cs:19`, `:49`) and emits `SET IDENTITY_INSERT [schema].[table] ON` or `OFF`
   (`:163`); the other three return `null`, so the save runs unchanged.
 - **Raw SQL is registered only where it can run.** `AddRawSqlQueryExecutor`
@@ -214,6 +214,13 @@ cannot go stale. Its failure message names this record.
   add one property per settings class.
 - **What to watch.** Allow-list growth in `DataSourceBranchingFitnessTests`: a new entry is a new
   engine-specific site outside the strategy and needs the same justification as the existing ones.
+
+## Revision (2026-10-06)
+- **Release status.** v1.218.0 has shipped (`MMCA.Common/CHANGELOG.md:279`); the Status block no
+  longer calls it unreleased.
+- **Anchors.** Re-verified against current source; the audit row-version read moved to
+  `AuditSaveChangesInterceptor.cs:67`, the factory's dialect use to `DbContextFactory.cs:293` and
+  `RequestExplicitKeyInsert` to `DbContextFactory.cs:322`, behavior unchanged.
 
 ## Related
 [ADR-006](006-database-per-service.md) (one sealed context per engine),

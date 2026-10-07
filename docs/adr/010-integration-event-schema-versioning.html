@@ -282,7 +282,7 @@
           changes and no outbox row migrates: System.Text.Json tolerates the missing field on old payloads and
           the type supplies the default; new rows simply gain <code>&quot;SchemaVersion&quot;:1</code> (the outbox serializer
           options set no naming policy, so outbox payloads keep PascalCase:
-          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:17-20</code>, <code>:140</code>).</li>
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:17-20</code>, <code>:142</code>).</li>
           <li><strong>New-type-for-breaking-change</strong> is the only safe option when transport binds by type (MassTransit)
           and consumers are independently deployed: an in-place reshape has no compatibility window.</li>
           </ul>
@@ -390,6 +390,19 @@
           Rationale&#39;s outbox example now shows <code>&quot;SchemaVersion&quot;:1</code>, because the outbox serializer options set
           only <code>ReferenceHandler.IgnoreCycles</code> and no naming policy
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:17-20</code>, <code>:140</code>).</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <p>No decision, rationale or content changed; one citation moved.</p>
+          <ul>
+          <li>The outbox serialization call (<code>JsonSerializer.Serialize(domainEvent, type, SerializerOptions)</code>) now sits at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:142</code>, not <code>:140</code>;
+          the Rationale citation is updated (the 2026-10-01 Revision keeps <code>:140</code> as recorded on that date). The
+          serializer options at <code>:17-20</code> are unchanged.</li>
+          <li>The Context&#39;s &quot;type string&quot; is, in current code, the stored name from <code>EventNameResolver.GetStorageName</code>
+          (<code>OutboxMessage.cs:141</code>): the <code>[EventName]</code> identity when the event declares one, otherwise the
+          assembly-qualified name. That identity is governed by
+          <a href="003-outbox-dual-dispatch.html">ADR-003</a>; the Context is left as decision-time framing.</li>
+          <li>All other anchors in the live sections were re-verified against current source and still hold.</li>
+          </ul>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -407,6 +420,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#amendment-2026-09-11-integration-event-payload-purity">Amendment (2026-09-11): integration-event payload purity</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             </ul>
           </nav>
         </aside>

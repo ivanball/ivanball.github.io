@@ -22,13 +22,17 @@ tests), and every staging, README, template and smoke anchor were re-taken at HE
 (128 tests), and every staging, README, template and CI anchor were re-taken at HEAD. Revised
 2026-09-19: the seed's fitness map declares 25 sealed subclasses rather than 24
 (`FeatureFlagLifecycleTests` joined it), and the seed no longer documents a run count of its own, so
-the generated-app test figure is stated only as unpinned on both sides.
+the generated-app test figure is stated only as unpinned on both sides. Revised 2026-10-01: the
+frozen wire contract is keyed by each event's `[EventName]` value and its failure points at
+`MMCA_CONTRACT_SNAPSHOT_OUT` rather than printing the live value. Revised 2026-10-06: the seed
+measurements were re-taken at MMCA.Helpdesk `f6ef4b0`, and `Directory.Build.targets` is now a 7-line
+import of the local-source swap MMCA.Common ships rather than the swap itself.
 
 ## Context
 
 [Build by hand](../guides/common-BUILD-BY-HAND.md) is accurate and complete, and phases 1 through 6
 of it are transcription work (`common-BUILD-BY-HAND.md:98` through `:1255`). Its own instruction for
-the load-bearing parts is "copy `MMCA.Helpdesk/Directory.Build.props`" (`:170`), "copy MMCA.ADC's
+the load-bearing parts is "copy `MMCA.Helpdesk/Directory.Build.props`" (`:171`), "copy MMCA.ADC's
 `.editorconfig` verbatim" (`:116`), "copy the relevant rows from MMCA.ADC/Directory.Packages.props"
 (`:159`). That walkthrough was the whole of
 [Getting Started](../guides/common-GETTING-STARTED.md) when this decision was taken; Getting Started
@@ -36,13 +40,14 @@ is now the six-step `dotnet new install MMCA.Templates` path
 (`common-GETTING-STARTED.md:10-22`) and the by-hand transcription moved to its own guide.
 
 Measured against MMCA.Helpdesk, the deliberately minimal seed, a brand-new app on the framework
-starts by hand-creating **12 projects, 136 files, and 11,532 lines** before a line of its own
-business logic. The method, re-run on 2026-10-01 and stated here so the figures can be reproduced
-rather than trusted: every tracked file under `Source/` and `Tests/` (129 files, 10,394 lines), plus
-the seven root build files below (1,138 lines). Those
+starts by hand-creating **12 projects, 137 files, and 11,571 lines** before a line of its own
+business logic. The method, re-run on 2026-10-06 at MMCA.Helpdesk `f6ef4b0` and stated here so the
+figures can be reproduced rather than trusted: every tracked file under `Source/` and `Tests/` (130
+files, 10,500 lines), plus the seven root build files below (1,071 lines). Those
 seven are an 827-line `.editorconfig`, a 100-line `Directory.Packages.props` carrying 58 pins,
-a 77-line `Directory.Build.props`, the 74-line local-source swap in `Directory.Build.targets`,
-`global.json`, `nuget.config`, and the solution file. Under `Source/` and `Tests/` sit the module
+a 77-line `Directory.Build.props`, a 7-line `Directory.Build.targets` that imports the local-source
+swap from MMCA.Common's `build/LocalSource/MMCA.Common.LocalSource.targets`
+(`Directory.Build.targets:6`), `global.json`, `nuget.config`, and the solution file. Under `Source/` and `Tests/` sit the module
 project set, the vertical slice, the migrations project and its design-time factory, two hosts, the
 Aspire AppHost, three `.resx` pairs, and the architecture map with its fitness subclasses.
 
@@ -257,3 +262,17 @@ package (`stage.ps1:143-147`). The seed measurements were re-taken at MMCA.Helpd
 (136 files, 11,532 lines; 129 files, 10,394 lines under `Source/` and `Tests/`), and the
 build-by-hand, staging, FACTS and required-check citations were re-anchored (the required check now
 reads from `MMCA.Helpdesk/AGENTS.md:104`, since that repo's `CLAUDE.md` imports `AGENTS.md`).
+
+## Revision (2026-10-06)
+
+No decision or rationale changed.
+
+- The seed measurements were re-taken at MMCA.Helpdesk `f6ef4b0` with the same method: 130 files and
+  10,500 lines under `Source/` and `Tests/`, plus 1,071 lines across the seven root build files, for
+  137 files and 11,571 lines. The method still reproduces the 2026-10-01 pair at `b9c97e9`; only the
+  tree moved (one new test file, `TicketsExportScopeTests.cs`, and growth elsewhere).
+- `Directory.Build.targets` is no longer the 74-line local-source swap: it is 7 lines and imports
+  `build/LocalSource/MMCA.Common.LocalSource.targets` from the sibling MMCA.Common checkout
+  (`Directory.Build.targets:6`). The 2026-10-01 root-file total (1,138 lines) predated that change.
+- Anchors were re-verified against current source; the build-by-hand copy instruction for
+  `Directory.Build.props` moved to `common-BUILD-BY-HAND.md:171`.

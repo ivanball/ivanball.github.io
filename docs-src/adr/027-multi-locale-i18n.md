@@ -1,7 +1,7 @@
 # ADR-027: Multi-Locale Internationalization (Supersedes ADR-011)
 
 ## Status
-Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, 2026-07-09, 2026-07-29, and 2026-09-15: the MudBlazor localization interceptor is replaced so no dependency assigns the current culture on a hybrid head; corrected 2026-08-01: the pseudo-locale CI gate is required on all three browser engines, and the hybrid applier sets only the thread defaults). **Supersedes [ADR-011](011-single-locale-i18n.md)** (single-locale by design).
+Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, 2026-07-09, 2026-07-29, and 2026-09-15: the MudBlazor localization interceptor is replaced so no dependency assigns the current culture on a hybrid head; corrected 2026-08-01: the pseudo-locale CI gate is required on all three browser engines, and the hybrid applier sets only the thread defaults; revised 2026-10-01: four statements corrected to match the code; revised 2026-10-06: displayed times follow the viewer's clock except a conference schedule, which follows the event's own time zone (Decision 11), and client-synthesized HTTP failures localize by error code). **Supersedes [ADR-011](011-single-locale-i18n.md)** (single-locale by design).
 
 ## Context
 ADR-011 recorded single-locale (en-US) as a deliberate, *revisitable* non-goal and sketched what
@@ -23,8 +23,10 @@ machine `Code`, which makes server-side error localization a keyed lookup rather
 
 2. **Strings are externalized to `.resx`, co-located with the type that uses them, looked up by
    `IStringLocalizer<T>`.** `AddLocalization()` is registered with **no `ResourcesPath`** so a type's
-   resource base name is its full type name and the `.resx` lives next to it (`Login.razor` →
-   `Login.resx` / `Login.es.resx`; a `*.Resources.SharedResource` marker for cross-cutting chrome). Keys
+   resource base name is its full type name and the `.resx` lives next to it (`ChangePasswordCard.razor` ->
+   `ChangePasswordCard.resx` / `ChangePasswordCard.es.resx` under
+   `MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/Auth/`; a `*.Resources.SharedResource`
+   marker for cross-cutting chrome, which pages such as `Login.razor` inject instead of owning a pair). Keys
    are dotted and stable (`Nav.Home`, `Common.Button.Cancel`). Parameterized text uses **composite format
    keys** (`"Error loading {0}."`) consumed as `L["Common.Error.Load", entity]`: never string
    concatenation. The `.resx` compile to **satellite assemblies** that pack into the NuGet packages
@@ -44,9 +46,9 @@ machine `Code`, which makes server-side error localization a keyed lookup rather
 4. **Only the human-facing `message` is localized; every machine field crosses the wire verbatim.**
    `ErrorHttpMapping.BuildErrorsExtension` localizes `Message` by the stable `Code` and leaves
    `Code`, `Type`, `Source` and `Target` untranslated
-   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ErrorHttpMapping.cs:61-69`,
-   localization at `:65`), and `ProblemDetailsResultReader` reads those machine fields back on the
-   client (`MMCA.Common/Source/Core/MMCA.Common.Shared/Http/ProblemDetailsResultReader.cs:344-356`).
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ErrorHttpMapping.cs:62-70`,
+   localization at `:66`), and `ProblemDetailsResultReader` reads those machine fields back on the
+   client (`MMCA.Common/Source/Core/MMCA.Common.Shared/Http/ProblemDetailsResultReader.cs:373-385`).
    Updated 2026-08-27: the client no longer branches on the ProblemDetails `title` at all. The
    removed `ServiceExceptionHelper` matched three fixed English title strings, which coupled the
    client to wording that could never be translated without breaking it; the reader matches the
@@ -142,8 +144,13 @@ machine `Code`, which makes server-side error localization a keyed lookup rather
    shared `ErrorSummary` component, each resolving every message as a resource key **with
    pass-through** so an already-translated server message renders as-is and a client-side message
    that happens to be a key gets translated
-   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/ResultUiExtensions.cs:17-23`, the lookup
-   at `:329-338`). `ErrorMessages.LoadError` / `SaveError` / `DeleteError` cover the narrow
+   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/ResultUiExtensions.cs:19-29`, the
+   pass-through lookup at `:376-385`). The one exception is a failure the client synthesized itself,
+   with no server-phrased message to pass through (a bodiless HTTP status, a transport failure, a
+   client timeout): `LocalizeError` looks that up by its error **code** instead (`Http.{status}`, then
+   the generic `Http.Status` format, `Http.TransportFailure`, `Http.Timeout`), falling back to the
+   English message when no key exists (`:339-365`, the code branches at `:346-362`).
+   `ErrorMessages.LoadError` / `SaveError` / `DeleteError` cover the narrow
    remainder, and the type says so: they are for the exceptions a page can still raise on its own
    behalf (a JS-interop failure, a mapping bug, a callback the page supplied), never for a server
    answer (`.../MMCA.Common.UI/Pages/Common/ErrorMessages.cs:14-22`). Every one of them renders the
@@ -223,6 +230,33 @@ machine `Code`, which makes server-side error localization a keyed lookup rather
     hybrid head already shares `CultureDelegatingHandler` through `AddUIShared`, so once
     `CurrentUICulture` is right, localized backend errors follow with no extra wiring.
 
+11. **Displayed times follow the viewer's clock, except a schedule, which follows the event's own
+    zone (added 2026-10-06).** Instants are stored and serialized in UTC. `MMCA.Common.UI` renders
+    them on the viewer's clock through `ViewerTimeZone`
+    (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Culture/ViewerTimeZone.cs:18`, registered
+    by `AddUIShared` at `.../MMCA.Common.UI/DependencyInjection.cs:190`): it reads the browser's IANA
+    zone once per scope through JS interop and resolves it with `TimeZoneInfo` (`:49-87`, `:122-125`);
+    until then, during SSR prerender, on a host without JS, or for an id the runtime does not know,
+    every conversion uses UTC (`:32`). The server's own zone is never used, because on Blazor Server
+    and during prerender `DateTime.ToLocalTime` is the server's clock (`:13-16`). Formatting uses
+    `CurrentCulture` (`:112-113`), so Decision 7 still governs the shape of the string. Common's own
+    pages use it (notifications, sessions), and so do Store's (`ReviewList`, `ProductReviewsPanel`,
+    `OrderSummaryPanel`, for example
+    `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Pages/Orders/OrderSummaryPanel.razor.cs:24`)
+    and ADC's non-schedule pages (points, check-ins, user administration). Helpdesk source references
+    no `ViewerTimeZone` of its own; the Common pages it hosts carry the rule.
+
+    A conference schedule is the one place-bound fact: a session starts at 10:00 in the venue's zone
+    for everyone, wherever they read it. MMCA.ADC therefore shows schedule times in the event's own
+    IANA zone. Session times are wall-clock local to that zone in the DTOs, never UTC
+    (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Services/HappeningNow/SessionReminderPlanner.cs:32-39`,
+    which converts them to instants only to schedule reminders); the live window is computed from the
+    event's zone (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/CurrentEventSelector.cs:66-76`,
+    zone lookup at `:74`), and the UI carries that zone in `LiveEventContext`
+    (`.../MMCA.ADC.Engagement.UI/Services/SessionLive/LiveEventContext.cs:13-31`), whose
+    `ToEventLocal` puts the current instant on the event's clock to compare with the schedule. The rule:
+    a schedule is shown in the event zone; everything else is viewer-relative.
+
 ## Rationale
 - **Keying error localization on the existing `Error.Code` is the cheapest correct extension point.** The codes are
   already stable and already cross the wire; localizing at the edge keeps the Result pattern pure and means
@@ -268,6 +302,22 @@ the hybrid head (`MauiCultureStore.cs:43`); web heads use request localization's
 fallback (`WebApplicationExtensions.cs:73-93`). Refreshed anchors: `ProblemDetailsResultReader.cs:344-356`
 (was 342-354), `ResultUiExtensions.cs:329-338` (was 325-334), `NavItem.cs:20` and `:13-18` (were 16 and 9-14).
 
+## Revision (2026-10-06)
+- Decision 11 added: displayed instants follow the viewer's clock (`ViewerTimeZone`, UTC fallback
+  during prerender, the server zone never used), while an ADC conference schedule follows the event's
+  own IANA zone; Store and ADC non-schedule pages use the viewer clock, Helpdesk inherits it from the
+  Common pages.
+- Decision 9: client-synthesized failures (a bodiless HTTP status, a transport failure, a timeout)
+  localize by error code (`Http.{status}`, `Http.Status`, `Http.TransportFailure`, `Http.Timeout`)
+  before the message pass-through; the earlier text described pass-through only.
+- Decision 2: the co-location example is now `ChangePasswordCard.razor` with its `.resx` pair; no
+  `Login.resx` exists (`Login.razor:22` injects `IStringLocalizer<SharedResource>`).
+- A stray closing code fence at the end of the file was removed.
+- Anchors re-verified against current source: `ErrorHttpMapping.cs:62-70` / `:66` (were 61-69 / 65),
+  `ProblemDetailsResultReader.cs:373-385` (the 2026-10-01 `:344-356` is stale), `ResultUiExtensions.cs:19-29`
+  and `:376-385` (the 2026-10-01 `:329-338` is stale); the MudBlazor 9.11.0 pin recorded above now sits
+  at `MMCA.Common/Directory.Packages.props:176`.
+
 ## Related
 [ADR-011](011-single-locale-i18n.md) (superseded), [ADR-013](013-result-pattern.md) (the `Error.Code`
 this localizes on), [ADR-015](015-architecture-fitness-functions.md) (the i18n gates now live here: the `MA0076` culture-less
@@ -278,4 +328,3 @@ formatting build gate and the `ResourceTranslationsAreComplete` translation-cove
 and which needs no hybrid equivalent: it persists through JS localStorage, which a `BlazorWebView` has),
 [ADR-042](042-device-capability-abstraction.md) (the head-supplies-the-implementation pattern Decision 10
 follows).
-```

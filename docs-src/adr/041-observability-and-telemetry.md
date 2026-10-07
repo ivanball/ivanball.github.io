@@ -56,6 +56,7 @@ bootstrap-factory and call-order citations in the Amended (2026-08-31) section a
 current lines. The "eight hosts" count in the first 2026-09-03 entry above is superseded).
 Revised 2026-10-01 (ASP.NET Core metrics are now behind a third cost knob,
 `Telemetry:DisableAspNetCoreMetrics`, which both production deployments turn on; see Revision below).
+Revised 2026-10-06: the correlation middleware also discards a non-printable-ASCII id, Store's auth alert counts 401 and 429, the bootstrap logger factory lives until the host exits, and `GlobalExceptionHandler` writes its Error row only on its 500 path (cross-tenant and bad-request rejections log Warning).
 
 ## Context
 The framework is a modular monolith whose modules extract into standalone services (ADR-008), so
@@ -111,23 +112,25 @@ for the CQRS and outbox paths, and expose cost knobs with fail-safe defaults.
   (`Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs`) increments
   it on both dead-letter paths, tagged by `event_type` and by a `reason` that tells them apart:
   `type_unresolvable` when a message's event type cannot be resolved and the row has been attempted before
-  (`OutboxProcessor.cs:678`-`OutboxProcessor.cs:681`; on the row's first attempt, `RetryCount` 0, it is
-  retried once as transient at `OutboxProcessor.cs:667`-`OutboxProcessor.cs:674`, unless `MaxRetries` is 1 or less), and
+  (`OutboxProcessor.cs:675`-`OutboxProcessor.cs:678`; on the row's first attempt, `RetryCount` 0, it is
+  retried once as transient at `OutboxProcessor.cs:664`-`OutboxProcessor.cs:671`, unless `MaxRetries` is 1 or less), and
   `retries_exhausted` when a failing message reaches `MaxRetries` and drops out of the poll
-  (`OutboxProcessor.cs:628`-`OutboxProcessor.cs:631`). The processor's activity source publishes outbox
-  spans under the same name (`OutboxProcessor.cs:94`); both the meter and the trace source are
+  (`OutboxProcessor.cs:625`-`OutboxProcessor.cs:628`). The processor's activity source publishes outbox
+  spans under the same name (`OutboxProcessor.cs:88`); both the meter and the trace source are
   registered by literal name in the Aspire defaults (`Extensions.Telemetry.cs:307`,
   `Extensions.Telemetry.cs:84`).
 
 - **Correlation-ID middleware ties the request together.** `CorrelationIdMiddleware`
-  (`Source/Presentation/MMCA.Common.API/Middleware/CorrelationIdMiddleware.cs:18`) uses the
-  `X-Correlation-ID` header (`CorrelationIdMiddleware.cs:21`), reading it from the request (a blank
-  header counts as absent, and a supplied id is cut to 64 characters, `CorrelationIdMiddleware.cs:24`,
-  `:56`) or falling back to the current W3C trace id and then to `HttpContext.TraceIdentifier`
-  (`CorrelationIdMiddleware.cs:39`-`:41`), sets it on the scoped `ICorrelationContext`
-  (`CorrelationIdMiddleware.cs:43`), and echoes it on the response
-  (`CorrelationIdMiddleware.cs:46`, inside the `OnStarting` callback registered at
-  `CorrelationIdMiddleware.cs:44`). The CQRS logging decorators stamp that same id into every log
+  (`Source/Presentation/MMCA.Common.API/Middleware/CorrelationIdMiddleware.cs:20`) uses the
+  `X-Correlation-ID` header (`CorrelationIdMiddleware.cs:23`), reading it from the request
+  (`CorrelationIdMiddleware.cs:40`; a blank header counts as absent, a supplied id is cut to 64
+  characters, `CorrelationIdMiddleware.cs:26`, `:63`, and a cut id holding any character outside
+  printable ASCII is discarded, `:64`, because Kestrel refuses to echo it in a response header) or
+  falling back to the current W3C trace id and then to `HttpContext.TraceIdentifier`
+  (`CorrelationIdMiddleware.cs:41`-`:43`), sets it on the scoped `ICorrelationContext`
+  (`CorrelationIdMiddleware.cs:45`), and echoes it on the response
+  (`CorrelationIdMiddleware.cs:48`, inside the `OnStarting` callback registered at
+  `CorrelationIdMiddleware.cs:46`). The CQRS logging decorators stamp that same id into every log
   scope (read at `LoggingCommandDecorator.cs:26`, stamped by `BeginCommandScope` at `:32`), so logs,
   the correlation id, and the trace id line up for one request.
 
@@ -151,7 +154,7 @@ for the CQRS and outbox paths, and expose cost knobs with fail-safe defaults.
   dependency latency is still captured as traces when `HttpClient` metrics are dropped, and request
   latency and failures still come from the request traces when ASP.NET Core metrics are dropped. Both
   production deployments set `Telemetry__DisableAspNetCoreMetrics` to `true`
-  (`MMCA.ADC/infra/main.bicep:298`-`:299`, `MMCA.Store/infra/main.bicep:253`-`:254`), so neither
+  (`MMCA.ADC/infra/main.bicep:324`-`:325`, `MMCA.Store/infra/main.bicep:253`-`:254`), so neither
   exports the ASP.NET Core meter family.
 
 - **Head-based sampling as a cost knob, off by default.** `Telemetry:TracesSampleRatio`
@@ -168,15 +171,15 @@ for the CQRS and outbox paths, and expose cost knobs with fail-safe defaults.
   the exporters (`Extensions.Telemetry.cs:122`), clears the `Recorded` flag on the recurring `OutboxPoll` span
   and its children (`OutboxPollFilterProcessor.cs:49`), and on the internal-command queue's
   `InternalCommandPoll` span the same way (`OutboxPollFilterProcessor.cs:60`-`:64`). The poll query runs inside that span, opened at
-  the top of `FetchCandidatesAsync` (`OutboxProcessor.cs:335`, span started at `OutboxProcessor.cs:341`,
-  named at `OutboxProcessor.cs:76`), and the backlog count in `CountPendingAsync` runs inside a second
-  span of the same name (`OutboxProcessor.cs:276`, started at `OutboxProcessor.cs:288`), so
+  the top of `FetchCandidatesAsync` (`OutboxProcessor.cs:327`, span started at `OutboxProcessor.cs:333`,
+  named at `OutboxProcessor.cs:70`), and the backlog count in `CountPendingAsync` runs inside a second
+  span of the same name (`OutboxProcessor.cs:268`, started at `OutboxProcessor.cs:280`), so
   steady-state polling does not flood Application Insights. Real
   outbox work is untouched: each per-message `OutboxProcess` span is started by `StartOutboxActivity`
-  (called once per message at `OutboxProcessor.cs:516`, declared at `OutboxProcessor.cs:719`) under an
+  (called once per message at `OutboxProcessor.cs:512`, declared at `OutboxProcessor.cs:716`) under an
   explicit parent context restored from the message's stored trace and span ids
-  (`OutboxProcessor.cs:726`-`OutboxProcessor.cs:729`), span started at
-  `OutboxProcessor.cs:731`-`OutboxProcessor.cs:734`, so it is never a child of the poll span.
+  (`OutboxProcessor.cs:723`-`OutboxProcessor.cs:726`), span started at
+  `OutboxProcessor.cs:728`-`OutboxProcessor.cs:731`, so it is never a child of the poll span.
 
 - **Dual exporters, either or both.** `AddOpenTelemetryExporters` enables OTLP when
   `OTEL_EXPORTER_OTLP_ENDPOINT` is present (`Extensions.Telemetry.cs:161`-`:162`, the Aspire dashboard sets it, exporter
@@ -569,3 +572,53 @@ as absent and cuts a supplied id to 64 characters
 live in `Extensions.Telemetry.cs`, so every Decision and Trade-offs citation into it is rebased, as are
 the CQRS decorator, outbox processor and correlation middleware citations. The dated amendment and
 revision sections keep the anchors they were written against.
+
+## Revision (2026-10-06)
+Four statements in earlier sections no longer match the code, and the anchors moved again.
+
+- **The correlation id has a printable-ASCII filter.** After the 64-character cut, `Sanitize`
+  discards any supplied id holding a character outside `' '`..`'~'`, so the middleware falls back to
+  the trace id and then `TraceIdentifier`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/CorrelationIdMiddleware.cs:61`-`:65`, the
+  filter at `:64`), because Kestrel refuses to echo such a value in a response header. The Gateway's
+  `GatewayCorrelationMiddleware` applies the same cut and filter
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Gateway/GatewayCorrelationMiddleware.cs:89`-`:90`). The
+  Decision bullet now says so.
+- **Store's auth alert counts 401 or 429, not only 401.** The Revision (2026-09-07) item 3 describes a
+  rule on sustained 401s; `authFailureSpikeAlert` (`MMCA.Store/infra/main.bicep:537`) queries
+  `ResultCode in ("401", "429")` on the `/Auth` path (`:553`), because ADR-029 account lockout and the
+  gateway's auth-tight limiter answer 429, so the rule also sees lockout storms (reasoning at
+  `:525`-`:529`).
+- **The bootstrap logger factory is not disposed once startup wiring is done.** Every service host
+  declares it as a top-level `using var` (for example
+  `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:124`), so it is disposed only when
+  the program ends, after `await app.RunAsync()` (`:366`). The Amended (2026-08-31) wording is
+  superseded on that point.
+- **`GlobalExceptionHandler` writes its Error row only on its 500 path.** The Amended (2026-09-11)
+  section says the single Error row with the stack belongs to the handling boundary;
+  `GlobalExceptionHandler` logs it at
+  `MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/GlobalExceptionHandler.cs:97` before
+  answering 500 (`:99`), while a cross-tenant write (`:56`) and a `BadHttpRequestException` (`:77`)
+  are logged at Warning. `DbUpdateExceptionHandler` still writes an Error row with the stack
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/DbUpdateExceptionHandler.cs:31`) and
+  answers 409 Conflict (`:33`).
+- **Current locations for facts the dated sections still carry.** Serilog adoption (nine hosts, each
+  calling `AddCommonSerilog` before `AddServiceDefaults`, the Gateways without Serilog) is unchanged;
+  the calls are now ADC Conference `Program.cs:102`, Engagement `:84`, Identity `:99`, Notification
+  `:87`, `MMCA.ADC.UI.Web` `:50`, Store Catalog `:72`, Identity `:76`, Sales `:87`, `MMCA.Store.UI.Web`
+  `:61`; bootstrap factories at ADC `:368`, `:212`, `:264`, `:194` and Store `:124`, `:118`, `:131`; the
+  ADC Gateway's `AddServiceDefaults` at `MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:69`. The
+  telemetry code the Amended (2026-09-03) and (2026-09-11) sections cite in `Extensions.cs` now lives
+  in `Extensions.Telemetry.cs`: `FilterProbeTelemetryConfigKey` `:19`, `IsProbeTelemetryFilterEnabled`
+  `:233`, `ProbeTelemetryFilterProcessor` registered at `:129`, `ConfigureMetrics` `:243` (called at
+  `:80`), the `MMCA.Common.*` meter chain `:307`-`:315`, the Polly subscription `:322`, the trace
+  sources `:83`-`:86`. The Revision (2026-09-07) resources: ADC `logIngestionCapAlert`
+  `MMCA.ADC/infra/main.bicep:638` (query `:654`), `sqlServerAuditing` `:872`, `sqlAuditDiagnostics`
+  `:897`, `serviceBusDiagnostics` `:1166`, `avatarBlobDiagnostics` `:1270`, `keyVaultDiagnostics`
+  `:1505`; Store `logIngestionQuotaAlert` `MMCA.Store/infra/main.bicep:623` (query `:639`),
+  `sqlAuditDiagnostics` `:871`, `sqlAuditingSettings` `:885`, `sqlThreatProtection` `:915`,
+  `dataProtectionBlobDiagnostics` `:1203`, `keyVaultDiagnostics` `:1376`, the SLO 401/499 exclusions
+  `:316`, `:334`.
+- Every anchor in the Status, Decision, Rationale, Trade-offs and Related sections was re-verified
+  against current source; the outbox, correlation-middleware and ADC bicep anchors in the Decision were
+  rebased.

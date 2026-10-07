@@ -7,6 +7,8 @@ something other than an outbound HTTP or gRPC client. [ADR-003](003-outbox-dual-
 backoff and dead-letter ladder is reused unchanged rather than amended, and
 [ADR-021](021-consumer-inbox-idempotency.md)'s dedup contract is untouched. The database resilience
 posture is also unchanged, recorded below as an explicit rejection rather than an omission.
+Revised 2026-10-01: broker wiring and Aspire meter citations moved, and the meter-count sentence corrected.
+Revised 2026-10-06: the circuit-breaker search now names its one non-breaker hit in `HttpResultExecutor.cs`.
 
 ## Context
 Delivery in this workspace has always been at-least-once with retries on both legs: the outbox
@@ -53,26 +55,26 @@ minute, ten minutes, one hour. Both live in the `"MessageBus"` section (`:14`).
 The two transports consume them differently, and the asymmetry is the decision:
 
 - **RabbitMQ consults the flag.** `ConfigureBrokerTransport`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:258`) calls
-  `cfg.UseDelayedRedelivery(r => r.Intervals(intervals))` inside `UsingRabbitMq` (`:266`) only under
-  `if (settings.EnableDelayedRedelivery)` (`:277`, the call at `:282`), with the plugin requirement
-  restated at the registration site (`:239-252`, `:273-276`). Default-off is not timidity: the local
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:264`) calls
+  `cfg.UseDelayedRedelivery(r => r.Intervals(intervals))` inside `UsingRabbitMq` (`:272`) only under
+  `if (settings.EnableDelayedRedelivery)` (`:283`, the call at `:288`), with the plugin requirement
+  restated at the registration site (`:252-257` in the method doc comment, `:279-282` inline). Default-off is not timidity: the local
   Aspire broker cannot serve it, so a default-on setting would break every developer's first `F5`
   with a bus-start failure, which is the worst possible place to learn about a broker plugin.
-- **Azure Service Bus does not consult it.** `UsingAzureServiceBus` (`:297`) calls
-  `UseDelayedRedelivery` unconditionally (`:323`), with the reasoning recorded inline (`:316-319`).
+- **Azure Service Bus does not consult it.** `UsingAzureServiceBus` (`:303`) calls
+  `UseDelayedRedelivery` unconditionally (`:329`), with the reasoning recorded inline (`:322-325`).
   Service Bus schedules natively, there is no plugin to be missing, and a production transport that
   can express "try again in an hour" should always express it. Making the operator opt in would mean
   the environment that most needs the behavior is the one most likely to be running without it.
 
 Two details are worth stating so the words above are not read as stronger than the code.
 "Unconditional" means "not gated on the flag": both call sites are still guarded by
-`intervals.Length > 0` (`:280`, `:321`), so an operator who configures an empty interval list turns
+`intervals.Length > 0` (`:286`, `:327`), so an operator who configures an empty interval list turns
 the feature off everywhere. And `RedeliveryIntervalsSeconds` carries **no** DataAnnotations attribute,
 unlike its neighbours `RetryLimit` and the two retry-interval settings, so the ADR-070 fail-fast
 chain does not validate it; non-positive entries are filtered at use time in `BuildRedeliveryIntervals`
-(`:375-378`) instead. In both transports the redelivery filter is registered **before**
-`UseMessageRetry` (`:286`, `:326`), which is what keeps immediate retry innermost and delayed
+(`:381-384`) instead. In both transports the redelivery filter is registered **before**
+`UseMessageRetry` (`:292`, `:332`), which is what keeps immediate retry innermost and delayed
 redelivery outside it.
 
 ### A fault consumer makes an exhausted message visible
@@ -87,9 +89,9 @@ that tried to recover would be a second, undocumented retry policy layered on th
 exist.
 
 Registration is automatic. `RegisterIntegrationEventConsumer<TEvent>`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Consumers/IntegrationEventConsumerExtensions.cs:38`)
-takes `bool registerFaultConsumer = true` (`:39`) and adds the fault consumer under that guard
-(`:46`), so a host that registers a consumer gets fault observability without asking. **That parameter
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Consumers/IntegrationEventConsumerExtensions.cs:60`)
+takes `bool registerFaultConsumer = true` (`:61`) and adds the fault consumer under that guard
+(`:71`, the upcasted-consumer variant carries the same parameter and guard at `:124`, `:134`), so a host that registers a consumer gets fault observability without asking. **That parameter
 is the only opt-out, and it is per event type**: there is deliberately no host-wide configuration
 switch, so turning fault observability off is a visible `false` at one call site rather than a setting
 that silently disarms every consumer in a service.
@@ -107,28 +109,28 @@ can subscribe to it without a package reference.
 
 ### A circuit breaker around the outbox broker publish, and nothing else
 `OutboxProcessor` holds a per-instance Polly `ResiliencePipeline`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:108`,
-built at `:701-712`) and wraps **exactly one call** in it: `state.Bus.PublishAsync(state.Event, ct)`
-(`:551-555`). The in-process dispatch branch is deliberately outside it (`:547-550`, `:557-561`), no
-database call is inside the delegate, and the intent is stated at the field (`:96-100`, "never the
-database calls").
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:102`,
+built at `:698-709`) and wraps **exactly one call** in it: `state.Bus.PublishAsync(state.Event, ct)`
+(`:548-552`). The in-process dispatch branch is deliberately outside it (`:544-547`, `:554-558`), no
+database call is inside the delegate, and the intent is stated at the field (`:90-101`, "never the
+database calls" at `:91`).
 
 Its parameters live in `MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/BrokerResilienceDefaults.cs`
 (`:24`) as static properties: `FailureRatio` 0.5 (`:32`), `MinimumThroughput` 10 (`:40`),
 `SamplingDuration` 30 seconds (`:47`), `BreakDuration` 15 seconds (`:55`). The pipeline is a breaker
 with **no retry strategy paired with it** (`BrokerResilienceDefaults.cs:17-22`,
-`OutboxProcessor.cs:99-100`), because the outbox already is the retry: adding a Polly retry inside a
+`OutboxProcessor.cs:93-94`), because the outbox already is the retry: adding a Polly retry inside a
 loop that re-leases and retries would multiply the attempt count without changing the outcome.
-`ShouldHandle` excludes `OperationCanceledException` (`:709-710`) so a host shutdown never counts
+`ShouldHandle` excludes `OperationCanceledException` (`:706-707`) so a host shutdown never counts
 toward opening the circuit.
 
 **`BrokenCircuitException` follows the ordinary failure path.** It is caught by the same
-`catch (Exception ex)` as any publish failure (`:587`), increments `RetryCount` (`:589`), records
-`LastError` (`:590`) and re-leases the row with the usual backoff (`:598-599`); it dead-letters only
-on `RetryCount >= MaxRetries` like everything else (`:623`). Only observability differs: the run sets
-`circuitOpen` (`:609`), increments `broker.circuit.open.count` (`:612-614`), writes one
-`LogBrokerCircuitOpen` line **per batch** rather than per message (`:512`, `:617-621`), and suppresses the
-per-message retry log for those rows (`:634-638`). A short-circuited publish is a failed publish, not a
+`catch (Exception ex)` as any publish failure (`:584`), increments `RetryCount` (`:586`), records
+`LastError` (`:587`) and re-leases the row with the usual backoff (`:595-596`); it dead-letters only
+on `RetryCount >= MaxRetries` like everything else (`:620`). Only observability differs: the run sets
+`circuitOpen` (`:606`), increments `broker.circuit.open.count` (`:609-611`), writes one
+`LogBrokerCircuitOpen` line **per batch** rather than per message (`:508`, `:614-618`), and suppresses the
+per-message retry log for those rows (`:631-635`). A short-circuited publish is a failed publish, not a
 new category of one; what the breaker buys is that it fails in microseconds instead of a connection
 timeout, and that the log volume during an outage is one line per batch instead of one per message.
 
@@ -138,20 +140,22 @@ queueing on it. It is **not** being made. A repository-wide search for `CircuitB
 `BrokenCircuitException` and `ResiliencePipeline` across `Source` finds the outbox breaker above and
 otherwise only the HTTP and gRPC standard resilience handlers and the defaults they read
 (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:127,138-141`,
-`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:167-172`,
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:170-179`,
 `MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:16`,
 `MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/GrpcResilienceDefaults.cs:21`,
-`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:49,52`). There is no breaker in any
-persistence path and none is added here.
+`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:49,52`), plus one doc comment that
+names `BrokenCircuitException` as a client-side transport fault the UI result executor classifies
+(`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/HttpResultExecutor.cs:122`), which is
+not a breaker. There is no breaker in any persistence path and none is added here.
 
 The reason is that EF Core's connection resiliency and a Polly breaker do not compose: the
 `EnableRetryOnFailure` execution strategy
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/SQLServerDbContext.cs:63-66`,
 5 retries, 10-second maximum delay) owns retrying at the EF layer, and it constrains how a
 user-initiated transaction may be written (`SQLServerDbContext.cs:60-62`,
-`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IUnitOfWork.cs:63`), which
+`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IUnitOfWork.cs:47-59`), which
 is why `DbContextFactory` materializes the strategy explicitly
-(`Persistence/DbContexts/Factory/DbContextFactory.cs:605`). Wrapping a breaker around a call that is
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:576`). Wrapping a breaker around a call that is
 already being retried inside the strategy would either count one logical failure many times or force
 the strategy to be replaced. That
 is an EF execution-strategy rework, a much larger change than a breaker, and it is not what this wave
@@ -192,7 +196,7 @@ database resilience posture**, recorded here so the asymmetry is a decision rath
   warns a RabbitMQ host that the feature it never enabled is not running.
 - **The intervals are not validated at startup.** `RedeliveryIntervalsSeconds` sits outside the
   ADR-070 fail-fast chain, so a typo becomes a filtered-out entry at
-  `DependencyInjection.Messaging.cs:375-378` rather than a refusal to boot. An operator who writes
+  `DependencyInjection.Messaging.cs:381-384` rather than a refusal to boot. An operator who writes
   `[0, 0, 0]` silently gets no delayed redelivery at all.
 - **An hour-long redelivery window widens the duplicate window with it.** A message redelivered at
   `+3600s` runs its handlers an hour after the original attempt, so ADR-021's inbox and every
@@ -211,7 +215,7 @@ database resilience posture**, recorded here so the asymmetry is a decision rath
   (`Extensions.Telemetry.cs:311`) can drift from the Infrastructure declaration with no compiler error and
   no test: the symptom would be a meter that exports nothing.
 - **The breaker is per processor instance, so its state is not shared.** The pipeline is a per-instance
-  field (`OutboxProcessor.cs:108`, rationale `:101-106`), so with N replicas the broker sees up to N
+  field (`OutboxProcessor.cs:102`, rationale `:95-100`), so with N replicas the broker sees up to N
   independent circuits and the effective failure threshold is N times the configured one, the same
   per-replica caveat ADR-019 records for the rate limiter.
 - **Fifteen seconds of break can be worse than none for a slow broker.** With a 0.5 failure ratio over
@@ -234,6 +238,19 @@ Citations into `MessageBusSettings.cs`, `OutboxProcessor.cs`, the gRPC and Aspir
 `DbContextFactory.cs:605` are refreshed, and the circuit-breaker search now also lists the typed HTTP service
 client's standard handler (`DependencyInjection.Messaging.cs:167-172`), which leaves the "no persistence
 breaker" finding unchanged.
+
+## Revision (2026-10-06)
+- The database-breaker search result now also names the one non-breaker hit it returns: a doc comment in
+  `HttpResultExecutor.cs:122` that lists `BrokenCircuitException` as a client-side transport fault. The
+  "no persistence breaker" finding is unchanged.
+- The fault-consumer registration paragraph notes that the upcasted-consumer overload carries the same
+  per-event `registerFaultConsumer` parameter (`IntegrationEventConsumerExtensions.cs:124`, `:134`); the
+  per-event-only opt-out still holds.
+- Anchors re-verified against current source: `ConfigureBrokerTransport` is now at
+  `DependencyInjection.Messaging.cs:264` and `BuildRedeliveryIntervals` at `:381-384`, the typed client
+  handler at `:170-179`, and `DbContextFactory.cs:576` replaces `:605` (both recorded in the 2026-10-01
+  Revision); the `OutboxProcessor.cs`, `IntegrationEventConsumerExtensions.cs` and `IUnitOfWork.cs`
+  citations in the live sections are refreshed.
 
 ## Related
 [ADR-003](003-outbox-dual-dispatch.md) (the outbox publish leg this breaker wraps, and the retry,

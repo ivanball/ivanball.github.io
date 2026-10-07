@@ -27,7 +27,7 @@ a `ReverseProxy` section at all: YARP was present only as its forwarder primitiv
 Aspire service-discovery names (`http://identity`, `http://conference`, `http://catalog` and so on)
 resolved through `AddHttpForwarderWithServiceDiscovery`, which is the part of the arrangement that was
 right and stays, now as `AddServiceDiscoveryDestinationResolver`
-(`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:149`,
+(`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:151`,
 `MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:141`).
 
 **The problem was not that the table was duplicated across deployment artifacts. It was that one table
@@ -53,10 +53,10 @@ was pinned by no test at all.
 
 **What is genuinely elsewhere is not the route table, and that distinction is worth recording**,
 because it is the duplication a reader assumes exists. The Aspire AppHost holds references and
-start-ordering (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:353-361`,
-`MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:312-318`) and the bicep templates hold
+start-ordering (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:345-353`,
+`MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:307-313`) and the bicep templates hold
 `services__<name>__http__0` environment variables on the gateway container app
-(`MMCA.ADC/infra/main.bicep:2381-2384`, `MMCA.Store/infra/main.bicep:1933-1935`). Both are **address
+(`MMCA.ADC/infra/main.bicep:2421-2424`, `MMCA.Store/infra/main.bicep:1943-1945`). Both are **address
 books**: service name to URL, with no path prefix anywhere in them. They answer "where does
 `conference` resolve" and never "what reaches conference", so neither is a second route table and
 neither should become one.
@@ -87,7 +87,7 @@ Make configuration the single source of the gateway route table, and pin it with
 ### 1. `ReverseProxy` configuration is the route table
 Each gateway calls `AddReverseProxy().LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"))`
 and `MapReverseProxy()`, and the `MapForwarder` lists are deleted. ADC wires it at
-`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:146-149` and maps it at `:221`; Store at
+`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:148-151` and maps it at `:234`; Store at
 `MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:138-141` and `:173`. Routes and clusters live
 in the gateway's own `appsettings.json`: 33 routes over five clusters for ADC (8 identity, 18
 conference, 5 engagement, 2 notification, at
@@ -260,6 +260,14 @@ which keeps the negotiating default for HTTP/1.1-capable REST and the Stripe web
 both gateways' `Program.cs` wiring and `MapReverseProxy`, both route and cluster tables and the shared
 `MmcaGateway` profile in `appsettings.json`, both AppHost gateway blocks, both bicep gateway address
 books, and both `RouteMapTests` suites.
+
+## Revision (2026-10-06)
+- No decision and no current-state statement changed: the AppHost blocks still hold only
+  `WithReference` and `WaitFor` ordering, and both bicep gateway address books still carry bare
+  `http://<app>` destinations with no path prefix.
+- Anchors were re-verified against current source and re-anchored where they had moved: ADC gateway
+  wiring (`Program.cs:148-151`) and `MapReverseProxy` (`:234`), both AppHost gateway blocks, and both
+  bicep gateway address books. Store gateway `Program.cs` citations still hold.
 
 ## Related
 [ADR-008](008-service-extraction-topology.md) (amended: the Gateway keeps the route-to-service map it

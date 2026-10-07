@@ -325,8 +325,8 @@
           finds a comment through <code>GetChildOrNotFound</code> (<code>:144</code>). <code>TicketInvariants</code> is the static class
           (<code>MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/Tickets/TicketInvariants.cs:16</code>,
           <code>Result.Combine</code> at <code>:27</code>, <code>:33</code>, <code>:40</code>). The ADC and Store aggregates use the same members, for
-          example <code>Speaker</code> (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:392</code>,
-          <code>:452</code>, <code>:472</code>) and <code>Product</code>
+          example <code>Speaker</code> (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:394</code>,
+          <code>:454</code>, <code>:474</code>) and <code>Product</code>
           (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/Product.cs:407</code>, <code>:455</code>, <code>:474</code>).</li>
           <li><strong>Adoption: the three application repos subclass the full base unchanged.</strong> MMCA.ADC
           (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Domain/EntityConventionTests.cs:3-6</code>),
@@ -386,6 +386,13 @@
           <li><strong>The framework&#39;s own model is gated more lightly.</strong> MMCA.Common runs the smaller base, so sealing,
           setter, layer-placement and DTO/request rules do not apply to its own concrete Domain types.</li>
           </ul>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <ul>
+          <li>No content changes: the contract described above still matches the code.</li>
+          <li>Anchors re-verified against current source; the ADC <code>Speaker</code> examples now point at the
+          <code>SetItems</code>, <code>RemoveChildOrNotFound</code> and <code>GetChildOrNotFound</code> call sites (<code>Speaker.cs:394</code>, <code>:454</code>,
+          <code>:474</code>).</li>
+          </ul>
           <h2 id="related">Related</h2>
           <p><a href="013-result-pattern.html">ADR-013</a> (the <code>Result&lt;T&gt;</code> factories this contract requires),
           <a href="068-value-objects-as-validated-primitives.html">ADR-068</a> (value-object factories and the static
@@ -411,6 +418,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

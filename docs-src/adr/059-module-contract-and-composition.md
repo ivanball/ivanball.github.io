@@ -49,11 +49,11 @@ rather than by absence.
   first parameter and hands it to the loader it builds
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/ModuleHostExtensions.cs:51-53,84-90`),
   which is how the service hosts pass it: Store
-  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:124-126`,
-  `MMCA.Store.Identity.Service/Program.cs:118-120`, `MMCA.Store.Sales.Service/Program.cs:131-133`) and
-  ADC (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:252-254`,
-  `MMCA.ADC.Conference.Service/Program.cs:365-367`, `MMCA.ADC.Engagement.Service/Program.cs:208-210`,
-  `MMCA.ADC.Notification.Service/Program.cs:189-191`) each name the single assembly of the one module
+  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:125-127`,
+  `MMCA.Store.Identity.Service/Program.cs:119-121`, `MMCA.Store.Sales.Service/Program.cs:132-134`) and
+  ADC (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:265-267`,
+  `MMCA.ADC.Conference.Service/Program.cs:369-371`, `MMCA.ADC.Engagement.Service/Program.cs:213-215`,
+  `MMCA.ADC.Notification.Service/Program.cs:195-197`) each name the single assembly of the one module
   that host enables, so an extracted service's scan surface equals its own module. Helpdesk calls
   `DiscoverAndRegister` directly with its one module assembly
   (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:116-124`), and the unit tests name their
@@ -123,7 +123,7 @@ rather than by absence.
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/ModuleControllerFeatureProvider.cs:33-53,60-82`).
   Seeders run only for enabled modules and in registration order (`ModuleLoader.cs:129-132,266-272`),
   invoked from startup database initialization
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:45-48,122`).
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:45-48,124`).
   `AddModuleHealthChecks` publishes one `module-{Name}` check per module, Healthy when enabled and
   Degraded when disabled (`DependencyInjection.cs:195-229`).
 - **A remote-dependency validator exists but is not wired.** `ValidateRemoteDependencies` re-resolves
@@ -168,7 +168,7 @@ Catalog enables `Catalog` and disables both peers with no remote declarations
 `Sales` and declares `["Catalog", "Identity"]` as `RemoteDependencies`
 (`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:27-34`), then registers typed
 gRPC clients for the two contracts after the loader returns
-(`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:244-245`); because the host names
+(`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:246-247`); because the host names
 only its own module assembly, the peer modules are never discovered there and their stubs are never
 registered. ADC Engagement declares
 `["Conference"]` remote (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/appsettings.json:38-46`)
@@ -177,7 +177,7 @@ and ADC Notification declares `["Identity"]` remote
 Conference enables one module and declares nothing remote
 (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/appsettings.json:21-26`) even though it wires
 Engagement's `IBookmarkCountService` as a gRPC client
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:409`), because
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:416`), because
 `ConferenceModule` never declares Engagement in `Dependencies`.
 
 ## Rationale
@@ -194,7 +194,7 @@ Engagement's `IBookmarkCountService` as a gRPC client
   branch for "peer not present", which is precisely why a module's non-hosting layers are identical
   in-process and extracted (`ModuleLoader.cs:119`, `CatalogModule.cs:31-32`). An extracted host,
   which never discovers its peers, registers a real cross-process adapter for the same contract
-  instead (`Sales.Service/Program.cs:244-245`).
+  instead (`Sales.Service/Program.cs:246-247`).
 - **Two strictness levels, chosen per module.** A module that genuinely cannot function without a
   peer opts into `RequiresDependencies = true` and fails fast (`SalesModule.cs:36`,
   `EngagementModule.cs:23`, `NotificationModule.cs:24`); everything else tolerates a missing peer and
@@ -212,7 +212,7 @@ Engagement's `IBookmarkCountService` as a gRPC client
 - **The composition root has to name every module assembly.** Discovery scans exactly the list it is
   handed (`ModuleLoader.cs:59-65`), so adding a module to a host is a third edit beside the project
   reference and the `Modules` configuration entry: the assembly list in that host's `Program.cs`
-  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:124-126`). An assembly left out
+  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:125-127`). An assembly left out
   of the list contributes nothing, and the module surfaces as "disabled" (absence equals disabled,
   `ModulesSettings.cs:18-19`), not as an error. The trade is deliberate: an ambient scan would make
   the same omission depend on whether some code path happened to load the assembly first
@@ -236,10 +236,10 @@ Engagement's `IBookmarkCountService` as a gRPC client
   (`DependencyInjection.cs:219-226`, `ModuleLoader.cs:334-335,343-344`).
 - **The dependency graph is a hand-written declaration, not a derived fact.** ADC Conference consumes
   Engagement's `IBookmarkCountService` over gRPC without listing Engagement in `Dependencies`
-  (`ConferenceModule.cs:15-30` versus `Conference.Service/Program.cs:409`), and Store Identity
+  (`ConferenceModule.cs:15-30` versus `Conference.Service/Program.cs:416`), and Store Identity
   consumes the Sales and Catalog export services over gRPC while `IdentityModule` declares no
   `Dependencies` at all (`MMCA.Store.Identity.API/IdentityModule.cs:16-47` versus
-  `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:263,274`), so neither the
+  `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:265,276`), so neither the
   topological sort nor the `RequiresDependencies` check knows about those edges. Nothing derives
   `Dependencies` from the interfaces a module actually resolves. What is pinned is the declaration
   against a written expectation: `ModuleConformanceTestsBase<TModule>` asserts `Name`, `Dependencies`,
@@ -300,6 +300,17 @@ an undeclared edge now named beside the ADC one. `DisabledAttendeeQueryService` 
 empty attendee list rather than an export, and the ADR-015 isolation base is cited at its new
 `Bases/Layering/` path.
 
+## Revision (2026-10-06)
+- No content change: the decision, the module inventory and every behavioral statement still match
+  the code.
+- Anchors re-verified against current source: the Store and ADC service hosts' module-assembly lists,
+  the Sales gRPC clients (`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:246-247`),
+  the Store Identity export clients (`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:265,276`),
+  the ADC Conference bookmark-count client (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:416`),
+  the seeding call (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:124`)
+  and `ModuleIsolationTestsBase` (`:8-40`, now seven facts). The Sales host assembly list cited in
+  the 2026-10-01 revision is now at `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:132-134`.
+
 ## Related
 ADR-008 (the extraction topology that consumes this model: "a service is the monolith with one module
 enabled" is a statement about `ModuleLoader` plus the `Disabled*` stubs, cited there as pre-existing
@@ -308,4 +319,4 @@ composition), ADR-007 (the typed gRPC clients that replace a disabled module's s
 level), ADR-014 (`AddApplicationDecorators()` must run after every module's handler scan, which is why
 module registration is a distinct, ordered startup step), ADR-015 (the module-isolation fitness
 functions that keep cross-module traffic on the `*.Shared` contracts this model registers,
-`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Layering/ModuleIsolationTestsBase.cs:8-36`).
+`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Layering/ModuleIsolationTestsBase.cs:8-40`).

@@ -52,6 +52,11 @@ AI ceiling uses. The ungated space is eleven alerts (ADC five, Store six), and e
 has written `####` triage in its runbook. The coverage-boundary paragraph, the triage paragraph, the
 floor bullets and the ungated trade-off are rewritten around what the templates and runbooks hold
 today, and every `main.bicep` and `OPERATIONS.md` citation is re-anchored. No decision changed.
+Revised 2026-10-01: both templates grew above the alert block, so every `main.bicep` citation in the
+current-state sections is re-anchored. No decision changed.
+Revised 2026-10-06: the framework base now ships a fourth, opt-in fact (`RequireWorkbook`, enabled
+only by MMCA.Common's own deployment-sample subclass), the latency predicate and the Common adoption
+boundary are stated as the code has them, and every ADC citation is re-anchored. No decision changed.
 ## Context
 ADR-041 standardized what the fleet **emits**: RED histograms off the CQRS pipeline, an outbox
 dead-letter counter, correlation ids, exporters, and the cost knobs that keep ingestion affordable.
@@ -75,7 +80,7 @@ Three forces shaped the decision.
    2026-07-29 resolved to exactly that, one window holding 8x401 plus 2x499 plus a single readiness 503
    and zero other failures, and five hub connections averaging 11.3s dragged the fleet-wide average to
    5539ms against a 3000ms threshold while every real request was fast
-   (`MMCA.ADC/infra/main.bicep:345-356`).
+   (`MMCA.ADC/infra/main.bicep:371-382`).
 
 ## Decision
 Declare each consumer's SLO alerts as **data in its Bicep template**, materialize them as Log Analytics
@@ -83,72 +88,74 @@ scheduled query rules, and make the alert-to-runbook pairing a **build gate ship
 
 - **`sloAlertSpecs` is the declaration.** A single array of records carrying `key`, `description`,
   `query`, `timeAggregation`, `metricMeasureColumn`, `threshold` and `severity`
-  (`MMCA.ADC/infra/main.bicep:362`, `MMCA.Store/infra/main.bicep:312`). Both consumers declare the same
+  (`MMCA.ADC/infra/main.bicep:388`, `MMCA.Store/infra/main.bicep:312`). Both consumers declare the same
   four SLOs with the same numbers: `failed-requests` (severity 2, more than 10 per 15 min),
   `server-response-time` (severity 3, average above 3000ms), `dependency-failures` (severity 2, more
-  than 10 per 15 min) (`MMCA.ADC/infra/main.bicep:363-389`, `MMCA.Store/infra/main.bicep:313-339`),
+  than 10 per 15 min) (`MMCA.ADC/infra/main.bicep:389-415`, `MMCA.Store/infra/main.bicep:313-339`),
   and `resilience-circuit-open` (severity 2, more than 0 rows), which fires on the first Polly
   `OnCircuitOpened` event a service reports in the window rather than on a rate, because an open
   breaker is already the failure mode the retry budget was meant to absorb
-  (`MMCA.ADC/infra/main.bicep:393-401`, reasoning at `:390-392`;
+  (`MMCA.ADC/infra/main.bicep:419-427`, reasoning at `:416-418`;
   `MMCA.Store/infra/main.bicep:343-351`, reasoning at `:340-342`). ADC declares a fifth, ADC-only
   spec, `ai-scoring-token-ceiling` (severity 3, a rolling two-day provider token total above the
   `aiScoringTokenCeiling` parameter), and declares it inside the array precisely so the gate covers
-  it (`MMCA.ADC/infra/main.bicep:439-451`, reasoning at `:402-438`, the in-array placement at
-  `:402-406`).
+  it (`MMCA.ADC/infra/main.bicep:465-477`, reasoning at `:428-464`, the in-array placement at
+  `:428-432`).
 
 - **Materialized as Log Analytics scheduled query rules.** One `Microsoft.Insights/scheduledQueryRules`
-  per spec (`MMCA.ADC/infra/main.bicep:454`, `MMCA.Store/infra/main.bicep:354`), named
-  `${prefix}-alert-${spec.key}-v2` (`MMCA.ADC/infra/main.bicep:458`,
+  per spec (`MMCA.ADC/infra/main.bicep:480`, `MMCA.Store/infra/main.bicep:354`), named
+  `${prefix}-alert-${spec.key}-v2` (`MMCA.ADC/infra/main.bicep:484`,
   `MMCA.Store/infra/main.bicep:359`), scoped to the Log Analytics workspace, and by default enabled and
   evaluated every 15 minutes over a 15-minute window with `autoMitigate`
   (`MMCA.Store/infra/main.bicep:366`, `:375-377`). Store pins those four values for every spec. ADC
   reads each from the spec and falls back to the same defaults (`enabled` at
-  `MMCA.ADC/infra/main.bicep:472`, `evaluationFrequency`, `windowSize` and `autoMitigate` at
-  `:485-489`, reasoning at `:480-483`), because one spec needs different values: the AI ceiling
+  `MMCA.ADC/infra/main.bicep:498`, `evaluationFrequency`, `windowSize` and `autoMitigate` at
+  `:511-515`, reasoning at `:506-509`), because one spec needs different values: the AI ceiling
   evaluates a two-day window every twelve hours and switches itself off when no AI key is deployed
-  (`:447-450`). For every other spec evaluation frequency equals window size, so consecutive windows
+  (`:473-476`). For every other spec evaluation frequency equals window size, so consecutive windows
   tile instead of overlapping: each rule still reads the same 15 minutes of data against the same
   threshold, and what the cadence trades is billed evaluations against worst-case detection latency,
-  which both templates state inline (`MMCA.ADC/infra/main.bicep:474-478`,
+  which both templates state inline (`MMCA.ADC/infra/main.bicep:500-504`,
   `MMCA.Store/infra/main.bicep:368-374`). A `union(...)` supplies `metricMeasureColumn` only for an
   aggregate rule; the empty-string case makes a rule count returned **rows**, which is what the
-  row-count SLOs want (`MMCA.ADC/infra/main.bicep:495-507`, `MMCA.Store/infra/main.bicep:383-395`).
+  row-count SLOs want (`MMCA.ADC/infra/main.bicep:518-533`, `MMCA.Store/infra/main.bicep:383-395`).
 
 - **The KQL predicate is the point of the migration.** Store's two failure queries exclude only 401 and
   499 (`MMCA.Store/infra/main.bicep:316`, `:334`), as does ADC's dependency query
-  (`MMCA.ADC/infra/main.bicep:384`); ADC's `failed-requests` query drops those two codes and also the
+  (`MMCA.ADC/infra/main.bicep:410`); ADC's `failed-requests` query drops those two codes and also the
   404s a crawler produces probing `/robots.txt` and `/sitemap.xml`
-  (`MMCA.ADC/infra/main.bicep:366`, with the page that prompted it recorded at `:357-359`). The latency
-  query excludes `/hubs/` requests before averaging `DurationMs`
-  (`MMCA.ADC/infra/main.bicep:375`, `MMCA.Store/infra/main.bicep:325`). A genuine 400 or 500 burst
-  still pages at the same threshold as before.
+  (`MMCA.ADC/infra/main.bicep:392`, with the page that prompted it recorded at `:383-385`). The latency
+  query excludes `/hubs/` requests, `ResultCode` 101 (a hub or Blazor circuit connection, whose
+  duration is its lifetime) and requests with no `Url` (background consumer spans), and averages
+  `DurationMs` only when the window holds at least 5 requests, so a single cold request cannot page
+  (`MMCA.ADC/infra/main.bicep:401`, described at `:400`; `MMCA.Store/infra/main.bicep:325`, described
+  at `:324`). A genuine 400 or 500 burst still pages at the same threshold as before.
 
 - **The superseded metric alerts are no longer declared, and the `-v2` names stay.** Neither template
   carries a `legacySloMetricAlertSpecs` array or a metric alert on `requests/failed`,
   `requests/duration` or `dependencies/failed`. The only `Microsoft.Insights/metricAlerts` resource
   left in each is the unrelated severity 1 gateway-availability alert, which stays because
   availability has no status-code confound and never produced a false page
-  (`MMCA.ADC/infra/main.bicep:691`, severity at `:697`;
+  (`MMCA.ADC/infra/main.bicep:717`, severity at `:723`;
   `MMCA.Store/infra/main.bicep:704`, severity at `:710`). The `-v2` suffix on
   the replacements is what made that removal safe and is now part of each rule's identity in Azure:
   renaming it would create a second rule alongside the live one rather than update it, and the
   unsuffixed names stay occupied in the resource group by the superseded alerts, which an incremental
   ARM deployment does not delete just because they left the template
-  (`MMCA.ADC/infra/main.bicep:456-457`, `MMCA.Store/infra/main.bicep:356-358`).
+  (`MMCA.ADC/infra/main.bicep:482-483`, `MMCA.Store/infra/main.bicep:356-358`).
 
 - **One unconditional action group.** `alertEmailAddress` is a required parameter with no default
   (`MMCA.ADC/infra/main.bicep:124`, `MMCA.Store/infra/main.bicep:91`), so the action group's email
-  receiver is not conditional (`MMCA.ADC/infra/main.bicep:329-343`, its receiver at `:337-339`;
+  receiver is not conditional (`MMCA.ADC/infra/main.bicep:355-369`, its receiver at `:361-367`;
   `MMCA.Store/infra/main.bicep:284`, its receiver at `:291-295`) and every scheduled query rule routes to it
-  (`MMCA.ADC/infra/main.bicep:511`, `MMCA.Store/infra/main.bicep:399`). The monthly cost budget
-  notifies the same group (`MMCA.ADC/infra/main.bicep:767`, `:775`;
+  (`MMCA.ADC/infra/main.bicep:537`, `MMCA.Store/infra/main.bicep:399`). The monthly cost budget
+  notifies the same group (`MMCA.ADC/infra/main.bicep:793`, `:801`;
   `MMCA.Store/infra/main.bicep:782`, `:790`).
 
 - **A saved workbook renders three of the SLO signals.** `sloWorkbook`
-  (`MMCA.ADC/infra/main.bicep:730`, `MMCA.Store/infra/main.bicep:745`) is bound to the Log Analytics
+  (`MMCA.ADC/infra/main.bicep:756`, `MMCA.Store/infra/main.bicep:745`) is bound to the Log Analytics
   workspace and embeds `workbooks/adc-slo-workbook.json` / `workbooks/store-slo-workbook.json` at
-  compile time via `loadTextContent` (`MMCA.ADC/infra/main.bicep:739`,
+  compile time via `loadTextContent` (`MMCA.ADC/infra/main.bicep:765`,
   `MMCA.Store/infra/main.bicep:754`), grouped per service by `AppRoleName`, so the visualization cannot
   diverge from the alerts by being maintained somewhere else. Both workbooks carry the same five
   panels, covering requests and failures, response-time percentiles and dependency calls and
@@ -157,7 +164,8 @@ scheduled query rules, and make the alert-to-runbook pairing a **build gate ship
   (`MMCA.ADC/infra/workbooks/adc-slo-workbook.json`, which mentions neither
   `resilience.polly.strategy.events` nor the `mmca.ai` counters, and
   `MMCA.Store/infra/workbooks/store-slo-workbook.json`). Nothing gates that pairing: the build gate
-  pairs alerts with runbook sections, not with workbook panels.
+  pairs alerts with runbook sections, not with workbook panels. Its opt-in workbook fact (below)
+  checks only that a workbook or dashboard resource exists, and neither consumer turns it on.
 
 - **`infra/OPERATIONS.md` is the paired artifact.** Each repo's runbook carries one `###` section per
   SLO alert whose heading contains the `-alert-<key>` infix and the alert's severity as `(sev N)`
@@ -173,21 +181,26 @@ scheduled query rules, and make the alert-to-runbook pairing a **build gate ship
 - **The pairing is enforced by a framework test base, and it fails the build.**
   `ObservabilityConventionTestsBase`
   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/ObservabilityConventionTestsBase.cs:30`)
-  ships three facts:
+  ships four facts:
+  - `MonitoringWorkbookOrDashboard_IsProvisioned_WhenRequired` (`:65-77`) requires the template to
+    declare a `Microsoft.Insights/workbooks` or `Microsoft.Portal/dashboards` resource
+    (`MonitoringViewResourceRegex`, `:174-175`), but only when the virtual `RequireWorkbook` is
+    overridden to true (`:58`, default false); otherwise it returns immediately. Neither ADC's nor
+    Store's subclass overrides it, so for both consumers the fact is a no-op.
   - `SloAlertSpecs_AreDiscovered_GateIsNotVacuous` requires at least `MinimumAlertSpecs` discovered
-    specs, default 3 (`ObservabilityConventionTestsBase.cs:39`, asserted at `:54-61`), so a drifted
+    specs, default 3 (`ObservabilityConventionTestsBase.cs:39`, asserted at `:84-86`), so a drifted
     parse anchor fails loudly instead of passing with zero alerts. The property is virtual, and each
     consumer raises it to its own spec count (below), so the floor also catches a spec that goes
     missing, not only a parser that discovers nothing.
   - `EveryProvisionedSloAlert_HasASeverityCorrectRunbookSection` fails when a spec has no `###` heading
-    containing `-alert-<key>` (`:64-78`, the infix constant at `:32`, the lookup at `:73`) **and**
+    containing `-alert-<key>` (`:89-115`, the infix constant at `:32`, the lookup at `:99`) **and**
     fails when the matching heading does not carry `(sev N)` for that spec's current severity
-    (`:80-84`), so re-tiering an alert without moving its runbook is a red build.
+    (`:106-110`), so re-tiering an alert without moving its runbook is a red build.
   - `EveryRunbookAlertSection_MapsToAProvisionedAlert` fails on an orphan runbook section whose alert no
-    longer exists (`:92-103`).
+    longer exists (`:117-129`).
   Discovery parses the template between the literal anchors `var sloAlertSpecs` and
-  `resource sloAlerts` (`:109-114`) with two source-generated regexes (`:139-143`), and a key-count
-  versus severity-count mismatch is itself a failure (`:117`), so a change to the spec shape cannot
+  `resource sloAlerts` (`:135-138`) with two source-generated regexes (`:165-169`), and a key-count
+  versus severity-count mismatch is itself a failure (`:143`), so a change to the spec shape cannot
   quietly desynchronize the parser.
 
 - **Consumers wire it with an embedded-resource pair and a one-override subclass.** The base reads
@@ -215,17 +228,22 @@ scheduled query rules, and make the alert-to-runbook pairing a **build gate ship
 
 **Adoption boundary.** ADC and Store only. MMCA.Helpdesk does **not** subclass this base and has no
 `infra/*.bicep` at all, so there is nothing for the gate to pair; it is not an un-adopted gate there,
-it is an inapplicable one. MMCA.Common runs the base against its own fixture pair, not against a real
-deployment.
+it is an inapplicable one. MMCA.Common runs the base twice: against its own fixture pair, and through
+`SampleDeploymentObservabilityTests` against the framework's deployment sample, `samples/deployment`
+(`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/SampleDeploymentObservabilityTests.cs:12`,
+embedded at
+`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/MMCA.Common.Architecture.Tests.csproj:39-43`),
+which sets `MinimumAlertSpecs` to 4 (`:20`) and is the only subclass in the workspace that sets
+`RequireWorkbook` to true (`:24`). It runs against a sample template, not a deployed environment.
 
 **Coverage boundary inside the templates.** The gate covers exactly the alerts declared between the two
 parse anchors: five specs on ADC (the four shared SLOs plus `ai-scoring-token-ceiling`) and four on
 Store. Eleven further alerts sit outside that window, five on ADC and six on Store. ADC provisions a
-three-entry `scheduledQueryAlertSpecs` array (`MMCA.ADC/infra/main.bicep:539`, keys
-`outbox-dead-letter` at `:541`, `sql-dependency-failures` at `:547` and `revision-activation-failed`
-at `:553`, materialized at `:560`, all severity 2 at `:567`), a `log-ingestion-cap-reached` rule
-(`:612`, severity 2 at `:619`), and a severity 1 gateway-availability metric alert over a
-three-location URL ping web test (`:658`, alert at `:691`, severity at `:697`). Store provisions six
+three-entry `scheduledQueryAlertSpecs` array (`MMCA.ADC/infra/main.bicep:565`, keys
+`outbox-dead-letter` at `:567`, `sql-dependency-failures` at `:573` and `revision-activation-failed`
+at `:579`, materialized at `:586`, all severity 2 at `:593`), a `log-ingestion-cap-reached` rule
+(`:638`, severity 2 at `:645`), and a severity 1 gateway-availability metric alert over a
+three-location URL ping web test (`:684`, alert at `:717`, severity at `:723`). Store provisions six
 as standalone resources rather than from an array: the `outbox-dead-letter` scheduled query rule
 (`MMCA.Store/infra/main.bicep:419`, severity 2 at `:426`), the `revision-activation-failed` rule over
 `ContainerAppSystemLogs_CL` (`:469`, severity 2 at `:476`) that closes the gap where a revision whose
@@ -234,7 +252,7 @@ readiness never went green left the previous revision serving and paged nobody,
 `:584`), `log-ingestion-quota` (`:623`, severity 2 at `:630`), and the outside-in Gateway availability
 web test (`:671`) with its severity 1 metric alert (`:704`, severity at `:710`), alongside the four
 SLO rules and the budget notifications. Every one of those eleven sits after its own template's
-`sloAlerts` loop closes (`MMCA.ADC/infra/main.bicep:454-515`, `MMCA.Store/infra/main.bicep:354-403`)
+`sloAlerts` loop closes (`MMCA.ADC/infra/main.bicep:480-541`, `MMCA.Store/infra/main.bicep:354-403`)
 and therefore outside the parse window, so the pairing gate neither requires nor forbids runbook
 sections for any of them.
 
@@ -244,7 +262,7 @@ headings with numbered triage steps, one per ungated family it provisions. Store
 (`MMCA.Store/infra/OPERATIONS.md:115`) holds all six: `store-alert-outbox-dead-letter` (sev 2) at
 `:123`, `store-alert-revision-activation-failed` (sev 2) at `:146`, `store-alert-gateway-availability`
 (sev 1) at `:173`, `store-alert-auth-failure-spike` (sev 2) at `:194`, `store-alert-forbidden-burst`
-(sev 3) at `:231` and `store-alert-log-ingestion-quota` (sev 2) at `:251`. ADC's
+(sev 3) at `:232` and `store-alert-log-ingestion-quota` (sev 2) at `:252`. ADC's
 (`MMCA.ADC/infra/OPERATIONS.md:149`) sits after its five `###` SLO sections and holds all five:
 `adc-prod-alert-outbox-dead-letter` (sev 2) at `:162`, `adc-prod-alert-sql-dependency-failures`
 (sev 2) at `:205`, `adc-prod-alert-revision-activation-failed` (sev 2) at `:231`,
@@ -252,7 +270,7 @@ headings with numbered triage steps, one per ungated family it provisions. Store
 (sev 1) at `:295`, named with the full deployed names its SLO headings already use. ADC's preamble
 counts the five and records that the AI token ceiling moved into the gated section
 (`MMCA.ADC/infra/OPERATIONS.md:151-160`). The headings are `####` rather than `###` in both repos,
-because `RunbookHeadingRegex` is `^###\s+.*$` (`ObservabilityConventionTestsBase.cs:145-146`) and
+because `RunbookHeadingRegex` is `^###\s+.*$` (`ObservabilityConventionTestsBase.cs:171-172`) and
 does not match a `####` line: an `###` heading naming a non-spec alert would read to
 `EveryRunbookAlertSection_MapsToAProvisionedAlert` as an orphan section and fail the build. Each
 runbook states that reasoning inline, above its own first `####` heading
@@ -294,20 +312,22 @@ fault.
   the deployment ran, the rule exists in Azure, or the KQL is valid. Renaming `sloAlertSpecs` or
   reshaping its entries breaks the parser, which the floor and the key/severity count assertion are
   designed to surface loudly rather than silently.
-- **The gate checks pairing and severity, nothing else.** Whether 10 failures per 15 minutes is the
-  right threshold, whether the query measures what it claims, and whether the triage steps are correct
-  all remain review concerns. Severity is the only value cross-checked between the two files.
+- **The gate checks pairing and severity, plus an opt-in workbook presence check, nothing else.**
+  Whether 10 failures per 15 minutes is the right threshold, whether the query measures what it
+  claims, and whether the triage steps are correct all remain review concerns. Severity is the only
+  value cross-checked between the two files. The `RequireWorkbook` fact proves only that some workbook
+  or dashboard resource is declared, never what it shows, and neither consumer enables it.
 - **Only the spec-window alerts are covered.** ADC's outbox dead-letter, SQL dependency,
   revision-activation, log-ingestion-cap and gateway-availability alerts and Store's outbox
   dead-letter, revision-activation, auth-failure-spike, forbidden-burst, log-ingestion-quota and
   gateway-availability alerts are provisioned but ungated, so all eleven can be added, renamed or
   re-tiered with no **build** consequence. That is not the same as no consequence. All eleven have
-  written triage today (Store `MMCA.Store/infra/OPERATIONS.md:123`, `:146`, `:173`, `:194`, `:231`,
-  `:251`; ADC `MMCA.ADC/infra/OPERATIONS.md:162`, `:205`, `:231`, `:261`, `:295`), but because those
+  written triage today (Store `MMCA.Store/infra/OPERATIONS.md:123`, `:146`, `:173`, `:194`, `:232`,
+  `:252`; ADC `MMCA.ADC/infra/OPERATIONS.md:162`, `:205`, `:231`, `:261`, `:295`), but because those
   `####` sections are invisible to the gate by design, a new ungated alert with no section, or a
   re-tiered or renamed one whose section was not moved, fails nothing. Both runbooks record the
   honour-system caveat themselves, in their Governance sections
-  (`MMCA.Store/infra/OPERATIONS.md:308-313`, `MMCA.ADC/infra/OPERATIONS.md:336-341`), and both now
+  (`MMCA.Store/infra/OPERATIONS.md:309-314`, `MMCA.ADC/infra/OPERATIONS.md:379-384`), and both now
   state the gated count their template declares (five on ADC, four on Store) and the floor their
   subclass sets. Nothing checks either sentence, because the gate matches headings, not prose.
 - **The template is not the inventory of the resource group.** The superseded metric alerts are gone
@@ -319,7 +339,7 @@ fault.
   infix, so the prefix in a heading is unchecked. Live rules resolve from `prefix` and carry the `-v2`
   suffix. ADC's headings spell that deployed name out in full, `adc-prod-alert-failed-requests-v2`
   (`MMCA.ADC/infra/OPERATIONS.md:17`), which matches only because `prefix` is `adc-${environmentName}`
-  (`MMCA.ADC/infra/main.bicep:157`) and the deployed environment is `prod`: the same runbook read
+  (`MMCA.ADC/infra/main.bicep:160`) and the deployed environment is `prod`: the same runbook read
   against any other environment names rules that do not exist. On Store the prefix does not match at
   all: `prefix` is `mmca-${environmentName}` (`MMCA.Store/infra/main.bicep:118`), so the deployed rule
   is `mmca-<env>-alert-failed-requests-v2` against a heading that reads `store-alert-failed-requests`
@@ -366,6 +386,25 @@ gateway metric alert, the workbook and the budget follow by the same offset. Sto
 pair is re-anchored to
 `MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/MMCA.Store.Architecture.Tests.csproj:16-21`.
 The 2026-09-07 revision above keeps its original anchors as a historical record.
+
+## Revision (2026-10-06)
+No decision or rationale changed.
+
+- The framework base ships a fourth fact, `MonitoringWorkbookOrDashboard_IsProvisioned_WhenRequired`,
+  gated by the virtual `RequireWorkbook` (default false). Neither consumer overrides it; MMCA.Common's
+  `SampleDeploymentObservabilityTests` (which runs the gate over `samples/deployment`) is the one
+  subclass that does, so the facts list, the adoption boundary and the "pairing and severity"
+  trade-off are rewritten around it.
+- The latency query is stated in full: besides `/hubs/` it drops `ResultCode` 101 and URL-less
+  requests and needs at least 5 requests per window.
+- The 2026-09-07 revision's Store rules now sit at `MMCA.Store/infra/main.bicep:537` (auth spike,
+  query at `:553`), `:577` (forbidden burst) and `:623` (ingestion quota), with triage at
+  `MMCA.Store/infra/OPERATIONS.md:194`, `:232` and `:252`. The auth-spike query now matches
+  `ResultCode` 401 or 429 on `/Auth`, not 401 alone as that revision records.
+- Every live-section anchor was re-verified against current source. ADC's `main.bicep` citations from
+  the action group onward moved by 26 lines (the 2026-10-01 note above is superseded for ADC),
+  `prefix` is at `:160`, the base file's fact, parse and regex anchors moved with the new fact, and
+  Store's two last triage headings and both runbooks' Governance sections are re-anchored.
 
 ## Related
 ADR-041 (the telemetry this alerts on top of: it defines emission, instrumentation and cost knobs and

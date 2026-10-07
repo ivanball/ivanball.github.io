@@ -13,7 +13,10 @@ AppHost, Helpdesk, gallery, cross-ADR and E2E citations to their current lines a
 the prerender-skip guard into the three reasons its pages now state and listed the pages that were
 missing from it; and quoted ADR-051's invariant verbatim. Revised 2026-09-19: recounted the list-page
 inheritors from source and set the count to twenty (thirteen in ADC, seven in Store), nineteen of them
-routable, matching the inventory ADR-094 records.
+routable, matching the inventory ADR-094 records. Revised 2026-10-01: split the prerender-skip guard
+into four stated reasons and re-anchored the citations. Revised 2026-10-06: corrected the rationale for
+skipping the prerender fetch on detail pages, recorded the framework's `UserAdminList` as a further
+inheritor of the list-page base, and re-anchored the citations to current source.
 
 ## Context
 Both web applications are Blazor Web Apps: a static server-rendered (SSR) prerender pass produces the
@@ -43,24 +46,23 @@ layer rather than by weakening the render mode.
 
 - **The mode is set once, at the root, on the shared router.** Each app's `App.razor` applies the same
   mode expression to `HeadOutlet` and to `Routes`
-  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Components/App.razor:42`, `App.razor:46`;
-  `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Components/App.razor:17`, `App.razor:21`), and `Routes`
+  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Components/App.razor:41`, `App.razor:45`;
+  `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Components/App.razor:16`, `App.razor:20`), and `Routes`
   is the single framework-owned router shared by both apps
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Routes.razor:12-54`). **No page or component in either app
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Routes.razor:12-56`). **No page or component in either app
   declares its own `@rendermode`**: across the repos this ADR governs (MMCA.ADC, MMCA.Store,
   MMCA.Helpdesk, plus the MMCA.Common gallery) the only `@rendermode` attributes are those four plus the
   two in each `InteractiveServer`-only host, and no `[RenderModeInteractive*]` attribute exists anywhere.
-  The workspace also carries local sample and workshop solutions that are `InteractiveServer`-only heads
-  of the same shape (MMCA.ECommerce and the Contoso.Support workshop seed); they are outside this ADR's
-  scope and are not counted here.
+  The workspace also carries local sample solutions that are `InteractiveServer`-only heads of the same
+  shape; they are outside this ADR's scope and are not counted here.
 - **`InteractiveAuto` is the default for both web heads.** Each `App.razor` resolves an `AppRenderMode`
   property that returns `InteractiveAuto` unless an E2E flag is set
-  (`MMCA.ADC/.../App.razor:67-78`, `MMCA.Store/.../App.razor:39-42`). Both hosts register both runtimes on
+  (`MMCA.ADC/.../App.razor:66-77`, `MMCA.Store/.../App.razor:38-41`). Both hosts register both runtimes on
   both sides of the pipeline: `AddInteractiveServerComponents()` + `AddInteractiveWebAssemblyComponents()`
   at service registration and `AddInteractiveServerRenderMode()` + `AddInteractiveWebAssemblyRenderMode()`
   on `MapRazorComponents<App>()`
-  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:67-69`, `Program.cs:298-300`;
-  `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:76-78`, `Program.cs:263-265`).
+  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:71-73`, `Program.cs:324-326`;
+  `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:77-79`, `Program.cs:276-278`).
 - **Prerendering stays enabled.** No host anywhere in the workspace passes `prerender: false` or
   constructs a render mode with prerendering disabled; every render mode in use is the stock static
   instance. Prerender is what ADR-022's SSR cookie scheme exists to serve, so it is kept and its cost is
@@ -68,49 +70,56 @@ layer rather than by weakening the render mode.
 - **The SSR/interactive double fetch is removed once, in the shared list-page base.**
   `DataGridListPageBase<TDto>` injects `PersistentComponentState`
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/DataGridListPageBase.cs:31`), restores a
-  per-page-type key `grid:{TypeFullName}` in `OnInitialized` (`DataGridListPageBase.cs:171-175`), and
+  per-page-type key `grid:{TypeFullName}` in `OnInitialized` (`DataGridListPageBase.cs:185-189`), and
   registers a persist callback so the prerender pass hands its rows forward
-  (`DataGridListPageBase.cs:184-194`). The first interactive `ServerData` call returns that snapshot and
-  clears it instead of issuing a redundant API round-trip (`DataGridListPageBase.cs:513-522`), which the
+  (`DataGridListPageBase.cs:198-208`). The first interactive `ServerData` call returns that snapshot and
+  clears it instead of issuing a redundant API round-trip (`DataGridListPageBase.cs:543-557`), which the
   base's own comment records as the fix for the visible cancel-retry cycle caused by the
-  SSR to Server to WASM transition (`DataGridListPageBase.cs:167-170`). The payload is a
-  `PersistedGridState` record of items plus total (`DataGridListPageBase.cs:1045`). **Twenty types
+  SSR to Server to WASM transition (`DataGridListPageBase.cs:181-184`). The payload is a
+  `PersistedGridState` record of items plus total (`DataGridListPageBase.cs:1132`). **Twenty types
   inherit this base** (thirteen in ADC, seven in Store), nineteen of them routable list pages plus ADC's
   non-routable Engagement `AttendeeSearchPanel`
   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/CheckIns/AttendeeSearchPanel.razor.cs:16`),
-  so the policy is written once and adopted by inheritance.
+  so the policy is written once and adopted by inheritance. The framework's own non-routable
+  `UserAdminList<TUser>` inherits it too
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Administration/UserAdminList.razor:4`), and both
+  apps' user list pages host that component
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.UI/Pages/Users/UserList.razor:8`,
+  `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.UI/Pages/Users/UserList/UserList.razor:12`), so
+  the same policy reaches those two pages by composition.
 - **The persist callback declares `InteractiveAuto` explicitly.** The base passes
   `RenderMode.InteractiveAuto` as the second argument to `RegisterOnPersisting`
-  (`DataGridListPageBase.cs:194`) because a page that inherits its mode from
+  (`DataGridListPageBase.cs:208`) because a page that inherits its mode from
   `<Routes @rendermode="...">` declares none of its own, and the callback would otherwise fail render-mode
   inference during the static prerender pass; the reasoning is recorded inline
-  (`DataGridListPageBase.cs:177-183`).
+  (`DataGridListPageBase.cs:191-197`).
 - **The prerender fetch is time-bounded so a cold backend cannot block the page.** `CreateFetchCts` links
   to the request token and, when `RendererInfo.IsInteractive` is false, cancels after
-  `PrerenderFetchTimeoutMs` (5000 ms) (`DataGridListPageBase.cs:84`, `DataGridListPageBase.cs:730-741`).
+  `PrerenderFetchTimeoutMs` (5000 ms) (`DataGridListPageBase.cs:95`, `DataGridListPageBase.cs:813-824`).
   On timeout the page returns an empty grid that the first interactive call refills
-  (`DataGridListPageBase.cs:80-83`, `DataGridListPageBase.cs:545`, `DataGridListPageBase.cs:659-668`).
+  (`DataGridListPageBase.cs:91-94`, `DataGridListPageBase.cs:612`, `DataGridListPageBase.cs:734-747`).
 - **Detail and dashboard pages take the other route: they skip the prerender fetch entirely.** An early
   `if (!RendererInfo.IsInteractive) return;` guard in `OnParametersSetAsync` / `OnInitializedAsync` appears
   across both apps, with four different stated reasons. Most of them avoid the doubled reads under
   `InteractiveAuto`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/Sessions/PublicSessionDetail.razor.cs:83-87`,
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/Sessions/PublicSessionDetail.razor.cs:95-99`,
   `.../Pages/Public/Speakers/PublicSpeakerDetail.razor.cs:77`,
-  `.../Pages/Speakers/SpeakerDashboard.razor.cs:70`,
-  `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/SessionLive/SessionLive.razor.cs:71`,
-  `.../Pages/SessionLive/PresenterView.razor.cs:58`;
+  `.../Pages/Speakers/SpeakerDashboard.razor.cs:76`,
+  `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/SessionLive/SessionLive.razor.cs:76`,
+  `.../Pages/SessionLive/PresenterView.razor.cs:63`;
   `MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.UI/Pages/Catalog/CatalogProductDetail.razor.cs:59`,
   `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Pages/ShoppingCarts/ShoppingCartDetail.razor.cs:65`).
   Store's `OrderDetail` states the second reason: no auth token can be read at prerender time, so every
-  authenticated call would 401 (`.../Pages/Orders/OrderDetail.razor.cs:110-113`). The third is that a write or
+  authenticated call would 401 (`.../Pages/Orders/OrderDetail.razor.cs:124-127`). The third is that a write or
   a hub join must not run on a pass the interactive instance repeats: ADC's sponsor-visit and room check-in
   pages post from `OnInitializedAsync` behind the guard
-  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/CheckIns/Sponsors/SponsorVisit.razor.cs:50`,
-  `.../Pages/CheckIns/Rooms/RoomCheckIn.razor.cs:47`), and `HappeningNow` gates its SignalR join on the same
-  flag (`.../Pages/HappeningNow/HappeningNow.razor.cs:115`). The fourth is that an un-timed call to a cold or
+  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/CheckIns/Sponsors/SponsorVisit.razor.cs:57`,
+  `.../Pages/CheckIns/Rooms/RoomCheckIn.razor.cs:54`), and `HappeningNow` gates its SignalR join on the same
+  flag, in `OnAfterRenderAsync` rather than an initialization method
+  (`.../Pages/HappeningNow/HappeningNow.razor.cs:120`). The fourth is that an un-timed call to a cold or
   unreachable backend would block the prerender, and with it the page load and the post-login navigation:
   ADC's home page skips its event fetch and countdown timer at prerender for that reason
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Home/ADCHome.razor.cs:132-137`).
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Home/ADCHome.razor.cs:138-143`).
 - **One page outside the grid family repeats the persistence pattern by hand.** Store's `CatalogBrowse`
   persists its prerendered products, categories and filter tuple and rehydrates them when the interactive
   pass starts on the same filter combination
@@ -122,25 +131,25 @@ layer rather than by weakening the render mode.
   client `Program.cs` mirrors its server host's registrations (MudBlazor, `AddUIShared`, browser device
   capabilities, the auth trio, the same conditional per-module UI registrations)
   (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Program.cs:33-76` against
-  `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:67-160`;
+  `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:71-178`;
   `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web.Client/Program.cs:31-64` against
-  `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:76-154`), and each client bootstraps its thread
+  `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:77-171`), and each client bootstraps its thread
   culture from the same cookie before running so hydration does not disagree with the prerender
-  (`MMCA.ADC/.../MMCA.ADC.UI.Web.Client/Program.cs:82`,
-  `MMCA.Store/.../MMCA.Store.UI.Web.Client/Program.cs:70`, ADR-027).
+  (`MMCA.ADC/.../MMCA.ADC.UI.Web.Client/Program.cs:83`,
+  `MMCA.Store/.../MMCA.Store.UI.Web.Client/Program.cs:71`, ADR-027).
 - **A build-time layer rule is what keeps the shared UI package runnable in the browser.**
   `MMCA.Common.UI` may not reference Domain, Application, Infrastructure or API, and the enforcement
   target says so in its failure text: "UI depends only on Shared for Blazor WASM compatibility"
   (`MMCA.Common/Source/Build/MMCA.Common.LayerEnforcement.targets:102-115`). Server-only components are
   hoisted out into `MMCA.Common.UI.Web` for exactly that reason, for example the shared `/Error` page,
   whose `HttpContext` cascading parameter cannot exist in the WASM-safe package
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Components/Pages/Error.razor:11-16`, `Error.razor:49-50`).
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Components/Pages/Error.razor:12-21`, `Error.razor:52-53`).
 - **`InteractiveServer` is pinned only under E2E configuration flags, never in production or local dev.**
   `E2E:ForceServer` returns `InteractiveServer`; ADC additionally honors `E2E:ForceWebAssembly`, which
-  returns `InteractiveWebAssembly` and wins if both are set (`MMCA.ADC/.../App.razor:67-78`,
-  `MMCA.Store/.../App.razor:39-42`). Those config keys are injected only by the AppHosts, and only when the
-  matching environment variable is present (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:408-435`,
-  `MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:409-417`). In CI only `E2E_FORCE_SERVER` is
+  returns `InteractiveWebAssembly` and wins if both are set (`MMCA.ADC/.../App.razor:66-77`,
+  `MMCA.Store/.../App.razor:38-41`). Those config keys are injected only by the AppHosts, and only when the
+  matching environment variable is present (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:400-427`,
+  `MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:404-412`). In CI only `E2E_FORCE_SERVER` is
   exported (`MMCA.ADC/.github/workflows/e2e.yml:226`, `MMCA.Store/.github/workflows/e2e.yml:229`);
   ADC's workflow deliberately does **not** set `E2E_FORCE_WASM` and records why
   (`MMCA.ADC/.github/workflows/e2e.yml:211-218`). Both `App.razor` comments cite the same trace evidence:
@@ -156,8 +165,8 @@ layer rather than by weakening the render mode.
   list-page base: the list page renders a `MudTable` directly
   (`MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Components/Pages/Tickets.razor:50-90`) and the
   detail page is a plain MudBlazor form, so none of the persistence machinery above applies there. The framework's own component gallery is likewise
-  `InteractiveServer`-only (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Gallery/Components/App.razor:22`,
-  `App.razor:26`, `MMCA.Common/Tests/Presentation/MMCA.Common.UI.Gallery/GalleryHost.cs:129-130`). ADR-028
+  `InteractiveServer`-only (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Gallery/Components/App.razor:21`,
+  `App.razor:25`, `MMCA.Common/Tests/Presentation/MMCA.Common.UI.Gallery/GalleryHost.cs:129-130`). ADR-028
   already noted Helpdesk's status ("As an `InteractiveServer`-only host it has no WASM boundary",
   `028-dark-theme-mode.md:60`); this ADR makes it part of the record rather than an aside.
 
@@ -176,9 +185,10 @@ layer rather than by weakening the render mode.
   inheriting one type; the alternative was the same 30 lines repeated per page, which is what
   `CatalogBrowse` shows happening the moment a page falls outside the family.
 - **Two anti-double-fetch mechanisms, matched to two page shapes.** A list page has data worth carrying
-  across the transition (the grid would otherwise flash empty), so it persists. A detail page behind
-  `[Authorize]` cannot even fetch at prerender time without a token, so it skips and renders its loading
-  state. Persisting where skipping would do would only inflate the HTML.
+  across the transition (the grid would otherwise flash empty), so it persists. A detail or dashboard
+  page, public or authenticated, skips and renders its loading state, so the interactive pass makes the
+  only read; for `OrderDetail` skipping is also forced, because no token can be read at prerender time.
+  Persisting where skipping would do would only inflate the HTML.
 - **The E2E pin is a runner concession, not a product decision.** Pinning `InteractiveServer` is confined
   to a config flag that only the AppHost sets and only CI exports, so the production and local-dev path
   is unchanged by it, and the flag's justification (with run ids) lives next to the code that reads it.
@@ -187,7 +197,8 @@ layer rather than by weakening the render mode.
 - **Everything shared has to run in both runtimes.** The WASM-compatibility layer rule
   (`MMCA.Common.LayerEnforcement.targets:102-115`) forbids the shared UI package from touching Domain,
   Application, Infrastructure or API, so anything server-only needs a second package
-  (`MMCA.Common.UI.Web`) and an explicit `AddAdditionalAssemblies` entry in every host.
+  (`MMCA.Common.UI.Web`) and an explicit `AddAdditionalAssemblies` entry in every app host (the
+  component gallery adds only `MMCA.Common.UI`, `MMCA.Common/Tests/Presentation/MMCA.Common.UI.Gallery/GalleryHost.cs:131`).
 - **Service registration is duplicated per head and can drift.** The WASM client and the server host
   register the same MudBlazor, `AddUIShared`, capability and per-module services in two separate
   `Program.cs` files; nothing checks that the two lists agree, so a service added to one and not the other
@@ -204,7 +215,7 @@ layer rather than by weakening the render mode.
   away from, so a regression specific to the WASM handover cannot be caught by that gate. The Core Web
   Vitals numbers carry the same caveat in their own remarks: they "reflect Server-mode
   prerender-then-hydrate under runner contention, not production's InteractiveAuto on real hardware"
-  (`MMCA.ADC/Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/WebVitalsTests.cs:15-18`). The pseudo-localization
+  (`MMCA.ADC/Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/WebVitalsTests.cs:17-20`). The pseudo-localization
   suite likewise had to route its activation through the culture cookie because the pinned circuit reads
   cookies but not the original query string
   (`MMCA.ADC/Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/PseudoLocalizationTests.cs:17-21`).
@@ -229,6 +240,21 @@ registration and mapping ranges and WASM client ranges, `Routes.razor`, `DataGri
 (`CreateFetchCts`, `PersistedGridState`), the detail-page guards, `OrderDetail`, `HappeningNow`, the layer
 enforcement target, `Error.razor`, both AppHosts, both `e2e.yml` workflows, and the Helpdesk `App.razor`,
 `Program.cs` and `Tickets.razor`.
+
+## Revision (2026-10-06)
+- The Rationale's two-page-shapes bullet no longer says detail pages skip because they sit behind
+  `[Authorize]` without a token: most skipping pages (several of them public) skip to avoid doubled
+  reads, and only `OrderDetail` states the token reason (`OrderDetail.razor.cs:124-127`).
+- The list-page bullet now records that the framework's own non-routable `UserAdminList<TUser>` also
+  inherits `DataGridListPageBase` (`UserAdminList.razor:4`) and reaches both apps' user list pages by
+  composition.
+- The guard bullet now says `HappeningNow` gates its hub join in `OnAfterRenderAsync`
+  (`HappeningNow.razor.cs:120`), and the trade-off on `AddAdditionalAssemblies` is scoped to the app
+  hosts, since the gallery adds only `MMCA.Common.UI` (`GalleryHost.cs:131`).
+- Anchors in the live sections were re-verified against current source and re-anchored (both `App.razor`
+  files, host `Program.cs` ranges, `Routes.razor`, `DataGridListPageBase`, the detail-page guards,
+  `ADCHome`, the WASM client culture calls, `Error.razor`, both AppHosts, the gallery `App.razor` and
+  `WebVitalsTests.cs`). The 2026-10-01 entry's anchors stand as recorded on that date.
 
 ## Related
 ADR-022 (reads the HttpOnly session cookie during the SSR prerender pass this decision keeps enabled),

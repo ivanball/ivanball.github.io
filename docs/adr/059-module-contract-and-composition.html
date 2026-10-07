@@ -284,11 +284,11 @@
           first parameter and hands it to the loader it builds
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/ModuleHostExtensions.cs:51-53,84-90</code>),
           which is how the service hosts pass it: Store
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:124-126</code>,
-          <code>MMCA.Store.Identity.Service/Program.cs:118-120</code>, <code>MMCA.Store.Sales.Service/Program.cs:131-133</code>) and
-          ADC (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:252-254</code>,
-          <code>MMCA.ADC.Conference.Service/Program.cs:365-367</code>, <code>MMCA.ADC.Engagement.Service/Program.cs:208-210</code>,
-          <code>MMCA.ADC.Notification.Service/Program.cs:189-191</code>) each name the single assembly of the one module
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:125-127</code>,
+          <code>MMCA.Store.Identity.Service/Program.cs:119-121</code>, <code>MMCA.Store.Sales.Service/Program.cs:132-134</code>) and
+          ADC (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:265-267</code>,
+          <code>MMCA.ADC.Conference.Service/Program.cs:369-371</code>, <code>MMCA.ADC.Engagement.Service/Program.cs:213-215</code>,
+          <code>MMCA.ADC.Notification.Service/Program.cs:195-197</code>) each name the single assembly of the one module
           that host enables, so an extracted service&#39;s scan surface equals its own module. Helpdesk calls
           <code>DiscoverAndRegister</code> directly with its one module assembly
           (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:116-124</code>), and the unit tests name their
@@ -358,7 +358,7 @@
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/ModuleControllerFeatureProvider.cs:33-53,60-82</code>).
           Seeders run only for enabled modules and in registration order (<code>ModuleLoader.cs:129-132,266-272</code>),
           invoked from startup database initialization
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:45-48,122</code>).
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:45-48,124</code>).
           <code>AddModuleHealthChecks</code> publishes one <code>module-{Name}</code> check per module, Healthy when enabled and
           Degraded when disabled (<code>DependencyInjection.cs:195-229</code>).</li>
           <li><strong>A remote-dependency validator exists but is not wired.</strong> <code>ValidateRemoteDependencies</code> re-resolves
@@ -402,7 +402,7 @@
           <code>Sales</code> and declares <code>[&quot;Catalog&quot;, &quot;Identity&quot;]</code> as <code>RemoteDependencies</code>
           (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:27-34</code>), then registers typed
           gRPC clients for the two contracts after the loader returns
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:244-245</code>); because the host names
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:246-247</code>); because the host names
           only its own module assembly, the peer modules are never discovered there and their stubs are never
           registered. ADC Engagement declares
           <code>[&quot;Conference&quot;]</code> remote (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/appsettings.json:38-46</code>)
@@ -411,7 +411,7 @@
           Conference enables one module and declares nothing remote
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/appsettings.json:21-26</code>) even though it wires
           Engagement&#39;s <code>IBookmarkCountService</code> as a gRPC client
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:409</code>), because
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:416</code>), because
           <code>ConferenceModule</code> never declares Engagement in <code>Dependencies</code>.</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
@@ -428,7 +428,7 @@
           branch for &quot;peer not present&quot;, which is precisely why a module&#39;s non-hosting layers are identical
           in-process and extracted (<code>ModuleLoader.cs:119</code>, <code>CatalogModule.cs:31-32</code>). An extracted host,
           which never discovers its peers, registers a real cross-process adapter for the same contract
-          instead (<code>Sales.Service/Program.cs:244-245</code>).</li>
+          instead (<code>Sales.Service/Program.cs:246-247</code>).</li>
           <li><strong>Two strictness levels, chosen per module.</strong> A module that genuinely cannot function without a
           peer opts into <code>RequiresDependencies = true</code> and fails fast (<code>SalesModule.cs:36</code>,
           <code>EngagementModule.cs:23</code>, <code>NotificationModule.cs:24</code>); everything else tolerates a missing peer and
@@ -447,7 +447,7 @@
           <li><strong>The composition root has to name every module assembly.</strong> Discovery scans exactly the list it is
           handed (<code>ModuleLoader.cs:59-65</code>), so adding a module to a host is a third edit beside the project
           reference and the <code>Modules</code> configuration entry: the assembly list in that host&#39;s <code>Program.cs</code>
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:124-126</code>). An assembly left out
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:125-127</code>). An assembly left out
           of the list contributes nothing, and the module surfaces as &quot;disabled&quot; (absence equals disabled,
           <code>ModulesSettings.cs:18-19</code>), not as an error. The trade is deliberate: an ambient scan would make
           the same omission depend on whether some code path happened to load the assembly first
@@ -471,10 +471,10 @@
           (<code>DependencyInjection.cs:219-226</code>, <code>ModuleLoader.cs:334-335,343-344</code>).</li>
           <li><strong>The dependency graph is a hand-written declaration, not a derived fact.</strong> ADC Conference consumes
           Engagement&#39;s <code>IBookmarkCountService</code> over gRPC without listing Engagement in <code>Dependencies</code>
-          (<code>ConferenceModule.cs:15-30</code> versus <code>Conference.Service/Program.cs:409</code>), and Store Identity
+          (<code>ConferenceModule.cs:15-30</code> versus <code>Conference.Service/Program.cs:416</code>), and Store Identity
           consumes the Sales and Catalog export services over gRPC while <code>IdentityModule</code> declares no
           <code>Dependencies</code> at all (<code>MMCA.Store.Identity.API/IdentityModule.cs:16-47</code> versus
-          <code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:263,274</code>), so neither the
+          <code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:265,276</code>), so neither the
           topological sort nor the <code>RequiresDependencies</code> check knows about those edges. Nothing derives
           <code>Dependencies</code> from the interfaces a module actually resolves. What is pinned is the declaration
           against a written expectation: <code>ModuleConformanceTestsBase&lt;TModule&gt;</code> asserts <code>Name</code>, <code>Dependencies</code>,
@@ -534,6 +534,18 @@
           an undeclared edge now named beside the ADC one. <code>DisabledAttendeeQueryService</code> is listed as an
           empty attendee list rather than an export, and the ADR-015 isolation base is cited at its new
           <code>Bases/Layering/</code> path.</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <ul>
+          <li>No content change: the decision, the module inventory and every behavioral statement still match
+          the code.</li>
+          <li>Anchors re-verified against current source: the Store and ADC service hosts&#39; module-assembly lists,
+          the Sales gRPC clients (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:246-247</code>),
+          the Store Identity export clients (<code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:265,276</code>),
+          the ADC Conference bookmark-count client (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:416</code>),
+          the seeding call (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:124</code>)
+          and <code>ModuleIsolationTestsBase</code> (<code>:8-40</code>, now seven facts). The Sales host assembly list cited in
+          the 2026-10-01 revision is now at <code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:132-134</code>.</li>
+          </ul>
           <h2 id="related">Related</h2>
           <p>ADR-008 (the extraction topology that consumes this model: &quot;a service is the monolith with one module
           enabled&quot; is a statement about <code>ModuleLoader</code> plus the <code>Disabled*</code> stubs, cited there as pre-existing
@@ -542,7 +554,7 @@
           level), ADR-014 (<code>AddApplicationDecorators()</code> must run after every module&#39;s handler scan, which is why
           module registration is a distinct, ordered startup step), ADR-015 (the module-isolation fitness
           functions that keep cross-module traffic on the <code>*.Shared</code> contracts this model registers,
-          <code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Layering/ModuleIsolationTestsBase.cs:8-36</code>).</p>
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Layering/ModuleIsolationTestsBase.cs:8-40</code>).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -559,6 +571,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

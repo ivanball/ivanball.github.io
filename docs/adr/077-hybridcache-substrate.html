@@ -242,7 +242,7 @@
           <p>Accepted (2026-08-13). <strong>Amends <a href="026-caching-strategy.html">ADR-026</a></strong>: Tier 1&#39;s substrate gains a third
           implementation beside <code>MemoryCacheService</code> and <code>DistributedCacheService</code>. It is opt-in through
           <code>AddCommonHybridCache(...)</code>; with no call the default path is byte-identical to today, so the release is
-          non-breaking. Revised 2026-10-01 (single-use records read through an L1-bypassing <code>GetFromSharedStoreAsync</code>, and consumers opt in through a Redis-guarded wrapper; see Revision below).</p>
+          non-breaking. Revised 2026-10-01 (single-use records read through an L1-bypassing <code>GetFromSharedStoreAsync</code>, and consumers opt in through a Redis-guarded wrapper; see Revision below). Revised 2026-10-06: the ADR-029 registration counter also reads through <code>GetFromSharedStoreAsync</code>, so the member is no longer single-use-only.</p>
           <p><strong>Scope note (2026-08-18).</strong> This record is Tier 1 only: the Status and Context sections above scope it to
           ADR-026&#39;s Tier 1 substrate, and the Related entry for ADR-040 leaves the Tier 2 output-cache edge untouched.
           The cross-service output-cache eviction shipped on 2026-08-18
@@ -336,14 +336,18 @@
           ignores the other replicas&#39; increments, which on the ADR-029 brute-force path means a lockout that never
           triggers. ADR-026 accepted an occasional lost increment; it did not accept a counter that reads its own
           stale copy for up to 30 seconds.</li>
-          <li><strong><code>GetFromSharedStoreAsync</code> reads single-use records from L2 alone.</strong> The override (<code>:150-169</code>) uses
+          <li><strong><code>GetFromSharedStoreAsync</code> reads from L2 alone.</strong> The override (<code>:150-169</code>) uses
           <code>SharedStoreReadOptions</code> (<code>:82-87</code>), the read-only flag plus <code>DisableLocalCacheRead | DisableLocalCacheWrite</code>,
-          so a record another replica already consumed is a miss here rather than a stale local copy. The OAuth
+          so a record another replica already consumed (or a value another replica changed) is a miss or the shared
+          value here rather than a stale local copy. Four single-use records read through it: the OAuth
           exchange code
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/OAuthControllerBase.cs:196</code>), the
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/OAuthControllerBase.cs:205</code>), the
           password-reset token (<code>PasswordResetTokenService.cs:128</code>), the email-confirmation token
-          (<code>EmailConfirmationTokenService.cs:90</code>) and the two-factor time step (<code>TwoFactorAuthenticator.cs:105</code>)
-          read through it.</li>
+          (<code>EmailConfirmationTokenService.cs:90</code>) and the two-factor time step (<code>TwoFactorAuthenticator.cs:105</code>).
+          So does one counter: the ADR-029 per-IP registration limit reads its count through it
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:138</code>), because
+          <code>IncrementAsync</code> writes L2 only and a plain <code>GetAsync</code> would let a replica&#39;s L1 copy pin the first count it
+          saw, so the limit would not trip while that copy lived.</li>
           <li><strong><code>RemoveByPrefixAsync</code> reuses the existing SCAN machinery</strong>, extracted out of <code>DistributedCacheService</code>
           into a shared internal <code>RedisPrefixScanner</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/RedisPrefixScanner.cs</code>) that both services
@@ -386,8 +390,8 @@
           tests project (<a href="038-supply-chain-provenance.html">ADR-038</a>). Consumers opt in through the guarded wrapper
           <code>AddCommonHybridCacheWhenRedisConfigured(configuration)</code> (<code>DependencyInjection.Caching.cs:200-212</code>), which
           calls <code>AddCommonHybridCache</code> only when the <code>redis</code> connection string is set: ADC calls it in its four service
-          hosts (for example <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:202</code>) and Store in its
-          three (for example <code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:107</code>); MMCA.Helpdesk
+          hosts (for example <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:203</code>) and Store in its
+          three (for example <code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:108</code>); MMCA.Helpdesk
           does not (no Redis, so it stays on the memory substrate).</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
@@ -401,7 +405,9 @@
           into a pure read while keeping the L1 promotion that is the point of adopting HybridCache.</li>
           <li><strong>The counter path is excluded rather than tuned.</strong> A short <code>LocalCacheExpiration</code> would have made the
           counters &quot;mostly right&quot;, the wrong property for the control that decides whether an account is locked.
-          Bypassing L1 on both legs keeps ADR-029&#39;s semantics identical to what shipped.</li>
+          Bypassing L1 on both legs keeps ADR-029&#39;s semantics identical to what shipped, and a counter that is
+          read outside <code>IncrementAsync</code> (the registration limit) reads through <code>GetFromSharedStoreAsync</code> for the
+          same reason.</li>
           <li><strong>Fail-soft matches the existing substrate&#39;s posture.</strong> ADR-026 already treats prefix invalidation as
           best-effort with a TTL backstop; a faulting read returning a miss is the same trade.</li>
           <li><strong>Opt-in keeps the release non-breaking and the monolith cheap.</strong> A host with no Redis gains nothing from
@@ -418,7 +424,8 @@
           a second and longer staleness window that did not exist before.</li>
           <li><strong>Single-use records stay out of that window only when read through <code>GetFromSharedStoreAsync</code>.</strong> The
           framework&#39;s own single-use reads (OAuth exchange code, password reset, email confirmation, two-factor time
-          step) bypass L1, so their replay exposure is bounded by the record&#39;s removal. A caller that reads a
+          step) bypass L1, so their replay exposure is bounded by the record&#39;s removal; the registration-limit
+          counter read takes the same path. A caller that reads a
           replay-guard value through plain <code>GetAsync</code> can still be served a stale local copy for up to
           <code>LocalCacheExpiration</code>.</li>
           <li><strong><code>AddCommonHybridCache</code> overwrites a host&#39;s own <code>ICacheService</code>.</strong> <code>RemoveAll&lt;ICacheService&gt;()</code> is what
@@ -454,6 +461,18 @@
           (<code>DependencyInjection.Caching.cs:147-161</code>). The registration now lives in <code>DependencyInjection.Caching.cs</code>,
           and the <code>DistributedCacheService</code>, <code>ICacheService</code> and <code>HybridCacheService</code> anchors are refreshed. The
           disjoint keyspace, opt-in registration and counter-path L1 bypass are unchanged.</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <ul>
+          <li><code>GetFromSharedStoreAsync</code> gained a fifth caller that is a counter, not a single-use record:
+          <code>LoginProtectionService.CheckRegistrationRateLimitAsync</code> reads the ADR-029 per-IP registration count
+          through it (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:138</code>).
+          The Decision, Rationale and Trade-offs entries now say so; the counter path&#39;s L1 bypass therefore covers
+          this read as well as <code>IncrementAsync</code>.</li>
+          <li>The OAuth exchange-code read moved to <code>OAuthControllerBase.cs:205</code>.</li>
+          <li>Anchors re-verified against current source; the consumer examples are now
+          <code>MMCA.ADC.Conference.Service/Program.cs:203</code> and <code>MMCA.Store.Catalog.Service/Program.cs:108</code> (four ADC
+          hosts and three Store hosts, unchanged).</li>
+          </ul>
           <h2 id="related">Related</h2>
           <p><a href="026-caching-strategy.html">ADR-026</a> (amended by this record: its Tier 1 substrate gains a third
           implementation, its 30-second default TTL becomes the local-cache bound as well, its prefix-invalidation
@@ -484,6 +503,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

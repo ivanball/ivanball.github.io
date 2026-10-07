@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-121: Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-09-11). Supersedes ADR-052.">
+  <meta name="description" content="Accepted (2026-09-11). Supersedes ADR-052. Revised 2026-10-01: the scoring trigger&#39;s feature gate and failure path, and ADR-025&#39;s place among the…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/121-ephemeral-in-process-work-queue.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-121: Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)">
-  <meta property="og:description" content="Accepted (2026-09-11). Supersedes ADR-052.">
+  <meta property="og:description" content="Accepted (2026-09-11). Supersedes ADR-052. Revised 2026-10-01: the scoring trigger&#39;s feature gate and failure path, and ADR-025&#39;s place among the…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/121-ephemeral-in-process-work-queue.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-121: Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)">
-  <meta name="twitter:description" content="Accepted (2026-09-11). Supersedes ADR-052.">
+  <meta name="twitter:description" content="Accepted (2026-09-11). Supersedes ADR-052. Revised 2026-10-01: the scoring trigger&#39;s feature gate and failure path, and ADR-025&#39;s place among the…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)","item":"https://ivanball.github.io/docs/adr/121-ephemeral-in-process-work-queue.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
@@ -239,7 +239,9 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-121-ephemeral-in-process-work-queue-bounded-channel-plus-hosted-drain">ADR-121: Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-09-11). Supersedes <a href="052-background-job-execution.html">ADR-052</a>.</p>
+          <p>Accepted (2026-09-11). Supersedes <a href="052-background-job-execution.html">ADR-052</a>.
+          Revised 2026-10-01: the scoring trigger&#39;s feature gate and failure path, and ADR-025&#39;s place among the framework hosted services.
+          Revised 2026-10-06: the scoring trigger&#39;s event-existence 404 and the handler&#39;s current retry remarks.</p>
           <h2 id="context">Context</h2>
           <p>ADR-052 ran two different kinds of work through one mechanism: ephemeral broadcasts that must not
           put a gRPC round trip on the hot path of a vote, and an AI scoring pass that takes minutes and issues
@@ -249,17 +251,19 @@
           <p>The expensive half has moved out. Session scoring is scheduled as a durable internal command
           (<a href="114-internal-commands-durable-job-queue.html">ADR-114</a>): the trigger endpoint writes a row through
           <code>IInternalCommandScheduler.ScheduleAsync</code>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs:132-136</code>)
-          and answers <code>202 Accepted</code> once the row is written (<code>:144</code>), with a failed schedule surfaced through
-          <code>HandleFailure</code> (<code>:138-141</code>) and a <code>[FeatureGate(ConferenceFeatures.SessionScoring)]</code> gate (<code>:125</code>)
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs:148-152</code>)
+          and answers <code>202 Accepted</code> once the row is written (<code>:160</code>), with a failed schedule surfaced through
+          <code>HandleFailure</code> (<code>:156</code>), an unknown event answered 404 by an existence check before anything is
+          scheduled (<code>:143-146</code>), and a <code>[FeatureGate(ConferenceFeatures.SessionScoring)]</code> gate (<code>:134</code>)
           answering 404 while the flag is off, and the framework&#39;s leased, retrying,
           dead-lettering processor runs the pass. Duplicate runs are held off across replicas by a per-event
           <code>IDistributedLock</code> claim taken inside the handler
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsInternalCommandHandler.cs:78-80</code>,
-          <code>ClaimTimeToLive</code> of 15 minutes at <code>:56</code>, <code>ClaimWait</code> of <code>TimeSpan.Zero</code> at <code>:63</code>), and the loser of
-          that claim logs and returns <code>Result.Success()</code> (<code>:82-86</code>). The handler says where its retries come
-          from: the framework&#39;s backoff and attempt ceiling &quot;replaces the local three-attempt requeue the
-          in-process queue carried&quot; (<code>:28</code>).</p>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsInternalCommandHandler.cs:83-85</code>,
+          <code>ClaimTimeToLive</code> of 15 minutes at <code>:61</code>, <code>ClaimWait</code> of <code>TimeSpan.Zero</code> at <code>:68</code>), and the loser of
+          that claim logs and returns <code>Result.Success()</code> (<code>:87-91</code>). The handler&#39;s remarks say where its
+          retries come from: the framework&#39;s processor completes a row only on a successful result, and
+          anything else consumes an attempt, backs off, and dead-letters at <code>InternalCommands:MaxAttempts</code>
+          (<code>:23-27</code>).</p>
           <p>What remains is the half that was always a good fit for a channel: ephemeral, best-effort work owned
           by one process, where a lost item costs a missed UI refresh and nothing else. This record is scoped
           to that work. It is deliberately not a job system, and it no longer pretends to be the place
@@ -322,9 +326,9 @@
           marker at <code>.../UseCases/Markers/ITransactional.cs:6</code>); no Engagement command implements it, so for
           these handlers <code>SaveChangesAsync</code> <strong>is</strong> the commit. Three of the four sites get the ordering
           structurally, because a <code>MutateEntityHandlerBase</code> subclass
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Crud/MutateEntityHandlerBase.cs:333</code>,
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Crud/MutateEntityHandlerBase.cs:339</code>,
           over the shared <code>MutateEntityHandlerCore</code> at <code>:52</code>) holds no save of its own: the base saves at
-          <code>:316</code>, logs at <code>:318</code> and then awaits the <code>OnMutatedAsync</code> post-save hook at <code>:319</code>, and the
+          <code>:322</code>, logs at <code>:324</code> and then awaits the <code>OnMutatedAsync</code> post-save hook at <code>:325</code>, and the
           enqueue is the body of that hook. <code>CloseLivePollHandler</code> declares the base at
           <code>.../LivePolls/UseCases/Close/CloseLivePollHandler.cs:24</code> and enqueues from the hook at <code>:73</code>
           (queue write at <code>:94-95</code>); <code>OpenLivePollHandler</code> at
@@ -406,6 +410,24 @@
           <code>ScheduleAsync</code> call, the scoring handler&#39;s claim, TTL, wait and loser lines (the cache evict at
           <code>ScoreEventSessionsInternalCommandHandler.cs:76</code> now precedes the claim), the Engagement queue
           registrations, and the <code>TransactionalCommandDecorator</code> pass-through.</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <p>No decision or rationale changed. Corrections this pass:</p>
+          <ul>
+          <li>The scoring trigger now checks that the event exists before scheduling and answers an unknown
+          event with 404 through <code>HandleFailure</code>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs:143-146</code>);
+          the Context paragraph records it.</li>
+          <li>The scoring handler no longer carries the quoted &quot;replaces the local three-attempt requeue&quot; remark;
+          Context now paraphrases its current retry remarks
+          (<code>ScoreEventSessionsInternalCommandHandler.cs:23-27</code>) instead of quoting removed wording.</li>
+          <li>The hosted services the 2026-10-01 revision cites now register at <code>OutboxProcessor</code>
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:219</code> and
+          <code>InternalCommandProcessor</code> <code>.../DependencyInjection.Jobs.cs:176</code> (<code>WarmupHostedService</code> is
+          unchanged at <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:102</code>).</li>
+          </ul>
+          <p>Anchors in the live sections were re-verified against current source and refreshed (the trigger&#39;s
+          <code>ScheduleAsync</code>, <code>HandleFailure</code>, <code>Accepted()</code> and <code>[FeatureGate]</code> lines, the scoring handler&#39;s
+          claim, TTL, wait and loser lines, and the <code>MutateEntityHandlerBase</code> save, log and hook lines).</p>
           <h2 id="related">Related</h2>
           <p><a href="114-internal-commands-durable-job-queue.html">ADR-114</a> (the durable, leased, retrying queue that owns
           expensive and must-run work),
@@ -433,6 +455,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

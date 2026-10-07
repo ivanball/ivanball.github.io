@@ -9,6 +9,9 @@ Revised 2026-09-01 (both consumers now adopt the controller base: ADC and Store 
 `UsersDataExportController` deriving from `DataExportControllerBase<ExportUserDataQuery>`, both
 Identity services enable `Privacy.DataExport`, and neither `UsersController` holds an export action
 any more, so the shipped-but-unadopted trade-off is retired).
+Revised 2026-10-01 (Store's second export section, Catalog, recorded; the rate-limit trade-off narrowed
+to "no export-specific limit").
+Revised 2026-10-06: the export base's role hook is named as shipped, `HasExportPrivilege`.
 The implementation shipped in the MMCA.Common "enterprise capability wave" release.
 It is opt-in: an app subclasses `ExportUserDataHandlerBase` and registers its own
 `IUserDataExportSection` implementations, and the shipped controller base is subclassed and routed by
@@ -74,7 +77,9 @@ constraints similar to `DeleteUserHandlerBase` but not identical: both constrain
 (`ExportUserDataHandlerBase.cs:54-55`), and deletion additionally requires `TUser : IErasableUser`
 (`DeleteUserHandlerBase.cs:66`) because it calls `Anonymize()`. Export never does, so it does not ask
 for that interface: a user aggregate can be exportable without being erasable. The base runs the same
-`UserOwnershipRule.CheckOwnership` gate with the export error code, and exposes a `HasDeletePrivilege`-style hook so the app supplies its own role
+`UserOwnershipRule.CheckOwnership` gate with the export error code (`ExportUserDataHandlerBase.cs:81-83`), and exposes an abstract
+`HasExportPrivilege(string? currentUserRole)` hook (`:130`, the export twin of deletion's
+`HasDeletePrivilege`, `DeleteUserHandlerBase.cs:171`) so the app supplies its own role
 vocabulary (ADC evaluates `UserRole.IsOrganizer`, Store evaluates `UserRole.IsAdmin`). It then loads the
 owned aggregate, fans out to every registered `IUserDataExportSection`, and assembles a
 `UserDataExportDTO`. The subclass keeps the role test, the subject snapshot projection, and the sections.
@@ -229,8 +234,8 @@ MMCA.Helpdesk has no Identity module and does not adopt.
   but neither app overrides it, so nothing records that an export was produced. The only bound on how
   often a privileged caller may produce one is the framework's global limiter, which both Identity hosts
   register and which partitions every authenticated request by user id
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:149`,
-  `:158`, `:376`); nothing limits the export endpoint on its own.
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:141`,
+  `:153-156`, `:158`, wired as the `GlobalLimiter` at `:401-402`); nothing limits the export endpoint on its own.
 - **The envelope now moves on the framework's schedule.** A consumer's export document shape is no longer
   the consumer's to version: a change to `UserDataExportDTO` reaches every app on the next lockstep bump
   ([ADR-016](016-lockstep-versioning-masstransit-pin.md)), the cost of not writing the orchestration
@@ -253,6 +258,15 @@ decided: a new store of personal data arrived as a registration. The rate-limit 
 unused `OnExportCompletedAsync` hook (`ExportUserDataHandlerBase.cs:159`). Citations refreshed:
 `DeleteUserHandlerBase.cs` (`:62`, `:66`, `:87`), `DataExportControllerBase.cs` (`:46-49`, `:59`, `:60`,
 `:61`, `:79`, `:113`, `:123-126`), and the ADC section classes (`:19`, `:18`).
+
+## Revision (2026-10-06)
+- The export base's role hook is named as shipped: `HasExportPrivilege(string? currentUserRole)`
+  (`ExportUserDataHandlerBase.cs:130`, passed to `UserOwnershipRule.CheckOwnership` at `:81-83`), not a
+  `HasDeletePrivilege`-style hook; `HasDeletePrivilege` exists only on `DeleteUserHandlerBase.cs:171`.
+- Global per-user limiter anchors corrected to the partition method (`:141`), the user-id partition key
+  (`:153-156`), the limited-partition call (`:158`) and the `GlobalLimiter` wiring (`:401-402`) in
+  `WebApplicationBuilderExtensions.RateLimiting.cs`; the behavior described is unchanged.
+- Remaining anchors re-verified against current source.
 
 ## Related
 [ADR-005](005-soft-delete-vs-erasure.md) (the erasure half of the same privacy obligation, whose

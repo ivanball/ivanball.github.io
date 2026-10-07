@@ -4,6 +4,8 @@
 Accepted (2026-07-28; revised 2026-08-14, 2026-08-18, 2026-08-23, and 2026-09-03).
 Revised 2026-09-22 (the layer rules also ship as compile-time MSBuild targets inside MMCA.Common.Shared; see the Revision below).
 Revised 2026-09-25 (the live-document OpenAPI guard is reconciled with the committed OpenAPI documents both consumers now gate at build time, and the MMCA.Common.Testing.UI page-test bases for the confirm-email and role-admin pages are recorded; see the Revision (2026-09-25) below).
+Revised 2026-09-10 (the security-headers suite reaches both UI web hosts) and 2026-10-01 (the switchable gateway probe gate and the two full-coverage suites are stated consistently); see those Revisions below.
+Revised 2026-10-06: the consumers' lockstep `MMCA.Common.Shared` pin is now 1.232.0 and this Status block lists every Revision section; see the Revision (2026-10-06) below.
 
 ## Context
 ADR-015 turned the architecture invariants into build-gating tests, and drew its own boundary
@@ -71,9 +73,9 @@ booted.
   `ASPNETCORE_ENVIRONMENT=Testing` as process environment variables *before* the host is built
   (`SqlServerIntegrationTestFixtureBase.cs:75`, `:76`), lets the host's own `DatabaseInitStrategy=Migrate`
   apply the schema when the first client forces the build
-  (`SqlServerIntegrationTestFixtureBase.cs:83`), resets data between tests with Respawn
-  (`SqlServerIntegrationTestFixtureBase.cs:99`), and drops the database on disposal
-  (`SqlServerIntegrationTestFixtureBase.cs:127`). Database-free hosts use
+  (`SqlServerIntegrationTestFixtureBase.cs:89`), resets data between tests with Respawn
+  (`SqlServerIntegrationTestFixtureBase.cs:95`, `:115`), and drops the database on disposal
+  (`SqlServerIntegrationTestFixtureBase.cs:132`). Database-free hosts use
   `ProductionHostApplicationFactory<TEntryPoint>` (`Fixtures/ProductionHostApplicationFactory.cs:23`),
   which pins `UseEnvironment("Production")` (`ProductionHostApplicationFactory.cs:37`) so the
   production-only branches (restrictive CORS, HSTS emission) are the ones under test, and captures the
@@ -336,6 +338,24 @@ MMCA.Store and MMCA.Helpdesk all pin `MMCA.Common.Shared` 1.216.0
 the ADC Conference 412 test, the seven problem-details subclasses, the gateway subclasses and the
 Store recording forwarder, the decorator subclasses (now under `Cqrs/`), and the ADR-015 and ADR-046
 cross-references.
+
+## Revision (2026-10-06)
+
+- **The lockstep pin has moved; the claim it supports has not.** MMCA.ADC, MMCA.Store and
+  MMCA.Helpdesk all pin `MMCA.Common.Shared` 1.232.0 now, not the 1.216.0 the 2026-10-01 Revision
+  recorded, at the same lines (`MMCA.ADC/Directory.Packages.props:105`,
+  `MMCA.Store/Directory.Packages.props:8`, `MMCA.Helpdesk/Directory.Packages.props:84`), so every
+  consumer still carries the compile-time layer targets.
+- **The Status block now names the 2026-09-10 and 2026-10-01 Revisions**, which existed as body
+  sections but were missing from it.
+- **ADC's local rate-limiting test moved:** the class recorded at `UiRateLimitingTests.cs:16` in the
+  2026-09-10 Revision is now declared at
+  `MMCA.ADC/Tests/Hosts/MMCA.ADC.UI.Web.Tests/UiRateLimitingTests.cs:18`; `BoundedCircuitHandlerTests.cs:16`
+  is unchanged.
+- Anchors re-verified against current source. The `SqlServerIntegrationTestFixtureBase` citations in
+  the Decision now point at the first client that forces the build and `Migrate` (`:89`), the
+  Respawner creation and per-test reset (`:95`, `:115`), and the drop inside `DisposeAsync` (`:132`);
+  the class (`:27`) and the two environment variables (`:75`, `:76`) were already current.
 
 ## Related
 ADR-015 (the structural / registration fitness layer this complements; its stated non-goal, "not

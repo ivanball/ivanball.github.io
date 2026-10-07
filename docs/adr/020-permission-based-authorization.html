@@ -254,7 +254,12 @@
           Revised 2026-09-25: ADC&#39;s <code>IdentityPermissions.All</code> holds only the capability ADC defines
           (<code>identity:users:read</code>) and its grant map names the framework&#39;s <code>ManageUsers</code> and <code>ManageRoles</code> beside
           it, the declaration shape Store already used; the effective grants are unchanged. Grant-site citations
-          refreshed (both apps now declare grants in a Shared-project <code>*PermissionGrants</code> map).</p>
+          refreshed (both apps now declare grants in a Shared-project <code>*PermissionGrants</code> map).
+          Revised 2026-10-01: the role-vocabulary paragraph records where a host-supplied role string reaches
+          framework code beyond <code>AddPermissions(...)</code>.
+          Revised 2026-10-06: ADC&#39;s Conference module defines twelve permissions (<code>SpeakersLink</code> added,
+          Organizer-only), and the explicit-authorization-decision fitness gate is on by default with all four
+          repos held to it.</p>
           <h2 id="context">Context</h2>
           <p>The default answer in ASP.NET Core is pure role-based access control (RBAC): an endpoint declares
           <code>[Authorize(Policy = &quot;RequireOrganizer&quot;)]</code> against a named policy that calls <code>RequireRole(...)</code>, and a
@@ -310,8 +315,9 @@
           applied from <code>MMCA.ADC.Notification.API/DependencyInjection.cs:44</code>).</li>
           </ul>
           <p>Adoption is asymmetric and that is intentional: a module declares as many capabilities as its own
-          surface needs. ADC&#39;s Conference module defines eleven (<code>ConferencePermissions.cs:12-47</code>, enumerated in
-          <code>All</code> at <code>:50-63</code>), including a curation subset (<code>ContentManagement</code> at <code>:70-79</code>: sessions, speakers,
+          surface needs. ADC&#39;s Conference module defines twelve (<code>ConferencePermissions.cs:12-55</code>, enumerated in
+          <code>All</code> at <code>:58-72</code>; the twelfth, <code>SpeakersLink</code> at <code>:55</code>, is Organizer-only and deliberately kept out of
+          the curation subset), including a curation subset (<code>ContentManagement</code> at <code>:79-88</code>: sessions, speakers,
           categories, sponsors, partners, activities, session assets) granted to the app&#39;s own <code>ContentEditor</code> role constant
           (<code>MMCA.ADC.Conference.Shared/Authorization/ConferencePermissionGrants.cs:48</code>, the whole set to <code>Organizer</code>
           at <code>:47</code>, applied from <code>MMCA.ADC.Conference.API/DependencyInjection.cs:43</code>); its Engagement module defines three
@@ -343,12 +349,12 @@
           <code>AddPermissions(...)</code> or as a role-valued setting on a framework gate. The framework&#39;s own
           navigation entries gate on <code>NavItem.RequiredPermission</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/NavItem.cs:20</code>, matched against the
-          <code>permission</code> claim at <code>.../UI/Layout/NavMenu.razor:256</code>), the notification entry on
+          <code>permission</code> claim at <code>.../UI/Layout/NavMenu.razor:259</code>), the notification entry on
           <code>NotificationPermissions.Manage</code>
           (<code>.../UI/Notifications/NotificationUIModule.cs:20</code>). The role-valued settings are all host-supplied
           and empty by default: the signed-in-devices entry narrows to <code>LayoutSettings.SessionsNavRequiredRole</code>
           when one is configured (<code>.../UI/Common/Settings/LayoutSettings.cs:39</code>, checked with <code>IsInRole</code> at
-          <code>.../UI/Layout/NavMenu.razor:249-250</code>), a host&#39;s own <code>NavItem.RequiredRole</code> is honoured (<code>:254</code>), the
+          <code>.../UI/Layout/NavMenu.razor:252-253</code>), a host&#39;s own <code>NavItem.RequiredRole</code> is honoured (<code>:257</code>), the
           owner-or-admin bypass role is required configuration a host supplies
           (<code>OwnerOrAdminFilterOptions.BypassRole</code>, <code>.../API/Authorization/OwnerOrAdminFilterOptions.cs:24</code>;
           <a href="033-resource-ownership-authorization.html">ADR-033</a>), the public output-cache policy takes its bypass
@@ -455,6 +461,34 @@
           Citations refreshed: the registry namespace (<code>MMCA.Common.Shared.Auth.Permissions</code>,
           <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/Permissions/PermissionRegistry.cs:3</code>),
           <code>AuthorizationExtensions.cs:25</code>, <code>NavMenu.razor:256</code>, and <code>TokenService.cs:73</code> and <code>:133-141</code>.</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <ul>
+          <li>ADC&#39;s Conference module now defines twelve permissions, not eleven: <code>SpeakersLink</code>
+          (<code>conference:speakers:link</code>, <code>ConferencePermissions.cs:55</code>) is granted to <code>Organizer</code> through <code>All</code>
+          (<code>:58-72</code>, <code>ConferencePermissionGrants.cs:47</code>) and kept out of <code>ContentManagement</code> (<code>:79-88</code>, still
+          seven members). The Decision paragraph is updated.</li>
+          <li>The explicit-authorization-decision gate recorded in the 2026-09-07 revision is on by default, not
+          opt-in: <code>RequireExplicitAuthorizationDecision</code> defaults to <code>true</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Api/AnonymousEndpointTestsBase.cs:69</code>)
+          and a repo opts out by overriding it to <code>false</code> (early return at <code>:121-125</code>). All four repos hold
+          themselves to it, each overriding it to <code>true</code> explicitly: MMCA.Common
+          (<code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Api/AnonymousEndpointTests.cs:71</code>),
+          MMCA.ADC (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Api/AnonymousEndpointTests.cs:139</code>),
+          MMCA.Store (<code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Api/AnonymousEndpointTests.cs:86</code>)
+          and MMCA.Helpdesk (<code>MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/AnonymousEndpointTests.cs:45</code>).
+          Current locations in that base: <code>Endpoints_DeclareAnAuthorizationDecision</code> at <code>:119</code>, the
+          <code>EndpointsWithoutAuthorizationAttribute</code> allow-list at <code>:77</code>, the staleness check
+          <code>UndecoratedAllowList_HasNoStaleEntries</code> at <code>:137</code>.</li>
+          <li>Current locations for the fallback-policy facts recorded in the 2026-09-07 revision: in
+          <code>AuthorizationExtensions.cs</code> the configurable overload is at <code>:62</code>, the <code>FallbackAuthorizationHandler</code>
+          registration at <code>:82-83</code>, the <code>FallbackPolicy</code> assignment at <code>:89</code> and the <code>Enabled = false</code> opt-out
+          documentation at <code>:45</code>; the handler class is at <code>Fallback/FallbackAuthorizationHandler.cs:32</code>, and
+          <code>ExemptPathPrefixes</code> at <code>Fallback/FallbackAuthorizationOptions.cs:64</code>.</li>
+          <li>Current <code>NavMenu.razor</code> locations for the role-vocabulary facts recorded on 2026-10-01: the permission
+          filter at <code>:259</code>, <code>SessionsNavRequiredRole</code> read and checked with <code>IsInRole</code> at <code>:252-253</code>, the
+          <code>NavItem.RequiredRole</code> filter at <code>:257</code>.</li>
+          <li>Anchors in the live sections were re-verified against current source.</li>
+          </ul>
           <h2 id="related">Related</h2>
           <p>ADR-004 (the authenticated principal and claims this keys on, including the optional <code>permission</code>
           claim), ADR-008 (each extracted service authorizes independently, so the registry is wired per
@@ -476,6 +510,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

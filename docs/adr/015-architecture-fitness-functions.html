@@ -259,8 +259,9 @@
           feature folders, and the unshipped-baseline declaration figure is re-counted. See
           Revision (2026-09-03) at the end.
           Revised 2026-09-09: <a href="115-strongly-typed-identifiers-opt-in.html">ADR-115</a> adds a rule family
-          (<code>StronglyTypedIdsAreReadonlyRecordStructs</code>, exposed as <code>StronglyTypedIdTestsBase</code> and vacuously
-          satisfied in every repo today). Revised 2026-09-11: the method, base and executed counts that entry
+          (<code>StronglyTypedIdsAreReadonlyRecordStructs</code>, exposed as <code>StronglyTypedIdTestsBase</code>, subclassed by
+          MMCA.Common, MMCA.ADC and MMCA.Store but not MMCA.Helpdesk, and vacuously satisfied where it runs).
+          Revised 2026-09-11: the method, base and executed counts that entry
           restated are removed from this record&#39;s live text, because
           <a href="https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md" target="_blank" rel="noopener">FACTS.md</a> owns them (<code>FACTS.md:51</code>,
           <code>:54</code>), is generated from source by <code>FactsGenerator</code> and is drift-gated in CI, so a figure transcribed
@@ -272,7 +273,10 @@
           (eighteen baseline pairs then, twenty-one today, still one per published package except
           <code>MMCA.Common.UI.Maui</code>). See Revision (2026-09-19) at the end.
           Revised 2026-10-01 (RS0026 / RS0027 move from off to error, with each already-shipped overload pair
-          suppressed at its own declaration; see Revision below).</p>
+          suppressed at its own declaration; see Revision below).
+          Revised 2026-10-06: the ADR-115 rule runs in three of the four repos rather than every repo, the
+          idempotency gate is exercised by MMCA.Common&#39;s own controllers, and the baseline and proto fixture
+          figures are re-counted. See Revision (2026-10-06) at the end.</p>
           <h2 id="context">Context</h2>
           <p>The codebase rests on invariants that are easy to state and easy to erode by accident: clean-
           architecture layer flow (Domain depends on nothing above it), module isolation (no module reaches into
@@ -786,6 +790,48 @@
           bases) and <code>:54</code> (executed); the Decision&#39;s floor citation is re-anchored in place. The dated figures
           and anchors inside the earlier revisions stay as they are, under the convention this record has used
           since 2026-09-01.</p>
+          <h2 id="revision-2026-10-06-the-adr-115-rules-reach-commons-own-idempotency-gate-re-counted-baselines">Revision (2026-10-06): the ADR-115 rule&#39;s reach, Common&#39;s own idempotency gate, re-counted baselines</h2>
+          <p>No rule family joined or left the library in this entry and no decision changed. It corrects four
+          statements and lists the anchors that moved, leaving the earlier entries as written.</p>
+          <ul>
+          <li><strong>The ADR-115 rule does not run in every repo.</strong> <code>StronglyTypedIdTestsBase</code> is subclassed in
+          MMCA.Common (<code>Tests/Architecture/MMCA.Common.Architecture.Tests/Domain/StronglyTypedIdConventionTests.cs:12</code>),
+          MMCA.ADC and MMCA.Store (<code>Tests/Architecture/*/Domain/StronglyTypedIdTests.cs</code>), and MMCA.Helpdesk
+          has no subclass, so the Status clause now says three of the four. Where it runs it still passes
+          vacuously (<code>StronglyTypedIdConventionTests.cs:7</code>).</li>
+          <li><strong>The idempotency rule is not consumer-only.</strong> MMCA.Common subclasses the base over its own map
+          (<code>Tests/Architecture/MMCA.Common.Architecture.Tests/Cqrs/IdempotencyConventionTests.cs:10-12</code>) and
+          ships concrete controllers with real POST actions, for example
+          <code>Source/Presentation/MMCA.Common.API/Controllers/Notifications/NotificationsController.cs:43-44</code>
+          (<code>[HttpPost]</code> plus <code>[Idempotent]</code>). The Section B cost bullet and the 2026-08-23 parenthetical that
+          say the rule &quot;needs a consumer&#39;s controllers&quot; are superseded: of the two Section B families, only the
+          proto rule is exercised against fixtures alone in Common&#39;s own build.</li>
+          <li><strong>The baselines were re-counted against v1.232.0 (<code>MMCA.Common/FACTS.md:14</code>).</strong> The 21
+          <code>PublicAPI.Shipped.txt</code> files hold <strong>8,254 declarations</strong> across 8,275 non-empty lines (the
+          2026-10-01 entry read 7,881 across 7,902); only the <code>MMCA.Common</code> metapackage&#39;s shipped file is
+          header-only; all 21 <code>PublicAPI.Unshipped.txt</code> files still hold the header alone. The first 2026-08-18
+          entry&#39;s baseline passage (eighteen pairs, 5,034 shipped, 2,710 unshipped, &quot;the surface as of this
+          branch&quot;) and its &quot;three rules ... are off&quot; paragraph are dated readings, superseded by the 2026-10-01
+          entry and this one, even though their wording reads as current.</li>
+          <li><strong>The proto fixtures are four, driven by seven <code>[Fact]</code>s.</strong> <code>TestData/fitness-shapes.proto</code> joins
+          the other three and is driven by <code>Parser_PinsMembersBehindAnRpcBodyAndInsideOneLineBodies</code>
+          (<code>.../Contracts/ProtoContractFitnessTests.cs:114-119</code>); the other six cases sit at <code>:44</code>, <code>:52</code>,
+          <code>:66</code>, <code>:76</code>, <code>:89</code> and <code>:100</code>, with the class at <code>:14</code> and the pinned and drifted fixtures at <code>:20</code>
+          and <code>:22</code>.</li>
+          <li><strong>Anchors re-verified against current source.</strong> <code>PublicApiAnalyzers</code> 5.6.0 <code>PackageVersion</code>:
+          <code>Directory.Packages.props:228</code>. In <code>Directory.Build.props</code>: the gate comment <code>:80-83</code>, the Maui
+          rationale <code>:85-87</code>, the ItemGroup <code>:89-96</code> (its exclusion condition on <code>:89</code>), the <code>AdditionalFiles</code>
+          <code>:94-95</code>, the RS0041 rationale <code>:22-26</code> with the <code>NoWarn</code> line at <code>:30</code>, <code>TreatWarningsAsErrors</code> <code>:7</code>.
+          The v1.153.0 changelog bullet: <code>CHANGELOG.md:3374-3380</code> (analyzer on <code>:3378</code>) under its heading at
+          <code>:3319</code>. <code>[HubMethodName]</code> sits at <code>NotificationHub.cs:127</code> and <code>:144</code> (constants <code>:36</code>, <code>:39</code>;
+          <code>Context.ConnectionAborted</code> passed at <code>:136</code> and <code>:150</code>); the client uses its own constants at
+          <code>NotificationHubService.cs:45-46</code>. In <code>ArchitectureRules.Protos.cs</code>: entry point <code>:38-41</code>, not-pinned
+          list <code>:28-31</code>, rpc rendering <code>:293-304</code>, <code>RpcLine</code> <code>:418-422</code>, <code>StreamPrefix</code> <code>:341-342</code>, field
+          rendering <code>:314-322</code> (<code>FieldLine</code> <code>:424-428</code>), enum values <code>:306-312</code> (<code>EnumValueLine</code> <code>:430-434</code>),
+          qualified name <code>:329-336</code>, transparent <code>oneof</code> <code>:271-273</code>. The <code>.editorconfig</code> anchors in the
+          2026-10-01 entry, the <code>ci.yml:161</code> floor, and the Status block&#39;s <code>FACTS.md:51</code> / <code>:54</code> pointers still
+          resolve.</li>
+          </ul>
           <h2 id="related">Related</h2>
           <p>ADR-009 (resilience gate), ADR-010 (event-version gate), ADR-016 (MassTransit pin gate, and the
           lockstep release cadence the public API baseline is pinned to), ADR-006/007/008 (the transport and
@@ -819,6 +865,7 @@
             <li><a href="#revision-2026-09-11-the-restated-counts-come-out-six-citations-move">Revision (2026-09-11): the restated counts come out, six citations move</a></li>
             <li><a href="#revision-2026-09-19-the-gate-covers-eighteen-projects-and-the-unshipped-side-nearly-doubled">Revision (2026-09-19): the gate covers eighteen projects, and the unshipped side nearly doubled</a></li>
             <li><a href="#revision-2026-10-01-rs0026--rs0027-become-errors-the-baselines-roll-over-citations-move">Revision (2026-10-01): RS0026 / RS0027 become errors, the baselines roll over, citations move</a></li>
+            <li><a href="#revision-2026-10-06-the-adr-115-rules-reach-commons-own-idempotency-gate-re-counted-baselines">Revision (2026-10-06): the ADR-115 rule&#39;s reach, Common&#39;s own idempotency gate, re-counted baselines</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

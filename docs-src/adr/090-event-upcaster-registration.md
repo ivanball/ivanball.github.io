@@ -8,6 +8,8 @@ follow-up work. It ships one now. ADR-010's policy is unchanged; this record cov
 mechanism that enforces its consumer-side half. Revised 2026-09-03 (outbox type resolution is no
 longer assembly-qualified-name-only, so the aliasing trade-off is narrower than recorded, and three
 citations are re-anchored after the flat-namespace split): see the revision at the end.
+Revised 2026-10-01: citations refreshed only. Revised 2026-10-06: a terminal unresolvable-type
+miss leaves `ProcessedOn` null rather than stamping it, so the row stays listed and replayable.
 
 ## Context
 ADR-010 splits event evolution into a signal and a discipline. The signal (`SchemaVersion`, a
@@ -168,3 +170,19 @@ are left as recorded; the current locations are `OutboxMessage.cs:139` (`GetStor
 (`ResolveEventType`) with the fallback at `:189`, and in `OutboxProcessor.cs` the `DeserializeEvent`
 call at `:533`, the `HandleUnresolvableType` call at `:536`, the method at `:661`, and the
 `type_unresolvable` reason tag at `:681`.
+
+## Revision (2026-10-06)
+No decision, mechanism, or rationale changed.
+
+- **Correction to the 2026-09-03 revision, item 2.** The terminal miss does not stamp
+  `ProcessedOn`. `HandleUnresolvableType`
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:658`)
+  dead-letters the row the way exhausted retries do: `RetryCount` is set to `MaxRetries` and
+  `LockedUntil` cleared (`:673-674`) while `ProcessedOn` stays null, so the row leaves the poll but
+  stays listed and replayable by the outbox administration (XML doc at `:648-651`). The dead-letter
+  counter increment tagged `reason` `type_unresolvable` is unchanged (`:675-678`).
+- **Anchors re-verified against current source.** In `OutboxMessage.cs`, `GetStorageName` is at
+  `:141` (inside `FromDomainEvent`, `:133`), `DeserializeEvent` at `:168` calls `ResolveEventType`
+  (`:191`), and the fallback is at `:201`. In `OutboxProcessor.cs`, the `DeserializeEvent` call is
+  at `:530`, the `HandleUnresolvableType` call at `:533`, the method at `:658`, and the reason tag
+  at `:678`. `AddEventUpcaster` remains at `DependencyInjection.Extensibility.cs:81`.

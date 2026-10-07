@@ -9,6 +9,8 @@ rollback now restores from a bacpac blob.
 Revised 2026-09-09: PostgreSQL is a fourth engine
 ([ADR-113](113-postgresql-as-a-first-class-engine.md)), so the per-engine context set is
 SQL Server / Cosmos / SQLite / PostgreSQL; the one-instance-per-database rule below is unchanged.
+Revised 2026-10-06: the `AtlDevCon` bacpac was deleted on 2026-10-03, so no pre-cutover rollback
+copy exists; the four live `ADC_*` databases rely on their own PITR plus LTR.
 
 ## Context
 When the modules were first extracted into independently-deployable services, all services in an
@@ -37,8 +39,12 @@ Adopt **database-per-service**: each service owns its own physical database with
 - **ADC** runs `ADC_Identity`, `ADC_Conference`, `ADC_Engagement`, `ADC_Notification`: locally on
   the shared Aspire SQL container and in Azure as four Basic-tier databases. Those four are the
   entire application data estate: the legacy `AtlDevCon` database was exported to the bacpac blob
-  `sql-archive/AtlDevCon-20260902.bacpac` and dropped on 2026-09-02, `infra/main.bicep` no longer
-  declares it, and that blob (not a live database) is the rollback source of record.
+  `sql-archive/AtlDevCon-20260902.bacpac` and dropped on 2026-09-02, and `infra/main.bicep` no
+  longer declares it. That bacpac was itself deleted permanently on 2026-10-03 (blob soft delete and
+  versioning were off), so there is no restore path to the pre-cutover `AtlDevCon` data; its contents
+  had already been copied into the per-service databases at cutover, and those four databases keep
+  their own PITR plus LTR (`MMCA.ADC/infra/main.bicep:921`, `MMCA.ADC/infra/main.bicep:966`,
+  `MMCA.ADC/infra/POST-CUTOVER-atldevcon-downgrade.md:103`, `MMCA.ADC/infra/DISASTER-RECOVERY.md:27`).
 - **Per-source outbox.** Each database has its own `OutboxMessages`; the `OutboxProcessor` drains
   only the sources its host owns, so no service ever sees another's rows.
 - **Cross-service references are scalar IDs, not FKs.** `CrossDataSourceDegradeConvention` removes
@@ -61,3 +67,11 @@ Adopt **database-per-service**: each service owns its own physical database with
   and its own backup/restore concern.
 - **Referential integrity across services is the application's responsibility** (compensating
   indexes survive, FK enforcement does not).
+
+## Revision (2026-10-06)
+- The ADC Decision bullet no longer names the `AtlDevCon` bacpac as the rollback source of record:
+  the blob was deleted permanently on 2026-10-03, so no pre-cutover restore path exists, and the live
+  `ADC_*` databases rely on PITR plus LTR (bacpac deletion at `MMCA.ADC/infra/main.bicep:921`,
+  LTR policy at `MMCA.ADC/infra/main.bicep:966`, `MMCA.ADC/infra/POST-CUTOVER-atldevcon-downgrade.md:103`). The 2026-09-03 Status note is kept as
+  recorded on that date.
+- Anchors re-verified against current source.

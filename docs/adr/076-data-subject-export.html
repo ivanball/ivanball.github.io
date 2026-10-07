@@ -247,6 +247,9 @@
           <code>UsersDataExportController</code> deriving from <code>DataExportControllerBase&lt;ExportUserDataQuery&gt;</code>, both
           Identity services enable <code>Privacy.DataExport</code>, and neither <code>UsersController</code> holds an export action
           any more, so the shipped-but-unadopted trade-off is retired).
+          Revised 2026-10-01 (Store&#39;s second export section, Catalog, recorded; the rate-limit trade-off narrowed
+          to &quot;no export-specific limit&quot;).
+          Revised 2026-10-06: the export base&#39;s role hook is named as shipped, <code>HasExportPrivilege</code>.
           The implementation shipped in the MMCA.Common &quot;enterprise capability wave&quot; release.
           It is opt-in: an app subclasses <code>ExportUserDataHandlerBase</code> and registers its own
           <code>IUserDataExportSection</code> implementations, and the shipped controller base is subclassed and routed by
@@ -304,7 +307,9 @@
           (<code>ExportUserDataHandlerBase.cs:54-55</code>), and deletion additionally requires <code>TUser : IErasableUser</code>
           (<code>DeleteUserHandlerBase.cs:66</code>) because it calls <code>Anonymize()</code>. Export never does, so it does not ask
           for that interface: a user aggregate can be exportable without being erasable. The base runs the same
-          <code>UserOwnershipRule.CheckOwnership</code> gate with the export error code, and exposes a <code>HasDeletePrivilege</code>-style hook so the app supplies its own role
+          <code>UserOwnershipRule.CheckOwnership</code> gate with the export error code (<code>ExportUserDataHandlerBase.cs:81-83</code>), and exposes an abstract
+          <code>HasExportPrivilege(string? currentUserRole)</code> hook (<code>:130</code>, the export twin of deletion&#39;s
+          <code>HasDeletePrivilege</code>, <code>DeleteUserHandlerBase.cs:171</code>) so the app supplies its own role
           vocabulary (ADC evaluates <code>UserRole.IsOrganizer</code>, Store evaluates <code>UserRole.IsAdmin</code>). It then loads the
           owned aggregate, fans out to every registered <code>IUserDataExportSection</code>, and assembles a
           <code>UserDataExportDTO</code>. The subclass keeps the role test, the subject snapshot projection, and the sections.</p>
@@ -452,8 +457,8 @@
           but neither app overrides it, so nothing records that an export was produced. The only bound on how
           often a privileged caller may produce one is the framework&#39;s global limiter, which both Identity hosts
           register and which partitions every authenticated request by user id
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:149</code>,
-          <code>:158</code>, <code>:376</code>); nothing limits the export endpoint on its own.</li>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:141</code>,
+          <code>:153-156</code>, <code>:158</code>, wired as the <code>GlobalLimiter</code> at <code>:401-402</code>); nothing limits the export endpoint on its own.</li>
           <li><strong>The envelope now moves on the framework&#39;s schedule.</strong> A consumer&#39;s export document shape is no longer
           the consumer&#39;s to version: a change to <code>UserDataExportDTO</code> reaches every app on the next lockstep bump
           (<a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a>), the cost of not writing the orchestration
@@ -476,6 +481,16 @@
           unused <code>OnExportCompletedAsync</code> hook (<code>ExportUserDataHandlerBase.cs:159</code>). Citations refreshed:
           <code>DeleteUserHandlerBase.cs</code> (<code>:62</code>, <code>:66</code>, <code>:87</code>), <code>DataExportControllerBase.cs</code> (<code>:46-49</code>, <code>:59</code>, <code>:60</code>,
           <code>:61</code>, <code>:79</code>, <code>:113</code>, <code>:123-126</code>), and the ADC section classes (<code>:19</code>, <code>:18</code>).</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <ul>
+          <li>The export base&#39;s role hook is named as shipped: <code>HasExportPrivilege(string? currentUserRole)</code>
+          (<code>ExportUserDataHandlerBase.cs:130</code>, passed to <code>UserOwnershipRule.CheckOwnership</code> at <code>:81-83</code>), not a
+          <code>HasDeletePrivilege</code>-style hook; <code>HasDeletePrivilege</code> exists only on <code>DeleteUserHandlerBase.cs:171</code>.</li>
+          <li>Global per-user limiter anchors corrected to the partition method (<code>:141</code>), the user-id partition key
+          (<code>:153-156</code>), the limited-partition call (<code>:158</code>) and the <code>GlobalLimiter</code> wiring (<code>:401-402</code>) in
+          <code>WebApplicationBuilderExtensions.RateLimiting.cs</code>; the behavior described is unchanged.</li>
+          <li>Remaining anchors re-verified against current source.</li>
+          </ul>
           <h2 id="related">Related</h2>
           <p><a href="005-soft-delete-vs-erasure.html">ADR-005</a> (the erasure half of the same privacy obligation, whose
           <code>IAnonymizable</code> opt-in and <code>[Pii]</code> guard are this contract&#39;s mirror: one erases what the other copies),
@@ -505,6 +520,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

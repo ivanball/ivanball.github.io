@@ -17,7 +17,10 @@ v1.177.0): `AddEntityCrud` also registers the update command's validator bridge,
 update-request rules reach the generic command with no hand-registered pairing. Revised 2026-09-19:
 the shared mutate workflow now carries one more step, a concurrency-token touch on a conditional
 write just before the save (SEC-Common-77), and ADC's Conference module registers a fourth
-`AddEntityCrud` aggregate, `Partner`.
+`AddEntityCrud` aggregate, `Partner`. Revised 2026-10-01: the generic update gets the transactional,
+permission and timeout steps only when a derived command opts in. Revised 2026-10-06: the payment
+override now runs on the shared mutate workflow with its provider call inside `MutateAsync`, so the
+generic-path boundary is the generic update path, not the presence of a provider call.
 
 ## Context
 ADR-034 records the read side of the generic resource layer and stops one verb short. Its
@@ -31,10 +34,10 @@ targets: a first module scaffolded from the template, where the aggregate is a t
 a status and a child collection, and the update handler is the same twelve lines every time. The
 shared load-mutate-save machinery already existed
 (`Source/Core/MMCA.Common.Application/UseCases/Crud/MutateEntityHandlerBase.cs:52`, whose
-`MutateCoreAsync` at `:271` loads the aggregate (`:281`), stamps the caller's concurrency token
-(`:291-296`), runs the mutation (`:298`), touches the root's concurrency token when the request was
-conditional (`MutateEntityHandlerBase.cs:314`, added 2026-09-07 for SEC-Common-77 so a write that
-changed only child rows still emits a root `UPDATE` carrying the caller's token) and saves (`:316`)),
+`MutateCoreAsync` at `:277` loads the aggregate (`:287`), stamps the caller's concurrency token
+(`:297-302`), runs the mutation (`:304`), touches the root's concurrency token when the request was
+conditional (`MutateEntityHandlerBase.cs:319-320`, added 2026-09-07 for SEC-Common-77 so a write that
+changed only child rows still emits a root `UPDATE` carrying the caller's token) and saves (`:322`)),
 so what was missing was not the workflow but a command and a handler generic enough to close over any
 aggregate, plus somewhere for the module to say which aggregate method a request maps to.
 
@@ -90,7 +93,7 @@ Ship the generic write side as four additive pieces plus a registration helper.
 3. **One generic update handler, on the existing base.**
    `UpdateEntityHandler<TEntity, TEntityDTO, TIdentifierType, TUpdateRequest>`
    (`Source/Core/MMCA.Common.Application/UseCases/Crud/UpdateEntityHandler.cs:48`) derives from the
-   DTO-returning `MutateEntityHandlerBase` (`MutateEntityHandlerBase.cs:356`) and overrides three
+   DTO-returning `MutateEntityHandlerBase` (`MutateEntityHandlerBase.cs:362`) and overrides three
    members: the id (`UpdateEntityHandler.cs:68`), the row version (`:76`), and `MutateAsync`, which
    is a single delegation to the applier (`:84-92`). It is left unsealed so a module can subclass it
    to declare the `Includes` a particular aggregate's mutation needs, or to add a `[LoggerMessage]`
@@ -144,7 +147,7 @@ Ship the generic write side as four additive pieces plus a registration helper.
 - **Invariants and events keep exactly one home.** The applier calls the aggregate's guarded methods,
   so a generic PUT raises the same `{Entity}Changed` event with the same state discriminator a
   hand-written handler would (ADR-083), and a refused invariant stops the write before the save
-  (`MutateEntityHandlerBase.cs:298-300`).
+  (`MutateEntityHandlerBase.cs:304-306`).
 - **A new base beats a wider one.** Adding a fifth type parameter to the shipped base would break
   every consumer's controllers at compile time in exchange for one action. Inheritance costs one word
   in a class declaration for the controllers that want the verb and nothing at all for those that do
@@ -400,3 +403,36 @@ handlers that `TryAdd` leaves in place now also names Store Catalog's `DeletePro
 `DependencyInjection.ModuleScanning.cs:119-135`); and the consumer registrations in ADC Conference
 (`:149-152`), Store Catalog (`:101-105`, `:112`) and Store Identity (`:78-80`). Anchors inside the
 2026-08-30 Revision are left as recorded.
+
+## Revision (2026-10-06)
+
+- **The payment-override example needs a nuance.** "Where the generic path stops" cites
+  `PayOrderHandler` as a hand-written domain-verb state machine and separately says a handler that
+  talks to a payment provider between load and save sits outside the load-mutate-save workflow.
+  `PayOrderHandler` now runs on the bare-`Result` mutate base
+  (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/Pay/PayOrderHandler.cs:23`,
+  base at `:27`) and retires the provider's hosted payment page inside `MutateAsync`, between the load
+  and the save (`PaymentSessionRetirement.RetireAsync` at `:69`). The base invites exactly that: a
+  mutation that first has to consult another service fits in `MutateAsync`, with the aggregate loaded
+  and its token stamped (`MutateEntityHandlerBase.cs:101-105`). So the boundary is not "a provider
+  call happens"; it is a hand-written subclass of the shared workflow versus the generic
+  `UpdateEntityHandler` path. The state-machine verbs still stay off the generic update path (no
+  request DTO, no applier), and a flow with its own compensation and idempotency that does not fit
+  one load-mutate-save, such as `ProcessPaymentWebhookHandler` (still a direct `ICommandHandler`,
+  `.../ProcessPaymentWebhook/ProcessPaymentWebhookHandler.cs:21`, `:24`), stays fully hand-written.
+- **Current locations for facts recorded in the 2026-08-30 Revision** (its text is left as recorded):
+  the mutate workflow is `MutateCoreAsync` at `MutateEntityHandlerBase.cs:277`, `OnMutatedAsync` with
+  the context at `:233`, the `SaveSkipped` short circuit at `:310-311`, the injected-unit-of-work
+  overload at `:247-248` and the attempt-scope overload at `:261` (failed-attempt rationale at
+  `:254-256`); the bare base is `:339`, the DTO base `:362`, the payload base `:407`, `BuildResult`
+  `:438`, called only on success (`:423-425`), and the arity rationale `:399-401`. The registration
+  helpers live in `DependencyInjection.Crud.cs`, not `DependencyInjection.cs`: `AddEntityUpdateVerb`
+  `:136` (seal `:142`, `TryAdd` `:144-148`, bridge `:150-152`), `AddEntityUpdate` `:187` (seal `:193`,
+  `TryAdd` `:195-197`, bridge `:199`), `AddCommandRequestValidator` `:220` (`TryAddTransient` `:223`).
+  Consumers: ADC `AddEntityUpdate<UpdateSpeakerCommand, ...>` at
+  `MMCA.ADC.Conference.Application/DependencyInjection.cs:161`, `SpeakerUpdateApplier.cs:14-15`,
+  `SetUserAvatarHandler.cs:27` (payload base `:34`), `RemoveUserAvatarHandler.cs:18` (bare base `:22`,
+  context-taking `MutateAsync` `:31`); Store `AddEntityUpdateVerb` pair at
+  `MMCA.Store.Sales.Application/DependencyInjection.cs:87-88`; ADC `ChangePasswordHandler.cs:24`.
+- Anchors in the current-state sections (Context, Decision 3, Rationale) were re-verified against
+  current source and moved where the code had shifted.

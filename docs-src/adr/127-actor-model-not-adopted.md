@@ -5,7 +5,9 @@ Accepted (2026-09-22) **as a documented rejection**. Nothing ships with this rec
 interface, no silo, no placement configuration, no new package. What ships is the reason the actor
 model was weighed and dropped, the alternative weighed with it, and the one condition that would make
 it right to revisit. The existing path stays: EF over the owning module's own database, Redis-backed
-caching, and the SignalR notification hub.
+caching, and the SignalR notification hub. Revised 2026-10-01: citations refreshed and the replica
+wording corrected. Revised 2026-10-06: the replica wording now reflects that the ADC front-door apps
+raise `minReplicas` to 2 under `conferenceMode`.
 
 ## Context
 The actor model gives every logical entity its own single-threaded unit of execution holding its state
@@ -49,7 +51,7 @@ pipeline
 backed by Redis when a connection string is present
 (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Caching/RedisCachingExtensions.cs:91`, registered at
 `:99`), with the Redis resource composed by each app's AppHost
-(`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:44`, the builder at `:10`), so a hot read path
+(`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:43`, the builder at `:9`), so a hot read path
 never reaches the database. ADC serves a single conference's attendance over a few days, and a runtime
 built for millions of addressable entities is not sized for that. Searches of both `Source` trees for
 `Orleans`, `IGrain`, `Akka` and `Proto.Actor` return no match, so the absence is real.
@@ -91,9 +93,12 @@ tiers, and live fan-out stays on the notification hub.
   about, a second serialization contract beside the integration-event schema
   ([ADR-010](010-integration-event-schema-versioning.md)), and a second answer to where state lives.
 - **A hand-rolled in-memory per-entity lock or actor-like queue.** It is per replica, and both apps scale
-  to more than one (every container app is `minReplicas: 1` and at least `maxReplicas: 2`, four for the scaled ADC
-  apps under `conferenceMode`,
-  `MMCA.ADC/infra/main.bicep:1882`, `conferenceScaledMaxReplicas` at `:191`, `MMCA.Store/infra/main.bicep:1591`), so an in-process writer guarantee is not a guarantee, and it would silently weaken a
+  to more than one (every container app declares at least `maxReplicas: 2`, four for the scaled ADC
+  apps under `conferenceMode`, and runs `minReplicas: 1` except the two ADC front-door apps, which run
+  two under `conferenceMode`:
+  `MMCA.ADC/infra/main.bicep:1882`, `conferenceScaledMaxReplicas` at `:191`,
+  `conferenceFrontDoorMinReplicas` at `:190` and its use at `:2493`, `MMCA.Store/infra/main.bicep:1591`),
+  so an in-process writer guarantee is not a guarantee, and it would silently weaken a
   correctness property the concurrency token holds across the fleet.
 - **Adopting actors only for live polls.** The live path is the least durable state in the system and
   the most visible during the event, so its first production exercise would fall on the day itself.
@@ -119,6 +124,15 @@ baseline, since every container app declares `minReplicas: 1` and at least `maxR
 the scaled ADC apps under `conferenceMode`)
 (`MMCA.ADC/infra/main.bicep:1882`, `conferenceScaledMaxReplicas` at `:191`, `MMCA.Store/infra/main.bicep:1591`); a per-replica writer guarantee
 still fails at two replicas, so the argument holds.
+
+## Revision (2026-10-06)
+No decision or rationale changed.
+- Replica wording corrected: not every container app is `minReplicas: 1`. The two ADC front-door apps
+  use `conferenceFrontDoorMinReplicas` (`MMCA.ADC/infra/main.bicep:190`, used at `:2493` and `:2639`),
+  which is 2 under `conferenceMode`; every other ADC app and every Store app stays at `minReplicas: 1`,
+  and every app still declares at least `maxReplicas: 2`, so the per-replica argument holds.
+- AppHost anchors moved: the Redis resource is `Program.cs:43` and the builder `:9`.
+- Every other anchor in the live sections was re-verified against current source and still matches.
 
 ## Related
 [ADR-007](007-grpc-extraction.md), [ADR-008](008-service-extraction-topology.md) and

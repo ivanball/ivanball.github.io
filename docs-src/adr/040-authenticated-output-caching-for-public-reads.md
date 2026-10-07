@@ -20,11 +20,17 @@ another service can now request this host's tag eviction over the outbox, broker
 `OutputCacheEvictionRequested`, best-effort and per tag, and ADC's bookmark counts now pair that
 event with their short TTL rather than relying on the TTL alone (see Trade-offs). Amended
 (2026-08-31): ADC's public-policy set gained `ActivitiesCache`, and `NowNextCache` remains the only
-policy without the bypass audience. Revised 2026-09-25: ADC's public-policy set is twelve and
+policy without the bypass audience. Revised 2026-09-10: Store's `CustomerErasedHandler` publishes
+`OutputCacheEvictionRequested` and the Catalog host registers both eviction halves (see the
+Revision (2026-09-10)). Revised 2026-09-25: ADC's public-policy set is twelve and
 eleven pass the bypass audience (the site-wide `ConferencePublicCache` and `BookmarkCountsCache`
 among them); Store's `ProductsCache` runs a 60-second TTL because a variant's effective price moves
 on the clock; both hosts register the Redis output-cache store unconditionally through the
-framework wrapper; anchors refreshed (see the Revision (2026-09-25) at the end).
+framework wrapper; anchors refreshed (see the Revision (2026-09-25) at the end). Revised
+2026-10-01: anchors only (see the Revision (2026-10-01)). Revised 2026-10-06: ADC bookmark eviction
+is raised by a paced hosted processor, the admin-freshness driver is broker-round-trip latency rather
+than unevicted writes, and ADC Conference scales to four replicas in conference mode (see the
+Revision (2026-10-06)).
 
 ## Context
 
@@ -33,12 +39,12 @@ endpoints (`[AllowAnonymous]` GETs like event/session/speaker catalogs) carry na
 tag-based eviction, primed by startup warmup and load-tested by k6. Five minutes is the usual TTL,
 but it is a default, not a rule: a payload that cannot wait five minutes takes a shorter one. Three
 of Store Catalog's four policies run five minutes
-(`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:151`, `:152`, `:161`), while
+(`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:152`, `:153`, `:162`), while
 `ProductsCache` runs 60 seconds because each variant's effective price moves on the clock when a
-discount window opens or closes, with no mutation to evict on (`:158`, the reasoning at
-`:153-157`). ADC runs two 60-second policies (`NowNextCache`, a clock-dependent now-and-next
+discount window opens or closes, with no mutation to evict on (`:159`, the reasoning at
+`:154-158`). ADC runs two 60-second policies (`NowNextCache`, a clock-dependent now-and-next
 snapshot, and `BookmarkCountsCache`, written by another service;
-`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:283,295`).
+`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:284,298`).
 
 That design was silently inert for the traffic that matters. The shared UI HttpClient pipeline
 attaches the stored Bearer token to every outgoing API request via `AuthDelegatingHandler`,
@@ -47,8 +53,8 @@ built-in default output-cache policy refuses both cache lookup and cache storage
 carrying an `Authorization` header (or an authenticated identity). The result: every logged-in
 user bypassed the output cache on every read, and on conference day (when every attendee is
 logged in) 100% of agenda/session/speaker reads landed on Basic-tier SQL. The gap was invisible
-in load evidence because the k6 scripts and the warmup requests are anonymous, which is exactly
-the traffic slice the default policy still cached.
+in load evidence because the k6 scripts of the time and the warmup requests were anonymous, which
+is exactly the traffic slice the default policy still cached.
 
 Two ways out were considered:
 
@@ -92,15 +98,17 @@ That audience is declared ONCE and shared, never restated per policy. ADC keeps 
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferenceReadAudience.cs:34-38`)
 and the API-layer visibility check reads the same list
 (`CurrentUserServiceExtensions.IsPrivilegedConferenceReader`,
-`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Authorization/CurrentUserServiceExtensions.cs:25`).
+`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Authorization/CurrentUserServiceExtensions.cs:24`).
 Two lists naming different roles would put a privileged payload in the shared public entries and
 serve it to everyone, so the single declaration is the guard, not a convention. Nor is the bypass a
 narrow exception in practice: eleven of ADC's twelve public policies pass it
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:266-295`, the array at `:265`),
-the exception being `NowNextCache` (`:283`), whose published-data payload is identical for every
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:267-298`, the array at `:266`),
+the exception being `NowNextCache` (`:284`), whose published-data payload is identical for every
 role. Breadth has a second driver that role-shaped variance does not cover: the admin surfaces read
-back right after mutating and not every write path evicts tags, so a cached stale row version makes
-the next save throw `DbUpdateConcurrencyException` (`Program.cs:257-258`).
+back right after mutating, and a write that never touches a controller (the BR-207 speaker
+auto-link, an Engagement bookmark) evicts only by publishing `OutputCacheEvictionRequested`, a
+broker round trip that is prompt but not instant (`Program.cs:251-257`), so a cached stale row
+version makes the next save throw `DbUpdateConcurrencyException` (`Program.cs:258-259`).
 
 ## Rationale
 
@@ -121,15 +129,17 @@ the next save throw `DbUpdateConcurrencyException` (`Program.cs:257-258`).
 - The output-cache store must be Redis-backed wherever the service runs more than one replica.
   **This supersedes the original trade-off, which accepted a per-replica in-memory store and its
   bounded staleness window.** That acceptance did not survive contact with the deployed topology:
-  ADC's Conference service and Store's Catalog service both run `minReplicas: 1, maxReplicas: 2`
-  with an HTTP scale rule at 50 concurrent requests, so every `EvictByTagAsync` reached only the
-  replica that handled the mutation and the other kept serving the pre-edit payload for the full
-  5-minute TTL.
+  ADC's Conference service and Store's Catalog service both run `minReplicas: 1` with an HTTP scale
+  rule at 50 concurrent requests and a ceiling of at least two replicas (Store `maxReplicas: 2`,
+  `MMCA.Store/infra/main.bicep:1715`; ADC `conferenceScaledMaxReplicas`,
+  `MMCA.ADC/infra/main.bicep:2033`, which is 2 normally and 4 with `conferenceMode` on, `:191`), so
+  every `EvictByTagAsync` reached only the replica that handled the mutation and the others kept
+  serving the pre-edit payload for the full 5-minute TTL.
 
   **Be precise about when this bites: it is a LATENT defect, not a continuously active one.** Both
   services sat at one live replica at ordinary traffic when the running apps were checked on
   2026-07-25. That is a runtime observation, not a repo fact: the committed Bicep pins only the
-  allowed range (`minReplicas: 1, maxReplicas: 2`), so re-checking the live count means looking at
+  allowed range (`minReplicas: 1` up to the ceilings above), so re-checking the live count means looking at
   Azure again. At one replica there is nothing to propagate. The staleness appears only once the scale rule adds the second
   replica, which is to say under exactly the load the cache exists to absorb: ADC conference day
   (~67 peak concurrent) and a Store traffic spike. At that point an organizer renaming a session,
@@ -148,10 +158,10 @@ the next save throw `DbUpdateConcurrencyException` (`Program.cs:257-258`).
   holds the framework's single `AddStackExchangeRedisOutputCache` call (`:99`) and no-ops when the
   connection string is blank (`:94`), so each host calls it unconditionally, top-level, before
   `AddOutputCache`
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:194`,
-  `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:98`), leaning on the framework
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:195`,
+  `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:99`), leaning on the framework
   behavior their comments state: `AddOutputCache` registers its store with `TryAdd` (ADC
-  `Program.cs:190-191`, Store `Program.cs:95-96`), so an explicit Redis registration wins regardless
+  `Program.cs:191-192`, Store `Program.cs:96-97`), so an explicit Redis registration wins regardless
   of call order (only the Store comment spells out that consequence). Read that as framework
   behavior per those host comments; nothing in these repos verifies it.
 
@@ -164,14 +174,20 @@ the next save throw `DbUpdateConcurrencyException` (`Program.cs:257-258`).
   `OutputCacheEvictionRequested` over the existing outbox, broker and inbox path, best-effort and
   per tag. ADC's bookmark counts, written by Engagement and read through Conference, now use
   exactly that: `UserSessionBookmarkCacheEvictionHandler`
-  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/UserSessionBookmarks/DomainEventHandlers/UserSessionBookmarkCacheEvictionHandler.cs:43`,
-  raising the event at `:77`) with the Conference host consuming it (`AddOutputCacheEvictionHandler()`
-  at `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:301`,
-  `RegisterOutputCacheEvictionConsumer()` at `:413`), keeping the short TTL as the backstop for a lost
-  or late event rather than the only defense (`BookmarkCountsCache`, 60 seconds, `Program.cs:295`).
-  A payload that changes on the clock still has no mutation to evict on, so a short TTL remains its
-  whole answer (`NowNextCache`, 60 seconds, ADC `Program.cs:283`; Store's `ProductsCache`, 60
-  seconds, `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:158`, whose discount
+  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/UserSessionBookmarks/DomainEventHandlers/UserSessionBookmarkCacheEvictionHandler.cs:37`)
+  only signals a request (`:56`), and the hosted `BookmarkCacheEvictionProcessor` raises the event
+  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/Caching/BookmarkCacheEvictionProcessor.cs:71`),
+  paced to at most one broadcast per 10-second `PacingWindow` per replica (`:46`) so a burst of
+  stars cannot keep the tag permanently cold. The Conference host consumes it
+  (`AddOutputCacheEvictionHandler()` at
+  `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:304`, and
+  `RegisterOutputCacheEvictionConsumer()` at
+  `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/ConferenceBrokerConsumers.cs:37`, wired
+  through `AddBrokerMessaging` at `Program.cs:417`), keeping the short TTL as the backstop for a
+  lost or late event rather than the only defense (`BookmarkCountsCache`, 60 seconds,
+  `Program.cs:298`). A payload that changes on the clock still has no mutation to evict on, so a
+  short TTL remains its whole answer (`NowNextCache`, 60 seconds, ADC `Program.cs:284`; Store's
+  `ProductsCache`, 60 seconds, `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:159`, whose discount
   edits still evict the `catalog:products` tag at once but whose discount windows open and close with
   no write at all). When adding a cached endpoint, check
   which process owns every write that can change its payload, and whether time alone changes it.
@@ -263,3 +279,40 @@ registration wins regardless of order. One observation, not a change: Store's `C
 (`Program.cs:151`) is registered but no `[OutputCache(PolicyName = "CatalogCache")]` references it
 in Store `Source`, so of the four Store policies three back endpoints. The earlier Revision sections
 keep the anchors they were written with.
+
+## Revision (2026-10-06)
+
+- **ADC bookmark eviction is raised by a paced processor, not the handler.**
+  `UserSessionBookmarkCacheEvictionHandler` only signals a request
+  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/UserSessionBookmarks/DomainEventHandlers/UserSessionBookmarkCacheEvictionHandler.cs:56`);
+  the hosted `BookmarkCacheEvictionProcessor` publishes `OutputCacheEvictionRequested`
+  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/Caching/BookmarkCacheEvictionProcessor.cs:71`)
+  at most once per 10-second `PacingWindow` per replica (`:46`). Trade-offs updated.
+- **The admin-freshness driver for the broad bypass is restated.** Application-layer writes now do
+  request eviction, so the reason is that their eviction is a broker round trip (prompt, not
+  instant), not that some writes never evict
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:251-259`). Decision updated.
+- **ADC Conference's replica ceiling is conditional.** `conferenceScaledMaxReplicas` is 2 normally
+  and 4 with `conferenceMode` on (`MMCA.ADC/infra/main.bicep:191`, used at `:2033`); Store Catalog
+  stays at `maxReplicas: 2` (`MMCA.Store/infra/main.bicep:1715`). Trade-offs updated.
+- **The anonymous-load-evidence sentence in Context is now past tense.** One k6 script now logs in
+  and sends a Bearer token (`MMCA.ADC/Tests/Load/k6/conference-day-attendee-load.js:107`, `:157`),
+  so "the k6 scripts are anonymous" no longer holds for every script.
+- **Correction to the 2026-09-10 revision.** The cached anonymous review list does not return the
+  reviewer name: `PublicProductReviewDTO` deliberately carries none
+  (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Reviews/PublicProductReviewDTO.cs:8`,
+  `:16-18`). Of the erased fields it returns `Title` (`:45`) and `Body` (`:48`); `:51` is
+  `Status`. The list rides `ProductsCache`
+  (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ReviewsController.cs:90`),
+  so the pre-erasure window is bounded by its 60-second TTL, not five minutes. The eviction
+  publish that revision describes is unaffected.
+- **The `RegisterOutputCacheEvictionConsumer` anchors moved.** The framework method is at
+  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Consumers/IntegrationEventConsumerExtensions.cs:158-160`;
+  Store Catalog calls `AddOutputCacheEvictionHandler()` at `Program.cs:177` and
+  `RegisterOutputCacheEvictionConsumer()` at `:290`.
+- Anchors in Context, Decision and Trade-offs were re-verified against current source (ADC
+  Conference `Program.cs` array `:266`, policies `:267-298`, `NowNextCache` `:284`,
+  `BookmarkCountsCache` `:298`, `AddRedisOutputCaching()` `:195` with its comment `:191-192`; Store
+  Catalog `Program.cs` policies `:152`, `:153`, `:159` (reasoning `:154-158`), `:162`,
+  `AddRedisOutputCaching()` `:99` with its comment `:96-97`; `IsPrivilegedConferenceReader` at
+  `CurrentUserServiceExtensions.cs:24`). Store's `CatalogCache` (`:152`) is still unreferenced.

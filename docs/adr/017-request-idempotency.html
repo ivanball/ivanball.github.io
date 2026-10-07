@@ -454,6 +454,19 @@
           <code>OAuthControllerBase.cs:177-178</code> and <code>complete</code> at <code>:97</code>; the filter&#39;s buffering guard is at
           <code>IdempotencyFilter.cs:122-123</code> and <code>ReadIdempotencyKey</code> at <code>:164-171</code>; the gate&#39;s simple-name remark
           spans <code>ArchitectureRules.Idempotency.cs:38-41</code>. That earlier section is left as written.</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <ul>
+          <li>No content change. Two anchors recorded in the earlier Revisions have moved: the per-session revoke
+          (<code>[HttpPost(&quot;revoke/{sessionId:guid}&quot;)]</code> plus <code>[NonIdempotent]</code>) is at
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AuthControllerBase.cs:208-209</code>, and the
+          OAuth exchange is at <code>.../Controllers/OAuthControllerBase.cs:186-187</code> with <code>complete</code> at <code>:106</code>. The
+          exchange is still the only <code>[HttpPost]</code> on <code>OAuthControllerBase</code>, so every POST on the shared auth
+          controllers remains <code>[NonIdempotent]</code> (register, login, refresh and revoke at <code>AuthControllerBase.cs:93-94</code>,
+          <code>:69-70</code>, <code>:117-118</code>, <code>:144-145</code>), and the 2026-08-18 statement that register is <code>[Idempotent]</code> stays
+          superseded by the Revision (2026-10-01).</li>
+          <li>Anchors in Status, Context, Decision, Rationale and Trade-offs were re-verified against current source
+          and are unchanged.</li>
+          </ul>
           <h2 id="related">Related</h2>
           <p>ADR-003 (handler idempotency for outbox/event consumers, a distinct concern), ADR-013 (Result is the
           response the filter caches/replays), ADR-014 (the filter keeps the handler thin), ADR-009 (the resilience
@@ -482,6 +495,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-08-18">Revision (2026-08-18)</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

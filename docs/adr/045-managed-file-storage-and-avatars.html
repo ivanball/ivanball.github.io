@@ -367,6 +367,26 @@
           <code>.../Users/UseCases/RemoveUserAvatar/RemoveUserAvatarHandler.cs:78-81</code>). Deletion is therefore eventual
           and at-least-once once scheduled, not synchronous; the Decision and Consequences bullets above are corrected to say so. The public-read
           container, the random suffix and the cache-TTL bound on staleness are unchanged.</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <p>No behavior changed; the dated sections above keep the anchors recorded on their dates, and the
+          load-bearing ones have moved to:</p>
+          <ul>
+          <li>Decoded-size guard: the <code>Image.IdentifyAsync</code> header read is now at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Storage/ImageSharpImageProcessor.cs:48</code>,
+          <code>MaxDecodedPixels</code> (50,000,000) at <code>:27</code>, <code>MaxDecodedDimension</code> (20,000) at <code>:34</code> (the long-thin
+          rationale is still at <code>:30</code>), and the <code>TooLargeToDecode</code> predicate at <code>:115</code>; the post-decode
+          re-check is at <code>:70</code>.</li>
+          <li>The abstract options-carrying <code>UploadAsync</code> is at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Storage/IFileStorageService.cs:37</code>;
+          <code>AzureBlobFileStorageService</code> implements it at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Storage/AzureBlobFileStorageService.cs:28</code> and
+          writes <code>ContentDisposition</code> and <code>CacheControl</code> at <code>:42-43</code>.</li>
+          <li>The <code>attempts_exhausted</code> dead-letter is at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Processing/InternalCommandProcessor.cs:451-457</code>.</li>
+          <li>The post-commit hook that replace and remove schedule from runs after <code>SaveChangesAsync</code> at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Crud/MutateEntityHandlerBase.cs:322-325</code>.</li>
+          </ul>
+          <p>Anchors were re-verified against current source on this date.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -384,6 +404,7 @@
             <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
             <li><a href="#revision-2026-09-12">Revision (2026-09-12)</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             </ul>
           </nav>
         </aside>

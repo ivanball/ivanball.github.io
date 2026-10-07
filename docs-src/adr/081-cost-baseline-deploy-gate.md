@@ -24,6 +24,8 @@ because Store's header carries three passages ADC's does not. The gate mechanism
 the per-repo SQL tier sets are unchanged.
 Revised 2026-10-01 (Store's SQL check now reads the service objective and accepts only Basic or
 Standard S0, closing the S0-to-S3 gap; see Revision below).
+Revised 2026-10-06: ADC's dated conference-mode window is recorded as a sanctioned per-repo
+difference in the gate, and Common's workflow list now includes `load-tests.yml`.
 
 ## Context
 Both deployed apps run a deliberately small production footprint: every Container App is declared with
@@ -161,8 +163,8 @@ the two also diverge: Store's carries three passages ADC's has no counterpart fo
 and is therefore blind by design to the 2026-09-02 container right-size (`:15-17`), and a
 `(Mirrors MMCA.ADC.)` marker on the `workflow_call` trigger (`:25`). MMCA.Helpdesk and MMCA.Common
 carry no `cost-guard.yml` and no deploy workflow at all: Helpdesk's `.github/workflows/` holds `ci.yml`,
-`release-templates.yml` and the two Claude workflows, and Common's holds `ci.yml`, `release.yml` and
-the same two, so neither has a rollout for this gate to block.
+`release-templates.yml` and the two Claude workflows, and Common's holds `ci.yml`, `release.yml`,
+`load-tests.yml` and the same two, so neither has a rollout for this gate to block.
 
 ## Rationale
 - **Configuration drift is the leading indicator; spend is the lagging one.** The budget notification
@@ -257,6 +259,10 @@ symptoms in production, this fails a build on configuration),
 list).
 
 ## Revision (2026-10-06)
+
+**Common's workflow list is corrected.** `MMCA.Common/.github/workflows/` holds five files: `ci.yml`,
+`release.yml`, `load-tests.yml` and the two Claude workflows; the Adoption paragraph had omitted
+`load-tests.yml`. The conclusion is unchanged: Common has no `cost-guard.yml` and no deploy workflow.
 
 **ADC's conference-mode window is a sanctioned per-repo difference.** ADC declares its conference-day
 surge in IaC: `conferenceMode` (`MMCA.ADC/infra/main.bicep:157`) sets `conferenceScaledMaxReplicas` to

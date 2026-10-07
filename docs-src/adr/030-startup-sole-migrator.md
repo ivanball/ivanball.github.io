@@ -1,7 +1,10 @@
 # ADR-030: Each Service Self-Applies Its Migrations at Startup (Sole Migrator)
 
 ## Status
-Accepted (2026-06-27).
+Accepted (2026-06-27). Revised 2026-08-07: the sole migrator also runs the module seeders on every
+boot. Revised 2026-10-01: PostgreSQL and tenant copies join the migrationless `EnsureCreated` path.
+Revised 2026-10-06: seeding runs on the default scope only, after a tenant-database pass, and the
+startup path consults the environment for the build-time OpenAPI skip.
 
 ## Context
 Under database-per-service (ADR-006), each service owns its own database and its own migrations project,
@@ -16,11 +19,11 @@ acting per physical data source:
 
 Any other value is a configuration mistake and stops startup before a single source is created
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:57`, the
-check itself at `:229-236`, its message at `:241-242`). The setting governs migrations only: a source no
+check itself at `:231-238`, its message at `:243-244`). The setting governs migrations only: a source no
 migrations pipeline owns (Cosmos, or PostgreSQL or SQLite with no migrations assembly declared) is
 created with EF's `EnsureCreated` ahead of the strategy switch, because it has no migration to apply and
-nothing else would ever create it (`:70-98`); a tenant's own copy of such a source is created the same
-way under either strategy (`"Migrate"` at `:199-211`, `"None"` at `:249-263`).
+nothing else would ever create it (`:70-100`); a tenant's own copy of such a source is created the same
+way under either strategy (`"Migrate"` at `:203-213`, `"None"` at `:251-265`).
 
 The framework's own comments mark `"None"` as the production strategy and `"Migrate"` as dev/test. Both
 production apps deliberately diverge from that recommendation, and the divergence was bought with an
@@ -32,8 +35,8 @@ in production and is the sole migrator of its own database**: it applies its pen
 at startup, before the new revision serves traffic. There is deliberately **no** separate deploy-step
 migration (no `sqlcmd` / `dotnet ef database update` apply in `deploy.yml`).
 
-- **Set in prod for every service.** `MMCA.Store/infra/main.bicep:1521,1687,1819` (Identity/Catalog/Sales)
-  and `MMCA.ADC/infra/main.bicep:1715,1935,2069,2221` (Identity/Conference/Engagement/Notification) all set
+- **Set in prod for every service.** `MMCA.Store/infra/main.bicep:1521,1690,1825` (Identity/Catalog/Sales)
+  and `MMCA.ADC/infra/main.bicep:1742,1974,2108,2260` (Identity/Conference/Engagement/Notification) all set
   `DatabaseInitStrategy = 'Migrate'`.
 - **One applier per revision.** Each service runs `minReplicas: 1`, so the startup `MigrateAsync` is not
   racing sibling replicas of the same revision. (Since the 2026-07-19 outbox lease revision, ADR-003,
@@ -41,13 +44,13 @@ migration (no `sqlcmd` / `dotnet ef database update` apply in `deploy.yml`).
   is scale-out safe by construction, so above one replica the setting is a cost/migration choice.)
 - **No deploy-step backstop, on purpose.** Both `deploy.yml` files carry an explicit comment that there
   is *no external `sqlcmd` migration backstop* and that each service is the **sole migrator**
-  (`MMCA.Store/.github/workflows/deploy.yml:1366-1374`, `MMCA.ADC/.github/workflows/deploy.yml:1475-1484`). The
+  (`MMCA.Store/.github/workflows/deploy.yml:1421-1429`, `MMCA.ADC/.github/workflows/deploy.yml:1549-1559`). The
   `sqlcmd` that *is* installed in the pipeline is a connectivity/readiness probe, not a migration apply.
 - **Build-time drift gate, not a runtime apply.** CI runs
-  `dotnet ef migrations has-pending-model-changes` (Store `deploy.yml:421`, ADC `deploy.yml:440`) so a
+  `dotnet ef migrations has-pending-model-changes` (Store `deploy.yml:424`, ADC `deploy.yml:445`) so a
   model that has drifted from its migrations fails the build, but that gate only *detects*; it never
   applies anything. The container does the applying. The gate sits in `build-and-test`, which runs on
-  pull requests only (Store `deploy.yml:257`, ADC `deploy.yml:225`), so a deploy dispatched by hand does
+  pull requests only (Store `deploy.yml:260`, ADC `deploy.yml:225`), so a deploy dispatched by hand does
   not re-run it.
 - **This overrides the framework's documented "None for production" recommendation**, accepting
   auto-migrate-on-boot in prod as the price of one fewer moving part.
@@ -70,7 +73,7 @@ migration (no `sqlcmd` / `dotnet ef database update` apply in `deploy.yml`).
   migration would ship itself on the next deploy. The apps accept this; the build-time model-drift gate
   is the compensating control, together with the expand/contract migration guard, which fails a pull
   request adding a migration that contains `DropColumn`/`DropTable`/`DropIndex` unless it carries an
-  `EXPAND-CONTRACT-OVERRIDE` marker (Store `deploy.yml:427-472`, ADC `deploy.yml:234-276`), and the
+  `EXPAND-CONTRACT-OVERRIDE` marker (Store `deploy.yml:430-481`, ADC `deploy.yml:234-282`), and the
   per-service blast radius bounds the damage.
 - **A failed startup migration fails the new revision.** ACA keeps traffic on the previous revision
   (readiness gating, ADR-025), but a *half-applied* migration still needs manual recovery: there is no
@@ -149,3 +152,32 @@ both `deploy.yml` sole-migrator comments and drift-gate steps. Separately, the s
 2026-08-07 revision describes is now reached through `InitializeDatabaseUnlessDesignTimeAsync`, which
 skips initialization and seeding only for build-time OpenAPI generation in Development (`:144-160`);
 production still migrates and re-seeds on every boot.
+
+## Revision (2026-10-06)
+No decision changed; every service still migrates and seeds itself at startup. Corrections to the
+2026-08-07 revision, whose text stays as recorded:
+
+- **Seeding is default-scope only, after a tenant pass.** `InitializeDatabaseAsync` now runs a
+  tenant-database pass after the strategy switch and before seeding, and `SeedAllAsync` runs on the
+  default scope only, never per tenant
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:117-124`,
+  switch at `:105-115`). It still sits outside the switch, so `"None"` still seeds.
+- **The environment is consulted once, at the host entry point.** The hosts now call
+  `app.InitializeDatabaseUnlessDesignTimeAsync(moduleHost)` (`:146-162`), which checks
+  `IsDevelopment()` together with the OpenAPI design-time switch (`:153`); outside that build-time
+  run the path is environment-independent, so production still re-seeds every revision. The call
+  follows `builder.Build()` after a few lines rather than immediately (ADC Identity
+  `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:353`, Conference `:443`,
+  Engagement `:321`, Notification `:266`; Store Identity
+  `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:296`, Catalog `:317`, Sales `:296`).
+- **Seeder probes now key on a stable identity first.** `ConferenceModuleDbSeeder` checks the
+  Sessionize code or a fixed key before the (pre-rename) name, with `ignoreQueryFilters: true` so a
+  soft-deleted seed row counts as present
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/DbContexts/Seeding/ConferenceModuleDbSeeder.cs:80-97`).
+  Not every step opens with `ExistsAsync`: the sample-data `SeedSampleEventLinksAsync` (`:319`) does not.
+- `ModuleLoader.SeedAllAsync` is now at
+  `MMCA.Common/Source/Core/MMCA.Common.Application/Modules/ModuleLoader.cs:266-272`; a disabled module
+  skips at `:123`, before its seeder is added (`:129-132`).
+- Anchors in Context, Decision and Trade-offs were re-verified against current source and refreshed
+  (strategy check, migrationless and tenant paths, both `main.bicep` setting lines, both `deploy.yml`
+  sole-migrator comments, drift-gate and expand/contract steps).

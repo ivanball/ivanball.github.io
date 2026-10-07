@@ -2,7 +2,9 @@
 
 ## Status
 Accepted (2026-08-23). Revised 2026-08-31. Revised 2026-09-19. Revised 2026-09-25 (the ADR-054 cross-reference is
-re-anchored onto that record's current best-effort trade-off).
+re-anchored onto that record's current best-effort trade-off). Revised 2026-10-01. Revised 2026-10-06:
+adoption is thirteen call sites with the ADC points award, and every Store Catalog controller evicts
+both catalog tags.
 
 ## Context
 A command that has already committed often has follow-up work attached to it: evict the output-cache
@@ -17,8 +19,8 @@ ADR-024 makes a push delivery failure non-fatal and records `MarkAsFailed` inste
 eviction store cannot dead-letter a coherence hint, ADR-076 degrades a data-subject export per section
 rather than failing the package (`076-data-subject-export.md:82-83`), ADR-091 composes the reset email in
 the handler and delivers it best-effort, "awaited and its failure caught, logged and swallowed"
-(`091-cache-backed-password-reset.md:71-76`), and ADR-054 makes compensation best-effort per order
-line (`054-saga-compensation-and-reconciliation.md:229-240`). What none of them decides is the **policy**:
+(`091-cache-backed-password-reset.md:81-86`), and ADR-054 makes compensation best-effort per order
+line (`054-saga-compensation-and-reconciliation.md:252-263`). What none of them decides is the **policy**:
 which failures may be swallowed at all, at what severity, whether cancellation counts as one of them,
 and how a swallow is made visible to somebody who is not reading the log. Answered per call site, that
 produces a repo full of hand-rolled `catch (Exception)` blocks, each choosing its own severity, its
@@ -62,9 +64,9 @@ documented exception.
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/OutputCacheEvictionExtensions.cs:78-92`,
   the token at `:90`; the ADC submit and moderation broadcasts take the parameter's default for the
   same reason, `.../SubmitQuestionHandler.cs:197-200`, the call closing at `:235`, and
-  `.../ModerateQuestionHandler.cs:157`, while the two ADC domain-event handlers pass their own
-  `cancellationToken`, `.../SessionQuestionUpvoteChangedHandler.cs:84` and
-  `.../LivePollVoteChangedHandler.cs:83`, and the hosted bookmark eviction processor passes its
+  `.../ModerateQuestionHandler.cs:157`, while the three ADC domain-event handlers pass their own
+  `cancellationToken`, `.../SessionQuestionUpvoteChangedHandler.cs:84`,
+  `.../LivePollVoteChangedHandler.cs:83` and `.../SessionQuestionSubmittedPointsHandler.cs:102`, and the hosted bookmark eviction processor passes its
   `stoppingToken`, `.../Caching/BookmarkCacheEvictionProcessor.cs:77`).
 - **The contract is pinned by tests.** `BestEffortTests` covers the transparent success path, token
   passthrough, one-Warning-per-failure, the `operation`-tagged increment observed through a
@@ -72,8 +74,8 @@ documented exception.
   and argument validation
   (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Services/BestEffortTests.cs:15-141`).
 
-Adoption today is **twelve call sites**: six in ADC Engagement, five in Store, and the framework's own
-eviction helper. The ADC six are the
+Adoption today is **thirteen call sites**: seven in ADC Engagement, five in Store, and the framework's own
+eviction helper. The ADC seven are the
 live-channel drain worker, whose operation name is the prefix `live-channel-publish:` plus the work
 item's event name and whose own catch turns the rethrown cancellation into a quiet stop
 (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/Live/LiveChannelPublishProcessor.cs:36`,
@@ -87,7 +89,11 @@ broadcast `livepoll-results-broadcast`
 (`.../LivePolls/DomainEventHandlers/LivePollVoteChangedHandler.cs:44`, call at `:51`); and the
 cross-host cache eviction `bookmark-cache-evict-broadcast`
 (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/Caching/BookmarkCacheEvictionProcessor.cs:49`,
-call at `:62-77`, a hosted processor that drains the signal the domain-event handler raises). The Store five are a checkout display label, `checkout-customer-name`, resolved by the
+call at `:62-77`, a hosted processor that drains the signal the domain-event handler raises); and the
+question-asked points award `session-question-points-award`, which runs after the question's transaction
+commits so a failed award never fails the committed question
+(`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/Points/DomainEventHandlers/SessionQuestionSubmittedPointsHandler.cs:59`,
+call at `:82-102`). The Store five are a checkout display label, `checkout-customer-name`, resolved by the
 checkout preflight outside the transaction so an unreachable Identity leaves the name null instead of
 failing an otherwise valid checkout
 (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutPreflight.cs:77-87`,
@@ -104,22 +110,22 @@ call at `:109-115`). Four of those five are pre-commit reads rather than post-co
 create fetch runs before `base.PersistAsync` at `CreateInventoryItemHandler.cs:82`, the set fetch before
 `SaveChangesAsync` at `AdjustInventoryHandler.cs:81`): the
 contract is about what a failure is allowed to do to the caller, not about where in the handler the
-work sits. The twelfth is the framework's own multi-tag eviction helper,
+work sits. The thirteenth is the framework's own multi-tag eviction helper,
 `OutputCacheEvictionExtensions.TryEvictTagsAsync`, whose operation name is the constant prefix
 `output-cache-evict:` plus the tag being evicted
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/OutputCacheEvictionExtensions.cs:34`,
 `:78-92`). Store Catalog reaches it from seven controllers, each passing fixed low-cardinality cache
-tags: `catalog:categories` and `catalog:products` together from `Controllers/CategoriesController.cs:171`,
-`ProductsController.cs:169` and `ProductVariantsController.cs:206`, and `catalog:products` alone from
-`ProductImagesController.cs:217`, `ReviewsController.cs:320`, `ReviewModerationController.cs:162` and
-`ProductAttributesController.cs:151`.
+tags, and every one of them evicts `catalog:products` and `catalog:categories` together:
+`Controllers/CategoriesController.cs:174`, `ProductsController.cs:172`, `ProductVariantsController.cs:206`,
+`ProductImagesController.cs:221`, `ReviewsController.cs:324`, `ReviewModerationController.cs:166` and
+`ProductAttributesController.cs:154`.
 
-One swallow deliberately stays hand-rolled, and it says so in code. The framework's own
+One swallow deliberately stays hand-rolled. The framework's own
 `OutputCacheEvictionHandler` hand-rolls the same swallow-log-count shape against
 `cache.eviction.failed` on the `MMCA.Common.OutputCache` meter
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/OutputCacheEvictionHandler.cs:51-62`): it is
 the one documented non-reuse of this helper inside the framework, and ADR-026 records the rationale
-(`026-caching-strategy.md:560-565`).
+(`026-caching-strategy.md:585-590`).
 
 Store's `AddVariantHandler` used to be the second hand-rolled case, and it now shows what the contract
 says to do when a side effect is too important to swallow: stop swallowing it. It no longer catches
@@ -128,10 +134,10 @@ anything and no longer publishes inline. After `SaveChangesAsync` populates the 
 command, `PublishProductVariantChangedInternalCommand`, carrying the `ProductId` and that
 `ProductVariantId`, with `CancellationToken.None` so the follow-up outlives a caller
 that has walked away
-(`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Products/UseCases/AddVariant/AddVariantHandler.cs:89-92`).
+(`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Products/UseCases/AddVariant/AddVariantHandler.cs:92-95`).
 The command is `ITransactional` (`AddVariantCommand.cs:25`), so the scheduler only enrolls the row and
 the transactional pipeline saves it just before the commit: the row commits with the variant
-(`AddVariantHandler.cs:76-79`, `:94-95`).
+(`AddVariantHandler.cs:77`, `:79-82`, `:97-98`).
 The scheduled row is the durable record, so a broker fault retries with backoff instead of stranding the
 variant without inventory; an inline publish left a window in which a crash between the commit and the
 publish lost the event outright, and the outbox could not help because the row only lands there once
@@ -139,7 +145,7 @@ publish lost the event outright, and the outbox could not help because the row o
 loses the event. That failure arrives as a `Result`, not an exception, and is still isolated from the
 caller's outcome (the variant is committed, and a client retry with a null SKU would create a duplicate),
 and it is still logged at **Error** with both ids, because it is the case where an admin has to create
-the inventory record by hand (`:96-97`, the `[LoggerMessage]` at `:107-110`).
+the inventory record by hand (`:99-100`, the `[LoggerMessage]` at `:110-113`).
 
 ## Rationale
 - **One policy beats five local leniencies.** Each feature record is still right about its own
@@ -163,7 +169,7 @@ the inventory record by hand (`:96-97`, the `[LoggerMessage]` at `:107-110`).
 ## Trade-offs
 - **Nothing gates use of the helper.** There is no fitness rule, analyzer or architecture test that
   fails a build for a hand-rolled `catch (Exception)` that should have been a `BestEffort` call; the
-  helper is a convention backed by review. The only inventory is a search, which is how the twelve call
+  helper is a convention backed by review. The only inventory is a search, which is how the thirteen call
   sites and the one remaining hand-rolled swallow above were enumerated.
 - **The Warning carries the operation name and the exception, nothing else.** No entity id, no
   correlation payload beyond the ambient scope. `SubmitQuestionHandler` records that cost explicitly:
@@ -199,6 +205,19 @@ rather than after the commit (`AddVariantHandler.cs:76-79`, `:94-95`). Citations
 subscription (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.Telemetry.cs:313`),
 `SubmitQuestionHandler`, `AddVariantHandler`, the controller lines, and the ADR-024, ADR-026 and
 ADR-041 cross-references.
+
+## Revision (2026-10-06)
+No decision or rationale changed; the adoption inventory is corrected again.
+- Adoption is thirteen call sites, not twelve: ADC adds the question-asked points award,
+  `session-question-points-award`
+  (`.../Points/DomainEventHandlers/SessionQuestionSubmittedPointsHandler.cs:59`, call at `:82-102`),
+  which passes its own `cancellationToken` (`:102`), so three ADC domain-event handlers do, not two.
+- All seven Store Catalog controllers now evict `catalog:products` and `catalog:categories` together;
+  none evicts `catalog:products` alone (`ReviewsController.cs:324`).
+- The hand-rolled `OutputCacheEvictionHandler` paragraph no longer claims the code itself documents
+  the non-reuse: the handler's comment justifies only the broad catch (`OutputCacheEvictionHandler.cs:58-59`).
+- Anchors re-verified against current source: the ADR-026, ADR-054 and ADR-091 cross-references,
+  `AddVariantHandler` and the seven controller lines.
 
 ## Related
 [ADR-024](024-push-notifications.md) (push delivery failure is non-fatal and recorded rather than

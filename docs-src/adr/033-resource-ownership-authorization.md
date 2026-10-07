@@ -1,7 +1,7 @@
 # ADR-033: Resource-Ownership Authorization (Row-Level + Action Filter)
 
 ## Status
-Accepted (2026-07-02, revised 2026-07-25, 2026-08-01, 2026-08-31). Revised 2026-10-01 (the fail-closed owner gate and the per-record ownership check are now framework code in `OwnershipHelper`; see Revision below).
+Accepted (2026-07-02, revised 2026-07-25, 2026-08-01, 2026-08-31, 2026-09-10). Revised 2026-10-01 (the fail-closed owner gate and the per-record ownership check are now framework code in `OwnershipHelper`; see Revision below). Revised 2026-10-06: the CSV export's fail-closed `AllowUnscopedExport` opt-in, which lets only the bypass role export an unscoped table, is now recorded in Adoption.
 
 ## Context
 ADR-020 added a permission (capability) layer over RBAC: it answers "what may this **role** do",
@@ -115,18 +115,29 @@ export streams are narrowed by the same expression rather than by a copy per act
 by `CustomerId`, `OrdersByCustomerSpecification.cs:18`), passed as `specification:
 GetOwnershipSpecification()` into each query (`OrdersController.cs:102`, `OrdersController.cs:140`,
 `OrdersController.cs:174`) and into its CSV export through a `GetExportSpecification` override
-(`OrdersController.cs:241-242`). `OrdersController` does not use the class-level filter for its
+(`OrdersController.cs:241-242`).
+The export itself fails closed on a `null` scope: `EntityControllerBase.ExportAsync` refuses with
+`Error.Forbidden` when the read specification is `null` and the controller has not opted in through
+`AllowUnscopedExport`
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:273-274`,
+`:608-613`), which defaults to `false` (`EntityControllerBase.cs:508`). Both Sales controllers opt in
+only for the bypass role, `AllowUnscopedExport => OwnershipHelper.IsAdmin(currentUserService,
+RoleNames.Admin)` (`ShoppingCartsController.cs:209`, `OrdersController.cs:249`), so an admin exports
+the whole table and a non-admin with an unresolvable claim still gets a 403. `CustomersController`
+opts in unconditionally (`CustomersController.cs:48`), because its export is already gated by
+`[HasPermission(IdentityPermissions.CustomersManage)]` and its holders list every customer unscoped.
+`OrdersController` does not use the class-level filter for its
 mutating routes; it runs an explicit per-mutation ownership check, a private `ValidateOwnershipAsync`
-(`OrdersController.cs:379-395`) that delegates to `OwnershipHelper.ValidateOwnershipAsync`
-(`OrdersController.cs:383`), which lets the bypass role through via `IsAdmin`
+(`OrdersController.cs:386-402`) that delegates to `OwnershipHelper.ValidateOwnershipAsync`
+(`OrdersController.cs:390`), which lets the bypass role through via `IsAdmin`
 (`OwnershipHelper.cs:146`). The only ownership logic the controller supplies is the existence predicate
-(`OrdersController.cs:387-389`). Its two denial branches return different statuses on purpose:
+(`OrdersController.cs:394-396`). Its two denial branches return different statuses on purpose:
 
 - **Missing owner claim** (the caller carries no `customer_id`, checked at `OwnershipHelper.cs:151-153`):
   `Error.Forbidden`, a 403 (`OwnershipHelper.cs:174-175`). Nothing was looked up, so there is no
   resource whose existence a 403 could leak; this matches the filter's own missing-claim `ForbidResult`.
 - **Owner mismatch** (the claim is present but the order is someone else's, the existence check at
-  `OrdersController.cs:387-389`): `Error.NotFound`, a 404 rather than a 403
+  `OrdersController.cs:394-396`): `Error.NotFound`, a 404 rather than a 403
   (`OwnershipHelper.cs:167-171`), so the response does not reveal that another customer's order exists.
 
 **A `null` specification means two different things, so the collection reads gate on it.** Store's two
@@ -170,9 +181,9 @@ guard that replaces the check named at each site:
 | `ShoppingCartsController.GetAllAsync` (both overloads, `:94`, `:109`) | `ShoppingCartByCustomerSpecification` through `GetReadSpecificationAsync` already narrows the rows to the caller, plus the `RequireResolvableOwner()` gate (`:100`, `:120`) |
 | `ShoppingCartsController.GetAllForLookupAsync` (`:139`) | `[HasPermission(SalesPermissions.ShoppingCartsManage)]` (`:138`) |
 | `ShoppingCartsController.ExportAsync` (`:174`) | the same `GetReadSpecificationAsync` scoping the list endpoints read, plus the `RequireResolvableOwner()` gate (`:182`) |
-| `CustomersController.GetAllAsync` (both overloads, `:53`, `:65`), `GetAllForLookupAsync` (`:82`) | `[HasPermission(IdentityPermissions.CustomersManage)]` (`:52`, `:64`, `:81`) |
-| `CustomersController.ExportAsync` (`:114`) | `[HasPermission(IdentityPermissions.CustomersManage)]` (`:113`) |
-| `CustomersController.DeleteAsync` (`:148`) | `[HasPermission(IdentityPermissions.CustomersManage)]` (`:146`, `[AllowMissingOwner]` at `:147`), so an owner cannot plain soft-delete their Customer row and skip the anonymizing erasure (ADR-005, `:140-143`) |
+| `CustomersController.GetAllAsync` (both overloads, `:56`, `:68`), `GetAllForLookupAsync` (`:85`) | `[HasPermission(IdentityPermissions.CustomersManage)]` (`:55`, `:67`, `:84`) |
+| `CustomersController.ExportAsync` (`:117`) | `[HasPermission(IdentityPermissions.CustomersManage)]` (`:116`) |
+| `CustomersController.DeleteAsync` (`:151`) | `[HasPermission(IdentityPermissions.CustomersManage)]` (`:149`, `[AllowMissingOwner]` at `:150`), so an owner cannot plain soft-delete their Customer row and skip the anonymizing erasure (ADR-005, `:143-146`) |
 
 Store states each of those guards as a capability, never as a role name: an endpoint requires what it
 does and the module's grant table decides who holds it (ADR-020).
@@ -180,9 +191,9 @@ does and the module's grant table decides who holds it (ADR-020).
 `CustomersController.CreateAsync` was inherited without its own policy and had been relying on the
 filter failing open. Deny-by-default closes that, but only incidentally, because the action happens to
 carry no owner parameter; it now states its own guard,
-`[HasPermission(IdentityPermissions.CustomersManage)]` (`CustomersController.cs:131`) beside the
-`[AllowMissingOwner]` opt-out (`CustomersController.cs:132`), matching the admin-gated create page that
-is its only caller (`CustomersController.cs:124-127`). ADC's `BookmarksController` needs no annotation:
+`[HasPermission(IdentityPermissions.CustomersManage)]` (`CustomersController.cs:134`) beside the
+`[AllowMissingOwner]` opt-out (`CustomersController.cs:135`), matching the admin-gated create page that
+is its only caller (`CustomersController.cs:127-132`). ADC's `BookmarksController` needs no annotation:
 both filtered actions bind a `[Required]` non-nullable `userId`, so model validation rejects a missing
 value before the filter runs.
 
@@ -200,7 +211,7 @@ value before the filter runs.
   `Specification<TEntity, TId>` whose `Criteria` is an EF-translatable expression
   (`Specification.cs:9`, `Specification.cs:23`), so it slots into `IEntityQueryService` alongside
   filtering, sorting, paging, and projection (and can be `And`-composed with other specs,
-  `SpecificationExtensions.cs:48`, building an `AndSpecification`, `Specification.cs:81`) rather than
+  `SpecificationExtensions.cs:54`, building an `AndSpecification`, `Specification.cs:81`) rather than
   introducing a parallel query path.
 
 ## Trade-offs
@@ -352,3 +363,24 @@ ADC's `BookmarksController.cs:85`, `:106`), the Store controller anchors, the `A
 `CustomersController.DeleteAsync` (`CustomersController.cs:145-148`), which carries
 `[HasPermission(IdentityPermissions.CustomersManage)]` and `[AllowMissingOwner]` so an owner cannot
 soft-delete their Customer row without the anonymizing erasure (ADR-005).
+
+## Revision (2026-10-06)
+An audit against the code. Enforcement behavior is unchanged; one gate the record omitted is now in it.
+
+1. **The export's unscoped opt-in is recorded.** `EntityControllerBase.ExportAsync` refuses a `null`
+   read specification with `Error.Forbidden` unless the controller overrides `AllowUnscopedExport`
+   (`EntityControllerBase.cs:273-274`, default `false` at `:508`). Store's two row-scoped controllers
+   opt in for the bypass role only (`ShoppingCartsController.cs:209`, `OrdersController.cs:249`) and
+   `CustomersController` opts in unconditionally behind its capability gate (`CustomersController.cs:48`).
+   ADC's two Q&A controllers do the same with their `Organizer` bypass role
+   (`EventQuestionAnswersController.cs:121`, `SessionQuestionAnswersController.cs:121`). Adoption now
+   states it.
+2. **Current locations for anchors recorded only in Revision 2026-10-01**: the v1.216.0 changelog entry
+   is `MMCA.Common/CHANGELOG.md:367` (under the `[1.216.0]` header at `:350`); ADC's private
+   `RequireResolvableOwner()` wrappers are at `EventQuestionAnswersController.cs:137-138` and
+   `SessionQuestionAnswersController.cs:137-138`, called at `:154`, `:172`, `:183`, `:197` in each, and
+   their `GetExportSpecification` overrides are at `:109`.
+3. Line anchors in the live sections were re-verified against current source and refreshed:
+   `OrdersController.ValidateOwnershipAsync` (`:386-402`, helper call `:390`, existence predicate
+   `:394-396`), the `CustomersController` deny-by-default table and `CreateAsync` guard, and the `And`
+   composition (`SpecificationExtensions.cs:54`).

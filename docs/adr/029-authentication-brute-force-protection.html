@@ -375,8 +375,8 @@
           cache does not aggregate an attacker hitting different replicas. The answer is the same as ADR-026:
           register a distributed cache once scaled out. Both apps do: every ADC and Store service host calls
           <code>AddCommonHybridCacheWhenRedisConfigured</code> (for example
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:133</code>,
-          <code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:101</code>), so with Redis configured
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:138</code>,
+          <code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:102</code>), so with Redis configured
           the counters run through <code>HybridCacheService.IncrementAsync</code>.</li>
           <li><strong>Normalization widens the DoS lever slightly.</strong> Collapsing every spelling onto one counter is what
           makes the lockout enforceable, and it also means an attacker no longer needs to guess the exact
@@ -457,6 +457,23 @@
           also the posture the framework already takes for the distributed request limiter,
           <code>RedisFixedWindowRateLimiter</code>, which permits the request and logs a warning on a Redis fault. The cost is that a lockout already in force is
           not enforced during the outage; the Warning log makes that window visible.</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <p>No behavior changed; this pass corrected anchors only.</p>
+          <ul>
+          <li>The Trade-offs examples of a host calling <code>AddCommonHybridCacheWhenRedisConfigured</code> now point at
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:138</code> and
+          <code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:102</code>.</li>
+          <li>The login-path order recorded in the 2026-09-07 Revision still holds (credential check, verify,
+          gate); its anchors in
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs</code> have moved and
+          now read: <code>HasStoredCredential</code> check <code>:153</code> (defined <code>:607</code>), <code>BurnPasswordVerificationCost</code> call
+          <code>:155</code> (defined <code>:615</code>, throwaway verify <code>:624</code>), password verify <code>:161</code>, failed-attempt increment
+          <code>:163</code>, <code>Auth.InvalidCredentials</code> <code>:158</code> and <code>:165</code>, <code>ValidateLoginCandidateAsync</code> gate call <code>:172</code>
+          (hook declared <code>:581</code>).</li>
+          <li>Every other live anchor (<code>ChangePasswordHandlerBase.cs</code>, <code>DependencyInjection.Caching.cs</code>,
+          <code>HybridCacheService.cs</code>, <code>PasswordHasher.cs</code>) was re-verified against current source and is
+          unchanged.</li>
+          </ul>
           <h2 id="alternatives-rejected">Alternatives rejected</h2>
           <ul>
           <li><strong>Making the failed-attempt and registration counters atomic.</strong> The increment in
@@ -497,6 +514,7 @@
             <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-03">Revision (2026-10-03)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#alternatives-rejected">Alternatives rejected</a></li>
             <li><a href="#related">Related</a></li>
             </ul>

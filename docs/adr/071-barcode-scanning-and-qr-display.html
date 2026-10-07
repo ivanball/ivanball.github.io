@@ -272,16 +272,16 @@
           <ul>
           <li><strong>Display is a component, not a capability.</strong> <code>QrCodeImage</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/Sharing/QrCodeImage.razor</code>) renders a payload as
-          an inline base64 PNG data URI through QRCoder&#39;s managed <code>PngByteQRCode</code> path (<code>:71-74</code>), so it works
-          identically on SSR, Server, WASM and MAUI with no per-head registration at all. <code>Payload</code> (<code>:15-17</code>)
-          and <code>AltText</code> (<code>:23-25</code>) are both <code>[EditorRequired]</code>, which is what keeps a generated image from
-          shipping without an accessible name; <code>PixelsPerModule</code> (default 10, clamped to at least 1 at <code>:74</code>),
+          an inline base64 PNG data URI through QRCoder&#39;s managed <code>PngByteQRCode</code> path (<code>:74-77</code>), so it works
+          identically on SSR, Server, WASM and MAUI with no per-head registration at all. <code>Payload</code> (<code>:18-20</code>)
+          and <code>AltText</code> (<code>:26-28</code>) are both <code>[EditorRequired]</code>, which is what keeps a generated image from
+          shipping without an accessible name; <code>PixelsPerModule</code> (default 10, clamped to at least 1 at <code>:77</code>),
           <code>ErrorCorrection</code> and <code>Class</code> cover sizing and styling. A blank payload renders nothing rather than a
-          broken image (<code>:66-69</code>), and the bitmap is memoized against the three inputs that affect it
-          (<code>:42-56</code>), so a parent re-render does not re-encode.</li>
+          broken image (<code>:69-72</code>), and the bitmap is memoized against the three inputs that affect it
+          (<code>:45-59</code>), so a parent re-render does not re-encode.</li>
           <li><strong>The error-correction level is a framework enum, not the generator&#39;s.</strong>
           <code>QrErrorCorrectionLevel</code> (<code>Components/Sharing/QrErrorCorrectionLevel.cs:9-21</code>: <code>Low</code>, <code>Medium</code> (default),
-          <code>Quartile</code>, <code>High</code>) is mapped onto QRCoder&#39;s <code>ECCLevel</code> inside the component (<code>QrCodeImage.razor:77-83</code>),
+          <code>Quartile</code>, <code>High</code>) is mapped onto QRCoder&#39;s <code>ECCLevel</code> inside the component (<code>QrCodeImage.razor:80-86</code>),
           so the package&#39;s public surface does not pin consumers to the generator that happens to back it today.</li>
           <li><strong>Scanning is one contract on the ADR-042 pattern.</strong> <code>IBarcodeScannerService</code>
           (<code>Services/Capabilities/Media/IBarcodeScannerService.cs:11-20</code>) is two members: <code>bool IsSupported</code> and
@@ -320,7 +320,7 @@
           </ul>
           <p>Packaging follows ADR-042 exactly: <code>QRCoder</code> 1.8.0 (MIT) is a <code>MMCA.Common.UI</code> dependency and
           <code>ZXing.Net.Maui.Controls</code> 0.10.4 (MIT) a <code>MMCA.Common.UI.Maui</code> one, both pinned in
-          <code>MMCA.Common/Directory.Packages.props</code> (<code>:191</code>, <code>:225</code>), and the MAUI package keeps its
+          <code>MMCA.Common/Directory.Packages.props</code> (<code>:187</code>, <code>:221</code>), and the MAUI package keeps its
           windows-job build and pack.</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
@@ -368,7 +368,7 @@
           it is functional rather than decorative: a MAUI head that forgets <code>UseCommonBarcodeScanner</code> gets the
           same behavior as a browser head. The mitigation is on the consumer, which is why ADC&#39;s check-in page
           shows its scan card only when <code>IsSupported</code> is true (<code>CheckInScan.razor:69-93</code>, <code>ScannerAvailable</code>
-          at <code>CheckInScan.razor.cs:41</code>) and always renders a manual attendee search beside it on every head
+          at <code>CheckInScan.razor.cs:46</code>) and always renders a manual attendee search beside it on every head
           (<code>CheckInScan.razor:113-118</code>, ADR-072), so the task stays completable when the scanner is absent.</li>
           <li><strong>Opt-in means the platform matrix is not uniform.</strong> A Windows or Mac Catalyst MAUI head that calls
           <code>UseCommonBarcodeScanner</code> still reports <code>IsSupported == false</code>, so &quot;registered&quot; and &quot;usable&quot; are two
@@ -390,6 +390,16 @@
           behind <code>ScannerAvailable =&gt; Scanner.IsSupported</code> (<code>CheckInScan.razor:69-93</code>,
           <code>CheckInScan.razor.cs:41</code>) and renders the manual search on every head (<code>CheckInScan.razor:113-118</code>),
           rather than substituting the manual path for the scanner.</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <p>No decision, rationale or behavior changed; versions are unchanged (QRCoder 1.8.0,
+          ZXing.Net.Maui.Controls 0.10.4).</p>
+          <ul>
+          <li>The package pins recorded in the 2026-10-01 revision now sit at
+          <code>MMCA.Common/Directory.Packages.props:187</code> (QRCoder) and <code>:221</code> (ZXing.Net.Maui.Controls), and
+          <code>ScannerAvailable =&gt; Scanner.IsSupported</code> at <code>CheckInScan.razor.cs:46</code>.</li>
+          <li>Anchors in the live sections were re-verified against current source and re-anchored
+          (<code>QrCodeImage.razor</code>, <code>Directory.Packages.props</code>, <code>CheckInScan.razor.cs</code>).</li>
+          </ul>
           <h2 id="related">Related</h2>
           <p><a href="042-device-capability-abstraction.html">ADR-042</a> (the capability pattern this extends: contract in
           <code>MMCA.Common.UI</code>, native implementation in <code>MMCA.Common.UI.Maui</code>, override after <code>AddUIShared</code>),
@@ -415,6 +425,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

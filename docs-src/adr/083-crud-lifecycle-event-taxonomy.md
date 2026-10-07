@@ -17,6 +17,8 @@ Revised 2026-09-19: both counts were recounted from source and raised. ADC Confe
 derive `EntityChangedEvent<TId>` across the four repos (19 including the `MMCA.ECommerce` sample), and
 the shape sweep finds 35 lifecycle events across the three apps (25 in ADC, of which 18 are in
 Conference; 9 in Store; 1 in Helpdesk).
+Revised 2026-10-06: `Session` now raises `SessionChanged` from four sites (a second `Updated` from
+`UnassignRoom`), and the stale source citations were re-anchored.
 
 ## Context
 ADR-003 decides how a domain event **moves**: captured into the outbox inside `SaveChangesAsync`,
@@ -51,18 +53,19 @@ carrying a `DomainEntityState` discriminator; handlers filter on `State`.
   site in any repo raises `Unchanged`: it is the zero default, and it appears only as a negative
   `[InlineData]` case in a handler test, whose helper has to hand-build the event because no
   transition on the aggregate produces one
-  (`MMCA.ADC/Tests/Modules/Engagement/MMCA.ADC.Engagement.Application.Tests/Points/DomainEventHandlers/SessionQuestionSubmittedPointsHandlerTests.cs:79,190-191`).
+  (`MMCA.ADC/Tests/Modules/Engagement/MMCA.ADC.Engagement.Application.Tests/Points/DomainEventHandlers/SessionQuestionSubmittedPointsHandlerTests.cs:79,203-220`).
 - **`Added` from the factory, `Updated` from mutators, `Deleted` from `Delete()`.** The base's usage
   note fixes the mapping (`EntityChangedEvent.cs:10-13`), and `Session` is the canonical shape: one
-  event type, three raise sites, in
-  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/Session.cs:234` (Added, from
-  the static factory), `:296` (Updated), `:317` (Deleted, inside the soft delete), all constructing the
-  same `SessionChanged` (`.../Sessions/DomainEvents/SessionChanged.cs:13-18`).
+  event type, four raise sites, in
+  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/Session.cs:243` (Added, from
+  the static factory), `:305` (Updated, from `Update`), `:324` (Updated, from `UnassignRoom`) and `:345`
+  (Deleted, inside the `Delete` override once the base soft delete and the child cascade succeed), all
+  constructing the same `SessionChanged` (`.../Sessions/DomainEvents/SessionChanged.cs:13-18`).
 - **Handlers filter on `State`, or deliberately do not.** `SpeakerDeletedHandler` subscribes to
   `SpeakerChanged` and returns immediately unless the state is `Deleted`
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/DomainEventHandlers/SpeakerDeletedHandler.cs:29-30`),
   and the points award for asking a question does the same for `Added` on `SessionQuestionChanged`
-  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/Points/DomainEventHandlers/SessionQuestionSubmittedPointsHandler.cs:60-63`).
+  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/Points/DomainEventHandlers/SessionQuestionSubmittedPointsHandler.cs:66-70`).
   A handler that genuinely wants every transition writes no filter and logs the discriminator instead:
   `TicketChangedAuditHandler` passes `domainEvent.State` straight into its `LoggerMessage` template
   (`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Application/Tickets/DomainEventHandlers/TicketChangedAuditHandler.cs:23,28-29`).
@@ -87,7 +90,7 @@ carrying a `DomainEntityState` discriminator; handlers filter on `State`.
   and stops on `Deleted`
   (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Inventory/DomainEventHandlers/ProductVariantChangedHandler.cs:56-59`).
   Because integration-event shapes are snapshot-frozen by an architecture test
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.Events.cs:45-58`),
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.Events.cs:40-57`),
   `State:ProductChangeState` is a committed line of the wire contract
   (`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Contracts/IntegrationEventContractTests.cs:12`, and
   the sibling `ProductInfoChanged` entry at `:11` carries it too),
@@ -208,6 +211,16 @@ total number of records deriving the base to **19**.
   conformant with this record, not a smell.
 - **A past-tense naming fitness rule in `EventConventionTestsBase`.** Rejected alongside the rename,
   and for a stronger reason: the rule would fail the build on the convention this ADR accepts.
+
+## Revision (2026-10-06)
+- `Session` has four `SessionChanged` raise sites, not three: `UnassignRoom` (O-60) raises a second
+  `Updated` (`Session.cs:324`) alongside `Update` (`:305`); still one event type, and every `Updated`
+  comes from a mutator. The `Deleted` raise now sits in the `Delete` override after the base soft
+  delete and the child cascade (`:345`).
+- Source citations re-verified against current code and re-anchored: `Session.cs` (`:243`, `:305`,
+  `:324`, `:345`), the hand-built `Unchanged` test helper (`SessionQuestionSubmittedPointsHandlerTests.cs:79,203-220`),
+  the `Added` guard (`SessionQuestionSubmittedPointsHandler.cs:66-70`) and the contract snapshot builder
+  (`ArchitectureRules.Events.cs:40-57`).
 
 ## Related
 ADR-003 (how these events are captured and dispatched; this ADR decides only their shape), ADR-010

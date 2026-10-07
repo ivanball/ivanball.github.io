@@ -278,6 +278,10 @@
           <code>AddContentPolicyGuardrail(configuration)</code> validates every configured pattern at startup and
           registers one singleton under both <code>IChatGuardrail</code> and <code>IChatRequestRedactor</code>, so registering it
           satisfies <code>Ai:RequireGuardrail</code> on its own (released in v1.208.0).</p>
+          <p>Revised 2026-10-01: the current-state sections match the code (ADC&#39;s full adoption, the v1.213.0
+          hardening, refreshed citations).</p>
+          <p>Revised 2026-10-06: the Anthropic SDK pin reads 12.53.0, and every live-section anchor is re-verified
+          against current source.</p>
           <h2 id="context">Context</h2>
           <p>Rubric section 16, AI-Native Application Architecture, asks one question of a product feature that
           calls a language model: is that dependency governed like any other external system, meaning
@@ -287,21 +291,21 @@
           one does (<code>:473</code>).</p>
           <p>Exactly one feature does. ADC&#39;s organizer-facing session scoring takes a constructor-injected
           <code>IChatClient</code> and <code>PromptContract</code>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/SessionScoringService.cs:46-49</code>),
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/SessionScoringService.cs:47-50</code>),
           and <a href="111-ai-session-scoring-governance.html">ADR-111</a> records the governance it grew: a port in
           Application, a pinned model, a dated prompt version, a golden-replay evaluation gate that hashes the
           rendered prompt per version, delimited and redacted input, a schema-constrained response, and a
           budgeted spend alert. What the module owns is what only session scoring knows: the prompt text, the
-          redaction rules and the response schema. What it does not own is the call. The model id (<code>:63</code>) is
-          folded into the prompt contract (<code>:92-93</code>), the 256-token output ceiling is one named constant
-          (<code>:70</code>) set on the request (<code>:115</code>) and clamped again by <code>Ai:MaxOutputTokens</code> at the framework
-          boundary, <code>ModelId</code> (<code>:73</code>) and <code>PromptVersion</code> (<code>:84</code>) read through the injected contract rather
+          redaction rules and the response schema. What it does not own is the call. The model id (<code>:64</code>) is
+          folded into the prompt contract (<code>:93-94</code>), the 256-token output ceiling is one named constant
+          (<code>:71</code>) set on the request (<code>:116</code>) and clamped again by <code>Ai:MaxOutputTokens</code> at the framework
+          boundary, <code>ModelId</code> (<code>:74</code>) and <code>PromptVersion</code> (<code>:85</code>) read through the injected contract rather
           than standing as independent literals, nothing in the module constructs an <code>HttpClient</code> for Anthropic
           (<code>MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:36-50</code>), and Infrastructure is the only
           layer that names the package (<code>MMCA.ADC.Conference.Infrastructure.csproj:19</code>, reason at <code>:15-18</code>).
           Token counters come off the framework meter <code>MMCA.Common.AI</code> rather than a meter named for the
-          feature (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:153</code>, meter registration
-          at <code>:171-173</code>). That division is the whole point of this record: ADR-111 names the alternative in
+          feature (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:154</code>, meter registration
+          at <code>:173-174</code>). That division is the whole point of this record: ADR-111 names the alternative in
           its own trade-offs, where one feature, one provider and one model leave no general model-calling
           abstraction, so a second AI feature inherits the conventions by imitation rather than by
           construction. ADC scored M2/I5 on section 16 in the 2026-09-04 cycle, before the package existed,
@@ -330,7 +334,7 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.AI/MMCA.Common.AI.csproj:11</code>) for the hosting environment,
           the distributed cache, the configuration binder and the options validation pipeline, plus exactly
           one runtime package: <code>Microsoft.Extensions.AI</code> (<code>:30</code>), pinned at 10.10.0
-          (<code>MMCA.Common/Directory.Packages.props:108</code>). The csproj states the reason in place
+          (<code>MMCA.Common/Directory.Packages.props:104</code>). The csproj states the reason in place
           (<code>MMCA.Common.AI.csproj:15-29</code>): everything the package governs is expressed in
           <code>Microsoft.Extensions.AI</code> primitives, so it needs nothing from Domain, Application or
           Infrastructure, must stay installable by a host that has taken none of them, and must not pin a
@@ -342,11 +346,11 @@
           an ungoverned <code>IChatClient</code> (<code>:34</code>). Two adapters ship, each one factory and one registration
           call: <code>MMCA.Common.AI.Anthropic</code> (<code>AnthropicAiProviderFactory.cs:14</code>, name at <code>:17</code>, the SDK&#39;s own
           <code>AsIChatClient</code> at <code>:48</code>, <code>AddAnthropicAiProvider()</code> at <code>DependencyInjection.cs:26</code>) over the
-          official Anthropic SDK (<code>MMCA.Common.AI.Anthropic.csproj:13</code>, pinned at 12.52.0,
-          <code>Directory.Packages.props:115</code>), and <code>MMCA.Common.AI.OpenAI</code> (<code>OpenAiProviderFactory.cs:18</code>, name
+          official Anthropic SDK (<code>MMCA.Common.AI.Anthropic.csproj:13</code>, pinned at 12.53.0,
+          <code>Directory.Packages.props:111</code>), and <code>MMCA.Common.AI.OpenAI</code> (<code>OpenAiProviderFactory.cs:18</code>, name
           at <code>:21</code>, <code>GetChatClient(model).AsIChatClient()</code> at <code>:49-51</code>, <code>AddOpenAiProvider()</code> at
           <code>DependencyInjection.cs:26</code>) over <code>Microsoft.Extensions.AI.OpenAI</code> and the official OpenAI SDK
-          (<code>MMCA.Common.AI.OpenAI.csproj:13-14</code>, pinned at <code>Directory.Packages.props:120-121</code>).
+          (<code>MMCA.Common.AI.OpenAI.csproj:13-14</code>, pinned at 10.10.1 and 2.14.0, <code>Directory.Packages.props:116-117</code>).
           <code>Ai:Provider</code> is a plain string (<code>AiSettings.cs:55</code>) matched case-insensitively against the
           registered factory names (<code>Providers/AiProviderValidator.cs:41-42</code>), and
           <code>CreateProviderChatClient</code> (<code>DependencyInjection.cs:239</code>) asks the match to build the client
@@ -391,47 +395,47 @@
           </li>
           <li><p><strong>What a call may do is configuration, and the outermost client enforces it.</strong> <code>BoundedChatClient</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.AI/Chat/BoundedChatClient.cs:65</code>) clamps <code>MaxOutputTokens</code>
-          down to <code>Ai:MaxOutputTokens</code> while leaving a smaller caller number alone (<code>:185-187</code>), sends every
-          request out naming <code>Ai:Model</code> and refuses one that names a different model (<code>:205-220</code>, the
-          refusal at <code>:210-214</code>), runs every call under a token linked to the caller&#39;s own and cancelled
-          after <code>Ai:Timeout</code> (<code>:270-275</code>, the streaming path covered for the whole stream at <code>:138-145</code>),
+          down to <code>Ai:MaxOutputTokens</code> while leaving a smaller caller number alone (<code>:197-199</code>), sends every
+          request out naming <code>Ai:Model</code> and refuses one that names a different model (<code>:215-230</code>, the
+          refusal at <code>:217-224</code>), runs every call under a token linked to the caller&#39;s own and cancelled
+          after <code>Ai:Timeout</code> (<code>:280-285</code>, the streaming path covered for the whole stream at <code>:138-145</code>),
           and refuses a request whose ESTIMATED input exceeds <code>Ai:PerCallInputTokenBudget</code> before it reaches
-          the provider (<code>:277-292</code>). The estimate asks the pipeline for an <code>IAiTokenEstimator</code>
+          the provider (<code>:287-302</code>). The estimate asks the pipeline for an <code>IAiTokenEstimator</code>
           (<code>Chat/IAiTokenEstimator.cs:14</code>) and otherwise counts four characters to the token
-          (<code>BoundedChatClient.cs:178</code>). Caller options are cloned, never mutated (<code>:183</code>). Pinning the model
+          (<code>BoundedChatClient.cs:178</code>). Caller options are cloned, never mutated (<code>:195</code>). Pinning the model
           here is what makes <code>PromptContract.Model</code> mean the same thing on an adapter that honors a
           per-request override and one that binds the model at construction
           (<code>OpenAiProviderFactory.cs:27-32</code>).</p>
           </li>
           <li><p><strong>Tools are off by default, and &quot;on&quot; means a policy said yes.</strong> While <code>Ai:AllowTools</code> is false,
-          tools and the tool mode are stripped from the request (<code>BoundedChatClient.cs:189-193</code>). While it
-          is true, <code>FilterTools</code> (<code>:231-268</code>) offers a tool only when EVERY registered <code>IChatToolPolicy</code>
-          (<code>Guardrails/IChatToolPolicy.cs:23</code>) returns <code>Allowed</code> (<code>BoundedChatClient.cs:251</code>), so policies
+          tools and the tool mode are stripped from the request (<code>BoundedChatClient.cs:201-205</code>). While it
+          is true, <code>FilterTools</code> (<code>:241-278</code>) offers a tool only when EVERY registered <code>IChatToolPolicy</code>
+          (<code>Guardrails/IChatToolPolicy.cs:23</code>) returns <code>Allowed</code> (<code>BoundedChatClient.cs:261</code>), so policies
           compose by intersection and a new concern can only ever remove tools; <code>Denied</code> is the enum&#39;s zero
           value (<code>Guardrails/ToolAuthorization.cs:13</code>), so a policy that forgets to answer refuses. A tool
           that marks itself consequential (<code>Guardrails/ChatToolPolicy.cs:30</code>) clears one more bar: the
           request has to name it in the confirmed list (<code>:41</code>, read at <code>:76-97</code>, checked at
-          <code>BoundedChatClient.cs:259</code>), per request and never per session. With no policy registered every
-          tool is stripped (<code>:241-244</code>), so the layer fails closed, and that combination is refused at
+          <code>BoundedChatClient.cs:269</code>), per request and never per session. With no policy registered every
+          tool is stripped (<code>:251-254</code>), so the layer fails closed, and that combination is refused at
           registration instead (<code>DependencyInjection.cs:219-226</code>).</p>
           </li>
           <li><p><strong>A host that inspects nothing does not start.</strong> <code>GuardrailChatClient</code>
           (<code>Chat/GuardrailChatClient.cs:31</code>) runs every registered <code>IChatRequestRedactor</code>
           (<code>Guardrails/IChatRequestRedactor.cs:25</code>) over the materialized messages first (<code>:126-135</code>), and
           the redacted list is what the guardrails inspect and what the provider is sent (<code>:68</code>, <code>:95</code>).
-          Then every <code>IChatGuardrail</code> (<code>Chat/IChatGuardrail.cs:20</code>) inspects the request (<code>:27</code>), the
-          buffered response (<code>:37</code>) and, on the streamed path, each update BEFORE it is yielded
+          Then every <code>IChatGuardrail</code> (<code>Chat/IChatGuardrail.cs:21</code>) inspects the request (<code>:28</code>), the
+          buffered response (<code>:38</code>) and, on the streamed path, each update BEFORE it is yielded
           (<code>InspectStreamedUpdateAsync</code>, a default interface member that allows so an implementation written
-          earlier keeps compiling, <code>:56-59</code>; the per-update loop at <code>GuardrailChatClient.cs:99-116</code>), with
+          earlier keeps compiling, <code>:57-60</code>; the per-update loop at <code>GuardrailChatClient.cs:99-116</code>), with
           the first block throwing <code>ChatGuardrailException</code>. <code>Ai:RequireGuardrail</code> defaults to true
           (<code>AiSettings.cs:117</code>), and an enabled host that registered neither a guardrail nor a redactor is
           refused at registration with the one-line fix in the message
           (<code>DependencyInjection.cs:208-217</code>, both refusals in <code>RefuseAnUngovernedHost</code> at <code>:202</code>). The
           framework ships two content policies that answer that refusal on their own. The first,
-          <code>PiiRedactionGuardrail</code> (<code>Guardrails/PiiRedactionGuardrail.cs:39</code>), removes email addresses and
+          <code>PiiRedactionGuardrail</code> (<code>Guardrails/PiiRedactionGuardrail.cs:41</code>), removes email addresses and
           North American phone numbers from every outgoing message, including reasoning text, string tool
-          results and the string arguments of tool calls (<code>:70-80</code>, <code>:105-123</code>, <code>:125</code>), leaves the
-          application&#39;s own <code>Instructions</code> alone (<code>:34-37</code>), and is registered as one singleton under both
+          results and the string arguments of tool calls (<code>:72-82</code>, <code>:109-128</code>, <code>:137</code>), leaves the
+          application&#39;s own <code>Instructions</code> alone (<code>:36-38</code>), and is registered as one singleton under both
           contracts by <code>AddPiiRedactionGuardrail()</code>
           (<code>Guardrails/GuardrailServiceCollectionExtensions.cs:33</code>, <code>:37-41</code>).
           Contact details are one of the two judgements the framework is willing to make for every
@@ -460,8 +464,8 @@
           <code>AddContentPolicyGuardrail(IConfiguration)</code> (<code>GuardrailServiceCollectionExtensions.cs:62</code>)
           registers one singleton under both interfaces (<code>:72-76</code>), so registering it satisfies
           <code>Ai:RequireGuardrail</code> exactly as the PII policy does. <code>PiiRedactionGuardrail</code> ships from
-          MMCA.Common v1.207.0 and <code>ContentPolicyGuardrail</code> from v1.208.0 (<code>MMCA.Common/CHANGELOG.md:402</code>,
-          <code>:381</code>).</p>
+          MMCA.Common v1.207.0 and <code>ContentPolicyGuardrail</code> from v1.208.0 (<code>MMCA.Common/CHANGELOG.md:773</code>,
+          <code>:727</code>).</p>
           </li>
           <li><p><strong>The configuration surface is one section, validated, and the switch is the registration.</strong>
           <code>AiSettings</code> (<code>MMCA.Common/Source/Core/MMCA.Common.AI/AiSettings.cs:22</code>) binds <code>Ai</code> (<code>:25</code>) and
@@ -498,7 +502,7 @@
           (<code>:57-62</code>); and <code>PromptContractPinTestsBase</code> (<code>PromptContractPinTestsBase.cs:25</code>), whose two
           facts fail a contract with no recorded hash (<code>:39</code>) and a recorded hash that no longer matches
           (<code>:60</code>), against a pin file the subclass names (<code>:36</code>). The package takes the governed package
-          and no vendor SDK (<code>MMCA.Common.AI.Testing.csproj:33</code>, reason at <code>:23-31</code>). The framework then
+          and no vendor SDK (<code>MMCA.Common.AI.Testing.csproj:35</code>, reason at <code>:25-33</code>). The framework then
           subclasses both bases over a reference contract nobody deploys
           (<code>MMCA.Common/Tests/Core/MMCA.Common.AI.Tests/Evaluation/ReferencePrompts.cs:30</code>), a three-case
           corpus (<code>ReferenceGoldenReplayTests.cs:17</code>, cases at <code>:20</code>) and a pin file
@@ -570,7 +574,7 @@
           false, a feature resolves the client with <code>GetService</code> and holds a nullable dependency: ADC&#39;s
           registration does exactly that and its scoring service takes <code>IChatClient?</code>
           (<code>MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:36-50</code>,
-          <code>SessionScoringService.cs:47</code>). The disabled path is a branch the consumer writes, not a flag the
+          <code>SessionScoringService.cs:48</code>). The disabled path is a branch the consumer writes, not a flag the
           framework reads for it.</li>
           <li><strong>A provider is now two references and a name, not one.</strong> A host has to add the adapter package
           beside the governed one and call its registration method; the governed package cannot fall back to
@@ -580,13 +584,13 @@
           <li><strong>Spend is queried under framework names, and the <code>provider</code> dimension changed value.</strong> ADC&#39;s token
           counters report on <code>MMCA.Common.AI</code> under the framework&#39;s counter names, so the App Insights spend
           alert and any saved query key on those rather than on a per-service meter
-          (<code>MMCA.ADC.Conference.Service/Program.cs:171-173</code>). Reading the tag from the client&#39;s metadata also
+          (<code>MMCA.ADC.Conference.Service/Program.cs:173-174</code>). Reading the tag from the client&#39;s metadata also
           moves the value from <code>Anthropic</code> to <code>anthropic</code>, which a saved query has to follow in the same
-          release (<code>MMCA.Common/UPGRADING.md:230-232</code>).</li>
+          release (<code>MMCA.Common/UPGRADING.md:501-503</code>).</li>
           <li><strong>Two defaults can now refuse a host that used to start.</strong> <code>Ai:RequireGuardrail</code> true and
           <code>Ai:AllowTools</code> with no <code>IChatToolPolicy</code> are both startup failures, and pinning the model turns a
           <code>PromptContract</code> that disagrees with <code>Ai:Model</code> into a refused call
-          (<code>MMCA.Common/UPGRADING.md:234-245</code>). That is the intended direction, and it is a breaking one.</li>
+          (<code>MMCA.Common/UPGRADING.md:505-516</code>). That is the intended direction, and it is a breaking one.</li>
           <li><strong>The input budget is an estimate, and says so.</strong> It reads message text plus instructions only, so
           images, tool schemas, provider-side additions and non-Latin scripts are under-counted
           (<code>BoundedChatClient.cs:52-58</code>). It is a runaway guardrail with headroom, never a billing figure.
@@ -596,7 +600,7 @@
           (<code>DependencyInjection.cs:36-39</code>). The provider span is absent on a hit, so the two are
           distinguishable, but a spend graph read without that context over-reports.</li>
           <li><strong>The framework ships two content policies, and both are narrow.</strong> Contact-detail redaction
-          (<code>PiiRedactionGuardrail.cs:39</code>) and the injection and blocked-response policy
+          (<code>PiiRedactionGuardrail.cs:41</code>) and the injection and blocked-response policy
           (<code>ContentPolicyGuardrail.cs:64</code>) are shipped because neither judgement varies by application: a
           phone number is never evidence for anything a model is asked, and an imperative aimed at the model
           is never the input&#39;s own argument. The built-in marker list stays deliberately small (eight
@@ -627,20 +631,20 @@
           </ul>
           <h2 id="consequences">Consequences</h2>
           <ul>
-          <li><strong>ADC&#39;s <code>SessionScoringService</code> runs on <code>IChatClient</code></strong> (<code>SessionScoringService.cs:46-49</code>). The
+          <li><strong>ADC&#39;s <code>SessionScoringService</code> runs on <code>IChatClient</code></strong> (<code>SessionScoringService.cs:47-50</code>). The
           port <code>IAiScoringService</code> stays, <code>PromptVersion</code> stays and keeps being persisted with every score,
           and the two-tier evaluation gate stays. The module holds no hand-written provider request, no
           free-standing model literal and no per-service meter; its output ceiling is one named constant
-          (<code>:70</code>) that <code>Ai:MaxOutputTokens</code> clamps again.</li>
+          (<code>:71</code>) that <code>Ai:MaxOutputTokens</code> clamps again.</li>
           <li><strong>Upgrading across this release is a mapped change, not a silent one.</strong>
-          <code>MMCA.Common/UPGRADING.md:200-248</code> carries the old-to-new table (the removed <code>AiProvider</code> enum, the
+          <code>MMCA.Common/UPGRADING.md:471-520</code> carries the old-to-new table (the removed <code>AiProvider</code> enum, the
           <code>string? configuredProvider</code> constructor, the factory), the four mechanical steps for a host on the
           Anthropic provider, the <code>provider</code> tag casing change and the two new defaults.</li>
           <li><strong>ADC runs on the adapter package, the shipped guardrails and the harness.</strong> The Conference module
           references <code>MMCA.Common.AI</code> alone (<code>MMCA.ADC.Conference.Infrastructure.csproj:19</code>); the host
           references the adapter (<code>MMCA.ADC.Conference.Service.csproj:34</code>) and calls
-          <code>AddAnthropicAiProvider()</code> (<code>MMCA.ADC.Conference.Service/Program.cs:140</code>),
-          <code>AddConferenceAiGuardrails(configuration)</code> (<code>:151</code>) and <code>AddMmcaChatClient</code> (<code>:153</code>).
+          <code>AddAnthropicAiProvider()</code> (<code>MMCA.ADC.Conference.Service/Program.cs:141</code>),
+          <code>AddConferenceAiGuardrails(configuration)</code> (<code>:152</code>) and <code>AddMmcaChatClient</code> (<code>:154</code>).
           <code>AddConferenceAiGuardrails</code> (<code>MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:85</code>)
           registers <code>AddPiiRedactionGuardrail()</code> (<code>:95</code>), <code>AddContentPolicyGuardrail(configuration)</code> (<code>:96</code>)
           and the module&#39;s own <code>SessionScoreResponseGuardrail</code> (<code>:99</code>). The golden suite runs on the shipped
@@ -673,6 +677,20 @@
           <code>GuardrailServiceCollectionExtensions</code>, <code>ContentPolicyGuardrail</code> (markers at <code>:77-87</code>),
           <code>ReplayChatClient</code>, the <code>[1.207.0]</code> block of <code>MMCA.Common/UPGRADING.md</code> (<code>:200-248</code>) and the
           Anthropic SDK pin (12.52.0).</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <ul>
+          <li>The official Anthropic SDK pin is 12.53.0 (<code>MMCA.Common/Directory.Packages.props:111</code>), not 12.52.0;
+          decision item 2 now also states the OpenAI adapter&#39;s pins (<code>Microsoft.Extensions.AI.OpenAI</code> 10.10.1
+          and <code>OpenAI</code> 2.14.0, <code>:116-117</code>). No decision, rationale or trade-off changed.</li>
+          <li>The PII and content-policy release entries now point at the specific CHANGELOG lines
+          (<code>MMCA.Common/CHANGELOG.md:773</code>, <code>:727</code>); the v1.213.0 hardening recorded in the 2026-10-01
+          revision sits at <code>CHANGELOG.md:505</code>, <code>:506</code> and <code>:516</code>, and the PII content switch at
+          <code>PiiRedactionGuardrail.cs:109-128</code>.</li>
+          <li>Anchors re-verified against current source: the <code>Directory.Packages.props</code> pins,
+          <code>BoundedChatClient</code>, <code>IChatGuardrail</code>, <code>PiiRedactionGuardrail</code>, <code>MMCA.Common.AI.Testing.csproj</code>,
+          the <code>[1.207.0]</code> block of <code>MMCA.Common/UPGRADING.md</code> (<code>:471-520</code>), ADC&#39;s <code>SessionScoringService</code>
+          and the Conference host&#39;s <code>Program.cs</code>.</li>
+          </ul>
           <h2 id="related">Related</h2>
           <p><a href="111-ai-session-scoring-governance.html">ADR-111</a> (the record this one extends: every scoring-specific
           rule, the prompt-change protocol, the golden and live evaluation tiers, the input and output
@@ -706,6 +724,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#consequences">Consequences</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

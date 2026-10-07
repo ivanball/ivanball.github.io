@@ -30,19 +30,19 @@ applications soft-delete: entities set `IsDeleted` and global query filters excl
 ([ADR-005](005-soft-delete-vs-erasure.md)), so at runtime today no cascade ever fires from ordinary
 application code. The genuine hard deletes are narrow and deliberate: the framework's own cleanup
 jobs against leaf tables (audit trail retention at
-`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailCleanupJob.cs:161-163`,
-refresh sessions at `.../Persistence/Auth/RefreshSessionCleanupService.cs:124`, permission grants at
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailCleanupJob.cs:158-161`,
+refresh sessions at `.../Persistence/Auth/RefreshSessionCleanupService.cs:127`, permission grants at
 `.../Persistence/Auth/EFPermissionGrantStore.cs:134-136`, internal commands at
-`.../Persistence/InternalCommands/Administration/InternalCommandAdministration.cs:223-225` and
-`.../Persistence/InternalCommands/Administration/InternalCommandCleanupService.cs:118` and `:153`,
-outbox messages at `.../Persistence/Outbox/Administration/OutboxCleanupService.cs:110`, `:166` and
-`:182`), ADC's session-score replacement
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/SessionScoringRunner.cs:155`),
+`.../Persistence/InternalCommands/Administration/InternalCommandAdministration.cs:218-221` and
+`.../Persistence/InternalCommands/Administration/InternalCommandCleanupService.cs:112` and `:147`,
+outbox messages at `.../Persistence/Outbox/Administration/OutboxCleanupService.cs:105`, `:161` and
+`:177`), ADC's session-score replacement
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/SessionScoringRunner.cs:170`),
 and Store's product image blob removal
 (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Infrastructure/Services/ProductImageStorageService.cs:101`
 and `:124`), which removes `ProductImageData` rows through the change tracker; the audit interceptor
 leaves an `EntityState.Deleted` entry as it is
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/AuditSaveChangesInterceptor.cs:87-89`),
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/AuditSaveChangesInterceptor.cs:101-102`),
 so that is a real `DELETE`.
 
 But the FK constraint is not a runtime detail. It is what the migration writes into the database, and
@@ -56,28 +56,28 @@ say we intend".
 opt-in with a stated reason, and the finished model records which of the two each foreign key is.**
 
 1. **A model-finalizing convention supplies the default.** `RestrictDeleteByDefaultConvention`
-   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Conventions/RestrictDeleteByDefaultConvention.cs:41`)
-   walks every declared foreign key on the finalized model (`:72-79`) and, when the delete behavior
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Conventions/RestrictDeleteByDefaultConvention.cs:42`)
+   walks every declared foreign key on the finalized model (`:73-80`) and, when the delete behavior
    has no configuration source or has only EF's own convention as its source (`:98`), sets
-   `DeleteBehavior.Restrict` (`:100`). A behavior anybody configured, fluently or by attribute, is
-   kept exactly as configured: this convention never overrides a decision (`:105`).
+   `DeleteBehavior.Restrict` (`:101`). A behavior anybody configured, fluently or by attribute, is
+   kept exactly as configured: this convention never overrides a decision (`:106`).
 
 2. **Every foreign key is stamped with where its behavior came from.** The annotation
-   `MMCA:DeleteBehaviorSource` (`:47`) carries one of `Explicit` (`:50`), `Convention` (`:53`) or
-   `Ownership` (`:56`), so a finished model can be audited without re-running the convention.
+   `MMCA:DeleteBehaviorSource` (`:48`) carries one of `Explicit` (`:51`), `Convention` (`:54`) or
+   `Ownership` (`:57`), so a finished model can be audited without re-running the convention.
 
 3. **Ownership foreign keys are left alone.** An owned type has no identity apart from its owner and
    EF requires that cascade rather than offering it, so the convention stamps `Ownership` and moves
-   on (`:89-93`).
+   on (`:90-94`).
 
 4. **Cosmos is a no-op.** The provider has no foreign key constraints to restrict, and stamping a
    delete-behavior decision on a model that cannot enforce one would only make the audit lie
-   (`:65-68`).
+   (`:66-69`).
 
 5. **It is registered on the one base context, after the other two finalizing conventions.**
    `ApplicationDbContext.ConfigureConventions`
-   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:379`)
-   adds it at `:400`, deliberately last of the three, so it never stamps a relationship the
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:378`)
+   adds it at `:399`, deliberately last of the three, so it never stamps a relationship the
    cross-source degrade convention has already removed. Because there is one context class per engine
    over one abstract base ([ADR-006](006-database-per-service.md)), that single registration reaches
    every module, every database and every repo.
@@ -165,6 +165,19 @@ current lines: `AuditTrailCleanupJob.cs:161-163`, `EFPermissionGrantStore.cs:134
 `ApplicationDbContext.ConfigureConventions` at `ApplicationDbContext.cs:379` with the registration at
 `:400`, still last after the cross-source degrade (`:388`) and soft-delete unique index (`:393`)
 conventions.
+
+## Revision (2026-10-06)
+No decision, rationale or trade-off changed; the convention, its registration order and every cited
+hard delete behave as recorded.
+- Anchors re-verified against current source and refreshed in the live sections:
+  `RestrictDeleteByDefaultConvention.cs` (class `:42`, walk `:73-80`, restrict `:101`, explicit stamp
+  `:106`, annotation and sources `:48`/`:51`/`:54`/`:57`, ownership `:90-94`, Cosmos `:66-69`),
+  `ApplicationDbContext.cs:378` with the registration at `:399` (degrade `:387`, soft-delete unique
+  index `:392`), `AuditTrailCleanupJob.cs:158-161`, `RefreshSessionCleanupService.cs:127`,
+  `InternalCommandAdministration.cs:218-221`, `InternalCommandCleanupService.cs:112`/`:147`,
+  `OutboxCleanupService.cs:105`/`:161`/`:177`, `SessionScoringRunner.cs:170`, and
+  `AuditSaveChangesInterceptor.cs:101-102` (the `Deleted` case falls through to the default
+  pass-through). Test-file and remaining anchors were re-checked and are unchanged.
 
 ## Related
 [ADR-006](006-database-per-service.md) (one context class per engine over one abstract base, which is

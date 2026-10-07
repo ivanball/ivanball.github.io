@@ -364,6 +364,18 @@
           <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:183</code>)
           still returns every state to a caller who passes that check.</li>
           </ol>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <p>No content change: the channel model, the per-user connection cap and its default are as recorded
+          on 2026-09-07. Two anchors recorded in that section have moved:</p>
+          <ul>
+          <li>The <code>MaxConnectionsPerUser</code> default of 20 is now declared at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/PushNotificationSettings.cs:46</code>
+          (its <code>Range(0, 10_000)</code> bound at <code>:45</code>).</li>
+          <li>The refusal of a connection past the cap is now in <code>NotificationHub.OnConnectedAsync</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/NotificationHub.cs:61</code>), which
+          reads the cap at <code>:63</code>, compares at <code>:69</code> and throws <code>HubException</code> at <code>:74</code>.</li>
+          </ul>
+          <p>Anchors were re-verified against current source.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -381,6 +393,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-07-24">Revision (2026-07-24)</a></li>
             <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             </ul>
           </nav>
         </aside>

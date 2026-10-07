@@ -1,7 +1,7 @@
 # ADR-125: Parameterized SQL Only, Enforced by a Fitness Gate
 
 ## Status
-Accepted (2026-09-19).
+Accepted (2026-09-19). Revised 2026-10-01: citations refreshed and MMCA.Helpdesk counted as the fourth subclassing repo. Revised 2026-10-06: the relational limit is now a conditional registration that fails at container validation, not a `NotSupportedException` on the first statement.
 
 ## Context
 The supported way to read data is the repository plus specification contract
@@ -25,34 +25,37 @@ Two call sites that look identical, opposite safety, and the difference is three
 The framework also runs on four engines ([ADR-018](018-polyglot-persistence.md)), and one of them has
 no SQL command surface at all, so "raw SQL" cannot be offered as a capability every host has. Before
 v1.192.0 the landing shape for a raw scalar read was four keyless `ValReturn<T>` entities mapped to no
-table and queried by nobody (`MMCA.Common/CHANGELOG.md:1153-1159`); the pair of additions this record
-covers shipped in v1.192.0 (`MMCA.Common/CHANGELOG.md:1038`, the interface at `:1108-1117` and the
-fitness base at `:1118-1121`).
+table and queried by nobody (`MMCA.Common/CHANGELOG.md:1494-1500`); the pair of additions this record
+covers shipped in v1.192.0 (`MMCA.Common/CHANGELOG.md:1379`, the interface at `:1449-1458` and the
+fitness base at `:1459-1462`).
 
 ## Decision
 Give raw SQL exactly one door whose signature makes the unsafe call uncompilable, and ban the four raw
 EF members in module code with a fitness test rather than a guideline.
 
 - **The contract accepts `FormattableString` and nothing else.** `IRawSqlQueryExecutor`
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IRawSqlQueryExecutor.cs:23`)
-  has two entry points, `QueryAsync<T>` (`:31`) and `QuerySingleOrDefaultAsync<T>` (`:40`), both typed
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IRawSqlQueryExecutor.cs:24`)
+  has two entry points, `QueryAsync<T>` (`:31`) and `QuerySingleOrDefaultAsync<T>` (`:39`), both typed
   `FormattableString`. A concatenated statement is a `string` and does not bind to either method, so
   injection on this path is a compile error rather than a review item, and the statement text stays
   stable across calls so the server keeps its plan (`:9-15`). `T` is a scalar or an unmapped DTO whose
   properties match the selected columns by name (`:26`, `:34`). The interface lives in Application, so
   a module reaches hand-written SQL without referencing EF Core.
 - **The relational limit is explicit and named, not implied.** `EFRawSqlQueryExecutor`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/EFRawSqlQueryExecutor.cs:22`)
-  resolves the host's default physical source (`:45`) and throws `NotSupportedException` naming Cosmos
-  DB and the two alternatives when that source is not relational (`:46-52`), which is the same boundary
-  the interface documents (`IRawSqlQueryExecutor.cs:18-20`, `:30`, `:39`).
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/EFRawSqlQueryExecutor.cs:28`)
+  resolves the host's default physical source (`:50`), and it is registered only when that default
+  source is on a relational engine
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:409`, registration at
+  `:411`). A Cosmos-default host has no registration, so a service that injects the interface there
+  fails when the container is validated rather than on its first statement, which is the same boundary
+  the interface documents (`IRawSqlQueryExecutor.cs:17-22`) and the executor restates
+  (`EFRawSqlQueryExecutor.cs:19-24`).
 - **The statement joins the caller's unit of work.** The executor takes its context from the scoped
-  `IDbContextFactory` and calls EF's `Database.SqlQuery<T>` on it (`EFRawSqlQueryExecutor.cs:54`), so
+  `IDbContextFactory` and calls EF's `Database.SqlQuery<T>` on it (`EFRawSqlQueryExecutor.cs:51`), so
   the read shares the caller's connection and any transaction an `ITransactional` command opened. It is
-  registered scoped, as the next registration after the singleton `IQueryableExecutor` and deliberately not a
-  singleton itself
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:110`, the sibling at
-  `:105` and the reason at `:107-109`), and is `internal`,
+  registered scoped, by the call that follows the singleton `IQueryableExecutor` and deliberately not a
+  singleton itself (`DependencyInjection.cs:116`, the sibling at `:111` and the reason at `:113-115`;
+  the scoped registration itself at `:411`), and is `internal sealed` (`EFRawSqlQueryExecutor.cs:28`),
   so the abstraction is the only public surface.
 - **The ban is a test, not a paragraph.** `ModuleCode_UsesParameterizedSqlOnly`
   (`RawSqlConventionTestsBase.cs:66`) scans the `.cs` files of every mapped module and fails on member
@@ -72,9 +75,10 @@ EF members in module code with a fitness test rather than a guideline.
   the `SET IDENTITY_INSERT` statement has no parameterized form, because a T-SQL identifier cannot be a
   command parameter, and the schema and table names are read off EF model metadata rather than caller
   input
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:411-412`,
-  the OFF statement at `:421-422`, the schema and table read at `:470-471`). That call site also carries the matching Sonar `S2077` suppression
-  with the same reasoning (`:410`, restored at `:425`), so the exemption is stated twice and names its
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:421-423`,
+  the OFF statement at `:431-433`, both built from the identity group's schema and table at `:422` and
+  `:432`). That call site also carries the matching Sonar `S2077` suppression
+  with the same reasoning (`:420`, restored at `:435`), so the exemption is stated twice and names its
   justification in both places. MMCA.ADC declares no override, so it inherits the empty list
   (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Cqrs/RawSqlConventionTests.cs:14-16`, with
   the reason written in its class documentation at `:10-12`), and MMCA.Store declares the empty list
@@ -114,9 +118,10 @@ EF members in module code with a fitness test rather than a guideline.
   the exemption surface is a known, justified constant rather than a growing list.
 - **Relational-only is a stated limit rather than an assumption.** Under
   [ADR-018](018-polyglot-persistence.md) a host can default to Cosmos DB, which speaks its own query
-  language. Naming the engine in the exception is more useful than a provider-level error, and it
-  points at the two real options (express the read with LINQ, or move the entity to a relational
-  source).
+  language. Withholding the registration on such a host turns the limit into a container-validation
+  failure at startup, which is earlier and more useful than a provider-level error on the first
+  statement; the real options stay the same (express the read with LINQ, or move the entity to a
+  relational source).
 
 ## Trade-offs
 - **`FormattableString` blocks the accident, not the intent.** `FormattableStringFactory.Create` builds
@@ -139,10 +144,11 @@ EF members in module code with a fitness test rather than a guideline.
   projects and test projects are outside it unless a subclass adds them, which is what MMCA.Common's
   subclass does for the framework projects and MMCA.ADC's does for its Notification module.
 - **One source, the default one.** The executor resolves the host's default physical source
-  (`EFRawSqlQueryExecutor.cs:45`), so a statement that must run against a named non-default source has
+  (`EFRawSqlQueryExecutor.cs:50`), so a statement that must run against a named non-default source has
   no route through this interface today.
-- **The Cosmos refusal is discovered at runtime** (`:46-52`). Nothing at compile time tells a module
-  author that the host it will be deployed into defaults to a non-relational engine.
+- **The Cosmos refusal is discovered at host startup** (container validation,
+  `IRawSqlQueryExecutor.cs:18-21`), not at compile time. Nothing at compile time tells a module author
+  that the host it will be deployed into defaults to a non-relational engine.
 
 ## Revision (2026-10-01)
 No decision or rationale changed. Citations refreshed: the CHANGELOG anchors (`MMCA.Common/CHANGELOG.md:1038`,
@@ -152,6 +158,23 @@ metadata at `:470-471`). The repo count moves from three to four: MMCA.Helpdesk 
 `RawSqlConventionTestsBase` and leaves `AllowedFiles` empty
 (`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/ArchitectureTests.cs:186-194`), so the
 ratchet still holds one entry across all four repos.
+
+## Revision (2026-10-06)
+- The relational limit changed shape in v1.218.0 (`MMCA.Common/CHANGELOG.md:286`): the executor no
+  longer throws `NotSupportedException` naming Cosmos DB. It is registered only when the default
+  source is relational (`DependencyInjection.cs:409-411`), so a Cosmos-default host that injects
+  `IRawSqlQueryExecutor` fails at container validation. The Decision, Rationale and Trade-offs bullets
+  now say so. The v1.192.0 entry (`CHANGELOG.md:1449-1458`) still records the original exception, as a
+  dated entry should.
+- The registration is now the `AddRawSqlQueryExecutor` call after the singleton `IQueryableExecutor`
+  (`DependencyInjection.cs:116`, sibling `:111`, reason `:113-115`), not a direct scoped registration;
+  the executor is `internal sealed`.
+- The `SET IDENTITY_INSERT` statements take their schema and table from the identity group
+  (`DbContextFactory.cs:422`, `:432`); the EF metadata origin is stated in the `S2077` suppression
+  comment (`:420`).
+- All live-section anchors were re-verified against current source (executor, interface,
+  `DependencyInjection.cs`, `DbContextFactory.cs`, CHANGELOG); the 2026-10-01 anchors above are left as
+  recorded on that date.
 
 ## Related
 [ADR-055](055-repository-and-specification-contract.md) (the repository plus specification path this

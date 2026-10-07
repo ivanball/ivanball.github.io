@@ -21,8 +21,9 @@ the dissolved `Settings` folder), the shared rule library and MMCA.Common's own 
 feature folders, and the unshipped-baseline declaration figure is re-counted. See
 Revision (2026-09-03) at the end.
 Revised 2026-09-09: [ADR-115](115-strongly-typed-identifiers-opt-in.md) adds a rule family
-(`StronglyTypedIdsAreReadonlyRecordStructs`, exposed as `StronglyTypedIdTestsBase` and vacuously
-satisfied in every repo today). Revised 2026-09-11: the method, base and executed counts that entry
+(`StronglyTypedIdsAreReadonlyRecordStructs`, exposed as `StronglyTypedIdTestsBase`, subclassed by
+MMCA.Common, MMCA.ADC and MMCA.Store but not MMCA.Helpdesk, and vacuously satisfied where it runs).
+Revised 2026-09-11: the method, base and executed counts that entry
 restated are removed from this record's live text, because
 [FACTS.md](https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md) owns them (`FACTS.md:51`,
 `:54`), is generated from source by `FactsGenerator` and is drift-gated in CI, so a figure transcribed
@@ -35,6 +36,9 @@ file count, the header-only list and the unshipped declaration figure are correc
 `MMCA.Common.UI.Maui`). See Revision (2026-09-19) at the end.
 Revised 2026-10-01 (RS0026 / RS0027 move from off to error, with each already-shipped overload pair
 suppressed at its own declaration; see Revision below).
+Revised 2026-10-06: the ADR-115 rule runs in three of the four repos rather than every repo, the
+idempotency gate is exercised by MMCA.Common's own controllers, and the baseline and proto fixture
+figures are re-counted. See Revision (2026-10-06) at the end.
 
 ## Context
 The codebase rests on invariants that are easy to state and easy to erode by accident: clean-
@@ -596,6 +600,48 @@ transparent `oneof` `:183-185`. The live `FACTS.md` pointers in the Status block
 bases) and `:54` (executed); the Decision's floor citation is re-anchored in place. The dated figures
 and anchors inside the earlier revisions stay as they are, under the convention this record has used
 since 2026-09-01.
+
+## Revision (2026-10-06): the ADR-115 rule's reach, Common's own idempotency gate, re-counted baselines
+No rule family joined or left the library in this entry and no decision changed. It corrects four
+statements and lists the anchors that moved, leaving the earlier entries as written.
+
+- **The ADR-115 rule does not run in every repo.** `StronglyTypedIdTestsBase` is subclassed in
+  MMCA.Common (`Tests/Architecture/MMCA.Common.Architecture.Tests/Domain/StronglyTypedIdConventionTests.cs:12`),
+  MMCA.ADC and MMCA.Store (`Tests/Architecture/*/Domain/StronglyTypedIdTests.cs`), and MMCA.Helpdesk
+  has no subclass, so the Status clause now says three of the four. Where it runs it still passes
+  vacuously (`StronglyTypedIdConventionTests.cs:7`).
+- **The idempotency rule is not consumer-only.** MMCA.Common subclasses the base over its own map
+  (`Tests/Architecture/MMCA.Common.Architecture.Tests/Cqrs/IdempotencyConventionTests.cs:10-12`) and
+  ships concrete controllers with real POST actions, for example
+  `Source/Presentation/MMCA.Common.API/Controllers/Notifications/NotificationsController.cs:43-44`
+  (`[HttpPost]` plus `[Idempotent]`). The Section B cost bullet and the 2026-08-23 parenthetical that
+  say the rule "needs a consumer's controllers" are superseded: of the two Section B families, only the
+  proto rule is exercised against fixtures alone in Common's own build.
+- **The baselines were re-counted against v1.232.0 (`MMCA.Common/FACTS.md:14`).** The 21
+  `PublicAPI.Shipped.txt` files hold **8,254 declarations** across 8,275 non-empty lines (the
+  2026-10-01 entry read 7,881 across 7,902); only the `MMCA.Common` metapackage's shipped file is
+  header-only; all 21 `PublicAPI.Unshipped.txt` files still hold the header alone. The first 2026-08-18
+  entry's baseline passage (eighteen pairs, 5,034 shipped, 2,710 unshipped, "the surface as of this
+  branch") and its "three rules ... are off" paragraph are dated readings, superseded by the 2026-10-01
+  entry and this one, even though their wording reads as current.
+- **The proto fixtures are four, driven by seven `[Fact]`s.** `TestData/fitness-shapes.proto` joins
+  the other three and is driven by `Parser_PinsMembersBehindAnRpcBodyAndInsideOneLineBodies`
+  (`.../Contracts/ProtoContractFitnessTests.cs:114-119`); the other six cases sit at `:44`, `:52`,
+  `:66`, `:76`, `:89` and `:100`, with the class at `:14` and the pinned and drifted fixtures at `:20`
+  and `:22`.
+- **Anchors re-verified against current source.** `PublicApiAnalyzers` 5.6.0 `PackageVersion`:
+  `Directory.Packages.props:228`. In `Directory.Build.props`: the gate comment `:80-83`, the Maui
+  rationale `:85-87`, the ItemGroup `:89-96` (its exclusion condition on `:89`), the `AdditionalFiles`
+  `:94-95`, the RS0041 rationale `:22-26` with the `NoWarn` line at `:30`, `TreatWarningsAsErrors` `:7`.
+  The v1.153.0 changelog bullet: `CHANGELOG.md:3374-3380` (analyzer on `:3378`) under its heading at
+  `:3319`. `[HubMethodName]` sits at `NotificationHub.cs:127` and `:144` (constants `:36`, `:39`;
+  `Context.ConnectionAborted` passed at `:136` and `:150`); the client uses its own constants at
+  `NotificationHubService.cs:45-46`. In `ArchitectureRules.Protos.cs`: entry point `:38-41`, not-pinned
+  list `:28-31`, rpc rendering `:293-304`, `RpcLine` `:418-422`, `StreamPrefix` `:341-342`, field
+  rendering `:314-322` (`FieldLine` `:424-428`), enum values `:306-312` (`EnumValueLine` `:430-434`),
+  qualified name `:329-336`, transparent `oneof` `:271-273`. The `.editorconfig` anchors in the
+  2026-10-01 entry, the `ci.yml:161` floor, and the Status block's `FACTS.md:51` / `:54` pointers still
+  resolve.
 
 ## Related
 ADR-009 (resilience gate), ADR-010 (event-version gate), ADR-016 (MassTransit pin gate, and the

@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-105: The Published Data-Residency Claim as a Build Gate · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-09-01). Revised 2026-10-01 (region matching is a whole-token comparison rather than plain containment; see Revision below).">
+  <meta name="description" content="Accepted (2026-09-01). Revised 2026-10-01 (region matching is a whole-token comparison rather than plain containment; see Revision below). Revised…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/105-data-residency-build-gate.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-105: The Published Data-Residency Claim as a Build Gate">
-  <meta property="og:description" content="Accepted (2026-09-01). Revised 2026-10-01 (region matching is a whole-token comparison rather than plain containment; see Revision below).">
+  <meta property="og:description" content="Accepted (2026-09-01). Revised 2026-10-01 (region matching is a whole-token comparison rather than plain containment; see Revision below). Revised…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/105-data-residency-build-gate.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-105: The Published Data-Residency Claim as a Build Gate">
-  <meta name="twitter:description" content="Accepted (2026-09-01). Revised 2026-10-01 (region matching is a whole-token comparison rather than plain containment; see Revision below).">
+  <meta name="twitter:description" content="Accepted (2026-09-01). Revised 2026-10-01 (region matching is a whole-token comparison rather than plain containment; see Revision below). Revised…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"105 · The Published Data-Residency Claim as a Build Gate","item":"https://ivanball.github.io/docs/adr/105-data-residency-build-gate.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
@@ -239,10 +239,10 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-105-the-published-data-residency-claim-as-a-build-gate">ADR-105: The Published Data-Residency Claim as a Build Gate</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-09-01). Revised 2026-10-01 (region matching is a whole-token comparison rather than plain containment; see Revision below).</p>
+          <p>Accepted (2026-09-01). Revised 2026-10-01 (region matching is a whole-token comparison rather than plain containment; see Revision below). Revised 2026-10-06: the gate runs only on a code diff, so a Markdown-only pull request skips it.</p>
           <h2 id="context">Context</h2>
           <p>Both deployed apps publish a privacy policy at their repo root, and each has a section that tells a
-          user where their personal data is stored (<code>MMCA.ADC/PRIVACY.md:61</code>, <code>MMCA.Store/PRIVACY.md:54</code>).
+          user where their personal data is stored (<code>MMCA.ADC/PRIVACY.md:95-97</code>, <code>MMCA.Store/PRIVACY.md:54</code>).
           That sentence is a public commitment about a named jurisdiction, and it is one of the few parts of a
           privacy policy that a reader could in principle check against reality.</p>
           <p>It is also the part most likely to be quietly wrong. The region a policy names is typed once, by a
@@ -251,7 +251,7 @@
           the policy: ADC pins its SQL server&#39;s region to a default declared inside its deploy workflow,
           deliberately separate from where its Container Apps run, because the subscription blocks the SQL
           resource provider in the resource group&#39;s own location
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:1302-1307</code>); Store runs single-region and records that region
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:1360-1365</code>); Store runs single-region and records that region
           as a single sentence in its DR runbook (<code>MMCA.Store/infra/DISASTER-RECOVERY.md:19</code>). Either can move
           without anyone opening <code>PRIVACY.md</code>, and the failure is silent: nothing breaks, no test goes red, no
           alert fires, and the app keeps serving traffic while the published claim is false. This workspace had
@@ -319,7 +319,7 @@
           reads <code>.github/workflows/deploy.yml</code>, finds the <code>SQL_LOCATION_OVERRIDE:-</code> marker, asserts it is
           present, and takes the letters and digits that follow it as the region (<code>:20-31</code>, marker at <code>:24</code>,
           assertion at <code>:26-27</code>). That default is the region ADC&#39;s SQL server and database land in
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:1307</code>). Its denylist carries one entry, the
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:1365</code>). Its denylist carries one entry, the
           pre-migration claim that once contradicted the deployed region (<code>:16</code>, explained at <code>:9-10</code>).</p>
           </li>
           <li><p><strong>Store parses its DR runbook.</strong> <code>DataResidencyTests</code>
@@ -331,8 +331,10 @@
           copied between the two repos fails (<code>:16</code>, explained at <code>:9-10</code>).</p>
           </li>
           <li><p><strong>It runs in the ordinary fitness suite, with no credentials and no cloud calls.</strong> The rule lives
-          in each repo&#39;s <code>*.Architecture.Tests</code> project and executes on every build and pull request like
-          every other architecture rule. Unlike the deploy-time gates it never authenticates to Azure and
+          in each repo&#39;s <code>*.Architecture.Tests</code> project and executes wherever that repo&#39;s <code>CI.slnf</code> test
+          step runs, like every other architecture rule; in CI that step runs only when the diff is
+          classified as code (<code>MMCA.ADC/.github/workflows/deploy.yml:339</code>,
+          <code>MMCA.Store/.github/workflows/deploy.yml:325</code>). Unlike the deploy-time gates it never authenticates to Azure and
           never reads live resource state: both of its inputs are committed files.</p>
           </li>
           <li><p><strong>Adoption is exactly the two deployed apps.</strong> ADC and Store subclass the base; MMCA.Helpdesk
@@ -349,7 +351,7 @@
           and <code>ExtractDeployedRegion</code>, the static <code>ContainsRegionClaim</code>, and the virtual
           <code>ForbiddenResidencyClaims</code> are all in the package&#39;s
           shipped baseline
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/PublicAPI.Shipped.txt:71-73,326-327,498,519</code>),
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/PublicAPI.Shipped.txt:78-80,353-354,542,572</code>),
           so reshaping the extension point is a reviewable text diff and a breaking change under ADR-015.</p>
           </li>
           </ol>
@@ -361,14 +363,14 @@
           artifact nothing in the build was reading.</li>
           <li><strong>The truth has to be per repo, because the deployments genuinely differ.</strong> ADC&#39;s SQL region is set
           independently of its compute region for a subscription-level reason
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:1302-1306</code>), while Store&#39;s whole footprint is one region
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:1360-1364</code>), while Store&#39;s whole footprint is one region
           documented in its DR runbook. A single hardcoded extractor would have fit neither; leaving only
           <code>Map</code> and <code>ExtractDeployedRegion</code> abstract keeps the assertion, the normalization and the
           denylist shared while the parsing stays local.</li>
           <li><strong>Build time is the right time, because both inputs are committed.</strong> ADR-081&#39;s cost baseline has to
           query Azure, because the thing it guards is live resource configuration that drifts by hand. What a
           repo claims and what it declares it will provision are both files in the repo, so the cheapest and
-          earliest place to compare them is the test suite that already runs on every pull request, with no
+          earliest place to compare them is the test suite that already runs on every code pull request, with no
           OIDC, no subscription access and no deploy pipeline involvement.</li>
           <li><strong>A denylist is the only defense against the copy-paste failure.</strong> The two policies are
           structurally similar documents in sibling repos, and the realistic drift is a paragraph carried
@@ -388,7 +390,7 @@
           <li><strong>It proves the policy agrees with a file, not with Azure.</strong> Both extractors read committed text.
           A database provisioned by hand into another region, a restore into a different geography, or a
           geo-redundant backup target is invisible to this gate. In ADC&#39;s case the marker parsed is a shell
-          default (<code>MMCA.ADC/.github/workflows/deploy.yml:1307</code>), so a deploy run with <code>SQL_LOCATION_OVERRIDE</code>
+          default (<code>MMCA.ADC/.github/workflows/deploy.yml:1365</code>, override mapped from a repository variable at <code>:1311</code>), so a deploy run with <code>SQL_LOCATION_OVERRIDE</code>
           set lands the SQL server in a region the test will never see, and the test still passes.</li>
           <li><strong>A whole-token match is looser than equality.</strong> The assertion is that some whole-token occurrence
           of the region exists in the policy (<code>DataResidencyTestsBase.cs:37-38</code>, loop at <code>:64-76</code>), so a policy
@@ -405,6 +407,12 @@
           (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Governance/DataResidencyTests.cs:24</code>,
           <code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Governance/DataResidencyTests.cs:24,30-32</code>). That
           is the intended fail-loud posture, but the cost lands on an unrelated edit.</li>
+          <li><strong>A Markdown-only pull request skips the gate.</strong> Both repos classify any <code>*.md</code> path as docs-only
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:138</code>, <code>MMCA.Store/.github/workflows/deploy.yml:192</code>), and
+          the <code>CI.slnf</code> test step runs only on a code diff (ADC <code>:339</code>, Store <code>:325</code>). A pull request that edits
+          only <code>PRIVACY.md</code> therefore never runs this test, and in Store both inputs (<code>PRIVACY.md</code> and
+          <code>infra/DISASTER-RECOVERY.md</code>) are Markdown, so an edit to either alone is not checked. The drift
+          surfaces on the next pull request that touches code.</li>
           <li><strong>The suite needs the repo working tree.</strong> <code>FindRepoRoot</code> walks up for <code>{RepoToken}.slnx</code> and throws
           when it is absent (<code>ArchitectureMapBase.cs:79-91</code>), so this rule cannot run from a copied artifact
           the way an assembly-only rule can.</li>
@@ -430,6 +438,19 @@
           Decisions 5, 6, 10 and 11, the Rationale wording on abstract members and two Trade-offs are updated
           to match; the remaining edits refresh citations (<code>deploy.yml</code>, <code>PRIVACY.md</code>, <code>DataResidencyTestsBase.cs</code>,
           <code>ArchitectureMapBase.cs</code>) and replace the restated abstract-base count with a link to <code>MMCA.Common/FACTS.md</code>.</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <ul>
+          <li>Decision 9 and the Rationale no longer claim the rule runs on every pull request: the <code>CI.slnf</code>
+          test step is gated on a code diff (<code>MMCA.ADC/.github/workflows/deploy.yml:339</code>,
+          <code>MMCA.Store/.github/workflows/deploy.yml:325</code>) and any <code>*.md</code> path is classified docs-only
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:138</code>, <code>MMCA.Store/.github/workflows/deploy.yml:192</code>).</li>
+          <li>A new trade-off records that a Markdown-only pull request (a <code>PRIVACY.md</code> edit, or in Store a DR
+          runbook edit) skips the gate until the next code pull request.</li>
+          <li>The <code>ContainsRegionClaim</code> shipped-API entry cited above at <code>PublicAPI.Shipped.txt:498</code> is now at
+          <code>:542</code>.</li>
+          <li>Anchors re-verified against current source: ADC <code>deploy.yml</code> default and rationale (<code>:1360-1365</code>),
+          ADC <code>PRIVACY.md</code> (<code>:95-97</code>) and <code>PublicAPI.Shipped.txt</code> (<code>:78-80,353-354,542,572</code>).</li>
+          </ul>
           <h2 id="related">Related</h2>
           <p><a href="009-resilience-and-recovery-objectives.html">ADR-009</a> (the single-region acceptance a consumer must
           declare: this record is what keeps the published claim honest about which region that is),
@@ -461,6 +482,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

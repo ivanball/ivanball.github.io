@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-131: Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-10-01). Targeted at MMCA.Common v1.218.0, which is unreleased at the time of writing. Records the owner&#39;s TD-08 decision for Option A of…">
+  <meta name="description" content="Accepted (2026-10-01). Shipped in MMCA.Common v1.218.0. Revised 2026-10-06: v1.218.0 is released, ADC adopted it through 1.218.1, HTTP/2 WebSocket…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/131-same-origin-api-proxy.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-131: Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)">
-  <meta property="og:description" content="Accepted (2026-10-01). Targeted at MMCA.Common v1.218.0, which is unreleased at the time of writing. Records the owner&#39;s TD-08 decision for Option A of…">
+  <meta property="og:description" content="Accepted (2026-10-01). Shipped in MMCA.Common v1.218.0. Revised 2026-10-06: v1.218.0 is released, ADC adopted it through 1.218.1, HTTP/2 WebSocket…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/131-same-origin-api-proxy.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-131: Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)">
-  <meta name="twitter:description" content="Accepted (2026-10-01). Targeted at MMCA.Common v1.218.0, which is unreleased at the time of writing. Records the owner&#39;s TD-08 decision for Option A of…">
+  <meta name="twitter:description" content="Accepted (2026-10-01). Shipped in MMCA.Common v1.218.0. Revised 2026-10-06: v1.218.0 is released, ADC adopted it through 1.218.1, HTTP/2 WebSocket…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)","item":"https://ivanball.github.io/docs/adr/131-same-origin-api-proxy.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
@@ -239,11 +239,13 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-131-same-origin-api-proxy-a-backend-for-frontend-that-keeps-tokens-out-of-browser-script">ADR-131: Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-10-01). Targeted at MMCA.Common v1.218.0, which is unreleased at the time of writing.
+          <p>Accepted (2026-10-01). Shipped in MMCA.Common v1.218.0. Revised 2026-10-06: v1.218.0 is released,
+          ADC adopted it through 1.218.1, HTTP/2 WebSocket CONNECT is exempt from the CSRF header, and proxied
+          hub traffic is exempt from the UI rate limiter.
           Records the owner&#39;s TD-08 decision for Option A of the token-storage design note; the implementing
           MMCA.Common commits are 4cfb4a35 (the proxy), b542dde1 (downloads through the proxy) and fba02c29
           (refresh outcomes and the same-origin gate). Opt-in per host: a host that does not call
-          <code>AddCommonSameOriginApiProxy</code> is unchanged (<code>MMCA.Common/UPGRADING.md:149</code>). Extends
+          <code>AddCommonSameOriginApiProxy</code> is unchanged (<code>MMCA.Common/UPGRADING.md:274</code>). Extends
           <a href="022-browser-session-cookie-auth.html">ADR-022</a> (the HttpOnly session cookie, until now read only for
           server-side rendering) and <a href="051-client-auth-token-lifecycle.html">ADR-051</a> (the client token
           lifecycle) without changing <a href="088-gateway-edge-responsibilities.html">ADR-088</a> (the gateway stays the
@@ -254,9 +256,9 @@
           The client therefore authenticates with a bearer token script can read: a host that does not opt in
           still attaches the stored token to the notification hub through
           <code>options.AccessTokenProvider = _tokenStorageService.GetAccessTokenAsync</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Notifications/NotificationHubService.cs:366</code>),
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Notifications/NotificationHubService.cs:528</code>),
           and to every <code>&quot;APIClient&quot;</code> call through <code>AuthDelegatingHandler</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/AuthDelegatingHandler.cs:12</code>). One
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/AuthDelegatingHandler.cs:14</code>). One
           successful script injection can then lift a live token and use it from anywhere until it expires.</p>
           <p>The ADC token-storage design note (kept in the private ADC repository) weighed four answers to &quot;how
           does an HttpOnly credential reach a cross-origin API&quot;: A, a same-origin proxy on the UI host; B, a
@@ -269,7 +271,7 @@
           Secure outside Development, 7-day lifetime, <code>:9-10</code>), and a single-flight refresher over that cookie
           (<code>ICookieSessionRefresher</code>,
           <code>MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/CookieSessionRefresher.cs:32</code>, striped
-          per refresh token, <code>:63-72</code>).</p>
+          per refresh token, <code>:67-71</code>, <code>:87</code>).</p>
           <h2 id="decision">Decision</h2>
           <p>The UI host serves the API on its own origin and forwards to the gateway server-side, attaching the
           bearer it reads from the HttpOnly cookie. The browser never holds a token that any API accepts.</p>
@@ -296,26 +298,32 @@
           non-absolute gateway and any <code>SameSite</code> other than <code>Strict</code> or <code>Lax</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxySettingsValidator.cs:26-43</code>).</li>
           <li><strong>The request pipeline, in order.</strong> <code>SameOriginApiProxyEndpoint</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxyEndpoint.cs:26</code>)
-          runs every gate before anything is forwarded (<code>:209-235</code>):<ol>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxyEndpoint.cs:29</code>)
+          runs every gate before anything is forwarded (<code>:71</code>, <code>:232-259</code>):<ol>
           <li><strong>Same-origin gate.</strong> An <code>Origin</code> that is not exactly the host&#39;s own (scheme, host and port as the
-          app sees them; a sibling subdomain is another origin), a WebSocket upgrade with no <code>Origin</code>, or a
-          <code>Sec-Fetch-Site</code> other than <code>same-origin</code> is refused 403 <code>cross_origin_rejected</code>; <code>none</code> is
-          allowed only on a plain GET or HEAD, for a user-initiated navigation such as a pasted download
-          link (<code>:109-185</code>, own-origin comparison <code>:139-153</code>, refusal <code>:211-216</code>).</li>
+          app sees them; a sibling subdomain is another origin), a WebSocket upgrade with no <code>Origin</code>
+          (HTTP/1.1 upgrade or HTTP/2 extended <code>CONNECT</code>), or a <code>Sec-Fetch-Site</code> other than <code>same-origin</code>
+          is refused 403 <code>cross_origin_rejected</code>; <code>none</code> is allowed only on a plain GET or HEAD, for a
+          user-initiated navigation such as a pasted download link (<code>:115-207</code>, own-origin comparison
+          <code>:146-160</code>, refusal <code>:234-239</code>).</li>
           <li><strong><code>OPTIONS</code> answered locally</strong> with 204 and no CORS grant, never forwarded, so the gateway&#39;s CORS
-          policy is never consulted on the proxy&#39;s behalf (<code>:218-225</code>).</li>
+          policy is never consulted on the proxy&#39;s behalf (<code>:241-248</code>).</li>
           <li><strong>CSRF header.</strong> Every unsafe method must carry exactly <code>X-CSRF: 1</code> or gets 403
-          <code>csrf_header_required</code> (<code>:101-107</code>, <code>:227-232</code>); the constants are <code>SameOriginProxyHeaders</code>
+          <code>csrf_header_required</code> (<code>:110-113</code>, <code>:250-256</code>). The one exemption is a WebSocket opened over
+          HTTP/2, an RFC 8441 extended <code>CONNECT</code> to which a browser cannot add headers and which the
+          same-origin gate has already held to the host&#39;s own <code>Origin</code> (<code>:169-172</code>, <code>:251</code>). The
+          constants are <code>SameOriginProxyHeaders</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/SameOriginProxyHeaders.cs:11</code>,
           <code>:14</code>, <code>:17</code>).</li>
           <li><strong>Session step.</strong> A request with a session cookie is validated or refreshed through
           <code>ICookieSessionRefresher.ValidateOrRefreshAsync</code>; sign-in requests skip it so a stale session
-          cannot block a login (<code>SameOriginApiProxyEndpoint.cs:79-90</code>).</li>
-          <li><strong>Forward</strong> through YARP over HTTP/1.1 with a 100-second activity timeout, so WebSocket upgrades
-          forward as plain upgrades (<code>:34-42</code>, <code>:315-325</code>), with the bearer attached server-side.</li>
+          cannot block a login (<code>SameOriginApiProxyEndpoint.cs:85-96</code>).</li>
+          <li><strong>Forward</strong> through YARP over HTTP/1.1 with a 100-second activity timeout, so an HTTP/1.1
+          WebSocket upgrade forwards as a plain upgrade and an HTTP/2 one is turned into an HTTP/1.1 GET
+          upgrade to the gateway (<code>:40-48</code>, <code>:339-349</code>), with the bearer attached server-side.</li>
           <li><strong>One forced refresh and replay</strong> when a safe, bodiless method comes back 401 (a revoked token
-          or a rotated key); nothing with a body is re-sent (<code>:191-194</code>, <code>:289-305</code>).</li>
+          or a rotated key); nothing with a body, and no upgrade, is re-sent (<code>:98-104</code>, <code>:213-217</code>,
+          <code>:313-329</code>).</li>
           </ol>
           </li>
           <li><strong>What the forward rewrites.</strong> <code>SameOriginProxyTransformer</code> replaces any browser <code>Authorization</code> with
@@ -326,7 +334,7 @@
           browser with <code>accessToken</code> replaced by its claims-only form and <code>refreshToken</code> emptied (<code>:91</code>,
           <code>:134-143</code>); a revoke forwards the bearer and clears the cookies whatever the upstream answered
           (<code>:84-87</code>). A browser POST to the refresh path is answered by the proxy itself from the refresh
-          cookie, in the same stripped shape (<code>SameOriginApiProxyEndpoint.cs:267-287</code>, <code>:332-350</code>).</li>
+          cookie, in the same stripped shape (<code>SameOriginApiProxyEndpoint.cs:76-81</code>, <code>:291-301</code>, <code>:351-374</code>).</li>
           <li><strong>Stateless: tokens stay in the existing cookie.</strong> No server-side session store; the proxy reads and
           writes the same HttpOnly pair through <code>ISessionCookieStore</code> (<code>ISessionCookieStore.cs:20</code>, <code>:24</code>).</li>
           <li><strong>The browser holds an unsigned claims copy.</strong> <code>SessionClaimsToken.Create</code>
@@ -343,8 +351,8 @@
           <code>Unavailable</code> (5xx, 429, timeout, network failure, unreadable body) (<code>:10-23</code>), classified at
           <code>CookieSessionRefresher.cs:119-121</code>. The proxy clears the cookies and answers 401 only on
           <code>Rejected</code>; on <code>Unavailable</code> it keeps them, forwards and replays nothing, and answers 503 with the
-          upstream <code>Retry-After</code>, or 5 seconds when there is none (<code>SameOriginApiProxyEndpoint.cs:45</code>,
-          <code>:237-261</code>).</li>
+          upstream <code>Retry-After</code>, or 5 seconds when there is none (<code>SameOriginApiProxyEndpoint.cs:51</code>,
+          <code>:268-285</code>).</li>
           <li><strong>The Blazor Server circuit trades handoffs, not tokens.</strong> The circuit keeps calling the gateway
           server-to-server; it exchanges tokens with the cookies only as data-protected, purpose-bound
           handoffs that live one minute
@@ -358,13 +366,13 @@
           and <code>ApiSettings.SameOriginApiEndpoint</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/Settings/ApiSettings.cs:33</code>) then becomes the
           <code>&quot;APIClient&quot;</code> base address
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:114</code>) and adds
-          <code>SameOriginProxyRequestHandler</code> (<code>DependencyInjection.cs:131-132</code>), which removes any
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:136</code>) and adds
+          <code>SameOriginProxyRequestHandler</code> (<code>DependencyInjection.cs:153-154</code>), which removes any
           <code>Authorization</code> header and stamps <code>X-CSRF: 1</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/SameOriginProxyRequestHandler.cs:11</code>,
           <code>:18-20</code>).</li>
           <li><strong>Hubs are proxied too.</strong> On an opted-in client the notification hub connects through the proxy
-          with the CSRF header and no access-token provider (<code>NotificationHubService.cs:76</code>, <code>:360-364</code>); the
+          with the CSRF header and no access-token provider (<code>NotificationHubService.cs:97</code>, <code>:522-526</code>); the
           proxy attaches the bearer to the upgrade server-side.</li>
           <li><strong>Downloads follow the API client.</strong> <code>ApiFileDownloadButton</code> resolves its anchor base as
           <code>SameOriginApiEndpoint</code>, then <code>WasmApiEndpoint</code>, then <code>ApiEndpoint</code>
@@ -372,21 +380,21 @@
           so a top-level GET carries the cookie and the proxy supplies the bearer.</li>
           <li><strong>MAUI is excluded.</strong> Native heads keep OS SecureStorage and talk to the gateway directly; the
           <code>&quot;APIClient&quot;</code> pipeline changes only when <code>SameOriginApiEndpoint</code> is configured, which only an
-          opted-in host&#39;s WebAssembly client receives (<code>DependencyInjection.cs:95-99</code>).</li>
+          opted-in host&#39;s WebAssembly client receives (<code>DependencyInjection.cs:117-121</code>).</li>
           <li><strong>SameSite: Strict by default, Lax allowed.</strong> The framework-wide cookie default stays <code>Lax</code>
           (<code>SessionCookieSettings.cs:19</code>); opting in raises it to the proxy&#39;s <code>SessionCookieSameSite</code>,
           <code>Strict</code> unless the host chooses <code>Lax</code> (<code>SameOriginApiProxySettings.cs:68-74</code>). CSRF protection
-          rests on the header and origin gates above, not on <code>SameSite</code>. ADC&#39;s 1.218.0 adoption branch
-          (<code>feat/common-1.218.0-adoption</code>, unmerged at the time of writing) sets <code>Lax</code> so a signed-in user
-          arriving from a mailed deep link keeps the session on the first server render
-          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:47-51</code>).</li>
+          rests on the header and origin gates above, not on <code>SameSite</code>. MMCA.ADC, which adopted the proxy
+          with MMCA.Common 1.218.1 (ADC #236), sets <code>Lax</code> so a signed-in user arriving from a mailed deep
+          link keeps the session on the first server render
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:60-65</code>).</li>
           <li><strong>Gates.</strong> The behavior is pinned by <code>SameOriginApiProxyOptInTests</code> (hosts that do not opt in are
           unchanged,
           <code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.Web.Tests/SameOriginProxy/SameOriginApiProxyOptInTests.cs:21</code>),
           <code>SameOriginApiProxyCsrfTests</code> (<code>SameOriginApiProxyCsrfTests.cs:12</code>), <code>SameOriginApiProxyOriginTests</code>
           (<code>SameOriginApiProxyOriginTests.cs:14</code>), <code>SameOriginApiProxyRefreshOutcomeTests</code>
           (<code>SameOriginApiProxyRefreshOutcomeTests.cs:14</code>), <code>SameOriginApiProxyHubTests</code>
-          (<code>SameOriginApiProxyHubTests.cs:25</code>), <code>SameOriginApiProxyTokenTests</code>
+          (<code>SameOriginApiProxyHubTests.cs:29</code>), <code>SameOriginApiProxyTokenTests</code>
           (<code>SameOriginApiProxyTokenTests.cs:15</code>) and <code>SameOriginApiProxyAuthFlowTests</code>
           (<code>SameOriginApiProxyAuthFlowTests.cs:20</code>), all in the same folder.</li>
           </ul>
@@ -398,7 +406,7 @@
           once UI and API share a registrable domain in every environment.</li>
           <li><strong>Reuse, not a second auth system.</strong> The proxy is built on the cookie writer and the single-flight
           refresher that already served server-side rendering (<code>ISessionCookieStore.cs:14</code>,
-          <code>CookieSessionRefresher.cs:63-72</code>), so there is one place a session is refreshed and one cookie
+          <code>CookieSessionRefresher.cs:67-71</code>), so there is one place a session is refreshed and one cookie
           format.</li>
           <li><strong>The right package.</strong> MMCA.Common.UI.Web is server-only; the MMCA.Common.UI Razor class library is
           loaded by WebAssembly and MAUI heads, which cannot host a forwarder, and MMCA.Common.API is
@@ -406,9 +414,9 @@
           browser.</li>
           <li><strong>Defense in depth for CSRF.</strong> A cookie that authenticates data calls must not be usable from
           another origin. The custom header cannot be sent cross-origin without a preflight, and the proxy
-          never answers a preflight with a grant (<code>SameOriginApiProxyEndpoint.cs:218-225</code>); the origin gate
-          covers what the header cannot, a WebSocket upgrade, which is a GET and is not CORS-protected
-          (<code>:116-117</code>). Both gates were added after an adversarial review found upgrades and preflights open
+          never answers a preflight with a grant (<code>SameOriginApiProxyEndpoint.cs:241-248</code>); the origin gate
+          covers what the header cannot, a WebSocket upgrade, which is not CORS-protected
+          (<code>:122-124</code>). Both gates were added after an adversarial review found upgrades and preflights open
           (commit fba02c29).</li>
           <li><strong>A blip at the identity endpoint must not sign users out.</strong> Treating every failed refresh as the
           end of the session cleared the cookies on a 5xx or a timeout; separating <code>Unavailable</code> from
@@ -421,27 +429,29 @@
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
           <li><strong>One extra hop.</strong> Every browser API call and every hub frame passes through the UI host before the
-          gateway (<code>SameOriginApiProxyEndpoint.cs:315-319</code>).</li>
+          gateway (<code>SameOriginApiProxyEndpoint.cs:339-342</code>).</li>
           <li><strong>The UI host becomes a stateful-ish auth edge.</strong> It owns refresh, the refresh race, the 401 replay
-          and cookie rotation for browser traffic (<code>SameOriginApiProxyEndpoint.cs:289-305</code>,
-          <code>:332-350</code>); a UI host outage now takes the browser&#39;s API path down with it.</li>
+          and cookie rotation for browser traffic (<code>SameOriginApiProxyEndpoint.cs:313-329</code>,
+          <code>:351-374</code>); a UI host outage now takes the browser&#39;s API path down with it.</li>
           <li><strong>The UI host rate limiter now meters API traffic.</strong> Its exempt prefixes are <code>/health</code>, <code>/alive</code>,
           <code>/_framework</code>, <code>/_content</code> and <code>/hubs</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:50</code>),
-          so every proxied <code>/api/**</code> call, including the hub at <code>/api/hubs/notifications</code>
-          (<code>NotificationHubService.cs:76</code>), counts against the per-IP window and the concurrency ceiling of
-          <a href="124-blazor-circuit-ceiling-ui-edge.html">ADR-124</a>.</li>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:56</code>),
+          and proxied hub traffic under <code>{PathPrefix}/hubs</code> (the hub at <code>/api/hubs/notifications</code>,
+          <code>NotificationHubService.cs:97</code>) is exempt too (<code>UiRateLimitingExtensions.cs:51-54</code>). Every other
+          proxied <code>/api/**</code> call, a file-extension path such as <code>/api/report.csv</code> included, counts against
+          the per-IP window and the concurrency ceiling of <a href="124-blazor-circuit-ceiling-ui-edge.html">ADR-124</a>
+          (<code>UiRateLimitingExtensions.cs:65-70</code>).</li>
           <li><strong>Ingress hosts must adopt forwarded headers or lose every POST.</strong> The origin gate compares against
-          the scheme, host and port as the app sees them (<code>SameOriginApiProxyEndpoint.cs:132-138</code>), so a host
+          the scheme, host and port as the app sees them (<code>SameOriginApiProxyEndpoint.cs:139-160</code>), so a host
           behind a TLS-terminating ingress must call <code>UseCommonUiForwardedHeaders()</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/CommonForwardedHeadersExtensions.cs:24</code>)
-          first, or every browser POST is refused (<code>UPGRADING.md:139-142</code>).</li>
+          first, or every browser POST is refused (<code>UPGRADING.md:264-267</code>).</li>
           <li><strong>Registration order matters.</strong> <code>AddCommonSameOriginApiProxy</code> must come after every
           <code>ITokenRefresher</code> and <code>ISessionCookieSync</code> registration; the boot fails otherwise
           (<code>SameOriginApiProxyServiceExtensions.cs:29-35</code>).</li>
           <li><strong>Client code that presented the browser-held token breaks.</strong> Decoding it for claims still works;
-          sending it to the gateway does not (<code>UPGRADING.md:143-144</code>), and requests a host writes by hand must
-          add <code>X-CSRF: 1</code> on unsafe methods (<code>UPGRADING.md:137-138</code>).</li>
+          sending it to the gateway does not (<code>UPGRADING.md:268-269</code>), and requests a host writes by hand must
+          add <code>X-CSRF: 1</code> on unsafe methods (<code>UPGRADING.md:261-263</code>).</li>
           <li><strong>Script on the page can still act as the user.</strong> The proxy removes theft, not use: an injected
           script runs same-origin and passes both gates. Content Security Policy
           (<a href="023-security-response-headers.html">ADR-023</a>) stays the control for that.</li>
@@ -467,7 +477,7 @@
           the origin gate cover both fetches and WebSocket upgrades.</li>
           <li><strong>Forwarding <code>OPTIONS</code> to the gateway</strong> (rejected 2026-10-01, after review). The gateway&#39;s CORS
           policy would then decide whether <code>X-CSRF</code> may be sent cross-origin to the proxy
-          (<code>SameOriginApiProxyEndpoint.cs:218-219</code>).</li>
+          (<code>SameOriginApiProxyEndpoint.cs:241-242</code>).</li>
           <li><strong>Proxying MAUI too</strong> (rejected 2026-10-01). A native head has no DOM and no script-injection
           surface, keeps tokens in OS SecureStorage, and would only gain a hop.</li>
           </ul>
@@ -476,14 +486,30 @@
           <li><strong>Adoption, per Blazor Web host.</strong> Register after the session-cookie and token registrations, map
           next to the session-cookie endpoints after <code>UseAuthorization</code>, configure the section only where a
           default does not fit, and call <code>UseCommonUiForwardedHeaders()</code> first behind an ingress
-          (<code>UPGRADING.md:118-149</code>).</li>
+          (<code>UPGRADING.md:243-274</code>).</li>
           <li><strong>The gateway URL stays configured.</strong> <code>ApiEndpoint</code> keeps the gateway address for full-page
           navigations that must reach the gateway itself, such as the external sign-in challenge
           (<code>ApiSettings.cs:25-31</code>).</li>
           <li><strong>What to watch.</strong> UI host 429s and concurrency rejections on <code>/api/**</code> after a consumer opts in
-          (the limiter above now sees API and hub traffic), 503 <code>session_refresh_unavailable</code> rates as a
+          (the limiter above now sees API traffic; proxied hub traffic stays exempt), 503 <code>session_refresh_unavailable</code> rates as a
           signal of identity-endpoint health, and 403 <code>cross_origin_rejected</code> spikes after an ingress change,
           which usually mean forwarded headers are missing.</li>
+          </ul>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <ul>
+          <li><strong>Release state.</strong> MMCA.Common v1.218.0 is released (tags <code>v1.218.0</code> and <code>v1.218.1</code>), and MMCA.ADC
+          adopted the proxy with 1.218.1 (ADC #236); the Status line and the SameSite bullet no longer
+          describe an unreleased version or an unmerged adoption branch.</li>
+          <li><strong>CSRF exemption for HTTP/2 WebSockets.</strong> An RFC 8441 extended <code>CONNECT</code> with <code>:protocol websocket</code>
+          is exempt from the <code>X-CSRF</code> header and still held to the host&#39;s own <code>Origin</code>
+          (<code>SameOriginApiProxyEndpoint.cs:169-172</code>, <code>:251</code>); YARP turns it into an HTTP/1.1 GET upgrade
+          upstream (<code>:40-48</code>).</li>
+          <li><strong>Rate limiter and hub traffic.</strong> Proxied hub traffic under <code>{PathPrefix}/hubs</code> is exempt from the
+          UI host limiter, while non-hub proxied paths count even with a file extension
+          (<code>UiRateLimitingExtensions.cs:51-56</code>, <code>:65-70</code>); the Trade-offs and Consequences text no longer
+          says the hub is metered.</li>
+          <li>Every <code>path:line</code> anchor in the live sections was re-verified against current source and moved
+          where the code had moved.</li>
           </ul>
           <h2 id="related">Related</h2>
           <p><a href="022-browser-session-cookie-auth.html">ADR-022</a> (the HttpOnly session cookie the proxy reads),
@@ -512,6 +538,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#alternatives-rejected">Alternatives rejected</a></li>
             <li><a href="#consequences">Consequences</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

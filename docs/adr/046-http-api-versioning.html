@@ -256,7 +256,8 @@
           re-anchored the host call-site citations; see the Revision (2026-09-25) below).
           Revised 2026-10-01 for v1.217.0 (the host registers the single <code>v1</code> OpenAPI document itself and
           <code>AddCommonOpenApi</code> only configures it; per-version documents are gone; see the Revision (2026-10-01,
-          v1.217.0) below).</p>
+          v1.217.0) below).
+          Revised 2026-10-06: the registration also adds <code>ApiVersionReportingResultFilter</code> as a global MVC filter so output-cached responses keep the version headers; re-anchored the citations.</p>
           <h2 id="context">Context</h2>
           <p>The framework&#39;s REST surface is served by controllers hosted in extracted service processes behind a
           YARP gateway. As those services evolve, a response shape has to be able to change without breaking a
@@ -275,29 +276,33 @@
           proves two live versions coexist.</p>
           <ul>
           <li><strong>One registration wires the whole policy.</strong> <code>AddCommonApiVersioning</code>
-          (<code>Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:37</code>) deliberately
+          (<code>Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:39</code>) deliberately
           does <strong>not</strong> set <code>DefaultApiVersion</code>: <code>1.0</code> is already the <code>Asp.Versioning</code> library default, and the
           API explorer inherits both it and <code>AssumeDefaultVersionWhenUnspecified</code> from the versioning options,
           so restating either one trips AV0011/AV0024. The code comment recording that omission is at
-          <code>WebApplicationBuilderExtensions.cs:39</code>-<code>WebApplicationBuilderExtensions.cs:41</code>. What the registration does set: it assumes the default
+          <code>WebApplicationBuilderExtensions.cs:41</code>-<code>WebApplicationBuilderExtensions.cs:43</code>. What the registration does set: it assumes the default
           version when a caller sends no header
-          (<code>AssumeDefaultVersionWhenUnspecified = true</code>, <code>WebApplicationBuilderExtensions.cs:44</code>), reports
+          (<code>AssumeDefaultVersionWhenUnspecified = true</code>, <code>WebApplicationBuilderExtensions.cs:46</code>), reports
           the supported/deprecated versions on every response (<code>ReportApiVersions = true</code>,
-          <code>WebApplicationBuilderExtensions.cs:45</code>), and selects the version from an <code>api-version</code> request
-          header (<code>new HeaderApiVersionReader(&quot;api-version&quot;)</code>, <code>WebApplicationBuilderExtensions.cs:46</code>). The
+          <code>WebApplicationBuilderExtensions.cs:47</code>), and selects the version from an <code>api-version</code> request
+          header (<code>new HeaderApiVersionReader(&quot;api-version&quot;)</code>, <code>WebApplicationBuilderExtensions.cs:48</code>). The
           reader is header-based deliberately: routes and query strings stay version-free, so a caller opts
-          into a newer shape by adding one header rather than changing the URL.</li>
+          into a newer shape by adding one header rather than changing the URL. The same call also adds
+          <code>ApiVersionReportingResultFilter</code> as a global MVC filter (<code>WebApplicationBuilderExtensions.cs:60</code>,
+          class at <code>Source/Presentation/MMCA.Common.API/Caching/ApiVersionReportingResultFilter.cs:21</code>), which
+          reports the version headers ahead of the response body so an output-cache entry stores them and a
+          cache hit still carries <code>api-supported-versions</code> (comment at <code>WebApplicationBuilderExtensions.cs:58</code>-<code>:59</code>).</li>
           <li><strong>The API explorer is wired for versioned OpenAPI.</strong> The same call chains <code>.AddMvc()</code> then
-          <code>.AddApiExplorer</code> (<code>WebApplicationBuilderExtensions.cs:47</code>,
-          <code>WebApplicationBuilderExtensions.cs:48</code>), formatting version groups as <code>&#39;v&#39;VVV</code>
-          (<code>WebApplicationBuilderExtensions.cs:50</code>) and substituting the version into the URL where a host
-          routes one (<code>SubstituteApiVersionInUrl = true</code>, <code>WebApplicationBuilderExtensions.cs:51</code>). The
+          <code>.AddApiExplorer</code> (<code>WebApplicationBuilderExtensions.cs:49</code>,
+          <code>WebApplicationBuilderExtensions.cs:50</code>), formatting version groups as <code>&#39;v&#39;VVV</code>
+          (<code>WebApplicationBuilderExtensions.cs:52</code>) and substituting the version into the URL where a host
+          routes one (<code>SubstituteApiVersionInUrl = true</code>, <code>WebApplicationBuilderExtensions.cs:53</code>). The
           explorer&#39;s default-version behavior is inherited rather than configured, exactly as the comment
-          above it records (<code>WebApplicationBuilderExtensions.cs:39</code>-<code>WebApplicationBuilderExtensions.cs:41</code>). The
+          above it records (<code>WebApplicationBuilderExtensions.cs:41</code>-<code>WebApplicationBuilderExtensions.cs:43</code>). The
           explorer feeds the controllers&#39; API descriptions to the OpenAPI generator; it does not name the
           documents. Since v1.217.0 each host registers the single <code>v1</code> document itself with ASP.NET Core&#39;s
           <code>services.AddOpenApi()</code>, and <code>AddCommonOpenApi</code>
-          (<code>WebApplicationBuilderExtensions.cs:95</code>, contract in the doc comment at <code>:81</code>-<code>:93</code>) registers no
+          (<code>WebApplicationBuilderExtensions.cs:101</code>, contract in the doc comment at <code>:87</code>-<code>:100</code>) registers no
           document: it configures every document the host registered. <code>MapCommonOpenApi</code> serves it at
           <code>/openapi/v1.json</code> outside Production only
           (<code>Source/Presentation/MMCA.Common.API/Startup/Endpoints/OpenApiEndpointExtensions.cs:60</code>, guarded at
@@ -352,11 +357,11 @@
           costs nothing and still protects any other consumer of the API descriptions from the same null.</li>
           <li><strong>Every REST host adopts it the same way.</strong> The extracted services call <code>AddCommonApiVersioning</code>
           in their startup: ADC&#39;s Conference
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:218</code>) and Identity
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:149</code>) hosts, Store&#39;s Catalog host
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:139</code>), and the same call is made
-          by the other extracted hosts (ADC Engagement <code>Program.cs:146</code>, ADC Notification <code>Program.cs:138</code>,
-          Store Sales <code>Program.cs:146</code>, Store Identity <code>Program.cs:133</code>) and by the monolith reference host
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:219</code>) and Identity
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:154</code>) hosts, Store&#39;s Catalog host
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:140</code>), and the same call is made
+          by the other extracted hosts (ADC Engagement <code>Program.cs:150</code>, ADC Notification <code>Program.cs:139</code>,
+          Store Sales <code>Program.cs:147</code>, Store Identity <code>Program.cs:134</code>) and by the monolith reference host
           (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:35</code>).</li>
           </ul>
           <p>Application controllers beyond <code>ServiceInfo</code> declare <code>[ApiVersion(&quot;1.0&quot;)]</code> today: the second version
@@ -482,6 +487,26 @@
           Store #179). The swap left all seven committed documents byte-identical in content, which is the
           acceptance test the change was held to. <code>AddCommonOpenApiHostRegistrationTests</code> pins the contract in
           the framework.</p>
+          <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
+          <ul>
+          <li>The Decision now records that <code>AddCommonApiVersioning</code> also registers <code>ApiVersionReportingResultFilter</code>
+          as a global MVC filter (<code>WebApplicationBuilderExtensions.cs:60</code>; class at
+          <code>Caching/ApiVersionReportingResultFilter.cs:21</code>), so version headers are written before the body and
+          an output-cache hit still carries them. No decision or rationale changed.</li>
+          <li>Current locations of facts recorded in earlier revisions: <code>AddCommonOpenApi</code> is at
+          <code>WebApplicationBuilderExtensions.cs:101</code> with its transformers at <code>:105</code>-<code>:112</code>; the host
+          registrations (<code>AddOpenApi</code>, <code>AddCommonOpenApi</code>, <code>MapCommonOpenApi</code>) are ADC Conference <code>:319</code>,
+          <code>:320</code>, <code>:453</code>; Engagement <code>:168</code>, <code>:169</code>, <code>:331</code>; Identity <code>:182</code>, <code>:183</code>, <code>:363</code>; Notification
+          <code>:155</code>, <code>:156</code>, <code>:276</code>; Store Catalog <code>:193</code>, <code>:194</code>, <code>:327</code>; Sales <code>:167</code>, <code>:168</code>, <code>:306</code>; Identity
+          <code>:154</code>, <code>:155</code>, <code>:306</code>. The design-time skip helper <code>InitializeDatabaseUnlessDesignTimeAsync</code> is
+          declared at <code>DatabaseInitializationExtensions.cs:146</code> with its check at <code>:153</code>, called from ADC
+          Conference <code>Program.cs:443</code>, Engagement <code>:321</code>, Identity <code>:353</code>, Notification <code>:266</code>; Store Catalog
+          <code>:317</code>, Sales <code>:296</code>, Identity <code>:296</code>. The <code>OpenAPI documents are current</code> step is at
+          <code>MMCA.ADC/.github/workflows/deploy.yml:305</code> (count check <code>:313</code>-<code>:315</code>, diff <code>:317</code>, upload <code>:322</code>)
+          and <code>MMCA.Store/.github/workflows/deploy.yml:290</code> (count check <code>:299</code>-<code>:301</code>, diff <code>:303</code>, upload
+          <code>:308</code>).</li>
+          <li>Anchors in Decision, Trade-offs and Related were re-verified against current source.</li>
+          </ul>
           <h2 id="related">Related</h2>
           <p>ADR-010 (integration-event schema versioning: the asynchronous, <code>SchemaVersion</code>-carried,
           consumer-resolved axis this deliberately contrasts with; HTTP versioning here is request-time and
@@ -511,6 +536,7 @@
             <li><a href="#revision-2026-09-25-both-consumers-commit-and-gate-their-openapi-documents">Revision (2026-09-25): both consumers commit and gate their OpenAPI documents</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-01-v12170-the-host-registers-the-openapi-document">Revision (2026-10-01, v1.217.0): the host registers the OpenAPI document</a></li>
+            <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

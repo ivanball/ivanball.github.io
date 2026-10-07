@@ -16,6 +16,14 @@ Revised 2026-09-19 (the consumer-side companion the 2026-09-11 revision describe
 absent is now in MMCA.Store's `main`: the Stripe leg has one retry owner. See the Revision
 (2026-09-19) at the end.)
 
+Revised 2026-10-01 (current-state sections realigned with the code; no decision change. See the
+Revision (2026-10-01) at the end.)
+
+Revised 2026-10-06: the DR-doc acceptance is described as written rather than signed off, the
+example consumer and the drill-table mitigation now match MMCA.Store and the `dr-freshness` gates,
+and the Stripe retry predicate also treats a client timeout as transient. See the Revision
+(2026-10-06) at the end.
+
 ## Context
 The framework already supplies the *mechanisms* for surviving partial failure: a standard Polly
 resilience handler (timeout / retry / circuit breaker), the outbox for at-least-once delivery
@@ -33,7 +41,8 @@ resilience handler (timeout / retry / circuit breaker), the outbox for at-least-
    gRPC client registered through the framework's extension methods (`AddTypedGrpcClient`,
    `AddTypedServiceClient`) wires the **standard resilience handler**. `AddTypedServiceClient` takes
    the global HTTP defaults' timeouts, retry budget and sampling window from `HttpResilienceDefaults`
-   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:167-173`).
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:170-179`), and
+   switches the retry off for POST and PATCH (`:177`), the same two verbs the Aspire defaults exclude.
    `AddTypedGrpcClient` reads `GrpcResilienceDefaults`
    (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:127-142`), which re-exposes
    those same timeouts and retry budget
@@ -43,7 +52,7 @@ resilience handler (timeout / retry / circuit breaker), the outbox for at-least-
    (`ResilienceHandlerTests` in `MMCA.Common.Grpc.Tests`) so the policy cannot silently regress.
 2. **Consumers must declare recovery objectives.** Each consuming app documents, in its own
    `infra/DISASTER-RECOVERY.md`: RTO/RPO per failure scenario, the backup/restore mechanism, and an
-   **explicit, signed-off** acceptance of single-region risk (or a multi-region failover plan).
+   **explicit, written** acceptance of single-region risk (or a multi-region failover plan).
    A restore must be *drilled*: the DR doc carries a drill-result table that cannot stay empty.
 3. **Graceful degradation is the default posture.** When a synchronous dependency is unreachable,
    the resilience pipeline retries/breaks; cross-service consistency that can be deferred flows through
@@ -57,9 +66,11 @@ resilience handler (timeout / retry / circuit breaker), the outbox for at-least-
 | Full region loss | ≤ 1 h (geo-redundant backup) | ≤ 4 h (geo-restore + redeploy) |
 
 ADC **deliberately accepts single-region risk**: sub-hour multi-region failover is not worth the
-cost/complexity at its scale. A different consumer (e.g. a 24×7 store) is expected to set tighter
-objectives and a failover plan in its own DR doc: the framework does not mandate one set of numbers,
-only that the numbers exist and the restore is drilled.
+cost/complexity at its scale. MMCA.Store, the other consumer, records the same objectives and the
+same accepted single-region risk in its own DR doc (`MMCA.Store/infra/DISASTER-RECOVERY.md:10-15`).
+A consumer with stricter availability needs would set tighter objectives and a failover plan in its
+own DR doc: the framework does not mandate one set of numbers, only that the numbers exist and the
+restore is drilled.
 
 ## Rationale
 - **Invariant over discipline.** A fitness function turns "remember to add resilience" into a build
@@ -79,10 +90,14 @@ only that the numbers exist and the restore is drilled.
   test (`ResilienceCircuitBreakerFaultInjectionTests`, same project) drives sustained failures and
   proves the circuit breaker actually trips and short-circuits. `AddTypedServiceClient` has its own
   registration test
-  (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Messaging/TypedServiceClientRegistrationTests.cs:15-28`),
-  asserting one retry and the 30-second attempt, 90-second total and 60-second sampling values.
-- Per-consumer DR docs can drift from reality; the drill-result table is the mitigation (a stale table
-  is a visible smell).
+  (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Messaging/TypedServiceClientRegistrationTests.cs:17-31`),
+  asserting one retry and the 30-second attempt, 90-second total and 60-second sampling values, plus a
+  theory proving the retry refuses a POST or PATCH replay (`:34-55`).
+- Per-consumer DR docs can drift from reality. The drill-result table is hand-maintained and lags the
+  drills (its last rows are 2026-08-10 in `MMCA.ADC/infra/DISASTER-RECOVERY.md:201` and 2026-07-28 in
+  `MMCA.Store/infra/DISASTER-RECOVERY.md:212`), so it is not the operative mitigation: drill recency
+  is enforced from `dr-drill.yml` run history by each consumer's `dr-freshness` deploy gate
+  (`MMCA.ADC/.github/workflows/deploy.yml:896-911`, `MMCA.Store/.github/workflows/deploy.yml:864`).
 - A gRPC client that needs bespoke timeouts must override the standard handler explicitly rather than
   opt out of resilience entirely: intentional friction.
 
@@ -227,3 +242,35 @@ handler: the optional AI provider adapters build SDK-owned clients, bounded by `
 `MMCA.Common/Source/Core/MMCA.Common.AI.OpenAI/OpenAiProviderFactory.cs:42-49`), with the SDKs' own
 retry counts left at their defaults. Citations inside the earlier Revision sections are left as
 recorded.
+
+## Revision (2026-10-06)
+No decision changes; the current-state sections are brought back in line with the code and the
+consumer DR docs.
+
+- Decision point 2 no longer calls the single-region acceptance "signed-off": both DR docs state it
+  in writing (`MMCA.ADC/infra/DISASTER-RECOVERY.md:23`, `MMCA.Store/infra/DISASTER-RECOVERY.md:23`)
+  but neither records an approver or a sign-off.
+- The "24x7 store" example is replaced: MMCA.Store, the real second consumer, uses the same objectives
+  and calls itself non-24x7-critical (`MMCA.Store/infra/DISASTER-RECOVERY.md:10-15`).
+- The Trade-offs entry about DR-doc drift no longer names the drill-result table as the mitigation:
+  both tables lag the drills, and recency is enforced by the `dr-freshness` deploy gate over
+  `dr-drill.yml` run history.
+- Decision point 1 records that `AddTypedServiceClient` disables the retry for POST and PATCH
+  (`DependencyInjection.Messaging.cs:177`), and the Trade-offs entry records the theory that tests it.
+- The Stripe pipeline the 2026-09-11 and 2026-09-19 revisions describe now also treats an
+  `OperationCanceledException` as transient when the caller's token is not cancelled (an `HttpClient`
+  timeout): retry and breaker share `IsTransientFailure`
+  (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Stripe/StripePaymentService.cs:557-564`,
+  the timeout arm at `:562`). The pipeline itself is at `:76-113`, and the attempts and delay come
+  from `StripeSettings.cs:64` and `:68` (defaults 3 and 500 ms).
+- Current locations of facts recorded in earlier revisions: the outbox broker pipeline field at
+  `OutboxProcessor.cs:102`, built at `:698-709`, wrapping the publish at `:548-552` with the
+  in-process branch at `:554-558`; the execution-strategy note at `IUnitOfWork.cs:47-52` and
+  `ExecuteInTransactionAsync` at `:63-65`; `CreateExecutionStrategy()` at `DbContextFactory.cs:576`;
+  the global handler at `MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:49-62` inside
+  `ConfigureHttpClientDefaults` (`:39-85`), which also reaches gRPC clients, with the gRPC-specific
+  handler layered on top (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:102-104`,
+  `:127-142`); and the Polly meter wiring in `Extensions.Telemetry.cs` (meter name `:31`,
+  `resilience.polly.strategy.events` `:52`, `AddMeter` `:322`, the duration-histogram opt-in
+  `:332`, config key `:25`).
+- Anchors in the live sections were re-verified against current source.
