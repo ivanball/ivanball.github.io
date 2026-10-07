@@ -486,21 +486,6 @@
           <code>HybridCacheService.cs</code>, <code>PasswordHasher.cs</code>) was re-verified against current source and is
           unchanged.</li>
           </ul>
-          <h2 id="alternatives-rejected">Alternatives rejected</h2>
-          <ul>
-          <li><strong>Making the failed-attempt and registration counters atomic.</strong> The increment in
-          <code>DistributedCacheService.IncrementAsync</code> is a read-modify-write through <code>IDistributedCache</code> and is
-          knowingly not atomic (Common v1.125.2, PR #119). It once used Redis <code>INCR</code>, which is atomic but
-          writes a Redis <strong>string</strong>, while <code>StackExchangeRedisCache</code> stores every entry as a Redis <strong>hash</strong>,
-          so the next read of that key returned <code>WRONGTYPE</code> and answered 500 from both registration and
-          login. Two remedies were weighed on 2026-07-25 and both declined: a Lua script written against the
-          hash layout, and moving these counters off <code>IDistributedCache</code> so both sides speak Redis strings.
-          The residual weakness is narrow. Concurrent guesses can overwrite each other&#39;s increments, so a
-          parallel burst can stay under <code>MaxFailedAttempts</code>, but sequential guessing (what credential
-          stuffing against one account actually looks like) still trips the lockout. The comments in
-          <code>LoginProtectionService.IncrementFailedAttemptsAsync</code> and the v1.126.0 CHANGELOG entry record the
-          accepted final state, not a TODO: cite this section rather than re-opening the finding.</li>
-          </ul>
           <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
           <p>Re-verified against current source. The lockout model, the backoff formula, the registration
           throttle, the non-atomic counters and the fail-open posture are unchanged. What moved is the HTTP
@@ -531,6 +516,21 @@
           (the read at <code>:271</code> through <code>SharedStoreReadOptions</code>, <code>:86-90</code>; the write at <code>:280</code>). The <code>:253</code> anchor in the 2026-10-01 Revision and the &quot;unchanged&quot; note in the 2026-10-06
           Revision record those passes as written.</li>
           </ol>
+          <h2 id="alternatives-rejected">Alternatives rejected</h2>
+          <ul>
+          <li><strong>Making the failed-attempt and registration counters atomic.</strong> The increment in
+          <code>DistributedCacheService.IncrementAsync</code> is a read-modify-write through <code>IDistributedCache</code> and is
+          knowingly not atomic (Common v1.125.2, PR #119). It once used Redis <code>INCR</code>, which is atomic but
+          writes a Redis <strong>string</strong>, while <code>StackExchangeRedisCache</code> stores every entry as a Redis <strong>hash</strong>,
+          so the next read of that key returned <code>WRONGTYPE</code> and answered 500 from both registration and
+          login. Two remedies were weighed on 2026-07-25 and both declined: a Lua script written against the
+          hash layout, and moving these counters off <code>IDistributedCache</code> so both sides speak Redis strings.
+          The residual weakness is narrow. Concurrent guesses can overwrite each other&#39;s increments, so a
+          parallel burst can stay under <code>MaxFailedAttempts</code>, but sequential guessing (what credential
+          stuffing against one account actually looks like) still trips the lockout. The comments in
+          <code>LoginProtectionService.IncrementFailedAttemptsAsync</code> and the v1.126.0 CHANGELOG entry record the
+          accepted final state, not a TODO: cite this section rather than re-opening the finding.</li>
+          </ul>
           <h2 id="related">Related</h2>
           <p>ADR-019 (the layered limiter: a principal-keyed global cap that exempts this anonymous surface, its
           one metered anonymous exception being the real-time hub paths, plus the per-IP <code>auth-ip</code> window that
@@ -558,8 +558,8 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-03">Revision (2026-10-03)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
-            <li><a href="#alternatives-rejected">Alternatives rejected</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
+            <li><a href="#alternatives-rejected">Alternatives rejected</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>
