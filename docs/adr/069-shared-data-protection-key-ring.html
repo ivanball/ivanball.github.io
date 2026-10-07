@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -244,7 +245,9 @@
           precisely. Revised 2026-09-10: gate 2 ships in both templates, default off. Revised 2026-10-01:
           citations refreshed. Revised 2026-10-06: in both ADC hosts Key Vault configuration now loads before
           <code>AddServiceDefaults()</code> (still before the registration call), the ADC replica cap is
-          <code>conferenceScaledMaxReplicas</code>, and gate 2 is recorded as switched on for ADC and off for Store.</p>
+          <code>conferenceScaledMaxReplicas</code>, and gate 2 is recorded as switched on for ADC and off for Store.
+          Revised 2026-10-07: anchors refreshed after the v1.233.0 release, and Related now points at ADR-024
+          for the WebSockets-only SignalR client that needs no session affinity.</p>
           <h2 id="context">Context</h2>
           <p>ASP.NET Core&#39;s DataProtection default keeps the key ring <strong>in memory, per process</strong>. That is correct
           for a single-process host and wrong for a scaled-out one: every replica generates its own keys, so an
@@ -257,9 +260,9 @@
           independently scaled hosts, and in ADC the two hosts that mint those payloads (the UI host and the
           Identity service, which also does OAuth correlation and state cookie cryptography) both scale to
           <code>maxReplicas: conferenceScaledMaxReplicas</code>, which is 2, or 4 in conference mode
-          (<code>MMCA.ADC/infra/main.bicep:191</code>; <code>:1882</code> Identity service, <code>:2640</code> UI host). Only the
-          Identity service runs with <strong>no session affinity</strong>; the UI ingress is sticky
-          (<code>MMCA.ADC/infra/main.bicep:2535-2537</code>), which narrows the UI window rather than closing it, since
+          (<code>MMCA.ADC/infra/main.bicep:192</code>; <code>:1914</code> Identity service, <code>:2692</code> UI host). Of those two
+          minting hosts, only the Identity service runs with <strong>no session affinity</strong>; the UI ingress is sticky
+          (<code>MMCA.ADC/infra/main.bicep:2582-2584</code>), which narrows the UI window rather than closing it, since
           affinity is lost on a replica restart, a revision swap, or a dropped affinity cookie.</p>
           <p>Nothing in the record decided <strong>where the key ring lives</strong>. ADR-061 decides how a running app reaches
           a secret (Key Vault reference resolved by a managed identity) and ADR-045 decides that blob storage is
@@ -295,15 +298,15 @@
           Crypto User role, because that role assignment is granted out of band and can lag a deployment.
           Folding the second step into the first would turn an optional hardening gap into a total
           authentication outage. The deployment template records the same reasoning as a follow-up
-          (<code>MMCA.ADC/infra/main.bicep:1337-1340</code>). Both templates now ship the gate-2 path, default off (see the
+          (<code>MMCA.ADC/infra/main.bicep:1358-1361</code>). Both templates now ship the gate-2 path, default off (see the
           2026-09-10 revision); a deployment turns it on through the <code>DATA_PROTECTION_KEY_VAULT_KEY_URI</code>
-          repository variable (<code>MMCA.ADC/.github/workflows/deploy.yml:1519-1520</code>,
-          <code>MMCA.Store/.github/workflows/deploy.yml:1408-1409</code>). That is repository configuration, not source:
+          repository variable (<code>MMCA.ADC/.github/workflows/deploy.yml:1411-1412</code>,
+          <code>MMCA.Store/.github/workflows/deploy.yml:1295-1296</code>). That is repository configuration, not source:
           as read on 2026-10-06 the variable is set on the ADC repository and absent on the Store repository.</li>
           <li><strong>One <code>DefaultAzureCredential</code> instance serves both sinks</strong> (<code>DataProtectionExtensions.cs:68</code>), so
           they share a single token cache. A deployed host authenticates with its managed identity and a
           developer machine falls back to the local Azure CLI or Visual Studio sign-in; ADC pins <strong>which</strong>
-          identity with <code>AZURE_CLIENT_ID</code> on both adopting apps (<code>MMCA.ADC/infra/main.bicep:1772</code>, <code>:2576</code>).</li>
+          identity with <code>AZURE_CLIENT_ID</code> on both adopting apps (<code>MMCA.ADC/infra/main.bicep:1804</code>, <code>:2624</code>).</li>
           <li><strong>ADC adopts it on exactly the two hosts that mint the payloads.</strong> The Identity service calls it
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:119</code>) and so does the Web UI host
           (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:65</code>), each after <code>AddServiceDefaults()</code>.
@@ -316,15 +319,15 @@
           token.</li>
           <li><strong>In ADC, infrastructure provisions one private container, not a new storage account.</strong>
           <code>dataprotection-keys</code> is created on the existing avatar storage account with <code>publicAccess: &#39;None&#39;</code>
-          (<code>MMCA.ADC/infra/main.bicep:1321-1327</code>), deliberately unlike the public <code>avatars</code> and
-          <code>session-assets</code> containers beside it (<code>:1292-1298</code>, <code>:1308-1314</code>), and both apps are pointed at
-          <code>.../dataprotection-keys/keys.xml</code> with the shared discriminator <code>MMCA.ADC</code> (<code>:1770-1771</code>,
-          <code>:2574-2575</code>), unconditionally. No extra role assignment is needed: the ADR-045 Storage Blob Data
+          (<code>MMCA.ADC/infra/main.bicep:1342-1348</code>), deliberately unlike the public <code>avatars</code> and
+          <code>session-assets</code> containers beside it (<code>:1312-1318</code>, <code>:1328-1334</code>), and both apps are pointed at
+          <code>.../dataprotection-keys/keys.xml</code> with the shared discriminator <code>MMCA.ADC</code> (<code>:1802-1803</code>,
+          <code>:2622-2623</code>), unconditionally. No extra role assignment is needed: the ADR-045 Storage Blob Data
           Contributor grant is scoped to the storage <strong>account</strong>, so it already covers this container
-          (<code>:1329-1336</code>, <code>:1343</code>). That grant is itself guarded by <code>grantAvatarStorageRole</code>, default <code>false</code>,
-          because the deploy identity deliberately lacks role-assignment rights (<code>:133</code>, <code>:1341-1349</code>). The
-          account&#39;s blob data-plane audit explicitly covers reads of <code>dataprotection-keys/keys.xml</code>
-          (<code>:1263</code>).</li>
+          (<code>:1350-1357</code>, <code>:1364</code>). That grant is itself guarded by <code>grantAvatarStorageRole</code>, default <code>false</code>,
+          because the deploy identity deliberately lacks role-assignment rights (<code>:133</code>, <code>:1350-1354</code>,
+          <code>:1362</code>). The account&#39;s blob data-plane audit explicitly covers reads of
+          <code>dataprotection-keys/keys.xml</code> (<code>:1282-1284</code>).</li>
           <li><strong>The Azure dependencies live in the Aspire package only.</strong>
           <code>Azure.Extensions.AspNetCore.DataProtection.Blobs</code> and <code>.Keys</code> are referenced by
           <code>MMCA.Common.Aspire</code> (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/MMCA.Common.Aspire.csproj:42-43</code>)
@@ -355,7 +358,7 @@
           before the data-plane grant exists would 403 on the first protect call rather than degrade. That
           flag has since been flipped true in production: the deploy workflow passes
           <code>&quot;dataProtectionStorageReady&quot;: {&quot;value&quot;: true}</code> in its base parameters
-          (<code>MMCA.Store/.github/workflows/deploy.yml:1315</code>).</li>
+          (<code>MMCA.Store/.github/workflows/deploy.yml:1202</code>).</li>
           <li><strong>Its own role-assignment guard.</strong> The Storage Blob Data Contributor grant is guarded by Store&#39;s
           own <code>grantDataProtectionStorageRole</code> parameter (default <code>false</code> at <code>:94</code>), with the account-scoped
           role assignment at <code>:1244-1252</code>, deliberately separate from the readiness flag above: one says whether
@@ -502,13 +505,41 @@
           (Identity), <code>:2594</code> (UI) and <code>deploy.yml:1339</code>, <code>:1519-1520</code>; Store <code>infra/main.bicep:100</code>, <code>:103</code>,
           <code>:1275-1277</code>, <code>:2077</code> (UI) and <code>deploy.yml:1281</code>, <code>:1408-1409</code>.</li>
           </ul>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. No decision, rationale or trade-off changed: both gates,
+          the two ADC adopting hosts and their call ordering (Identity <code>Program.cs:110</code> -&gt; <code>:112</code> -&gt; <code>:119</code>;
+          UI <code>Program.cs:61</code> -&gt; <code>:63</code> -&gt; <code>:65</code>), the Store UI adoption (<code>Program.cs:44</code>, <code>:63</code>, <code>:69</code>), the
+          private <code>dataprotection-keys</code> container, the unconditional blob URI and discriminator, and the
+          absence of session affinity on Identity (the one non-sticky host of the two minting hosts) all hold. What moved is line numbers in the ADC template
+          and both deploy workflows, plus one cross-reference.</p>
+          <ol>
+          <li><strong>Related now points at ADR-024.</strong> The SignalR hub client skips negotiation and connects over
+          WebSockets only (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Notifications/NotificationHubService.cs:537-538</code>,
+          rationale in the doc comment at <code>:511-516</code>): with no separate negotiate request, connect cannot
+          land on a replica that never issued the connection id, so the hub needs no session affinity
+          either. That is the same no-affinity stance this record takes for Identity, reached by a different
+          mechanism.</li>
+          <li>Anchors re-verified against current source: ADC <code>infra/main.bicep:192</code>
+          (<code>conferenceScaledMaxReplicas</code>), <code>:1914</code> (Identity scale), <code>:2692</code> (UI scale), <code>:2582-2584</code>
+          (sticky UI ingress, the only <code>stickySessions</code> block in the file), <code>:1342-1348</code>
+          (<code>dataprotection-keys</code>, <code>publicAccess: &#39;None&#39;</code>), <code>:1312-1318</code> (<code>avatars</code>), <code>:1328-1334</code>
+          (<code>session-assets</code>), <code>:1350-1357</code> and <code>:1364</code> (account-scoped grant), <code>:1350-1354</code> and <code>:1362</code>
+          (<code>grantAvatarStorageRole</code> guard; param still <code>:133</code>), <code>:1358-1361</code> (gate-2 follow-up comment),
+          <code>:1282-1284</code> (blob audit), <code>:1802-1804</code> and <code>:2622-2624</code> (blob URI, discriminator,
+          <code>AZURE_CLIENT_ID</code>); Store <code>deploy.yml:1202</code> (production flip of <code>dataProtectionStorageReady</code>).
+          Current gate-2 locations: ADC <code>infra/main.bicep:142</code>, <code>:145</code>, <code>:1553</code> (comment <code>:1543-1552</code>),
+          <code>:1857-1858</code> (Identity), <code>:2641-2642</code> (UI) and <code>deploy.yml:1233</code>, <code>:1411-1412</code>; Store
+          <code>deploy.yml:1168</code>, <code>:1295-1296</code>. The earlier revisions keep their anchors as a historical record.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-022 (the browser session cookies whose decryption this makes replica-independent, together with
           the antiforgery tokens the SSR pages mint), ADR-008 (the multi-host topology that created the problem;
           the adopting hosts are the ones that mint auth payloads), ADR-061 (managed identity as the runtime
           credential model, which this reuses for a payload that is state rather than a secret), ADR-045 (the
           storage account, the account-scoped data-plane grant, and the <code>DefaultAzureCredential</code> pattern this
-          container rides on).</p>
+          container rides on), ADR-024 (the WebSockets-only SignalR client transport, recorded in its
+          2026-10-07 revision: with no negotiate request, connect cannot land on a different replica than
+          negotiate, so the hub needs no session affinity either).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -527,6 +558,7 @@
             <li><a href="#revision-2026-09-10">Revision (2026-09-10)</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

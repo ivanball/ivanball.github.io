@@ -22,6 +22,8 @@ Revised 2026-10-07: the consumer AppHost smoke projects (ADC and Store) and thei
 so the consumer passages are restated as history, and MMCA.Common's `apphost-testing` tier is now
 blocking and remains where the base is exercised (see Revision below).
 
+Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
+
 ## Context
 The AppHost is the only file that states how a whole stack fits together: which project resources
 exist, which database each one owns, which broker they share, where JWKS discovery points, and the
@@ -114,7 +116,7 @@ skip rather than a timeout, and wait for readiness per resource rather than for 
    machine-level act a test fixture has no business performing silently; a CI job that needs one runs
    `dotnet dev-certs https --trust` as an explicit step. The framework's own `apphost-testing` job
    needs none, because its sample AppHost serves cleartext only, and its header says a consumer stack
-   with an https launch profile adds that step (`MMCA.Common/.github/workflows/ci.yml:905`, `:914-917`).
+   with an https launch profile adds that step (`MMCA.Common/.github/workflows/ci.yml:905`, `:918-921`).
 
 5. **The RS256 keypair is minted when the environment has none.** `EphemeralRsaKeyPair.Create()`
    (`.../Preconditions/EphemeralRsaKeyPair.cs:42`) generates an RSA-2048 pair and the fixture pushes
@@ -298,10 +300,14 @@ No decision or rationale changed.
   run (`MMCA.ADC/AGENTS.md:77`, `MMCA.Store/AGENTS.md:76`).
 - MMCA.Common's `apphost-testing` tier is blocking (no `continue-on-error`) and is where the base is
   exercised; it is not a required merge check (`MMCA.Common/.github/workflows/ci.yml:905`, `:910-911`).
-  Its `dotnet dev-certs` step is removed, because the sample serves cleartext only (`:914-917`), so
+  Its `dotnet dev-certs` step is removed, because the sample serves cleartext only (`:918-921`), so
   decision 4 no longer cites one.
 - Decision 9 now cites the framework sample test and the package documentation instead of the deleted
   consumer tests. The decision itself is unchanged.
+- Anchors re-verified against current source: the job's cleartext, no-dev-certificate header and its
+  note that a consumer stack with an https launch profile adds a `dotnet dev-certs https --trust`
+  step sit at `MMCA.Common/.github/workflows/ci.yml:918-921` (decision 4 and the item above), while
+  the job name (`:905`) and the BLOCKING, not-a-required-check comment (`:910-911`) are unchanged.
 
 ## Related
 [ADR-098](098-aspire-orchestration-not-testing-or-dashboards.md) (the orchestration posture this tier

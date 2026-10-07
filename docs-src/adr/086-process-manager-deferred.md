@@ -8,6 +8,10 @@ constraint that limits the technology choice, and the single condition that woul
 Revised (2026-09-11): the first per-instance scheduled deadline now exists in MMCA.Store, built on
 ADR-114's internal-command queue rather than on a state machine, which retires one of the three
 absent properties without meeting this record's trigger; the deferral stands. See the Revision below.
+Revised 2026-10-07: the in-process provider is not MassTransit, so a state machine needs a broker
+provider (or a new in-process MassTransit registration) to ride, and the EF saga repository would be
+a fourth MassTransit package that the v8 pin gate covers only once its id is added; the deferral
+stands.
 
 ## Context
 [ADR-054](054-saga-compensation-and-reconciliation.md) decided how this workspace achieves
@@ -67,10 +71,14 @@ A durable multi-step workflow coordinator in this workspace is a **MassTransit v
 machine**, not a hand-rolled orchestrator and not a third-party workflow engine:
 
 - **`MassTransitStateMachine<TInstance>` for the definition.** The transport abstraction
-  ([ADR-066](066-broker-transport-selection.md)) is already MassTransit across all three providers
-  (`InProcess`, RabbitMQ locally, Azure Service Bus in production), so the state machine rides the
-  bus that already exists. Introducing a second coordination technology beside it would mean two
-  retry models, two dead-letter destinations and two sets of transport configuration.
+  ([ADR-066](066-broker-transport-selection.md)) is MassTransit for both broker providers (RabbitMQ
+  locally, Azure Service Bus in production), so in a broker deployment the state machine rides the
+  bus that already exists. The `InProcess` provider is not MassTransit: `AddBrokerMessaging` returns
+  before `AddMassTransit` is ever called, and the bus is the hand-written `InProcessMessageBus`
+  dispatching through `IDomainEventDispatcher`. A coordinator therefore needs a broker provider, or
+  a MassTransit registration added for the in-process mode, before it has a bus to ride. Introducing
+  a second coordination technology beside MassTransit would mean two retry models, two dead-letter
+  destinations and two sets of transport configuration.
 - **Durable correlation state per workflow instance.** One row per running workflow, keyed by a
   `CorrelationId`, carrying the current state and whatever the workflow needs to remember between
   steps. It belongs in the owning service's own database
@@ -94,8 +102,10 @@ machine**, not a hand-rolled orchestrator and not a third-party workflow engine:
 MassTransit is **pinned to v8** and the pin is a build gate
 ([ADR-016](016-lockstep-versioning-masstransit-pin.md)): `MassTransit`, `MassTransit.RabbitMQ` and
 `MassTransit.Azure.ServiceBus.Core` are all held at 8.5.11 in
-`MMCA.Common/Directory.Packages.props:124-126`, because v9 requires a commercial license. The v8 saga
-state machine and its EF Core saga repository are fully capable, so the pin does not block the design;
+`MMCA.Common/Directory.Packages.props:124-126`, because v9 requires a commercial license. The design
+assumes the v8 saga state machine and its EF Core saga repository are sufficient, an assumption no
+source here exercises (no saga type and no `MassTransit.EntityFrameworkCore` version exists in any
+repo), so the pin is not known to block the design;
 what it blocks is assuming a future v9 feature, and it means the coordinator inherits the pin's own
 risk. If v8 stops receiving security fixes, a process manager built on it is inside the blast radius
 of that migration rather than beside it. That is a reason to build the coordinator when a workflow
@@ -113,8 +123,10 @@ record is the design the implementing PR starts from.
   simpler option being tolerated. Checkout's saga state is two fields on `Order`, and an orchestrator
   would introduce a state row that duplicates them, with the two able to disagree. ADR-054's argument
   is sound and this record does not weaken it.
-- **The coordinator is cheap to add and expensive to have prematurely.** A saga state machine is a
-  class, a migration and a repository registration on infrastructure that already exists. What is
+- **The coordinator is cheap to add and expensive to have prematurely.** In a broker deployment a
+  saga state machine is a class, a migration, one new package and a repository registration on a
+  MassTransit bus that already exists; under the `InProcess` provider it also needs a MassTransit
+  registration that does not exist today. What is
   expensive is the standing cost: a second persistence model, a second failure mode (a stuck instance
   that is neither running nor complete), and a second place to look during an incident. Nothing today
   earns that.
@@ -123,7 +135,9 @@ record is the design the implementing PR starts from.
   a placement, a licensing constraint and a relationship to ADR-054, which is most of the design work.
 - **Naming the trigger keeps the deferral falsifiable.** "We do not need one yet" is a claim that can
   be checked against a workflow inventory. Without the three-part test above it is a preference.
-- **One coordination technology, chosen for the transport already in place.** Reaching for a workflow
+- **One coordination technology, chosen for the transport the broker providers already use.** The
+  `InProcess` provider has no MassTransit bus, so this holds for broker deployments; a monolith
+  deployment adopting the coordinator takes on MassTransit either way. Reaching for a workflow
   engine outside the bus would add an operational dependency to two production deployments to solve a
   problem neither currently has.
 
@@ -199,6 +213,40 @@ now sit at `:69`/`:75`, and the arm call it attributes to `CheckOutHandler` is a
 `deadlineScheduler.ArmAsync` call there (`CheckOutHandler.cs:180`) that delegates to
 `CheckOutDeadlineScheduler`, which schedules the `ExpireUnpaidOrderInternalCommand`
 (`.../ShoppingCarts/UseCases/CheckOut/CheckOutDeadlineScheduler.cs:55-56`).
+
+## Revision (2026-10-07)
+
+Re-verified against current source. The deferral, its trigger, the coordinator's shape and the v8
+licensing constraint are unchanged, and the absence evidence still holds. One statement in the
+Decision was wrong and is corrected in place: MassTransit is the transport for the two broker
+providers only, not for all three. The statements that depended on it (the v8 saga repository's
+capability, the coordinator's cost, one coordination technology) are qualified to match.
+
+1. **The in-process provider is not MassTransit.** `AddBrokerMessaging` returns early when the
+   provider is `InProcess`, before `AddMassTransit` is reached
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:52-55`,
+   `AddMassTransit` at `:64`, and the switch's `InProcess` arm notes the short-circuit at `:342-344`).
+   In that mode the bus is `InProcessMessageBus`, which dispatches through `IDomainEventDispatcher`
+   (`.../Messaging/InProcessMessageBus.cs:19-26`). A saga state machine therefore has a bus to ride
+   only under RabbitMQ or Azure Service Bus; the modular-monolith deployment would need a broker
+   provider or a new in-process MassTransit registration first. The Decision bullet now says so.
+2. **The EF saga repository is not yet a dependency.** The pin covers exactly three packages,
+   `MassTransit`, `MassTransit.RabbitMQ` and `MassTransit.Azure.ServiceBus.Core`, all at 8.5.11
+   (`MMCA.Common/Directory.Packages.props:124-126`), and no `MassTransit.EntityFrameworkCore`
+   version is declared there. Building the coordinator adds a fourth MassTransit package, and the
+   build gate that holds the pin checks a fixed list of exactly those three ids
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/DependencyVersionTestsBase.cs:17-22`,
+   loop at `:27-35`), so the new package is guarded only once its id is added to
+   `MassTransitPackageIds`. Whether the v8 saga repository is sufficient is a library claim no
+   source here exercises, so the Decision now states it as an assumption, and the Rationale bullets
+   on cost and on one coordination technology are qualified for the `InProcess` provider.
+3. Anchors re-verified against current source: the 2026-09-11 Revision's
+   `CheckOutHandler.cs:178-184,226-229` is kept as written; the file now has 214 lines, the arm call
+   is the single line `CheckOutHandler.cs:180` (comment at `:176-179`, return at `:182`), and the
+   scheduling it delegates to is `CheckOutDeadlineScheduler.cs:55-58`. The Context anchors hold:
+   `PaymentReconciliationService.cs:69` (class) and `:75` (`PeriodicBackgroundService` base),
+   `RefreshSessionCleanupService.cs:53`, `PermissionGrantRefreshService.cs:36`,
+   `InternalCommandCleanupService.cs:46`, `OutboxCleanupService.cs:49`.
 
 ## Related
 [ADR-054](054-saga-compensation-and-reconciliation.md) (the accepted mechanism this record defers an

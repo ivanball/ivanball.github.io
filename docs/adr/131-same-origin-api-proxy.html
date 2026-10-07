@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html" aria-current="page">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -249,14 +250,18 @@
           <a href="022-browser-session-cookie-auth.html">ADR-022</a> (the HttpOnly session cookie, until now read only for
           server-side rendering) and <a href="051-client-auth-token-lifecycle.html">ADR-051</a> (the client token
           lifecycle) without changing <a href="088-gateway-edge-responsibilities.html">ADR-088</a> (the gateway stays the
-          API edge).</p>
+          API edge). Revised 2026-10-07: the proxied hub connection carries no <code>X-CSRF</code> header and both hub
+          modes are WebSocket-only with negotiation skipped, <code>Unavailable</code> covers every non-refusal status
+          including 409 <code>Auth.RefreshSuperseded</code>, and the implementing commits are on <code>main</code> as squash e9c28d15
+          (#469).</p>
           <h2 id="context">Context</h2>
           <p>A Blazor WebAssembly client calls the API through the gateway, which is a different origin from the
           UI host, so the HttpOnly session cookies the UI host writes (ADR-022) never travel with those calls.
           The client therefore authenticates with a bearer token script can read: a host that does not opt in
           still attaches the stored token to the notification hub through
           <code>options.AccessTokenProvider = _tokenStorageService.GetAccessTokenAsync</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Notifications/NotificationHubService.cs:528</code>),
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Notifications/NotificationHubService.cs:545</code>;
+          off the browser the hub&#39;s own socket factory sets that bearer on the upgrade, <code>:547-550</code>, <code>:590-594</code>),
           and to every <code>&quot;APIClient&quot;</code> call through <code>AuthDelegatingHandler</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/AuthDelegatingHandler.cs:14</code>). One
           successful script injection can then lift a live token and use it from anywhere until it expires.</p>
@@ -348,10 +353,12 @@
           <li><strong>Refresh outcomes are three, not two.</strong> <code>SessionRefreshStatus</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/SessionRefreshOutcome.cs:4</code>) is
           <code>Refreshed</code>, <code>Rejected</code> (no refresh cookie, or the identity endpoint answered 400, 401 or 403) and
-          <code>Unavailable</code> (5xx, 429, timeout, network failure, unreadable body) (<code>:10-23</code>), classified at
-          <code>CookieSessionRefresher.cs:119-121</code>. The proxy clears the cookies and answers 401 only on
-          <code>Rejected</code>; on <code>Unavailable</code> it keeps them, forwards and replays nothing, and answers 503 with the
-          upstream <code>Retry-After</code>, or 5 seconds when there is none (<code>SameOriginApiProxyEndpoint.cs:51</code>,
+          <code>Unavailable</code> (any other status, a timeout, a network failure or an unreadable body) (<code>:10-23</code>),
+          classified at <code>CookieSessionRefresher.cs:122-125</code>. &quot;Any other status&quot; covers 5xx, 429, 408, a 404
+          from a misrouted gateway, and 409 <code>Auth.RefreshSuperseded</code> when another request rotated the same
+          token inside <code>RefreshSessions:ReuseGraceSeconds</code> (<code>CookieSessionRefresher.cs:113-121</code>). The proxy
+          clears the cookies and answers 401 only on <code>Rejected</code>; on <code>Unavailable</code> it keeps them, forwards and
+          replays nothing, and answers 503 with the upstream <code>Retry-After</code>, or 5 seconds when there is none (<code>SameOriginApiProxyEndpoint.cs:51</code>,
           <code>:268-285</code>).</li>
           <li><strong>The Blazor Server circuit trades handoffs, not tokens.</strong> The circuit keeps calling the gateway
           server-to-server; it exchanges tokens with the cookies only as data-protected, purpose-bound
@@ -372,8 +379,13 @@
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/SameOriginProxyRequestHandler.cs:11</code>,
           <code>:18-20</code>).</li>
           <li><strong>Hubs are proxied too.</strong> On an opted-in client the notification hub connects through the proxy
-          with the CSRF header and no access-token provider (<code>NotificationHubService.cs:97</code>, <code>:522-526</code>); the
-          proxy attaches the bearer to the upgrade server-side.</li>
+          with no token, no extra header and no access-token provider (<code>NotificationHubService.cs:100-102</code>,
+          <code>:518-521</code>, <code>:540-543</code>). A browser cannot add headers to a WebSocket upgrade, so the proxy needs no
+          <code>X-CSRF</code> there: a GET upgrade is a safe method and an HTTP/2 extended <code>CONNECT</code> is exempt
+          (<code>SameOriginApiProxyEndpoint.cs:251</code>), and both are held to the host&#39;s own <code>Origin</code> by the
+          same-origin gate (<code>:175-188</code>); the proxy attaches the bearer to
+          the upgrade server-side. Both modes skip negotiation and use WebSockets only, with no Server-Sent
+          Events or long-polling fallback (<code>NotificationHubService.cs:537-538</code>).</li>
           <li><strong>Downloads follow the API client.</strong> <code>ApiFileDownloadButton</code> resolves its anchor base as
           <code>SameOriginApiEndpoint</code>, then <code>WasmApiEndpoint</code>, then <code>ApiEndpoint</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/Forms/ApiFileDownloadButton.razor.cs:98</code>),
@@ -417,7 +429,7 @@
           never answers a preflight with a grant (<code>SameOriginApiProxyEndpoint.cs:241-248</code>); the origin gate
           covers what the header cannot, a WebSocket upgrade, which is not CORS-protected
           (<code>:122-124</code>). Both gates were added after an adversarial review found upgrades and preflights open
-          (commit fba02c29).</li>
+          (commit fba02c29, which reached <code>main</code> in the squash commit e9c28d15, #469).</li>
           <li><strong>A blip at the identity endpoint must not sign users out.</strong> Treating every failed refresh as the
           end of the session cleared the cookies on a 5xx or a timeout; separating <code>Unavailable</code> from
           <code>Rejected</code> keeps a live session and tells the client when to retry
@@ -437,7 +449,7 @@
           <code>/_framework</code>, <code>/_content</code> and <code>/hubs</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:56</code>),
           and proxied hub traffic under <code>{PathPrefix}/hubs</code> (the hub at <code>/api/hubs/notifications</code>,
-          <code>NotificationHubService.cs:97</code>) is exempt too (<code>UiRateLimitingExtensions.cs:51-54</code>). Every other
+          <code>NotificationHubService.cs:100-102</code>) is exempt too (<code>UiRateLimitingExtensions.cs:51-54</code>). Every other
           proxied <code>/api/**</code> call, a file-extension path such as <code>/api/report.csv</code> included, counts against
           the per-IP window and the concurrency ceiling of <a href="124-blazor-circuit-ceiling-ui-edge.html">ADR-124</a>
           (<code>UiRateLimitingExtensions.cs:65-70</code>).</li>
@@ -491,9 +503,11 @@
           navigations that must reach the gateway itself, such as the external sign-in challenge
           (<code>ApiSettings.cs:25-31</code>).</li>
           <li><strong>What to watch.</strong> UI host 429s and concurrency rejections on <code>/api/**</code> after a consumer opts in
-          (the limiter above now sees API traffic; proxied hub traffic stays exempt), 503 <code>session_refresh_unavailable</code> rates as a
-          signal of identity-endpoint health, and 403 <code>cross_origin_rejected</code> spikes after an ingress change,
-          which usually mean forwarded headers are missing.</li>
+          (the limiter above now sees API traffic; proxied hub traffic stays exempt), 503
+          <code>session_refresh_unavailable</code> rates as a signal of identity-endpoint health (read alongside the 409
+          <code>Auth.RefreshSuperseded</code> rotation races it also counts, from a second tab or another replica inside
+          <code>RefreshSessions:ReuseGraceSeconds</code>), and 403 <code>cross_origin_rejected</code> spikes after an ingress
+          change, which usually mean forwarded headers are missing.</li>
           </ul>
           <h2 id="revision-2026-10-06">Revision (2026-10-06)</h2>
           <ul>
@@ -511,6 +525,36 @@
           <li>Every <code>path:line</code> anchor in the live sections was re-verified against current source and moved
           where the code had moved.</li>
           </ul>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. The proxy&#39;s own code, its gates and its settings are unchanged.
+          MMCA.Common v1.233.0 (#520, commit b222df4f) changed the hub transport, and it added
+          <code>RefreshSessionSettings.ReuseGraceSeconds</code> (section <code>RefreshSessions</code>, default 10,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/RefreshSessionSettings.cs:12</code>, <code>:98</code>) with a new
+          identity-endpoint answer, 409 <code>Auth.RefreshSuperseded</code> for a rotation inside that window
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Sessions/AuthSessionIssuer.cs:276-280</code>, <code>:330</code>,
+          <code>:438</code>). The proxy&#39;s unchanged <code>ClassifyFailure</code> routes that answer to <code>Unavailable</code>, a 503 with
+          <code>Retry-After</code> (<code>CookieSessionRefresher.cs:122-125</code>, <code>:195-197</code>), so the refresh behavior the browser
+          sees changed, and the hub, refresh and What-to-watch text moved.</p>
+          <ol>
+          <li><strong>The proxied hub sends no CSRF header.</strong> The Decision bullet no longer says the hub connects with
+          the <code>X-CSRF</code> header: it connects with no token and no extra header
+          (<code>NotificationHubService.cs:518-521</code>, <code>:540-543</code>), and the proxy lets the upgrade through because a
+          GET upgrade is a safe method and an HTTP/2 extended <code>CONNECT</code> is exempt
+          (<code>SameOriginApiProxyEndpoint.cs:251</code>), both held to the host&#39;s own <code>Origin</code> (<code>:175-188</code>).</li>
+          <li><strong>WebSocket-only hub transport.</strong> Both modes skip negotiation and use WebSockets only, with no
+          Server-Sent Events or long-polling fallback (<code>NotificationHubService.cs:537-538</code>). Off the browser,
+          the direct connection&#39;s socket factory sets the stored bearer on the upgrade
+          (<code>NotificationHubService.cs:547-550</code>, <code>:590-594</code>); the Context paragraph now says so.</li>
+          <li><strong><code>Unavailable</code> covers every non-refusal status.</strong> The Decision bullet now names 408, a misrouted
+          404 and 409 <code>Auth.RefreshSuperseded</code> inside <code>RefreshSessions:ReuseGraceSeconds</code> alongside 5xx and
+          429 (<code>CookieSessionRefresher.cs:113-125</code>).</li>
+          <li><strong>Implementing commits.</strong> 4cfb4a35, b542dde1 and fba02c29 are on the feature branch only; the work
+          reached <code>main</code> as the squash commit e9c28d15 (#469), contained in tag <code>v1.218.0</code>. The Rationale
+          citation now names it.</li>
+          <li>Anchors re-verified against current source: <code>NotificationHubService.cs:528</code> -&gt; <code>:545</code>;
+          <code>NotificationHubService.cs:97</code> -&gt; <code>:100-102</code> (Decision and Trade-offs); <code>:522-526</code> -&gt; <code>:540-543</code>;
+          <code>CookieSessionRefresher.cs:119-121</code> -&gt; <code>:122-125</code>. The other live anchors still hold.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="022-browser-session-cookie-auth.html">ADR-022</a> (the HttpOnly session cookie the proxy reads),
           <a href="051-client-auth-token-lifecycle.html">ADR-051</a> (client token lifecycle across render modes),
@@ -539,6 +583,7 @@
             <li><a href="#alternatives-rejected">Alternatives rejected</a></li>
             <li><a href="#consequences">Consequences</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

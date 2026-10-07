@@ -11,7 +11,10 @@ Blazor Web hosts' `MapRazorComponents` citations, which have moved, and named th
 `.Distinct()` in the double-wiring trade-off). Revised 2026-10-01 (re-anchored moved citations and
 recorded the `Layout:HideNotificationPagesWhenUnregistered` opt-in). Revised 2026-10-06: records the
 fifth contract member, `ContentHeaderComponentTypes`, as a third component extension point, and the
-shell pages the route list omitted.
+shell pages the route list omitted. Revised 2026-10-07: records that the delete confirmation bypasses
+`IAppDialogService` (the `DeleteConfirmation` component injects MudBlazor's `IDialogService`
+directly), scopes the facades to toasts and confirmation, and re-anchors the ADC Web host's assembly
+wiring.
 
 ## Context
 ADR-059 decided how a module plugs into the **server**: an `IModule` implementation is discovered by
@@ -88,8 +91,9 @@ Ship the application shell in the framework package and let each module plug int
   `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/DependencyInjection.cs:76`).
 - **MudBlazor is the single component vendor, and the framework's own contracts sit in front of it.**
   The shell, its pages and every module UI render MudBlazor components; nothing here mixes in a second
-  component library. Where a vendor type would otherwise leak into page and helper code, a framework
-  contract stands in its place: `IToastService` and `IAppDialogService`
+  component library. For toasts and yes/no confirmation a framework contract stands in front of the
+  vendor (other vendor types, such as the `MudDataGrid<TDto>` that `ListPageActions` takes, are
+  referenced directly: `ListPageActions.cs:5`, `:29`): `IToastService` and `IAppDialogService`
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/Interfaces/IToastService.cs`,
   `IAppDialogService.cs`, namespace `MMCA.Common.UI.Common.Interfaces`). `IToastService` carries the
   five severities every component library exposes and is fire-and-forget by design (during SSR
@@ -101,13 +105,20 @@ Ship the application shell in the framework package and let each module plug int
   and so does the shipped bUnit base
   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.UI/Infrastructure/BunitComponentTestBase.cs:54`),
   so a component test resolves the two contracts without pulling in the rest of the shared-UI surface.
-  The vendor type therefore appears in exactly one implementation per contract, and the framework
-  helpers that raise a toast or ask a question (`ResultUiExtensions.NotifyOnFailure`,
-  `ListPageActions.DeleteWithConfirmationAsync`) take the facade. Richer, entity-specific dialogs stay component-side (`DeleteConfirmation`).
+  The framework helpers that raise a toast take the toast facade
+  (`MMCA.Common.UI/Common/ResultUiExtensions.cs:289-291`, and
+  `ListPageActions.DeleteWithConfirmationAsync` at `MMCA.Common.UI/Pages/Common/ListPageActions.cs:61`).
+  The delete confirmation is the component-side exception: `DeleteWithConfirmationAsync` asks its
+  question through the `DeleteConfirmation` component it is handed (`ListPageActions.cs:58`, `:72`),
+  and that component injects MudBlazor's `IDialogService` directly rather than going through
+  `IAppDialogService` (`MMCA.Common.UI/Components/Forms/DeleteConfirmation.razor:2`, `:33`). Richer,
+  entity-specific dialogs are inline, visibility-bound `<MudDialog @bind-Visible>` components rather
+  than either service (for example
+  `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Pages/Orders/ShipOrderDialog.razor:4-9`).
 
 - **Blazor Web heads feed the same enumeration to the endpoint side.** `MapRazorComponents<App>()`
   takes the module assemblies from `GetServices<IUIModule>()` in addition to the shell assemblies
-  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:313-327`, which also de-duplicates at `:321`, and
+  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:313-330`, which also de-duplicates at `:324`, and
   `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:274-284`), so the router's view and the
   endpoint's view of the routable assemblies come from one source.
 
@@ -155,11 +166,12 @@ no `ApiSettings`-backed client pipeline (`MMCA.Helpdesk/Source/Hosts/UI/MMCA.Hel
   suites (Telerik, Syncfusion) buy grid-export depth, a large widget catalog and a support contract,
   which earn their licence on export-heavy or reporting-heavy products; no app in this workspace is
   one, so that spend would buy capability nobody uses.
-- **The facades are what keep the vendor replaceable.** Because notifications and confirmation go
-  through `IToastService` / `IAppDialogService`, a vendor change is the shell components plus two
-  implementations, not every call site that raises a toast or asks the user a question. The same
-  boundary is why a bUnit test answers a confirmation with a stub instead of driving a rendered
-  dialog.
+- **The facades narrow what a vendor change touches.** Call sites that raise a toast or confirm
+  through `IToastService` / `IAppDialogService` change with the two implementations, not one by one,
+  and a bUnit test answers an `IAppDialogService` confirmation with a stub instead of driving a
+  rendered dialog. The delete confirmation is outside that boundary (`DeleteConfirmation.razor:2`,
+  `:33`), so a vendor change also touches that component, and a test of a delete flow cannot answer
+  it through the facade stub.
 
 ## Trade-offs
 - **`Assembly` is required even when it carries no route.** A host-only module that contributes only a
@@ -177,9 +189,9 @@ no `ApiSettings`-backed client pipeline (`MMCA.Helpdesk/Source/Hosts/UI/MMCA.Hel
   protection still comes from `AuthorizeRouteView` and the pages' own attributes (`Routes.razor:29-52`).
 - **Blazor Web heads wire the assemblies twice.** The router's `AdditionalAssemblies` and the
   endpoint's `AddAdditionalAssemblies` are separate calls, so both hosts repeat the enumeration in
-  `Program.cs` (`MMCA.ADC.UI.Web/Program.cs:313-327`, `MMCA.Store.UI.Web/Program.cs:274-284`); they
+  `Program.cs` (`MMCA.ADC.UI.Web/Program.cs:313-330`, `MMCA.Store.UI.Web/Program.cs:274-284`); they
   derive it from the same `IUIModule` registrations, but the duplication is real. The two hosts also
-  build the list differently: ADC concatenates and applies `.Distinct()` (`:320-321`), because the shell
+  build the list differently: ADC concatenates and applies `.Distinct()` (`:323-324`), because the shell
   assemblies it lists can overlap a module's, while Store spreads the module assemblies into a
   collection expression with no de-duplication (`MMCA.Store.UI.Web/Program.cs:279-284`).
 - **The reference seed does not demonstrate the pattern.** Helpdesk's hand-rolled shell means an
@@ -211,6 +223,26 @@ answers the notification routes with the not-found page
 - Anchors re-verified against current source and updated where they moved (`IUIModule.cs`,
   `Routes.razor`, `NavMenu.razor`, `MainLayout.razor`, `DependencyInjection.cs`,
   `BunitComponentTestBase.cs`, both Web hosts' `Program.cs`, `SalesUIModule.cs`, ADC `MauiProgram.cs`).
+
+## Revision (2026-10-07)
+Re-verified against current source. The contract, the shell, the router and nav composition and the
+vendor choice are unchanged; one statement about the facades was too broad, and the ADC Web host's
+assembly wiring moved.
+
+1. `ListPageActions.DeleteWithConfirmationAsync` takes only the toast facade
+   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/ListPageActions.cs:61`). It asks its
+   question through the `DeleteConfirmation` component parameter (`ListPageActions.cs:58`, `:72`), and
+   that component injects MudBlazor's `IDialogService` directly
+   (`MMCA.Common.UI/Components/Forms/DeleteConfirmation.razor:2`, `:33`), so the delete confirmation
+   does not go through `IAppDialogService`. The Decision no longer says the vendor dialog type appears
+   in exactly one implementation, names the delete confirmation as the component-side exception, and
+   scopes the facades to toasts and confirmation (`ListPageActions` takes `MudDataGrid<TDto>` directly,
+   `ListPageActions.cs:29`; entity dialogs are inline `MudDialog` components). The Rationale's
+   facade bullet is narrowed to match: a vendor change and a bUnit confirmation stub reach only the
+   call sites that use the facades.
+2. Anchors re-verified against current source: ADC `MMCA.ADC.UI.Web/Program.cs` assembly wiring
+   `:313-330` (`.Concat` `:323`, `.Distinct()` `:324`, the overlap comment `:314-315`), and
+   `ResultUiExtensions.NotifyOnFailure` (`MMCA.Common.UI/Common/ResultUiExtensions.cs:289-291`).
 
 ## Related
 ADR-059 (the server-side `IModule` contract this mirrors in the presentation layer), ADR-056 (the

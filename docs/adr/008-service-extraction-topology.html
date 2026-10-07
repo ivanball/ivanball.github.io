@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -254,7 +255,10 @@
           route&#39;s declared <code>anonymous</code> policy, plus a session-asset upload body cap), and every anchor is
           refreshed against current line numbers. The topology decision is unchanged. Revised 2026-10-01
           (extracted hosts discover only their own module and reach peers over gRPC clients, and JWKS
-          federation bypasses the Gateway in production; see Revision below).</p>
+          federation bypasses the Gateway in production; see Revision below). Revised 2026-10-07: the
+          cross-service tier&#39;s cadence is corrected to weeknights only (a scheduled night is skipped when
+          <code>main</code> has not moved since the last successful run), the single arm-deploy step is scoped to
+          <code>main.bicep</code>, and anchors are refreshed after the v1.233.0 release.</p>
           <h2 id="context">Context</h2>
           <p>ADC began as a modular monolith: one <code>MMCA.ADC.WebAPI</code> host loaded every module (Identity, Conference,
           Engagement, Notification) in-process via the <code>ModuleLoader</code>, sharing one database and dispatching
@@ -278,9 +282,9 @@
           <ul>
           <li><strong>Each service is the monolith with one module enabled.</strong> The hosts still run <code>ModuleLoader</code>, just with
           <code>Modules:{Module}:Enabled=true</code> for their own module, and each names only its own module assembly
-          to <code>AddModuleHost</code> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:369-371</code>), so
+          to <code>AddModuleHost</code> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:371-373</code>), so
           peer modules are never discovered there; the cross-module interfaces a service consumes are
-          satisfied by gRPC clients the host registers (<code>:416</code>). The Domain/Application/Shared code is identical whether it runs in-process or extracted.</li>
+          satisfied by gRPC clients the host registers (<code>:418</code>). The Domain/Application/Shared code is identical whether it runs in-process or extracted.</li>
           <li><strong>Extraction follows the Strangler Fig route; a rewrite is never the plan.</strong> Nothing in the topology
           needs a big-bang switch. A module is extracted by (1) starting its single-module service host beside
           the combined host, which keeps running with that module turned off (<code>Modules:{Module}:Enabled=false</code>)
@@ -315,9 +319,9 @@
           <li><strong>Cross-service communication uses edge transports:</strong> synchronous calls over gRPC contracts (ADR-007);
           asynchronous flows over the outbox to MassTransit broker (ADR-003, ADR-006). Token validation is
           federated via JWKS (ADR-004): locally the AppHost points each service at Identity through the Gateway
-          (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:365-367</code>), while in production each service
-          sets its JWT authority to Identity&#39;s internal URL directly (<code>MMCA.ADC/infra/main.bicep:1969</code>, <code>:2103</code>,
-          <code>:2255</code>). Each service owns its own database (ADR-006).</li>
+          (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:368-370</code>), while in production each service
+          sets its JWT authority to Identity&#39;s internal URL directly (<code>MMCA.ADC/infra/main.bicep:2003</code>, <code>:2139</code>,
+          <code>:2293</code>). Each service owns its own database (ADR-006).</li>
           <li><strong>Transport stays at the edge, enforced.</strong> <code>MicroserviceExtractionTests</code> in the architecture suite
           forbid gRPC / MassTransit / Protobuf dependencies in any Domain, Application, or Shared assembly, so the
           core stays host-agnostic and the split stays reversible.</li>
@@ -335,7 +339,7 @@
           <li><strong>Reversible by construction.</strong> Transport at the edge + the <code>ModuleLoader</code> mean a service can be
           re-collapsed into a combined host (or peers co-hosted) by a host-level change, not a domain change: a
           host names the module assemblies it boots in code
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:369-371</code>), and configuration then
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:371-373</code>), and configuration then
           enables or disables each of them. Useful
           insurance for a small team adopting microservices.</li>
           </ul>
@@ -371,14 +375,15 @@
           nothing runs is a claim. They are not the output of a scale, team or deploy-cadence trigger. The
           conference peaked at roughly 67 concurrent users (Context above), one team owns every module, and all
           six deployables still ship in a single pipeline run from one template
-          (<code>MMCA.ADC/infra/main.bicep:1651</code>, <code>:1890</code>, <code>:2041</code>, <code>:2174</code>, <code>:2353</code>, <code>:2516</code>, deployed together by a
-          single <code>azure/arm-deploy</code> step at <code>MMCA.ADC/.github/workflows/deploy.yml:1543-1547</code>), so the
+          (<code>MMCA.ADC/infra/main.bicep:1675</code>, <code>:1922</code>, <code>:2075</code>, <code>:2210</code>, <code>:2400</code>, <code>:2563</code>, deployed together by a
+          single <code>azure/arm-deploy</code> step for <code>main.bicep</code> at <code>MMCA.ADC/.github/workflows/deploy.yml:1433-1439</code>), so the
           independent-deploy benefit this record lists is available rather than taken. What ADC does buy with the split is proof under load that the path
           works: transport stays out of Domain, Application and Shared under a build gate
           (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Layering/MicroserviceExtractionTests.cs:3</code>), and the
-          genuine cross-process flows (outbox to broker to consumer, and a real gRPC read) run nightly against
-          real containers (<code>MMCA.ADC/.github/workflows/cross-service-tests.yml:6-10</code>, cadence at <code>:25-31</code>). A
-          consumer adopting this topology should extract on an observable constraint (a module that must scale
+          genuine cross-process flows (outbox to broker to consumer, and a real gRPC read) run on weeknights against
+          real containers (<code>MMCA.ADC/.github/workflows/cross-service-tests.yml:6-10</code>, schedule at <code>:26-32</code>;
+          a scheduled night is skipped only when the branch head equals the head of the last successful run,
+          <code>:65-77</code>). A consumer adopting this topology should extract on an observable constraint (a module that must scale
           or fail apart from the rest, or an owner who must deploy on their own clock) and stay a modular
           monolith until then; ADC deliberately runs ahead of its own constraints so that consumers do not have
           to discover the path for themselves.</p>
@@ -409,6 +414,30 @@
           arm-deploy step at <code>MMCA.ADC/.github/workflows/deploy.yml:1543-1547</code>.</li>
           <li>Anchors in the live sections were re-verified against current source.</li>
           </ul>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. The topology and every decision above stand: each extracted
+          host still names a single module assembly to <code>AddModuleHost</code>, peers are still reached over
+          host-registered gRPC clients, JWKS federation still runs through the Gateway only under the AppHost,
+          and all six container apps still deploy from one <code>main.bicep</code> template. Two live statements (the
+          cross-service cadence and the arm-deploy step) and the anchors moved.</p>
+          <ol>
+          <li>The cross-service tier does not run nightly: its schedule is weeknights at 06:00 UTC
+          (<code>MMCA.ADC/.github/workflows/cross-service-tests.yml:32</code>, cron <code>0 6 * * 1-5</code>), and the
+          should-run guard (job at <code>:51</code>) skips a scheduled night only when the branch head SHA equals the
+          head SHA of the last successful run (<code>:65-77</code>), so a night after a failed run still runs. The
+          Applicability section now says &quot;on weeknights&quot;.</li>
+          <li>The single <code>azure/arm-deploy</code> step is single for <code>main.bicep</code>, which holds all six apps
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:1433-1439</code>); a separate arm-deploy step deploys
+          <code>infra/foundation.bicep</code> (<code>:972</code>). The Applicability sentence now names the <code>main.bicep</code> step.</li>
+          <li>Anchors re-verified against current source: Conference host <code>AddModuleHost</code> call at
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:371-373</code> (single-assembly array
+          at <code>:372</code>; likewise Engagement <code>:214</code>, Identity <code>:266</code>, Notification <code>:196</code>), gRPC client
+          registration at <code>:418</code>; AppHost JWKS wiring at
+          <code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:368-370</code>; production JWT authority at
+          <code>MMCA.ADC/infra/main.bicep:2003</code>, <code>:2139</code> and <code>:2293</code>; the six container apps at <code>:1675</code>,
+          <code>:1922</code>, <code>:2075</code>, <code>:2210</code>, <code>:2400</code> and <code>:2563</code>; cross-service header at
+          <code>MMCA.ADC/.github/workflows/cross-service-tests.yml:6-10</code> and trigger block at <code>:26-32</code>.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-003 (outbox dual dispatch), ADR-004 (cross-service token validation via JWKS), ADR-006 (database
           per service), and ADR-007 (gRPC cross-service calls) are the facet decisions that sit under this extraction.</p>
@@ -430,6 +459,7 @@
             <li><a href="#applicability">Applicability</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

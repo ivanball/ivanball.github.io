@@ -12,7 +12,9 @@ is recounted. Revised 2026-10-01 (Blazor Server per-circuit UI state is recorded
 `CartStateService` now derives from `AuthenticatedServiceBase`; see Revision below). Revised 2026-10-06: the retry
 policy is recorded as never replaying a POST or PATCH that carries no `Idempotency-Key`, write
 invalidation as skipping only a pre-write rejection, and the direct-root count as twenty-two (see
-Revision below).
+Revision below). Revised 2026-10-07: the opt-in same-origin proxy base address and handler, the
+shared Aspire handler's refusal to retry POST and PATCH, and the `IdempotentReadRetry` GET path for
+read services outside the hierarchy are recorded, and the `IsNotFound` anchor is corrected.
 
 ## Context
 ADR-034 decided the **server** half of entity data access: a generic controller base with a dynamic
@@ -45,10 +47,18 @@ Client-side entity data access goes through one hand-written base hierarchy in `
   unavailable, `:72-75`), the explicit-token variant used to replay a 401 with a freshly refreshed
   token (`CreateClientWithToken`, `:88-95`, the client end of ADR-051), the retry policy, and the
   idempotency-key mint. The client itself is registered once, in `AddUIShared`
-  (`.../MMCA.Common.UI/DependencyInjection.cs:114-147`): base address from `ApiSettings`, `Accept:
+  (`.../MMCA.Common.UI/DependencyInjection.cs:124-155`): base address from `ApiSettings`
+  (`SameOriginApiEndpoint` when set, otherwise `ApiEndpoint`, `:136`), `Accept:
   application/json`, `AuthDelegatingHandler` plus `CultureDelegatingHandler`, and a transport timeout
   pinned to the shared 90-second budget (`:142`, `MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:19`)
-  so the BCL's uncoordinated 100-second default cannot cut a call off mid-policy.
+  so the BCL's uncoordinated 100-second default cannot cut a call off mid-policy. When
+  `Api:SameOriginApiEndpoint` is configured (`:120-121`, the opt-in same-origin proxy a WebAssembly
+  client receives from its Server host), one more handler, `SameOriginProxyRequestHandler`, is added
+  innermost (`:149-155`), so it sees and strips every `Authorization` header the outer handlers
+  attached and stamps the proxy's CSRF header; without it the chain keeps only the two handlers
+  `AddUIShared` adds (`:146-147`). A host that calls `AddServiceDefaults` also wraps the client in the
+  standard resilience and service-discovery handlers through `ConfigureHttpClientDefaults`
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:39-85`).
 - **Typed CRUD is `EntityServiceBase<TEntityDTO, TIdentifierType>`**
   (`.../MMCA.Common.UI/Services/Api/EntityServiceBase.cs:43`), implementing
   `IEntityService<TEntityDTO, TIdentifierType>` (`.../MMCA.Common.UI/Common/Interfaces/IEntityService.cs:20`).
@@ -63,7 +73,7 @@ Client-side entity data access goes through one hand-written base hierarchy in `
   `id`, `includeChildren` and the caller's `CancellationToken`) cover the remaining reads. A read for a
   missing entity is a `NotFound` failure, not a default value (`:155-158`): the caller tells it apart
   from a transport failure through `ResultUiExtensions.IsNotFound`
-  (`.../MMCA.Common.UI/Common/ResultUiExtensions.cs:329`) rather than by asking for a null.
+  (`.../MMCA.Common.UI/Common/ResultUiExtensions.cs:340`) rather than by asking for a null.
 - **Reads go through an optional client read cache.** The constructor takes an optional `IUiReadCache`
   (`EntityServiceBase.cs:47`, exposed to subclasses as `ReadCache`, `:58`), the client half of
   [ADR-040](040-authenticated-output-caching-for-public-reads.md). All four reads call `GetCachedAsync`
@@ -145,6 +155,29 @@ Client-side entity data access goes through one hand-written base hierarchy in `
   by hand, minting a key where the endpoint is `[Idempotent]` (for example
   `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Services/SessionLive/LivePollUIService.cs:93,156`
   and `.../SessionQuestionUIService.cs:73`).
+- **Read services outside the hierarchy reuse the same policy without inheriting the root.**
+  `IdempotentReadRetry`
+  (`.../MMCA.Common.UI/Services/Api/IdempotentReadRetry.cs:18`) is a public static class whose only
+  entry point is a GET (`GetAsync`, `:35-44`), run through the very policy object the root exposes
+  (`AuthenticatedServiceBase.SharedRetryPolicy`, `AuthenticatedServiceBase.cs:38`, over `RetryPolicy`
+  at `:27`; taken at `IdempotentReadRetry.cs:24`), so the two paths cannot drift. It serves services
+  that create the named `"APIClient"` themselves rather than through `CreateAuthenticatedClientAsync`
+  or `CreateClientWithToken`. They never set a token explicitly, but the registered chain still
+  includes `AuthDelegatingHandler` (`.../MMCA.Common.UI/DependencyInjection.cs:146`), which attaches
+  the stored bearer to any request with no `Authorization` header
+  (`.../MMCA.Common.UI/Services/Auth/AuthDelegatingHandler.cs:34-40`), so these calls carry it
+  whenever a user is signed in. Without the helper such a GET would get only the shared handler's
+  single retry on a host that calls `AddServiceDefaults` (see Trade-offs), and one attempt on a head
+  that does not. Seven call sites across six ADC files use it: four lookup services
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Services/Speakers/SpeakerLookupService.cs:96`,
+  `.../Services/Events/EventLookupService.cs:102`,
+  `.../Services/Categories/CategoryItemLookupService.cs:54`, and
+  `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Services/Lookups/SessionLookupService.cs:30,53`)
+  plus `.../Services/SessionLive/LiveEventService.cs:29` and
+  `.../Services/HappeningNow/NowNextService.cs:26`. Store, Helpdesk and the rest of Common do not
+  call it.
+  Writes are deliberately not offered: a write that needs retries goes through `EntityServiceBase`,
+  whose creates carry an `Idempotency-Key`.
 - **UI state is per circuit, never process-wide.** Blazor Server runs every user's circuit in one
   process, so client-side state lives in scoped services: UI assemblies declare no mutable static
   field and no settable static property, and no `*StateService` or `*StateContainer` type is
@@ -284,7 +317,11 @@ handoff and the `InteractiveAuto` registration) and inventories the same set of 
   per-hop retry count is pinned to **one**
   (`HttpResilienceDefaults.cs:21-30`, applied at `Extensions.cs:54`), with the reason stated in both
   places: full budgets at every hop turned a backend brownout into an up-to-16x request storm. The
-  cost is that the effective attempt count for a UI action is a product of two layers and cannot be
+  shared handler also never replays a POST or PATCH
+  (`options.Retry.DisableFor(HttpMethod.Post, HttpMethod.Patch)`, `Extensions.cs:61`), because a
+  timed-out attempt may still be running server-side and the handler does not look for an
+  idempotency key (even on `"APIClient"`, where the UI base's create does carry one), so a client
+  create is retried only by the UI base, under its key. The cost is that the effective attempt count for a UI action is a product of two layers and cannot be
   read off either one alone.
 - **The retry policy is `static` and not configurable.** `RetryPolicy` is a `protected static readonly`
   field (`AuthenticatedServiceBase.cs:27`), so its counts and delays are compile-time constants shared
@@ -343,6 +380,30 @@ contract itself and its rationale are unchanged.
 - Line anchors into `AuthenticatedServiceBase`, `EntityServiceBase`, `ResultUiExtensions`, the UI
   `DependencyInjection`, `EventService`, `SpeakerService`, `CartStateService` and
   `DataGridListPageBase` were re-verified against current source.
+
+## Revision (2026-10-07)
+Re-verified against current source. The client data-access contract, the retry policy, the
+idempotency-key mint and the adoption counts are unchanged; three behaviors around them were not
+recorded, and one anchor was wrong.
+1. The `"APIClient"` registration now records the opt-in same-origin proxy: the base address is
+   `SameOriginApiEndpoint` when set, else `ApiEndpoint`
+   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:136`), and when
+   `Api:SameOriginApiEndpoint` is configured (`:120-121`) an innermost
+   `SameOriginProxyRequestHandler` joins the chain (`:149-155`).
+2. The stacked-retry trade-off now records that the shared standard resilience handler never retries
+   a POST or PATCH (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:61`), so only the
+   UI base retries a client create.
+3. A new Decision bullet records `IdempotentReadRetry`
+   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/IdempotentReadRetry.cs:18`), the
+   GET-only path (`:35-44`) that reuses `AuthenticatedServiceBase.SharedRetryPolicy`
+   (`AuthenticatedServiceBase.cs:38`) for read services that create `"APIClient"` themselves without
+   inheriting the root (the chain's `AuthDelegatingHandler` still attaches a stored bearer); seven
+   call sites across six ADC files use it, four of them lookup services (for example
+   `SpeakerLookupService.cs:96`) plus `LiveEventService.cs:29` and `NowNextService.cs:26`.
+4. Anchors re-verified against current source: `ResultUiExtensions.IsNotFound` is at
+   `ResultUiExtensions.cs:340` (`:328` is `HasErrorType`), the `"APIClient"` registration spans
+   `DependencyInjection.cs:124-155` with the timeout pin still at `:142`, and the Aspire retry-count
+   pin (`Extensions.cs:54`) and its `ConfigureHttpClientDefaults` block (`:39-85`) hold.
 
 ## Related
 [ADR-034](034-generic-entity-query-layer.md) (the server surface this contract calls, and the filter

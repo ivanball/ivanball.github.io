@@ -5,13 +5,14 @@ Accepted (2026-08-23). Revised 2026-08-26 (the convention **appends** its clause
 filter instead of skipping the index). Revised 2026-10-01 (PostgreSQL coverage and per-engine
 quoting). Revised 2026-10-06: the per-engine predicate now comes from each engine's
 `IDataSourceEngine.BuildSoftDeleteFilter`, and the Cosmos no-op is a relational-capability check.
+Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 
 ## Context
 ADR-005 makes deletion **soft**: an `IAuditableEntity` sets `IsDeleted = true`
 (`MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IAuditableEntity.cs:11`) and a named global
 query filter hides the row from every query
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:453-467`,
-the filter name at `:474`). The application therefore behaves as though the row is gone.
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:454-468`,
+the filter name at `:475`). The application therefore behaves as though the row is gone.
 
 The database does not. A unique index still counts the hidden row, so the deleted record keeps
 occupying its unique slot forever: delete a speaker and the email unique index still refuses to
@@ -32,12 +33,12 @@ rows, automatically, in every context of every consumer.
 - **A model-finalizing convention, registered once in the base context.**
   `SoftDeleteUniqueIndexConvention` (`.../Conventions/SoftDeleteUniqueIndexConvention.cs:34`) is added
   by `ApplicationDbContext.ConfigureConventions`
-  (`.../DbContexts/ApplicationDbContext.cs:392`, rationale at `:389-391`). Because ADR-006 keeps one
+  (`.../DbContexts/ApplicationDbContext.cs:393`, rationale at `:389-392`). Because ADR-006 keeps one
   context class per engine over that base, a single registration reaches every module, every database
   and every consumer repo. Nothing opts in per entity.
 - **Scope: unique, non-owned, soft-deletable.** The convention walks entity types assignable to
   `IAuditableEntity` and not owned (`:46-47`, the same predicate the query filter uses at
-  `ApplicationDbContext.cs:456`), then applies the filter to every index that is unique
+  `ApplicationDbContext.cs:457`), then applies the filter to every index that is unique
   (`:49-50`, `:61-64`).
 - **A hand-authored filter is kept and extended, not replaced and not skipped.** An index that
   already declares a predicate keeps it and gains the soft-delete clause appended with `AND` (`:80`),
@@ -53,9 +54,9 @@ rows, automatically, in every context of every consumer.
   and left alone (`SoftDeleteUniqueIndexConvention.cs:73-76`), so a second model build cannot produce
   `... AND [IsDeleted] = 0 AND [IsDeleted] = 0`. Recognition (`SoftDeleteFilterSql.ContainsPredicate`)
   compares a normalized form with whitespace and all three identifier quoting styles stripped
-  (`.../Persistence/SoftDeleteFilterSql.cs:52-59`, normalizer at `:77-78`), because a hand-written
-  `HasFilter("[IsDeleted] = 0")` literal and the builder's output do not agree on quoting (`:44-51`);
-  the boolean `= false` spelling counts as the same clause as `= 0` (`:57-58`).
+  (`.../Persistence/SoftDeleteFilterSql.cs:53-60`, normalizer at `:78-79`), because a hand-written
+  `HasFilter("[IsDeleted] = 0")` literal and the builder's output do not agree on quoting (`:45-52`);
+  the boolean `= false` spelling counts as the same clause as `= 0` (`:58-59`).
 - **There is therefore no opt-out.** Declaring a filter no longer excludes an index from the
   convention (the early `continue` on an existing filter is gone,
   `SoftDeleteUniqueIndexConvention.cs:61-81`), so a unique index that genuinely must enforce
@@ -63,12 +64,12 @@ rows, automatically, in every context of every consumer.
   workspace wants it, and the alternative (leaving hand-filtered indexes silently un-narrowed) is the
   bug this revision fixes.
 - **One predicate builder serves both paths.** `SoftDeleteFilterSql.Build`
-  (`.../Persistence/SoftDeleteFilterSql.cs:34-35`) is called by the convention
+  (`.../Persistence/SoftDeleteFilterSql.cs:35-36`) is called by the convention
   (`SoftDeleteUniqueIndexConvention.cs:57`) and by the public opt-in `HasSoftDeleteFilter`
   (`.../Persistence/Configuration/IndexBuilderExtensions.cs:52-66`), so the automatic and the manual
   path cannot disagree about identifier quoting or about which column carries the flag
-  (`SoftDeleteFilterSql.cs:9-16`). The column name is read from the model, falling back to the
-  property name (`:72-74`), and `Build` hands it to the engine's `IDataSourceEngine.BuildSoftDeleteFilter`,
+  (`SoftDeleteFilterSql.cs:9-17`). The column name is read from the model, falling back to the
+  property name (`:73-75`), and `Build` hands it to the engine's `IDataSourceEngine.BuildSoftDeleteFilter`,
   which owns the per-engine predicate: `[IsDeleted] = 0` for SQL Server
   (`.../Persistence/DataSources/Engines/SQLServerDataSourceEngine.cs:117`), `"IsDeleted" = 0` for
   SQLite (`SqliteDataSourceEngine.cs:115`), and `"IsDeleted" = false` for PostgreSQL
@@ -84,7 +85,7 @@ rows, automatically, in every context of every consumer.
   combined predicate at its own declaration site uses the same call: the two are joined as
   `{additionalFilter} AND {filter}` (`:62-65`). The framework's own push-notification dedup index does
   exactly that (`PushNotificationConfiguration.cs:69-73`, quoting `DedupKey` per engine through
-  `SoftDeleteFilterSql.QuoteColumn`, `SoftDeleteFilterSql.cs:69-70`), and since the convention started appending,
+  `SoftDeleteFilterSql.QuoteColumn`, `SoftDeleteFilterSql.cs:70-71`), and since the convention started appending,
   that call is belt and braces rather than the only thing narrowing the index: it produces the same
   SQL in the same order, and the convention recognizes it and stops
   (`SoftDeleteUniqueIndexConvention.cs:73-76`). Store's SKU index
@@ -198,6 +199,19 @@ No decision or rationale changed.
   `SoftDeleteFilterSql.cs:34-50` is now `PostgreSQLDataSourceEngine.cs:116`, and the remarks naming all
   three engines are at `SoftDeleteUniqueIndexConvention.cs:29-30`.
 - All live-section anchors were re-verified against current source.
+
+## Revision (2026-10-07)
+Re-verified against current source. No decision, rationale, behavior or predicate changed: the
+convention registration, the query filter, `SoftDeleteFilterSql` and the per-engine builders behave
+as the live sections describe. Common's comment-drift fix shifted line numbers only (the rationale
+comment above the convention registration grew from three lines to four, and the `SoftDeleteFilterSql`
+class summary gained a line), so the 2026-10-06 revision's anchors (`SoftDeleteFilterSql.cs:34-35`,
+`:52-59`) and its closing re-verification note no longer match source; that section stays as recorded.
+1. Anchors re-verified against current source: `ApplicationDbContext.cs` registration `:393`,
+   rationale `:389-392`, `ApplySoftDeleteFilters` `:454-468`, its predicate `:457`, the filter name
+   `:475`; `SoftDeleteFilterSql.cs` `Build` `:35-36`, `ContainsPredicate` `:53-60` (the `= 0` and
+   `= false` checks at `:58-59`), the quoting remarks `:45-52`, the class summary `:9-17`,
+   `QuoteColumn` `:70-71`, the column-name fallback `:73-75` and the normalizer `:78-79`.
 
 ## Related
 ADR-005 (decides soft-delete over erasure and owns the query filter that hides the row, but says

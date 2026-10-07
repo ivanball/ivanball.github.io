@@ -46,6 +46,9 @@ unchanged.
 Revised 2026-10-06: the ordered replacement list in **Transport exit options** is ceded to ADR-118,
 which accepted Wolverine first and a raw-SDK adapter second and rejects a commercial v9, so the three
 2026-08-28 candidates remain only as the record of the first sketch.
+Revised 2026-10-07: the emulator proving ground is restated as a five-day recency gate (a red
+nightly blocks a deploy only once the last run green on both broker jobs is stale), and the Store
+props and both `cross-service-tests.yml` anchors are rebased.
 
 ## Context
 MMCA.Common publishes its `MMCA.Common.*` NuGet package set (see `FACTS.md` for the authoritative
@@ -97,12 +100,12 @@ Two related governance questions had no recorded answer:
    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj:52-54`),
    but each **does** declare one MassTransit entry of its own: `MassTransit.Azure.ServiceBus.Core`
    8.5.11 for the Service Bus emulator test tier, carrying a comment that names Common's lockstep v8
-   pin (`MMCA.ADC/Directory.Packages.props:60-65`, `MMCA.Store/Directory.Packages.props:88-93`).
+   pin (`MMCA.ADC/Directory.Packages.props:60-65`, `MMCA.Store/Directory.Packages.props:84-89`).
    Common's own three MassTransit entries are on that same 8.5.11
    (`MMCA.Common/Directory.Packages.props:124-126`), so all three repos sit on one patch version.
    Alignment there is a convention the app-side comments carry, not something the gate enforces
    (Store's comment names the lockstep pin without a patch number,
-   `MMCA.Store/Directory.Packages.props:89-90`, so it holds across patch bumps):
+   `MMCA.Store/Directory.Packages.props:85-86`, so it holds across patch bumps):
    what the pin governs, and what the fitness function reads, is the major, so an app-side entry on
    a different v8 patch would still be inside the decision.
    They still do not subclass the test: its default list also names the two package ids they do not
@@ -211,12 +214,19 @@ function that reads it
 the major ceiling at `:24-37`), plus the dependabot ignore they are paired with.
 
 A proving ground already exists: both consumers' nightlies run an Azure Service Bus emulator smoke
-against their real integration-event contracts, and the tier is authoritative rather than advisory,
-so a transport regression blocks the next deploy
-(`MMCA.ADC/.github/workflows/cross-service-tests.yml:159`, the gating rationale at `:132-143`,
+against their real integration-event contracts, and the tier is authoritative rather than advisory
+(`MMCA.ADC/.github/workflows/cross-service-tests.yml:142`, the gating rationale at `:116-126`,
 and the equivalent `servicebus-emulator-smoke` job in
-`MMCA.Store/.github/workflows/cross-service-tests.yml:160`, rationale at `:140-154`; the deploy-side halves are recorded in
-ADR-066 and ADR-064). Any transport candidate has somewhere to be exercised that is not production.
+`MMCA.Store/.github/workflows/cross-service-tests.yml:141`, rationale at `:121-135`; the deploy-side
+halves are recorded in ADR-066 and ADR-064). The deploy gate is a recency gate, not a per-run one:
+`cross-service-freshness` requires the `cross-service` and `servicebus-emulator-smoke` jobs to have
+both succeeded in one completed run of `cross-service-tests.yml` (whatever triggered it, so a
+dispatched green run counts too) within `window-days: '5'`
+(`MMCA.ADC/.github/workflows/deploy.yml:883-888`, `MMCA.Store/.github/workflows/deploy.yml:838-843`).
+The proof's age is floored to whole days and the gate fails only when that age exceeds the window
+(`MMCA.Common/.github/actions/freshness-gate/action.yml:25-26`, `:143-145`), so a red nightly blocks
+a deploy only once the last run green on both jobs is six or more whole days old.
+Any transport candidate has somewhere to be exercised that is not production.
 
 ## Alternatives rejected
 - **Opt-in flags and compatibility shims for a framework change, with consumers upgraded per page or
@@ -265,6 +275,34 @@ rebased onto their current lines; the nine-file `using MassTransit` count is unc
 - Every live-section anchor (`Directory.Packages.props`, `MMCA.Common.Infrastructure.csproj`,
   `DependencyInjection.Messaging.cs`, `IntegrationEventConsumerExtensions.cs`,
   `ConsumerOriginRestore.cs`) was re-verified against current source and rebased where it had moved.
+
+## Revision (2026-10-07)
+Re-verified against current source. The pin, the gate and the dependency set are unchanged:
+MassTransit stays below major 9, ImageSharp below major 4, and all three repos sit on MassTransit
+8.5.11 (`MMCA.Common/Directory.Packages.props:124-126`, `MMCA.ADC/Directory.Packages.props:65`,
+`MMCA.Store/Directory.Packages.props:89`). The gate itself did not change (`window-days: '5'` with
+`required-jobs-mode: same-run` was already in place); what changed is this record's description
+of it, plus anchors moved by the 2026-10-07 workflow pruning in MMCA.ADC #258 and MMCA.Store #197.
+
+1. **Transport exit options** no longer says a transport regression blocks the next deploy. The
+   `cross-service-freshness` step is a recency gate: it passes on the newest completed run of
+   `cross-service-tests.yml` (any trigger, so a dispatched green run counts) in which
+   `cross-service` and `servicebus-emulator-smoke` both succeeded within `window-days: '5'`
+   (`MMCA.ADC/.github/workflows/deploy.yml:883-888`, `MMCA.Store/.github/workflows/deploy.yml:838-843`),
+   with the age floored to whole days and compared as greater-than
+   (`MMCA.Common/.github/actions/freshness-gate/action.yml:25-26`, `:143-145`), so a red nightly
+   blocks a deploy only once that last proving run is six or more whole days old
+   (`MMCA.ADC/.github/workflows/deploy.yml:867`, `MMCA.Store/.github/workflows/deploy.yml:824`).
+2. Anchors rebased after MMCA.ADC #258 and MMCA.Store #197 (both "ci: prune unneeded workflow jobs
+   and steps", 2026-10-07) shifted them: Store's emulator-tier comment block
+   `MMCA.Store/Directory.Packages.props:84-87` (the patch-agnostic pin sentence at `:85-86`) and its
+   entry at `:89`, previously `:88-90` and `:93`; the ADC `servicebus-emulator-smoke` job
+   `MMCA.ADC/.github/workflows/cross-service-tests.yml:142` with its AUTHORITATIVE (TD-17) rationale
+   at `:116-126`, previously `:159` and `:132-143`; the Store job
+   `MMCA.Store/.github/workflows/cross-service-tests.yml:141` with its rationale at `:121-135`,
+   previously `:160` and `:140-154`. The ADC comment and entry
+   `MMCA.ADC/Directory.Packages.props:60-65` are unchanged. The earlier anchors were exact when the
+   2026-10-01 and 2026-10-06 revisions recorded them.
 
 ## Related
 ADR-015 (the fitness function that enforces the pins), ADR-003 / ADR-006 (MassTransit is the broker

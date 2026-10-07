@@ -26,14 +26,18 @@ Revised 2026-10-01 (Store's SQL check now reads the service objective and accept
 Standard S0, closing the S0-to-S3 gap; see Revision below).
 Revised 2026-10-06: ADC's dated conference-mode window is recorded as a sanctioned per-repo
 difference in the gate, and Common's workflow list now includes `load-tests.yml`.
+Revised 2026-10-07: Common's workflow list is three files with no Claude workflows, ADC's Notification
+app is recorded as staying off the conference-mode replica ceiling, and `backend-test-gate` is
+recorded as gone from both deploy conditions; anchors refreshed after the v1.233.0 release.
 
 ## Context
 Both deployed apps run a deliberately small production footprint: every Container App is declared with
-`maxReplicas: 2` (ADC's scaled apps read `conferenceScaledMaxReplicas`, which `conferenceMode` raises to 4,
-`MMCA.ADC/infra/main.bicep:191`, and the same mode lifts ADC's hot-path databases to S2, `:949-953`; see
-Revision (2026-10-06)) and every SQL database with the `Basic` tier
+`maxReplicas: 2` (ADC's five scaled apps read `conferenceScaledMaxReplicas`, which `conferenceMode` raises
+to 4, `MMCA.ADC/infra/main.bicep:192`, while Notification keeps a literal `maxReplicas: 2`, `:2388`; the
+same mode lifts ADC's hot-path databases to S2, `:965-969`; see Revision (2026-10-06)) and every SQL
+database with the `Basic` tier
 (`MMCA.Store/infra/main.bicep:1591,1715,1860,1979,2097` and `:957-961`;
-`MMCA.ADC/infra/main.bicep:1882,2033,2166,2341,2494,2640` and `:951-953`). That
+`MMCA.ADC/infra/main.bicep:1914,2067,2202,2388,2541,2692` and `:967-969`). That
 footprint is the cost baseline, and it is what the monthly bill is planned against.
 
 The footprint is also expected to move temporarily. A conference day, a load test, a slow query under
@@ -43,7 +47,7 @@ it is silent: nothing breaks, no alert fires on a healthy oversized system, and 
 traffic perfectly while costing several times its baseline.
 
 The existing control against that was the monthly Azure budget declared in both Bicep templates
-(`MMCA.Store/infra/main.bicep:766-794`, `MMCA.ADC/infra/main.bicep:777-805`), which notifies at 80% of
+(`MMCA.Store/infra/main.bicep:766-794`, `MMCA.ADC/infra/main.bicep:793-821`), which notifies at 80% of
 actual spend and 100% of forecast spend. The Store template names the exact case it is meant to catch
 in its own comment, "a scale-up (manual SQL-tier / replica) silently running for weeks"
 (`MMCA.Store/infra/main.bicep:764`). A spend threshold is a lagging indicator: by the time it
@@ -97,7 +101,7 @@ The cost baseline is asserted by a **read-only reusable workflow** that both run
   real load, or the tier a bacpac restore would land on) does not fail the gate as if it were an
   un-reverted surge, while anything above Standard S0 still does
   (`MMCA.Store/.github/workflows/cost-guard.yml:9-13`). ADC has no comparable headroom case: its
-  archive was dropped the same day (`MMCA.ADC/infra/main.bicep:916-922`) and its baseline stayed at
+  archive was dropped the same day (`MMCA.ADC/infra/main.bicep:932-937`) and its baseline stayed at
   `Basic` alone. The asymmetry is deliberate in both directions.
 
 - **It never mutates production.** Every Azure call is an `az ... list` or `az ... show`; the one
@@ -131,12 +135,12 @@ The cost baseline is asserted by a **read-only reusable workflow** that both run
 
 - **Gate on deploys only, never on pull requests.** The calling job carries
   `if: github.event_name != 'pull_request'` and `secrets: inherit`
-  (`MMCA.Store/.github/workflows/deploy.yml:822-830`,
-  `MMCA.ADC/.github/workflows/deploy.yml:853-865`), because there is no production OIDC on a PR and the
+  (`MMCA.Store/.github/workflows/deploy.yml:730-739`,
+  `MMCA.ADC/.github/workflows/deploy.yml:770-783`), because there is no production OIDC on a PR and the
   deploy is PR-skipped anyway. ADC's calling job also grants its own `id-token: write` and
-  `contents: read` (`MMCA.ADC/.github/workflows/deploy.yml:857-859`), because ADC's workflow-level
+  `contents: read` (`MMCA.ADC/.github/workflows/deploy.yml:775-777`), because ADC's workflow-level
   permissions deliberately omit `id-token` (`:28-37`); Store's calling job does the same
-  (`MMCA.Store/.github/workflows/deploy.yml:826-828`), because its workflow-level permissions omit
+  (`MMCA.Store/.github/workflows/deploy.yml:735-737`), because its workflow-level permissions omit
   `id-token` too (`:44-53`). Both repos' CONTRIBUTING files list `cost-guard` among the push-only
   jobs that must **not** be added to branch protection (`MMCA.Store/CONTRIBUTING.md:42,118`,
   `MMCA.ADC/CONTRIBUTING.md:42,111`).
@@ -162,8 +166,8 @@ the two also diverge: Store's carries three passages ADC's has no counterpart fo
 and is therefore blind by design to the 2026-09-02 container right-size (`:15-17`), and a
 `(Mirrors MMCA.ADC.)` marker on the `workflow_call` trigger (`:25`). MMCA.Helpdesk and MMCA.Common
 carry no `cost-guard.yml` and no deploy workflow at all: Helpdesk's `.github/workflows/` holds `ci.yml`,
-`release-templates.yml` and the two Claude workflows, and Common's holds `ci.yml`, `release.yml`,
-`load-tests.yml` and the same two, so neither has a rollout for this gate to block.
+`release-templates.yml` and the two Claude workflows, and Common's holds only `ci.yml`, `release.yml`
+and `load-tests.yml`, so neither has a rollout for this gate to block.
 
 ## Rationale
 - **Configuration drift is the leading indicator; spend is the lagging one.** The budget notification
@@ -287,3 +291,32 @@ The body's `cost-guard.yml`, `deploy.yml` and Bicep anchors point at the current
 calling job is corrected too: like ADC's, it grants its own `id-token: write`
 (`MMCA.Store/.github/workflows/deploy.yml:826-828`) under workflow-level permissions that omit it
 (`:44-53`).
+
+## Revision (2026-10-07)
+Re-verified against current source. The gate mechanism, the `2` replica ceiling, the per-repo SQL
+tier sets and ADC's conference-mode window are unchanged; three statements and the Bicep and
+`deploy.yml` anchors moved.
+
+1. **Common's workflow list is three files.** `MMCA.Common/.github/workflows/` holds `ci.yml`,
+   `load-tests.yml` and `release.yml` and no Claude workflows, so the Adoption paragraph no longer
+   says "the same two". The Revision (2026-10-06) count of five is superseded. Helpdesk's list
+   (`ci.yml`, `claude-code-review.yml`, `claude.yml`, `release-templates.yml`) is unchanged. The
+   conclusion stands: neither repo carries `cost-guard.yml` or a deploy workflow.
+2. **ADC's Notification app stays off the conference-mode ceiling.** Five ADC Container Apps read
+   `conferenceScaledMaxReplicas` (`MMCA.ADC/infra/main.bicep:1914,2067,2202,2541,2692`), while
+   Notification declares a literal `maxReplicas: 2` and its comment states it keeps the baseline in
+   conference mode too (`:2385-2388`). The Context now names that split.
+3. **`backend-test-gate` is gone from both deploy conditions.** Neither `deploy.yml` declares it. ADC's
+   deploy tolerates two skippable needs, `e2e-gate` and `ai-eval-gate`
+   (`MMCA.ADC/.github/workflows/deploy.yml:1145,1182-1183`), and Store's one, `e2e-gate`
+   (`MMCA.Store/.github/workflows/deploy.yml:1083,1116`), which is what the Decision already says. The
+   2026-09-03 and 2026-09-11 Status sentences that mention it are history and stay as written.
+4. **ADC's AtlDevCon bacpac no longer exists.** The archive note now records that the bacpac was
+   deleted on 2026-10-03, so AtlDevCon has no restore path (`MMCA.ADC/infra/main.bicep:932-938,980-981`).
+   The Decision's point is unaffected: ADC's baseline is `Basic` alone.
+5. Anchors re-verified against current source: ADC `conferenceScaledMaxReplicas`
+   (`MMCA.ADC/infra/main.bicep:192`), the S2 switch (`:965-969`), the budget (`:793-821`), the
+   AtlDevCon note (`:932-938`); the `cost-guard` calling jobs
+   (`MMCA.Store/.github/workflows/deploy.yml:730-739`, `if` at `:732`, permissions `:735-737`;
+   `MMCA.ADC/.github/workflows/deploy.yml:770-783`, `if` at `:772`, permissions `:775-777`,
+   `deploy_gate: true` at `:781-782`). Anchors inside the earlier dated revisions stay as written.

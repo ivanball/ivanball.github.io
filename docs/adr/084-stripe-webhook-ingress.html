@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -244,7 +245,8 @@
           secret is shared through the distributed cache, cancelling a payable order expires the provider
           session, and reconciliation sweeps stranded unpaid orders).
           Revised 2026-10-01 (current-state sections re-anchored and the shared signing secret described).
-          Revised 2026-10-06: the minted signing secret is never printed (an operator reveals it in the Stripe Dashboard), and the paid-order short-circuit covers every status past <code>Paid</code>.</p>
+          Revised 2026-10-06: the minted signing secret is never printed (an operator reveals it in the Stripe Dashboard), and the paid-order short-circuit covers every status past <code>Paid</code>.
+          Revised 2026-10-07: anchors refreshed after the v1.233.0 release.</p>
           <h2 id="context">Context</h2>
           <p>Four ADRs already cover how a message crosses a boundary in this workspace. ADR-003 decides how an
           event leaves a service (outbox, at-least-once). ADR-021 decides how a redelivered broker message is
@@ -549,6 +551,33 @@
           </ol>
           <p>All <code>path:line</code> citations in Status, Context, Decision, Rationale and Trade-offs were re-verified
           against current source and re-anchored where they had moved.</p>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. The ingress contract, the Decision, the Rationale and the
+          Trade-offs are unchanged, and their citations still hold. Only anchors inside the earlier dated
+          revisions have moved; those revisions stay as written, and the current locations are recorded here.</p>
+          <ol>
+          <li>Anchors re-verified against current source:<ul>
+          <li>The 2026-09-07 item 3 cancel behavior: the guard is at
+          <code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/Cancel/CancelOrderHandler.cs:106</code>
+          inside <code>RetirePaymentSessionAsync</code> (<code>:104-140</code>), the expiry runs through
+          <code>PaymentSessionRetirement.RetireAsync</code> (<code>:116</code>), the <code>PaymentAlreadyCompleted</code> refusal is at
+          <code>:126-132</code>, and the read and expire failure logs are at <code>:121</code> and <code>:136</code>; the constant is
+          still at <code>OrderCancellationErrorCodes.cs:18</code>.</li>
+          <li>The 2026-09-07 item 4 default: <code>StuckAgeMinutes</code> defaults to 30 at
+          <code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Reconciliation/PaymentReconciliationSettings.cs:48</code>
+          (range <code>[Range(5, 10080)]</code> at <code>:47</code>); the class-two description is at
+          <code>PaymentReconciliationService.cs:29-41</code> and the Cancelled-over-PaymentFailed reasoning at
+          <code>:43-50</code>.</li>
+          <li>The 2026-10-01 items 1 to 3: in
+          <code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Stripe/StripeWebhookRegistrationService.cs</code>
+          the shared-secret adoption is at <code>:115-120</code>, the shared-store write and then the provider
+          assignment at <code>:202-203</code>, the creation log call and declaration at <code>:205,308-309</code>, and the
+          existing-endpoint trust check at <code>:146</code>; in <code>ProcessPaymentWebhookHandler.cs</code> the paid
+          short-circuit is at <code>:84-92</code>, the <code>PaymentProof</code> check at <code>:101-108</code> and the refund log for a
+          different payment intent at <code>:124-134</code>.</li>
+          </ul>
+          </li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-003 (outbound at-least-once delivery, the other end of the same family), ADR-021 (broker-side
           inbound dedup, which never sees a webhook), ADR-017 (client-supplied idempotency keys, which a third
@@ -575,6 +604,7 @@
             <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

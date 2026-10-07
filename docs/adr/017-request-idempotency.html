@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -250,7 +251,10 @@
           protection&quot;) becomes a declared decision rather than an oversight. The shared auth controllers declare
           their intent both ways. See the Revision (2026-08-18) at the end. Revised 2026-10-01 (keys are bound
           to the request body with a 422 on reuse, replays carry <code>Location</code> and <code>ETag</code>, and lock or cache faults
-          fail open; see Revision below).</p>
+          fail open; see Revision below). Revised 2026-10-07: the shared <code>[Idempotent]</code> inventory is
+          corrected (email confirmation, entity create and update, notifications and legal acceptance carry
+          it too, not only the password-reset pair) and the shared admin lock/unlock POSTs are recorded as
+          declared by each consumer override rather than by the base.</p>
           <h2 id="context">Context</h2>
           <p>Write endpoints (POST / PUT / PATCH) are exposed to <strong>client retries and double-submits</strong>: a flaky
           network, an impatient user double-clicking, or a resilience pipeline re-issuing a request can cause the
@@ -467,6 +471,40 @@
           <li>Anchors in Status, Context, Decision, Rationale and Trade-offs were re-verified against current source
           and are unchanged.</li>
           </ul>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. The Decision, Rationale and Trade-offs are unchanged and every
+          anchor in them still lands on the code it names. What needs correcting is the inventory of shared
+          declarations recorded in the earlier Revisions (incomplete when written, and since extended), and several
+          of their anchors. Those sections are left as written.</p>
+          <ol>
+          <li><strong>The shared <code>[Idempotent]</code> actions are more than the password-reset pair.</strong> The Revision
+          (2026-10-01) lists forgot-password and reset-password
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/PasswordResetAuthControllerBase.cs:75-76</code>,
+          <code>:99-100</code>, both still exact) as the shared <code>[Idempotent]</code> actions. The shared
+          <code>EmailConfirmationControllerBase</code> (ADR-116) also marks send-email-confirmation and confirm-email
+          <code>[Idempotent]</code> (<code>.../Controllers/EmailConfirmationControllerBase.cs:78-79</code>, <code>:106-107</code>). Outside
+          auth, the shared bases declare it on the entity create POST
+          (<code>.../Controllers/AggregateRootEntityControllerBase.cs:59-60</code>), the entity update PUT
+          (<code>.../Controllers/CrudEntityControllerBase.cs:88-89</code>) and the legal-acceptance POST
+          (<code>.../Controllers/Legal/LegalAcceptanceControllerBase.cs:93-94</code>), and the shipped concrete
+          <code>NotificationsController</code> (<code>.../Controllers/Notifications/NotificationsController.cs:30</code>) declares
+          it on its POST (<code>:43-44</code>). Every POST on
+          <code>AuthControllerBase</code> and <code>OAuthControllerBase</code> remains <code>[NonIdempotent]</code>.</li>
+          <li><strong>Not every shared base declares its POSTs.</strong> <code>UsersAdminControllerBase</code> carries neither marker
+          on its lock and unlock POSTs
+          (<code>.../Controllers/Administration/UsersAdminControllerBase.cs:128</code>, <code>:148</code>). The gate still holds,
+          because it scans concrete classes only and both consumers override the two actions with
+          <code>[NonIdempotent]</code> (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Controllers/UsersAdminController.cs:33</code>,
+          <code>:42</code>; <code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.API/Controllers/AdminUsersController.cs:38</code>,
+          <code>:46</code>), but a new consumer of that base has to supply the declaration itself rather than inherit it.</li>
+          <li>Anchors re-verified against current source: in <code>AuthControllerBase.cs</code>, login <code>:69-70</code> and
+          register <code>:93-94</code> are unchanged, refresh is at <code>:123-124</code>, revoke at <code>:151-152</code> and the per-session
+          revoke at <code>:215-216</code>; the OAuth exchange (still the only <code>[HttpPost]</code> on <code>OAuthControllerBase</code>, the
+          other verbs at <code>:103</code>, <code>:113</code>, <code>:126</code> being <code>[HttpGet]</code>) is at <code>OAuthControllerBase.cs:230-231</code>
+          with <code>complete</code> at <code>:145</code>; in <code>IdempotencyFilter.cs</code> the no-key <code>next()</code> is at <code>:132-136</code>, the
+          buffering guard at <code>:122-123</code> and <code>ReadIdempotencyKey</code> at <code>:164-171</code> (blank to null at <code>:170</code>);
+          the passthrough tests remain at <code>IdempotencyFilterPassthroughTests.cs:46</code>, <code>:68</code> and <code>:85</code>.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-003 (handler idempotency for outbox/event consumers, a distinct concern), ADR-013 (Result is the
           response the filter caches/replays), ADR-014 (the filter keeps the handler thin), ADR-009 (the resilience
@@ -496,6 +534,7 @@
             <li><a href="#revision-2026-08-18">Revision (2026-08-18)</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

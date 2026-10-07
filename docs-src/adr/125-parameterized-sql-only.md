@@ -1,7 +1,7 @@
 # ADR-125: Parameterized SQL Only, Enforced by a Fitness Gate
 
 ## Status
-Accepted (2026-09-19). Revised 2026-10-01: citations refreshed and MMCA.Helpdesk counted as the fourth subclassing repo. Revised 2026-10-06: the relational limit is now a conditional registration that fails at container validation, not a `NotSupportedException` on the first statement.
+Accepted (2026-09-19). Revised 2026-10-01: citations refreshed and MMCA.Helpdesk counted as the fourth subclassing repo. Revised 2026-10-06: the relational limit is now a conditional registration that fails at container validation, not a `NotSupportedException` on the first statement. Revised 2026-10-07: the Cosmos-default failure is an unresolved-service error raised at startup only where the container is validated on build (Development under the default builder) and otherwise on first resolution, and the CHANGELOG anchors are refreshed after the v1.233.0 release.
 
 ## Context
 The supported way to read data is the repository plus specification contract
@@ -25,9 +25,9 @@ Two call sites that look identical, opposite safety, and the difference is three
 The framework also runs on four engines ([ADR-018](018-polyglot-persistence.md)), and one of them has
 no SQL command surface at all, so "raw SQL" cannot be offered as a capability every host has. Before
 v1.192.0 the landing shape for a raw scalar read was four keyless `ValReturn<T>` entities mapped to no
-table and queried by nobody (`MMCA.Common/CHANGELOG.md:1494-1500`); the pair of additions this record
-covers shipped in v1.192.0 (`MMCA.Common/CHANGELOG.md:1379`, the interface at `:1449-1458` and the
-fitness base at `:1459-1462`).
+table and queried by nobody (`MMCA.Common/CHANGELOG.md:1519-1525`); the pair of additions this record
+covers shipped in v1.192.0 (`MMCA.Common/CHANGELOG.md:1404`, the interface at `:1474-1483` and the
+fitness base at `:1484-1487`).
 
 ## Decision
 Give raw SQL exactly one door whose signature makes the unsafe call uncompilable, and ban the four raw
@@ -39,7 +39,7 @@ EF members in module code with a fitness test rather than a guideline.
   `FormattableString`. A concatenated statement is a `string` and does not bind to either method, so
   injection on this path is a compile error rather than a review item, and the statement text stays
   stable across calls so the server keeps its plan (`:9-15`). `T` is a scalar or an unmapped DTO whose
-  properties match the selected columns by name (`:26`, `:34`). The interface lives in Application, so
+  properties match the selected columns by name (`:27`, `:34`). The interface lives in Application, so
   a module reaches hand-written SQL without referencing EF Core.
 - **The relational limit is explicit and named, not implied.** `EFRawSqlQueryExecutor`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/EFRawSqlQueryExecutor.cs:28`)
@@ -47,9 +47,15 @@ EF members in module code with a fitness test rather than a guideline.
   source is on a relational engine
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:409`, registration at
   `:411`). A Cosmos-default host has no registration, so a service that injects the interface there
-  fails when the container is validated rather than on its first statement, which is the same boundary
-  the interface documents (`IRawSqlQueryExecutor.cs:17-22`) and the executor restates
-  (`EFRawSqlQueryExecutor.cs:19-24`).
+  fails with an unresolved-service error rather than on its first statement. The interface
+  (`IRawSqlQueryExecutor.cs:17-22`), the executor (`EFRawSqlQueryExecutor.cs:19-24`) and the
+  registration method (`DependencyInjection.cs:391-396`) all document the missing registration, and
+  all three word the timing as "when the container is validated", which is narrower than what the
+  hosts do. No host in the four repos sets `ValidateOnBuild` itself, and the hosts that register the
+  executor build through `WebApplication.CreateBuilder` (for example
+  `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:12`), so the container is validated at
+  startup only where the default builder turns validation on (the Development environment), and
+  elsewhere the error appears the first time a dependent service is resolved.
 - **The statement joins the caller's unit of work.** The executor takes its context from the scoped
   `IDbContextFactory` and calls EF's `Database.SqlQuery<T>` on it (`EFRawSqlQueryExecutor.cs:51`), so
   the read shares the caller's connection and any transaction an `ITransactional` command opened. It is
@@ -118,8 +124,9 @@ EF members in module code with a fitness test rather than a guideline.
   the exemption surface is a known, justified constant rather than a growing list.
 - **Relational-only is a stated limit rather than an assumption.** Under
   [ADR-018](018-polyglot-persistence.md) a host can default to Cosmos DB, which speaks its own query
-  language. Withholding the registration on such a host turns the limit into a container-validation
-  failure at startup, which is earlier and more useful than a provider-level error on the first
+  language. Withholding the registration on such a host turns the limit into a dependency-resolution
+  failure (at startup where the container is validated, otherwise when the first dependent service
+  is resolved), which is earlier and more legible than a provider-level error on the first
   statement; the real options stay the same (express the read with LINQ, or move the entity to a
   relational source).
 
@@ -146,9 +153,11 @@ EF members in module code with a fitness test rather than a guideline.
 - **One source, the default one.** The executor resolves the host's default physical source
   (`EFRawSqlQueryExecutor.cs:50`), so a statement that must run against a named non-default source has
   no route through this interface today.
-- **The Cosmos refusal is discovered at host startup** (container validation,
-  `IRawSqlQueryExecutor.cs:18-21`), not at compile time. Nothing at compile time tells a module author
-  that the host it will be deployed into defaults to a non-relational engine.
+- **The Cosmos refusal is discovered at run time, not at compile time.** The missing registration is
+  documented (`IRawSqlQueryExecutor.cs:18-21`), but it surfaces as a resolution failure: at host
+  startup only where the container is validated on build (the Development environment under the
+  default builder), otherwise on the first resolution of a dependent service. Nothing at compile
+  time tells a module author that the host it will be deployed into defaults to a non-relational engine.
 
 ## Revision (2026-10-01)
 No decision or rationale changed. Citations refreshed: the CHANGELOG anchors (`MMCA.Common/CHANGELOG.md:1038`,
@@ -175,6 +184,32 @@ ratchet still holds one entry across all four repos.
 - All live-section anchors were re-verified against current source (executor, interface,
   `DependencyInjection.cs`, `DbContextFactory.cs`, CHANGELOG); the 2026-10-01 anchors above are left as
   recorded on that date.
+
+## Revision (2026-10-07)
+Re-verified against current source. The decision, the executor, the interface, the fitness base, the
+one-entry `AllowedFiles` ratchet and every consumer subclass are unchanged. Three things moved: the
+timing of the Cosmos-default failure was stated more strongly than the hosts support, the `T`-shape
+anchor on `QueryAsync<T>` was one line early, and every CHANGELOG anchor shifted by 25 lines when the
+v1.232.1 and v1.233.0 entries (`MMCA.Common/CHANGELOG.md:7-31`) landed above v1.192.0.
+
+1. The Cosmos-default failure is an unresolved-service error whose timing depends on the host. No host
+   in the four repos sets `ValidateOnBuild` (no match in any of their source trees); the hosts that
+   register the executor build through `WebApplication.CreateBuilder` (for example
+   `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:12`), whose default validates the container
+   on build only in the Development environment. Elsewhere the error surfaces the first time a
+   dependent service is resolved. The Decision, Rationale and Trade-offs bullets now say so; the
+   registration itself is unchanged (`DependencyInjection.cs:409-411`). The source comments still say
+   "fails when the container is validated" (`IRawSqlQueryExecutor.cs:21`,
+   `EFRawSqlQueryExecutor.cs:22-23`, `DependencyInjection.cs:394-395`), which is the narrower wording
+   this revision corrects; they are left for a source change.
+2. The `QueryAsync<T>` row-shape `typeparam` is at `IRawSqlQueryExecutor.cs:27`, not `:26` (the
+   method `summary`).
+3. Anchors re-verified against current source: the v1.192.0 header (`MMCA.Common/CHANGELOG.md:1404`),
+   the `IRawSqlQueryExecutor` entry (`:1474-1483`, still ending on the original
+   `NotSupportedException` sentence at `:1483`), the `RawSqlConventionTestsBase` entry
+   (`:1484-1487`) and the `ValReturn<T>` removal (`:1519-1525`). The v1.218.0 conditional registration
+   bullet cited by the 2026-10-06 revision is now `:311`; that revision, and the 2026-10-06 sentence in
+   Status, are left as recorded on their date.
 
 ## Related
 [ADR-055](055-repository-and-specification-contract.md) (the repository plus specification path this

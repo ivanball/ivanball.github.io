@@ -1,7 +1,7 @@
 # ADR-082: Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy
 
 ## Status
-Accepted (2026-08-14).
+Accepted (2026-08-14). Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 
 ## Context
 Both deployed applications put a YARP gateway in front of per-module service hosts (ADR-008), and
@@ -74,7 +74,7 @@ deliberately broader one for gateways.
   `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:21-22`), and Bicep injects the
   real value into the gateway container of both applications as
   `Cors__AllowedOrigins__0`, pointing at the UI container app's FQDN
-  (`MMCA.ADC/infra/main.bicep:2415`, `MMCA.Store/infra/main.bicep:1937`). On Store the same key can
+  (`MMCA.ADC/infra/main.bicep:2462`, `MMCA.Store/infra/main.bicep:1937`). On Store the same key can
   also arrive from Key Vault as `Cors--AllowedOrigins--0`, which is why the vault provider is
   registered before anything reads configuration: the allow-list binds eagerly
   (`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:54-62`, `:63`).
@@ -85,8 +85,8 @@ deliberately broader one for gateways.
   `MMCA.Store.Sales.Service/Program.cs:146`), as does the Helpdesk reference host
   (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:34`), and every one of the eight then
   runs `UseCommonMiddlewarePipeline()` so the selection above applies
-  (`MMCA.ADC.Identity.Service/Program.cs:356`, `MMCA.ADC.Conference.Service/Program.cs:446`,
-  `MMCA.ADC.Engagement.Service/Program.cs:324`, `MMCA.ADC.Notification.Service/Program.cs:269`,
+  (`MMCA.ADC.Identity.Service/Program.cs:356`, `MMCA.ADC.Conference.Service/Program.cs:448`,
+  `MMCA.ADC.Engagement.Service/Program.cs:325`, `MMCA.ADC.Notification.Service/Program.cs:269`,
   `MMCA.Store.Catalog.Service/Program.cs:320`, `MMCA.Store.Identity.Service/Program.cs:299`,
   `MMCA.Store.Sales.Service/Program.cs:299`, `MMCA.Helpdesk.Web/Program.cs:142`). Both gateways call
   `AddCommonGatewayCors` and the bare `app.UseCors()`
@@ -160,6 +160,17 @@ service hosts (`MiddlewarePipelineBuilderTests.cs:14-39`), leaving the ordering 
 ## Revision (2026-10-06)
 - No content changed: the two-tier posture, both policies, the environment selection step, the call-site adoption and the test coverage all still hold as written.
 - Anchors were re-verified against current source and moved where the code shifted: the `AddCommonCors` policy lines (`WebApplicationBuilderExtensions.cs:132`, `:144-149`), the pipeline delegation (`WebApplicationExtensions.cs:170`, `:172`), the gateway Bicep entries, every host call site, the ADC gateway CORS lines, the service-tier test range (`WebApplicationBuilderExtensionsTests.cs:210-334`) and the ADR-008 cross-reference (`:95`).
+
+## Revision (2026-10-07)
+Re-verified against current source. The two-tier posture, both policies, the environment selection
+step, the deploy-time origin injection and the adoption on all eight service-tier hosts and both
+gateways are unchanged; only three anchors moved after the v1.233.0 release.
+
+1. Anchors re-verified against current source: the ADC gateway Bicep entry for
+   `Cors__AllowedOrigins__0` (`MMCA.ADC/infra/main.bicep:2462`; Store unchanged at
+   `MMCA.Store/infra/main.bicep:1937`) and the `UseCommonMiddlewarePipeline()` calls in
+   `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:448` and
+   `MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:325`.
 
 ## Related
 [ADR-079](079-shared-http-middleware-pipeline.md) (the shared middleware pipeline whose fixed order

@@ -6,8 +6,10 @@ interface, no silo, no placement configuration, no new package. What ships is th
 model was weighed and dropped, the alternative weighed with it, and the one condition that would make
 it right to revisit. The existing path stays: EF over the owning module's own database, Redis-backed
 caching, and the SignalR notification hub. Revised 2026-10-01: citations refreshed and the replica
-wording corrected. Revised 2026-10-06: the replica wording now reflects that the ADC front-door apps
-raise `minReplicas` to 2 under `conferenceMode`.
+wording corrected. Revised 2026-10-06: the replica wording now reflects that not every ADC app runs
+`minReplicas: 1` under `conferenceMode`. Revised 2026-10-07: the replica wording now reflects
+that the ADC UI app holds four replicas under `conferenceMode` and the Notification app stays at a
+ceiling of two, and anchors were refreshed.
 
 ## Context
 The actor model gives every logical entity its own single-threaded unit of execution holding its state
@@ -28,7 +30,10 @@ and session state is the caller's own row, read per request. Contention is handl
 rather than by a writer thread: every auditable entity carries a database-managed concurrency token
 (`MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IRowVersioned.cs:11`) configured for every
 context in `OnModelCreating`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:416`).
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:417`,
+which calls `ConfigureConcurrencyTokens` at `:421`, defined at `:589`: `IsRowVersion()` at `:602` on
+an engine with a store-generated row version, such as the SQL Server databases both apps use, and
+`IsConcurrencyToken()` at `:606` on every other engine).
 That is the single-writer guarantee an actor would provide, and it already holds across replicas,
 which an in-process actor would not ([ADR-035](035-optimistic-concurrency.md)).
 
@@ -42,8 +47,8 @@ the host at startup
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/SignalRExtensions.cs:27`). ADC's Engagement
 module reaches it off the command hot path through a single-reader drain that preserves per-session
 ordering
-(`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/Live/LiveChannelPublishProcessor.cs:30`,
-resolving the publisher per item at `:51`), the one actor-shaped guarantee the live layer needs.
+(`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/Live/LiveChannelPublishProcessor.cs:40`,
+resolving the publisher per item at `:127`), the one actor-shaped guarantee the live layer needs.
 
 **Read pressure is absorbed by caching, and the load is small.** Tier 2 is an HTTP output cache in the
 pipeline
@@ -51,7 +56,7 @@ pipeline
 backed by Redis when a connection string is present
 (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Caching/RedisCachingExtensions.cs:91`, registered at
 `:99`), with the Redis resource composed by each app's AppHost
-(`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:43`, the builder at `:9`), so a hot read path
+(`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:44`, the builder at `:10`), so a hot read path
 never reaches the database. ADC serves a single conference's attendance over a few days, and a runtime
 built for millions of addressable entities is not sized for that. Searches of both `Source` trees for
 `Orleans`, `IGrain`, `Akka` and `Proto.Actor` return no match, so the absence is real.
@@ -93,11 +98,13 @@ tiers, and live fan-out stays on the notification hub.
   about, a second serialization contract beside the integration-event schema
   ([ADR-010](010-integration-event-schema-versioning.md)), and a second answer to where state lives.
 - **A hand-rolled in-memory per-entity lock or actor-like queue.** It is per replica, and both apps scale
-  to more than one (every container app declares at least `maxReplicas: 2`, four for the scaled ADC
-  apps under `conferenceMode`, and runs `minReplicas: 1` except the two ADC front-door apps, which run
-  two under `conferenceMode`:
-  `MMCA.ADC/infra/main.bicep:1882`, `conferenceScaledMaxReplicas` at `:191`,
-  `conferenceFrontDoorMinReplicas` at `:190` and its use at `:2493`, `MMCA.Store/infra/main.bicep:1591`),
+  to more than one (every container app declares at least `maxReplicas: 2`; under `conferenceMode` the
+  ADC Identity, Conference, Engagement, Gateway and UI apps reach four while Notification stays at two;
+  every app runs `minReplicas: 1` except the ADC Gateway, which runs two under `conferenceMode`, and
+  the ADC UI, which then holds its ceiling of four:
+  `MMCA.ADC/infra/main.bicep:1914`, `:2067`, `:2202`, `:2388`, `:2540` and `:2691`,
+  `conferenceFrontDoorMinReplicas` at `:191`, `conferenceScaledMaxReplicas` at `:192`,
+  `MMCA.Store/infra/main.bicep:1591`),
   so an in-process writer guarantee is not a guarantee, and it would silently weaken a
   correctness property the concurrency token holds across the fleet.
 - **Adopting actors only for live polls.** The live path is the least durable state in the system and
@@ -133,6 +140,28 @@ No decision or rationale changed.
   and every app still declares at least `maxReplicas: 2`, so the per-replica argument holds.
 - AppHost anchors moved: the Redis resource is `Program.cs:43` and the builder `:9`.
 - Every other anchor in the live sections was re-verified against current source and still matches.
+
+## Revision (2026-10-07)
+Re-verified against current source. No decision or rationale changed: every container app still
+declares at least `maxReplicas: 2`, so a per-replica writer guarantee still fails and the argument
+holds. The replica detail moved and the anchors were re-pointed.
+1. Replica wording corrected: the two ADC front-door apps do not share one floor. The Gateway uses
+   `conferenceFrontDoorMinReplicas` (`MMCA.ADC/infra/main.bicep:2540`, 2 under `conferenceMode`),
+   while the UI uses `conferenceMode ? conferenceScaledMaxReplicas : conferenceFrontDoorMinReplicas`
+   (`:2691`), so it holds four under `conferenceMode`. Notification stays at `minReplicas: 1`,
+   `maxReplicas: 2` and is off `conferenceScaledMaxReplicas` (`:2388`), so "four for the scaled ADC
+   apps" covers Identity, Conference, Engagement, Gateway and UI (`:1914`, `:2067`, `:2202`, `:2541`,
+   `:2692`) only.
+2. Anchors re-verified against current source: `conferenceFrontDoorMinReplicas`
+   (`MMCA.ADC/infra/main.bicep:191`) and `conferenceScaledMaxReplicas` (`:192`), replacing `:1882`
+   (now a probe comment), `:190`, `:2493` and `:2639`; `OnModelCreating`
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:417`,
+   `ConfigureConcurrencyTokens` at `:589`, `IsRowVersion()` at `:602` on a store-generated engine and
+   `IsConcurrencyToken()` at `:606` otherwise); `LiveChannelPublishProcessor`
+   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/Live/LiveChannelPublishProcessor.cs:40`,
+   per-item publisher resolution at `:127`, the single-reader FIFO drain unchanged); the AppHost Redis
+   resource (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:44`) and builder (`:10`).
+   `MMCA.Store/infra/main.bicep:1591` still holds.
 
 ## Related
 [ADR-007](007-grpc-extraction.md), [ADR-008](008-service-extraction-topology.md) and

@@ -12,7 +12,10 @@ Trade-off below ("an action that should be idempotent but is missing `[Idempoten
 protection") becomes a declared decision rather than an oversight. The shared auth controllers declare
 their intent both ways. See the Revision (2026-08-18) at the end. Revised 2026-10-01 (keys are bound
 to the request body with a 422 on reuse, replays carry `Location` and `ETag`, and lock or cache faults
-fail open; see Revision below).
+fail open; see Revision below). Revised 2026-10-07: the shared `[Idempotent]` inventory is
+corrected (email confirmation, entity create and update, notifications and legal acceptance carry
+it too, not only the password-reset pair) and the shared admin lock/unlock POSTs are recorded as
+declared by each consumer override rather than by the base.
 
 ## Context
 Write endpoints (POST / PUT / PATCH) are exposed to **client retries and double-submits**: a flaky
@@ -235,6 +238,40 @@ spans `ArchitectureRules.Idempotency.cs:38-41`. That earlier section is left as 
   superseded by the Revision (2026-10-01).
 - Anchors in Status, Context, Decision, Rationale and Trade-offs were re-verified against current source
   and are unchanged.
+
+## Revision (2026-10-07)
+Re-verified against current source. The Decision, Rationale and Trade-offs are unchanged and every
+anchor in them still lands on the code it names. What needs correcting is the inventory of shared
+declarations recorded in the earlier Revisions (incomplete when written, and since extended), and several
+of their anchors. Those sections are left as written.
+
+1. **The shared `[Idempotent]` actions are more than the password-reset pair.** The Revision
+   (2026-10-01) lists forgot-password and reset-password
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/PasswordResetAuthControllerBase.cs:75-76`,
+   `:99-100`, both still exact) as the shared `[Idempotent]` actions. The shared
+   `EmailConfirmationControllerBase` (ADR-116) also marks send-email-confirmation and confirm-email
+   `[Idempotent]` (`.../Controllers/EmailConfirmationControllerBase.cs:78-79`, `:106-107`). Outside
+   auth, the shared bases declare it on the entity create POST
+   (`.../Controllers/AggregateRootEntityControllerBase.cs:59-60`), the entity update PUT
+   (`.../Controllers/CrudEntityControllerBase.cs:88-89`) and the legal-acceptance POST
+   (`.../Controllers/Legal/LegalAcceptanceControllerBase.cs:93-94`), and the shipped concrete
+   `NotificationsController` (`.../Controllers/Notifications/NotificationsController.cs:30`) declares
+   it on its POST (`:43-44`). Every POST on
+   `AuthControllerBase` and `OAuthControllerBase` remains `[NonIdempotent]`.
+2. **Not every shared base declares its POSTs.** `UsersAdminControllerBase` carries neither marker
+   on its lock and unlock POSTs
+   (`.../Controllers/Administration/UsersAdminControllerBase.cs:128`, `:148`). The gate still holds,
+   because it scans concrete classes only and both consumers override the two actions with
+   `[NonIdempotent]` (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Controllers/UsersAdminController.cs:33`,
+   `:42`; `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.API/Controllers/AdminUsersController.cs:38`,
+   `:46`), but a new consumer of that base has to supply the declaration itself rather than inherit it.
+3. Anchors re-verified against current source: in `AuthControllerBase.cs`, login `:69-70` and
+   register `:93-94` are unchanged, refresh is at `:123-124`, revoke at `:151-152` and the per-session
+   revoke at `:215-216`; the OAuth exchange (still the only `[HttpPost]` on `OAuthControllerBase`, the
+   other verbs at `:103`, `:113`, `:126` being `[HttpGet]`) is at `OAuthControllerBase.cs:230-231`
+   with `complete` at `:145`; in `IdempotencyFilter.cs` the no-key `next()` is at `:132-136`, the
+   buffering guard at `:122-123` and `ReadIdempotencyKey` at `:164-171` (blank to null at `:170`);
+   the passthrough tests remain at `IdempotencyFilterPassthroughTests.cs:46`, `:68` and `:85`.
 
 ## Related
 ADR-003 (handler idempotency for outbox/event consumers, a distinct concern), ADR-013 (Result is the

@@ -51,6 +51,7 @@ line numbers. Nothing in the decision changes.
 **Revised 2026-10-01:** both consumers now turn active destination probing off; see the Revision (2026-10-01) below.
 
 Revised 2026-10-06: the edge correlation middleware now sanitizes a caller-supplied id, the gateway config filters are recorded as fixed for the process lifetime, and the citations are refreshed; see the Revision (2026-10-06) below.
+Revised 2026-10-07: anchors refreshed after the v1.233.0 release; see the Revision (2026-10-07) below.
 
 ## Context
 [ADR-008](008-service-extraction-topology.md) made the Gateway the only client entry point and gave it
@@ -242,7 +243,7 @@ every request on the concurrency partition, go through the shared `IsExemptFromL
 A configured secret shorter than 32 characters fails at registration
 (`GatewayRateLimitingSettings.cs:153`). The secret is deployment data on both sides of the boundary:
 each consumer injects `GatewayRateLimiting__TrustedCallerSecret` into gateway and UI container alike
-from Key Vault (`MMCA.ADC/infra/main.bicep:2444` and `:2602`, `MMCA.Store/infra/main.bicep:1958-1959` and
+from Key Vault (`MMCA.ADC/infra/main.bicep:2491` and `:2650`, `MMCA.Store/infra/main.bicep:1958-1959` and
 `:2084`), and the client half is framework code, `AddTrustedCallerHeader`
 (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:121`, attaching
 `TrustedCallerHandler`, `Security/TrustedCallerHandler.cs:35`, at `:156`). It exempts a component you
@@ -381,7 +382,7 @@ balances across the replicas behind it. ADC declares five clusters with one dest
 `:288-292`, `:293-297`) and Store three (`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:146-154`,
 `:155-163`, `:164-168`), resolved through `AddServiceDiscoveryDestinationResolver`
 (ADC `Program.cs:151`, Store `Program.cs:141`) against the bicep address book
-(`MMCA.ADC/infra/main.bicep:2421-2424`). The shape is not incidental: both repositories **pin it as
+(`MMCA.ADC/infra/main.bicep:2468-2471`). The shape is not incidental: both repositories **pin it as
 an invariant**, asserting that each cluster contains a single destination
 (`MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/RouteMapTests.cs:251-253`,
 `MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/RouteMapTests.cs:315-317`). A second destination in
@@ -766,6 +767,38 @@ reasoning at `:63-67`), and it also exempts any path with a file extension (`:80
   changes are merged.
 - Every `path:line` anchor in the Status, Context, Decision and Trade-offs sections was re-verified
   against current source and refreshed (the `MMCA.Common.Gateway` pin is 1.232.0 in both consumers).
+
+## Revision (2026-10-07)
+
+Re-verified against current source. Nothing in the decision changes: the edge responsibilities, the
+three declines, the delegations, the four bypass tiers and ADC's no-fallback authorization all hold
+as recorded. Only the version pin and line anchors moved with the v1.233.0 release.
+
+1. **The `MMCA.Common.Gateway` pin is 1.233.0 in both consumers**
+   (`MMCA.ADC/Directory.Packages.props:121`, `MMCA.Store/Directory.Packages.props:14`), still in
+   lockstep with the rest of the framework. This supersedes the ADC `:125` anchor in the 2026-08-27
+   and 2026-09-19 Status sentences and the 1.232.0 figure there and in the 2026-10-06 revision,
+   which stay as written. The 2026-10-06 statement that every Status, Context, Decision and
+   Trade-offs anchor was current no longer held at this audit; the Decision anchors are refreshed
+   below, and the Status pin anchor is superseded here.
+2. Anchors re-verified against current source:
+   - ADC injects `GatewayRateLimiting__TrustedCallerSecret` into the gateway at
+     `MMCA.ADC/infra/main.bicep:2491` and the UI at `:2650` (Decision refreshed); the Store anchors
+     `MMCA.Store/infra/main.bicep:1958-1959` and `:2084` are unchanged.
+   - ADC's service-discovery address book is `MMCA.ADC/infra/main.bicep:2468-2471` (Decision
+     refreshed).
+   - The ADC UI host calls the kit at `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:72`
+     (`RetentionFrom`), `:82` (`AddBoundedBlazorCircuits`), `:148` (`AddUiRateLimiting`) and `:221`
+     (`UseUiRateLimiting`), superseding the ADC anchors in the 2026-10-06 revision. The Store anchors
+     `:78`, `:86`, `:95`, `:229` hold, and the Store `using` of the kit namespace is at
+     `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:23` (the 2026-09-20 revision cites `:24`).
+   - The kit's release entry is `MMCA.Common/CHANGELOG.md:823` (`[1.206.0]`), superseding `:798` in
+     the 2026-10-06 revision.
+   - ADC's gateway registers plain `AddAuthorization()` at
+     `MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:114`, with the no-fallback reasoning at
+     `:110-113`, superseding `:108-112` in the 2026-10-01 revision. The route-table comment at
+     `MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:72-77` still describes a registered
+     fallback, and this record still follows `Program.cs`.
 
 ## Related
 [ADR-008](008-service-extraction-topology.md) (the record that made the Gateway the only entry point

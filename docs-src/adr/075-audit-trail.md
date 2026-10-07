@@ -13,6 +13,7 @@ Revised 2026-09-25 (both apps' SQL auditing now records UPDATE and DELETE statem
 table, by different means, and the code anchors are refreshed).
 Revised 2026-10-01 (retention has no fallback: without the scheduler nothing is purged; see Revision below).
 Revised 2026-10-06: inserts and deletes write one summary row, a store-generated key is fixed up by an `UPDATE` after the save, and ADC's trail-DML auditing therefore fires on routine inserts too.
+Revised 2026-10-07: the key fix-up issues one filtered `UPDATE` per pending row rather than one statement covering all of them, `AuditTrailSettings` also carries `DataSource` (the engine the reader queries), and anchors are refreshed after the v1.233.0 release.
 ## Context
 The framework already answers "who touched this row last". Every `AuditableBaseEntity` carries
 `CreatedOn/By` and `LastModifiedOn/By`, stamped by `AuditSaveChangesInterceptor` on the way into
@@ -58,7 +59,9 @@ final stamped values rather than a half-populated entity. The audit-trail rows i
 never audited. `DesignTimeDbContextHelper` registers all four
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Design/DesignTimeDbContextHelper.cs:148-149`,
 `:155`, `:167`). Only the two `GetRequiredService` interceptors are hard requirements for `dotnet ef`; the
-tenant and audit-trail ones are resolved with `GetService`, so omitting them would still work (`:162-164`).
+context resolves the tenant and audit-trail ones with `GetService` (`.../ApplicationDbContext.cs:305`,
+`:319`), so omitting either would still work (the helper's own comment says so for the audit-trail one,
+`DesignTimeDbContextHelper.cs:162-164`).
 
 ### `AuditTrailEntry` is deliberately not an auditable entity
 The entity (Infrastructure `Persistence/AuditTrail/AuditTrailEntry.cs`) does **not** implement
@@ -75,13 +78,15 @@ property and adds one row per property whose value actually changed, skipping co
 properties flagged modified but holding an equal value (`:303-312`); a changed owned value object is
 captured as `navigation.property` rows, including on an owner left `Unchanged` (`:258-261`, `:394`). An
 `Added` or `Deleted` entity writes a single summary row with a null `PropertyName` (`:265-274`;
-`.../AuditTrail/AuditTrailEntry.cs:16-20`). Every row goes through `context.Set<AuditTrailEntry>().Add(...)`
+`.../AuditTrail/AuditTrailEntry.cs:18-22`). Every row goes through `context.Set<AuditTrailEntry>().Add(...)`
 (`:446`) into the same `SaveChanges` call as the data, so it commits or rolls back with it: the outbox
 mechanic of ADR-003, applied to a different payload. One exception: an inserted entity with a
 store-generated key has only a temporary key at capture, so after the save the interceptor rewrites that
-row's `EntityKey` with a set-based `ExecuteUpdate` (`:276-282`, `:507-509`). That `UPDATE` joins the
-ambient transaction when one is open; without one it commits after the data save, so a crash in that
-window leaves the row holding the temporary key.
+row's `EntityKey` (`:276-282`): it loops over the pending rows and issues one `UPDATE` per row, filtered
+by that row's `Id`, as `ExecuteUpdateAsync` on the async save path (`:498`, `:507-509`) and
+`ExecuteUpdate` on the sync one (`:541-543`), so an audited save inserting N such entities adds N
+`UPDATE` statements. Each joins the ambient transaction when one is open; without one it commits
+after the data save, so a crash in that window leaves the row holding the temporary key.
 
 Two mechanics are copied verbatim from `DomainEventSaveChangesInterceptor`:
 
@@ -101,18 +106,24 @@ construction survives the erasure of the row it describes.
 ### Opt-in is a marker interface, plus a settings section
 `IAuditedEntity` (Domain) is an empty marker. An entity is audited because someone wrote the interface on
 it, which is what keeps volume a deliberate decision rather than a framework-imposed tax.
-`AuditTrailSettings` binds section `AuditTrail` (`Enabled`, `RetentionDays` default 90) through the
-ADR-070 fail-fast chain, and `AddAuditTrail(configuration)`
+`AuditTrailSettings` binds section `AuditTrail` (`Enabled` default false, `RetentionDays` default 90 and
+bounded `[Range(1, 3650)]`, and `DataSource` default `SQLServer`, the engine whose `Default` database
+the reader queries;
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSettings.cs:26`,
+`:37-38`, `:46`; consumed at `AuditTrailReader.cs:53`) through the ADR-070 fail-fast chain, which runs
+`ValidateDataAnnotations` plus `ValidateOnStart` (`DependencyInjection.Jobs.cs:110-113`). Cosmos is
+documented as unsupported for `DataSource` (`AuditTrailSettings.cs:44`) but not validated: the property
+carries no validation attribute (`:46`). `AddAuditTrail(configuration)`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Jobs.cs:108`) registers the
 interceptor and the settings together, plus `IAuditTrailReader` (`:119`) and `AuditTrailCleanupJob` (`:124`).
 
 ### The table lives in every relational source that adopts it
-`ApplicationDbContext.OnModelCreating` (`.../ApplicationDbContext.cs:416`) calls
-`ConfigureAuditTrail(modelBuilder)` (`:435`, the method itself at `:847`), gated on the settings flag
-resolved from the root provider the way the interceptors are (`:332`, checked at `:849`), creating a
-`dbo.AuditTrailEntries` table (`:856`) with two indexes: `IX_AuditTrailEntries_Entity` on
-`(EntityType, EntityKey, ChangedOn)` for the read path (`:867-868`) and `IX_AuditTrailEntries_ChangedOn`
-for the retention sweep (`:873-874`). A same-transaction write requires the table in the same database as
+`ApplicationDbContext.OnModelCreating` (`.../ApplicationDbContext.cs:417`) calls
+`ConfigureAuditTrail(modelBuilder)` (`:436`, the method itself at `:848`), gated on the settings flag
+resolved from the root provider the way the interceptors are (`:332`, checked at `:850`), creating a
+`dbo.AuditTrailEntries` table (`:857`) with two indexes: `IX_AuditTrailEntries_Entity` on
+`(EntityType, EntityKey, ChangedOn)` for the read path (`:868-869`) and `IX_AuditTrailEntries_ChangedOn`
+for the retention sweep (`:874-875`). A same-transaction write requires the table in the same database as
 the data, which is the outbox precedent (ADR-006) and the reason the trail is not one central store.
 Cosmos skips it: the `CosmosDbContext` `OnModelCreating` override
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/CosmosDbContext.cs:119`) does
@@ -296,6 +307,41 @@ now record trail DML, each shaped by its own volume decision.
   groups `:879-885`, `auditTrailDiagnostics` `:1010`, rationale `:979-1003`, `auditTrailDatabaseNames`
   `:1004`, `auditTrailDmlAuditing` `:1026` (the 2026-10-01 note's `:846` and `:1003` were wrong).
 - Every anchor in the live sections was re-verified against current source.
+
+## Revision (2026-10-07): per-row key fix-up, the reader's data source, and current anchors
+Re-verified against current source. The capture mechanics, the row shape, the opt-in gates, the
+redaction rule, the Cosmos skip and both apps' SQL-auditing content are unchanged; no fitness test
+asserts interceptor ordering (none in `MMCA.Common.Testing.Architecture` references an interceptor) and
+no controller or UI in ADC, Store or Helpdesk `Source/` consumes `IAuditTrailReader`, so those Decision
+and Trade-offs statements stand. What moved is one description, one omitted setting, the design-time
+omission note and the anchors.
+
+1. **The key fix-up is one statement per row, not one for all rows.** The Decision previously described
+   a single set-based `ExecuteUpdate`. The interceptor loops over the pending rows and issues one
+   `UPDATE` per row, filtered by that row's `Id`: `ExecuteUpdateAsync` on the async path
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:498`,
+   `:507-509`) and `ExecuteUpdate` on the sync path (`:541-543`). Each one is set-based in the sense the
+   method's own doc comment uses (it bypasses the change tracker, `:482-484`). This matches ADC's bicep note of "one UPDATE per row" (`MMCA.ADC/infra/main.bicep:1012-1016`).
+2. **`AuditTrailSettings` has a third property.** `DataSource` (default `SQLServer`) names the engine
+   whose `Default` database `IAuditTrailReader` queries
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSettings.cs:46`,
+   consumed at `AuditTrailReader.cs:53`). Cosmos is documented as unsupported (`:44`) but not
+   validated, since the property has no validation attribute and `AddAuditTrail` runs only
+   `ValidateDataAnnotations` plus `ValidateOnStart` (`DependencyInjection.Jobs.cs:110-113`); `RetentionDays` is bounded `[Range(1, 3650)]` (`:37`). The
+   Decision now lists all three.
+3. **The design-time omission note cites the context, not only the helper.** The helper's comment covers
+   the audit-trail interceptor alone (`DesignTimeDbContextHelper.cs:162-164`); the tenant interceptor's
+   optional resolution is `ApplicationDbContext.cs:305`.
+4. Anchors re-verified against current source: `ApplicationDbContext.cs` interceptor block `:297-322`
+   (`GetRequiredService` `:297-298`, `GetService` `:305` and `:319`, `AddInterceptors` `:321`), flag
+   `:332`, `OnModelCreating` `:417`, `ConfigureAuditTrail` call `:436` and method `:848`, flag checked
+   `:850`, `ToTable` `:857`, `IX_AuditTrailEntries_Entity` `:868-869`, `IX_AuditTrailEntries_ChangedOn`
+   `:874-875` (the 2026-10-06 list's `:416`, `:435`, `:847`, `:849`, `:867-868`, `:873-874` were correct
+   when recorded and moved down one line when Common #518 added a comment line at `:391`); `AuditTrailEntry.cs` row-shape paragraph `:18-22`; ADC `MMCA.ADC/infra/main.bicep`:
+   `sqlServerAuditing` `:888`, groups `:895-901`, server volume rationale `:879-887`, trail-DML
+   rationale `:995-1023`, `auditTrailDatabaseNames` `:1024`, `auditTrailDiagnostics` `:1030`,
+   `auditTrailDmlAuditing` `:1046`, `UPDATE` and `DELETE` actions `:1054-1055`. The older anchors in the
+   dated revisions above are left as recorded.
 
 ## Related
 [ADR-003](003-outbox-dual-dispatch.md) (the same-transaction write this copies wholesale, including the

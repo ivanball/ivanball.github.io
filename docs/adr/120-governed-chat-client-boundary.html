@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -282,6 +283,9 @@
           hardening, refreshed citations).</p>
           <p>Revised 2026-10-06: the Anthropic SDK pin reads 12.53.0, and every live-section anchor is re-verified
           against current source.</p>
+          <p>Revised 2026-10-07: <code>PiiRedactionGuardrail</code> also redacts tool results and tool-call arguments that
+          arrive as <code>JsonElement</code> values (since v1.232.0), and its anchors and the CHANGELOG release anchors
+          are refreshed.</p>
           <h2 id="context">Context</h2>
           <p>Rubric section 16, AI-Native Application Architecture, asks one question of a product feature that
           calls a language model: is that dependency governed like any other external system, meaning
@@ -432,11 +436,13 @@
           refused at registration with the one-line fix in the message
           (<code>DependencyInjection.cs:208-217</code>, both refusals in <code>RefuseAnUngovernedHost</code> at <code>:202</code>). The
           framework ships two content policies that answer that refusal on their own. The first,
-          <code>PiiRedactionGuardrail</code> (<code>Guardrails/PiiRedactionGuardrail.cs:41</code>), removes email addresses and
-          North American phone numbers from every outgoing message, including reasoning text, string tool
-          results and the string arguments of tool calls (<code>:72-82</code>, <code>:109-128</code>, <code>:137</code>), leaves the
-          application&#39;s own <code>Instructions</code> alone (<code>:36-38</code>), and is registered as one singleton under both
-          contracts by <code>AddPiiRedactionGuardrail()</code>
+          <code>PiiRedactionGuardrail</code> (<code>Guardrails/PiiRedactionGuardrail.cs:40</code>), removes email addresses and
+          North American phone numbers from every outgoing message, including reasoning text, tool results
+          and the arguments of tool calls (<code>:71-81</code>, <code>:108-127</code>, <code>:136-137</code>), whether those arrive as
+          strings or as <code>JsonElement</code> values, where only string values are rewritten and property names,
+          numbers and booleans are copied as they are (<code>:112</code>, <code>:129-134</code>, <code>RedactJson</code> at <code>:144</code>). It
+          leaves the application&#39;s own <code>Instructions</code> alone (<code>:35-37</code>), and is registered as one singleton
+          under both contracts by <code>AddPiiRedactionGuardrail()</code>
           (<code>Guardrails/GuardrailServiceCollectionExtensions.cs:33</code>, <code>:37-41</code>).
           Contact details are one of the two judgements the framework is willing to make for every
           application: they are never evidence for anything a model is asked, so the judgement does not
@@ -464,8 +470,8 @@
           <code>AddContentPolicyGuardrail(IConfiguration)</code> (<code>GuardrailServiceCollectionExtensions.cs:62</code>)
           registers one singleton under both interfaces (<code>:72-76</code>), so registering it satisfies
           <code>Ai:RequireGuardrail</code> exactly as the PII policy does. <code>PiiRedactionGuardrail</code> ships from
-          MMCA.Common v1.207.0 and <code>ContentPolicyGuardrail</code> from v1.208.0 (<code>MMCA.Common/CHANGELOG.md:773</code>,
-          <code>:727</code>).</p>
+          MMCA.Common v1.207.0 and <code>ContentPolicyGuardrail</code> from v1.208.0 (<code>MMCA.Common/CHANGELOG.md:798</code>,
+          <code>:752</code>).</p>
           </li>
           <li><p><strong>The configuration surface is one section, validated, and the switch is the registration.</strong>
           <code>AiSettings</code> (<code>MMCA.Common/Source/Core/MMCA.Common.AI/AiSettings.cs:22</code>) binds <code>Ai</code> (<code>:25</code>) and
@@ -600,7 +606,7 @@
           (<code>DependencyInjection.cs:36-39</code>). The provider span is absent on a hit, so the two are
           distinguishable, but a spend graph read without that context over-reports.</li>
           <li><strong>The framework ships two content policies, and both are narrow.</strong> Contact-detail redaction
-          (<code>PiiRedactionGuardrail.cs:41</code>) and the injection and blocked-response policy
+          (<code>PiiRedactionGuardrail.cs:40</code>) and the injection and blocked-response policy
           (<code>ContentPolicyGuardrail.cs:64</code>) are shipped because neither judgement varies by application: a
           phone number is never evidence for anything a model is asked, and an imperative aimed at the model
           is never the input&#39;s own argument. The built-in marker list stays deliberately small (eight
@@ -691,6 +697,22 @@
           the <code>[1.207.0]</code> block of <code>MMCA.Common/UPGRADING.md</code> (<code>:471-520</code>), ADC&#39;s <code>SessionScoringService</code>
           and the Conference host&#39;s <code>Program.cs</code>.</li>
           </ul>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. No decision, rationale or trade-off changed in direction; the
+          PII policy&#39;s scope grew and the release anchors moved when the v1.233.0 and v1.232.1 CHANGELOG
+          blocks landed above them.</p>
+          <ol>
+          <li>Decision item 7 now states that <code>PiiRedactionGuardrail</code> redacts tool results and tool-call
+          arguments that arrive as <code>JsonElement</code> values as well as strings, rewriting only string values
+          (<code>MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/PiiRedactionGuardrail.cs:112</code>, <code>:129-134</code>,
+          <code>RedactJson</code> at <code>:144</code>), released in v1.232.0 (<code>MMCA.Common/CHANGELOG.md:46</code>, M195).</li>
+          <li>Anchors re-verified against current source: <code>PiiRedactionGuardrail</code> (class at <code>:40</code>, also in
+          the Trade-offs, patterns at <code>:71-81</code>, content switch at <code>:108-127</code>, <code>RedactText</code> at <code>:136-137</code>,
+          the <code>Instructions</code> remark at <code>:35-37</code>), and the release entries for <code>PiiRedactionGuardrail</code> and
+          <code>ContentPolicyGuardrail</code> (<code>MMCA.Common/CHANGELOG.md:798</code>, <code>:752</code>). The v1.213.0 hardening the
+          2026-10-01 revision records now sits at <code>CHANGELOG.md:530</code>, <code>:531</code> and <code>:541</code>; the earlier
+          revisions keep their anchors as written.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="111-ai-session-scoring-governance.html">ADR-111</a> (the record this one extends: every scoring-specific
           rule, the prompt-change protocol, the golden and live evaluation tiers, the input and output
@@ -725,6 +747,7 @@
             <li><a href="#consequences">Consequences</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

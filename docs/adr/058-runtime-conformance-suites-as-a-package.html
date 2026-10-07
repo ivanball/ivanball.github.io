@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -243,7 +244,8 @@
           Revised 2026-09-22 (the layer rules also ship as compile-time MSBuild targets inside MMCA.Common.Shared; see the Revision below).
           Revised 2026-09-25 (the live-document OpenAPI guard is reconciled with the committed OpenAPI documents both consumers now gate at build time, and the MMCA.Common.Testing.UI page-test bases for the confirm-email and role-admin pages are recorded; see the Revision (2026-09-25) below).
           Revised 2026-09-10 (the security-headers suite reaches both UI web hosts) and 2026-10-01 (the switchable gateway probe gate and the two full-coverage suites are stated consistently); see those Revisions below.
-          Revised 2026-10-06: the consumers&#39; lockstep <code>MMCA.Common.Shared</code> pin is now 1.232.0 and this Status block lists every Revision section; see the Revision (2026-10-06) below.</p>
+          Revised 2026-10-06: the consumers&#39; lockstep <code>MMCA.Common.Shared</code> pin is now 1.232.0 and this Status block lists every Revision section; see the Revision (2026-10-06) below.
+          Revised 2026-10-07: the consumers&#39; lockstep <code>MMCA.Common.Shared</code> pin is now 1.233.0 and the ADC pin anchor moved to <code>Directory.Packages.props:101</code>; see the Revision (2026-10-07) below.</p>
           <h2 id="context">Context</h2>
           <p>ADR-015 turned the architecture invariants into build-gating tests, and drew its own boundary
           explicitly: the fitness suite asserts &quot;<strong>structure / registration</strong>, not runtime behavior&quot;
@@ -581,6 +583,27 @@
           Respawner creation and per-test reset (<code>:95</code>, <code>:115</code>), and the drop inside <code>DisposeAsync</code> (<code>:132</code>);
           the class (<code>:27</code>) and the two environment variables (<code>:75</code>, <code>:76</code>) were already current.</li>
           </ul>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. No decision, rationale or adoption changed; the seven bases and
+          the subclass inventory above stand. Only the lockstep pin moved.</p>
+          <ol>
+          <li><strong>The lockstep pin is now 1.233.0.</strong> MMCA.ADC, MMCA.Store and MMCA.Helpdesk all pin
+          <code>MMCA.Common.Shared</code> 1.233.0 (<code>MMCA.ADC/Directory.Packages.props:101</code>,
+          <code>MMCA.Store/Directory.Packages.props:8</code>, <code>MMCA.Helpdesk/Directory.Packages.props:84</code>), not the
+          1.232.0 the 2026-10-06 Revision recorded. The pin carries the compile-time layer targets only into
+          a package-mode build, because they arrive through the package&#39;s <code>buildTransitive</code> folder
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/MMCA.Common.Shared.csproj:18</code>). ADC and Store build in
+          package mode. Helpdesk does not by default: its committed <code>local.props</code> sets <code>UseLocalMMCA=true</code>
+          (<code>MMCA.Helpdesk/local.props:6</code>) and its CI builds in local-source mode
+          (<code>MMCA.Helpdesk/.github/workflows/ci.yml:10</code>). That mode swaps in
+          <code>MMCA.Common.LocalSource.targets</code> (<code>MMCA.Helpdesk/Directory.Build.targets:6</code>), which does not
+          import <code>MMCA.Common.Shared.targets</code>. For Helpdesk the pin therefore covers only a package-mode
+          build (a generated app, or a clone with <code>local.props</code> deleted).</li>
+          <li>Anchors re-verified against current source: the ADC <code>MMCA.Common.Shared</code> pin is at
+          <code>MMCA.ADC/Directory.Packages.props:101</code> (the 2026-10-01 and 2026-10-06 Revisions cite <code>:105</code>, which
+          now opens the <code>MMCA.Common.AI</code> block); the Store (<code>:8</code>) and Helpdesk (<code>:84</code>) pin lines are
+          unchanged.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-015 (the structural / registration fitness layer this complements; its stated non-goal, &quot;not
           runtime behavior&quot;, is exactly this ADR&#39;s scope, and the two tiers ship as two separate packages),
@@ -612,6 +635,7 @@
             <li><a href="#revision-2026-09-25-committed-openapi-documents-and-page-test-bases-in-testingui">Revision (2026-09-25): committed OpenAPI documents, and page-test bases in Testing.UI</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

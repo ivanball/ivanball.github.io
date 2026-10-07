@@ -33,6 +33,7 @@ ADC's one compensating step (the session-asset orphan-blob delete, ADR-123); eve
 re-anchored (`CheckOutHandler`, `OrderCancelledSagaHandler`, `OrderPaymentFailedSagaHandler`,
 `Order`, `InventoryRestorationDomainService`, `appsettings.json`, `maxReplicas`).
 Revised (2026-10-01): the restoration marker and the stock increase now commit in one transaction, marker first, with the stock moved by an atomic relative update, so the Decision and Rationale bullets are corrected and a trade-off records the discarded failed `Result`; `CancelOrderHandler` retires the session through `PaymentSessionRetirement`, the reconciliation pass is gated by `PaymentProof`, and `PeriodicBackgroundService` moved with Common now subclassing it; two Revision (2026-09-11) statements are marked as no longer holding; every current-state citation is re-anchored. See the Revision below.
+Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 
 ## Context
 Checkout spans a boundary no transaction covers. `CheckOutHandler` commits the order insert, the cart
@@ -112,10 +113,10 @@ saga-timeout backstop for steps that depend on an external system.
   (`MMCA.Common/.../DbContexts/Factory/DbContextFactory.cs:615-621`). Same database, one transaction: the marker
   cannot exist without the writes it guards, and the writes cannot land unmarked.
 - **Redelivery is the retry mechanism.** A failing in-process handler leaves its outbox row
-  unprocessed (`MMCA.Common/.../Interceptors/DomainEventSaveChangesInterceptor.cs:332-360`, the catch at
-  `:346-354`) and the `OutboxProcessor` re-dispatches the pure domain event on a later cycle
-  (`MMCA.Common/.../Outbox/Processing/OutboxProcessor.cs:556-557`), with the bounded retries, backoff and
-  dead-lettering ADR-003 already defines (`OutboxProcessor.cs:586-596,620-634,662-679`). The framework packages that failure mode and only that
+  unprocessed (`MMCA.Common/.../Interceptors/DomainEventSaveChangesInterceptor.cs:369-400`, the catch at
+  `:383-394`) and the `OutboxProcessor` re-dispatches the pure domain event on a later cycle
+  (`MMCA.Common/.../Outbox/Processing/OutboxProcessor.cs:520`, the dispatch at `:694`), with the bounded retries, backoff and
+  dead-lettering ADR-003 already defines (`OutboxProcessor.cs:534-544,568-578,858-859`). The framework packages that failure mode and only that
   one: `SafeDomainEventHandler<TDomainEvent>` runs the subclass inside an exception filter whose
   `LogAndRethrow` writes one error line and always returns `false`, so the exception keeps
   propagating, with `OperationCanceledException` excluded because a host shutdown is not a delivery
@@ -279,7 +280,7 @@ is the framework's stated answer to cross-boundary consistency, not because it i
   handlers after it, and a redelivery re-runs the ones that already succeeded. The blast radius is
   wider than the one event: the interceptor dispatches every local event of a save in a single call
   and marks their outbox rows processed only afterwards
-  (`MMCA.Common/.../Interceptors/DomainEventSaveChangesInterceptor.cs:336-341`), so a throw skips
+  (`MMCA.Common/.../Interceptors/DomainEventSaveChangesInterceptor.cs:373-378`), so a throw skips
   that mark for the whole batch and every local event written by that save is redelivered, not just
   the one whose handler failed. Every handler on a shared event must therefore be idempotent against
   both a repeat of its own event and a repeat of every sibling event of the same save, or must
@@ -418,6 +419,21 @@ No behaviour changed; this pass only re-anchors.
   and validated on start at `SalesModule.cs:61-64`, `PaymentReconciliationSettings` at `:66-69`, and
   `PaymentReconciliationSettingsValidator` is registered at `:74`.
 - Every other citation in the current-state sections was re-verified against current source.
+
+## Revision (2026-10-07)
+
+Re-verified against current source. No behaviour changed: a failing in-process handler still leaves
+its local outbox rows unprocessed, the interceptor still dispatches every local event of a save in one
+call before marking any row processed, and the `OutboxProcessor` still re-dispatches with bounded
+retries, backoff and dead-lettering. Only the Common line numbers moved.
+
+1. Anchors re-verified against current source: `DomainEventSaveChangesInterceptor` (`FlushStateAsync`
+   now `:369-400`, the catch that logs, releases the local lease and signals at `:383-394`, the
+   dispatch and `OutboxFinalizer.MarkProcessedAsync` at `:373-378`) and `OutboxProcessor` (the
+   per-row `DeliverAsync` call at `:520`, its `dispatcher.DispatchAsync` at `:694`, the retry
+   increment and backoff re-lease at `:534-544`, the retries-exhausted dead-letter metric at
+   `:568-578`, `ComputeRetryBackoffSeconds` at `:858-859`). The Revision (2026-09-11) citations of
+   `CheckOutHandler` keep the line numbers of that date, as the Revision (2026-10-01) states.
 
 ## Related
 ADR-003 (the outbox delivery and retry this leans on for compensation redelivery; this record says

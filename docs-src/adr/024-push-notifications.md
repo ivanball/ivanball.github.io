@@ -12,6 +12,7 @@ Revised 2026-09-11 (the Store order-email call sites moved onto ADR-114 durable 
 those paths now retry and dead-letter; `IEmailSender` itself is unchanged).
 Revised 2026-10-01 (the opt-in dedup key is scoped to the sender; see Revision below).
 Revised 2026-10-06: the dedup race is recorded as propagate-and-roll-back under the `ITransactional` send, not catch-and-requery.
+Revised 2026-10-07: the hub client connects WebSockets-only with negotiation skipped, in both connection modes, so a multi-replica hub needs no session affinity and there is no SSE or long-polling fallback.
 ## Context
 The framework needs to deliver user-facing notifications (an organizer broadcasting a schedule change,
 a per-user alert). Two delivery models each fail on their own. A pure real-time push over a WebSocket
@@ -94,6 +95,18 @@ recipient policy both behind abstractions.
   registrations at `:65-66`), so the opt-in registration, not the flag, is what decides whether
   a send goes through SignalR; with `Enabled: false` the sender is still wired and simply has no hub
   endpoint for clients to connect to.
+- **The hub client connects WebSockets-only, with no negotiate request.** `NotificationHubService`
+  sets `SkipNegotiation = true` and `Transports = HttpTransportType.WebSockets` before branching on
+  the connection mode (`NotificationHubService.cs:537-538`, the same-origin-proxy early return at
+  `:540-543`), so every mode opens the connection as a single WebSocket request: the browser path
+  through the same-origin proxy, a browser connecting to the gateway directly (token from
+  `AccessTokenProvider`, `:545`), and a direct non-browser connection (server-side Blazor, MAUI),
+  which also gets its own socket factory (`:547-550`). Negotiate and
+  connect are otherwise two requests, and behind a non-sticky ingress the connect can land on a
+  replica that never issued the connection id and be refused with a 404; with no negotiate there is
+  nothing to pin, so the hub scales out without session affinity, consistent with the no-affinity
+  posture ADR-069 records for the Identity service. Delivery across replicas is then the
+  backplane's job (above). There is no Server-Sent Events or long-polling fallback (`NotificationHubService.cs:510-516`).
 
 ## Rationale
 - **Each channel covers the other's failure mode.** The inbox guarantees eventual delivery to offline
@@ -116,15 +129,27 @@ recipient policy both behind abstractions.
 - **Silent no-op by default.** Because `NullPushNotificationSender` is the default, a host that forgets
   `AddPushNotifications` sends nothing live and shows no error. The behavior is intentional (inert until
   opted in) but is a discoverability foot-gun.
-- **WebSocket auth is a special case.** SignalR cannot send an `Authorization` header on the connection
-  upgrade, so the hub authenticates from the `access_token` query string on `/hubs` (ADR-004), a path
-  that has to be kept exempt from other edge controls.
+- **WebSocket auth is a special case, and it differs by connection mode.** A browser cannot add headers
+  to the WebSocket upgrade. Through the same-origin proxy the connection carries no token at all and the
+  proxy authenticates from the HttpOnly session cookie (`NotificationHubService.cs:518-521`, early
+  return at `:540-543`). A direct non-browser connection (server-side Blazor, MAUI) builds its own
+  `ClientWebSocket` and sets `Authorization: Bearer <token>` on the upgrade
+  (`NotificationHubService.cs:549`, `:590-594`). Only a browser connecting to the gateway directly
+  still relies on the `access_token` query string on `/hubs` (ADR-004), which the server extracts for
+  hub paths
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.Authentication.cs:151`,
+  `:179`); that path has to be kept exempt from other edge controls.
 - **Read state is per-user, not on the aggregate.** `IsRead`/`ReadOn` live on each `UserNotification`,
   not on the `PushNotification`, so "how many recipients have read this" is a query across the inbox
   rows rather than a property of the sent notification.
 - **Backplane is a deployment dependency for multi-replica correctness.** Without Redis, a push only
   reaches users connected to the same replica that handled the send; the inbox masks this for correctness
   but not for immediacy.
+- **WebSockets are required; there is no transport fallback.** Because the client pins the transport
+  to WebSockets and skips negotiation (`NotificationHubService.cs:537-538`), a client or an
+  intermediate proxy that cannot carry a WebSocket gets no live push at all rather than degrading to
+  Server-Sent Events or long polling. The inbox still delivers on next load, so this costs immediacy,
+  not correctness.
 
 ## Revision (2026-09-07)
 Two bounds were added under the delivery model, from the 2026-09-07 security review.
@@ -149,14 +174,15 @@ Two bounds were added under the delivery model, from the 2026-09-07 security rev
 ## Related
 ADR-003 (the outbox dual-dispatch path, which is distinct: that carries service-to-service integration
 events, this carries user-facing notifications), ADR-004 (the `/hubs` `access_token` query-string auth
-the hub relies on), ADR-008 (extraction: ADC runs a dedicated `MMCA.ADC.Notification.Service` built on
+a browser client connecting to the gateway directly relies on), ADR-008 (extraction: ADC runs a dedicated `MMCA.ADC.Notification.Service` built on
 these boundaries), ADR-012 (that Notification service is now a mixed-endpoint host: its default endpoint
 stays Profile-B `Http1AndHttp2` for the SignalR WebSocket/HTTP/1.1 path, and since 2026-07-09 it also
 serves an inbound `Http2`-only h2c gRPC edge on a dedicated named endpoint per ADR-039), ADR-022 (the
 browser-edge auth context the UI client runs in), ADR-044 (the optional OS-level native-push channel
 `SendPushNotificationHandler` fires after the inbox and SignalR legs, defaulting to `NullNativePushSender`),
-ADR-114 (the durable internal-command processor the Store order emails are scheduled through, which is
-where their retry and dead-letter posture comes from).
+ADR-069 (the record of the Identity service running with no session affinity; the WebSockets-only,
+negotiate-free hub client gives the hub the same posture), ADR-114 (the durable internal-command
+processor the Store order emails are scheduled through, which is where their retry and dead-letter posture comes from).
 
 ## Revision (2026-08-07)
 Records transactional email, a delivery path the channel model above never mentions. The decision is
@@ -275,3 +301,30 @@ inside the earlier Revision sections are left as recorded.
   `OrderShippedHandler.cs:34` (a scheduling site the 2026-08-07 record did not name).
 - All `path:line` anchors in the live sections (Status through Trade-offs) were re-verified against
   current source.
+
+## Revision (2026-10-07)
+Re-verified against current source. The two-channel model, the dedup and transactional posture, and
+the backplane are unchanged; what moved is the hub client's transport, released in v1.233.0.
+
+1. **The hub client is WebSockets-only and skips negotiation in both connection modes.**
+   `NotificationHubService.ConfigureConnection` sets `SkipNegotiation = true` and
+   `Transports = HttpTransportType.WebSockets` before it branches on the same-origin proxy
+   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Notifications/NotificationHubService.cs:537-538`,
+   method at `:533`, early return at `:540-543`). The reason is replica placement: negotiate and
+   connect are two requests, and behind a non-sticky ingress the connect can reach a replica that
+   never issued the connection id and is refused with a 404. Without negotiation the connection is a
+   single WebSocket request that lands on one replica and stays there, so a multi-replica hub needs no
+   session affinity, the same no-affinity posture ADR-069 records for the Identity service. The doc
+   comment states the same contract and that there is no Server-Sent Events or long-polling fallback
+   (`:510-516`). The Decision gains a bullet and the Trade-offs record the lost fallback.
+2. **ADC relies on this to run the Notification hub at more than one replica.** The Notification
+   container app's scale block names the negotiate-free client as one of two preconditions for
+   `maxReplicas: 2` (`MMCA.ADC/infra/main.bicep:2369-2382`, scale at `:2388`), the other being the
+   Redis backplane fan-out proven by a two-replica cross-service test. A broken backplane link is
+   surfaced by the `signalr-backplane-errors` scheduled-query alert
+   (`MMCA.ADC/infra/main.bicep:595-598`), since it would otherwise split the hub into per-replica
+   islands, which is the multi-replica trade-off this ADR already records.
+3. Anchors re-verified against current source: the new Decision and Trade-offs anchors at
+   `NotificationHubService.cs:510-516`, `:537-538` and `:540-543`. All other `path:line` anchors in
+   the live sections are as recorded on 2026-10-06; anchors inside earlier Revision sections are left
+   as recorded.

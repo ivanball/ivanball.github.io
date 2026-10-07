@@ -3,7 +3,7 @@
 ## Status
 Accepted (2026-09-04). **Extended by [ADR-120](120-governed-chat-client-boundary.md)** (2026-09-11): the rules here that belong to *calling a model* rather than to *scoring a session* (a bounded call, a versioned and hashed prompt contract, token metering tagged by model and prompt version, the isolation of the provider SDK) ship as the optional framework package `MMCA.Common.AI`. This record is not superseded: the scoring-specific rules below, the prompt-change protocol, the two evaluation tiers, the input and output guardrails and the budgeted ceiling alert all stand. **Revised 2026-09-11**: that migration has shipped. The scorer is constructed over the governed `IChatClient` and keeps `IAiScoringService`, `PromptVersion` and the evaluation gate, so decisions 1, 2, 7 and 8 below read against the framework client: the service constructs no `HttpClient`, defines no counters, and token usage is metered by the framework on the `MMCA.Common.AI` meter, which is what the ceiling alert now queries. Decision 9 changed with it: the hosted drain and the crash-recovery sweep are gone, replaced by the [ADR-114](114-internal-commands-durable-job-queue.md) internal-command pipeline, and the trigger endpoint answers 202 for every pass it schedules, and only while the session-scoring feature flag is on.
 
-**Revised 2026-09-21 (MMCA.Common v1.207.0)**: the feature names no vendor. The implementation is `SessionScoringService`, the provider is an adapter package selected by `Ai:Provider`, contact-detail removal moved out of the service and onto the framework's `PiiRedactionGuardrail` at the pipeline boundary, the golden corpus records `ChatResponse` documents rather than a provider wire format, and the token-ceiling alert moved into the `sloAlertSpecs` loop so the runbook-pairing gate covers it. These ADC changes shipped in the consumer PR that followed the v1.207.0 release and are merged to ADC `main`. Revised 2026-10-01 (the guardrails are one module-owned composition of three, adding the framework content policy and a response gate that now owns refusal, empty and malformed-answer handling, and both evaluation tiers, golden replay and the live judge, run that same composition; see Revision below). Revised 2026-10-06: the trigger answers 404 for an unknown event before scheduling, failed sessions are retried and re-paid up to the processor's attempt limit, and the paid-tier path filter is stated as the three folders it covers.
+**Revised 2026-09-21 (MMCA.Common v1.207.0)**: the feature names no vendor. The implementation is `SessionScoringService`, the provider is an adapter package selected by `Ai:Provider`, contact-detail removal moved out of the service and onto the framework's `PiiRedactionGuardrail` at the pipeline boundary, the golden corpus records `ChatResponse` documents rather than a provider wire format, and the token-ceiling alert moved into the `sloAlertSpecs` loop so the runbook-pairing gate covers it. These ADC changes shipped in the consumer PR that followed the v1.207.0 release and are merged to ADC `main`. Revised 2026-10-01 (the guardrails are one module-owned composition of three, adding the framework content policy and a response gate that now owns refusal, empty and malformed-answer handling, and both evaluation tiers, golden replay and the live judge, run that same composition; see Revision below). Revised 2026-10-06: the trigger answers 404 for an unknown event before scheduling, failed sessions are retried and re-paid up to the processor's attempt limit, and the paid-tier path filter is stated as the three folders it covers. Revised 2026-10-07: the free evaluation tier runs on every code PR through `CI.slnf` while `ai-eval-gate` runs only on a deploy the path filter marks as touching scoring (or that it cannot range-check), the corpus guard names three required cases, and the port's prompt-version remarks exclude redaction.
 
 ## Context
 MMCA.ADC ships one product feature that calls a language model. An organizer, looking at the session
@@ -12,8 +12,8 @@ of that event on six criteria and a penalty, and the resulting numbers are what 
 argues over when it accepts or declines a talk. Each scored session is one paid call to whichever
 provider `Ai:Provider` names, Anthropic today (`MMCA.ADC.Conference.Service/appsettings.json:97`).
 The key has been a deployed parameter of the Conference container app since 2026-04-04. It travels as
-the Key Vault secret `anthropic-api-key` (`MMCA.ADC/infra/main.bicep:1644`, container-app secret
-reference at `:1919`) into the container environment variable `Ai__ApiKey` (`:1999`), which is the
+the Key Vault secret `anthropic-api-key` (`MMCA.ADC/infra/main.bicep:1666-1668`, container-app secret
+reference at `:1951`) into the container environment variable `Ai__ApiKey` (`:2033`), which is the
 framework's `Ai:ApiKey` and the only AI credential name the host reads: `Ai:Enabled` is derived from
 the key's presence rather than configured, so a host with no key starts with scoring unavailable
 instead of failing validation on a required-when-enabled value it cannot supply
@@ -25,8 +25,8 @@ Rubric version 2 (ADR-110) turned section 16 into AI-Native Application Architec
 that a feature calling a model must satisfy: model calls behind a port, prompt and model versioning,
 an evaluation suite gating CI, guardrails and PII redaction at the boundary, and LLM observability
 with cost attribution. ADC is the only one of the three repos the category applies to, and the
-2026-09-04 re-score is the first cycle that scores it
-(`Website/docs-src/governance/adc-ArchitectureScorecard.md:5`).
+2026-09-04 re-score is the first cycle that scores it. The current scorecard scores it because the
+feature calls a model in production (`Website/docs-src/governance/adc-ArchitectureScorecard.md:104`).
 
 Before this record only the first of those criteria was met. `IAiScoringService` existed, so the
 Application layer never saw an HTTP client. Everything else was implicit:
@@ -52,16 +52,16 @@ This record states the governance the feature now carries.
 ## Decision
 **A product feature that calls a model is governed like any other production dependency: the call
 sits behind a port, the model and the prompt are versioned and persisted with every score, an
-evaluation suite is a deploy precondition, the untrusted half of the prompt is delimited, escaped and
+evaluation suite gates the change, the untrusted half of the prompt is delimited, escaped and
 redacted, the response is schema-constrained, and the spend is metered and alerted against a
 budgeted ceiling.**
 
 1. **The model call is behind a port, and the port carries the versions.** `IAiScoringService`
    (`MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/IAiScoringService.cs:6`)
-   exposes `ScoreSessionAsync` (`:11`) plus `ModelId` (`:16`) and `PromptVersion` (`:30`). It is
+   exposes `ScoreSessionAsync` (`:11`) plus `ModelId` (`:16`) and `PromptVersion` (`:31`). It is
    declared in Application, so nothing above Infrastructure knows a provider exists. The contract is
    that the method never throws for a scoring failure: failure is a `Success = false` result (shape
-   at `:84`). `SessionScoringService` is the only implementation
+   at `:85`). `SessionScoringService` is the only implementation
    (`MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/SessionScoringService.cs:47-50`), and its
    name says what it does rather than who answers it: the credential, the base address, the provider
    SDK, the per-call timeout and the tool gate belong to the framework's governed `IChatClient`
@@ -92,8 +92,9 @@ budgeted ceiling.**
    (`SessionScoringService.cs:229`, read back off the contract at `:85`), and its documented scope is
    any change to the system prompt, the user-prompt assembly, the speaker formatting or the
    structured-output schema (`:77-84`). The port's own remarks on `PromptVersion`
-   (`IAiScoringService.cs:24-26`, member at `:30`) also still list the redaction rules applied to
-   submitted text as a bump trigger, which no longer applies: redaction left the scorer (decision 4). It is
+   (`IAiScoringService.cs:24-28`, member at `:31`) list the same triggers and state that redaction of
+   submitted text is not part of the contract, because the framework's `PiiRedactionGuardrail`
+   applies it inside the governed chat pipeline (decision 6). It is
    stored beside the model id on every score: `SessionAiScore.ModelUsed`
    (`MMCA.ADC.Conference.Domain/Sessions/SessionAiScore.cs:43`) and `SessionAiScore.PromptVersion`
    (`:52`), both assigned by the factory (`:114-115`). The column is `nvarchar(32)` added expand-only
@@ -117,7 +118,7 @@ budgeted ceiling.**
    a bare `<version>` key is the SHA-256 of the rendered system-plus-user prompt, and a
    `session-scoring@<version>` key is the framework `PromptContract` hash, a normalized SHA-256 over
    name, version, model and system brief that the governed client stamps on every request. Each gate
-   ignores keys it does not own (`MMCA.ADC.Conference.Scoring.Evaluation.Tests/README.md:56-70`).
+   ignores keys it does not own (`MMCA.ADC.Conference.Scoring.Evaluation.Tests/README.md:59-71`).
 
 4. **The prompt change protocol is written down and is five steps.** Bump `PromptVersion` to today's
    date; run the two contract gates, whose failure messages carry the new hashes; add both entries to
@@ -126,15 +127,17 @@ budgeted ceiling.**
    score drift case by case, arguing about any case that left its band rather than widening the band
    to make a red run green; and accept that existing rows keep the version that produced them, so the
    dashboard legitimately shows a mix of versions until the next pass
-   (`MMCA.ADC.Conference.Scoring.Evaluation.Tests/README.md:77-99`). Contact-detail removal is no
-   longer part of the scope, because it is no longer part of the scorer (`:79-82`).
+   (`MMCA.ADC.Conference.Scoring.Evaluation.Tests/README.md:78-100`). Contact-detail removal is no
+   longer part of the scope, because it is no longer part of the scorer (`:80-83`).
 
-5. **The evaluation suite is a deploy precondition, split into a free tier and a paid tier.** The
-   suite is one project with three files (`README.md:8-17`) over a corpus of seven cases, and every
+5. **The evaluation suite gates the change, split into a free tier and a paid tier.** The suite is
+   one project with three test files (`README.md:8-14`): two free-tier files, `GoldenReplayTests.cs`
+   and `PromptContractTests.cs`, and one paid-tier file, `LiveJudgeTests.cs`, over a corpus of
+   seven cases, and every
    case is **two** files under `Golden/`: `case-<id>.json` carries the proposal, a note and the band
    its overall score must land in, while `<id>.response.json` carries the recorded answer in the
    `ChatResponse` shape `Microsoft.Extensions.AI` serializes for its own types, written by the
-   framework's `RecordedResponses.Write` and never hand-typed (`README.md:23-48`, the path convention
+   framework's `RecordedResponses.Write` and never hand-typed (`README.md:26-44`, the path convention
    at `GoldenCase.cs:41`, the reason at `:10-16`). That shape is what makes the corpus survive a
    provider change: the code under test only ever sees a `ChatResponse`, so answers recorded against
    one provider are exactly the answers it sees after the provider swaps. `GoldenReplayTests`
@@ -150,23 +153,34 @@ budgeted ceiling.**
    re-derived in the test from the same recorded sub-scores (`:42-96`, request inspection at
    `:247-264`, redaction check at `:143-158`, re-derivation at `:203-214`, recording read through
    `RecordedResponses.Read` at `:218`). Two further tests keep the corpus from silently shrinking
-   below six cases or losing the injection and no-speaker cases (`:98-115`) and catch a case added
+   below six cases, repeating an id, or losing the injection, no-speaker and contact-details cases
+   (`:98-115`, the contact-details id at `:160`, which the redaction check is keyed on) and catch a
+   case added
    without its recording (`:117-127`). `LiveJudgeTests` scores the same proposals through the real
    provider API, is trait-gated `Category=AiEval.Live`, and skips itself dynamically when `AI_API_KEY`
    is absent so a run that judged nothing says so rather than reporting a pass (`LiveJudgeTests.cs:41`,
    `:58-70`). It composes its client exactly as the host does, from the host's own copied
    `appsettings.json`: `AddAnthropicAiProvider()`, then `AddConferenceAiGuardrails(configuration)`,
    then `AddMmcaChatClient(configuration)`, stating no model, no ceiling and no timeout of its own, so
-   a configuration change reaches this tier without an edit (`:99-112`). In CI the `ai-eval-gate` job
-   runs the free tier on every code deploy with `--minimum-expected-tests 1`, so a discovery breakage
-   reds the gate instead of reporting a vacuous pass (`.github/workflows/deploy.yml:558-560`, step at
-   `:583-590`), and adds the paid tier only when the `changes` job's `scoring` output is true, which
-   the path filter sets for three folders only: the scoring infrastructure folder, the
-   `ScoreEventSessions` use-case folder and the evaluation test project (`:71`, `:162-171`, step at
-   `:592-605`). The filter is narrow on purpose, so a change to the guardrail composition in
-   `DependencyInjection.cs`, to the host's `Ai` or `ContentPolicy` configuration, to `Program.cs` or
-   to the `MMCA.Common.AI` package version does not run the paid tier. `ai-eval-gate` is in
-   `deploy.needs` and in the `deploy` job's `if` (`:1242`, `:1289`).
+   a configuration change reaches this tier without an edit (`:99-112`). In CI the free tier carries
+   no trait, so it runs on every code PR in `build-and-test`'s `MMCA.ADC.CI.slnf` pass, against the
+   tree that merges; a docs-only PR skips the test step (`.github/workflows/deploy.yml:225`, step
+   condition at `:339`, unfiltered run at `:350-353`, project listed at `MMCA.ADC.CI.slnf:49`). The
+   `ai-eval-gate` job exists for the paid tier: it runs only on a code deploy whose `changes` job sets
+   the `scoring` output (job condition at `:509-511`). The path filter sets it for three folders: the
+   scoring infrastructure folder, the `ScoreEventSessions` use-case folder and the evaluation test
+   project (`:71`, `:162-172`). The `changes` job also fails safe to `scoring=true` when the push
+   range is unknown (an empty or zero `event.before`, which covers every `workflow_dispatch` deploy,
+   trigger at `:8`) or when the range diff fails, so those deploys run the paid tier too (`:97-108`,
+   `:112-123`). Every other deploy skips the job, so on those deploys the suite gates only
+   indirectly, through the required PR check. Inside it the
+   free tier re-runs first as a cheap precondition for spending on the judge, with
+   `--minimum-expected-tests 1` so a discovery breakage reds the gate instead of reporting a vacuous
+   pass (step at `:534-541`), and then the live judge runs (step at `:543-555`). The filter is narrow
+   on purpose, so a change to the guardrail composition in `DependencyInjection.cs`, to the host's
+   `Ai` or `ContentPolicy` configuration, to `Program.cs` or to the `MMCA.Common.AI` package version
+   does not run the paid tier. `ai-eval-gate` is in `deploy.needs`, and the `deploy` job's `if`
+   accepts it as either succeeded or skipped (`:1145`, `:1183`).
 
 6. **Input guardrails: delimit, escape, instruct, redact.** The user message is an XML-shaped envelope
    rather than labelled lines: `<session_proposal>` wrapping `<session_title>`,
@@ -188,8 +202,8 @@ budgeted ceiling.**
    registers the framework's `PiiRedactionGuardrail`, which carries the same email and phone patterns
    and rewrites every outgoing message inside the governed pipeline, so contact-detail removal is a
    policy the feature cannot bypass rather than a call it has to remember (`DependencyInjection.cs:95`,
-   `MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/PiiRedactionGuardrail.cs:41`, placeholders at
-   `:43-44`, patterns at `:73` and `:79`, applied at `:137-138`), and the framework's
+   `MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/PiiRedactionGuardrail.cs:40`, placeholders at
+   `:42-43`, patterns at `:72` and `:78`, applied at `:136-137`), and the framework's
    `ContentPolicyGuardrail` in `Redact` mode, which neutralizes an instruction-override phrase inside
    a proposal before the call while the rest of the submission is still scored on its merits
    (`DependencyInjection.cs:96`,
@@ -203,7 +217,7 @@ budgeted ceiling.**
    survives both the escape and the guardrail: it is the published conference record and the only
    handle the credibility criterion has on a track record (`SessionScoringService.cs:310-315`). The
    phone pattern is deliberately narrow rather than "any run of digits", because a bio legitimately
-   contains years, team sizes and throughput figures (`PiiRedactionGuardrail.cs:79`).
+   contains years, team sizes and throughput figures (`PiiRedactionGuardrail.cs:78`).
 
 7. **Output guardrail: the response is schema-constrained, and anything else is a failure.** The
    request sets `ChatResponseFormat.ForJsonSchema` over the score schema (`:117`, schema built at
@@ -241,17 +255,17 @@ budgeted ceiling.**
    message at `:408-409`). In production the framework counters reach App Insights, where a scheduled
    query rule sums both over a rolling two-day window and fires when the total crosses
    `aiScoringTokenCeiling`, defaulted to 2,000,000 tokens, the envelope of one full pass
-   (`MMCA.ADC/infra/main.bicep:77`, `:78`, query at `:468`, threshold at `:471`). The rule is an
-   entry in the same `sloAlertSpecs` list (`:388`) as the request and resilience SLOs rather than a rule
-   declared on its own (`:465-477`, loop at `:481`), so the architecture gate that pairs every
+   (`MMCA.ADC/infra/main.bicep:77`, `:78`, query at `:470`, threshold at `:473`). The rule is an
+   entry in the same `sloAlertSpecs` list (`:390`) as the request and resilience SLOs rather than a rule
+   declared on its own (`:467-479`, loop at `:482`), so the architecture gate that pairs every
    alert with a runbook heading covers it: `MinimumAlertSpecs` is 5
    (`Tests/Architecture/MMCA.ADC.Architecture.Tests/Governance/ObservabilityConventionTests.cs:14`)
    and the paired heading is `adc-prod-alert-ai-scoring-token-ceiling-v2`
    (`infra/OPERATIONS.md:111`). The entry is the one that needs a different cadence from the
    15-minute default, so the loop reads `windowSize`, `evaluationFrequency` and `autoMitigate`
-   per-entry with the list default as a fallback (`:473-475`, defaults at `:511-515`). It is severity
-   3, not a page: a budget breach is a cost signal, nothing is down (`:472`, `:449-450`). It is
-   enabled only when a key is deployed (`:476`, `:162`, `:498`), because with no key the feature is
+   per-entry with the list default as a fallback (`:475-477`, defaults at `:513-517`). It is severity
+   3, not a page: a budget breach is a cost signal, nothing is down (`:474`, `:451-452`). It is
+   enabled only when a key is deployed (`:478`, `:162`, `:500`), because with no key the feature is
    inert and the rule could only ever evaluate zero.
 
 9. **The trigger is human-initiated and permission-gated, and nothing starts unrequested paid work.**
@@ -300,7 +314,7 @@ budgeted ceiling.**
   and the regression history the corpus exists for survives a swap that the corpus is otherwise
   powerless to judge.
 - **Two evaluation tiers, split by cost, is the only honest split.** Replay is free and
-  deterministic, so it runs on every code deploy and catches a delimiter that stopped being emitted, a
+  deterministic, so it runs on every code PR through `CI.slnf` and catches a delimiter that stopped being emitted, a
   weighting change and a forgotten version bump. The live judge is the only thing that can catch a
   model deprecation, a provider contract change or a prompt edit that reads fine and scores everything
   a point lower, and it costs one paid call per case, so it is scoped to a diff that touched the
@@ -340,13 +354,13 @@ budgeted ceiling.**
 
 ## Trade-offs
 - **Recorded-response replay cannot see model drift.** Every free-tier case answers from a response
-  captured at a point in time, so the tier that runs on every deploy is blind to exactly the failure
+  captured at a point in time, so the tier that runs on every code PR is blind to exactly the failure
   the port was built to survive: a model deprecation or a provider-side contract change. Only the
   live judge sees those, and it runs only when the diff touched the scoring paths.
 - **The live judge costs money and needs the key in CI.** The test reads the provider-neutral
   `AI_API_KEY` (`LiveJudgeTests.cs:41`), which the workflow maps from the repository secret, still
   named `ANTHROPIC_API_KEY` because it holds an Anthropic credential
-  (`.github/workflows/deploy.yml:605`). That is one more place the credential exists. The step
+  (`.github/workflows/deploy.yml:555`). That is one more place the credential exists. The step
   deliberately omits `--minimum-expected-tests`, so on a repo with the secret absent every case skips
   and the step is green: the gate reports "judged nothing" rather than failing, and the reader has to
   look at the skip count to know which happened.
@@ -357,7 +371,7 @@ budgeted ceiling.**
 - **Rows written before the column existed carry `legacy`, and their brief is unrecoverable.** The
   default is honest, but it names an unknown rather than resolving one.
 - **Seven cases and one canonical proposal is a thin corpus.** The bands were set around recorded
-  values, and the guard against the corpus shrinking is a count of six plus two named ids. Nothing
+  values, and the guard against the corpus shrinking is a count of six, unique ids and three named ids. Nothing
   requires a new criterion to arrive with a case that exercises it. Two files per case also means two
   ways to get a case wrong, which is why a test asserts that every case has a recording beside it
   (`GoldenReplayTests.cs:117-127`).
@@ -370,18 +384,18 @@ budgeted ceiling.**
   10-digit North American shape by design, so an international number, a spelled-out address or a
   social handle passes through unredacted, and the narrowness that protects the credibility evidence
   is the same narrowness that limits the coverage. Changing either pattern is now a framework release
-  rather than a module edit (`PiiRedactionGuardrail.cs:73`, `:79`).
+  rather than a module edit (`PiiRedactionGuardrail.cs:72`, `:78`).
 - **The ceiling is a two-day rolling total evaluated every twelve hours, not a monthly budget.**
   Azure scheduled query rules evaluate at most two days of data, and a self-resolving (stateful) rule
   may not evaluate less often than every twelve hours, so the guard is sized to one legitimate pass
   rather than a month of spend: a repeated or runaway pass inside two days trips it, while slow
-  accumulation across a month does not (`infra/main.bicep:452-462`, values at `:473-475`). A single
+  accumulation across a month does not (`infra/main.bicep:454-466`, values at `:475-477`). A single
   runaway pass can spend its whole way through the envelope inside an hour, and the alert notices on
   the next evaluation, at most twelve hours later. It is a budget guard, not a circuit breaker:
   nothing stops the calls.
 - **Cost visibility depends on the metrics export staying on.** The counters ride an application
   meter, which the http-client and runtime instrument toggles do not touch
-  (`infra/main.bicep:445-447`), but an export path that breaks makes the alert evaluate zero and look
+  (`infra/main.bicep:447-449`), but an export path that breaks makes the alert evaluate zero and look
   healthy.
 - **A duplicate trigger is invisible to the organizer.** The endpoint answers 202 for every pass it
   schedules while the flag is on, so a second click reports acceptance and the skip is visible only in the
@@ -435,6 +449,42 @@ unmerged.
   re-verified against current source and re-anchored. The 2026-10-01 Revision's anchors stay as
   recorded; their current homes are `Program.cs:152`, `appsettings.json:107-109`,
   `SessionScoringService.cs:126-134` and `SessionSelectionController.cs:134`.
+
+## Revision (2026-10-07)
+Re-verified against current source. The governance itself is unchanged: the port, the persisted
+model and prompt versions, the hash gates, the guardrail composition, the ceiling alert and the
+human trigger all read as before. What moved is how the two evaluation tiers reach CI, the corpus
+guard, the port's prompt-version remarks, and the anchors after the v1.233.0 release.
+
+1. The free tier's every-change run is the PR `build-and-test` pass over `MMCA.ADC.CI.slnf` on
+   every code PR (`.github/workflows/deploy.yml:225`, `:339`, `:350-353`, `MMCA.ADC.CI.slnf:49`),
+   not the deploy. The whole `ai-eval-gate` job is conditioned on `scoring == 'true'`
+   (`deploy.yml:509-511`), which the path filter sets for the three scoring folders and the
+   `changes` job's fail-safe sets for any deploy with an unknown or undiffable range, including
+   every `workflow_dispatch` deploy (`:8`, `:97-108`, `:112-123`); every other deploy skips it, and
+   the free tier re-runs inside it only as a precondition for the live judge (`:534-541`,
+   `:543-555`). Decision 5, the two-tier Rationale bullet and the replay Trade-off now
+   say so; the `deploy` job's `if` accepts the job as succeeded or skipped (`:1183`).
+2. The corpus guard requires at least six cases, unique ids and three named cases, including
+   `contact-details-in-bio`, which the redaction check is keyed on
+   (`GoldenReplayTests.cs:104-114`, constant at `:160`). Decision 5 and the thin-corpus Trade-off
+   now name the third id and the uniqueness check.
+3. The port's `PromptVersion` remarks no longer list redaction as a bump trigger; they state that
+   redaction is not part of the contract and belongs to `PiiRedactionGuardrail`
+   (`IAiScoringService.cs:24-28`). Decision 3 now says so.
+4. The evaluation project holds three test files (`README.md:8-14`): two free-tier files,
+   `GoldenReplayTests.cs` and `PromptContractTests.cs`, and one paid-tier file, `LiveJudgeTests.cs`,
+   plus support files; decision 5 now says so, and the Decision summary says the suite gates the
+   change rather than calling it a deploy precondition.
+5. The Context pointer to the ADC scorecard header no longer supports the first-scored-cycle
+   statement (the header now carries a later cycle), so it points at the scorecard's applicability
+   line instead (`adc-ArchitectureScorecard.md:104`).
+6. Anchors re-verified against current source: `main.bicep:1666-1668`, `:1951`, `:2033`, `:390`,
+   `:467-479`, `:470`, `:473`, `:474`, `:475-477`, `:478`, `:482`, `:500`, `:513-517`, `:451-452`,
+   `:454-466`, `:447-449`; `deploy.yml:162-172`, `:555`, `:1145`; `IAiScoringService.cs:31`,
+   `:85`; `README.md:26-44`, `:59-71`, `:78-100`, `:80-83`; `PiiRedactionGuardrail.cs:40`,
+   `:42-43`, `:72`, `:78`, `:136-137`. The 2026-10-06 Revision's `IAiScoringService.cs:24-26`
+   statement stays as recorded.
 
 ## Related
 [ADR-110](110-rubric-v2-category-realignment.md) (the rubric category this record answers: section 16,

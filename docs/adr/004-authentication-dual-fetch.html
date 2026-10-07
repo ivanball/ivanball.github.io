@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -241,7 +242,10 @@
           <h2 id="status">Status</h2>
           <p>Accepted. Updated 2026-09-03 (<code>JwtSettings</code> / <code>JwtSigningAlgorithm</code> cited at their real <code>Auth/</code>
           paths, and the validator registration described with its current signature and secure-by-default
-          <code>RequireHttpsMetadata</code> resolution).</p>
+          <code>RequireHttpsMetadata</code> resolution). Revised 2026-10-07: gateway-routed discovery is scoped to the
+          local Aspire wiring (production ACA validators in ADC and Store use the direct internal-ingress
+          Identity authority), and the resilience claim now says the Polly pipeline covers the warmup prefetch
+          but not the JwtBearer middleware&#39;s own discovery fetch.</p>
           <h2 id="context">Context</h2>
           <p>When the modular monolith is extracted into per-module service hosts behind a gateway (ADR-008),
           every service must authenticate the same end-user JWT, but only one service (Identity) issues tokens.
@@ -284,7 +288,7 @@
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.Authentication.cs:52-57</code>).
           No service except Identity holds key material. ADC&#39;s Conference, Engagement, and Notification
           services and Store&#39;s Catalog and Sales services all use this path
-          (<code>.../MMCA.ADC.Conference.Service/Program.cs:329</code>, <code>.../MMCA.ADC.Engagement.Service/Program.cs:178</code>,
+          (<code>.../MMCA.ADC.Conference.Service/Program.cs:331</code>, <code>.../MMCA.ADC.Engagement.Service/Program.cs:178</code>,
           <code>.../MMCA.ADC.Notification.Service/Program.cs:168</code>; <code>.../MMCA.Store.Catalog.Service/Program.cs:205</code>,
           <code>.../MMCA.Store.Sales.Service/Program.cs:179</code>), passing the host&#39;s <code>IConfiguration</code> and
           <code>IHostEnvironment</code> and leaving <code>requireHttpsMetadata</code> at its default. All five resolve the audience
@@ -301,8 +305,11 @@
           so the host logs one startup warning naming the key
           (<code>.../WebApplicationBuilderExtensions.Authentication.cs:68-72</code>).</li>
           <li><code>ValidIssuer</code> is deliberately <strong>not</strong> pinned: the middleware takes the issuer from the discovery
-          document, because the <code>authority</code> is the Aspire service-discovery URL (e.g. <code>http://identity</code>)
-          while the token&#39;s <code>iss</code> claim is the public gateway origin (e.g. <code>https://localhost:6001</code>).</li>
+          document, because the <code>authority</code> need not be the token&#39;s <code>iss</code> origin. Locally the authority is
+          the gateway&#39;s HTTPS endpoint (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:332-335</code>);
+          in ADC&#39;s production deployment it is Identity&#39;s internal-ingress URL <code>http://${identityApp.name}</code>
+          (<code>MMCA.ADC/infra/main.bicep:2003</code>) while Identity issues tokens with <code>iss</code> set to the public
+          gateway origin (<code>MMCA.ADC/infra/main.bicep:1769</code>).</li>
           <li>Both validators pin <code>TokenValidationParameters.ValidAlgorithms</code> so an attacker cannot force an
           algorithm swap (for example, signing an HS256 token using the RSA public key as the HMAC secret):
           the <strong>forwarded JWKS</strong> validator (<code>AddForwardedJwtBearer</code>) pins <code>[RS256]</code> (the JWKS path only ever
@@ -322,11 +329,24 @@
           <strong>gateway</strong> HTTPS origin; the gateway terminates TLS, speaks HTTP/1.1 and HTTP/2 via ALPN, and
           forwards <code>/.well-known/*</code> on to Identity. When no gateway is passed, it <strong>falls back</strong> to Identity&#39;s
           HTTPS endpoint directly (HTTP/2-only, so the gateway form is preferred). ADC&#39;s AppHost uses the
-          two-argument gateway form for all three validating services.</li>
+          two-argument gateway form for all three validating services
+          (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:368-370</code>).</li>
+          <li>That gateway routing is the local Aspire wiring only; Store&#39;s AppHost uses the same gateway form
+          for Catalog and Sales (<code>MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:357-358</code>). In
+          the Azure Container Apps deployments the validators set <code>Authentication__JwtBearer__Authority</code>
+          to Identity&#39;s internal-ingress URL <code>http://${identityApp.name}</code> directly (ADC:
+          <code>MMCA.ADC/infra/main.bicep:2003</code>, <code>:2139</code>, <code>:2293</code>; Store: <code>MMCA.Store/infra/main.bicep:1684</code>,
+          <code>:1819</code>), where TLS terminates at the platform edge, and pair it with
+          <code>Authentication__JwtBearer__RequireHttpsMetadata=false</code> (ADC: <code>:2007</code>, <code>:2143</code>, <code>:2297</code>; Store:
+          <code>:1689</code>, <code>:1824</code>), which is the shape the startup warning above exists for.</li>
           <li><code>OpenIdConnectMetadataWarmupTask</code> (MMCA.Common.Aspire) pre-fetches the discovery document at
-          startup so the first authenticated request on a cold, CPU-throttled replica does not pay the
-          discovery round trip inside the request (the classic &quot;first request fails, second succeeds&quot; pattern
-          on Azure Container Apps Consumption).</li>
+          startup through an <code>IHttpClientFactory</code> client
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Warmup/OpenIdConnectMetadataWarmupTask.cs:45</code>),
+          aimed at the classic &quot;first request fails, second succeeds&quot; pattern on a cold, CPU-throttled
+          Azure Container Apps Consumption replica. It warms the issuer and the discovery path, but it does
+          not populate the JwtBearer middleware&#39;s <code>ConfigurationManager</code>, which caches discovery state
+          separately and still performs its own fetch on the first authenticated request
+          (<code>.../Warmup/OpenIdConnectMetadataWarmupTask.cs:16-19</code>).</li>
           <li>SignalR cannot send an <code>Authorization</code> header on the WebSocket upgrade, so both registration paths
           read the token from the <code>access_token</code> query string for <code>/hubs</code> requests.</li>
           </ul>
@@ -351,11 +371,23 @@
           <li><strong>More moving parts than a shared secret.</strong> RS256 needs key generation, distribution of the public
           half, a JWKS endpoint, and discovery wiring, versus one symmetric string.</li>
           <li><strong>Discovery is a startup dependency.</strong> A validator cannot verify tokens until it has fetched the key
-          set; the warmup task and the resilience pipeline (ADR-009) absorb the cold-start and transient
-          cases, and the middleware caches the key set after the first fetch.</li>
-          <li><strong>Transport coupling.</strong> The HTTP/2-only cleartext endpoints (ADR-012) force discovery through the
-          gateway; the direct-Identity fallback exists but is HTTP/2-only, so callers should prefer the
-          gateway form.</li>
+          set. The warmup task reduces the cold-start cost without removing it: the middleware&#39;s own fetch
+          uses its own <code>HttpClient</code> (no <code>Backchannel</code> is set, see below), so it does not reuse the warmup
+          client&#39;s connection pool, and only issuer-side and process-wide state is shared. The middleware
+          caches the key set after its first fetch. The Polly pipeline only partly covers this: <code>AddServiceDefaults()</code> attaches
+          <code>AddStandardResilienceHandler</code> through <code>ConfigureHttpClientDefaults</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:39-49</code>), which reaches only
+          <code>IHttpClientFactory</code> clients, so the warmup prefetch is covered
+          (<code>.../Warmup/OpenIdConnectMetadataWarmupTask.cs:22</code>, <code>:45</code>). The JwtBearer middleware&#39;s own
+          <code>ConfigurationManager</code> fetch is separate (<code>OpenIdConnectMetadataWarmupTask.cs:16-19</code>), and
+          <code>AddForwardedJwtBearerCore</code> sets no <code>Backchannel</code> or <code>BackchannelHttpHandler</code>
+          (<code>.../WebApplicationBuilderExtensions.Authentication.cs:83-114</code>), so that fetch does not run
+          through a Common-registered resilience pipeline; what retry, if any, applies to it is left to
+          the framework&#39;s default backchannel. ADR-009 itself does not address discovery.</li>
+          <li><strong>Transport coupling.</strong> Locally, the HTTP/2-only cleartext endpoints (ADR-012) force discovery
+          through the gateway; the direct-Identity fallback exists but is HTTP/2-only, so the AppHost prefers
+          the gateway form. In production the internal-ingress authority removes that coupling at the cost
+          of a cleartext metadata fetch inside the environment.</li>
           <li><strong>Endpoint hygiene is on the issuer.</strong> JWKS and discovery are anonymous by definition; the discovery
           doc returns <code>404</code> on non-issuer hosts and the JWKS provider returns an empty set when unconfigured,
           so only the real issuer advertises a key.</li>
@@ -378,11 +410,46 @@
           <li>The ADC Conference service call is cited at <code>Program.cs:329</code>, where <code>services.AddForwardedJwtBearer(</code> starts.</li>
           <li>All other anchors in the live sections were re-verified against current source and are unchanged.</li>
           </ul>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. The signing model, the validator registration, the
+          <code>RequireHttpsMetadata</code> resolution and the decision not to pin <code>ValidIssuer</code> are unchanged; three
+          statements about discovery routing, the warmup task and discovery resilience were overstated and
+          are now scoped to what source shows.</p>
+          <ol>
+          <li>Gateway-routed discovery is the local Aspire wiring
+          (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:368-370</code>,
+          <code>MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:357-358</code>). The production validators use
+          Identity&#39;s internal-ingress authority directly (ADC: <code>MMCA.ADC/infra/main.bicep:2003</code>, <code>:2139</code>,
+          <code>:2293</code>; Store: <code>MMCA.Store/infra/main.bicep:1684</code>, <code>:1819</code>) with <code>RequireHttpsMetadata=false</code>
+          (ADC: <code>:2007</code>, <code>:2143</code>, <code>:2297</code>; Store: <code>:1689</code>, <code>:1824</code>). The Decision bullet, the
+          <code>ValidIssuer</code> bullet (whose example authority was the Aspire service-discovery URL; it now names
+          the gateway endpoint locally and the internal-ingress URL in production, against the public
+          <code>Jwt__Issuer</code> at <code>MMCA.ADC/infra/main.bicep:1769</code>), the Transport coupling trade-off and the
+          ADR-012 entry under Related now say so.</li>
+          <li>The warmup bullet no longer says the first authenticated request skips the discovery round trip:
+          the middleware&#39;s <code>ConfigurationManager</code> still performs its own fetch
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Warmup/OpenIdConnectMetadataWarmupTask.cs:16-19</code>),
+          and the Discovery trade-off now says the warmup reduces rather than absorbs the cold-start cost.</li>
+          <li>The Discovery trade-off no longer credits ADR-009 with covering the discovery fetch. The
+          standard resilience handler is attached through <code>ConfigureHttpClientDefaults</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:39-49</code>) and so reaches the
+          <code>IHttpClientFactory</code> client the warmup task uses (<code>.../Warmup/OpenIdConnectMetadataWarmupTask.cs:45</code>);
+          <code>AddForwardedJwtBearerCore</code> sets no backchannel
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.Authentication.cs:83-114</code>),
+          so the middleware&#39;s own <code>ConfigurationManager</code> fetch is outside that pipeline. The ADR-009 entry
+          under Related now says so.</li>
+          <li>Anchors re-verified against current source: the ADC Conference service call moved to
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:331</code>; the
+          <code>AddForwardedJwtBearer</code> signature (<code>:52-57</code>), <code>RequireHttpsMetadata</code> resolution (<code>:64-66</code>) and
+          warning-filter registration (<code>:68-72</code>) in <code>WebApplicationBuilderExtensions.Authentication.cs</code>
+          are unchanged.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-007 (gRPC calls forward the validated JWT downstream via <code>JwtForwardingClientInterceptor</code>),
           ADR-008 (the extraction that split issuer and validator into separate processes), ADR-012 (the
-          HTTP/2-only transport that forces gateway-routed discovery), ADR-009 (the resilience pipeline that
-          covers the discovery fetch).</p>
+          HTTP/2-only transport that forces gateway-routed discovery in the local Aspire wiring), ADR-009
+          (resilience; its Polly pipeline covers the warmup prefetch, not the middleware&#39;s own discovery
+          fetch).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -400,6 +467,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

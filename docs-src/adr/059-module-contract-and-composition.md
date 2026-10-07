@@ -1,7 +1,7 @@
 # ADR-059: The IModule Contract and Reflection-Based Module Composition
 
 ## Status
-Accepted (2026-07-28; revised 2026-08-14).
+Accepted (2026-07-28; revised 2026-08-14). Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 
 ## Context
 The framework's headline claim is that an application is built as a modular monolith and later
@@ -52,7 +52,7 @@ rather than by absence.
   (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:125-127`,
   `MMCA.Store.Identity.Service/Program.cs:119-121`, `MMCA.Store.Sales.Service/Program.cs:132-134`) and
   ADC (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:265-267`,
-  `MMCA.ADC.Conference.Service/Program.cs:369-371`, `MMCA.ADC.Engagement.Service/Program.cs:213-215`,
+  `MMCA.ADC.Conference.Service/Program.cs:371-373`, `MMCA.ADC.Engagement.Service/Program.cs:213-215`,
   `MMCA.ADC.Notification.Service/Program.cs:195-197`) each name the single assembly of the one module
   that host enables, so an extracted service's scan surface equals its own module. Helpdesk calls
   `DiscoverAndRegister` directly with its one module assembly
@@ -123,9 +123,9 @@ rather than by absence.
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/ModuleControllerFeatureProvider.cs:33-53,60-82`).
   Seeders run only for enabled modules and in registration order (`ModuleLoader.cs:129-132,266-272`),
   invoked from startup database initialization
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:45-48,124`).
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:51-54,137`).
   `AddModuleHealthChecks` publishes one `module-{Name}` check per module, Healthy when enabled and
-  Degraded when disabled (`DependencyInjection.cs:195-229`).
+  Degraded when disabled (`DependencyInjection.cs:212-234`).
 - **A remote-dependency validator exists but is not wired.** `ValidateRemoteDependencies` re-resolves
   every service type a disabled dependency's stub registered, throwing when it no longer resolves and
   warning when it still resolves to the stub type (`ModuleLoader.cs:212-257`). It is exercised only by
@@ -177,7 +177,7 @@ and ADC Notification declares `["Identity"]` remote
 Conference enables one module and declares nothing remote
 (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/appsettings.json:21-26`) even though it wires
 Engagement's `IBookmarkCountService` as a gRPC client
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:416`), because
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:418`), because
 `ConferenceModule` never declares Engagement in `Dependencies`.
 
 ## Rationale
@@ -233,10 +233,10 @@ Engagement's `IBookmarkCountService` as a gRPC client
   so a data-subject export assembled while a module is disabled reads as a complete document.
   A wrongly disabled module therefore produces plausible wrong answers rather than an error, and the
   only startup signal is a Degraded `module-{Name}` health check plus a log line
-  (`DependencyInjection.cs:219-226`, `ModuleLoader.cs:334-335,343-344`).
+  (`DependencyInjection.cs:224-231`, `ModuleLoader.cs:334-335,343-344`).
 - **The dependency graph is a hand-written declaration, not a derived fact.** ADC Conference consumes
   Engagement's `IBookmarkCountService` over gRPC without listing Engagement in `Dependencies`
-  (`ConferenceModule.cs:15-30` versus `Conference.Service/Program.cs:416`), and Store Identity
+  (`ConferenceModule.cs:15-30` versus `Conference.Service/Program.cs:418`), and Store Identity
   consumes the Sales and Catalog export services over gRPC while `IdentityModule` declares no
   `Dependencies` at all (`MMCA.Store.Identity.API/IdentityModule.cs:16-47` versus
   `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:265,276`), so neither the
@@ -310,6 +310,22 @@ empty attendee list rather than an export, and the ADR-015 isolation base is cit
   the seeding call (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:124`)
   and `ModuleIsolationTestsBase` (`:8-40`, now seven facts). The Sales host assembly list cited in
   the 2026-10-01 revision is now at `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:132-134`.
+
+## Revision (2026-10-07)
+Re-verified against current source. The decision, the module inventory and every behavioral
+statement are unchanged: `AddModuleHealthChecks` still publishes one Healthy `module-{Name}` check per
+enabled module and one Degraded check per disabled module, startup database initialization still runs
+the module seeders, and ADC Conference still wires Engagement's `IBookmarkCountService` client without
+declaring Engagement in `Dependencies`. Only line numbers moved.
+
+1. Anchors re-verified against current source: the ADC Conference `AddModuleHost` call
+   (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:371-373`), the ADC Conference
+   bookmark-count client (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:418`), the
+   `InitializeDatabaseAsync` signature and its seeding call
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:51-54,137`;
+   line 124 is now the pending-migrations check, so the 2026-10-06 `:124` seeding anchor is stale), and
+   `AddModuleHealthChecks` (`MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:212-234`,
+   the Degraded branch at `:224-231`).
 
 ## Related
 ADR-008 (the extraction topology that consumes this model: "a service is the monolith with one module

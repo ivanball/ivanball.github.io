@@ -27,6 +27,9 @@ Revised 2026-10-01 (the output-cache list reads as a sample, and the `auth-ip` n
 claims to mirror the global limiter).
 Revised 2026-10-06: every ADC service binds the `RateLimiting` section, and the email-confirmation
 `auth-ip` decoration is recorded as owned by the framework base rather than by each app.
+Revised 2026-10-07: the distributed limiter's Redis partition key is qualified by the application
+namespace (MMCA.Common v1.232.0), so by default two MMCA applications sharing one Redis no longer
+share counters.
 ## Context
 Every service exposes read and write endpoints to the public internet through the gateway (ADR-008).
 Abusive or runaway clients (scrapers, credential stuffing, retry storms, a buggy SPA stuck in a loop)
@@ -63,7 +66,7 @@ Rate limiting is **layered**, and the always-on global limiter is **authenticate
    are served from the output cache (`UseOutputCache`; ADC's Conference service defines one
    public-endpoint policy per public aggregate, among them `EventsCache` / `CategoriesCache` /
    `QuestionsCache` / `RoomsCache`,
-   `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:267-298`), and login/registration brute-force is handled by `LoginProtectionService`
+   `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:269-300`), and login/registration brute-force is handled by `LoginProtectionService`
    (exponential-backoff account lockout after `MaxFailedAttempts` failed logins, plus per-IP
    registration throttling).
 3. **A per-IP cap on the anonymous authentication endpoints, on by default.** `AddCommonRateLimiting`
@@ -343,6 +346,49 @@ lines.
 - Anchors in the live sections (the Conference output-cache range and the unattributable-bucket
   anchors in Decision item 3) were re-verified against current source.
 
+## Revision (2026-10-07)
+
+Re-verified against current source. The layering, every default, the `auth-ip` surface, the
+fail-open posture and both gateways' `auth-tight` scoping are unchanged. One storage detail of the
+distributed limiter moved, and the anchors that drifted since the 2026-10-06 audit are re-pointed.
+
+1. **The Redis partition key is namespaced per application** (SEC-Common-53, shipped in MMCA.Common
+   v1.232.0). The framework builds
+   each `RedisFixedWindowRateLimiter` with the partition key `{namespace}:{scope}:{partition}`
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:254`,
+   rationale at `:247-249`), where the namespace is `Cache:KeyPrefix` with its trailing colon
+   trimmed, or `ApplicationNamespace.Resolve` when no prefix is set (`:199-205`). That matches how
+   the distributed cache resolves its own prefix: a configured `Cache:KeyPrefix` as is, else the
+   application namespace plus `:`
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/CacheKeyPrefix.cs:73-88`). The limiter still prefixes `rl:` and appends the
+   Unix minute (`MMCA.Common/Source/Presentation/MMCA.Common.API/RateLimiting/RedisFixedWindowRateLimiter.cs:132`,
+   documented at `:24-26`), so the stored key is `rl:{namespace}:{scope}:{partition}:{unixMinute}`.
+   By default, two MMCA applications pointed at one Redis therefore do not share a counter. Two
+   hosts that set the same `Cache:KeyPrefix` or `Application:Namespace` share a namespace on
+   purpose (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/CacheKeyPrefix.cs:37-40`,
+   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/ApplicationNamespace.cs:22-25`),
+   and a host with no application name falls back to `app` (`ApplicationNamespace.cs:34`, `:67`).
+   The `rl:` keyspace
+   the Related section names still holds.
+2. **The Conference output-cache range drifted after the 2026-10-06 audit.** The range was correct
+   when that audit re-verified it; MMCA.ADC #255 later moved it by two lines through comment edits
+   higher in the file. The `AddPublicEndpointPolicy` calls now run from `ConferencePublicCache`
+   (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:269`) to `BookmarkCountsCache`
+   (`:300`), and the four sampled names are all present (`EventsCache` `:270`, `RoomsCache` `:278`,
+   `CategoriesCache` `:279`, `QuestionsCache` `:280`); Decision item 2 now cites `:269-300`. The
+   unattributable-bucket anchors in Decision item 3 were and remain correct (`"anonymous-hub"` `:66`,
+   `"authenticated"` `:156`, `__unknown-ip` `NoLimiter` `:310` in `WebApplicationBuilderExtensions.RateLimiting.cs`).
+3. Anchors re-verified against current source: `AddTrustedCallerHeader` is called from
+   `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:137` (Store `:129` and the definition at
+   `MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:121` unchanged).
+   `CredentialRoutes_CarryTheTightRateLimiterPolicy` is declared at
+   `MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/MmcaGatewayTests.cs:144`, with the per-route
+   assertion loop at `:155-161` and the exact-set `BeEquivalentTo` assertion at `:163-168`, still
+   pinning both directions. `RateLimiting__AuthIpPermitLimit` is at `MMCA.ADC/infra/main.bicep:1868`
+   (value `'300'` inside the `conferenceMode` block, rationale at `:1863-1865`), and the ADC
+   `GatewayRateLimiting__TrustedCallerSecret` injections are at `:2491` and `:2650` (Store
+   `MMCA.Store/infra/main.bicep:1959` and `:2084` unchanged).
+
 ## Related
 ADR-004 (the JWKS/discovery traffic the limiter exempts, and the authenticated principal it keys on),
 ADR-008 (the gateway edge this protects), ADR-017 (request idempotency, the other inbound-edge
@@ -350,7 +396,7 @@ safeguard against client retries), ADR-029 (the per-email lockout and registrati
 on the login and register endpoints the `auth-ip` cap also covers, and the reason `auth-ip` stays
 local), ADR-026 (the
 Redis the distributed limiter reuses, and the `IncrementAsync` storage-format lesson the raw `INCR`
-here avoids by owning its own `rl:` keyspace), ADR-070 (the fail-fast configuration contract
+here avoids by owning its own `rl:` keyspace, qualified per application), ADR-070 (the fail-fast configuration contract
 `RateLimitingSettings` binds into, and the `Distributed` degradation that sits outside it), ADR-079
 (the shared middleware pipeline that places `UseRateLimiter` after authentication and after forwarded
 headers, which is what makes both partition keys resolvable).

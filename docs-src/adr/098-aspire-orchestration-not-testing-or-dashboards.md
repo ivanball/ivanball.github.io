@@ -10,7 +10,7 @@ three repos, both consumers own an AppHost smoke project, and each of them subcl
 one app's; the ADC bicep and workflow anchors are re-pinned to their current lines. Revised
 2026-10-01: the per-PR framework AppHost test job and the extra telemetry cuts are recorded. Revised
 2026-10-06: the ADC AppHost's broker is described as selectable (RabbitMQ or the Service Bus
-emulator) rather than RabbitMQ only. Revised 2026-10-07: the consumer AppHost smoke projects and their nightly job are removed, so the bounded exception is MMCA.Common's blocking framework tier alone (see Revision below). Records two
+emulator) rather than RabbitMQ only. Revised 2026-10-07: the consumer AppHost smoke projects and their nightly job are removed, so the bounded exception is MMCA.Common's blocking framework tier alone (see Revision below). Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Records two
 standing divergences from the default .NET Aspire path as
 decisions rather than as gaps. Both parts describe what the four repos already do, with the single
 bounded exception recorded in Decision 1, and the value of writing them down is that a reader (or a
@@ -23,9 +23,9 @@ Aspire is used on exactly two surfaces here.
 provisions a persistent SQL Server container, one database per service, Redis and a message broker
 (RabbitMQ by default, or the Azure Service Bus emulator when `ADC_BROKER=servicebus`), then the four
 services, the Gateway and the Blazor UI
-(`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:1-6`, SQL at `:14-15`, the four databases at
-`:36-39`, Redis at `:43-44`, the broker selection at `:66-94` with the `AddSelectedBroker` call at
-`:94`); `MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:1-14`
+(`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:1-7`, SQL at `:15-16`, the four databases at
+`:37-40`, Redis at `:44-45`, the broker selection at `:47-96` with the `AddSelectedBroker` call at
+`:97`); `MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:1-14`
 is the same shape over its three services. Service discovery and health-based startup ordering come from Aspire's resource
 model rather than from hand-written wiring.
 
@@ -130,24 +130,24 @@ extension of it.
 
 - **The sink is workspace-based Application Insights**, backed by the existing Log Analytics
   workspace, with telemetry landing in the workspace tables under its PerGB2018 pricing and retention
-  (`MMCA.ADC/infra/main.bicep:254-264`, the workspace binding at `:261`); hosts export to it through
-  `UseAzureMonitor` whenever the injected connection string is present (`:249-253`, the injected
-  `APPLICATIONINSIGHTS_CONNECTION_STRING` entry at `:269-272`).
+  (`MMCA.ADC/infra/main.bicep:255-265`, the workspace binding at `:262`); hosts export to it through
+  `UseAzureMonitor` whenever the injected connection string is present (`:250-254`, the injected
+  `APPLICATIONINSIGHTS_CONNECTION_STRING` entry at `:270-273`).
 - **The stream is deliberately thinned, and each cut is priced in the template.** Head-based trace
-  sampling keeps 25% (`Telemetry__TracesSampleRatio` = `0.25`, `:274-281`); the OpenTelemetry logging
+  sampling keeps 25% (`Telemetry__TracesSampleRatio` = `0.25`, `:275-282`); the OpenTelemetry logging
   provider ships `Warning` and above while Serilog still writes `Information` to container stdout
-  (`:283-292`); the Gateway's YARP per-request `Information` lines are floored to `Warning`
-  (`:293-302`); the two highest-volume instrument groups (`http.client.*` gauges and the `dotnet.*`
-  runtime instruments, measured at about 65% of AppMetrics ingestion, `:304-309`) are switched off
-  (`:310-317`); the whole ASP.NET Core meter family (measured at 73% of workspace ingestion over
-  2026-09-22..28, read by no alert) is dropped (`:319-326`); Live Metrics is disabled
-  (`AzureMonitor__EnableLiveMetrics` = `false`, `:328-336`); and the metric export interval is
+  (`:284-293`); the Gateway's YARP per-request `Information` lines are floored to `Warning`
+  (`:294-303`); the two highest-volume instrument groups (`http.client.*` gauges and the `dotnet.*`
+  runtime instruments, measured at about 65% of AppMetrics ingestion, `:305-311`) are switched off
+  (`:312-319`); the whole ASP.NET Core meter family (measured at 73% of workspace ingestion over
+  2026-09-22..28, read by no alert) is dropped (`:321-328`); Live Metrics is disabled
+  (`AzureMonitor__EnableLiveMetrics` = `false`, `:330-338`); and the metric export interval is
   stretched from the 60-second default to 300 seconds, cutting roughly 80% of the remaining
-  datapoints while five-minute alert windows keep the same signal (`:338-347`).
+  datapoints while five-minute alert windows keep the same signal (`:340-349`).
 - **What an operator actually reads is alerts and a workbook, not a live console.** SLO rules ship as
-  code (`main.bicep:480`, `:586`, and the Gateway availability alert at `:717` over the web test at
-  `:684`, all wired to the unconditional action group at `:352-369`), and a saved Azure Monitor
-  workbook visualizes the same SLOs per service (`:756`), which is the deployed-environment view (ADR-062, ADR-041).
+  code (`main.bicep:482`, `:602`, and the Gateway availability alert at `:733` over the web test at
+  `:700`, all wired to the unconditional action group at `:357-371`), and a saved Azure Monitor
+  workbook visualizes the same SLOs per service (`:772`), which is the deployed-environment view (ADR-062, ADR-041).
 - **The ACA Aspire dashboard is not provisioned**, and that is the decision rather than a to-do. It is
   ephemeral (no retention behind it), full fidelity (it would be looking at the very stream this
   template thins), and it has no alert or saved-query surface, so it cannot be the thing that pages
@@ -155,10 +155,10 @@ extension of it.
 
 ## Rationale
 - **Test at the boundary that ships.** A service is deployed as its own container app
-  (`MMCA.ADC/infra/main.bicep:1651`, `:1890`, `:2041`, `:2174`), configured entirely through
+  (`MMCA.ADC/infra/main.bicep:1675`, `:1922`, `:2075`, `:2210`), configured entirely through
   environment variables. `WebApplicationFactory` plus an environment-variable override channel is a
   closer model of that than an app model the deployment does not use: production topology comes from
-  Bicep (`MMCA.ADC/.github/workflows/deploy.yml:1541-1547`), not from the AppHost.
+  Bicep (`MMCA.ADC/.github/workflows/deploy.yml:1433-1439`), not from the AppHost.
 - **The cheapest tier that could have failed.** The per-service tier needs no Docker at all, because
   `AddBrokerMessaging` returns early on the default `InProcess` provider, which is what an absent
   `MessageBus` section resolves to
@@ -190,12 +190,12 @@ extension of it.
   production code.
 - **Sampling means a reported request may have no trace.** At 0.25, three of four traces are dropped
   at the head, so an operator investigating a specific user report will often find the request counted
-  and not traced (`main.bicep:274-281`).
+  and not traced (`main.bicep:275-282`).
 - **The `Warning` floor moves `Information` logs off the queryable path.** They exist in container
-  stdout only (`:283-292`), so the correlation-id story (ADR-041) is complete only for what the floor
+  stdout only (`:284-293`), so the correlation-id story (ADR-041) is complete only for what the floor
   admits.
 - **A 300-second export interval delays metric-driven signal.** Alert rules use five-minute windows,
-  so the design holds, but a metric change is not visible in near real time (`:338-347`).
+  so the design holds, but a metric change is not visible in near real time (`:340-349`).
 - **Neither absence is enforced.** Nothing fails a build if a project adds `Aspire.Hosting.Testing` or
   a dashboard resource: unlike the pins of ADR-016 or the fitness rules of ADR-015, this record is a
   convention, and its only guard is review.
@@ -250,6 +250,16 @@ No decision or rationale changed.
 - Context item 1, the bounded exception in Decision 1 and the first Trade-off are restated for that
   state. The exception stays bounded to one framework tier over a sample AppHost; the orchestration
   and observability decisions are unchanged.
+- Anchors re-verified against current source: the ADC AppHost header, SQL, database, Redis and
+  broker lines (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:1-7`, `:15-16`, `:37-40`,
+  `:44-45`, `:47-96`, `AddSelectedBroker` at `:97`); App Insights and its connection string
+  (`MMCA.ADC/infra/main.bicep:255-265`, `:262`, `:250-254`, `:270-273`); the seven thinning knobs
+  (`:275-282`, `:284-293`, `:294-303`, `:305-311`, `:312-319`, `:321-328`, `:330-338`,
+  `:340-349`); the SLO rules, availability alert, web test, action group and workbook (`:482`,
+  `:602`, `:733`, `:700`, `:357-371`, `:772`); the four container apps (`:1675`, `:1922`,
+  `:2075`, `:2210`); and the deploy step that applies the Bicep template
+  (`MMCA.ADC/.github/workflows/deploy.yml:1433-1439`). The anchors inside the 2026-10-01 and
+  2026-10-06 revisions stay as written and are superseded by the live sections.
 
 ## Related
 [ADR-041](041-observability-and-telemetry.md) (the shared Aspire OpenTelemetry baseline and the

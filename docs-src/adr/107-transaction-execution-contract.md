@@ -12,6 +12,7 @@ opt-out; see Revision below).
 Revised 2026-10-06: the commit phase also releases the internal-command processor wake after a successful commit
 and drops it on every other path, MMCA.ADC's count is six with `DeleteSessionAssetCommand`, and three more ADC
 direct callers are listed.
+Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 
 ## Context
 Every transactional write in this workspace funnels through one method. `IUnitOfWork.ExecuteInTransactionAsync`
@@ -108,8 +109,8 @@ work, the commit phase is deliberately outside the retry, and a commit whose out
 
 8. **Deferred in-process dispatch is flushed only after a successful commit, and dropped on every other path.**
    Handlers deferred while a transaction is open are flushed per context immediately after the commit succeeds
-   (`DbContextFactory.cs:639-643`, `.../Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:145`).
-   `RollbackTransaction` drops them (`DbContextFactory.cs:484-495`, `DomainEventSaveChangesInterceptor.cs:162`), and
+   (`DbContextFactory.cs:639-643`, `.../Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:160`).
+   `RollbackTransaction` drops them (`DbContextFactory.cs:484-495`, `DomainEventSaveChangesInterceptor.cs:177`), and
    so do `ResetForRetry` between attempts and `AbandonAfterCommitFailure` after an ambiguous commit (`:840`,
    `:766`). The processor wake owed by internal commands enrolled in the unit follows the same rule:
    `EnrolledCommandWake.Release` runs right after a successful commit and ahead of the event flush, so a throwing
@@ -157,7 +158,7 @@ work, the commit phase is deliberately outside the retry, and a commit whose out
     ("Deliberately NOT `ITransactional`": `VerifyPaymentCommand.cs:11`, `ProcessPaymentWebhookCommand.cs:9`,
     `CheckOutCommand.cs:9`, `BulkSetInventoryCommand.cs:11`), and MMCA.Helpdesk has none. Direct callers are the
     framework's own `EFRefreshSessionStore` rotation
-    (`.../Infrastructure/Persistence/Auth/EFRefreshSessionStore.cs:121`), ADC's `AuthenticationService` for both
+    (`.../Infrastructure/Persistence/Auth/EFRefreshSessionStore.cs:134`), ADC's `AuthenticationService` for both
     registration and external login
     (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:86`, `:221`), ADC's
     `RefreshFromSessionizeHandler` (`RefreshFromSessionizeHandler.cs:149`), `DeleteSessionHandler` and
@@ -201,8 +202,8 @@ work, the commit phase is deliberately outside the retry, and a commit whose out
   display name, so their latency never holds database locks, `CheckOutHandler.cs:24-31`), the code does that
   pre-flight before opening the transaction (`:54-78`), and the write-phase remarks explain why the whole
   read-execute-write unit runs inside (`:99-107`) and why a commit failure is not retried (`:108-115`, citing this
-  record for the behavior MMCA.Common shipped in v1.135.0, `MMCA.Common/CHANGELOG.md:3966`, and that Store consumes at
-  v1.232.0, `MMCA.Store/Directory.Packages.props:11`). That is discipline, not enforcement: nothing checks that a
+  record for the behavior MMCA.Common shipped in v1.135.0, `MMCA.Common/CHANGELOG.md:3991`, and that Store consumes at
+  v1.233.0, `MMCA.Store/Directory.Packages.props:11`). That is discipline, not enforcement: nothing checks that a
   new handler keeps its commit dependencies inside the delegate.
 - **Cosmos participation is silent.** A Cosmos context in a transactional scope is skipped without a warning
   (`DbContextFactory.cs:860-861`), so a future host mixing engines gets partial atomicity with no signal at the call
@@ -241,6 +242,18 @@ five, four in Conference. MMCA.Store has three, since `AddVariantCommand` gained
   heading is at `MMCA.Common/CHANGELOG.md:3966` and the v1.215.0 heading cited in the 2026-10-01 revision is at `:390`.
 - Every `DbContextFactory.cs`, `UnitOfWork`, `DependencyInjection` and `PublicAPI.Shipped.txt` anchor in the live
   sections was re-verified against current source and refreshed where it had moved.
+
+## Revision (2026-10-07)
+Re-verified against current source. The execution, retry, commit-once, ambiguity and deferred-dispatch
+rules are unchanged, every live `DbContextFactory.cs` anchor still holds, and MMCA.ADC still has six
+`ITransactional` commands; only the anchors and the Store package pin below moved.
+
+1. Anchors re-verified against current source: `DomainEventSaveChangesInterceptor.FlushDeferredAsync`
+   is at `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:160`
+   and `DropDeferred` at `:177`; the `EFRefreshSessionStore` rotation calls `ExecuteInTransactionAsync` at
+   `.../Persistence/Auth/EFRefreshSessionStore.cs:134`; the v1.135.0 CHANGELOG heading is at
+   `MMCA.Common/CHANGELOG.md:3991`; Store consumes MMCA.Common v1.233.0
+   (`MMCA.Store/Directory.Packages.props:11`).
 
 ## Related
 [ADR-014](014-cqrs-decorator-pipeline.md) (the Transactional decorator that is the main caller, and whose

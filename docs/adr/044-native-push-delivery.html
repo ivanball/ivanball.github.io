@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -243,7 +244,8 @@
           default; each consumer switches it on by provisioning a notification hub with platform
           credentials and enabling the <code>NativePush</code> configuration section. Revised 2026-10-01 (UI.Maui
           ships credentialed FCM/APNs token providers and token-rotation re-registration; see Revision below).
-          Revised 2026-10-06: the device DELETE route is <code>/Notifications/Devices/{installationId}</code>.</p>
+          Revised 2026-10-06: the device DELETE route is <code>/Notifications/Devices/{installationId}</code>.
+          Revised 2026-10-07: anchors refreshed after the v1.233.0 release.</p>
           <h2 id="context">Context</h2>
           <p>ADR-024 established two notification channels: a durable per-user <code>UserNotification</code> inbox (the
           source of truth) and a transient SignalR push behind <code>IPushNotificationSender</code>. Both stop at the
@@ -298,7 +300,7 @@
           auth-state changes, and on Android <code>MauiFirebaseMessagingService.OnNewToken</code> re-registers when
           FCM rotates the token (<code>MauiFirebaseMessagingService.cs:26-35</code>). <code>AuthUIService</code> owns the
           unregister leg: <code>LogoutAsync</code> and <code>RevokeAllSessionsAsync</code> both call <code>UnregisterPushAsync</code>
-          before the local sign-out (<code>AuthUIService.cs:90,143</code>, defined at <code>:342</code>).</li>
+          before the local sign-out (<code>AuthUIService.cs:90,143</code>, defined at <code>:361</code>).</li>
           </ul>
           <h2 id="consequences">Consequences</h2>
           <ul>
@@ -353,6 +355,15 @@
           <code>AuthUIService.cs:90,143</code> (definition at <code>:342</code>), and the handler&#39;s native leg and at-least-once
           remarks are <code>SendPushNotificationHandler.cs:141-154</code> and <code>:21-30</code>.</li>
           </ul>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. The decision is unchanged: Notification Hubs, <code>user:{id}</code> tags, the
+          Null-by-default sender and registrar, and the unregister leg running before the local sign-out in
+          both <code>LogoutAsync</code> and <code>RevokeAllSessionsAsync</code>. Only one anchor moved.</p>
+          <ol>
+          <li>Anchors re-verified against current source: the unregister calls stay at <code>AuthUIService.cs:90,143</code>
+          (each ahead of <code>SignOutLocallyAsync</code> at <code>:101</code> and <code>:144</code>), and <code>UnregisterPushAsync</code> is now defined
+          at <code>AuthUIService.cs:361</code>.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -369,6 +380,7 @@
             <li><a href="#consequences">Consequences</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             </ul>
           </nav>
         </aside>

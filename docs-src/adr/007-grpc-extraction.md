@@ -7,6 +7,7 @@ type triggers yet). Revised 2026-09-04: the `*.Contracts` gRPC adapter is named 
 module's **Anti-Corruption Layer**; no code changed. Revised 2026-10-06: the `[ServiceContract]` ratchet
 is now triggered (ADC marks six interfaces and Store four), a second fitness rule keeps their
 implementations non-public, and the h2c, JWKS and disabled-stub bullets are narrowed to current wiring.
+Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 
 ## Context
 Once modules became separate service processes, the in-process interface calls between them (e.g.
@@ -52,7 +53,7 @@ Use **gRPC**, exposed through `MMCA.Common.Grpc`, with a contract-package conven
   `:109`). Under the AppHost the authority is wired by `WithJwksDiscovery(identity, gateway)`, whose
   gateway argument is optional (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:309-311`);
   in production the bicep points the authority straight at Identity's internal cleartext URL with
-  `RequireHttpsMetadata=false`, not through the gateway (`MMCA.ADC/infra/main.bicep:1969`, `:1973`;
+  `RequireHttpsMetadata=false`, not through the gateway (`MMCA.ADC/infra/main.bicep:2003`, `:2007`;
   `MMCA.Store/infra/main.bicep:1684`, `:1689`).
 - **Disabled-module stubs**: when a multi-module host runs with a peer module switched off,
   `ModuleLoader` registers that module's `Disabled*` stubs so resolution always succeeds
@@ -88,7 +89,7 @@ Use **gRPC**, exposed through `MMCA.Common.Grpc`, with a contract-package conven
   `IUserNotificationExportService.cs:13`) and Store four (`IProductVariantService.cs:33`,
   `IUserCatalogExportService.cs:19`, `IUserSalesExportService.cs:20`, `ICustomerService.cs:25`), all
   with the parameterless form, so none passes a version. MMCA.Common and Helpdesk mark nothing
-  (`MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/ServiceContractAttribute.cs:11`), so
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/ServiceContractAttribute.cs:12-13`), so
   there the rules stay a ratchet that passes without asserting anything.
 
 ## Trade-offs
@@ -119,3 +120,15 @@ Use **gRPC**, exposed through `MMCA.Common.Grpc`, with a contract-package conven
 - h2c: Store Sales joins ADC Notification on the ADR-012 mixed profile (default `Http1AndHttp2` plus
   an `Http2`-only `grpc` endpoint).
 - Anchors re-verified against current source.
+
+## Revision (2026-10-07)
+Re-verified against current source. The decision, the JWKS wiring and the `[ServiceContract]`
+adoption are unchanged: ADC production bicep still sets the authority to Identity's internal
+cleartext URL with `RequireHttpsMetadata=false`, and MMCA.Common and Helpdesk still mark no type.
+Only anchors moved.
+
+1. Anchors re-verified against current source: ADC JWKS authority and `RequireHttpsMetadata`
+   re-pointed to `MMCA.ADC/infra/main.bicep:2003`, `:2007` (the same pair repeats at `:2139`,
+   `:2143` and `:2293`, `:2297`); the "MMCA.Common applies to no type" remark re-pointed to
+   `MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/ServiceContractAttribute.cs:12-13`;
+   Store's `MMCA.Store/infra/main.bicep:1684`, `:1689` still hold.

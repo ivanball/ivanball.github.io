@@ -8,6 +8,8 @@ adopted by nothing, with the cheap default left exactly where it is.
 Revised 2026-09-19: Context corrected to state what `ValueObjectsAreImmutableSealedInShared` actually
 asserts (sealed, Shared-layer assembly, no public mutable setters). The rule carries no `record`
 check.
+Revised 2026-10-07: Decision point 13 now separates code references from comment-only mentions of
+`Enumeration<T>`; adoption remains zero.
 
 ## Context
 A bounded set of named values shows up everywhere in this workspace: the state that triggered a
@@ -151,10 +153,13 @@ whose members need behavior or data, and nothing in the framework pushes a consu
 
 13. **Adoption is zero and this record says so.** No production type in MMCA.Common, MMCA.Store,
     MMCA.ADC, MMCA.Helpdesk or the MMCA.ECommerce sample derives from `Enumeration<T>`. The only
-    types that reference it at all are the base file itself, the EF converters, the `AddAPI`
-    registration and the three test files; the only derivations are the five private fixtures in
-    those tests (`EnumerationTests.cs:122`, `:134`, `EnumerationSerializationTests.cs:111`, `:122`,
-    `EnumerationValueConverterTests.cs:89`).
+    code that references it is the base file itself, the EF converters, the `AddAPI` registration
+    of its JSON converter factory (`DependencyInjection.cs:19`, `:59`) and the three test files.
+    Everywhere else it appears only as text, in comments and in one `SuppressMessage`
+    justification string, as the precedent the strongly typed identifiers and the entity base cite
+    (for example `IStronglyTypedId.cs:54`, `BaseEntity.cs:31`, `:50`). The only derivations are the five private
+    fixtures in those tests (`EnumerationTests.cs:122`, `:134`,
+    `EnumerationSerializationTests.cs:111`, `:122`, `EnumerationValueConverterTests.cs:89`).
 
 ## Rationale
 - **The default should be the cheap type.** A CLR enum costs nothing at a call boundary, needs no
@@ -238,6 +243,26 @@ No decision, rationale or content changed.
   converter factory `:201`, IEquatable remark `:42-48`, usage note `:191-194`).
 - The `PublicAPI.Shipped.txt` ranges moved: Shared `:567-572`, `:763-767`, `:991-993`; Infrastructure `:356-357`, `:360-361`. They still hold eighteen declarations.
 - Anchors in Context, Decision, Rationale and Trade-offs were re-verified against current source; `Enumeration.cs:11` and `:26-34` are unchanged.
+
+## Revision (2026-10-07)
+Re-verified against current source. No decision or rationale changed, and adoption is still zero:
+no type in MMCA.ADC, MMCA.Store or MMCA.Helpdesk derives from `Enumeration<T>`, and the only
+derivations in MMCA.Common remain the five private test fixtures. One statement corrected.
+
+1. Decision point 13 said the only types referencing `Enumeration<T>` at all were the base file, the
+   EF converters, the `AddAPI` registration and the three test files. Code references are confined
+   to those, but the type is also named as text elsewhere: the strongly typed identifier interface
+   (`MMCA.Common/Source/Core/MMCA.Common.Shared/Identifiers/IStronglyTypedId.cs:54`), the entity base
+   (`MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/BaseEntity.cs:31`, plus a
+   `SuppressMessage` justification string at `:50`), the strongly typed
+   identifier fitness rule
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Domain/ArchitectureRules.StronglyTypedIds.cs:30`)
+   and two identifier tests (`MMCA.Common/Tests/Core/MMCA.Common.Shared.Tests/Identifiers/TestIdentifiers.cs:8`,
+   `StronglyTypedIdSerializationTests.cs:99`). None is a code dependency; Decision point 13 now
+   says so.
+2. Anchors re-verified against current source: `DependencyInjection.cs:59` (factory registration),
+   `EnumerationTests.cs:122`, `:134`, `EnumerationSerializationTests.cs:111`, `:122` and
+   `EnumerationValueConverterTests.cs:89` (the five fixtures), all unchanged.
 
 ## Related
 [ADR-037](037-field-level-encryption-at-rest.md) (the precedent for recording a shipped, tested and

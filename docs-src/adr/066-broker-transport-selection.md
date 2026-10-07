@@ -29,6 +29,9 @@ because both templates record the opposite in a comment above the rules). Revise
 consumers can run the production transport locally; see Revision below). Revised 2026-10-06: the
 broker selector both AppHosts use is now the framework's `BrokerSelection` rather than a repo-local
 helper, ADC's per-service broker secret is recorded alongside Store's, and anchors are re-verified.
+Revised 2026-10-07: ADC's `cross-service-freshness` gate is now a step of one consolidated
+`freshness` deploy job rather than a job of its own, so the gate citation is restated, and the ADC
+anchors are refreshed after the v1.233.0 release.
 ## Context
 ADR-003 decides that integration events leave an aggregate through the outbox and are published by
 `OutboxProcessor` via `IMessageBus`, and it settles the *dispatch* question ("in-process for the
@@ -62,7 +65,7 @@ carry a dedicated test tier for the transport that only production uses.
   `WithBroker` overload taking a `RabbitMQServerResource` attaches it to a project resource with
   `WithReference` + `WaitFor` and sets `MessageBus__Provider=RabbitMq` (`:252-262`). Every extracted
   service gets a broker: ADC's four
-  (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:125,154,197,225`) and Store's three
+  (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:128,157,200,228`) and Store's three
   (`MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:162,188,234`), each through
   `WithSelectedBroker(withBroker)`. The RabbitMQ branch is framework code: `BrokerSelection.AddSelectedBroker`
   calls `AddMessageBroker().WithLifetime(ContainerLifetime.Persistent)`
@@ -91,19 +94,19 @@ carry a dedicated test tier for the transport that only production uses.
   (`AddSelectedBroker`, `:57`) that `WithSelectedBroker` applies to each service (`:81`). The
   delegate exists because the two `WithBroker` overloads take different resource types, so the choice
   cannot be one variable handed to one call (`:13-17`). ADC's AppHost makes that choice once on
-  `ADC_BROKER` (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:94`, rationale at `:66-93`) and
+  `ADC_BROKER` (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:97`, rationale at `:69-96`) and
   Store's on `STORE_BROKER` (`MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:78`, rationale at
   `:50-77`). Unset is the default in both, so the everyday inner loop pays neither the extra container
   nor its warm-up.
 - **Production is Azure Service Bus, injected by Bicep.** Each service container app receives
   `MessageBus__Provider=AzureServiceBus` plus a `MessageBus__ConnectionString` secret reference:
-  ADC at `MMCA.ADC/infra/main.bicep:1760-1761` (identity, `:1651`), `:1982-1983` (conference,
-  `:1890`), `:2124-2125` (engagement, `:2041`), `:2275-2276` (notification, `:2174`); Store at
+  ADC at `MMCA.ADC/infra/main.bicep:1791-1792` (identity, `:1675`), `:2016-2017` (conference,
+  `:1922`), `:2160-2161` (engagement, `:2075`), `:2313-2314` (notification, `:2210`); Store at
   `MMCA.Store/infra/main.bicep:1512-1513` (identity, `:1420`), `:1678-1679` (catalog, `:1599`),
   `:1813-1814` (sales, `:1723`). Every service in both repos reads its own per-service secret: Store
   names a distinct secret reference per app, while ADC keeps the plain name
   `service-bus-connection-string` and resolves it to the Key Vault secret belonging to that one
-  service (`MMCA.ADC/infra/main.bicep:1562-1584`). The images are the same ones the AppHost runs locally; only the two environment variables
+  service (`MMCA.ADC/infra/main.bicep:1586-1608`). The images are the same ones the AppHost runs locally; only the two environment variables
   differ.
 - **One resolution order for the connection string.** `ResolveBrokerConnectionString` prefers an
   explicit `MessageBus:ConnectionString`, then `ConnectionStrings:rabbitmq`, then
@@ -122,23 +125,23 @@ carry a dedicated test tier for the transport that only production uses.
   delayed-message-exchange plugin the Aspire container does not ship
   (`DependencyInjection.Messaging.cs:283-290`, posture documented in the remarks at `:251-258`).
 - **Service Bus Standard tier and `Manage` rights are forced by the topology MassTransit builds.**
-  Both namespaces are `Standard`/`Standard` (`MMCA.ADC/infra/main.bicep:1069-1072`,
+  Both namespaces are `Standard`/`Standard` (`MMCA.ADC/infra/main.bicep:1089-1092`,
   `MMCA.Store/infra/main.bicep:999-1002`) because `UsingAzureServiceBus` configures a topic per
   message type plus a subscription per consumer, and Basic supports queues only
-  (`MMCA.ADC/infra/main.bicep:1060-1061`, `MMCA.Store/infra/main.bicep:991-993`). There is no shared
+  (`MMCA.ADC/infra/main.bicep:1080-1081`, `MMCA.Store/infra/main.bicep:991-993`). There is no shared
   client rule: each container app owns a namespace authorization rule of its own, and every one of
   them carries `Send` + `Listen` + **`Manage`**. ADC declares four (`identity-service`,
   `conference-service`, `engagement-service`, `notification-service` at
-  `MMCA.ADC/infra/main.bicep:1109`, `:1121`, `:1133`, `:1145`, rights at `:1113-1117` and repeated
+  `MMCA.ADC/infra/main.bicep:1129`, `:1141`, `:1153`, `:1165`, rights at `:1133-1137` and repeated
   identically on the other three); Store declares three (`catalog-app`, `sales-app`, `identity-app`
   at `MMCA.Store/infra/main.bicep:1035`, `:1047`, `:1059`, rights at `:1039-1043`). `Manage` is on
   all seven so `ConfigureEndpoints` can provision that topology at startup; without it the first
   publish fails with an Unauthorized topology error, which is why neither template drops it
-  (`MMCA.ADC/infra/main.bicep:1082-1094`, `MMCA.Store/infra/main.bicep:1025-1034`). Neither repo
+  (`MMCA.ADC/infra/main.bicep:1102-1114`, `MMCA.Store/infra/main.bicep:1025-1034`). Neither repo
   sources a connection string from `RootManageSharedAccessKey`, so a later move to managed identity
   can revoke these without touching the namespace root: each service reads its own
   `listKeys().primaryConnectionString` variable, four of them under a four-line rationale comment in
-  ADC (`MMCA.ADC/infra/main.bicep:226-229`, variables at `:230-233`) and three under a five-line one
+  ADC (`MMCA.ADC/infra/main.bicep:227-230`, variables at `:231-234`) and three under a five-line one
   in Store (`MMCA.Store/infra/main.bicep:154-158`, variables at `:159-161`).
 - **Tests use the transport the tier is testing.** A per-service integration host configures no
   provider, so `AddBrokerMessaging` short-circuits and the in-process bus stands
@@ -170,14 +173,17 @@ carry a dedicated test tier for the transport that only production uses.
   throw a named PHASE 1 or PHASE 2 `TimeoutException`: the point is not only failing sooner but
   keeping the evidence, since a step killed by the JOB timeout has its log discarded, which is what
   left ADC's 7-of-7 hang (2026-07-21 to 07-24) unlocalized for a week. Both jobs are **authoritative**
-  on the weekday-nightly workflow: neither carries `continue-on-error` (ADC
-  `MMCA.ADC/.github/workflows/cross-service-tests.yml:159-163`, rationale `:132-143`, cron `:31`;
+  on the weekday-nightly workflow: neither carries `continue-on-error` (ADC jobs
+  `MMCA.ADC/.github/workflows/cross-service-tests.yml:79` and `:142`, rationale `:116-126`, cron `:32`;
   Store's `servicebus-emulator-smoke` job in
   `MMCA.Store/.github/workflows/cross-service-tests.yml`), and each repo's `cross-service-freshness`
   deploy gate requires BOTH the `cross-service` job and the `servicebus-emulator-smoke` job to have
-  concluded success in the same nightly run (ADC `MMCA.ADC/.github/workflows/deploy.yml:970-973`, gate job
-  `:949`, in `deploy.needs` at `:1242` and asserted at `:1283`; the Store gate enumerates the same two
-  job names in `MMCA.Store/.github/workflows/deploy.yml`). ADC promoted the tier on 2026-08-31 (TD-17)
+  concluded success in the same nightly run (ADC `MMCA.ADC/.github/workflows/deploy.yml:885-888`, Store
+  `MMCA.Store/.github/workflows/deploy.yml:840-843`). In both repos the gate is a step (ADC `:870`,
+  Store `:825`) of one consolidated `freshness` job (ADC `:817`, Store `:774`), and the deploy asserts
+  `needs.freshness.result == 'success'` (ADC `:1179`, with `freshness` in `deploy.needs` at `:1145`;
+  Store `:1113`). ADC
+  promoted the tier on 2026-08-31 (TD-17)
   and Store followed immediately after, so the transport only production runs is a deploy
   precondition in both apps. Both gates count per-JOB conclusions rather than the run conclusion, so a
   still-advisory job elsewhere in the same workflow cannot drag a proven run down.
@@ -222,14 +228,15 @@ broker, so extraction later is an AppHost change rather than a code change.
   close it: it is opt-in and off by default, so the inner loop a developer actually runs is still the
   divergent one unless they set `ADC_BROKER=servicebus` or `STORE_BROKER=servicebus`.
 - **The production transport is gated nightly, not per commit.** Both emulator jobs are authoritative
-  and both `cross-service-freshness` gates require them (`MMCA.ADC/.github/workflows/deploy.yml:970-973`
+  and both `cross-service-freshness` gates require them (`MMCA.ADC/.github/workflows/deploy.yml:885-888`
   and the Store equivalent), so a Service-Bus-only regression blocks the next deploy rather than the
   merge that introduced it: the tier needs a Docker daemon the gating jobs do not have, so it runs on
   the weekday nightly and reaches the deploy chain through a recency check. The residual is the window
   between a merge and the nightly that judges it, plus the recency tolerance itself (5 days on ADC, to
-  absorb the weekday-only cadence, `MMCA.ADC/.github/workflows/deploy.yml:968`). The sanctioned way
+  absorb the weekday-only cadence, `MMCA.ADC/.github/workflows/deploy.yml:883`). The sanctioned way
   past a red job is a fix or a dispatched green run, never re-adding `continue-on-error`; the one
-  escape hatch is `deploy.yml`'s break-glass `skip_freshness_gates` input, which forces a written
+  escape hatch is `deploy.yml`'s break-glass `skip_freshness_gates` input (ADC `:13`,
+  `MMCA.Store/.github/workflows/deploy.yml:26`), which forces a written
   justification into the run summary.
 - **The emulator is not Azure Service Bus.** It imposes its own quotas (the one-hour entity TTL the
   shared fixture base works around in its static constructor,
@@ -239,10 +246,10 @@ broker, so extraction later is an AppHost change rather than a code change.
 - **`Manage` rights are broad, and splitting the credential did not narrow them.** Every per-service
   rule can create and delete entities anywhere in the namespace, which is the price of letting
   `ConfigureEndpoints` build the topology instead of declaring every topic in Bicep
-  (`MMCA.ADC/infra/main.bicep:1109-1155`, `MMCA.Store/infra/main.bicep:1035-1069`). Both templates
+  (`MMCA.ADC/infra/main.bicep:1129-1175`, `MMCA.Store/infra/main.bicep:1035-1069`). Both templates
   record the residual next to the rules: a compromised container still holds namespace-wide
   `Send` + `Listen` + `Manage`, so per-service rules buy credential separation and revocability, not
-  privilege reduction (`MMCA.ADC/infra/main.bicep:1096-1108`, `MMCA.Store/infra/main.bicep:1025-1034`).
+  privilege reduction (`MMCA.ADC/infra/main.bicep:1116-1128`, `MMCA.Store/infra/main.bicep:1025-1034`).
 - **Provider selection is per host and silent when missing.** A service that never receives
   `MessageBus__Provider` keeps the in-process bus and publishes nothing to the broker, without an
   error (`DependencyInjection.Messaging.cs:52-55`); correctness depends on auditing the AppHost and the Bicep
@@ -250,10 +257,10 @@ broker, so extraction later is an AppHost change rather than a code change.
 - **The choice lives in AppHost prose that has to be maintained alongside the calls.** The note above
   ADC's Notification registration now states that `WithSelectedBroker(withBroker)` wires the
   transport the same way as the other services, and records that an earlier version of the same note
-  said the broker was not wired yet (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:114-116`,
-  the call it describes at `:125`). The `ADC_BROKER` opt-in adds a second block of the same kind, a
+  said the broker was not wired yet (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:117-119`,
+  the call it describes at `:128`). The `ADC_BROKER` opt-in adds a second block of the same kind, a
   rationale above the selection itself that ends in a pointer to the Common `BrokerSelection`
-  (`:66-93`), and Store's `STORE_BROKER` opt-in carries its own
+  (`:69-96`, the pointer at `:93-96`), and Store's `STORE_BROKER` opt-in carries its own
   (`MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:50-77`). Keeping the transport decision in
   orchestration code puts the explanation in comments, which are not checked by anything.
 
@@ -321,6 +328,37 @@ freshness gate now runs through the shared `freshness-gate` composite action
   remark at `:1014-1015`. The 2026-10-01 Store sales secret reference is now `:1814`, and the ADC
   composite action and required jobs are `deploy.yml:962` and `:970-973`.
 - Every live-section anchor was re-verified against current source and re-anchored where it drifted.
+
+## Revision (2026-10-07)
+Re-verified against current source. The transport decision, the three provider values, the
+per-service Standard-tier rules with `Send` + `Listen` + `Manage`, the authoritative emulator tier and
+the same-run, two-job deploy requirement are unchanged. What moved is the shape of both repos' deploy
+gate and every ADC anchor, shifted by the changes merged on 2026-10-07.
+
+1. Neither repo's `cross-service-freshness` gate is a job of its own any more. Store made the same
+   consolidation on the same day: the gate is a step (`MMCA.Store/.github/workflows/deploy.yml:825`)
+   of one `freshness` job (`:774`), requires both jobs in the same run (`:840-843`), and the deploy
+   asserts `needs.freshness.result == 'success'` (`:1113`). On ADC it is a step
+   (`MMCA.ADC/.github/workflows/deploy.yml:870`) of one consolidated `freshness` job (`:817`) that
+   runs four freshness steps and fails when any of them fails; `deploy.needs` names `freshness`
+   (`:1145`) and the deploy asserts `needs.freshness.result == 'success'` (`:1179`). The step still
+   calls the shared composite action (`:877`) with a 5-day window (`:883`) and requires
+   `cross-service` and `servicebus-emulator-smoke` in the same run (`:885-888`), so the Decision
+   bullet now cites each repo's step and parent job instead of a standalone gate job, and the
+   Trade-offs bullet names both repos' `skip_freshness_gates` input.
+2. Anchors re-verified against current source: ADC AppHost services
+   `MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:128`, `:157`, `:200`, `:228`, selection
+   `:97`, rationale `:69-96` (Common pointer `:93-96`), Notification note `:117-119`; ADC Bicep
+   container apps `MMCA.ADC/infra/main.bicep:1675`, `:1922`, `:2075`, `:2210`, broker env pairs
+   `:1791-1792`, `:2016-2017`, `:2160-2161`, `:2313-2314`, per-service Key Vault secrets
+   `:1586-1608`, Standard sku `:1089-1092`, Basic rationale `:1080-1081`, rules `:1129`, `:1141`,
+   `:1153`, `:1165` (declarations `:1129-1175`, rights `:1133-1137`), `Manage` rationale
+   `:1102-1114`, residual risk `:1116-1128`, `listKeys` rationale `:227-230` (the "One rule per
+   service" line is `:230`) and variables `:231-234`; ADC cross-service workflow jobs
+   `MMCA.ADC/.github/workflows/cross-service-tests.yml:79` and `:142`, authoritative rationale
+   `:116-126`, cron `:32`; ADC `deploy.yml` window `:883` and break-glass `skip_freshness_gates`
+   input `:13`. The 2026-10-06 revision's anchors and its re-verification note were accurate on
+   that date and stay as written.
 
 ## Related
 ADR-003 (the outbox that feeds `IMessageBus`; this ADR picks the transport underneath it), ADR-016

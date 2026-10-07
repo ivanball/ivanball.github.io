@@ -24,6 +24,8 @@ types and four custom validators; source citations re-anchored). Revised 2026-10
 thirty-three framework registrations with `SecurityHeadersSettings` and `SameOriginApiProxySettings` now on
 the chain, eleven framework bindings deliberately off it, five custom `IValidateOptions<T>`, and each
 Identity `AuthenticationService` now takes a single `IOptions<T>`; source citations re-anchored).
+Revised 2026-10-07: `LegalAcceptanceOptions` now states its off-chain reason in a comment at the call
+site rather than only in XML remarks, and anchors were refreshed after the v1.233.0 release.
 
 ## Context
 Every host in the workspace reads a dozen or more configuration sections: connection strings, SMTP,
@@ -76,7 +78,7 @@ value through `IOptions<T>` of the concrete settings class.**
   (`DependencyInjection.Jobs.cs:39-42`), `TwoFactorSettings` in `AddTwoFactorAuthentication`
   (`DependencyInjection.Auth.cs:42-45`), `EmailConfirmationSettings` in `AddEmailConfirmation`
   (`DependencyInjection.Auth.cs:70-73`), `PermissionGrantSettings` in `AddStoredPermissionGrants`
-  (`DependencyInjection.Auth.cs:138-141`), `AuditTrailSettings` in `AddAuditTrail`
+  (`DependencyInjection.Auth.cs:141-144`), `AuditTrailSettings` in `AddAuditTrail`
   (`DependencyInjection.Jobs.cs:110-113`), `TenancySettings` in `AddMultiTenancy`
   (`DependencyInjection.cs:278-281`, the method starting at `:276`), and `PushNotificationSettings` in `AddPushNotifications`
   (`DependencyInjection.Notifications.cs:43-46`). The two cache sections take the chain only when the
@@ -117,7 +119,7 @@ value through `IOptions<T>` of the concrete settings class.**
   both sections before it builds the host's `ModuleLoader`
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/ModuleHostExtensions.cs:61-64` and `:69-72`,
   the method starting at `:51`), so ADC's four services
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:369-371`, and the comment at `:360`
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:371-373`, and the comment at `:362`
   says what the call binds) and Store's three
   (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:125-127`) each declare the two
   sections in a single line of host code. The Helpdesk monolith seed still writes both chains out in its
@@ -173,9 +175,10 @@ value through `IOptions<T>` of the concrete settings class.**
   block, the reason at `:56-57`), and the two client-side sections whose absence leaves the compiled-in
   defaults, the staleness policy `UiReadCacheOptions` (`:63-64`) and `NotificationBellOptions`
   (`:66-67`). `LegalAcceptanceOptions` binds the same way inside the opt-in `AddLegalAcceptance`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Auth.cs:106-107`), because
-  registration asks for acceptance only while `Legal:CurrentTermsVersion` is set; its reason sits in
-  the method's XML remarks (`:100-101`) rather than in a comment at the call.
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Auth.cs:109-110`), because
+  its one setting has no invalid value (any version string turns the feature on, null or whitespace
+  turns it off); the reason sits in a comment at the call (`:106-108`), and the method's XML remarks
+  (`:100-101`) add that registration asks for acceptance only while `Legal:CurrentTermsVersion` is set.
   `NativePushSettings` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:84-85`)
   and `FileStorageSettings` (`:116-117`) bind the same way inside their opt-in registration methods,
   both of which read the section back and turn themselves into a no-op when it is absent or incomplete,
@@ -203,7 +206,7 @@ value through `IOptions<T>` of the concrete settings class.**
 
 **Every layer reads a bound section the same way.** Inside Infrastructure and API that is a constructor
 or per-request `IOptions<T>`: `OutboxProcessor`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:56`),
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:59`),
 `BrokerEventBus` (`.../Messaging/BrokerEventBus.cs:35`), `LoginProtectionService`
 (`.../Auth/LoginProtectionService.cs:30`), `RsaJwksProvider` (`.../Auth/RsaJwksProvider.cs:14`),
 `SQLServerDbContext` (`.../Persistence/DbContexts/SQLServerDbContext.cs:36`), and `IdempotencyFilter`
@@ -221,7 +224,7 @@ injections itself, one in each of six classes: `AuthenticationServiceBase<TUser>
 `IOptions<EmailConfirmationSettings>`
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:71`),
 `AuthSessionIssuer` takes `IOptions<RefreshSessionSettings>`
-(`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Sessions/AuthSessionIssuer.cs:42`),
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Sessions/AuthSessionIssuer.cs:44`),
 `AuthenticationValidators` takes an optional `IOptions<LegalAcceptanceOptions>`
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationValidators.cs:28`), the shared
 `ForgotPasswordHandlerBase` takes `IOptions<PasswordResetSettings>`
@@ -311,8 +314,11 @@ between to fall out of step with it.
   not a gate, which is weaker than the invariant-over-discipline posture ADR-015 applies elsewhere. A
   section added without the chain fails silently, which is to say it fails later. Eleven framework bindings
   and two consumer-host bindings sit off the chain by choice, and nothing in the build distinguishes
-  those from a section whose author simply forgot: only the comment beside each one does (and for
-  `LegalAcceptanceOptions`, only the XML remarks on its registration method).
+  those from a section whose author simply forgot: only a source comment near each one does (one comment
+  covers both client-side UI sections, and for `NativePushSettings` and `FileStorageSettings` the reason
+  sits only in the XML summary of the registration method,
+  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:76-78` and
+  `:109-110`).
 - **Bad configuration becomes a crash loop, not a degraded start.** A deployed replica with a missing
   required value never reaches the warm-up and readiness machinery of ADR-025: it terminates at host build.
   That is the intended trade (no half-configured replica serves traffic), but it means a configuration
@@ -405,6 +411,25 @@ No decision or rationale changed; the inventory was re-counted against source.
   chain; it only reads the `MessageBus` section back at `DependencyInjection.Messaging.cs:49`).
 - `UiRateLimitingSettings` re-anchored to `UiRateLimitingExtensions.cs:180-183`; every other citation was
   re-verified against current source and re-anchored in place.
+
+## Revision (2026-10-07)
+Re-verified against current source. The decision, the rationale and every count are unchanged
+(thirty-three framework registrations, eleven framework exceptions, five custom validators); one
+exception's description moved.
+
+1. `LegalAcceptanceOptions` now carries its reason in a comment at the call
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Auth.cs:106-108`, the
+   binding at `:109-110`): the one setting has no invalid value. The XML remarks (`:100-101`) remain,
+   so the Decision no longer says the reason sits only there. The Trade-offs caveat now names
+   `NativePushSettings` and `FileStorageSettings` instead: they bind with no comment at the call
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:84-85`,
+   `:116-117`), their reason only in the XML summary of each registration method (`:76-78`,
+   `:109-110`).
+2. Anchors re-verified against current source: `PermissionGrantSettings`
+   (`DependencyInjection.Auth.cs:141-144`), ADC Conference.Service `AddModuleHost`
+   (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:371-373`, the comment at `:362`),
+   `OutboxProcessor` (`.../Persistence/Outbox/Processing/OutboxProcessor.cs:59`) and
+   `AuthSessionIssuer` (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Sessions/AuthSessionIssuer.cs:44`).
 
 ## Related
 ADR-025 (startup warm-up and readiness gating: this contract decides what happens *before* a host reaches

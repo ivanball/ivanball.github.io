@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -271,7 +272,9 @@
           Revised 2026-10-01 (the four gate bodies now run as one shared composite action owned by MMCA.Common,
           so the per-repo copies and their message differences are gone; see Revision below).
           Revised 2026-10-06: the job-reading gates now page an unfiltered run listing and filter completed runs client-side (MMCA.Common v1.220.0), and every citation is re-anchored.
-          Revised 2026-10-07: the four gates now run as the four steps of one <code>freshness</code> job that skips a docs-only push, <code>backend-test-gate</code> is retired in both repos, and the success-only lookup filters client-side (see Revision below).</p>
+          Revised 2026-10-07: the four gates now run as the four steps of one <code>freshness</code> job that skips a docs-only push, <code>backend-test-gate</code> is retired in both repos, and the success-only lookup filters client-side (see Revision below).
+          Revised 2026-10-07: the Rationale&#39;s API-cost sentence now states the bounded read count and the
+          per-repo job timeout, and the Decision notes that both CONTRIBUTING files still name the gates as jobs.</p>
           <h2 id="context">Context</h2>
           <p>A production rollout in both deployed apps waits on a list of jobs in <code>deploy.needs</code>
           (<code>MMCA.ADC/.github/workflows/deploy.yml:1145</code>, <code>MMCA.Store/.github/workflows/deploy.yml:1083</code>). Most of
@@ -293,7 +296,7 @@
           Monday for the drill (<code>MMCA.ADC/.github/workflows/dr-drill.yml:32</code>,
           <code>MMCA.Store/.github/workflows/dr-drill.yml:33</code>), monthly for the load test
           (<code>load-test.yml:23</code>, Store <code>:21</code>), weeknights for the broker tier
-          (<code>MMCA.ADC/.github/workflows/cross-service-tests.yml:31</code>,
+          (<code>MMCA.ADC/.github/workflows/cross-service-tests.yml:32</code>,
           <code>MMCA.Store/.github/workflows/cross-service-tests.yml:35</code>), and alternating weekly crons for the two
           non-chromium engines, Monday firefox and Thursday webkit
           (<code>MMCA.ADC/.github/workflows/e2e.yml:49-50</code>, <code>MMCA.Store/.github/workflows/e2e.yml:46-47</code>).</p>
@@ -436,7 +439,10 @@
           later one. Neither enumeration is exhaustive: ADC&#39;s at <code>CONTRIBUTING.md:42-44</code> stops at
           <code>cross-service-freshness</code> and Store&#39;s at <code>:42-43</code> names only <code>dr-freshness</code> and <code>load-freshness</code>, so
           the generic &quot;the freshness gates&quot; sentence (<code>MMCA.ADC/CONTRIBUTING.md:111</code>,
-          <code>MMCA.Store/CONTRIBUTING.md:118</code>) is what covers <code>cross-browser-freshness</code> in both.</p>
+          <code>MMCA.Store/CONTRIBUTING.md:118</code>) is what covers <code>cross-browser-freshness</code> in both. Both files still
+          treat the gates as jobs: the earlier passages name them by their step ids, and the later sentence
+          lists &quot;the freshness gates&quot; among the push-only jobs; the one job that actually runs is <code>freshness</code> (<code>MMCA.ADC/.github/workflows/deploy.yml:817</code>,
+          <code>MMCA.Store/.github/workflows/deploy.yml:774</code>).</p>
           </li>
           </ul>
           <p><strong>Adoption is the two deployed apps, and all four gates are the same shape in both.</strong> The
@@ -481,9 +487,13 @@
           age comparison is what converts an artifact into something that can say no.</li>
           <li><strong>The expensive verification stays off the deploy path.</strong> Running the restore, the k6 scenario or a
           Testcontainers broker tier per deploy would add minutes and real Azure or Docker cost to every
-          rollout, and the broker tier could not run there at all. One or two Actions API reads inside a
-          five-minute job buys the same guarantee at effectively zero marginal cost, which is exactly why the
-          gate is affordable enough to keep enabled.</li>
+          rollout, and the broker tier could not run there at all. A bounded set of Actions API reads (at most
+          five listing pages per gate in the success and same-run modes, and per required job in the per-job
+          mode the cross-browser gate uses, plus one jobs read per scanned run per required job,
+          <code>MMCA.Common/.github/actions/freshness-gate/action.yml:164,190,193,236-239</code>) inside a job with a 5-minute
+          timeout in ADC and 10 in Store (<code>MMCA.ADC/.github/workflows/deploy.yml:821</code>,
+          <code>MMCA.Store/.github/workflows/deploy.yml:777</code>) buys the same guarantee at effectively zero marginal
+          cost, which is exactly why the gate is affordable enough to keep enabled.</li>
           <li><strong>Fail on absence, because a vacuous gate is worse than none.</strong> A gate that passes when it finds
           nothing reads as evidence while proving nothing, so an empty query result exits 1 rather than 0.</li>
           <li><strong>Job-level truth for the broker and cross-browser gates.</strong> The run conclusion is wrong in both
@@ -626,6 +636,26 @@
           <li>Decision, Adoption, Rationale and Trade-offs are re-anchored onto the current <code>deploy.yml</code> and action
           lines.</li>
           </ul>
+          <p>Re-verified against current source after the v1.233.0 release. The gates, windows, <code>deploy.needs</code>
+          counts (8 in ADC, 7 in Store, <code>MMCA.ADC/.github/workflows/deploy.yml:1145</code>,
+          <code>MMCA.Store/.github/workflows/deploy.yml:1083</code>) and the break-glass contract are unchanged; the
+          counts and anchors quoted in the earlier dated Status sentences and Revision sections are
+          historical and are left as written.</p>
+          <ol>
+          <li>Rationale no longer says &quot;one or two Actions API reads inside a five-minute job&quot;: a gate reads at
+          most five listing pages, once per required job in the per-job mode the cross-browser gate uses
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:927</code>, <code>MMCA.Store/.github/workflows/deploy.yml:877</code>), and
+          adds one jobs read per scanned run per required job
+          (<code>MMCA.Common/.github/actions/freshness-gate/action.yml:164,190,193,236-239</code>), and the <code>freshness</code> job timeout
+          is 5 minutes in ADC and 10 in Store (<code>MMCA.ADC/.github/workflows/deploy.yml:821</code>,
+          <code>MMCA.Store/.github/workflows/deploy.yml:777</code>).</li>
+          <li>Decision now notes that both <code>CONTRIBUTING.md</code> files still list the gates by step id as though
+          each were a job (<code>MMCA.ADC/CONTRIBUTING.md:42-44</code>, <code>MMCA.Store/CONTRIBUTING.md:42-43</code>) and list
+          &quot;the freshness gates&quot; among the push-only jobs (<code>MMCA.ADC/CONTRIBUTING.md:111</code>,
+          <code>MMCA.Store/CONTRIBUTING.md:118</code>), while the job that runs is <code>freshness</code>.</li>
+          <li>Anchors re-verified against current source: the weeknight broker cron is
+          <code>MMCA.ADC/.github/workflows/cross-service-tests.yml:32</code> (Store <code>:35</code> unchanged).</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-009 (states the recovery objectives and requires that a restore be drilled and recorded; this
           record decides that a deploy is blocked on how recently that drill, and the capacity and broker proofs

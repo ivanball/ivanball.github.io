@@ -12,6 +12,7 @@ MMCA.Common reference sample recorded as complete, and every `main.bicep`, `depl
 Revised 2026-09-10: ADC's Gateway reads the vault as a configuration source like every other deployable.
 Revised 2026-10-01: citations re-anchored and Store's Data Protection key-ring knobs recorded.
 Revised 2026-10-06: ADC's storage Shared Key parameter is no longer documented as required by any consumer, and every citation is re-anchored.
+Revised 2026-10-07: Key Vault purge protection is recorded as prescribed by both out-of-band vault bootstrap runbooks rather than open, the reference sample's vault write is pinned to its own resource, and every moved ADC citation (plus four Store and Common ones) is re-anchored.
 ## Context
 A Container App can hold a credential two ways: as a literal value in the app's own `secrets`
 collection, or as a reference to a Key Vault secret that the platform resolves at runtime through an
@@ -38,39 +39,39 @@ vault directly as a configuration source at startup. SQL authentication is stage
 its way to the same model.
 
 - **The apps run as one shared user-assigned managed identity, referenced as `existing`.**
-  `adc-prod-apps-identity` (`MMCA.ADC/infra/main.bicep:1473-1475`) and `mmca-prod-apps-identity`
+  `adc-prod-apps-identity` (`MMCA.ADC/infra/main.bicep:1497-1499`) and `mmca-prod-apps-identity`
   (`MMCA.Store/infra/main.bicep:1140-1142`). Every container app attaches it
-  (`MMCA.ADC/infra/main.bicep:1657`, `:1896`, `:2047`, `:2180`, `:2359`, `:2522`;
+  (`MMCA.ADC/infra/main.bicep:1680`, `:1927`, `:2080`, `:2215`, `:2405`, `:2568`;
   `MMCA.Store/infra/main.bicep:1426`, `:1605`, `:1729`, `:1878`, `:2007`), and the same identity is
   the ACR pull credential, so no registry admin password exists either
-  (`MMCA.ADC/infra/main.bicep:1478-1481`, `MMCA.Store/infra/main.bicep:1145-1148`).
+  (`MMCA.ADC/infra/main.bicep:1502-1505`, `MMCA.Store/infra/main.bicep:1145-1148`).
 - **The vault is referenced, not created; the deployment writes the values into it.** The template
-  declares the vault as `existing` (`MMCA.ADC/infra/main.bicep:1494-1496`,
+  declares the vault as `existing` (`MMCA.ADC/infra/main.bicep:1518-1520`,
   `MMCA.Store/infra/main.bicep:1261-1263`) and then writes secret child resources: nineteen in ADC
-  (`MMCA.ADC/infra/main.bicep:1542-1646`) and fourteen in Store
-  (`MMCA.Store/infra/main.bicep:1288-1365`).
+  (`MMCA.ADC/infra/main.bicep:1566-1670`) and fourteen in Store
+  (`MMCA.Store/infra/main.bicep:1288-1366`).
 - **Every Container App secret entry is a `keyVaultUrl` reference bound to that identity.** ADC
-  Identity (`MMCA.ADC/infra/main.bicep:1676-1685`), Conference (`:1915-1919`), Engagement
-  (`:2065-2067`), Notification (`:2209-2214`); Store Identity
+  Identity (`MMCA.ADC/infra/main.bicep:1700-1709`), Conference (`:1947-1951`), Engagement
+  (`:2099-2101`), Notification (`:2245-2250`); Store Identity
   (`MMCA.Store/infra/main.bicep:1445-1451`), Catalog (`:1623-1625`), Sales (`:1760-1768`). Not one
   entry carries an inline `value`. Each Gateway carries at most two, both conditional: the
   synthetic-traffic bypass key its edge rate limiter checks (ADR-088) and the trusted-caller key,
   written as the same `keyVaultUrl` reference and gated on `hasSyntheticTrafficSecret` and
   `hasTrustedCallerSecret`, so the list is empty when both parameters are unset
-  (`MMCA.ADC/infra/main.bicep:2379`, `:2384`; `MMCA.Store/infra/main.bicep:1899`, `:1902`). The UI
+  (`MMCA.ADC/infra/main.bicep:2426`, `:2431`; `MMCA.Store/infra/main.bicep:1899`, `:1902`). The UI
   apps carry one conditional entry each, the same trusted-caller key the Gateway checks
-  (`MMCA.ADC/infra/main.bicep:2544`, `MMCA.Store/infra/main.bicep:2026`), so no deployable is
+  (`MMCA.ADC/infra/main.bicep:2591`, `MMCA.Store/infra/main.bicep:2026`), so no deployable is
   credential-free today.
 - **Containers consume secrets only through `secretRef`.** The SQL connection string
-  (`MMCA.ADC/infra/main.bicep:1713`, `MMCA.Store/infra/main.bicep:1480`), the broker connection string
-  (`MMCA.ADC/infra/main.bicep:1761`, `MMCA.Store/infra/main.bicep:1513`), the RSA signing pair (the
+  (`MMCA.ADC/infra/main.bicep:1737`, `MMCA.Store/infra/main.bicep:1480`), the broker connection string
+  (`MMCA.ADC/infra/main.bicep:1792`, `MMCA.Store/infra/main.bicep:1513`), the RSA signing pair (the
   private key the issuer signs with, the public key its in-process validation and its JWKS endpoint
-  publish: `MMCA.ADC/infra/main.bicep:1797-1798`, `:1801`; `MMCA.Store/infra/main.bicep:1561-1562`,
-  `:1565`), SMTP (`MMCA.ADC/infra/main.bicep:1803`, `:2296`; `MMCA.Store/infra/main.bicep:1567`,
-  `:1849`), the OAuth client secrets (`MMCA.ADC/infra/main.bicep:1806`, `:1810`, `:1816`), the
-  Anthropic key (`:1999`), the native-push hub connection string (`:2294`), the gateway
-  synthetic-traffic bypass key (`:2437`, `MMCA.Store/infra/main.bicep:1953`), the trusted-caller key
-  (`MMCA.ADC/infra/main.bicep:2444`, `:2602`; `MMCA.Store/infra/main.bicep:1959`, `:2084`), and the
+  publish: `MMCA.ADC/infra/main.bicep:1829-1830`, `:1833`; `MMCA.Store/infra/main.bicep:1561-1562`,
+  `:1565`), SMTP (`MMCA.ADC/infra/main.bicep:1835`, `:2334`; `MMCA.Store/infra/main.bicep:1567`,
+  `:1849`), the OAuth client secrets (`MMCA.ADC/infra/main.bicep:1838`, `:1842`, `:1848`), the
+  Anthropic key (`:2033`), the native-push hub connection string (`:2332`), the gateway
+  synthetic-traffic bypass key (`:2484`, `MMCA.Store/infra/main.bicep:1953`), the trusted-caller key
+  (`MMCA.ADC/infra/main.bicep:2491`, `:2650`; `MMCA.Store/infra/main.bicep:1959`, `:2084`), and the
   two Stripe keys (`MMCA.Store/infra/main.bicep:1845-1846`). RSA is the only signing key material
   either template provisions: production signs with RS256 (ADR-004), and no HS256 secret exists in
   either vault or either app.
@@ -81,8 +82,8 @@ its way to the same model.
   which layers the vault over `IConfiguration` at startup. Store wires all five deployables through
   two shared env entries (`MMCA.Store/infra/main.bicep:1402`, `:1412`, used at `:1474-1475`,
   `:1654-1655`, `:1790-1791`, `:1935-1936`, `:2067-2068`); ADC writes the pair inline on each of its
-  six apps (`MMCA.ADC/infra/main.bicep:1772`, `:1780`; `:1987-1988`; `:2129-2130`; `:2285-2286`;
-  `:2430-2431`; `:2576`, `:2579`, documented at `:1490-1493`). The calls themselves sit
+  six apps (`MMCA.ADC/infra/main.bicep:1804`, `:1812`; `:2021-2022`; `:2165-2166`; `:2323-2324`;
+  `:2477-2478`; `:2624`, `:2627`, documented at `:1514-1517`). The calls themselves sit
   in each host's `Program.cs`: Store `Identity.Service:50`, `Catalog.Service:46`, `Sales.Service:62`,
   `Gateway:63`, `UI.Web:44`; ADC `Identity.Service:110`, `Conference.Service:114`,
   `Engagement.Service:95`, `Notification.Service:98`, `Gateway:67`, `UI.Web:61`. The call is
@@ -91,61 +92,62 @@ its way to the same model.
   `DefaultAzureCredential` against the same Key Vault Secrets User grant the references already use,
   which is what makes `AZURE_CLIENT_ID` load-bearing: these apps carry only a user-assigned identity,
   so an unpinned client id fails the startup read (`MMCA.Store/infra/main.bicep:1407-1411`,
-  `MMCA.ADC/infra/main.bicep:2425-2429`). Secret names map `--` onto the configuration separator
+  `MMCA.ADC/infra/main.bicep:2472-2476`). Secret names map `--` onto the configuration separator
   (`KeyVaultConfigurationExtensions.cs:43-48`, `:109`), and no secret in either vault carries `--`
-  today (`MMCA.ADC/infra/main.bicep:1542-1646`, `MMCA.Store/infra/main.bicep:1288-1365`), so this
+  today (`MMCA.ADC/infra/main.bicep:1566-1670`, `MMCA.Store/infra/main.bicep:1288-1366`), so this
   adds a source without re-pointing any setting the apps already bind.
 - **Composite connection strings are assembled at deploy time and land only in the vault.** The Redis
-  string embeds a key read with `listKeys()` (`MMCA.ADC/infra/main.bicep:1441`,
+  string embeds a key read with `listKeys()` (`MMCA.ADC/infra/main.bicep:1465`,
   `MMCA.Store/infra/main.bicep:1115`), each broker string comes from that service's own SAS rule
-  rather than the namespace root (`MMCA.ADC/infra/main.bicep:230-233`,
+  rather than the namespace root (`MMCA.ADC/infra/main.bicep:231-234`,
   `MMCA.Store/infra/main.bicep:159-161`), and the per-database SQL strings are composed from a shared
-  base (`MMCA.ADC/infra/main.bicep:217-224`, `MMCA.Store/infra/main.bicep:146-152`). All of them are
+  base (`MMCA.ADC/infra/main.bicep:218-225`, `MMCA.Store/infra/main.bicep:146-152`). All of them are
   written straight into vault secrets, so the assembled value never appears in app configuration.
 - **An unconfigured optional secret gets a placeholder, not a missing entry.** Seven ADC values and
   five Store values are written as the literal `unused` when their parameter is empty
-  (`MMCA.ADC/infra/main.bicep:1608`, `:1615`, `:1625`, `:1630`, `:1635`, `:1640`, `:1645`;
+  (`MMCA.ADC/infra/main.bicep:1632`, `:1639`, `:1649`, `:1654`, `:1659`, `:1664`, `:1669`;
   `MMCA.Store/infra/main.bicep:1338`, `:1343`, `:1348`, `:1356`, `:1365`), while the app-side
-  reference is conditional (for example `hasSmtpPassword` at `MMCA.ADC/infra/main.bicep:1682` and
+  reference is conditional (for example `hasSmtpPassword` at `MMCA.ADC/infra/main.bicep:1706` and
   `MMCA.Store/infra/main.bicep:1768`), so the vault entry always exists but an unconfigured
   feature is simply absent from the app.
 - **The two role assignments are bootstrapped out of band, deliberately.** The deploy identity holds
   Key Vault Secrets Officer to write the values; the apps hold Key Vault Secrets User to read them;
   the vault and both grants are created outside the template because the deploy principal has
-  Contributor without role-assignment-write (`MMCA.ADC/infra/main.bicep:1486-1493`,
-  `MMCA.Store/infra/main.bicep:1257-1260`). It is the same least-privilege posture that keeps ADR-045's
-  avatar-storage grant behind a default-false flag (`MMCA.ADC/infra/main.bicep:133`, `:1341-1349`).
+  Contributor without role-assignment-write (out-of-band notes at `MMCA.ADC/infra/main.bicep:1510-1513`
+  and `MMCA.Store/infra/main.bicep:1257-1260`; the Contributor reason at
+  `MMCA.ADC/infra/main.bicep:1494-1495` and `MMCA.Store/infra/main.bicep:1137-1138`). It is the same least-privilege posture that keeps ADR-045's
+  avatar-storage grant behind a default-false flag (`MMCA.ADC/infra/main.bicep:133`, `:1362`).
   The bootstrap commands are written out in the framework's reference runbook
   (`MMCA.Common/samples/deployment/DEPLOYMENT.md:14-36`).
 - **SQL authentication is staged behind `useManagedIdentitySql`, and the stage is additive.** The
   parameter defaults to `false` (`MMCA.ADC/infra/main.bicep:36`, `MMCA.Store/infra/main.bicep:26`)
   and selects one of two auth segments for the connection-string base:
   `Authentication=Active Directory Managed Identity` with the identity's client id, or the SQL login
-  plus password (`MMCA.ADC/infra/main.bicep:217-219`, `MMCA.Store/infra/main.bicep:146-148`). The
+  plus password (`MMCA.ADC/infra/main.bicep:218-220`, `MMCA.Store/infra/main.bicep:146-148`). The
   Entra admin the flip depends on is provisioned only when its object id is supplied and does not set
   `azureADOnlyAuthentication`, so password login keeps working during the transition
-  (`MMCA.ADC/infra/main.bicep:832-847`, `MMCA.Store/infra/main.bicep:812-818`). The pipeline exposes
+  (`MMCA.ADC/infra/main.bicep:848-863`, `MMCA.Store/infra/main.bicep:812-818`). The pipeline exposes
   the same three stages: supply the Entra admin, run the per-database external-provider grants by
-  hand, then set the flag (`MMCA.ADC/.github/workflows/deploy.yml:1494-1512`,
-  `MMCA.Store/.github/workflows/deploy.yml:1383-1401`), driven by repository variables that are
-  absent by default (`MMCA.ADC/.github/workflows/deploy.yml:1335-1337`,
-  `MMCA.Store/.github/workflows/deploy.yml:1277-1279`).
+  hand, then set the flag (`MMCA.ADC/.github/workflows/deploy.yml:1386-1404`,
+  `MMCA.Store/.github/workflows/deploy.yml:1270-1288`), driven by repository variables that are
+  absent by default (`MMCA.ADC/.github/workflows/deploy.yml:1229-1231`,
+  `MMCA.Store/.github/workflows/deploy.yml:1164-1166`).
 
 **Adoption boundary.** The secret-reference half is shipped and identical in both deployed apps, and
 the configuration-source half is now shipped on every deployable in both (see the 2026-09-10 revision;
 the Gateway difference recorded here is closed). The SQL half
 is staged in both and not flipped in either template default, so with the default parameters every
 app-to-database connection string still carries `User ID` and `Password`
-(`MMCA.ADC/infra/main.bicep:219`, `MMCA.Store/infra/main.bicep:148`). That password is itself a vault
+(`MMCA.ADC/infra/main.bicep:220`, `MMCA.Store/infra/main.bicep:148`). That password is itself a vault
 secret and never app configuration, so what remains is a shared SQL login, not an exposed one.
 Whether a given deployment has already set the `USE_MANAGED_IDENTITY_SQL` repository variable is not
 determinable from source. MMCA.Common carries the posture as a reference sample rather than a
-deployment: `MMCA.Common/samples/deployment/main.bicep:67-76` creates an RBAC-authorized vault, `:105`
-writes the SQL connection string into it, `:138-141` and `:147` attach the identity for both secret
+deployment: `MMCA.Common/samples/deployment/main.bicep:69-78` creates an RBAC-authorized vault, `:105`
+composes the SQL connection string and `:107-111` writes it into the vault, `:138-141` and `:147` attach the identity for both secret
 reads and ACR pull, `:152` declares the matching `keyVaultUrl` secret entry, and `:164` reads it
 through a `secretRef`. The sample now closes the loop it used to leave open, and CI type-checks it on
 every pull request that changes code; a docs-only PR skips both compile steps
-(`MMCA.Common/.github/workflows/ci.yml:819-835`, gated at `:830`, `:834`).
+(`MMCA.Common/.github/workflows/ci.yml:776-782`, gated at `:777`, `:781`).
 MMCA.Helpdesk has no `infra/` directory and no deploy workflow at all: its four workflows are
 `ci.yml`, the two Claude ones (`claude.yml`, `claude-code-review.yml`), and `release-templates.yml`,
 which packages and publishes the `MMCA.Templates` dotnet-new pack rather than any infrastructure. So
@@ -155,17 +157,17 @@ consumer-by-consumer state is named.
 ## Rationale
 - **A reference has one home; a literal has as many homes as it has consumers.** Three vault secrets
   in each repo are referenced by more than one app: Redis by all four ADC services
-  (`MMCA.ADC/infra/main.bicep:1677`, `:1916`, `:2066`, `:2210`) and all three Store services
+  (`MMCA.ADC/infra/main.bicep:1701`, `:1948`, `:2100`, `:2246`) and all three Store services
   (`MMCA.Store/infra/main.bicep:1446`, `:1624`, `:1761`), the SMTP password by two apps in each
-  (`MMCA.ADC/infra/main.bicep:1682`, `:2214`; `MMCA.Store/infra/main.bicep:1451`, `:1768`), and the
+  (`MMCA.ADC/infra/main.bicep:1706`, `:2250`; `MMCA.Store/infra/main.bicep:1451`, `:1768`), and the
   trusted-caller key by the Gateway that checks it and the UI that presents it
-  (`MMCA.ADC/infra/main.bicep:2384`, `:2544`; `MMCA.Store/infra/main.bicep:1902`, `:2026`). As
+  (`MMCA.ADC/infra/main.bicep:2431`, `:2591`; `MMCA.Store/infra/main.bicep:1902`, `:2026`). As
   references they are one vault entry pointed at from several apps; as literals they would be several
   copies to keep in step. The broker string is deliberately not on that list: since the 2026-09-07
   revision each service reads its own.
 - **Reuse the identity that already existed.** The user-assigned identity was introduced to pull
   images from ACR without the registry admin password
-  (`MMCA.ADC/infra/main.bicep:1468-1472`, `MMCA.Store/infra/main.bicep:1135-1139`). Granting it Key Vault
+  (`MMCA.ADC/infra/main.bicep:1492-1496`, `MMCA.Store/infra/main.bicep:1135-1139`). Granting it Key Vault
   Secrets User extends one principal rather than introducing a second credential-holding model, and
   leaves one thing to audit.
 - **Keeping the grants out of the template is what keeps the deploy identity least-privileged.** A
@@ -183,25 +185,25 @@ consumer-by-consumer state is named.
   several more out-of-band bootstraps.
 - **The template alone does not stand up an environment.** The vault, the identity, its AcrPull grant
   and both Key Vault roles must already exist; `main.bicep` references them
-  (`MMCA.ADC/infra/main.bicep:1473-1475`, `:1494-1496`) and cannot report that a grant is missing. The
+  (`MMCA.ADC/infra/main.bicep:1497-1499`, `:1518-1520`) and cannot report that a grant is missing. The
   prerequisites live in each repo's private `infra/DISASTER-RECOVERY.md` and, in distilled form, in
   `MMCA.Common/samples/deployment/DEPLOYMENT.md:14-36`.
 - **The pipeline is still a plaintext path.** Values arrive as `@secure()` bicep parameters written
   from GitHub secrets into a parameters file at deploy time
-  (`MMCA.ADC/.github/workflows/deploy.yml:1309-1340` maps them into the step environment and
-  `:1367-1396` writes the file, RSA keys appended at `:1398-1403`). The vault removes the app-configuration copy, not
+  (`MMCA.ADC/.github/workflows/deploy.yml:1203-1234` maps them into the step environment and
+  `:1262-1290` writes the file, RSA keys appended at `:1294-1297`). The vault removes the app-configuration copy, not
   the CI copy; rotating a secret still means rotating a GitHub secret and redeploying.
 - **The `unused` placeholder makes the vault a poor inventory.** A secret written as `unused` is
   indistinguishable in the vault from a configured one; only the app's `secrets` list says which
   credentials are actually live.
 - **Two literal values remain in the template.** The Application Insights connection string is an
-  ordinary env var (`MMCA.ADC/infra/main.bicep:269-272`, `MMCA.Store/infra/main.bicep:197-200`) and the
+  ordinary env var (`MMCA.ADC/infra/main.bicep:270-273`, `MMCA.Store/infra/main.bicep:197-200`) and the
   Log Analytics shared key is passed inline to the managed environment
-  (`MMCA.ADC/infra/main.bicep:1453-1466`, `MMCA.Store/infra/main.bicep:1120-1133`). Both are telemetry
+  (`MMCA.ADC/infra/main.bicep:1477-1490`, `MMCA.Store/infra/main.bicep:1120-1133`). Both are telemetry
   ingestion keys resolved at deploy time, not application credentials, and neither is covered by this
   decision: the connection string is read from the Application Insights resource's
-  `properties.ConnectionString` (`MMCA.ADC/infra/main.bicep:271`, `MMCA.Store/infra/main.bicep:199`),
-  and only the shared key comes from `listKeys()` (`MMCA.ADC/infra/main.bicep:1462`,
+  `properties.ConnectionString` (`MMCA.ADC/infra/main.bicep:272`, `MMCA.Store/infra/main.bicep:199`),
+  and only the shared key comes from `listKeys()` (`MMCA.ADC/infra/main.bicep:1486`,
   `MMCA.Store/infra/main.bicep:1129`).
 - **The host-side vault read is a hard startup dependency.** The configuration source is added
   synchronously in the host builder, so a vault read that cannot authenticate (an unpinned
@@ -303,6 +305,62 @@ those older revisions leave as recorded are given their current locations here.
   is re-verified and re-anchored against current source; the secret counts (nineteen and fourteen)
   and placeholder counts (seven and five) are unchanged, and Key Vault purge protection is still not
   enabled by either template.
+
+## Revision (2026-10-07)
+Re-verified against current source. No decision changed: the shared identity, the `existing` vault,
+the `keyVaultUrl`-only secret lists, the host-side vault read, the placeholder pattern and the
+additive SQL staging all hold as written, and the counts re-measure unchanged (nineteen and fourteen
+vault secrets, seven and five `unused` placeholders). One statement is added and one corrected. Every
+ADC `main.bicep` and `deploy.yml` citation above that moved is re-anchored in place
+(`useManagedIdentitySql` at `MMCA.ADC/infra/main.bicep:36` and `grantAvatarStorageRole` at `:133` did
+not move), and four non-ADC citations are re-anchored with them: Store vault secrets
+`MMCA.Store/infra/main.bicep:1288-1366`, Store SQL stages and repository variables
+`MMCA.Store/.github/workflows/deploy.yml:1270-1288` and `:1164-1166`, and the sample CI steps
+`MMCA.Common/.github/workflows/ci.yml:776-782`.
+
+1. **Key Vault purge protection is a bootstrap step, not an open gap.** The 2026-09-07 and
+   2026-10-06 revisions record that neither template enables purge protection. That stays literally
+   true and cannot be otherwise: both templates declare the vault `existing`, so no template property
+   could set it. The out-of-band bootstrap runbooks the templates point at now prescribe it: ADC
+   creates the vault with `--enable-purge-protection true` (`MMCA.ADC/infra/DISASTER-RECOVERY.md:86`)
+   and gives the update-and-verify pair for an existing vault (`:110-111`); Store gives the create
+   flag and the update command for an existing vault, with no verify step
+   (`MMCA.Store/infra/DISASTER-RECOVERY.md:114`, `:135`), and states it as mandatory, not optional
+   (`:120-126`, SEC-Store-58). Whether a live vault actually has it set is not determinable from
+   source. The MMCA.Common reference sample creates its own vault with no purge-protection property
+   (`MMCA.Common/samples/deployment/main.bicep:69-78`).
+2. **The reference sample's vault write is its own resource.** `MMCA.Common/samples/deployment/main.bicep:105`
+   only composes the SQL connection string; the `kvSqlConn` secret at `:107-111` writes it into the
+   vault. The Adoption-boundary sentence is corrected in place. The sample's CI gate is the
+   `sample-deployment-validate` job (`MMCA.Common/.github/workflows/ci.yml:766`), whose two compile
+   steps (`:776-782`) are gated on `needs.changes.outputs.code` at `:777` and `:781`; the workflow
+   still triggers on `pull_request` only (`:14-15`).
+3. **Anchors re-verified against current source:** shared identity `MMCA.ADC/infra/main.bicep:1497-1499`
+   (comment `:1492-1496`, ACR config `:1502-1505`), identity attach `:1680`, `:1927`, `:2080`,
+   `:2215`, `:2405`, `:2568`; vault `:1518-1520` (out-of-band note `:1510-1517`); vault secrets
+   `:1566-1670` and Store `MMCA.Store/infra/main.bicep:1288-1366`; secret lists `:1700-1709`,
+   `:1947-1951`, `:2099-2101`, `:2245-2250`; gateway secrets `:2424-2433` (`:2426`, `:2431`), UI
+   `:2591`; `secretRef` uses `:1737`, `:1792`, `:1829-1830`, `:1833`, `:1835`, `:2334`, `:1838`,
+   `:1842`, `:1848`, `:2033`, `:2332`, `:2484`, `:2491`, `:2650`; `AZURE_CLIENT_ID` and
+   `KeyVault__Uri` `:1804`/`:1812`, `:2021-2022`, `:2165-2166`, `:2323-2324`, `:2477-2478`,
+   `:2624`/`:2627`, unpinned-client-id comment `:2472-2476`; Redis `:1465`, broker strings
+   `:231-234`, SQL base `:218-225` (auth segment `:218-220`, password form at `:220`); placeholders
+   `:1632`, `:1639`, `:1649`, `:1654`, `:1659`, `:1664`, `:1669`, `hasSmtpPassword` `:1706`;
+   Rationale Redis `:1701`, `:1948`, `:2100`, `:2246`, SMTP `:1706`, `:2250`, trusted caller
+   `:2431`, `:2591`; Entra admin `:848-863` (resource at `:854`), `useManagedIdentitySql` `:36`;
+   avatar grant `:1362`; App Insights `:270-273` (`:272`), Log Analytics `:1477-1490` (`listKeys()`
+   at `:1486`). Pipeline `MMCA.ADC/.github/workflows/deploy.yml:1203-1234` (step at `:1202`),
+   parameters file `:1262-1290`, RSA keys `:1294-1297`, repo variables `:1229-1231`, SQL stages
+   `:1386-1404`; Store `MMCA.Store/.github/workflows/deploy.yml:1164-1166` and `:1270-1288`. Current
+   locations for the 2026-09-07 revision: ADC Service Bus rules `MMCA.ADC/infra/main.bicep:1129`,
+   `:1141`, `:1153`, `:1165` (stated at `:227-230`); Data Protection blob URI `:1802`, application
+   name `:1803`, `dataProtectionKek` resource `:1553`, env var `:1857-1859` (Identity) and
+   `:2641-2643` (UI); the parameters are unmoved since the 2026-10-06 revision:
+   `storageAllowSharedKeyAccess` `:139`, `createDataProtectionKeyVaultKey` `:142`,
+   `dataProtectionKeyVaultKeyUri` `:145`, `hasDataProtectionKek` `:166`. Current locations for the
+   2026-09-10 revision: `MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:67`; ADC `gatewayApp`
+   `MMCA.ADC/infra/main.bicep:2400`, `AZURE_CLIENT_ID` `:2477`, `KeyVault__Uri` `:2478`. The anchors inside the dated revisions above
+   are left as recorded.
 
 ## Related
 ADR-037 (`037-field-level-encryption-at-rest.md:108-110` directs a consumer to keep the

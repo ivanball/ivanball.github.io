@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -247,7 +248,8 @@
           Revised 2026-10-01 (a schedule outside a transaction now signals the processor whether or not the row
           is due, and the two processors share one polling implementation; see Revision below).
           Revised 2026-10-06: a schedule enrolled in a transaction now owes a processor wake that the unit of
-          work releases once after a successful commit and drops on rollback.</p>
+          work releases once after a successful commit and drops on rollback.
+          Revised 2026-10-07: anchors refreshed after the v1.233.0 release.</p>
           <h2 id="context">Context</h2>
           <p>The framework has had two ways to move work off the request thread and neither of them is a job
           queue.</p>
@@ -256,7 +258,7 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:15</code>) is
           written by the domain-event interceptor inside the same transaction as the aggregate change, and
           <code>OutboxProcessor</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:53</code>)
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:56</code>)
           drains one table per relational source with a claim lease, exponential backoff, dead-lettering and
           OpenTelemetry instrumentation. It answers &quot;this happened, tell whoever cares&quot;. It does not answer
           &quot;do this later&quot;, and bending it to do so means expressing an instruction as an event, which is
@@ -317,13 +319,13 @@
           <p><strong>3. One table per relational source, mapped unconditionally.</strong> <code>InternalCommandMessage</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/InternalCommandMessage.cs:21</code>)
           is configured in <code>ApplicationDbContext.ConfigureInternalCommands</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:751</code>)
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:752</code>)
           alongside the outbox and inbox, with three filtered indexes for the poll, the retention sweep and the
           dead-letter view. It takes the engine the model is being built for and runs its partial-index
           predicates through the same <code>QuoteColumn</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:618</code>)
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:619</code>)
           and <code>IncludeColumns</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:644</code>)
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:645</code>)
           helpers <a href="113-postgresql-as-a-first-class-engine.html">ADR-113</a> introduced for the outbox, so PostgreSQL
           gets double-quoted identifiers while every other engine keeps the bracketed literal it has always
           produced. <code>PostgreSQLDbContext</code> calls <code>base.OnModelCreating</code>, so the fourth engine needs no
@@ -368,11 +370,11 @@
           <p>Settings live under <code>InternalCommands</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Administration/InternalCommandsSettings.cs:15</code>)
           and mirror <code>OutboxSettings</code> where the semantics match: <code>BatchSize</code> 50 (<code>:31</code>), <code>MaxAttempts</code> 5
-          (<code>:39</code>), <code>LeaseSeconds</code> 300 (<code>:69</code>), <code>RetryBackoffBaseSeconds</code> 10 (<code>:78</code>), <code>RetentionDays</code> 7 (<code>:94</code>),
-          <code>CleanupIntervalHours</code> 6 (<code>:109</code>). Two values deliberately differ. <code>ProcessingDelaySeconds</code> defaults
-          to <code>0</code> rather than the outbox&#39;s 5 (<code>:58</code>), because that delay exists to bound a race with the
+          (<code>:39</code>), <code>LeaseSeconds</code> 300 (<code>:70</code>), <code>RetryBackoffBaseSeconds</code> 10 (<code>:79</code>), <code>RetentionDays</code> 7 (<code>:95</code>),
+          <code>CleanupIntervalHours</code> 6 (<code>:110</code>). Two values deliberately differ. <code>ProcessingDelaySeconds</code> defaults
+          to <code>0</code> rather than the outbox&#39;s 5 (<code>:59</code>), because that delay exists to bound a race with the
           in-process fast path that dispatches an event before the processor can, and the queue has no such
-          fast path. <code>MaxRetryBackoffSeconds</code> (600, <code>:87</code>) is a separate ceiling rather than the lease, because
+          fast path. <code>MaxRetryBackoffSeconds</code> (600, <code>:88</code>) is a separate ceiling rather than the lease, because
           a job queue wants a long lease for slow handlers and a short ceiling on how long a transient failure
           parks a command, where the outbox caps its backoff at <code>LeaseSeconds</code> and gets one number for both.</p>
           <p><code>IInternalCommandAdministration</code>
@@ -436,12 +438,12 @@
           buys a poll against a transaction that has not committed; the wake is owed instead and released once
           after the commit succeeds (Decision 2). Anything that wake does not reach is discovered by the next
           poll. <code>InternalCommands:PollingIntervalSeconds</code> ships at 2
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Administration/InternalCommandsSettings.cs:49</code>),
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Administration/InternalCommandsSettings.cs:50</code>),
           which is the same default <code>OutboxSettings</code> ships
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxSettings.cs:31</code>),
           so the divergence is a deployment decision rather than a framework one: ADC and Store both run the
-          queue at 60 seconds (<code>MMCA.ADC/infra/main.bicep:1726</code>, <code>MMCA.Store/infra/main.bicep:1500</code>) while
-          pushing the outbox to 300 (<code>MMCA.ADC/infra/main.bicep:1720</code>, <code>MMCA.Store/infra/main.bicep:1493</code>).
+          queue at 60 seconds (<code>MMCA.ADC/infra/main.bicep:1750</code>, <code>MMCA.Store/infra/main.bicep:1500</code>) while
+          pushing the outbox to 300 (<code>MMCA.ADC/infra/main.bicep:1744</code>, <code>MMCA.Store/infra/main.bicep:1493</code>).
           A host that raises the interval to cut idle polling accepts that much latency on any
           transaction-scheduled work the post-commit wake does not reach.</p>
           <p><strong>Two poll loops, not one.</strong> A host now runs the outbox processor and the queue processor side by
@@ -486,6 +488,24 @@
           <code>InternalCommandProcessor.cs:76</code>, and its <code>payload_invalid</code> anchor is now
           <code>InternalCommandProcessor.cs:374</code>.</li>
           </ul>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. The decision, the five parts, every <code>InternalCommandsSettings</code>
+          default (<code>BatchSize</code> 50, <code>MaxAttempts</code> 5, <code>PollingIntervalSeconds</code> 2, <code>ProcessingDelaySeconds</code> 0,
+          <code>LeaseSeconds</code> 300, <code>RetryBackoffBaseSeconds</code> 10, <code>MaxRetryBackoffSeconds</code> 600, <code>RetentionDays</code> 7,
+          <code>CleanupIntervalHours</code> 6) and the deployed 60-second queue and 300-second outbox intervals in ADC and
+          Store are unchanged; only line anchors moved.</p>
+          <ol>
+          <li>Anchors re-verified against current source: <code>OutboxProcessor</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:56</code>,
+          its <code>PollingLoop.RunAsync</code> call now at <code>:110</code>), <code>ConfigureInternalCommands</code>, <code>QuoteColumn</code> and
+          <code>IncludeColumns</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:752</code>,
+          <code>:619</code>, <code>:645</code>), the <code>InternalCommandsSettings</code> members
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Administration/InternalCommandsSettings.cs:50</code>,
+          <code>:59</code>, <code>:70</code>, <code>:79</code>, <code>:88</code>, <code>:95</code>, <code>:110</code>), and the ADC polling settings
+          (<code>MMCA.ADC/infra/main.bicep:1750</code> for the queue and <code>:1744</code> for the outbox). The 2026-10-01 and
+          2026-10-06 revisions keep their dated anchors as written.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="003-outbox-dual-dispatch.html">ADR-003</a> (the claim-lease, backoff and dead-letter machinery this
           record borrows as an idiom),
@@ -513,6 +533,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

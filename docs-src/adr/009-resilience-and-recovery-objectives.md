@@ -24,6 +24,8 @@ example consumer and the drill-table mitigation now match MMCA.Store and the `dr
 and the Stripe retry predicate also treats a client timeout as transient. See the Revision
 (2026-10-06) at the end.
 
+Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
+
 ## Context
 The framework already supplies the *mechanisms* for surviving partial failure: a standard Polly
 resilience handler (timeout / retry / circuit breaker), the outbox for at-least-once delivery
@@ -97,7 +99,7 @@ restore is drilled.
   drills (its last rows are 2026-08-10 in `MMCA.ADC/infra/DISASTER-RECOVERY.md:201` and 2026-07-28 in
   `MMCA.Store/infra/DISASTER-RECOVERY.md:212`), so it is not the operative mitigation: drill recency
   is enforced from `dr-drill.yml` run history by each consumer's `dr-freshness` deploy gate
-  (`MMCA.ADC/.github/workflows/deploy.yml:896-911`, `MMCA.Store/.github/workflows/deploy.yml:864`).
+  (`MMCA.ADC/.github/workflows/deploy.yml:830-839`, `MMCA.Store/.github/workflows/deploy.yml:788-796`).
 - A gRPC client that needs bespoke timeouts must override the standard handler explicitly rather than
   opt out of resilience entirely: intentional friction.
 
@@ -274,3 +276,27 @@ consumer DR docs.
   `resilience.polly.strategy.events` `:52`, `AddMeter` `:322`, the duration-histogram opt-in
   `:332`, config key `:25`).
 - Anchors in the live sections were re-verified against current source.
+
+## Revision (2026-10-07)
+Re-verified against current source. No decision, default or rationale changes: the outbox broker
+breaker, the Stripe single-retry-owner pipeline, the Polly meter wiring and both consumers'
+`dr-freshness` gates all behave as recorded. Only line positions moved, after the v1.233.0 release,
+including several the 2026-10-06 revision listed as current.
+
+1. Anchors re-verified against current source: the Trade-offs `dr-freshness` gates now at
+   `MMCA.ADC/.github/workflows/deploy.yml:830-839` and `MMCA.Store/.github/workflows/deploy.yml:788-796`
+   (both over `dr-drill.yml` with an 8-day window, `:838-839` and `:795-796`); the outbox broker
+   pipeline field at
+   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:105`,
+   built by `BuildBrokerPublishPipeline` at `:868-879`, wrapping the broker publish at `:685-689` with
+   the in-process dispatch branch outside it at `:691-695`, and `BrokenCircuitException` recognized in
+   the ordinary failure path at `:554`; the broker breaker's fault-injection test at
+   `MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Outbox/Processing/OutboxProcessorTests.cs:665`;
+   the Stripe pipeline at
+   `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Stripe/StripePaymentService.cs:76-113`
+   (retry `:77`, breaker `:94`, shared `IsTransientFailure` at `:557`), with `RetryMaxAttempts` and
+   `RetryDelayMs` at `.../Payments/Stripe/StripeSettings.cs:64` and `:68` and `RequestTimeoutSeconds`
+   at `:44`; and the Polly meter wiring in
+   `MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.Telemetry.cs` (meter name `:31`,
+   `resilience.polly.strategy.events` `:52`, `AddMeter` `:322`, the duration-histogram opt-in `:332`,
+   config key `:25`). Citations inside the earlier Revision sections are left as recorded.

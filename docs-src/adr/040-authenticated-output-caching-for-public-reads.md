@@ -30,7 +30,9 @@ framework wrapper; anchors refreshed (see the Revision (2026-09-25) at the end).
 2026-10-01: anchors only (see the Revision (2026-10-01)). Revised 2026-10-06: ADC bookmark eviction
 is raised by a paced hosted processor, the admin-freshness driver is broker-round-trip latency rather
 than unevicted writes, and ADC Conference scales to four replicas in conference mode (see the
-Revision (2026-10-06)).
+Revision (2026-10-06)). Revised 2026-10-07: the Decision now records the policy's tenant vary
+rule (the key varies by the resolved tenant) and its wide `HasRole` bypass check, and anchors are
+refreshed after the v1.233.0 release (see the Revision (2026-10-07)).
 
 ## Context
 
@@ -44,11 +46,14 @@ of Store Catalog's four policies run five minutes
 discount window opens or closes, with no mutation to evict on (`:159`, the reasoning at
 `:154-158`). ADC runs two 60-second policies (`NowNextCache`, a clock-dependent now-and-next
 snapshot, and `BookmarkCountsCache`, written by another service;
-`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:284,298`).
+`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:286,300`).
 
 That design was silently inert for the traffic that matters. The shared UI HttpClient pipeline
-attaches the stored Bearer token to every outgoing API request via `AuthDelegatingHandler`,
-including reads of public endpoints whose payload is identical for every caller. ASP.NET Core's
+attaches the stored Bearer token to every outgoing API request via `AuthDelegatingHandler`
+(`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/AuthDelegatingHandler.cs:34-40`; a
+request that sets the `SkipBearer` option, which the token-refresh POST does, passes through
+untouched, `:18-22`, `:29`), including reads of public endpoints whose payload is identical for
+every caller. ASP.NET Core's
 built-in default output-cache policy refuses both cache lookup and cache storage for any request
 carrying an `Authorization` header (or an authenticated identity). The result: every logged-in
 user bypassed the output cache on every read, and on conference day (when every attendee is
@@ -68,13 +73,21 @@ authenticated caller (mobile hosts, cross-service calls, curl with a token) unca
 ## Decision
 
 `MMCA.Common.API` ships `PublicEndpointOutputCachePolicy`, an `IOutputCachePolicy` that mirrors
-the built-in default policy with one deliberate difference: it does not disable cache lookup or
-storage when the request carries an `Authorization` header or an authenticated identity. It
+the built-in default policy with two deliberate departures, one relaxation and one tightening. The
+relaxation: it does not disable cache lookup or storage when the request carries an
+`Authorization` header or an authenticated identity
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/PublicEndpointOutputCachePolicy.cs:83-90`). It
 enforces the same response-side guards (GET/HEAD only; never store `Set-Cookie` responses or
 non-200s), varies the cache key by every query-string parameter (`CacheVaryByRules.QueryKeys =
 "*"`, the same rule as the default policy; a raw `IOutputCachePolicy` registration replaces the
 whole default chain, so the policy must restate it), and takes the expiration and eviction tags
-as constructor arguments.
+as constructor arguments. The tightening, which the default policy lacks: when a tenant has
+been resolved for the request, the key varies by `ITenantContext.TenantId` under
+`VaryByValues["t"]`, so one tenant's rows are never served to another from the shared entry
+(`PublicEndpointOutputCachePolicy.cs:98-106`,
+the key constant at `:50`). An unresolved tenant (a single-tenant host, a background call) adds
+nothing, and the vary rule is a backstop, not a license: a caller-dependent payload still must not
+use this policy (`:37-42`).
 
 Hosts register it per named policy via the `OutputCacheOptions.AddPublicEndpointPolicy(name,
 expiration, tags)` extension and reference it from `[OutputCache(PolicyName = ...)]` exactly like
@@ -91,7 +104,13 @@ expiration, bypassRoles, tags)` overload makes callers in a bypass role skip the
 Use it when the payload is identical for every caller EXCEPT a privileged read audience (ADC's
 audience is two roles, `Organizer` and `ContentEditor`, who see unpublished rows per BR-108).
 Per-user payloads remain out of scope: bypass roles handle role-shaped variance, not
-identity-shaped variance.
+identity-shaped variance. Membership is checked with the framework's wide `HasRole` extension
+(`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/ClaimsPrincipalExtensions.cs:75-77`, which reads
+`ClaimTypes.Role` plus bare `role`/`roles` claims and compares case-insensitively, `:59-67`), not
+the BCL `ClaimsPrincipal.IsInRole`, which matches only the identity's own role claim type: against an identity provider
+that emits bare `role`/`roles` claims, `IsInRole` would miss the bypass while the permission
+handler granted the elevated payload, and that response would be stored under the shared public
+key (`PublicEndpointOutputCachePolicy.cs:137-142`).
 
 That audience is declared ONCE and shared, never restated per policy. ADC keeps it in
 `ConferenceReadAudience.PrivilegedRoles`
@@ -102,13 +121,13 @@ and the API-layer visibility check reads the same list
 Two lists naming different roles would put a privileged payload in the shared public entries and
 serve it to everyone, so the single declaration is the guard, not a convention. Nor is the bypass a
 narrow exception in practice: eleven of ADC's twelve public policies pass it
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:267-298`, the array at `:266`),
-the exception being `NowNextCache` (`:284`), whose published-data payload is identical for every
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:269-300`, the array at `:268`),
+the exception being `NowNextCache` (`:286`), whose published-data payload is identical for every
 role. Breadth has a second driver that role-shaped variance does not cover: the admin surfaces read
 back right after mutating, and a write that never touches a controller (the BR-207 speaker
 auto-link, an Engagement bookmark) evicts only by publishing `OutputCacheEvictionRequested`, a
-broker round trip that is prompt but not instant (`Program.cs:251-257`), so a cached stale row
-version makes the next save throw `DbUpdateConcurrencyException` (`Program.cs:258-259`).
+broker round trip that is prompt but not instant (`Program.cs:253-259`), so a cached stale row
+version makes the next save throw `DbUpdateConcurrencyException` (`Program.cs:260-262`).
 
 ## Rationale
 
@@ -132,7 +151,7 @@ version makes the next save throw `DbUpdateConcurrencyException` (`Program.cs:25
   ADC's Conference service and Store's Catalog service both run `minReplicas: 1` with an HTTP scale
   rule at 50 concurrent requests and a ceiling of at least two replicas (Store `maxReplicas: 2`,
   `MMCA.Store/infra/main.bicep:1715`; ADC `conferenceScaledMaxReplicas`,
-  `MMCA.ADC/infra/main.bicep:2033`, which is 2 normally and 4 with `conferenceMode` on, `:191`), so
+  `MMCA.ADC/infra/main.bicep:2067`, which is 2 normally and 4 with `conferenceMode` on, `:192`), so
   every `EvictByTagAsync` reached only the replica that handled the mutation and the others kept
   serving the pre-edit payload for the full 5-minute TTL.
 
@@ -180,13 +199,13 @@ version makes the next save throw `DbUpdateConcurrencyException` (`Program.cs:25
   paced to at most one broadcast per 10-second `PacingWindow` per replica (`:46`) so a burst of
   stars cannot keep the tag permanently cold. The Conference host consumes it
   (`AddOutputCacheEvictionHandler()` at
-  `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:304`, and
+  `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:306`, and
   `RegisterOutputCacheEvictionConsumer()` at
   `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/ConferenceBrokerConsumers.cs:37`, wired
-  through `AddBrokerMessaging` at `Program.cs:417`), keeping the short TTL as the backstop for a
+  through `AddBrokerMessaging` at `Program.cs:419`), keeping the short TTL as the backstop for a
   lost or late event rather than the only defense (`BookmarkCountsCache`, 60 seconds,
-  `Program.cs:298`). A payload that changes on the clock still has no mutation to evict on, so a
-  short TTL remains its whole answer (`NowNextCache`, 60 seconds, ADC `Program.cs:284`; Store's
+  `Program.cs:300`). A payload that changes on the clock still has no mutation to evict on, so a
+  short TTL remains its whole answer (`NowNextCache`, 60 seconds, ADC `Program.cs:286`; Store's
   `ProductsCache`, 60 seconds, `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:159`, whose discount
   edits still evict the `catalog:products` tag at once but whose discount windows open and close with
   no write at all). When adding a cached endpoint, check
@@ -316,3 +335,35 @@ keep the anchors they were written with.
   Catalog `Program.cs` policies `:152`, `:153`, `:159` (reasoning `:154-158`), `:162`,
   `AddRedisOutputCaching()` `:99` with its comment `:96-97`; `IsPrivilegedConferenceReader` at
   `CurrentUserServiceExtensions.cs:24`). Store's `CatalogCache` (`:152`) is still unreferenced.
+
+## Revision (2026-10-07)
+
+Re-verified against current source. The decision, the strict apply-only-to-identity-independent
+contract, the twelve/eleven ADC bypass count, Store's four no-bypass policies and the three
+60-second TTLs (ADC `NowNextCache` and `BookmarkCountsCache`, Store `ProductsCache`) are unchanged. What moved: the Decision now records two properties of the policy it did not
+mention, and the ADC Conference and Bicep anchors shifted after the v1.233.0 release.
+
+1. **The cache key varies by the resolved tenant.** `PublicEndpointOutputCachePolicy` stamps
+   `ITenantContext.TenantId` into `VaryByValues["t"]` when a tenant is resolved
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/PublicEndpointOutputCachePolicy.cs:98-106`,
+   the key constant at `:50`, the class-level SECURITY (tenancy) note at `:37-42`), so the policy is
+   not only a relaxation of the default: it adds a tenancy tightening the default lacks. Decision
+   updated.
+2. **The bypass check is the wide `HasRole` read, not `IsInRole`** (`:137-142`), so an identity
+   provider emitting bare `role`/`roles` claims cannot get an elevated response stored under the
+   shared key. Decision updated.
+3. **`AuthDelegatingHandler` has a `SkipBearer` opt-out.** It attaches the stored Bearer only when
+   no `Authorization` header is set (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/AuthDelegatingHandler.cs:34-40`),
+   and a request carrying the `SkipBearer` option (the token-refresh POST) passes through untouched
+   (`:18-22`, `:29`). Context updated; the reads the policy targets still carry the token.
+4. Anchors re-verified against current source: ADC Conference `Program.cs` (`adminBypassRoles`
+   array `:268`, the twelve public policies `:269-300`, `NowNextCache` `:286`,
+   `BookmarkCountsCache` `:300`, the broker-round-trip reasoning `:253-259`, the
+   `DbUpdateConcurrencyException` sentence `:260-262`, `AddRedisOutputCaching()` `:195` with its
+   `TryAdd` comment `:191-192`, `AddOutputCacheEvictionHandler()` `:306`, `AddBrokerMessaging` with
+   `ConferenceBrokerConsumers.Register` `:419`); `RegisterOutputCacheEvictionConsumer()` at
+   `ConferenceBrokerConsumers.cs:37`; `MMCA.ADC/infra/main.bicep` (`conferenceScaledMaxReplicas`
+   defined at `:192`, the Conference scale rule at `:2067`); Store Catalog `Program.cs` (policies
+   `:152`, `:153`, `:159` with reasoning `:154-158`, `:162`, `AddRedisOutputCaching()` `:99`) and
+   `MMCA.Store/infra/main.bicep:1715`; `RedisCachingExtensions.cs:91`, `:94`, `:99`. The earlier
+   Revision sections keep the anchors they were written with.

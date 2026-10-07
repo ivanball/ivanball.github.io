@@ -6,6 +6,7 @@ default; each consumer switches it on by provisioning a notification hub with pl
 credentials and enabling the `NativePush` configuration section. Revised 2026-10-01 (UI.Maui
 ships credentialed FCM/APNs token providers and token-rotation re-registration; see Revision below).
 Revised 2026-10-06: the device DELETE route is `/Notifications/Devices/{installationId}`.
+Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 
 ## Context
 ADR-024 established two notification channels: a durable per-user `UserNotification` inbox (the
@@ -62,7 +63,7 @@ may not exist when the code ships.
   auth-state changes, and on Android `MauiFirebaseMessagingService.OnNewToken` re-registers when
   FCM rotates the token (`MauiFirebaseMessagingService.cs:26-35`). `AuthUIService` owns the
   unregister leg: `LogoutAsync` and `RevokeAllSessionsAsync` both call `UnregisterPushAsync`
-  before the local sign-out (`AuthUIService.cs:90,143`, defined at `:342`).
+  before the local sign-out (`AuthUIService.cs:90,143`, defined at `:361`).
 
 ## Consequences
 - Sends fan out per 20-user chunk and per platform: an audience of N users costs
@@ -115,3 +116,12 @@ registrar) is unchanged.
   is now `MMCA.Common.UI.Maui/DependencyInjection.cs:124-132`, the unregister calls are
   `AuthUIService.cs:90,143` (definition at `:342`), and the handler's native leg and at-least-once
   remarks are `SendPushNotificationHandler.cs:141-154` and `:21-30`.
+
+## Revision (2026-10-07)
+Re-verified against current source. The decision is unchanged: Notification Hubs, `user:{id}` tags, the
+Null-by-default sender and registrar, and the unregister leg running before the local sign-out in
+both `LogoutAsync` and `RevokeAllSessionsAsync`. Only one anchor moved.
+
+1. Anchors re-verified against current source: the unregister calls stay at `AuthUIService.cs:90,143`
+   (each ahead of `SignOutLocallyAsync` at `:101` and `:144`), and `UnregisterPushAsync` is now defined
+   at `AuthUIService.cs:361`.

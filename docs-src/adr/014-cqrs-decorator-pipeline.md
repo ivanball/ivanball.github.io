@@ -28,7 +28,7 @@ Citations refreshed: the Common `DependencyInjection` registration helpers now s
 `DependencyInjection.cs`, `DependencyInjection.ModuleScanning.cs` and `DependencyInjection.Crud.cs`).
 Revised 2026-10-01 (the record states where each kind of validation lives: UI form models, the
 Validating decorator with its coverage fitness gate, and domain factories; see Revision below).
-Revised 2026-10-06: the Decision states the shipped seven-decorator command chain and six-decorator query chain instead of the pre-2026-08-18 order.
+Revised 2026-10-06: the Decision states the shipped seven-decorator command chain and six-decorator query chain instead of the pre-2026-08-18 order. Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 
 ## Context
 Commands and queries share cross-cutting concerns: validation, transactions, cache invalidation,
@@ -73,8 +73,8 @@ Use single-responsibility handlers behind a Scrutor-composed decorator pipeline.
   (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:132`). The seven production service hosts
   compose the same sequence through `AddMmcaApplicationPipeline(pipeline => ...)` instead, which runs it
   in order and seals it (see the Revision (2026-08-26) below): ADC Identity / Conference / Engagement /
-  Notification (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:324`, `...Conference.Service/Program.cs:414`,
-  `...Engagement.Service/Program.cs:285`, `...Notification.Service/Program.cs:227`) and Store Identity /
+  Notification (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:324`, `...Conference.Service/Program.cs:416`,
+  `...Engagement.Service/Program.cs:286`, `...Notification.Service/Program.cs:227`) and Store Identity /
   Catalog / Sales (`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:236`,
   `...Catalog.Service/Program.cs:256`, `...Sales.Service/Program.cs:236`). Only that decorators-last
   ordering is load-bearing; the relative position of `AddInfrastructure`/`AddAPI` is not.
@@ -485,3 +485,15 @@ anchors inside the earlier Revision sections are left as historical records.
   `MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Markers/IRequiresPermission.cs:34`, with its
   single member `string Permission { get; }` at `:41`; behavior is unchanged.
 - Anchors in the live sections were re-verified against current source.
+
+## Revision (2026-10-07)
+Re-verified against current source. The decision, both decorator chains
+(`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:134-140`, `:143-148`) and the
+validation homes are unchanged; only two `AddMmcaApplicationPipeline` call sites moved. Stale anchors
+inside the earlier Revision sections are left as historical records.
+
+1. Anchors re-verified against current source: in the Decision, ADC Conference
+   (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:416`) and Engagement
+   (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:286`) are re-pointed; ADC Identity
+   `:324` and Notification `:227`, Store Identity `:236`, Catalog `:256` and Sales `:236`, and
+   `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:132` still match.

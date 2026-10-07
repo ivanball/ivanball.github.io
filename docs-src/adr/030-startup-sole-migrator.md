@@ -4,7 +4,9 @@
 Accepted (2026-06-27). Revised 2026-08-07: the sole migrator also runs the module seeders on every
 boot. Revised 2026-10-01: PostgreSQL and tenant copies join the migrationless `EnsureCreated` path.
 Revised 2026-10-06: seeding runs on the default scope only, after a tenant-database pass, and the
-startup path consults the environment for the build-time OpenAPI skip.
+startup path consults the environment for the build-time OpenAPI skip. Revised 2026-10-07: concurrent
+replicas of one service are a supported case (EF's migrations lock plus a five-minute initialization
+command timeout), so `minReplicas: 1` is not a single-applier guarantee.
 
 ## Context
 Under database-per-service (ADR-006), each service owns its own database and its own migrations project,
@@ -18,12 +20,13 @@ acting per physical data source:
   throw a per-source breakdown if any is behind.
 
 Any other value is a configuration mistake and stops startup before a single source is created
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:57`, the
-check itself at `:231-238`, its message at `:243-244`). The setting governs migrations only: a source no
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:63`, the
+check itself at `:290-297`, its message at `:302-303`). The setting governs migrations only: a source no
 migrations pipeline owns (Cosmos, or PostgreSQL or SQLite with no migrations assembly declared) is
 created with EF's `EnsureCreated` ahead of the strategy switch, because it has no migration to apply and
-nothing else would ever create it (`:70-100`); a tenant's own copy of such a source is created the same
-way under either strategy (`"Migrate"` at `:203-213`, `"None"` at `:251-265`).
+nothing else would ever create it (`:76-106`); a tenant's own copy of such a source is created the same
+way under either strategy (`"Migrate"` at `:231-239`, `"None"` at `:242-245` through
+`ApplyNoneStrategyToTenantAsync`, `:310-324`).
 
 The framework's own comments mark `"None"` as the production strategy and `"Migrate"` as dev/test. Both
 production apps deliberately diverge from that recommendation, and the divergence was bought with an
@@ -36,21 +39,47 @@ at startup, before the new revision serves traffic. There is deliberately **no**
 migration (no `sqlcmd` / `dotnet ef database update` apply in `deploy.yml`).
 
 - **Set in prod for every service.** `MMCA.Store/infra/main.bicep:1521,1690,1825` (Identity/Catalog/Sales)
-  and `MMCA.ADC/infra/main.bicep:1742,1974,2108,2260` (Identity/Conference/Engagement/Notification) all set
+  and `MMCA.ADC/infra/main.bicep:1773,2008,2144,2298` (Identity/Conference/Engagement/Notification) all set
   `DatabaseInitStrategy = 'Migrate'`.
-- **One applier per revision.** Each service runs `minReplicas: 1`, so the startup `MigrateAsync` is not
-  racing sibling replicas of the same revision. (Since the 2026-07-19 outbox lease revision, ADR-003,
-  this migration serialization is the only correctness reason left for `minReplicas: 1`; the outbox
-  is scale-out safe by construction, so above one replica the setting is a cost/migration choice.)
+- **Concurrent replicas serialize on EF's migrations lock.** "Sole migrator" means the service is the
+  only thing that migrates its database, not that one replica does. Every service runs
+  `minReplicas: 1` but scales above it (Store `MMCA.Store/infra/main.bicep:1591,1715,1860`, max 2; ADC
+  `MMCA.ADC/infra/main.bicep:1914,2067,2202`, max `conferenceScaledMaxReplicas`, 2 or 4 in conference
+  mode, `:192`, and `:2388`, max 2), so several replicas can run startup initialization at once. Each
+  calls `MigrateAsync`; every replica but one waits on EF's migrations lock (`__EFMigrationsLock`), and
+  migration plus seeding run under a five-minute command timeout so that wait does not trip the
+  30-second default
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:33-37`,
+  raised at `:108-112`, restored in the `finally` at `:139-145`). In production the container's
+  startup probe is the tighter bound: it polls `/alive` with `initialDelaySeconds: 5`,
+  `periodSeconds: 5` and `failureThreshold: 30` (about 155 seconds), and the host does not listen
+  until initialization finishes, so a replica still waiting on the lock after that window is
+  restarted before the five-minute timeout is reached (ADC `MMCA.ADC/infra/main.bicep:1886-1894`;
+  Store `MMCA.Store/infra/main.bicep:1585,1709,1854`). Seeding tolerates the overlap only where a
+  seeder handles it: ADC's `ConferenceModuleDbSeeder` treats a unique or primary-key violation on
+  save as another replica having seeded those rows and detaches every pending entry of the failing
+  context, the seed rows and the outbox rows the save captured
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/DbContexts/Seeding/ConferenceModuleDbSeeder.cs:68`,
+  `:574-594`). Store's seeders check then insert and save with a plain `SaveChangesAsync`, with no
+  violation handling
+  (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Infrastructure/Persistence/DbContexts/Seeding/CatalogModuleDbSeeder.cs:55,79,122`,
+  `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Persistence/DbContexts/Seeding/SalesModuleDbSeeder.cs:118`).
+  The `minReplicas: 1` floor is a warm-replica cost choice, not a race guard (ADR-003 makes the
+  outbox scale-out safe independently).
 - **No deploy-step backstop, on purpose.** Both `deploy.yml` files carry an explicit comment that there
   is *no external `sqlcmd` migration backstop* and that each service is the **sole migrator**
-  (`MMCA.Store/.github/workflows/deploy.yml:1421-1429`, `MMCA.ADC/.github/workflows/deploy.yml:1549-1559`). The
-  `sqlcmd` that *is* installed in the pipeline is a connectivity/readiness probe, not a migration apply.
+  (`MMCA.Store/.github/workflows/deploy.yml:1308-1316`, `MMCA.ADC/.github/workflows/deploy.yml:1442-1451`).
+  Both comments go on to say that with `minReplicas=1` exactly one replica migrates, so there is a
+  single applier (Store `:1314-1316`, ADC `:1448-1451`); that sentence is stale against the scale-out
+  above and is not evidence for this decision. The
+  `sqlcmd` that *is* installed in the pipeline is a `SELECT 1` readiness probe for the CI SQL Server
+  container, not a migration apply (Store `deploy.yml:621-637`, probe `:643`; ADC `deploy.yml:663-677`,
+  probe `:683`).
 - **Build-time drift gate, not a runtime apply.** CI runs
-  `dotnet ef migrations has-pending-model-changes` (Store `deploy.yml:424`, ADC `deploy.yml:445`) so a
+  `dotnet ef migrations has-pending-model-changes` (Store `deploy.yml:425`, ADC `deploy.yml:448`) so a
   model that has drifted from its migrations fails the build, but that gate only *detects*; it never
   applies anything. The container does the applying. The gate sits in `build-and-test`, which runs on
-  pull requests only (Store `deploy.yml:260`, ADC `deploy.yml:225`), so a deploy dispatched by hand does
+  pull requests only (Store `deploy.yml:261`, ADC `deploy.yml:225`), so a deploy dispatched by hand does
   not re-run it.
 - **This overrides the framework's documented "None for production" recommendation**, accepting
   auto-migrate-on-boot in prod as the price of one fewer moving part.
@@ -73,20 +102,26 @@ migration (no `sqlcmd` / `dotnet ef database update` apply in `deploy.yml`).
   migration would ship itself on the next deploy. The apps accept this; the build-time model-drift gate
   is the compensating control, together with the expand/contract migration guard, which fails a pull
   request adding a migration that contains `DropColumn`/`DropTable`/`DropIndex` unless it carries an
-  `EXPAND-CONTRACT-OVERRIDE` marker (Store `deploy.yml:430-481`, ADC `deploy.yml:234-282`), and the
+  `EXPAND-CONTRACT-OVERRIDE` marker (Store `deploy.yml:431-482`, ADC `deploy.yml:234-282`), and the
   per-service blast radius bounds the damage.
 - **A failed startup migration fails the new revision.** ACA keeps traffic on the previous revision
   (readiness gating, ADR-025), but a *half-applied* migration still needs manual recovery: there is no
   automated down-migration.
-- **Rolling updates briefly overlap two revisions.** `minReplicas: 1` keeps it to one applier per
-  revision, but during a rollout the old and new revisions coexist for a window; a long migration can
-  delay the new revision's readiness.
+- **Rolling updates briefly overlap two revisions, and replicas wait on each other.** Replicas starting
+  together serialize on the migrations lock, so a long migration delays every waiting replica's startup
+  (in production the startup probe restarts a replica still waiting after about 155 seconds, well
+  inside the five-minute initialization timeout), and during a rollout the old
+  and new revisions coexist for a window; a long migration can delay the new revision's readiness.
 - **Recovery is per database.** Backups/restore are per service (ADR-006 / ADR-009), so rolling back a
   bad migration is a per-database operation, not an app-wide one.
 
 ## Related
 ADR-006 (database-per-service: why each service owns and migrates its own database),
-ADR-025 (readiness gating keeps traffic off a still-migrating replica),
+ADR-025 (readiness gating; a still-migrating replica is not yet listening at all, because
+initialization completes before the host starts, e.g.
+`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:445` ahead of `app.RunAsync()` at
+`:475`),
+ADR-003 (the outbox lease that makes scale-out safe on the dispatch side),
 ADR-009 (RTO/RPO + drilled restore is the recovery backstop for a bad migration).
 
 ## Revision (2026-08-07)
@@ -181,3 +216,55 @@ No decision changed; every service still migrates and seeds itself at startup. C
 - Anchors in Context, Decision and Trade-offs were re-verified against current source and refreshed
   (strategy check, migrationless and tenant paths, both `main.bicep` setting lines, both `deploy.yml`
   sole-migrator comments, drift-gate and expand/contract steps).
+
+## Revision (2026-10-07)
+Re-verified against current source. Unchanged: every service host still sets
+`DatabaseInitStrategy = 'Migrate'` in production, is the only thing that migrates and seeds its own
+database, and has no deploy-step migration backstop. What moved is the single-applier premise: the
+v1.233.0 framework release designs startup initialization for several replicas of one service
+starting together. That premise never held for Store, whose three services have scaled to 2
+replicas since before this ADR was accepted; ADC's services also scale above one replica.
+
+1. **Concurrent replicas are a supported case.** Migration and seeding now run inside a try/finally
+   that raises each relational source's command timeout to `InitializationCommandTimeout` (five
+   minutes) and restores it afterwards, so a replica waiting on EF's migrations lock
+   (`__EFMigrationsLock`) behind another replica's migration does not fail at the 30-second default
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:33-37`,
+   `:108-145`, `RaiseCommandTimeouts` at `:257-281`). In production the container startup probe
+   (`/alive`, about 155 seconds: ADC `MMCA.ADC/infra/main.bicep:1886-1894`, Store
+   `MMCA.Store/infra/main.bicep:1585,1709,1854`) restarts a replica that is still waiting before
+   that timeout is reached, so only waits under that window are survived. The Decision's "One
+   applier per revision" bullet is replaced accordingly, and the Trade-offs bullet on rolling updates now names the wait.
+2. **`minReplicas: 1` is a floor, not a ceiling.** Store's three services scale to 2
+   (`MMCA.Store/infra/main.bicep:1591,1715,1860`); ADC's Identity, Conference and Engagement scale to
+   `conferenceScaledMaxReplicas` (2, or 4 in conference mode) and Notification to 2
+   (`MMCA.ADC/infra/main.bicep:192`, `:1914,2067,2202`, `:2388`). Store's scale-out predates this
+   ADR (Store commit `a472db8e`, 2026-04-12), so the earlier claim that migration serialization is
+   the only correctness reason left for `minReplicas: 1` did not hold when written; the floor is a
+   cost choice (`MMCA.ADC/AGENTS.md:64` states the same).
+3. **ADC's Conference seeder tolerates a concurrent seed.** `ConferenceModuleDbSeeder` saves each
+   step through `SaveToleratingConcurrentSeedAsync`, which treats a SQL Server unique or primary-key
+   violation as another replica having seeded the same rows and detaches every Added, Modified or
+   Deleted entry of the failing context, including the outbox rows the save captured
+   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/DbContexts/Seeding/ConferenceModuleDbSeeder.cs:68`,
+   `:574-594`). Its first probe is now in `SeedCloudAiConferenceEventAsync` (`:91`, `ExistsAsync` with
+   `ignoreQueryFilters: true` at `:105-109`); `SeedSampleEventLinksAsync` (`:334-358`) still has no
+   `ExistsAsync` and relies on the link-add calls rejecting an existing link. Store's seeders have
+   no such handling (`CatalogModuleDbSeeder.cs:55,79,122`, `SalesModuleDbSeeder.cs:118`).
+4. **Related now names how traffic is kept off a migrating replica.** Initialization completes
+   before the host starts listening (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:445`
+   ahead of `app.RunAsync()` at `:475`), so the replica is not reachable at all until it finishes;
+   ADR-025's readiness gate is not what holds it back. ADR-003 joins Related for the outbox side of
+   scale-out safety.
+5. Anchors re-verified against current source: the strategy check (`DatabaseInitializationExtensions.cs:63`,
+   `:290-297`, message `:302-303`); migrationless and tenant paths (`:76-106`, `:231-239`, `:242-245`,
+   `:310-324`); the strategy switch `:118-128`, tenant pass `:130-131` and default-scope `SeedAllAsync`
+   `:137`; `InitializeDatabaseUnlessDesignTimeAsync` at `:167-183` with its design-time check at `:174`;
+   both `main.bicep` setting lines (`MMCA.ADC/infra/main.bicep:1773,2008,2144,2298`; Store unchanged at
+   `:1521,1690,1825`); both `deploy.yml` sole-migrator comments (Store `:1308-1316`, ADC `:1442-1451`,
+   whose closing `minReplicas=1` single-applier sentence is stale),
+   the `sqlcmd` readiness probe (Store `:621-643`, ADC `:663-683`), the drift-gate commands (Store
+   `:425`, ADC `:448`), the `build-and-test` pull-request condition (Store `:261`, ADC `:225`) and the
+   expand/contract steps (Store `:431-482`, ADC `:234-282`); the host call sites, now ADC Conference
+   `:445` and Engagement `MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:322`, the
+   others unchanged.

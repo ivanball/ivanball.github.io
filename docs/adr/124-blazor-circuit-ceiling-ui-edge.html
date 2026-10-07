@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -247,7 +248,9 @@
           circuit count releases a permit only for a circuit it admitted; see Revision below). Revised 2026-10-06 (the
           extension exemption no longer applies under the same-origin API proxy prefix, proxied hub traffic is exempt at
           the configured prefix, and ADC&#39;s replica count, container size and per-IP window widen under <code>conferenceMode</code>;
-          see Revision below).</p>
+          see Revision below). Revised 2026-10-07: under <code>conferenceMode</code> ADC&#39;s UI runs a fixed four replicas rather than
+          scaling up to four, ADR-079 is cited as the service pipeline the UI host composes around rather than one it
+          joins, and anchors refreshed after the v1.233.0 release.</p>
           <h2 id="context">Context</h2>
           <p><a href="019-rate-limiting.html">ADR-019</a> layers rate limiting, and <a href="088-gateway-edge-responsibilities.html">ADR-088</a>
           makes the Gateway the layer that carries the outermost one. Both records describe traffic that arrives
@@ -255,7 +258,7 @@
           externally reachable origin</strong> on its own Container Apps FQDN, so the Gateway&#39;s edge limiter guards the
           Gateway&#39;s own hostname and never sees a single request to the front door a browser actually loads
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hardening/UiRateLimitingSettings.cs:11-16</code>, and the same
-          statement at the registration site in <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:138-140</code> and
+          statement at the registration site in <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:139-141</code> and
           <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:88-90</code>).</p>
           <p>Two properties of this origin make that gap expensive rather than cosmetic.</p>
           <p><strong>A page load here is not a cheap request.</strong> Under <a href="056-blazor-render-mode-strategy.html">ADR-056</a>&#39;s
@@ -337,9 +340,9 @@
           also carries <code>/hubs</code>, mirroring the Gateway&#39;s own bypass list, so a host that ever fronts a SignalR hub on this
           origin is covered by declaration rather than by accident (<code>:44-56</code>), and the same hub traffic arriving through
           the proxy is exempt at <code>{SameOriginApiProxy:PathPrefix}/hubs</code> (<code>:85</code>), with the prefix read through the proxy&#39;s
-          own options so the limiter and the proxy cannot disagree (<code>:198-204</code>; v1.232.0, <code>MMCA.Common/CHANGELOG.md:37</code>).
+          own options so the limiter and the proxy cannot disagree (<code>:198-204</code>; v1.232.0, <code>MMCA.Common/CHANGELOG.md:62</code>).
           Because these are the kit&#39;s defaults, both hosts exempt them, and both use-site comments name <code>/hubs</code>
-          (<code>MMCA.Store.UI.Web/Program.cs:225-228</code>, ADC&#39;s at <code>MMCA.ADC.UI.Web/Program.cs:215-217</code>). <code>/_blazor</code>
+          (<code>MMCA.Store.UI.Web/Program.cs:225-228</code>, ADC&#39;s at <code>MMCA.ADC.UI.Web/Program.cs:218-220</code>). <code>/_blazor</code>
           deliberately has no extension and no exemption from the per-IP window, because the negotiate endpoint is
           exactly what opens a circuit; it is kept out of the concurrency ceiling only, as above
           (<code>MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:72-76</code>). An unresolvable client IP <strong>fails open</strong>
@@ -347,10 +350,10 @@
           in-process <code>TestServer</code> to a standstill (<code>:118-124</code>).</p>
           </li>
           <li><p><strong>Forwarded headers come first, with one framework posture shared by every host.</strong> Both UI hosts open their
-          pipeline with <code>UseCommonUiForwardedHeaders()</code> (<code>MMCA.ADC.UI.Web/Program.cs:207</code>,
+          pipeline with <code>UseCommonUiForwardedHeaders()</code> (<code>MMCA.ADC.UI.Web/Program.cs:210</code>,
           <code>MMCA.Store.UI.Web/Program.cs:200</code>), defined in <code>MMCA.Common.API</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/CommonForwardedHeadersExtensions.cs:24-25</code>, shipped in
-          v1.211.0, <code>MMCA.Common/CHANGELOG.md:577-580</code>). It applies <code>CommonForwardedHeaders.Create()</code>: <code>X-Forwarded-For</code>,
+          v1.211.0, <code>MMCA.Common/CHANGELOG.md:602-605</code>). It applies <code>CommonForwardedHeaders.Create()</code>: <code>X-Forwarded-For</code>,
           <code>X-Forwarded-Proto</code> and <code>X-Forwarded-Host</code> by default, with the known-proxy and known-network allow-lists
           cleared because cloud ingress reaches the container from addresses in neither default list
           (<code>.../MMCA.Common.API/Startup/CommonForwardedHeaders.cs:14-20,33-34,42-53</code>). The service pipeline&#39;s
@@ -363,15 +366,15 @@
           </li>
           <li><p><strong>Both limiters go in after forwarded headers and before anything that opens a circuit or renders a page.</strong>
           <code>AddUiRateLimiting</code> at registration and <code>UseUiRateLimiting()</code> in the pipeline
-          (<code>MMCA.ADC.UI.Web/Program.cs:146</code> and <code>:218</code>, <code>MMCA.Store.UI.Web/Program.cs:95</code> and <code>:229</code>). The circuit
+          (<code>MMCA.ADC.UI.Web/Program.cs:148</code> and <code>:221</code>, <code>MMCA.Store.UI.Web/Program.cs:95</code> and <code>:229</code>). The circuit
           ceiling is registered beside it, with the retention half applied to <code>AddInteractiveServerComponents</code> from
           the same section so the two numbers cannot drift apart (<code>RetentionFrom</code> at <code>MMCA.ADC.UI.Web/Program.cs:72</code>
-          and <code>MMCA.Store.UI.Web/Program.cs:78</code>, <code>AddBoundedBlazorCircuits()</code> at <code>MMCA.ADC.UI.Web/Program.cs:81</code> and
+          and <code>MMCA.Store.UI.Web/Program.cs:78</code>, <code>AddBoundedBlazorCircuits()</code> at <code>MMCA.ADC.UI.Web/Program.cs:82</code> and
           <code>MMCA.Store.UI.Web/Program.cs:86</code>, both through
           <code>MMCA.Common.UI.Web/Hardening/BlazorCircuitLimitExtensions.cs:28-41,51-61</code>).</p>
           </li>
           <li><p><strong>One framework kit, consumed by both hosts, with the same section names and the same shape.</strong> The kit
-          ships in <code>MMCA.Common.UI.Web</code> from v1.206.0 (<code>MMCA.Common/CHANGELOG.md:815-827</code>) and binds
+          ships in <code>MMCA.Common.UI.Web</code> from v1.206.0 (<code>MMCA.Common/CHANGELOG.md:840-852</code>) and binds
           <code>UiRateLimiting</code> (<code>MMCA.Common.UI.Web/Hardening/UiRateLimitingSettings.cs:36</code>) and <code>BlazorCircuitLimits</code>
           (<code>MMCA.Common.UI.Web/Hardening/BlazorCircuitLimitSettings.cs:20</code>). It ships the limiter <strong>enabled</strong> by
           default with one escape hatch for a load or capacity proof driven from a single runner IP
@@ -389,9 +392,9 @@
           <code>:60-62</code>). Store keeps 300 (<code>MMCA.Store.UI.Web/appsettings.json:25</code>). ADC sets <strong>1200 per minute</strong>, four
           times the storefront&#39;s, because on conference day the attendees are physically in one venue behind one NAT
           and present to this limiter as a SINGLE client IP (<code>MMCA.ADC.UI.Web/appsettings.json:15-21</code>, restated at
-          <code>MMCA.ADC.UI.Web/Program.cs:144-145</code>). A conference-day deployment widens it again: the <code>conferenceMode</code>
+          <code>MMCA.ADC.UI.Web/Program.cs:146-147</code>). A conference-day deployment widens it again: the <code>conferenceMode</code>
           parameter overrides the window to <strong>12000 per minute per replica</strong> through the environment
-          (<code>MMCA.ADC/infra/main.bicep:2603-2606</code>). Every value is also written out explicitly in each host&#39;s
+          (<code>MMCA.ADC/infra/main.bicep:2651-2654</code>). Every value is also written out explicitly in each host&#39;s
           <code>appsettings.json</code>, so the deployed posture is stated rather than inherited
           (<code>MMCA.ADC.UI.Web/appsettings.json:19-24,28-32</code>, <code>MMCA.Store.UI.Web/appsettings.json:23-28,38-42</code>).</p>
           </li>
@@ -417,10 +420,11 @@
           Interactive Auto moves a returning session to the WebAssembly runtime after the first render. The instruction
           that follows from that framing is written next to the number: raise it only together with the container&#39;s
           memory (<code>MMCA.Common.UI.Web/Hardening/BlazorCircuitLimitSettings.cs:26-38</code>). ADC&#39;s busiest measured
-          conference day peaked near 67 concurrent users, and its UI container scales to at most two replicas by
-          default and four under <code>conferenceMode</code>, which also doubles the container to 0.5 vCPU / 1 GiB
-          (<code>MMCA.ADC.UI.Web/appsettings.json:25-27</code>, <code>MMCA.ADC/infra/main.bicep:2640</code> defined at <code>:191</code>, resources at
-          <code>:2552</code> defined at <code>:182</code>, the <code>uiApp</code> container app at <code>:2516</code>).</li>
+          conference day peaked near 67 concurrent users, and its UI container scales between one and two replicas
+          by default and runs a fixed four under <code>conferenceMode</code> (the floor is raised to the ceiling), which also
+          doubles the container to 0.5 vCPU / 1 GiB (<code>MMCA.ADC.UI.Web/appsettings.json:25-27</code>,
+          <code>MMCA.ADC/infra/main.bicep:2691-2692</code> defined at <code>:191-192</code>, resources at <code>:2599</code> defined at <code>:182</code>, the
+          <code>uiApp</code> container app at <code>:2563</code>).</li>
           <li><strong>Binding is validated at startup, and the hot path does not pay for it.</strong> Both sections go through
           <code>ValidateDataAnnotations().ValidateOnStart()</code>, and the limiter then closes over the already-bound instance
           rather than resolving <code>IOptions</code> on every request, precisely because an out-of-range value has already failed
@@ -430,8 +434,8 @@
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
           <li><strong>Both ceilings are per replica, in memory.</strong> The effective allowance is the configured number multiplied by
-          the replica count (two at most for ADC&#39;s UI by default, four under <code>conferenceMode</code>,
-          <code>MMCA.ADC/infra/main.bicep:191</code>), so two replicas carry an abuse ceiling of 400 circuits and four carry 800,
+          the replica count (two at most for ADC&#39;s UI by default, a fixed four under <code>conferenceMode</code>,
+          <code>MMCA.ADC/infra/main.bicep:192,2691-2692</code>), so two replicas carry an abuse ceiling of 400 circuits and four carry 800,
           against a real peak of well under 100. That is the same trade the Gateway kit documents and is accepted for
           the same reason: an edge limiter has to answer in microseconds on every request, and a shared counter would
           put a network round trip in front of the whole site
@@ -457,7 +461,7 @@
           default widening buys a margin over one NAT&#39;d venue at the cost of letting a single scripted client burn four
           times as many requests before it is shed, and the conference-day override to 12000 per minute makes that forty
           times the storefront&#39;s window for the day (<code>MMCA.ADC.UI.Web/appsettings.json:15-21</code>,
-          <code>MMCA.ADC/infra/main.bicep:2606</code>, <code>MMCA.Common.UI.Web/Hardening/UiRateLimitingSettings.cs:52-55</code>).</li>
+          <code>MMCA.ADC/infra/main.bicep:2654</code>, <code>MMCA.Common.UI.Web/Hardening/UiRateLimitingSettings.cs:52-55</code>).</li>
           </ul>
           <h2 id="revision-2026-09-25-one-framework-kit-one-forwarded-header-posture">Revision (2026-09-25): one framework kit, one forwarded-header posture</h2>
           <p>The hardening kit this record decides now lives once, in <code>MMCA.Common.UI.Web/Hardening/</code>, first shipped in
@@ -499,14 +503,40 @@
           v1.206.0 kit entry the 2026-09-25 Revision cites at <code>MMCA.Common/CHANGELOG.md:815-827</code>.</li>
           <li>Every <code>path:line</code> anchor in the live sections was re-verified against current source and repointed.</li>
           </ul>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. The three layers, their defaults, the <code>/_blazor</code> carve-out, the proxy-prefix
+          exemption rules and both hosts&#39; configuration are unchanged, and both consumers pin <code>MMCA.Common.UI.Web</code> 1.233.0
+          (<code>MMCA.ADC/Directory.Packages.props:129</code>, <code>MMCA.Store/Directory.Packages.props:20</code>). Two statements moved
+          (items 1 and 2), and anchors were re-pointed (item 3).</p>
+          <ol>
+          <li>Under <code>conferenceMode</code> ADC&#39;s UI container does not scale up to four replicas: its floor is raised to the
+          ceiling, so it runs a fixed four (<code>MMCA.ADC/infra/main.bicep:2691-2692</code>, ceiling defined at <code>:192</code>). By
+          default it scales between one and two (<code>:191-192</code>). The Rationale and Trade-offs now say so.</li>
+          <li>The UI hosts do not join the <a href="079-shared-http-middleware-pipeline.html">ADR-079</a> pipeline: that record scopes
+          itself to REST and gRPC service hosts, and the UI hosts hand-compose their own, reusing two of its pieces
+          through public methods: the forwarded-headers posture (<code>MMCA.ADC.UI.Web/Program.cs:210</code>,
+          <code>MMCA.Store.UI.Web/Program.cs:200</code>) and the request-localization half (<code>MMCA.ADC.UI.Web/Program.cs:238</code>,
+          <code>MMCA.Store.UI.Web/Program.cs:233</code>). <code>UseUiRateLimiting()</code> sits in the hand-composed pipeline
+          (<code>MMCA.ADC.UI.Web/Program.cs:221</code>). The Related entry now says so.</li>
+          <li>Anchors re-verified against current source: <code>MMCA.ADC/infra/main.bicep:2651-2654</code> (conference-day window,
+          value at <code>:2654</code>), <code>:2563</code> (<code>uiApp</code>), <code>:2599</code> (resources), <code>:2691-2692</code> (scale), <code>:191-192</code>;
+          <code>MMCA.ADC.UI.Web/Program.cs:139-141</code> (registration statement), <code>:146-147</code> (NAT restatement), <code>:148</code>
+          (<code>AddUiRateLimiting</code>), <code>:82</code> (<code>AddBoundedBlazorCircuits</code>), <code>:210</code> (<code>UseCommonUiForwardedHeaders</code>),
+          <code>:218-220</code> (use-site comment), <code>:221</code> (<code>UseUiRateLimiting</code>), <code>:75,139</code> (ADR-088 comments);
+          <code>MMCA.Common/CHANGELOG.md:62</code> (v1.232.0 proxy-prefix entry), <code>:602-605</code> (v1.211.0 forwarded headers),
+          <code>:840-852</code> (v1.206.0 kit).</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="019-rate-limiting.html">ADR-019</a> (the layered rate-limiting posture this adds a layer to),
           <a href="088-gateway-edge-responsibilities.html">ADR-088</a> (the Gateway edge whose limiter this host is outside of, and
-          which the registration comments name directly at <code>MMCA.ADC.UI.Web/Program.cs:138</code> and
+          which the registration comments name directly at <code>MMCA.ADC.UI.Web/Program.cs:75,139</code> and
           <code>MMCA.Store.UI.Web/Program.cs:88</code>), <a href="056-blazor-render-mode-strategy.html">ADR-056</a> (the Interactive Auto
           strategy that makes a first render a Server circuit and a returning session a WebAssembly one, which is what
-          makes the ceiling both necessary and generous), <a href="079-shared-http-middleware-pipeline.html">ADR-079</a> (the ordered
-          pipeline this middleware is placed into, after forwarded headers and before anything that renders),
+          makes the ceiling both necessary and generous), <a href="079-shared-http-middleware-pipeline.html">ADR-079</a> (the shared
+          service pipeline the UI hosts deliberately do not call: each hand-composes its own and reuses two pieces of
+          that pipeline through public methods, its forwarded-headers posture and its request-localization half
+          (<code>MMCA.ADC.UI.Web/Program.cs:210,238</code>, <code>MMCA.Store.UI.Web/Program.cs:200,233</code>), and this middleware sits in
+          the hand-composed pipeline after forwarded headers and before anything that renders),
           <a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a> (the lockstep bump that moves both hosts onto a kit change together).</p>
           
         <div class="doc-foot btn-row">
@@ -526,6 +556,7 @@
             <li><a href="#revision-2026-09-25-one-framework-kit-one-forwarded-header-posture">Revision (2026-09-25): one framework kit, one forwarded-header posture</a></li>
             <li><a href="#revision-2026-10-01-the-circuit-transport-and-the-circuit-count">Revision (2026-10-01): the circuit transport and the circuit count</a></li>
             <li><a href="#revision-2026-10-06-the-proxy-prefix-and-conference-mode">Revision (2026-10-06): the proxy prefix and conference mode</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

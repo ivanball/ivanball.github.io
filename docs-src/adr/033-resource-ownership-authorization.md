@@ -1,14 +1,14 @@
 # ADR-033: Resource-Ownership Authorization (Row-Level + Action Filter)
 
 ## Status
-Accepted (2026-07-02, revised 2026-07-25, 2026-08-01, 2026-08-31, 2026-09-10). Revised 2026-10-01 (the fail-closed owner gate and the per-record ownership check are now framework code in `OwnershipHelper`; see Revision below). Revised 2026-10-06: the CSV export's fail-closed `AllowUnscopedExport` opt-in, which lets only the bypass role export an unscoped table, is now recorded in Adoption.
+Accepted (2026-07-02, revised 2026-07-25, 2026-08-01, 2026-08-31, 2026-09-10). Revised 2026-10-01 (the fail-closed owner gate and the per-record ownership check are now framework code in `OwnershipHelper`; see Revision below). Revised 2026-10-06: the CSV export's fail-closed `AllowUnscopedExport` opt-in, which lets only the bypass role export an unscoped table, is now recorded in Adoption. Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 
 ## Context
 ADR-020 added a permission (capability) layer over RBAC: it answers "what may this **role** do",
 resolving a role to a permission so an endpoint can require a capability instead of a role name. It
 explicitly scoped out the orthogonal question, "is this **my** order", recording that "per-resource
 ownership (a customer may read only their own data) stays a separate concern (`OwnerOrAdminFilter`),
-and a route needing both composes the two" (`020-permission-based-authorization.md:159-160`).
+and a route needing both composes the two" (`020-permission-based-authorization.md:165-166`).
 
 That carve-out names a mechanism that already ships in framework code but had no decision record of
 its own. RBAC and permissions are principal-scoped: a customer with the Customer role may read orders,
@@ -239,7 +239,7 @@ value before the filter runs.
 
 ## Related
 ADR-020 (the role/permission RBAC layer this complements, and whose explicit
-`020-permission-based-authorization.md:159-160` scope-out this fills), ADR-034 (the generic entity query
+`020-permission-based-authorization.md:165-166` scope-out this fills), ADR-034 (the generic entity query
 pipeline / `IEntityQueryService` the collection-scoping `Specification` slots into), ADR-013 (failures
 surface as `Result`/HTTP at the edge, the filter as a 403 `ForbidResult`), ADR-004 (the validated
 principal and owner claim both enforcement points trust), ADR-078 (the CSV export endpoint, whose
@@ -384,3 +384,17 @@ An audit against the code. Enforcement behavior is unchanged; one gate the recor
    `OrdersController.ValidateOwnershipAsync` (`:386-402`, helper call `:390`, existence predicate
    `:394-396`), the `CustomersController` deny-by-default table and `CreateAsync` guard, and the `And`
    composition (`SpecificationExtensions.cs:54`).
+
+## Revision (2026-10-07)
+Re-verified against current source. Enforcement behavior is unchanged: the filter, the ownership
+specification, the fail-closed `RequireResolvableOwner<TId>` gate and the per-record
+`ValidateOwnershipAsync<TId>` check read as recorded. Only anchors moved.
+
+1. Anchors re-verified against current source: the ADR-020 carve-out quote in Context and Related is
+   now `020-permission-based-authorization.md:165-166`; the v1.216.0 changelog entry recorded in
+   Revisions 2026-10-01 and 2026-10-06 is `MMCA.Common/CHANGELOG.md:392`, under the `[1.216.0]`
+   header at `:375`; and the two-generic `GetOwnershipSpecification<TSpec, TId>` overload the ADC
+   Q&A controllers take (Revision 2026-09-10, item 1) is declared at
+   `MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:35`. The live
+   `OwnershipHelper` anchors (`:18`, `:21`, `:46-52`, `:65`, `:70`, `:91-104`, `:133-157`,
+   `:167-171`, `:174-175`) are unchanged.

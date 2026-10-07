@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -294,7 +295,8 @@
           current lines. The &quot;eight hosts&quot; count in the first 2026-09-03 entry above is superseded).
           Revised 2026-10-01 (ASP.NET Core metrics are now behind a third cost knob,
           <code>Telemetry:DisableAspNetCoreMetrics</code>, which both production deployments turn on; see Revision below).
-          Revised 2026-10-06: the correlation middleware also discards a non-printable-ASCII id, Store&#39;s auth alert counts 401 and 429, the bootstrap logger factory lives until the host exits, and <code>GlobalExceptionHandler</code> writes its Error row only on its 500 path (cross-tenant and bad-request rejections log Warning).</p>
+          Revised 2026-10-06: the correlation middleware also discards a non-printable-ASCII id, Store&#39;s auth alert counts 401 and 429, the bootstrap logger factory lives until the host exits, and <code>GlobalExceptionHandler</code> writes its Error row only on its 500 path (cross-tenant and bad-request rejections log Warning).
+          Revised 2026-10-07: Context and the rejected-alternative now separate unsampled tracing (the largest line item) from sampled traces (metrics measured larger in every recorded window), an outbox message with no stored trace context gets no <code>OutboxProcess</code> span, and the outbox, ADC bicep, ADC Conference <code>Program.cs</code> and <code>GlobalExceptionHandler</code> anchors are rebased after the v1.232.1 and v1.233.0 releases.</p>
           <h2 id="context">Context</h2>
           <p>The framework is a modular monolith whose modules extract into standalone services (ADR-008), so
           the same telemetry has to make sense whether a request stays in one process or crosses a gateway and
@@ -305,7 +307,16 @@
           dead-lettering&quot; are not questions auto-instrumentation can answer.</p>
           <p>Two cost forces pull the other way. A deployed fleet polls every relational outbox around the clock,
           so idle poll spans would dominate Application Insights ingestion if exported, and full-fidelity
-          tracing is the single largest observability line item. The framework needs custom instrumentation
+          tracing is the largest observability line item (<code>MMCA.ADC/infra/main.bicep:275</code>-<code>:277</code>,
+          <code>MMCA.Store/infra/main.bicep:202</code>-<code>:204</code>), which is why both deployments sample traces at 25%
+          (<code>MMCA.ADC/infra/main.bicep:280</code>-<code>:281</code>). With sampling on, metrics are the line every recorded
+          measurement puts on top: the <code>http.client.*</code> gauges plus the runtime instruments were about 65% of
+          AppMetrics over 2026-08-03..09 (<code>MMCA.ADC/infra/main.bicep:305</code>-<code>:307</code>, behind the HttpClient and
+          runtime knobs), AppMetrics stayed about 63% of workspace ingestion in ADC (67% in Store) over
+          2026-08-01..22 after those two groups were dropped (<code>MMCA.ADC/infra/main.bicep:341</code>-<code>:342</code>,
+          <code>MMCA.Store/infra/main.bicep:268</code>, behind the 300s export interval), and the ASP.NET Core meter
+          family alone was 73% over 2026-09-22..28 (<code>MMCA.ADC/infra/main.bicep:321</code>-<code>:322</code>, behind the
+          ASP.NET Core knob). The framework needs custom instrumentation
           where auto-instrumentation is blind, plus knobs that cut telemetry cost without going dark. This
           cross-cutting observability decision was implemented but named by no existing ADR; this record
           captures it.</p>
@@ -347,11 +358,13 @@
           (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs</code>) increments
           it on both dead-letter paths, tagged by <code>event_type</code> and by a <code>reason</code> that tells them apart:
           <code>type_unresolvable</code> when a message&#39;s event type cannot be resolved and the row has been attempted before
-          (<code>OutboxProcessor.cs:675</code>-<code>OutboxProcessor.cs:678</code>; on the row&#39;s first attempt, <code>RetryCount</code> 0, it is
-          retried once as transient at <code>OutboxProcessor.cs:664</code>-<code>OutboxProcessor.cs:671</code>, unless <code>MaxRetries</code> is 1 or less), and
+          (<code>OutboxProcessor.cs:845</code>-<code>OutboxProcessor.cs:848</code>, in <code>HandleUnresolvableType</code> at <code>:828</code>; on the
+          row&#39;s first attempt, <code>RetryCount</code> 0, it is retried once as transient at
+          <code>OutboxProcessor.cs:834</code>-<code>OutboxProcessor.cs:841</code>, unless <code>MaxRetries</code> is 1 or less), and
           <code>retries_exhausted</code> when a failing message reaches <code>MaxRetries</code> and drops out of the poll
-          (<code>OutboxProcessor.cs:625</code>-<code>OutboxProcessor.cs:628</code>). The processor&#39;s activity source publishes outbox
-          spans under the same name (<code>OutboxProcessor.cs:88</code>); both the meter and the trace source are
+          (guard at <code>OutboxProcessor.cs:568</code>, increment at <code>OutboxProcessor.cs:573</code>-<code>OutboxProcessor.cs:576</code>).
+          The processor&#39;s activity source publishes outbox spans under the same name
+          (<code>OutboxProcessor.cs:91</code>); both the meter and the trace source are
           registered by literal name in the Aspire defaults (<code>Extensions.Telemetry.cs:307</code>,
           <code>Extensions.Telemetry.cs:84</code>).</p>
           </li>
@@ -389,7 +402,7 @@
           dependency latency is still captured as traces when <code>HttpClient</code> metrics are dropped, and request
           latency and failures still come from the request traces when ASP.NET Core metrics are dropped. Both
           production deployments set <code>Telemetry__DisableAspNetCoreMetrics</code> to <code>true</code>
-          (<code>MMCA.ADC/infra/main.bicep:324</code>-<code>:325</code>, <code>MMCA.Store/infra/main.bicep:253</code>-<code>:254</code>), so neither
+          (<code>MMCA.ADC/infra/main.bicep:326</code>-<code>:327</code>, <code>MMCA.Store/infra/main.bicep:253</code>-<code>:254</code>), so neither
           exports the ASP.NET Core meter family.</p>
           </li>
           <li><p><strong>Head-based sampling as a cost knob, off by default.</strong> <code>Telemetry:TracesSampleRatio</code>
@@ -406,15 +419,17 @@
           the exporters (<code>Extensions.Telemetry.cs:122</code>), clears the <code>Recorded</code> flag on the recurring <code>OutboxPoll</code> span
           and its children (<code>OutboxPollFilterProcessor.cs:49</code>), and on the internal-command queue&#39;s
           <code>InternalCommandPoll</code> span the same way (<code>OutboxPollFilterProcessor.cs:60</code>-<code>:64</code>). The poll query runs inside that span, opened at
-          the top of <code>FetchCandidatesAsync</code> (<code>OutboxProcessor.cs:327</code>, span started at <code>OutboxProcessor.cs:333</code>,
-          named at <code>OutboxProcessor.cs:70</code>), and the backlog count in <code>CountPendingAsync</code> runs inside a second
-          span of the same name (<code>OutboxProcessor.cs:268</code>, started at <code>OutboxProcessor.cs:280</code>), so
+          the top of <code>FetchCandidatesAsync</code> (<code>OutboxProcessor.cs:287</code>, span started at <code>OutboxProcessor.cs:293</code>,
+          named at <code>OutboxProcessor.cs:73</code>), and the backlog count in <code>CountPendingAsync</code> runs inside a second
+          span of the same name (<code>OutboxProcessor.cs:255</code>, started at <code>OutboxProcessor.cs:267</code>), so
           steady-state polling does not flood Application Insights. Real
           outbox work is untouched: each per-message <code>OutboxProcess</code> span is started by <code>StartOutboxActivity</code>
-          (called once per message at <code>OutboxProcessor.cs:512</code>, declared at <code>OutboxProcessor.cs:716</code>) under an
+          (called once per message at <code>OutboxProcessor.cs:490</code>, declared at <code>OutboxProcessor.cs:886</code>) under an
           explicit parent context restored from the message&#39;s stored trace and span ids
-          (<code>OutboxProcessor.cs:723</code>-<code>OutboxProcessor.cs:726</code>), span started at
-          <code>OutboxProcessor.cs:728</code>-<code>OutboxProcessor.cs:731</code>, so it is never a child of the poll span.</p>
+          (<code>OutboxProcessor.cs:893</code>-<code>OutboxProcessor.cs:896</code>), span started at
+          <code>OutboxProcessor.cs:898</code>-<code>OutboxProcessor.cs:901</code>, so it is never a child of the poll span. A
+          message that stored no trace or span id gets no <code>OutboxProcess</code> span at all
+          (<code>OutboxProcessor.cs:888</code>-<code>:891</code>).</p>
           </li>
           <li><p><strong>Dual exporters, either or both.</strong> <code>AddOpenTelemetryExporters</code> enables OTLP when
           <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> is present (<code>Extensions.Telemetry.cs:161</code>-<code>:162</code>, the Aspire dashboard sets it, exporter
@@ -664,8 +679,9 @@
           the cloud role name. The ASP.NET Core request span already names the route, which maps to one
           command or query; <code>LoggingCommandDecorator</code> already carries a CommandName plus ModuleName log
           scope, a query tag on the SQL, and a <code>CqrsMetrics</code> duration histogram tagged by command. Traces
-          sample at 25% and trace ingestion is the largest observability cost line here, so an extra
-          dependency row per command or query buys duplication at a measurable price. Revisit only on a
+          sample at 25% and trace ingestion is a real cost line (with sampling on, metrics measured larger in
+          every recorded window, see Context), so an extra dependency row per command or query buys duplication at a
+          measurable price. Revisit only on a
           concrete diagnostic gap (orphan SQL spans from scheduled jobs would be one), and scope any fix to
           that path rather than to the pipeline.</li>
           </ul>
@@ -827,6 +843,55 @@
           against current source; the outbox, correlation-middleware and ADC bicep anchors in the Decision were
           rebased.</li>
           </ul>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. The telemetry baseline, the CQRS and outbox instruments, the
+          correlation middleware, the metrics knobs, sampling, poll-span filtering and the exporters
+          behave as the Decision describes, and every <code>Extensions.Telemetry.cs</code> line anchor still holds. What
+          moved is one cost statement, one outbox detail, and the outbox, ADC bicep, ADC Conference
+          <code>Program.cs</code> and <code>GlobalExceptionHandler</code> line anchors (the outbox processor&#39;s lines moved in the
+          v1.233.0 release, the <code>GlobalExceptionHandler</code> lines in v1.232.1).</p>
+          <ol>
+          <li><strong>Sampled traces are not the largest measured ingestion line.</strong> The Context said full-fidelity
+          tracing is the single largest observability line item, which still matches the deployments&#39;
+          own comments on unsampled export (<code>MMCA.ADC/infra/main.bicep:275</code>-<code>:277</code>,
+          <code>MMCA.Store/infra/main.bicep:202</code>-<code>:204</code>); the rejected per-command span alternative went further
+          and called sampled trace ingestion the largest cost line. Both deployments have sampled at 25%
+          since before any recorded measurement (<code>MMCA.ADC/infra/main.bicep:280</code>-<code>:281</code>), and every recorded
+          window puts metrics on top: <code>http.client.*</code> plus runtime about 65% of AppMetrics over
+          2026-08-03..09 (<code>MMCA.ADC/infra/main.bicep:305</code>-<code>:307</code>), AppMetrics about 63% of workspace
+          ingestion in ADC and 67% in Store over 2026-08-01..22 after those two groups were dropped
+          (<code>MMCA.ADC/infra/main.bicep:341</code>-<code>:342</code>, <code>MMCA.Store/infra/main.bicep:268</code>), and the ASP.NET Core
+          meter family alone 73% over 2026-09-22..28 (<code>MMCA.ADC/infra/main.bicep:321</code>-<code>:322</code>,
+          <code>MMCA.Store/infra/main.bicep:249</code>), the figure the Revision (2026-10-01) records. The Context
+          now separates the two claims and the alternative names sampled traces. The framework comment at
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.Telemetry.cs:134</code>-<code>:135</code> still calls
+          trace ingestion the largest observability line item without qualifying it as unsampled. No more
+          recent ingestion breakdown is recorded in source, so which line is largest after the ASP.NET
+          Core family was dropped is not stated here.</li>
+          <li><strong>Not every outbox message gets an <code>OutboxProcess</code> span.</strong> <code>StartOutboxActivity</code> returns null when
+          the message stored no trace or span id
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:888</code>-<code>:891</code>),
+          so such a message is processed with no span. The Decision bullet now says so.</li>
+          <li>Anchors re-verified against current source: in <code>OutboxProcessor.cs</code>, the <code>type_unresolvable</code>
+          increment <code>:845</code>-<code>:848</code> inside <code>HandleUnresolvableType</code> <code>:828</code>, the first-attempt retry guard
+          <code>:834</code>-<code>:841</code>, the <code>retries_exhausted</code> guard <code>:568</code> and increment <code>:573</code>-<code>:576</code>, the activity
+          source <code>:91</code>, <code>PollActivityName</code> <code>:73</code>, <code>FetchCandidatesAsync</code> <code>:287</code> (span <code>:293</code>),
+          <code>CountPendingAsync</code> <code>:255</code> (span <code>:267</code>), <code>StartOutboxActivity</code> called <code>:490</code> and declared <code>:886</code>,
+          its parent context <code>:893</code>-<code>:896</code> and span start <code>:898</code>-<code>:901</code>; the ADC
+          <code>Telemetry__DisableAspNetCoreMetrics</code> setting <code>MMCA.ADC/infra/main.bicep:326</code>-<code>:327</code> (Store
+          <code>MMCA.Store/infra/main.bicep:253</code>-<code>:254</code> unchanged). Current locations for anchors the dated
+          sections keep as written: the ADC Conference bootstrap factory
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:370</code> (<code>RunAsync</code> <code>:475</code>; the
+          other six service hosts unchanged); <code>GlobalExceptionHandler</code> Error row
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/GlobalExceptionHandler.cs:100</code> and its
+          500 at <code>:102</code>, the cross-tenant Warning <code>:58</code> (400 at <code>:60</code>) and the bad-request Warning <code>:80</code>
+          (<code>DbUpdateExceptionHandler.cs:31</code> and <code>:33</code> unchanged); the ADC Revision (2026-09-07) resources
+          <code>logIngestionCapAlert</code> <code>MMCA.ADC/infra/main.bicep:654</code> (query <code>:670</code>), <code>sqlServerAuditing</code>
+          <code>:888</code>, <code>sqlAuditDiagnostics</code> <code>:913</code>, <code>serviceBusDiagnostics</code> <code>:1186</code>, <code>avatarBlobDiagnostics</code>
+          <code>:1290</code>, <code>keyVaultDiagnostics</code> <code>:1529</code> (the Store resources the Revision (2026-10-06) lists are
+          unchanged). The Revision (2026-10-06) closing statement that every live anchor was re-verified
+          held for that date; this item supersedes it for the outbox and ADC bicep anchors.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -853,6 +918,7 @@
             <li><a href="#revision-2026-09-19-the-ai-meter-is-subscribed">Revision (2026-09-19): the AI meter is subscribed</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             </ul>
           </nav>
         </aside>

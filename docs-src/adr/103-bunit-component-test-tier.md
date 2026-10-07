@@ -8,7 +8,8 @@ package count). See Revision (2026-09-19) at the end. Revised 2026-10-01 (the ba
 real authorization service, so a component test can assert a role denial; see Revision below).
 Revised 2026-10-06: the helper's call-site count refreshed and two omitted registrations recorded (the
 base's `ViewerTimeZone` default and the ADC Conference subclass's inert event lookup). See Revision
-(2026-10-06) at the end.
+(2026-10-06) at the end. Revised 2026-10-07: anchors refreshed after the v1.233.0 release. See Revision
+(2026-10-07) at the end.
 
 ## Context
 Three test tiers in this workspace are decided in writing and one is not. ADR-015 gates **structure**
@@ -46,7 +47,7 @@ fixes every choice above once, in one file.
   symbols, so a move off that line changes this file and no other
   (`BunitComponentTestBase.cs:30-35`). The line is pinned at `bunit` 2.11.3 in each repo's central
   package file (`MMCA.Common/Directory.Packages.props:234-235`,
-  `MMCA.ADC/Directory.Packages.props:32`, `MMCA.Store/Directory.Packages.props:58`), and the
+  `MMCA.ADC/Directory.Packages.props:32`, `MMCA.Store/Directory.Packages.props:54`), and the
   package carries a direct `AngleSharp` pin because central package management does not pin
   transitives (`MMCA.Common.Testing.UI.csproj:15-17`).
 - **MudBlazor services plus the ADR-067 facades, registered once.** The constructor calls
@@ -179,7 +180,7 @@ architecture), so the tier is adopted in three of the four repos with a Blazor U
   (`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/MMCA.ADC.Conference.UI.Tests.csproj:10`),
   so each repo's central package file names the number
   (`MMCA.Common/Directory.Packages.props:235`, `MMCA.ADC/Directory.Packages.props:32`,
-  `MMCA.Store/Directory.Packages.props:58`) and three files have to agree. The `AngleSharp` advisory
+  `MMCA.Store/Directory.Packages.props:54`) and three files have to agree. The `AngleSharp` advisory
   pin does not spread that way: it is named once, in `MMCA.Common/Directory.Packages.props:240`, and
   reaches consumers transitively through the package's own direct reference
   (`MMCA.Common.Testing.UI.csproj:17`).
@@ -272,3 +273,11 @@ Citation anchors in the current-state sections were re-verified against current 
 (`BunitComponentTestBase.cs`, `MMCA.Common.Testing.UI.csproj`, `DependencyInjection.cs:159,227-230`,
 `MMCA.Common/Directory.Packages.props:234-235,240`, `MMCA.Common.UI.Tests.csproj:27`, the ADC
 Conference subclass at `BunitTestBase.cs:24-68`).
+
+## Revision (2026-10-07)
+**The decision and the mechanism are unchanged.** Re-verified against current source: `bunit` is
+still pinned at 2.11.3 in all three central package files, and the `AngleSharp` pin is still named
+only in MMCA.Common's. Only the MMCA.Store anchor for the `bunit` pin moved.
+1. Anchors re-verified against current source: `MMCA.Store/Directory.Packages.props:54` (was `:58`,
+   in the Decision bullet and the per-repo pin trade-off), `MMCA.Common/Directory.Packages.props:234-235,240`
+   and `MMCA.ADC/Directory.Packages.props:32` (unchanged).

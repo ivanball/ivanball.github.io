@@ -5,7 +5,7 @@ Accepted (2026-10-01). Shipped in MMCA.Common v1.218.0 (`MMCA.Common/CHANGELOG.m
 2026-10-06: the release status now records v1.218.0 as shipped. Refines [ADR-018](018-polyglot-persistence.md) (engine as
 a routing decision) and [ADR-113](113-postgresql-as-a-first-class-engine.md) (the fourth engine)
 without changing [ADR-006](006-database-per-service.md) (one sealed context class per engine, one
-instance per database).
+instance per database). Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 
 ## Context
 MMCA.Common persists through four engines named by one shipped public enum, `DataSource`
@@ -74,11 +74,11 @@ registry keyed by the shipped enum. Call sites read engine facts; they no longer
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:61`).
   The resolver orders substitution by `SubstitutionPriority`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/DataSourceResolver.cs:36`)
-  and reads migration policy and connection strings through the engine (`:393`, `:450`, `:470`,
-  `:500`, `:503`); `PhysicalDataSource.UsesMigrations` switches on `Migrations`
+  and reads migration policy and connection strings through the engine (`:394`, `:451`, `:471`,
+  `:501`, `:504`); `PhysicalDataSource.UsesMigrations` switches on `Migrations`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/PhysicalDataSource.cs:42`);
   the row-version mapping and stamp read `RowVersion`
-  (`ApplicationDbContext.cs:591`,
+  (`ApplicationDbContext.cs:592`,
   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/AuditSaveChangesInterceptor.cs:67`);
   include support reads `IsRelational`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/DataSourceService.cs:32`);
@@ -90,9 +90,9 @@ registry keyed by the shipped enum. Call sites read engine facts; they no longer
   `SQLServer` (`DataSourceResolver.cs:23`).
 - **Outbox support is the engine's relational flag.** `ApplicationDbContext.SupportsOutbox` is gone;
   the outbox routing decision reads `context.Engine.Capabilities.IsRelational`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/InProcessEventBus.cs:81`,
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/InProcessEventBus.cs:82`,
   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/BrokerEventBus.cs:70`,
-  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:236`).
+  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:257`).
 - **Explicit-key insert is engine-neutral at the API.** `IUnitOfWork.RequestIdentityInsert` is renamed
   `RequestExplicitKeyInsert`, with no alias
   (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IUnitOfWork.cs:45`,
@@ -125,7 +125,7 @@ registry keyed by the shipped enum. Call sites read engine facts; they no longer
   and `DataSourceEntrySettings` still carry one named property per engine (for example
   `ConnectionStringSettings.cs:18`, `:28`, `:40`, `:43`;
   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/DataSourceEntrySettings.cs:22`,
-  `:28`, `:38`, `:56`), and each engine reads its own (`SQLServerDataSourceEngine.cs:52-70`). A fifth
+  `:28`, `:40`, `:58`), and each engine reads its own (`SQLServerDataSourceEngine.cs:52-70`). A fifth
   engine adds one property per settings class.
 
 A source-scanning fitness test keeps new branches out:
@@ -221,6 +221,20 @@ cannot go stale. Its failure message names this record.
 - **Anchors.** Re-verified against current source; the audit row-version read moved to
   `AuditSaveChangesInterceptor.cs:67`, the factory's dialect use to `DbContextFactory.cs:293` and
   `RequestExplicitKeyInsert` to `DbContextFactory.cs:322`, behavior unchanged.
+
+## Revision (2026-10-07)
+Re-verified against current source. The decision, the engine contract, the capabilities table and
+the call sites that read engine facts are unchanged; only line anchors moved.
+
+1. Anchors re-verified against current source: the v1.218.0 release heading is
+   `MMCA.Common/CHANGELOG.md:304` (the `:279` cited in the Status block and the 2026-10-06 revision
+   falls inside the 1.219.0 section); the resolver reads migration policy and connection strings at
+   `DataSourceResolver.cs:394`, `:451`, `:471`, `:501`, `:504`; the row-version mapping reads
+   `RowVersion` at `ApplicationDbContext.cs:592`; the outbox routing reads `IsRelational` at
+   `InProcessEventBus.cs:82` and `DomainEventSaveChangesInterceptor.cs:257` (`BrokerEventBus.cs:70`
+   unchanged); and the `DataSourceEntrySettings` connection-string properties sit at
+   `DataSourceEntrySettings.cs:22` (Cosmos), `:28` (PostgreSQL), `:40` (SQLite) and `:58`
+   (SQL Server).
 
 ## Related
 [ADR-006](006-database-per-service.md) (one sealed context per engine),

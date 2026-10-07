@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -254,6 +255,7 @@
           <p>Revised 2026-10-07: the consumer AppHost smoke projects (ADC and Store) and their CI job are removed,
           so the consumer passages are restated as history, and MMCA.Common&#39;s <code>apphost-testing</code> tier is now
           blocking and remains where the base is exercised (see Revision below).</p>
+          <p>Revised 2026-10-07: anchors refreshed after the v1.233.0 release.</p>
           <h2 id="context">Context</h2>
           <p>The AppHost is the only file that states how a whole stack fits together: which project resources
           exist, which database each one owns, which broker they share, where JWKS discovery points, and the
@@ -342,7 +344,7 @@
           machine-level act a test fixture has no business performing silently; a CI job that needs one runs
           <code>dotnet dev-certs https --trust</code> as an explicit step. The framework&#39;s own <code>apphost-testing</code> job
           needs none, because its sample AppHost serves cleartext only, and its header says a consumer stack
-          with an https launch profile adds that step (<code>MMCA.Common/.github/workflows/ci.yml:905</code>, <code>:914-917</code>).</p>
+          with an https launch profile adds that step (<code>MMCA.Common/.github/workflows/ci.yml:905</code>, <code>:918-921</code>).</p>
           </li>
           <li><p><strong>The RS256 keypair is minted when the environment has none.</strong> <code>EphemeralRsaKeyPair.Create()</code>
           (<code>.../Preconditions/EphemeralRsaKeyPair.cs:42</code>) generates an RSA-2048 pair and the fixture pushes
@@ -525,10 +527,14 @@
           run (<code>MMCA.ADC/AGENTS.md:77</code>, <code>MMCA.Store/AGENTS.md:76</code>).</li>
           <li>MMCA.Common&#39;s <code>apphost-testing</code> tier is blocking (no <code>continue-on-error</code>) and is where the base is
           exercised; it is not a required merge check (<code>MMCA.Common/.github/workflows/ci.yml:905</code>, <code>:910-911</code>).
-          Its <code>dotnet dev-certs</code> step is removed, because the sample serves cleartext only (<code>:914-917</code>), so
+          Its <code>dotnet dev-certs</code> step is removed, because the sample serves cleartext only (<code>:918-921</code>), so
           decision 4 no longer cites one.</li>
           <li>Decision 9 now cites the framework sample test and the package documentation instead of the deleted
           consumer tests. The decision itself is unchanged.</li>
+          <li>Anchors re-verified against current source: the job&#39;s cleartext, no-dev-certificate header and its
+          note that a consumer stack with an https launch profile adds a <code>dotnet dev-certs https --trust</code>
+          step sit at <code>MMCA.Common/.github/workflows/ci.yml:918-921</code> (decision 4 and the item above), while
+          the job name (<code>:905</code>) and the BLOCKING, not-a-required-check comment (<code>:910-911</code>) are unchanged.</li>
           </ul>
           <h2 id="related">Related</h2>
           <p><a href="098-aspire-orchestration-not-testing-or-dashboards.html">ADR-098</a> (the orchestration posture this tier

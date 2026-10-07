@@ -11,6 +11,7 @@ Revised 2026-09-09: PostgreSQL is a fourth engine
 SQL Server / Cosmos / SQLite / PostgreSQL; the one-instance-per-database rule below is unchanged.
 Revised 2026-10-06: the `AtlDevCon` bacpac was deleted on 2026-10-03, so no pre-cutover rollback
 copy exists; the four live `ADC_*` databases rely on their own PITR plus LTR.
+Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 
 ## Context
 When the modules were first extracted into independently-deployable services, all services in an
@@ -43,7 +44,7 @@ Adopt **database-per-service**: each service owns its own physical database with
   longer declares it. That bacpac was itself deleted permanently on 2026-10-03 (blob soft delete and
   versioning were off), so there is no restore path to the pre-cutover `AtlDevCon` data; its contents
   had already been copied into the per-service databases at cutover, and those four databases keep
-  their own PITR plus LTR (`MMCA.ADC/infra/main.bicep:921`, `MMCA.ADC/infra/main.bicep:966`,
+  their own PITR plus LTR (`MMCA.ADC/infra/main.bicep:937`, `MMCA.ADC/infra/main.bicep:982`,
   `MMCA.ADC/infra/POST-CUTOVER-atldevcon-downgrade.md:103`, `MMCA.ADC/infra/DISASTER-RECOVERY.md:27`).
 - **Per-source outbox.** Each database has its own `OutboxMessages`; the `OutboxProcessor` drains
   only the sources its host owns, so no service ever sees another's rows.
@@ -75,3 +76,14 @@ Adopt **database-per-service**: each service owns its own physical database with
   LTR policy at `MMCA.ADC/infra/main.bicep:966`, `MMCA.ADC/infra/POST-CUTOVER-atldevcon-downgrade.md:103`). The 2026-09-03 Status note is kept as
   recorded on that date.
 - Anchors re-verified against current source.
+
+## Revision (2026-10-07)
+Re-verified against current source. The decision is unchanged: four per-service `ADC_*` databases,
+no `AtlDevCon` database or bacpac, and PITR plus LTR as the only restore path. Only the
+`infra/main.bicep` anchors moved; the 2026-10-06 revision above keeps the anchors it recorded.
+
+1. Anchors re-verified against current source: the `AtlDevCon` archived-and-dropped note with the
+   2026-10-03 bacpac deletion at `MMCA.ADC/infra/main.bicep:937` (was `:921`), the
+   `serviceDatabaseLtr` policy (weekly `P4W`, monthly `P12M`, yearly `P1Y`) at
+   `MMCA.ADC/infra/main.bicep:982` (was `:966`); `MMCA.ADC/infra/POST-CUTOVER-atldevcon-downgrade.md:103`
+   and `MMCA.ADC/infra/DISASTER-RECOVERY.md:27` are unchanged.

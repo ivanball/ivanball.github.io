@@ -4,7 +4,7 @@
 Accepted (2026-09-12). Extends [ADR-045](045-managed-file-storage-and-avatars.md) from images to
 documents: the framework gains a document content sniffer, a blob-name sanitizer and stored response
 headers, and ADC gains a `SessionAsset` aggregate that uses them. ADR-045's avatar-only scope
-statement ("no other managed uploads exist") is superseded by this record. Revised 2026-10-01 (the upload-options overload is abstract and the template enables on-upload malware scanning by default; see Revision below). Revised 2026-10-06: all three delete paths schedule blob removal inside the delete's transaction, so there is no post-commit tail.
+statement ("no other managed uploads exist") is superseded by this record. Revised 2026-10-01 (the upload-options overload is abstract and the template enables on-upload malware scanning by default; see Revision below). Revised 2026-10-06: all three delete paths schedule blob removal inside the delete's transaction, so there is no post-commit tail. Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 
 ## Context
 A speaker finishes a talk and forty people want the deck. Until now ADC's only answer was
@@ -122,10 +122,10 @@ safe precisely because a blob name carries a fresh asset id and therefore never 
 
 **5. Storage reuses ADR-045 with its own container, and downloads go straight to the blob.** The
 Conference service registers the same `AddAzureBlobFileStorage`
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:357`) against a new **public-read
-`session-assets` container** on the existing storage account (`MMCA.ADC/infra/main.bicep:1308-1314`,
-container name injected at `:1995`); the account-scoped data-plane grant already covers it, so no
-second role assignment (`:1341-1349`, comment at `:1334-1336`). The blob name is
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:359`) against a new **public-read
+`session-assets` container** on the existing storage account (`MMCA.ADC/infra/main.bicep:1328-1334`,
+container name injected at `:2029`); the account-scoped data-plane grant already covers it, so no
+second role assignment (`:1362-1370`, comment at `:1355-1357`). The blob name is
 `{eventId}/{sessionId}/{assetId}/{sanitized-file-name}`
 (`UploadSessionAssetHandler.cs:90-94`), which is what makes a public container acceptable: the GUID
 segment is unguessable, so holding one asset URL reveals nothing about any other. Attendees download
@@ -134,9 +134,9 @@ Where storage is not configured, the null default stands and an upload fails wit
 `SessionAsset.StorageNotConfigured` while links keep working (`:56-62`), which is the local-dev
 posture. Optional on-upload malware scanning (Microsoft Defender for Storage) is available behind the
 bicep parameter `enableSessionAssetMalwareScanning`, **defaulting to true**
-(`MMCA.ADC/infra/main.bicep:136`, resource at `:1361-1377`): the deploy identity's Contributor role covers
-the settings write (comment at `:1351-1360`), and the per-GB scanning cost is bounded by a
-50 GB monthly cap (`:1369`). Production diverges from the template: an `az rest` read of the
+(`MMCA.ADC/infra/main.bicep:136`, resource at `:1382-1398`): the deploy identity's Contributor role covers
+the settings write (comment at `:1372-1381`), and the per-GB scanning cost is bounded by a
+50 GB monthly cap (`:1390`). Production diverges from the template: an `az rest` read of the
 account's `defenderForStorageSettings/current` on 2026-10-01 returned Defender for Storage enabled
 but `malwareScanning.onUpload.isEnabled=false` (`capGBPerMonth=-1`). It is defence in depth behind the content gate, not the primary
 control.
@@ -304,6 +304,21 @@ current line numbers.
 - Every live-section anchor was re-verified against current source this pass (permissions,
   Conference service registration, bicep container, grant and scanning resource, Gateway body-size
   raise, delete handlers).
+
+## Revision (2026-10-07)
+Re-verified against current source. The decision, the six parts, the limits and the trade-offs are
+unchanged, and the template still enables on-upload scanning with the 50 GB cap while the recorded
+production read (2026-10-01) is not re-checked here; only line numbers moved, and the 2026-10-06
+statement that every live-section anchor had been re-verified no longer holds for the anchors below.
+
+1. Anchors re-verified against current source: the Conference service registration
+   `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:359`; the public-read container
+   `MMCA.ADC/infra/main.bicep:1328-1334` (name `:1330`, `publicAccess: 'Blob'` `:1332`), its
+   container name injected at `:2029`; the account-scoped grant `:1362-1370` with its coverage
+   comment at `:1355-1357`; the scanning resource `:1382-1398` (cap `:1390`, Contributor comment
+   `:1372-1381`); the v1.210.0 breaking change at `MMCA.Common/CHANGELOG.md:697-698` (release
+   heading `:635`); and the public download list at `PublicSessionDetail.razor:121`, after the
+   `ResourceLinks` row at `:111-113`.
 
 ## Related
 [ADR-045](045-managed-file-storage-and-avatars.md) (the storage abstraction, the image path this

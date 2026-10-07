@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -267,7 +268,8 @@
           entity registry is built lazily) and citations refreshed.
           Revised 2026-10-06: per-engine behavior now lives in an internal engine registry
           (<code>DataSourceEngines</code>), and Cosmos&#39;s missing outbox follows from its non-relational capability rather
-          than a <code>SupportsOutbox</code> member.</p>
+          than a <code>SupportsOutbox</code> member.
+          Revised 2026-10-07: anchors refreshed after the v1.233.0 release.</p>
           <h2 id="context">Context</h2>
           <p>ADR-006 (database-per-service) splits storage along the <strong>Name</strong> axis: several physically separate
           databases, all on the same engine (SQL Server), one per service. A second, orthogonal axis is the
@@ -323,21 +325,21 @@
           <li><strong>Configuration drives routing.</strong> <code>DataSourceResolver</code> builds a per-engine logical-to-physical map
           from the engine-specific connection strings (<code>SQLServerConnectionString</code> /
           <code>PostgreSQLConnectionString</code> / <code>CosmosConnectionString</code> / <code>SqliteConnectionString</code>, each read by
-          its engine: <code>DataSourceResolver.cs:499-500</code> for the top-level section and <code>:502-503</code> for a named
+          its engine: <code>DataSourceResolver.cs:500-501</code> for the top-level section and <code>:503-504</code> for a named
           entry delegate to the registry, for example <code>SQLServerDataSourceEngine.cs:52-63</code>,
           plus <code>CosmosDatabaseName</code> and a migrations assembly for the
           two server engines, <code>SQLServerMigrationsAssembly</code> and <code>PostgreSQLMigrationsAssembly</code>, which SQLite
-          and Cosmos leave empty at the top level (<code>DataSourceResolver.cs:254</code>, <code>:286-287</code>;
+          and Cosmos leave empty at the top level (<code>DataSourceResolver.cs:255</code>, <code>:287-288</code>;
           <code>SqliteDataSourceEngine.cs:74</code>, <code>CosmosDataSourceEngine.cs:73</code>) and which a named entry can override per source
-          (<code>DataSourceEntrySettings.cs:35</code>, <code>:62</code>); a named entry also carries a <code>SqliteMigrationsAssembly</code>
-          (<code>DataSourceEntrySettings.cs:53</code>, read at <code>DataSourceResolver.cs:428</code>)), read from either
+          (<code>DataSourceEntrySettings.cs:37</code>, <code>:64</code>); a named entry also carries a <code>SqliteMigrationsAssembly</code>
+          (<code>DataSourceEntrySettings.cs:55</code>, read by its engine at <code>SqliteDataSourceEngine.cs:77-80</code>)), read from either
           configuration shape: the top-level <code>ConnectionStrings</code> section, or a named entry under <code>DataSources</code>.
           Either shape supplies an engine&#39;s <code>Default</code> source on its own. The top-level value is the first
           answer; where it names nothing for that engine and the named entries declare exactly one distinct
           database on it, that database is the host&#39;s single database and becomes <code>Default</code>, which is what lets
           a host declare its databases only under <code>DataSources</code> and still route the framework-owned tables
           (outbox, inbox, scheduled jobs, audit trail) that resolve to the <code>Default</code> name
-          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/DataSourceResolver.cs:218-276</code>).
+          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/DataSourceResolver.cs:219-277</code>).
           Several distinct databases with no top-level value leave <code>Default</code> empty, since there is no single
           answer: a genuinely multi-database host names the one it wants shared by adding a
           <code>DataSources:Default</code> entry. Logical names with no entry for an engine collapse onto that engine&#39;s
@@ -361,7 +363,8 @@
           (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/CosmosDbContext.cs:123-127</code>, <code>:139-143</code>),
           so its events dispatch in-process only: the save interceptor writes outbox rows only for a relational
           engine
-          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:236</code>),
+          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:257</code>,
+          the synchronous save path at <code>:141</code>),
           and <code>BrokerEventBus</code> throws when the outbox target is not relational
           (<code>Source/Core/MMCA.Common.Infrastructure/Messaging/BrokerEventBus.cs:70-77</code>).</li>
           <li><strong>The host surface reads the same two shapes.</strong> The Aspire AppHost helpers
@@ -503,6 +506,31 @@
           message is at <code>:505</code>.</li>
           <li>Anchors in the live sections were re-verified against current source.</li>
           </ul>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. No decision changed: the engine registry, the default-seed rule,
+          the per-entry migrations assemblies, the relational-only outbox and the 2026-08-29 substitution rule
+          all behave as described. Only line anchors moved, including several the 2026-10-06 pass reported as
+          re-verified when they were not.</p>
+          <ol>
+          <li>Decision item 4 now cites the engine that reads a named entry&#39;s <code>SqliteMigrationsAssembly</code>
+          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/Engines/SqliteDataSourceEngine.cs:77-80</code>):
+          the resolver never names that property and reaches it through
+          <code>GetMigrationsAssembly</code> (<code>DataSourceResolver.cs:429</code>, <code>:458-459</code>).</li>
+          <li>Decision item 6 now also cites the synchronous save path&#39;s relational gate
+          (<code>DomainEventSaveChangesInterceptor.cs:141</code>) next to the outbox-write gate (<code>:257</code>).</li>
+          <li>The 2026-08-29 substitution behavior sits at these current locations: the preference order from
+          each engine&#39;s <code>SubstitutionPriority</code> (<code>DataSourceResolver.cs:35-36</code>; SQL Server 0 at
+          <code>SQLServerDataSourceEngine.cs:29</code>, PostgreSQL 1 at <code>PostgreSQLDataSourceEngine.cs:27</code>, SQLite 2
+          at <code>SqliteDataSourceEngine.cs:26</code>, Cosmos 3 at <code>CosmosDataSourceEngine.cs:28</code>), the per-engine
+          map loop (<code>DataSourceResolver.cs:75-78</code>), the configured engines (<code>:80</code>, predicate <code>:175-180</code>),
+          the pick (<code>:81</code> through <code>:165-169</code>), the substitution call and body (<code>:97</code>, <code>:128-129</code>), the
+          no-database case that substitutes nothing (<code>:47-52</code>, <code>:165-169</code>, <code>:129</code>), and the startup message
+          (<code>:506</code>).</li>
+          <li>Anchors re-verified against current source: <code>DataSourceResolver.cs:500-501</code> and <code>:503-504</code>
+          (connection-string reads), <code>:219-277</code> (default seed), <code>:255</code> and <code>:287-288</code> (top-level migrations
+          assembly), <code>DataSourceEntrySettings.cs:37</code>, <code>:55</code>, <code>:64</code> (per-entry migrations assemblies), and
+          <code>DomainEventSaveChangesInterceptor.cs:257</code> (relational outbox gate).</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -522,6 +550,7 @@
             <li><a href="#revision-2026-08-29-engine-substitution-for-a-single-engine-host">Revision (2026-08-29): engine substitution for a single-engine host</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             </ul>
           </nav>
         </aside>

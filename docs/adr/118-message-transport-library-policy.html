@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -249,14 +250,15 @@
           Service Bus emulator smoke is restated as authoritative rather than advisory; the external v9 and
           support-horizon dates gain the hedge ADR-016 already carries; and the unreconciled overlap with
           ADR-016&#39;s still-live <strong>Transport exit options</strong> section is recorded under <strong>Related</strong>. The pin, the
-          decision and the replacement order are unchanged.</p>
+          decision and the replacement order are unchanged. Revised 2026-10-07: anchors refreshed after the
+          v1.233.0 release.</p>
           <h2 id="context">Context</h2>
           <p>MassTransit is the only message-broker library in this workspace, and it is pinned to 8.5.11 across
           all three of its packages (<code>MMCA.Common/Directory.Packages.props:124-126</code>, the pin comment at
           <code>:119-123</code>). Two consumers declare a
           <code>MassTransit.Azure.ServiceBus.Core</code> entry of their own at the same 8.5.11 patch for their Service Bus
           emulator test tier (<code>MMCA.ADC/Directory.Packages.props:65</code>,
-          <code>MMCA.Store/Directory.Packages.props:93</code>), so the workspace carries five pinned MassTransit entries,
+          <code>MMCA.Store/Directory.Packages.props:89</code>), so the workspace carries five pinned MassTransit entries,
           not three. The pin is a policy
           rather than a lag: v9 was announced in April 2025 and shipped in January 2026 as a commercial,
           source-available product with a runtime licence key (those two dates are the vendor&#39;s own public
@@ -295,9 +297,9 @@
           is the broker&#39;s.</li>
           <li><strong>The publish and consume leg is the only part MassTransit owns.</strong> <code>OutboxProcessor</code> resolves
           <code>IMessageBus</code> from the per-row scope
-          (<code>.../Persistence/Outbox/Processing/OutboxProcessor.cs:542</code>) and publishes every integration event
-          through it (<code>PublishAsync</code> at <code>:550</code>), and only the broker hop is wrapped in the circuit breaker
-          (<code>:548-552</code>, the comment saying so at <code>:544-547</code>)
+          (<code>.../Persistence/Outbox/Processing/OutboxProcessor.cs:680</code>) and publishes every integration event
+          through it (<code>PublishAsync</code> at <code>:687</code>), and only the broker hop is wrapped in the circuit breaker
+          (<code>:685-689</code>, the comment saying so at <code>:682-684</code>)
           (<a href="087-broker-poison-message-handling.html">ADR-087</a>).</li>
           </ul>
           <p>The abstractions that stand between application code and the library are already in place and are
@@ -386,8 +388,8 @@
           runs first. That job is authoritative rather than advisory: it has carried no <code>continue-on-error</code>
           since 2026-08-31 (TD-17), and <code>deploy.yml</code>&#39;s cross-service-freshness gate requires it to have
           concluded success alongside the <code>cross-service</code> job in the same qualifying nightly
-          (<code>MMCA.ADC/.github/workflows/cross-service-tests.yml:159</code>, the gating rationale at <code>:132-143</code>;
-          the gate&#39;s <code>required-jobs</code> at <code>MMCA.ADC/.github/workflows/deploy.yml:970-972</code>), so
+          (<code>MMCA.ADC/.github/workflows/cross-service-tests.yml:142</code>, the gating rationale at <code>:116-126</code>;
+          the gate&#39;s <code>required-jobs</code> at <code>MMCA.ADC/.github/workflows/deploy.yml:885-887</code>), so
           a candidate arm that regresses Service Bus topology or the AMQP round-trip blocks the next deploy.</p>
           </li>
           </ol>
@@ -449,6 +451,23 @@
           and Decision were re-verified against current source (the <code>OutboxMessage</code> columns, the
           <code>OutboxProcessor</code> publish leg and breaker, the transport switch arms, and ADC <code>deploy.yml</code>&#39;s
           <code>required-jobs</code>).</p>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. No decision, trigger, replacement order or rationale changed,
+          and no fact changed: all five MassTransit entries are still at 8.5.11 and the Service Bus emulator
+          smoke is still authoritative and deploy-gated. Four groups of anchors in Context and Decision moved
+          after the 2026-10-06 revision and are re-pointed in place.</p>
+          <ol>
+          <li>Anchors re-verified against current source: the Store <code>MassTransit.Azure.ServiceBus.Core</code> entry
+          <code>MMCA.Store/Directory.Packages.props:89</code> (still 8.5.11; the ADC entry stays at
+          <code>MMCA.ADC/Directory.Packages.props:65</code>); the <code>OutboxProcessor</code> publish leg inside <code>DeliverAsync</code>,
+          with <code>IMessageBus</code> resolved at <code>OutboxProcessor.cs:680</code>, the breaker call at <code>:685-689</code>,
+          <code>PublishAsync</code> at <code>:687</code> and the only-the-broker-hop comment at <code>:682-684</code>; the ADC
+          <code>servicebus-emulator-smoke</code> job at <code>MMCA.ADC/.github/workflows/cross-service-tests.yml:142</code> with
+          its AUTHORITATIVE SINCE 2026-08-31 (TD-17) rationale at <code>:116-126</code> (<code>continue-on-error</code> appears
+          there only in comments, never as a key); and the <code>cross-service-freshness</code> gate&#39;s <code>required-jobs</code>
+          at <code>MMCA.ADC/.github/workflows/deploy.yml:885-887</code> (<code>required-jobs-mode: same-run</code> at <code>:888</code>).
+          The Store anchor inside the 2026-10-01 revision is left as written.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a> (the lockstep release policy this pin is
           enforced under; its 2026-08-28 amendment first sketched exit options, and this record owns the
@@ -483,6 +502,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

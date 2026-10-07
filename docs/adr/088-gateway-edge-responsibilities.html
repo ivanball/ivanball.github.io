@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -280,7 +281,8 @@
           citations in the load-balancing delegation and the adoption trade-off are refreshed against current
           line numbers. Nothing in the decision changes.</p>
           <p><strong>Revised 2026-10-01:</strong> both consumers now turn active destination probing off; see the Revision (2026-10-01) below.</p>
-          <p>Revised 2026-10-06: the edge correlation middleware now sanitizes a caller-supplied id, the gateway config filters are recorded as fixed for the process lifetime, and the citations are refreshed; see the Revision (2026-10-06) below.</p>
+          <p>Revised 2026-10-06: the edge correlation middleware now sanitizes a caller-supplied id, the gateway config filters are recorded as fixed for the process lifetime, and the citations are refreshed; see the Revision (2026-10-06) below.
+          Revised 2026-10-07: anchors refreshed after the v1.233.0 release; see the Revision (2026-10-07) below.</p>
           <h2 id="context">Context</h2>
           <p><a href="008-service-extraction-topology.html">ADR-008</a> made the Gateway the only client entry point and gave it
           three jobs: the route-to-service map, CORS, and forwarding the caller&#39;s <code>Authorization</code> header. Nothing
@@ -455,7 +457,7 @@
           A configured secret shorter than 32 characters fails at registration
           (<code>GatewayRateLimitingSettings.cs:153</code>). The secret is deployment data on both sides of the boundary:
           each consumer injects <code>GatewayRateLimiting__TrustedCallerSecret</code> into gateway and UI container alike
-          from Key Vault (<code>MMCA.ADC/infra/main.bicep:2444</code> and <code>:2602</code>, <code>MMCA.Store/infra/main.bicep:1958-1959</code> and
+          from Key Vault (<code>MMCA.ADC/infra/main.bicep:2491</code> and <code>:2650</code>, <code>MMCA.Store/infra/main.bicep:1958-1959</code> and
           <code>:2084</code>), and the client half is framework code, <code>AddTrustedCallerHeader</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:121</code>, attaching
           <code>TrustedCallerHandler</code>, <code>Security/TrustedCallerHandler.cs:35</code>, at <code>:156</code>). It exempts a component you
@@ -579,7 +581,7 @@
           <code>:288-292</code>, <code>:293-297</code>) and Store three (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:146-154</code>,
           <code>:155-163</code>, <code>:164-168</code>), resolved through <code>AddServiceDiscoveryDestinationResolver</code>
           (ADC <code>Program.cs:151</code>, Store <code>Program.cs:141</code>) against the bicep address book
-          (<code>MMCA.ADC/infra/main.bicep:2421-2424</code>). The shape is not incidental: both repositories <strong>pin it as
+          (<code>MMCA.ADC/infra/main.bicep:2468-2471</code>). The shape is not incidental: both repositories <strong>pin it as
           an invariant</strong>, asserting that each cluster contains a single destination
           (<code>MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/RouteMapTests.cs:251-253</code>,
           <code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/RouteMapTests.cs:315-317</code>). A second destination in
@@ -1029,6 +1031,39 @@
           <li>Every <code>path:line</code> anchor in the Status, Context, Decision and Trade-offs sections was re-verified
           against current source and refreshed (the <code>MMCA.Common.Gateway</code> pin is 1.232.0 in both consumers).</li>
           </ul>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. Nothing in the decision changes: the edge responsibilities, the
+          three declines, the delegations, the four bypass tiers and ADC&#39;s no-fallback authorization all hold
+          as recorded. Only the version pin and line anchors moved with the v1.233.0 release.</p>
+          <ol>
+          <li><strong>The <code>MMCA.Common.Gateway</code> pin is 1.233.0 in both consumers</strong>
+          (<code>MMCA.ADC/Directory.Packages.props:121</code>, <code>MMCA.Store/Directory.Packages.props:14</code>), still in
+          lockstep with the rest of the framework. This supersedes the ADC <code>:125</code> anchor in the 2026-08-27
+          and 2026-09-19 Status sentences and the 1.232.0 figure there and in the 2026-10-06 revision,
+          which stay as written. The 2026-10-06 statement that every Status, Context, Decision and
+          Trade-offs anchor was current no longer held at this audit; the Decision anchors are refreshed
+          below, and the Status pin anchor is superseded here.</li>
+          <li>Anchors re-verified against current source:<ul>
+          <li>ADC injects <code>GatewayRateLimiting__TrustedCallerSecret</code> into the gateway at
+          <code>MMCA.ADC/infra/main.bicep:2491</code> and the UI at <code>:2650</code> (Decision refreshed); the Store anchors
+          <code>MMCA.Store/infra/main.bicep:1958-1959</code> and <code>:2084</code> are unchanged.</li>
+          <li>ADC&#39;s service-discovery address book is <code>MMCA.ADC/infra/main.bicep:2468-2471</code> (Decision
+          refreshed).</li>
+          <li>The ADC UI host calls the kit at <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:72</code>
+          (<code>RetentionFrom</code>), <code>:82</code> (<code>AddBoundedBlazorCircuits</code>), <code>:148</code> (<code>AddUiRateLimiting</code>) and <code>:221</code>
+          (<code>UseUiRateLimiting</code>), superseding the ADC anchors in the 2026-10-06 revision. The Store anchors
+          <code>:78</code>, <code>:86</code>, <code>:95</code>, <code>:229</code> hold, and the Store <code>using</code> of the kit namespace is at
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:23</code> (the 2026-09-20 revision cites <code>:24</code>).</li>
+          <li>The kit&#39;s release entry is <code>MMCA.Common/CHANGELOG.md:823</code> (<code>[1.206.0]</code>), superseding <code>:798</code> in
+          the 2026-10-06 revision.</li>
+          <li>ADC&#39;s gateway registers plain <code>AddAuthorization()</code> at
+          <code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:114</code>, with the no-fallback reasoning at
+          <code>:110-113</code>, superseding <code>:108-112</code> in the 2026-10-01 revision. The route-table comment at
+          <code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:72-77</code> still describes a registered
+          fallback, and this record still follows <code>Program.cs</code>.</li>
+          </ul>
+          </li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="008-service-extraction-topology.html">ADR-008</a> (the record that made the Gateway the only entry point
           and gave it routing, CORS and auth forwarding; this is the first record to add cross-cutting behavior
@@ -1069,6 +1104,7 @@
             <li><a href="#revision-2026-09-20">Revision (2026-09-20)</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

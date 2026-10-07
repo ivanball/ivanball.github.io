@@ -6,7 +6,8 @@ engine) and [ADR-018](018-polyglot-persistence.md) (engine as a routing decision
 engine. Revised 2026-10-01 (the Helpdesk canary and the `--database postgresql` template choice
 are shipped, the canary as an advisory template-generated job; see Revision below). Revised
 2026-10-06: engine behavior is delegated to a `PostgreSQLDataSourceEngine` in the `DataSourceEngines`
-registry rather than per-site switch arms.
+registry rather than per-site switch arms. Revised 2026-10-07: anchors refreshed after the
+v1.233.0 release.
 
 ## Context
 The framework has shipped three database engines since its first release: SQL Server, Azure Cosmos DB
@@ -70,7 +71,7 @@ and differing from it only where the server forces a difference.**
    `PhysicalDbContextFactory` delegates to its `CreateDbContext`
    (`.../DbContexts/Factory/PhysicalDbContextFactory.cs:32`, `PostgreSQLDataSourceEngine.cs:85`) and
    `ApplyConfigurationsForEntitiesInContext` reads its `EntityConfigurationInterface`
-   (`.../DbContexts/ApplicationDbContext.cs:955`, `PostgreSQLDataSourceEngine.cs:30`).
+   (`.../DbContexts/ApplicationDbContext.cs:956`, `PostgreSQLDataSourceEngine.cs:30`).
 
 3. **The mapping is the SQL Server mapping, not PostgreSQL house style.**
    `EntityTypeConfigurationPostgreSQL<TEntity, TIdentifierType>`
@@ -91,11 +92,11 @@ and differing from it only where the server forces a difference.**
    `PostgreSQLDataSourceEngine.cs:116`),
    so the automatic convention and the opt-in `HasSoftDeleteFilter` extension can never disagree.
    The outbox filters are built through one `QuoteColumn` helper
-   (`.../DbContexts/ApplicationDbContext.cs:618-619`, delegating to
-   `SoftDeleteFilterSql.QuoteColumn` at `SoftDeleteFilterSql.cs:69-70` and on to the engine) that
+   (`.../DbContexts/ApplicationDbContext.cs:619-620`, delegating to
+   `SoftDeleteFilterSql.QuoteColumn` at `SoftDeleteFilterSql.cs:70-71` and on to the engine) that
    returns the bracketed form for every engine except PostgreSQL (`PostgreSQLDataSourceEngine.cs:113`),
    so the literals SQL Server and SQLite have always produced are
-   byte-identical. `IncludeColumns` (`.../DbContexts/ApplicationDbContext.cs:644-648`) asks the
+   byte-identical. `IncludeColumns` (`.../DbContexts/ApplicationDbContext.cs:645-649`) asks the
    engine for the provider's own `IncludeProperties` overload (`PostgreSQLDataSourceEngine.cs:109`)
    for the same reason.
 
@@ -117,7 +118,7 @@ and differing from it only where the server forces a difference.**
    the SQLite rule rather than the SQL Server one. SQL Server always migrates because hosts have
    depended on that since the first release; PostgreSQL ships with no such host, so a source with
    nothing to apply is created outright by `DatabaseInitializationExtensions`
-   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:93-99`)
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:90-105`)
    instead of being migrated into an empty schema. `DesignTimeDbContextHelper.CreatePostgreSQL`
    (`.../DbContexts/Design/DesignTimeDbContextHelper.cs:74`) scaffolds the migrations when a host
    wants them.
@@ -146,7 +147,7 @@ and differing from it only where the server forces a difference.**
    `Tests/Core/MMCA.Common.Infrastructure.PostgreSQL.Tests` is a Testcontainers project outside
    `MMCA.Common.slnx` (the posture `Tests/Core/MMCA.Common.Infrastructure.Redis.Tests` established:
    Docker-gated, own CI job, kept out of the fast solution-wide unit loop), run by the
-   `postgresql-integration` CI job (`MMCA.Common/.github/workflows/ci.yml:881`). It creates the whole
+   `postgresql-integration` CI job (`MMCA.Common/.github/workflows/ci.yml:828`). It creates the whole
    schema, round-trips an auditable entity's UTC audit stamps, proves a soft-deleted row is hidden AND
    frees its unique slot, writes and drains the outbox row of a local domain event, and writes the
    outbox row of an integration event and asserts it stays pending for `OutboxProcessor`
@@ -264,6 +265,17 @@ readiness check moved to `MMCA.Common.Aspire/Extensions.Health.cs:232` and `:263
   not a new arm in every switch.
 - Anchors re-verified against current source (`ApplicationDbContext.cs:618-619` and `:644-648`,
   `IDataSourceService.cs:16-22`, `DatabaseInitializationExtensions.cs:93-99`).
+
+## Revision (2026-10-07)
+Re-verified against current source. The engine decision, its rationale and every behavior described
+above are unchanged; only line anchors moved.
+
+1. Anchors re-verified against current source: `ApplicationDbContext.cs:956`
+   (`EntityConfigurationInterface`, Decision 2), `ApplicationDbContext.cs:619-620` (`QuoteColumn`) and
+   `:645-649` (`IncludeColumns`, Decision 4), `SoftDeleteFilterSql.cs:70-71` (`QuoteColumn`; `Build`
+   stays at `:35`), `DatabaseInitializationExtensions.cs:90-105` (the migration-less loop, its
+   `UsesMigrations` skip at `:99` and `EnsureCreatedAsync` at `:104-105`, Decision 6), and the
+   `postgresql-integration` job at `MMCA.Common/.github/workflows/ci.yml:828` (Decision 9).
 
 ## Related
 [ADR-006](006-database-per-service.md) (one sealed context per engine, one instance per database),

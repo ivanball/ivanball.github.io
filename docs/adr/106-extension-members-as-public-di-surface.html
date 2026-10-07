@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 131 ADRs</summary>
+        <summary>All 132 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
           </ol>
         </nav>
       </details>
@@ -239,7 +240,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-106-c-extension-members-as-the-public-di-registration-surface">ADR-106: C# Extension Members as the Public DI Registration Surface</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-09-01; counts re-measured 2026-10-01). Revised 2026-10-06: counts re-measured against current source, and ADC&#39;s broker selection is now credited to the framework rather than to an ADC block.</p>
+          <p>Accepted (2026-09-01; counts re-measured 2026-10-01). Revised 2026-10-06: counts re-measured against current source, and ADC&#39;s broker selection is now credited to the framework rather than to an ADC block. Revised 2026-10-07: anchors refreshed after the v1.233.0 release.</p>
           <h2 id="context">Context</h2>
           <p>Every host in this workspace boots the same way: a <code>Program.cs</code> calls a short list of <code>Add*</code> methods
           on <code>IServiceCollection</code>, one per layer, and all of the framework&#39;s wiring sits behind those names.
@@ -373,9 +374,9 @@
           <code>:81</code>). For an extension member the baseline holds a container line plus a member line, and a
           separate classic static line carrying a <code>this</code> parameter. <code>AddApplication</code> appears as
           <code>MMCA.Common.Application.DependencyInjection.extension(...IServiceCollection!).AddApplication()</code>
-          (<code>Application/PublicAPI.Shipped.txt:257</code>, container at <code>:256</code>) and as
+          (<code>Application/PublicAPI.Shipped.txt:260</code>, container at <code>:259</code>) and as
           <code>static MMCA.Common.Application.DependencyInjection.AddApplication(this ...IServiceCollection! services)</code>
-          (<code>:1238</code>). Across the repo there are 290 <code>.extension</code> lines in 17 <code>PublicAPI.Shipped.txt</code> files,
+          (<code>:1241</code>). Across the repo there are 290 <code>.extension</code> lines in 17 <code>PublicAPI.Shipped.txt</code> files,
           covering 17 packages, and none in any <code>PublicAPI.Unshipped.txt</code>. Gateway&#39;s surface is shipped like
           the rest: both shapes of <code>UseCommonForwardedHeaders</code> sit in <code>Gateway/PublicAPI.Shipped.txt:12</code> and
           <code>:98</code>, and its <code>PublicAPI.Unshipped.txt</code> is a single line.</p>
@@ -421,7 +422,7 @@
           <code>public R M(...)</code> inside <code>extension(T x)</code> becomes <code>public static R M(this T x, ...)</code>, with the
           method names, parameters and return types unchanged. That is exactly the form the baselines
           already record on their <code>static ...(this ...)</code> lines
-          (<code>Application/PublicAPI.Shipped.txt:1238-1250</code>), so the public API a
+          (<code>Application/PublicAPI.Shipped.txt:1241-1253</code>), so the public API a
           consumer binds to would not move and no <code>Program.cs</code> line would change. The single exception is
           the extension property in Decision point 8, whose classic form is <code>get_IsIdValueGenerated(Type)</code>
           rather than a <code>this</code>-marked method.</p>
@@ -454,14 +455,14 @@
           <ul>
           <li><strong>A preview language feature under a floating SDK is a moving target.</strong> No <code>global.json</code> pins an
           SDK version and CI installs <code>dotnet-version: &#39;10.0.x&#39;</code> (<code>MMCA.Common/.github/workflows/ci.yml:101</code>
-          and ten more, <code>release.yml:50</code>, <code>:184</code>), so the compiler and the analyzers that interpret these
+          and ten more, <code>release.yml:50</code>, <code>:186</code>), so the compiler and the analyzers that interpret these
           blocks can change on any patch release with no repo edit. That is not hypothetical: the IDE0051
           suppressions record behavior that differs between SDK 10.0.201 and the 10.0.104 the same comment
           names (<code>Infrastructure/DependencyInjection.Messaging.cs:224</code>).</li>
           <li><strong>Method to property inside a block is a binary break, and it does not look like one.</strong> Both are
           members of the same block and the source edit is two words, but the emitted classic member changes
           from <code>Name(this T)</code> to <code>get_Name(T)</code> (<code>Domain/PublicAPI.Shipped.txt:111</code> beside <code>:293</code>, against
-          <code>Application/PublicAPI.Shipped.txt:257</code> beside <code>:1238</code>). RS0017 catches the removal at build time in
+          <code>Application/PublicAPI.Shipped.txt:260</code> beside <code>:1241</code>). RS0017 catches the removal at build time in
           MMCA.Common; a consumer that had already compiled against the old member does not get that warning.</li>
           <li><strong>Analyzers do not fully understand the shape.</strong> CA1708 is wrong on every block it flags (27
           type-level suppressions) and IDE0051 is wrong across the block boundary (nine more). Each
@@ -527,6 +528,17 @@
           <li>Every remaining line anchor in Context, Decision, Rationale and Trade-offs was re-verified against
           current source and moved where the code moved.</li>
           </ul>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <p>Re-verified against current source. No decision, rationale, count or trade-off changed: the DI surface
+          is still written as <code>extension(T)</code> blocks under <code>LangVersion preview</code> and both emitted shapes are still
+          baselined. Only line anchors moved after the v1.233.0 release.</p>
+          <ol>
+          <li>Anchors re-verified against current source: the <code>AddApplication</code> extension member is at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/PublicAPI.Shipped.txt:260</code> (container at <code>:259</code>) and
+          its classic static form at <code>:1241</code>, so the classic <code>DependencyInjection</code> block runs <code>:1241-1253</code>
+          (ending at <code>VerifyDecoratorPipeline</code>); <code>dotnet-version: &#39;10.0.x&#39;</code> in
+          <code>MMCA.Common/.github/workflows/release.yml</code> is at <code>:50</code> and <code>:186</code>.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="015-architecture-fitness-functions.html">ADR-015</a> (the RS0016/RS0017 baseline that freezes both
           emitted shapes of every extension member, and the fitness-rule tier that had to learn about
@@ -556,6 +568,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

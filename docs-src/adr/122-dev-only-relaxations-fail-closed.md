@@ -1,7 +1,7 @@
 # ADR-122: Dev-Only Relaxations Are Environment-Gated and Fail Closed
 
 ## Status
-Accepted (2026-09-11). Revised 2026-10-01: citations re-anchored. Revised 2026-10-06: the plain-check inventory adds the Development-only design-time database skip.
+Accepted (2026-09-11). Revised 2026-10-01: citations re-anchored. Revised 2026-10-06: the plain-check inventory adds the Development-only design-time database skip. Revised 2026-10-07: the inventory names the `!IsProduction()` OpenAPI and Scalar mappings as outside the rule, the UI-side null-aware pseudo-locale check, and the Serilog file sink as out of scope.
 
 ## Context
 Several capabilities are useful locally and dangerous in a deployed environment: EF Core rendering
@@ -45,9 +45,11 @@ argument, then configuration, then `!environment.IsDevelopment()`
 with a startup-warning filter registered when a non-Development host opts out (`:68-72`).
 
 **The remaining environment-conditional relaxations are plain `IsDevelopment()` checks, not
-fail-closed gates**, and this record names them as such: each reads a non-nullable environment the
-host always supplies, so there is no unknown case for them to close against. They are listed here so
-the inventory is complete, not to claim a guarantee their code does not make.
+fail-closed gates**, and this record names them as such: each server-side check reads a non-nullable
+environment the host always supplies, so there is no unknown case for them to close against (the one
+UI-side check, noted under the pseudo-locale, reads a nullable environment and treats null as not
+Development). They are listed here so the Development-gated inventory is complete, not to claim a
+guarantee their code does not make.
 
 - CORS: the pipeline selects `CorsPolicyAllowAll` in Development and `CorsPolicyAllowSpecificOrigins`
   otherwise (`.../Startup/Pipeline/MiddlewarePipelineBuilder.cs:99-101`); the allow-any policy is
@@ -64,15 +66,32 @@ the inventory is complete, not to claim a guarantee their code does not make.
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Security/BlazorCspPolicyProvider.cs:41`). See
   ADR-023.
 - Pseudo-locale: added to the supported cultures and accepted by `/culture/set` only in Development
-  (`.../Startup/WebApplicationExtensions.cs:80-82`, `:119-122`).
+  (`.../Startup/WebApplicationExtensions.cs:80-82`, `:119-122`). The culture switcher offers it in
+  the menu only when `Services.GetService<IHostEnvironment>()?.IsDevelopment() == true`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Globalization/CultureSwitcher.razor:24-27`), so
+  a WASM render, which registers no `IHostEnvironment` (`:21-22`), does not offer it; the WASM bootstrap takes the
+  decision as an explicit `allowPseudoLocale` argument from the host
+  (`.../MMCA.Common.UI/Services/Culture/MmcaCultureBootstrap.cs:41`, documented at `:31-34`).
 - Design-time database skip: database initialization returns early only when the host is
   Development and the `OpenApiDesignTimeKey` setting is true
-  (`.../Startup/DatabaseInitializationExtensions.cs:153`), so a build-time OpenAPI run does not
+  (`.../Startup/DatabaseInitializationExtensions.cs:174-177`), so a build-time OpenAPI run does not
   touch a database.
 
+Two endpoint mappings are gated on `!IsProduction()` rather than on Development, so they do not
+follow this record's rule: in a host that calls them, Staging or any environment name other than
+`Production` gets them. `MapCommonOpenApi` maps the OpenAPI document with `AllowAnonymous()`
+(`.../Startup/Endpoints/OpenApiEndpointExtensions.cs:62`, `:74`), and the ADC and Store service
+hosts call it. `MapCommonScalarUi` maps the Scalar reference UI under the same check (`:91-93`); it
+is documented as opt-in (`:81-82`) and no consumer host calls it today. Both expose API
+description, not data. ADR-046 documents the OpenAPI document's posture; no ADR covers the Scalar
+UI. They are named here so the inventory states where the rule does not apply.
+
 The Serilog minimum level (`Debug` in Development, `Information` otherwise,
-`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Logging/SerilogHostExtensions.cs:77`) is also
-environment-conditional but relaxes no security control, so it is not part of this inventory.
+`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Logging/SerilogHostExtensions.cs:77`) and the
+rolling file sink (written outside Production, `ShouldWriteFileSink` at `:87-88`, see ADR-041) are
+also environment-conditional but relax no security control, so they are not part of this inventory.
+The same holds for the error page's Development guidance block, which adds static text only
+(`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Components/Pages/Error.razor:37`).
 
 The two fail-closed gates that are pure functions are unit-tested on exactly the closing case: the
 EF gate with no environment registered is false
@@ -123,6 +142,24 @@ warning filter, now in the partial file `WebApplicationBuilderExtensions.Authent
   `Secure` flag to `SessionCookieJar.cs:64`, and HSTS to `SecurityHeaders.cs:175`; all other
   citations still hold.
 
+## Revision (2026-10-07)
+Re-verified against current source. The rule, the three fail-closed gates and the Development-gated
+plain checks are unchanged; the inventory now states where the rule does not apply and covers two
+branches it omitted.
+
+1. The two endpoint mappings gated on `!IsProduction()` rather than Development are named as
+   outside the rule: `MapCommonOpenApi` maps the document anonymously
+   (`OpenApiEndpointExtensions.cs:62`, `:74`), cross-referenced to ADR-046, and the opt-in
+   `MapCommonScalarUi` maps the Scalar UI (`:91-93`), which no consumer host calls.
+2. The pseudo-locale bullet adds the UI-side check: `CultureSwitcher.razor:24-27` reads a nullable
+   `IHostEnvironment` and offers the pseudo-locale only when it is Development, and the WASM
+   bootstrap takes an explicit `allowPseudoLocale` argument (`MmcaCultureBootstrap.cs:41`). The
+   "non-nullable environment" sentence is now scoped to the server-side checks.
+3. The out-of-scope sentence adds the Serilog file sink (`SerilogHostExtensions.cs:87-88`) beside
+   the minimum level (`:77`), and the error page's static Development guidance (`Error.razor:37`).
+4. Anchors re-verified against current source: the design-time database skip moved to
+   `DatabaseInitializationExtensions.cs:174-177`; all other citations still hold.
+
 ## Related
 [ADR-070](070-fail-fast-configuration-contract.md) (binds and validates settings at startup; this
 record governs when a validated setting may be honored),
@@ -131,4 +168,6 @@ record governs when a validated setting may be honored),
 [ADR-120](120-governed-chat-client-boundary.md) (the chat client whose prompt and completion
 telemetry the AI gate protects), [ADR-024](024-push-notifications.md) (the notification use case
 whose email channel rides the SMTP transport gated here),
-[ADR-027](027-multi-locale-i18n.md) (the pseudo-locale that is Development-only).
+[ADR-027](027-multi-locale-i18n.md) (the pseudo-locale that is Development-only),
+[ADR-046](046-http-api-versioning.md) (the OpenAPI document mapped outside Production),
+[ADR-041](041-observability-and-telemetry.md) (the Serilog level and file sink named out of scope).

@@ -3,6 +3,7 @@
 ## Status
 Accepted (2026-07-06; revised 2026-07-24, 2026-07-25, 2026-08-15, 2026-08-18). Revised 2026-08-18: the
 versioned-envelope converter is no longer unpublished, it is included in v1.153.0; adoption stays zero.
+Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 
 ## Context
 Transparent database encryption (TDE) protects the data files as a whole, but it decrypts
@@ -313,3 +314,11 @@ Anchor-only refresh; no decision, rationale or trade-off changed.
 - Every other `EncryptedStringConverter.cs` and `EncryptedStringConverterTests.cs` anchor was re-verified
   against current source and still holds; adoption is still zero (no reference to the type in Store, ADC
   or Helpdesk).
+
+## Revision (2026-10-07)
+Re-verified against current source. Anchor-only refresh; no decision, rationale, trade-off or adoption
+fact changed. The converter is still absent from the changelog and adoption is still zero.
+1. Anchors re-verified against current source: the `[1.153.0]` changelog heading cited in the three
+   revisions above now sits at `MMCA.Common/CHANGELOG.md:3344` (the section runs to the `[1.152.0]`
+   heading at `MMCA.Common/CHANGELOG.md:3426`), and `EncryptedStringConverter` still has no match
+   anywhere in the changelog. The earlier anchors are left as recorded.

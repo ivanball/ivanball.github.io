@@ -1,7 +1,7 @@
 # ADR-109: Feature-by-Folder Layout as an Enforced Convention
 
 ## Status
-Accepted (2026-09-03; folder inventory and IDE0130 exception list refreshed 2026-09-19). Revised 2026-10-01: citations re-anchored. Revised 2026-10-06: module-name consumers moved to the per-engine data-source engines, PostgreSQL added.
+Accepted (2026-09-03; folder inventory and IDE0130 exception list refreshed 2026-09-19). Revised 2026-10-01: citations re-anchored. Revised 2026-10-06: module-name consumers moved to the per-engine data-source engines, PostgreSQL added. Revised 2026-10-07: Decision 8 narrowed to the sub-folder names that actually shift the derived module, the stale exemption-prose trade-off dropped, anchors refreshed after the v1.233.0 release.
 
 ## Context
 The rubric's section 5 asks that "code is organized by feature/capability, so a change touches one
@@ -12,12 +12,12 @@ already gates the *contents* of a slice: `SliceCohesionTestsBase`
 fails a build when a handler is stranded from its command or query contract.
 
 Nothing gated the *shape of the tree* until 2026-09-02, when a folder-width fitness function and a
-repo-wide reorganization shipped together (`MMCA.Common/CHANGELOG.md:1984-1987`, `:2017-2021`). That
-reorganization, and a second pass the next day (`:1925-1931`), were both marked **Breaking**, because in
+repo-wide reorganization shipped together (`MMCA.Common/CHANGELOG.md:2009-2012`, `:2042-2046`). That
+reorganization, and a second pass the next day (`:1950-1956`), were both marked **Breaking**, because in
 this workspace namespaces follow folders: moving a file renames a namespace, and a namespace is
 public API on a package family released in lockstep (ADR-016). Two consecutive MMCA.Common
 releases (v1.183.0 and v1.184.0) were therefore layout releases, and they are what forced
-`UPGRADING.md` into existence (`MMCA.Common/CHANGELOG.md:1972-1973`).
+`UPGRADING.md` into existence (`MMCA.Common/CHANGELOG.md:1997-1998`).
 
 The convention itself is written down only in the workspace `CLAUDE.md` and in the rubric text
 above. The bill it produces (public namespace renames, a scripted consumer sweep, an UPGRADING
@@ -50,7 +50,7 @@ and a layout change ships as a breaking release with a migration map.**
    exception: beside `Persistence/`, its first level also carries aggregate names for external
    adapters, `Events/Sessionize/` and `Sessions/Scoring/`. MMCA.ADC's own `CLAUDE.md` states that
    shape as the rule for the repo, "external adapters sitting under their aggregate"
-   (`MMCA.ADC/AGENTS.md:99`, which `MMCA.ADC/CLAUDE.md` imports).
+   (`MMCA.ADC/AGENTS.md:100`, which `MMCA.ADC/CLAUDE.md` imports).
 
 3. **The aggregate carries the same plural name in every project of the module.** `Speakers` appears
    in the Conference module's Domain, Application, Shared, `UI/Pages`, `UI/Services`,
@@ -77,13 +77,13 @@ and a layout change ships as a breaking release with a migration map.**
 
 6. **All four repos run the gate, and every exemption is code.** `FolderWidthTests` subclasses the
    base in MMCA.Common
-   (`Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/FolderWidthTests.cs:18`), MMCA.ADC
+   (`Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/FolderWidthTests.cs:16`), MMCA.ADC
    (`Tests/Architecture/MMCA.ADC.Architecture.Tests/Governance/FolderWidthTests.cs:10`), MMCA.Store
    (`Tests/Architecture/MMCA.Store.Architecture.Tests/Governance/FolderWidthTests.cs:9`) and
    MMCA.Helpdesk (`Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/FolderWidthTests.cs:8`), each
    supplying only its `RepoRoot`. Only MMCA.Common overrides `ExemptFolderSuffixes`, with three
    one-concept folders: `MMCA.Common.Application/UseCases/Decorators`, its test twin, and
-   `MMCA.Common.Domain/Interfaces` (`FolderWidthTests.cs:28-33`). ADC, Store and Helpdesk run
+   `MMCA.Common.Domain/Interfaces` (`FolderWidthTests.cs:26-31`). ADC, Store and Helpdesk run
    against the empty default (`FolderWidthTestsBase.cs:29`). The base is public API and is baselined
    under the ADR-015 gate (`Testing.Architecture/PublicAPI.Shipped.txt:127-129`, `:363`,
    `:584-585`).
@@ -92,13 +92,13 @@ and a layout change ships as a breaking release with a migration map.**
    it.** The shared analyzer baseline sets `dotnet_style_namespace_match_folder = true:warning`
    (`MMCA.Common/.editorconfig:90`) and `TreatWarningsAsErrors` is on repo-wide
    (`MMCA.Common/Directory.Build.props:7`), so IDE0130 fails the build. The exceptions are named per
-   path: six in MMCA.Common (`.editorconfig:858-866` for the reasons), three of them the flat public
-   surfaces consumers subclass (`Testing.Architecture/Bases/` at `:867`, `Testing.Architecture/Rules/`
-   at `:870`, `Testing.UI/Infrastructure/` at `:873`), two of them Aspire extension folders whose
-   methods stay in the `MMCA.Common.Aspire` namespace a host already has a using for (`:876`,
-   `:879`), and the sixth a test fake that carries a consumer-shaped namespace because the
+   path: six in MMCA.Common (`.editorconfig:860-868` for the reasons), three of them the flat public
+   surfaces consumers subclass (`Testing.Architecture/Bases/` at `:869`, `Testing.Architecture/Rules/`
+   at `:872`, `Testing.UI/Infrastructure/` at `:875`), two of them Aspire extension folders whose
+   methods stay in the `MMCA.Common.Aspire` namespace a host already has a using for (`:878`,
+   `:881`), and the sixth a test fake that carries a consumer-shaped namespace because the
    convention under test keys on namespace shape (`Tests/Presentation/MMCA.Common.API.Tests/Fakes/`
-   at `:882`), and one each in ADC and Store for the MAUI head's per-TFM `Platforms/` bootstrap
+   at `:884`), and one each in ADC and Store for the MAUI head's per-TFM `Platforms/` bootstrap
    files (`MMCA.ADC/.editorconfig:848-857`, `MMCA.Store/.editorconfig:837-846`).
 
 8. **A folder inside a module project is never named `Domain`, `Application`, `Infrastructure`,
@@ -106,8 +106,11 @@ and a layout change ships as a breaking release with a migration map.**
    namespace, taking the segment before the first layer segment
    (`MMCA.Common/Source/Core/MMCA.Common.Shared/Conventions/ModuleNameConventions.cs:38-51`):
    `Domain` matches at any index from 1 up (`:41-43`) and the other four match only at index 3 or
-   later (`:17`, `:48-50`). A sub-folder carrying one of those names therefore shifts the derived
-   module. That name is load-bearing: it is the SQL Server schema
+   later (`:17`, `:48-50`). A `Domain` sub-folder therefore shifts the derived module in any project
+   other than Domain, because `Domain` wins wherever it appears (`:41-45`). The other four take the
+   first match, so under a project whose own layer segment already sits at index 3 (for example
+   `MMCA.ADC.Conference.Application`) they still yield `Conference`, and they shift the module only
+   in a project whose layer is not in that list, such as Shared (`:17`, `:48-50`). That name is load-bearing: it is the SQL Server schema
    (`Infrastructure/Persistence/DataSources/Engines/SQLServerDataSourceEngine.cs:101`), the
    PostgreSQL schema (`PostgreSQLDataSourceEngine.cs:100`), the Cosmos container
    (`CosmosDataSourceEngine.cs:95`), each engine reached from
@@ -122,14 +125,14 @@ and a layout change ships as a breaking release with a migration map.**
 9. **The move is scripted, not hand-edited.** `Tools/Scripts/move-namespace.ps1` rewrites namespaces
    and usings repo-wide and across the consumers, and `Tools/Scripts/auto-add-usings.py` plus
    `Tools/Scripts/fix-build-usings.py` settle the usings the compiler then reports. The framework's
-   own changelog names the script as the consumer sweep (`MMCA.Common/CHANGELOG.md:1928-1930`,
-   `:1985-1987`).
+   own changelog names the script as the consumer sweep (`MMCA.Common/CHANGELOG.md:1953-1955`,
+   `:2010-2012`).
 
 10. **A layout change ships as a breaking minor release with an old-to-new map.** v1.183.0 dissolved
     `MMCA.Common.Infrastructure.Services` and `.Settings` into the features they implement and split
-    the UI capability, service and component grab-bags (`CHANGELOG.md:1991-2013`), and added the
-    folder-width rule (`:2017-2021`). v1.184.0 split the eight remaining flat public namespaces
-    (`:1925-1931`, `:1933-1968`) and added `UPGRADING.md` (`:1972-1973`). There is no dual-namespace grace
+    the UI capability, service and component grab-bags (`CHANGELOG.md:2016-2034`), and added the
+    folder-width rule (`:2042-2046`). v1.184.0 split the eight remaining flat public namespaces
+    (`:1950-1956`, `:1960-1991`) and added `UPGRADING.md` (`:1997-1998`). There is no dual-namespace grace
     release and no `[Obsolete]` shim, because C# cannot forward a type across namespaces inside one
     assembly (`MMCA.Common/UPGRADING.md:10-12`); the first-party consumers are swept in the same
     release (`UPGRADING.md:32-33`).
@@ -150,7 +153,7 @@ and a layout change ships as a breaking release with a migration map.**
   under `TreatWarningsAsErrors`, "the folder names the feature" would be a review convention that
   decays silently. With it, the compiler holds the tree and the namespace in agreement.
 - **Exemptions belong in code.** A deliberately flat folder is listed as a string in the repo's own
-  subclass with a documented reason (`FolderWidthTests.cs:22-33`), so the exception is reviewable in
+  subclass with a documented reason (`FolderWidthTests.cs:20-31`), so the exception is reviewable in
   a diff rather than being an unwritten habit.
 
 ## Trade-offs
@@ -179,12 +182,8 @@ and a layout change ships as a breaking release with a migration map.**
 - **The skip list hides real trees.** `Resources` and `wwwroot` are skipped outright by segment
   (`:78-82`), so a localization or asset folder can grow without bound even when its shape is
   authored rather than generated.
-- **The exemption prose drifts from the exemption list.** MMCA.Common's `FolderWidthTests` class
-  summary still describes the pre-v1.184.0 set (application contracts, CQRS primitives, shared auth
-  contracts, API startup extensions, the integration-test package root:
-  `FolderWidthTests.cs:9-16`), while the live list holds three entries (`:28-33`).
 - **Namespace-follows-folder is not universal.** Eight documented IDE0130 exclusions
-  (`MMCA.Common/.editorconfig:867-883`, `MMCA.ADC/.editorconfig:856-857`,
+  (`MMCA.Common/.editorconfig:869-885`, `MMCA.ADC/.editorconfig:856-857`,
   `MMCA.Store/.editorconfig:845-846`) mean that in those trees a folder move renames nothing, so the
   property a reader relies on holds almost everywhere rather than everywhere.
 
@@ -214,6 +213,29 @@ consecutive layout releases, v1.183.0 and v1.184.0.
   `FolderWidthTestsBase` baseline is six entries at `PublicAPI.Shipped.txt:127-129`, `:363`,
   `:584-585`.
 - Anchors re-verified against current source (MMCA.Common v1.232.0).
+
+## Revision (2026-10-07)
+Re-verified against current source. The twelve-file cap, the counting rules, the three Common
+exemptions, the six Common IDE0130 exceptions and the scripted move are unchanged; one Decision
+sentence overstated the code, one trade-off no longer held, and the changelog, `.editorconfig`,
+`FolderWidthTests` and AGENTS.md anchors moved.
+1. Decision 8: narrowed "a sub-folder carrying one of those names shifts the derived module". A
+   `Domain` sub-folder shifts it in any non-Domain project because `Domain` wins
+   (`MMCA.Common/Source/Core/MMCA.Common.Shared/Conventions/ModuleNameConventions.cs:41-45`); the
+   other four take the first match (`:48-50`), so they shift it only in a project whose layer is not
+   in `NonDomainLayerSegments` (`:17`), such as Shared.
+2. Trade-offs: dropped the bullet saying the MMCA.Common `FolderWidthTests` class summary describes
+   the pre-v1.184.0 exemption set. The summary names exactly the three live exemptions
+   (`Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/FolderWidthTests.cs:10-12`),
+   matching the list at `:28-30`.
+3. Anchors re-verified against current source: Common `FolderWidthTests.cs:16` (class), `:26-31`
+   (override), `:20-31` (override with its summary); `FolderWidthTestsBase.cs:29`;
+   `MMCA.ADC/AGENTS.md:100`; `MMCA.Common/.editorconfig:860-868`, `:869`, `:872`, `:875`, `:878`,
+   `:881`, `:884`, range `:869-885`; the v1.184.0 and v1.183.0 entries now span
+   `MMCA.Common/CHANGELOG.md:1948-2051` (v1.184.0 Breaking `:1950-1956`, splits `:1960-1991`,
+   UPGRADING.md `:1997-1998`; v1.183.0 Breaking `:2009-2012`, dissolutions `:2016-2034`,
+   folder-width rule `:2042-2046`), with the script named at `:1953-1955` and `:2010-2012`
+   (MMCA.Common v1.233.0, `CHANGELOG.md:7`).
 
 ## Related
 [ADR-015](015-architecture-fitness-functions.md) (the fitness-function tier this rule joins, and the
