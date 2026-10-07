@@ -251,6 +251,9 @@
           <p>Revised 2026-10-01: decision 9 shows a non-null skip reason in every consumer.</p>
           <p>Revised 2026-10-06: the ADC gateway test asserts liveness (<code>/alive</code>) rather than the aggregate
           <code>/health</code>, and the package&#39;s XML documentation now recommends the safe skip branch.</p>
+          <p>Revised 2026-10-07: the consumer AppHost smoke projects (ADC and Store) and their CI job are removed,
+          so the consumer passages are restated as history, and MMCA.Common&#39;s <code>apphost-testing</code> tier is now
+          blocking and remains where the base is exercised (see Revision below).</p>
           <h2 id="context">Context</h2>
           <p>The AppHost is the only file that states how a whole stack fits together: which project resources
           exist, which database each one owns, which broker they share, where JWKS discovery points, and the
@@ -264,11 +267,10 @@
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/Fixtures/CrossServiceFixtureBase.cs</code>). The E2E tier
           runs against a deployed environment, by which time a composition mistake is a production incident
           rather than a test failure.</p>
-          <p>MMCA.ADC proved both the gap and the shape of the answer. Its
-          <code>Tests/Integration/MMCA.ADC.AppHost.SmokeTests</code> project boots the real AppHost through
-          <code>DistributedApplicationTestingBuilder</code>, and it sits deliberately outside every <code>.slnx</code> and <code>.slnf</code>
-          so no ordinary build picks it up: CI restores and builds it by explicit project path
-          (<code>MMCA.ADC/.github/workflows/cross-service-tests.yml:225</code>, <code>:268</code>). Before this package existed that
+          <p>MMCA.ADC proved both the gap and the shape of the answer. Its AppHost smoke project (removed on
+          2026-10-07, see Revision below) booted the real AppHost through
+          <code>DistributedApplicationTestingBuilder</code> and sat deliberately outside every <code>.slnx</code> and <code>.slnf</code>, so no
+          ordinary build picked it up and CI built it by explicit project path. Before this package existed that
           project asked the gateway for one health answer, and what it proved is how little of the code around
           that answer is ADC-specific: a startup budget, a readiness budget, a poll interval, a poll loop that
           treats a connection failure as &quot;not yet&quot;, and a teardown. Roughly a hundred lines of infrastructure
@@ -338,8 +340,9 @@
           current user&#39;s personal store read-only and answers false when it cannot
           (<code>.../DeveloperCertificateAvailability.cs:61-75</code>). Installing or trusting a certificate is a
           machine-level act a test fixture has no business performing silently; a CI job that needs one runs
-          <code>dotnet dev-certs https --trust</code> as an explicit step
-          (<code>MMCA.Common/.github/workflows/ci.yml:1000</code>, in the <code>apphost-testing</code> job declared at <code>:958</code>).</p>
+          <code>dotnet dev-certs https --trust</code> as an explicit step. The framework&#39;s own <code>apphost-testing</code> job
+          needs none, because its sample AppHost serves cleartext only, and its header says a consumer stack
+          with an https launch profile adds that step (<code>MMCA.Common/.github/workflows/ci.yml:905</code>, <code>:914-917</code>).</p>
           </li>
           <li><p><strong>The RS256 keypair is minted when the environment has none.</strong> <code>EphemeralRsaKeyPair.Create()</code>
           (<code>.../Preconditions/EphemeralRsaKeyPair.cs:42</code>) generates an RSA-2048 pair and the fixture pushes
@@ -385,16 +388,19 @@
           assertion library (the csproj references only <code>xunit.v3.extensibility.core</code>,
           <code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/MMCA.Common.Testing.Aspire.csproj:25</code>), so a
           test class writes the skip itself, always with a non-null reason: <code>Assert.SkipWhen(!Fixture.IsAvailable, Fixture.SkipReason ?? &quot;...&quot;)</code>
-          (<code>MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Aspire.AppHostTests/SampleAppHostTests.cs:155</code>,
-          <code>MMCA.Store/Tests/Integration/MMCA.Store.AppHost.SmokeTests/AppHostCompositionSmokeTests.cs:50</code>) or
-          an <code>if (!Fixture.IsAvailable) Assert.Skip(...)</code> branch
-          (<code>MMCA.ADC/Tests/Integration/MMCA.ADC.AppHost.SmokeTests/AdcAppHostSmokeTests.cs:67-73</code>).
+          (<code>MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Aspire.AppHostTests/SampleAppHostTests.cs:155</code>) or
+          the <code>if (!Fixture.IsAvailable) { Assert.Skip(Fixture.SkipReason!); }</code> branch the package&#39;s own
+          documentation prescribes
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/Fixtures/AppHostFixtureBase.cs:34-35</code>).
           <code>SkipReason</code> is null exactly when the stack started, and <code>SkipWhen</code> validates its reason before
-          the condition, so a null-forgiven <code>Fixture.SkipReason!</code> throws <code>ArgumentNullException</code> on the
-          runner the tier exists for (<code>.../AdcAppHostSmokeTests.cs:59-66</code>). That keeps the skip API where
-          a test project already has it and keeps one more package out of a consumer&#39;s graph.</p>
+          the condition, so a null-forgiven <code>Fixture.SkipReason!</code> passed to <code>SkipWhen</code> throws
+          <code>ArgumentNullException</code> on the runner the tier exists for (<code>.../AppHostFixtureBase.cs:36-37</code>). That
+          keeps the skip API where a test project already has it and keeps one more package out of a
+          consumer&#39;s graph.</p>
           </li>
-          <li><p><strong>The tier runs in CI, advisory, against an in-repo sample.</strong>
+          <li><p><strong>The tier runs in CI, blocking, against an in-repo sample.</strong> The <code>apphost-testing</code> job carries
+          no <code>continue-on-error</code>, so a red fails the run, but it is not a required merge check
+          (<code>MMCA.Common/.github/workflows/ci.yml:905</code>, <code>:910-911</code>).
           <code>Tests/Hosting/MMCA.Common.Testing.Aspire.AppHostTests</code> boots a sample AppHost with a SQLite file
           and ONE sample service project declared as TWO resources, so it needs no container runtime, and
           asserts every helper against it. The two resources are the two cleartext protocol profiles,
@@ -449,35 +455,20 @@
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
-          <li><strong>A consumer&#39;s smoke tier is a subclass.</strong> <code>MMCA.ADC.AppHost.SmokeTests</code> is two files. The fixture
-          is <code>AdcAppHostFixture : AppHostFixtureBase&lt;Projects.MMCA_ADC_AppHost&gt;</code>
-          (<code>MMCA.ADC/Tests/Integration/MMCA.ADC.AppHost.SmokeTests/AdcAppHostFixture.cs:28</code>), whose whole
-          body is a <code>RequiredEnvironment</code> override (<code>:31</code>, opt-in, Docker and the developer certificate), a
-          <code>Budget</code> override (<code>:42</code>, twelve minutes startup and eight readiness, because a cold
-          agent pulls four container images before a process starts) and a <code>ResourcesToAwait</code> override
-          (<code>:52</code>, the four services then the gateway, in dependency order so a failure names the first thing
-          that did not come up). The tests are
-          <code>AdcAppHostSmokeTests : AppHostTestBase&lt;AdcAppHostFixture&gt;</code> (<code>.../AdcAppHostSmokeTests.cs:32</code>). The
-          mapping was mechanical: the old <code>StartupBudget</code> / <code>ReadinessBudget</code> / <code>PollInterval</code> fields are the
-          one <code>Budget</code> override; the <code>PollUntilHealthyAsync</code> loop is gone, because the base waits on each
-          resource&#39;s own health signal instead of polling one endpoint through the gateway; the
-          <code>DistributedApplicationTestingBuilder.CreateAsync</code> / <code>BuildAsync</code> / <code>StartAsync</code> / <code>StopAsync</code>
-          sequence is the type parameter; and the single <code>/health</code> assertion is now a liveness assertion,
-          <code>AssertAliveAsync(&quot;gateway&quot;, &quot;http&quot;)</code> (<code>:97</code>), because the gateway&#39;s aggregate <code>/health</code> report
-          probes every backend and answers 503 whenever one downstream probe has not settled (<code>:75-91</code>). It
-          sits alongside <code>AssertJwksAsync</code> (<code>:110</code>), <code>AssertH2cAsync</code> over four endpoints (<code>:125</code> for the
-          three REST services, <code>:137</code> for Notification&#39;s dedicated <code>grpc</code> endpoint) and
-          <code>AssertDataSourceAsync</code> over four data sources (<code>:152</code>), none of which the earlier project
-          asserted. The workflow job keeps its <code>dotnet dev-certs</code> step
-          (<code>MMCA.ADC/.github/workflows/cross-service-tests.yml:275</code>) and runs no <code>openssl</code> keypair step
-          (<code>:282</code>), since the fixture mints one. MMCA.Store&#39;s tier is the same shape
-          (<code>MMCA.Store/Tests/Integration/MMCA.Store.AppHost.SmokeTests/StoreAppHostFixture.cs:23</code>,
-          <code>.../AppHostCompositionSmokeTests.cs:26</code>).</li>
-          <li><strong>Cost: this is the slowest tier per assertion, and it is deliberately advisory.</strong> The
-          <code>apphost-testing</code> job runs <code>continue-on-error</code>, exactly as ADC&#39;s <code>apphost-smoke</code> does under
-          <a href="098-aspire-orchestration-not-testing-or-dashboards.html">ADR-098</a>, so a flake reds the job for
-          visibility without failing the run and can never gate a release. Promote it out of
-          <code>continue-on-error</code> only after a green streak; delete it if it proves to be a flake generator.</li>
+          <li><strong>A consumer&#39;s AppHost tier is a subclass, and neither consumer carries one today.</strong> While both
+          consumers ran the tier (2026-09-11 to 2026-10-07), each was a fixture plus a test class over the
+          package: ADC&#39;s was two files, a fixture whose body was three overrides (<code>RequiredEnvironment</code>,
+          <code>Budget</code> with twelve minutes startup and eight readiness, and <code>ResourcesToAwait</code>) and a test class
+          over <code>AppHostTestBase&lt;AdcAppHostFixture&gt;</code>, and Store&#39;s had the same shape. Both projects, and the
+          <code>apphost-smoke</code> job that ran them, are removed. Each consumer&#39;s real AppHost composition is exercised
+          instead by its <code>e2e.yml</code>, which boots the AppHost for every E2E run, including the deploy&#39;s chromium
+          <code>e2e-gate</code> (<code>MMCA.ADC/.github/workflows/e2e.yml:29-30</code>, <code>:227</code>;
+          <code>MMCA.Store/.github/workflows/e2e.yml:252</code>), and the base itself by MMCA.Common&#39;s own tier
+          (<code>MMCA.ADC/AGENTS.md:77</code>, <code>MMCA.Store/AGENTS.md:76</code>). The package is unchanged, so a consumer that
+          wants the wiring assertions back writes the subclass again rather than a harness.</li>
+          <li><strong>Cost: this is the slowest tier per assertion, and it blocks the CI run without being a required
+          merge check.</strong> The <code>apphost-testing</code> job has no <code>continue-on-error</code>, so a red fails the MMCA.Common
+          CI run, but it is not a required merge check (<code>MMCA.Common/.github/workflows/ci.yml:910-911</code>).</li>
           <li><strong>A consumer&#39;s real stack still needs Docker on the runner.</strong> The in-repo sample avoids containers
           on purpose, so the framework&#39;s own CI does not pay for image pulls, but ADC&#39;s AppHost starts SQL
           Server, Redis, RabbitMQ and MailDev. That is why <code>AppHostEnvironmentRequirement.Docker</code> is part of
@@ -523,6 +514,22 @@
           <li>Anchors re-verified against current source: <code>AppHostFixtureBase.cs</code>, <code>H2cHealthCheckExtensions.cs</code>,
           <code>AdcAppHostSmokeTests.cs</code>, <code>Directory.Packages.props</code> and <code>FACTS.md:40</code>.</li>
           </ul>
+          <h2 id="revision-2026-10-07">Revision (2026-10-07)</h2>
+          <ul>
+          <li>The consumer AppHost smoke projects (<code>MMCA.ADC.AppHost.SmokeTests</code>, <code>MMCA.Store.AppHost.SmokeTests</code>)
+          and the <code>apphost-smoke</code> job in each <code>cross-service-tests.yml</code> are removed, along with the consumers&#39;
+          <code>Aspire.Hosting.Testing</code> pins; the package is now pinned in MMCA.Common only
+          (<code>MMCA.Common/Directory.Packages.props:368</code>). Context and Trade-offs describe the consumer tiers as
+          history, and the anchors into those projects in earlier revisions no longer resolve.</li>
+          <li>Each consumer&#39;s AppHost composition is exercised by <code>e2e.yml</code> booting the real AppHost on every E2E
+          run (<code>MMCA.ADC/AGENTS.md:77</code>, <code>MMCA.Store/AGENTS.md:76</code>).</li>
+          <li>MMCA.Common&#39;s <code>apphost-testing</code> tier is blocking (no <code>continue-on-error</code>) and is where the base is
+          exercised; it is not a required merge check (<code>MMCA.Common/.github/workflows/ci.yml:905</code>, <code>:910-911</code>).
+          Its <code>dotnet dev-certs</code> step is removed, because the sample serves cleartext only (<code>:914-917</code>), so
+          decision 4 no longer cites one.</li>
+          <li>Decision 9 now cites the framework sample test and the package documentation instead of the deleted
+          consumer tests. The decision itself is unchanged.</li>
+          </ul>
           <h2 id="related">Related</h2>
           <p><a href="098-aspire-orchestration-not-testing-or-dashboards.html">ADR-098</a> (the orchestration posture this tier
           tests without changing),
@@ -549,6 +556,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

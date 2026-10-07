@@ -195,21 +195,20 @@
           <p>Phases 1 and 2 are their own jobs<span class="cite"><span> (<code>deploy.yml:1089</code>, <code>deploy.yml:1143</code>)</span></span> rather than steps inside
           <code>deploy</code>, so they overlap the ~20-minute chromium <code>e2e-gate</code> instead of sitting on the critical
           path<span class="cite"><span> (<code>deploy.yml:1081-1088</code>, <code>:1123-1131</code>)</span></span>. Nothing is rolled out there: <code>build-images</code> only pushes
-          tags, and the <code>deploy</code> job<span class="cite"><span> (<code>deploy.yml:1234-1690</code>)</span></span> still waits on every gate before <code>main.bicep</code>
-          points a container app at any of them. That gate list<span class="cite"><span> (<code>deploy.yml:1237</code>)</span></span> is <code>supply-chain</code>,
-          <code>cost-guard</code>, the <strong>four</strong> freshness gates (<code>dr-freshness</code>, <code>load-freshness</code>,
-          <code>cross-service-freshness</code> and <code>cross-browser-freshness</code>), <code>foundation</code>, <code>build-images</code>,
-          <code>ai-eval-gate</code>, and then <strong>exactly one</strong> of the two complementary test gates: the chromium
-          <code>e2e-gate</code> on a UI diff or <code>backend-test-gate</code> on every other code diff<span class="cite"><span> (<code>deploy.yml:1261-1268</code>,
-          <code>:1282-1284</code>)</span></span>. Those last two conditions are exact complements, which is what keeps the invariant
-          &quot;no production deploy without test execution&quot; true without either gate having to be unconditional.
-          The two newest entries are <code>cross-browser-freshness</code>, which asserts a recent successful firefox
-          <strong>and</strong> webkit leg on <code>e2e.yml</code>, so cross-engine coverage is enforced without putting
-          either engine back on the per-deploy critical path, and <code>ai-eval-gate</code>, which runs the AI session
-          scorer&#39;s golden-replay and prompt-contract tiers on every code deploy and adds the paid live judge
-          only when the diff touches the scoring code<span class="cite"><span> (<code>deploy.yml:1242-1246</code>)</span></span>. Both are <code>deploy.yml</code> jobs and
-          belong to the CI/CD chapter; they matter here because the feature <code>ai-eval-gate</code> guards is the same
-          one the token-ceiling alert in <code>main.bicep</code> bounds at runtime (see below).</p>
+          tags, and the <code>deploy</code> job<span class="cite"><span> (<code>deploy.yml:1142</code>)</span></span> still waits on every gate before <code>main.bicep</code>
+          points a container app at any of them. That gate list<span class="cite"><span> (<code>deploy.yml:1145</code>)</span></span> is <code>supply-chain</code>,
+          <code>cost-guard</code>, the <code>freshness</code> job with its <strong>four</strong> steps (<code>dr-freshness</code>, <code>load-freshness</code>,
+          <code>cross-service-freshness</code> and <code>cross-browser-freshness</code>), <code>foundation</code>, <code>build-images</code>, and two
+          conditional gates: the chromium <code>e2e-gate</code> on a UI diff and <code>ai-eval-gate</code> on a scoring-code diff<span class="cite"><span>
+          (<code>deploy.yml:1182-1183</code>)</span></span>. There is no separate test gate on the push: the PR&#39;s <code>build-and-test</code> is the
+          test gate, because branch protection enforces admins and requires an up-to-date branch, so the PR run
+          covers the exact tree that merges<span class="cite"><span> (<code>deploy.yml:1146-1148</code>)</span></span>. <code>cross-browser-freshness</code> asserts a recent
+          successful firefox <strong>and</strong> webkit leg on <code>e2e.yml</code>, so cross-engine coverage is enforced without putting
+          either engine back on the per-deploy critical path, and <code>ai-eval-gate</code> runs the AI session scorer&#39;s paid
+          live judge only when the diff touches the scoring code<span class="cite"><span> (<code>deploy.yml:505-511</code>)</span></span>, while its golden-replay
+          and prompt-contract tiers run in every PR. Both live in <code>deploy.yml</code> and belong to the CI/CD chapter;
+          they matter here because the feature <code>ai-eval-gate</code> guards is the same one the token-ceiling alert in
+          <code>main.bicep</code> bounds at runtime (see below).</p>
           <p>The <strong>shared resource group</strong> is <code>acc-rg</code> in the QiMata Sponsorship subscription (East US 2), read
           from the <code>AZURE_RESOURCE_GROUP</code> repository variable<span class="cite"><span> (<code>deploy.yml:24</code>)</span></span> and named in the SQL-region
           comment<span class="cite"><span> (<code>deploy.yml:1344-1349</code>)</span></span>. Both Bicep files target <code>resourceGroup</code> scope<span class="cite"><span> (<code>main.bicep:1</code>,

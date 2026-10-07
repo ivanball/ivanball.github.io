@@ -349,19 +349,18 @@
           (<code>MMCA.Store/.github/workflows/cost-guard.yml:52</code>, <code>MMCA.ADC/.github/workflows/cost-guard.yml:50</code>).</p>
           </li>
           <li><p><strong><code>deploy</code> waits on it by name.</strong> <code>cost-guard</code> is listed in <code>deploy.needs</code>
-          (<code>MMCA.Store/.github/workflows/deploy.yml:1187</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:1242</code>), and
+          (<code>MMCA.Store/.github/workflows/deploy.yml:1083</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:1145</code>), and
           because the deploy condition runs under <code>always()</code> with explicit per-need results, the condition
           requires <code>needs.cost-guard.result == &#39;success&#39;</code> literally
-          (<code>MMCA.Store/.github/workflows/deploy.yml:1215-1229</code>,
-          <code>MMCA.ADC/.github/workflows/deploy.yml:1274-1289</code>). The only needs allowed to be <code>skipped</code> there are
-          the diff-scoped gates, and the two lists are not symmetric. Store tolerates one pair, <code>e2e-gate</code> or
-          <code>backend-test-gate</code>, whose UI and backend conditions are exact complements, so exactly one of the
-          two runs on every code deploy (<code>MMCA.Store/.github/workflows/deploy.yml:1228-1229</code>). ADC tolerates
-          that same pair plus <code>ai-eval-gate</code>
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:1287-1289</code>), which runs on any code diff, so its <code>skipped</code>
-          arm covers only the docs-only path on which <code>deploy</code> does not run at all
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:1266-1273</code>). Either way a cost-guard that fails, errors or
-          is skipped leaves <code>deploy</code> unrun.</p>
+          (<code>MMCA.Store/.github/workflows/deploy.yml:1106-1116</code>,
+          <code>MMCA.ADC/.github/workflows/deploy.yml:1172-1183</code>). The only needs allowed to be <code>skipped</code> there are
+          the diff-scoped gates, and the two lists are not symmetric. Store tolerates one, <code>e2e-gate</code>, which
+          runs when the diff touches the UI (<code>MMCA.Store/.github/workflows/deploy.yml:761,1116</code>). ADC tolerates
+          <code>e2e-gate</code> plus <code>ai-eval-gate</code>, which runs when the diff touches the scoring code
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:511,1182-1183</code>). Either way a cost-guard that fails, errors or
+          is skipped on a code push leaves <code>deploy</code> unrun; on a docs-only push <code>cost-guard</code> and <code>deploy</code> both
+          skip (<code>MMCA.ADC/.github/workflows/deploy.yml:772,1176</code>,
+          <code>MMCA.Store/.github/workflows/deploy.yml:732,1110</code>).</p>
           </li>
           <li><p><strong>Gate on deploys only, never on pull requests.</strong> The calling job carries
           <code>if: github.event_name != &#39;pull_request&#39;</code> and <code>secrets: inherit</code>

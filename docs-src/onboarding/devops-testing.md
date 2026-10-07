@@ -58,36 +58,31 @@ its own job with its own prerequisites.
 **pull-request-only** (`MMCA.ADC/.github/workflows/deploy.yml:702`, with the reasoning at
 `deploy.yml:697-701`) and is **not** in the `deploy` job's `needs` list (`deploy.yml:1219`). Its
 sibling `build-and-test` is pull-request-only for the same stated reason (`deploy.yml:222-225`). The
-comment under the `needs` list spells it out (`deploy.yml:1220-1222`): with strict branch protection
+comment under the `needs` list spells it out (`deploy.yml:1146-1148`): with strict branch protection
 the PR validated the exact merge tree, so those jobs are required PR checks rather than push-time
 deploy gates, and they are not re-run on the merge push. The required contexts are exactly four,
 `build-and-test`, `supply-chain`, `integration-tests` and `coverage`, as the repo's own contributing
 guide records twice (`MMCA.ADC/CONTRIBUTING.md:38-41` and `CONTRIBUTING.md:80-81`).
 
-What actually blocks the deploy is `supply-chain`, `cost-guard`, the **four** freshness gates
-(`dr-freshness`, `load-freshness`, `cross-service-freshness`, `cross-browser-freshness`),
-`foundation`, `build-images`, the always-on `ai-eval-gate` (section 7), and then
-**exactly one of two complementary test gates**: the chromium `e2e-gate` on a UI diff, or
-`backend-test-gate` on every other code diff (`deploy.yml:1219`, condition at `deploy.yml:1251-1266`).
-`backend-test-gate` (`deploy.yml:499`) exists because those PR-only checks plus a ui-scoped
-`e2e-gate` composed into a hole: a backend-only push to `main` ran **no tests at all** before rolling
-out, with the post-deploy smoke gate as the only backstop, which is detection after the rollout
-rather than prevention (`deploy.yml:486-487`). Its `if` is the exact complement of `e2e-gate`'s
-(`deploy.yml:501` versus `deploy.yml:872`), so one of the two always runs on a code deploy, at zero
-added minutes on a UI deploy and one `CI.slnf` pass on a backend-only one. It deliberately runs
-`MMCA.ADC.CI.slnf` and skips coverage collection (`deploy.yml:495-498`, run step at
-`deploy.yml:527`): coverage is a review-time regression signal, not a rollout gate. It restores with
-`--locked-mode` against the committed lock files (`deploy.yml:517`), so the gate cannot silently
-resolve a different graph than the PR validated.
+What actually blocks the deploy is `supply-chain`, `cost-guard`, the `freshness` job with its **four**
+steps (`dr-freshness`, `load-freshness`, `cross-service-freshness`, `cross-browser-freshness`),
+`foundation`, `build-images`, and two conditional gates: the chromium `e2e-gate` on a UI diff and
+`ai-eval-gate`, the paid live judge of the AI session scorer, on a scoring-code diff
+(`MMCA.ADC/.github/workflows/deploy.yml:1145`, condition at `deploy.yml:1172-1183`). A backend-only
+deploy runs no test job on the push, and that is safe by construction: the PR's `build-and-test` is the
+test gate, because branch protection enforces admins and requires an up-to-date branch, so the PR run
+covers the exact tree that merges and no post-merge job re-runs those tiers (`deploy.yml:1146-1148`,
+and the `e2e-gate` comment at `deploy.yml:798-802`). The post-deploy smoke gate is the post-rollout
+backstop behind it.
 [Rubric §17, DevOps & Deployment]: §17 assesses how consistently CI/CD enforces quality gates; the
 two-filter pattern is how the build stays fast on every push while the SQL-dependent tier still has
-to be green before a PR can merge at all, and the complementary pair is how "no production deploy
+to be green before a PR can merge at all, and branch protection that binds admins too is how "no production deploy
 without test execution" survives both of those optimizations.
 
-**MMCA.Store has no `backend-test-gate`.** Its `deploy` job needs
-`[changes, supply-chain, cost-guard, dr-freshness, load-freshness, cross-service-freshness, e2e-gate, foundation, build-images]`
-(`MMCA.Store/.github/workflows/deploy.yml:945`), so a Store backend-only deploy still relies on the
-post-deploy smoke gate. That is a real asymmetry between the two apps, not a documentation gap.
+**MMCA.Store has the same shape minus `ai-eval-gate`.** Its `deploy` job needs
+`[changes, supply-chain, cost-guard, freshness, e2e-gate, foundation, build-images]`
+(`MMCA.Store/.github/workflows/deploy.yml:1083`), and its PR `build-and-test` is the test gate under the
+same branch protection.
 
 `MMCA.ADC.Integration.slnf` (`MMCA.ADC/MMCA.ADC.Integration.slnf:5-8`) contains exactly four
 projects, one per service host: Identity, Conference, Engagement and Notification. These are the
@@ -171,14 +166,13 @@ consequences:
    (`ci.yml:324`), `1` for the AppHost tier (`ci.yml:1015`), `40` for the cross-repo Helpdesk canary
    (`ci.yml:580`), the exact `[Fact]` count of each Testcontainers tier (`15` for Redis at
    `ci.yml:876-879`, `7` for PostgreSQL at `ci.yml:914-916`, `3` for SQL Server at `ci.yml:954-956`),
-   and `1` for four of
-   ADC's five test invocations (`MMCA.ADC/.github/workflows/deploy.yml:346,527,583,781`). The
-   `backend-test-gate` step comment states the reasoning in one line: a filter or discovery breakage
-   that runs zero tests must fail here, not report a vacuous pass (`deploy.yml:525-526`). The one
-   invocation deliberately without a floor is the paid live judge of `ai-eval-gate`
-   (`deploy.yml:586`): without `AI_API_KEY` (mapped from the `ANTHROPIC_API_KEY` repository secret,
-   `deploy.yml:596-598`) every case skips itself dynamically, and a zero-run there must not red a
-   deploy on a repo whose secret is absent (`deploy.yml:587-589`).
+   and `1` for every ADC test invocation except one. The `ai-eval-gate` replay step's comment states the
+   reasoning in one line: a filter or discovery breakage that runs zero tests must fail here, not report
+   a vacuous pass (`MMCA.ADC/.github/workflows/deploy.yml:535-536`). The one invocation deliberately
+   without a floor is the paid live judge of `ai-eval-gate` (`deploy.yml:543-551`): without `AI_API_KEY`
+   (mapped from the `ANTHROPIC_API_KEY` repository secret, `deploy.yml:552-555`) every case skips itself
+   dynamically, and a zero-run there must not red a deploy on a repo whose secret is absent
+   (`deploy.yml:544-546`).
 
 2. **Filter syntax differs.** You pass a `--` separator and then MTP's own filter flags:
    ```bash
@@ -348,12 +342,6 @@ those.
 |---|---|---|
 | `MMCA.ADC.E2E.Tests` | 92 | Playwright browser-automation tests across login, register, password reset, conference browsing, organizer management, bookmark and live flows, plus the 45-scan `AccessibilityTests` suite (`MMCA.ADC/Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/AccessibilityTests.cs:29`, 45 `[Fact]` methods, each one `ScanAsync`/`ScanGridAsync` call); requires the Aspire stack running |
 
-**Out-of-solution**
-
-| Project | Types | Purpose |
-|---|---|---|
-| `MMCA.ADC.AppHost.SmokeTests` | 3 | `AppHostCompositionSmokeTests`: boots the real Aspire stack and asserts the composition. Deliberately outside every `.slnx`/`.slnf` and restored, lock-checked and built by explicit path (`MMCA.ADC/.github/workflows/cross-service-tests.yml:225,229,268`) |
-
 ### Test-type totals
 
 - **MMCA.Common:** the 16 in-solution projects sum to 60 + 64 + 401 + 514 + 1 + 37 + 170 + 18 + 170 +
@@ -361,9 +349,8 @@ those.
   3 + 8 + 14 = **72**, for **1,883**.
 - **MMCA.ADC:** 72 (Identity) + 367 (Conference, incl. the 10-type scoring evaluation suite) + 138 (Engagement) + 5 (Notification) + 57
   (architecture) + 108 (four integration projects) + 16 (two Testcontainers tiers) + 9 (Gateway) + 17
-  (Services) + 7 (UI.Web) + 92 (E2E) = **888** in-solution, plus the 3-type AppHost smoke project =
-  **891**.
-- **Combined test projects: 2,774.** Separately, the five shipped testing packages contribute
+  (Services) + 7 (UI.Web) + 92 (E2E) = **888**.
+- **Combined test projects: 2,771.** Separately, the five shipped testing packages contribute
   another **153** types (`MMCA.Common.Testing` 25, `.Testing.Architecture` 68, `.Testing.Aspire` 10,
   `.Testing.E2E` 32, `.Testing.UI` 18): those are shipped product, not tests, which is why they are
   counted apart. The inventory also lists `MMCA.Common.AI.Testing` (5 types,
@@ -1426,33 +1413,12 @@ on the freshness of the evidence rather than on the run itself. MMCA.Store mirro
 with `MMCA.Store.CrossService.IntegrationTests` and `MMCA.Store.ServiceBusEmulator.IntegrationTests`
 behind its own `cross-service-freshness` gate (`MMCA.Store/.github/workflows/deploy.yml:716`).
 
-A third nightly job, `apphost-smoke` (`cross-service-tests.yml:208`), boots the real Aspire stack and
-asserts its composition. It is **`continue-on-error: true`** (line 213) and, unlike the emulator smoke
-above it, the `cross-service-freshness` deploy gate does not look at it at all, so nothing it does can
-ever gate a deploy.
-
-Three of its steps are worth reading, because each one is a precondition the job has to create for
-itself. A **lock-drift guard** compares every `MMCA.Common.*` entry in the project's committed
-`packages.lock.json` against the single central pin and fails on a mismatch (`cross-service-tests.yml:229`):
-this project sits outside every solution, so no gating restore covers its lock, and one lock really
-did sit at `1.176.0` while the repo pinned `1.177.0`. It deliberately does **not** use `--locked-mode`,
-because an Aspire AppHost's lock carries a RID-specific `Aspire.Dashboard.Sdk.<rid>` entry that makes
-locked mode fail with NU1004 on this runner whether or not anything drifted. A **dev-certificate trust**
-step follows the build (`cross-service-tests.yml:274-275`): Notification launches with the `https`
-profile, so its stock `/alive` probe negotiates TLS against the ASP.NET development certificate, and on
-a fresh runner every probe fails with `UntrustedRoot` until the certificate is trusted, leaving the
-gateway's `WaitFor(notification)` edge waiting out the budget. The run step sets `MMCA_APPHOST_TESTS`
-(`cross-service-tests.yml:278`, env at line 289), the framework's ADR-117 opt-in: without it the fixture never boots an
-orchestrator and every test skips with a named reason, which is exactly what a developer machine and
-every other CI job should get. The ephemeral RS256 keypair Identity needs is no longer minted by an
-`openssl` step here: `AppHostFixtureBase` mints it and exports it through the same `E2E_JWT_*` channel
-`WithE2eRsaKeys()` forwards, and it stays load-bearing for the original reason (without a real PEM,
-Identity's JwtBearer options factory throws on every request, liveness included, so the probe never
-turns it healthy). The comment says why plainly: it is the widest possible assertion
-(it pulls and starts four containers before a single process runs) and its failure modes are still
-unproven, so it reds the job for visibility without failing the run, and it should be promoted out of
-`continue-on-error` only after it earns a track record, or deleted if it proves to be a flake
-generator. That is what an honestly staged new gate looks like.
+The full Aspire composition is booted where it is exercised end to end: `e2e.yml` starts the consumer
+AppHost for every Playwright run (`MMCA.ADC/.github/workflows/e2e.yml:228`), and the framework's own
+AppHost tier, the blocking `apphost-testing` job in MMCA.Common's `ci.yml`, covers the shared
+`Aspire.Hosting.Testing` base (`MMCA.Common/.github/workflows/ci.yml:905-950`). The nightly
+`cross-service-tests.yml` carries no AppHost job: its two test jobs are the two the freshness gate
+requires (`MMCA.ADC/.github/workflows/cross-service-tests.yml:79`, `:142`).
 
 ### MMCA.Common unit-level infrastructure tests
 
@@ -1711,19 +1677,17 @@ A test tier only means something once you know what it blocks. This is the map.
 | Tier | Prerequisite | Where it runs | What it blocks |
 |---|---|---|---|
 | Unit + architecture + bUnit | none | Common `build-and-test`; ADC/Store `build-and-test` over `CI.slnf` | Merge, on every code PR |
-| Unit + architecture + bUnit, again | none | ADC `backend-test-gate` over `CI.slnf`, push-only, non-UI diffs | **The deploy**, on every backend-only ADC code deploy |
-| AI golden replay + prompt contract | none, no API key, no network | ADC `ai-eval-gate`, push-only, every code diff | **The deploy**, on every ADC code deploy |
+| AI golden replay + prompt contract | none, no API key, no network | ADC `build-and-test` over `CI.slnf` (the tests carry no trait, `MMCA.ADC/.github/workflows/deploy.yml:499-500`) | Merge, on every ADC code PR |
 | AI live judge (paid model calls) | `ANTHROPIC_API_KEY` | ADC `ai-eval-gate`, only when the diff touches the scoring code | The deploy, on a scoring-code deploy |
 | Unit + architecture, seed | none, no database | Helpdesk `build-and-test` over `MMCA.Helpdesk.slnx`, against MMCA.Common **source** | Merge, on Helpdesk PRs |
 | Runtime conformance, host-free order gates | none | Same job as the unit tier, all four repos | Merge |
 | Runtime conformance, Gateway trio | none (Production-pinned boot) | Same job as the unit tier | Merge |
-| Topology parity (AppHost vs. Bicep) | none, text parse | ADC `MMCA.ADC.Gateway.Tests`, so the unit tier | Merge, and the deploy through `backend-test-gate` |
+| Topology parity (AppHost vs. Bicep) | none, text parse | ADC `MMCA.ADC.Gateway.Tests`, so the unit tier | Merge, through the PR's `build-and-test`, which is the deploy's test gate |
 | Runtime conformance, HTTP suites | real SQL Server | ADC/Store `integration-tests` over `Integration.slnf` | Merge (PR-only required check), **not** the deploy |
 | Testcontainers cross-service / broker | Docker | Nightly `cross-service-tests.yml` | The deploy, indirectly, via `cross-service-freshness` |
-| AppHost composition smoke | Docker | Nightly `cross-service-tests.yml`, `continue-on-error` | Nothing, deliberately |
 | Real-engine persistence (PostgreSQL) | Docker | Common `postgresql-integration` | Nothing until it is added to branch protection; the job is written to be promotable |
 | Real-engine persistence (SQL Server) | Docker | Common `sqlserver-integration` | Nothing until it is added to branch protection (`MMCA.Common/.github/workflows/ci.yml:930-931`) |
-| AppHost orchestration | Dev HTTPS certificate, `MMCA_APPHOST_TESTS` | Common `apphost-testing`, `continue-on-error` | Nothing, deliberately |
+| AppHost orchestration | `MMCA_APPHOST_TESTS` (no container runtime, no dev certificate) | Common `apphost-testing`, blocking (`MMCA.Common/.github/workflows/ci.yml:910-911`) | The CI run goes red; not a required merge check |
 | Browser (gallery) | Playwright, no backend | Common `ui-e2e`, three engines | Merge, all three engines |
 | Browser (full stack) | full Aspire stack | ADC/Store `e2e-gate`, chromium only | The deploy, when the change is ui-scoped |
 | Browser (full stack), firefox and webkit | full Aspire stack | ADC `e2e.yml` on alternating weekly crons, one engine each | The deploy, indirectly, via `cross-browser-freshness` |
@@ -1740,31 +1704,28 @@ matrix (`ci.yml:256-257`), one engine per leg via `E2E_BROWSER` (`ci.yml:321`), 
 `fail-fast: false` (`ci.yml:255`) so each engine reports independently. **All three are required merge
 checks**, three of the eight enumerated in `MMCA.Common/CONTRIBUTING.md:60-71` (firefox was promoted
 2026-07-12 and webkit 2026-07-16 after 11 consecutive green main runs, `ci.yml:258-260` and
-`CONTRIBUTING.md:63-65`). Only the chromium leg collects coverage; the other two run the same command
-plain, so the merged report is not engine-dependent (`ci.yml:318`, run step at `ci.yml:322`). That file also names the live ruleset as authoritative over its own copy
+`CONTRIBUTING.md:63-65`). No leg collects coverage: the `coverage` job reads only the unit tier
+(`ci.yml:357-358`). `CONTRIBUTING.md` also names the live ruleset as authoritative over its own copy
 (`CONTRIBUTING.md:75-77`), which is the right instinct for any list of gates.
 
-The deployed apps gate the deploy instead: ADC's `e2e-gate` (`MMCA.ADC/.github/workflows/deploy.yml:861`)
-calls the reusable `e2e.yml` (line 805) with `browsers: '["chromium"]'` (line 807), and the `deploy`
-job waits on it (`deploy.yml:1219,1264`). Store's is the same shape at
-`MMCA.Store/.github/workflows/deploy.yml:584,594,945`.
+The deployed apps gate the deploy instead: ADC's `e2e-gate` (`MMCA.ADC/.github/workflows/deploy.yml:792`)
+calls the reusable `e2e.yml` (line 804) with `browsers: '["chromium"]'` (line 806), and the `deploy`
+job waits on it (`deploy.yml:1145,1182`). Store's is the same shape at
+`MMCA.Store/.github/workflows/deploy.yml:751,1083`.
 
 **The deploy gate is ui-scoped and may legitimately skip.** Both apps gate `e2e-gate` on a `ui` change
-filter (`MMCA.ADC/.github/workflows/deploy.yml:872`), and the `deploy` job's condition accepts
+filter (`MMCA.ADC/.github/workflows/deploy.yml:803`), and the `deploy` job's condition accepts
 `success` **or** `skipped` for that need while requiring `success` from every unconditional one
-(`deploy.yml:1264`). That asymmetry is deliberate and was learned the hard way: under default
+(`deploy.yml:1182`). That asymmetry is deliberate and was learned the hard way: under default
 `success()` semantics a legitimately skipped `e2e-gate` cascaded into a skipped deploy, so a
-green run shipped nothing (`deploy.yml:1238-1240`).
+green run shipped nothing (`deploy.yml:1164-1167`).
 
-On ADC the cost of that fix is now bounded rather than open-ended. `backend-test-gate`
-(`deploy.yml:501`) carries the exact complementary condition and the same success-or-skipped
-allowance (`deploy.yml:1265`), so a skipped `e2e-gate` means a *run* `backend-test-gate` and the
-invariant "no production deploy without test execution" holds without making either gate
-unconditional (`deploy.yml:867-871`, `deploy.yml:1243-1249`). What a
-backend-only ADC deploy still ships without is a **browser scan**: axe did not run on that commit, and
-the post-deploy smoke gate is the backstop for anything the unit tier cannot see. On MMCA.Store, which
-has no `backend-test-gate`, the original exposure remains: a backend-only deploy runs no test tier at
-all on the push.
+On both apps the cost of that fix is bounded by branch protection rather than by a second deploy gate.
+Admins are enforced and an up-to-date branch is required, so the PR's `build-and-test` ran the unit,
+architecture and bUnit tiers against the exact tree that merges, and a skipped `e2e-gate` does not mean
+an untested deploy (`deploy.yml:798-802`, `deploy.yml:1146-1148`). What a backend-only deploy still
+ships without is a **browser scan**: axe did not run on that commit, and the post-deploy smoke gate is
+the backstop for anything the unit tier cannot see.
 
 MMCA.Helpdesk adopts none of the browser tier: it pins the package version but no project references
 it, and the repo has no E2E test project at all, so the seed shows a reader no worked example of
@@ -2072,10 +2033,9 @@ the code it claims to measure.
   to maintain while learning the framework.
 
 [Rubric §17, DevOps & Deployment]: the whole table above is §17's subject. A tier that runs and
-blocks nothing is documentation; a tier that blocks something is a gate. The two most instructive
-entries are the two ends of that spectrum in the same nightly workflow: `cross-service` blocks the
-deploy through a freshness gate, and `apphost-smoke` deliberately blocks nothing until it earns the
-right to.
+blocks nothing is documentation; a tier that blocks something is a gate. The most instructive entry is
+`cross-service`, which never runs on the deploy path and still blocks the deploy, through the age of its
+last proof in the `freshness` job.
 
 ---
 

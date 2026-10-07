@@ -179,14 +179,14 @@ accessibility.
 
 ## Trade-offs
 - **The gate is ui-scoped and may legitimately skip.** Both apps gate `e2e-gate` on a `ui` change
-  filter (ADC `deploy.yml:885`, Store `:852`) and `deploy` accepts `skipped` for it (ADC `:1287`,
-  Store `:1228`), so a backend-only or infra-only deploy ships with no Web Vitals measurement of that
-  commit. Both apps pair the gate with a `backend-test-gate` carrying the exact inverse condition
-  (ADC `deploy.yml:504`, `:506`; Store `:537`, `:539`), but that job runs no browser, so it leaves
-  this budget unmeasured on those deploys. Same intended cost trade as the accessibility gate, and the same caveat: "deployed"
+  filter (ADC `deploy.yml:803`, Store `:761`) and `deploy` accepts `skipped` for it (ADC `:1182`,
+  Store `:1116`), so a backend-only or infra-only deploy ships with no Web Vitals measurement of that
+  commit. The test gate on such a deploy is the pull request's required checks (ADC `:798-800`,
+  Store `:757-759`), which run no browser, so they leave this budget unmeasured on those deploys.
+  Same intended cost trade as the accessibility gate, and the same caveat: "deployed"
   does not always mean "the budget ran on this commit".
 - **It never runs on a pull request.** The E2E project is in neither solution filter and the gate is
-  push/dispatch only (ADC `deploy.yml:885`, Store `:852`), so a regression is caught between merge and
+  push/dispatch only (ADC `deploy.yml:803`, Store `:761`), so a regression is caught between merge and
   rollout, not before merge.
 - **The measured configuration is not the production one.** CI pins the UI to `InteractiveServer`
   (ADC `e2e.yml:226`, Store `:229`), so the numbers describe Server-mode prerender-then-hydrate under

@@ -9,14 +9,17 @@ twelve (ADC adds `ai-eval-gate`), `backend-test-gate` included in both, so neith
 smoke gate as its only backend backstop. The rollout and revision-only rollback model itself is
 unchanged, and the citation anchors are refreshed).
 Anchors refreshed 2026-10-01.
+Revised 2026-10-07: the four recency gates now run as steps of one `freshness` job and
+`backend-test-gate` is retired, so `deploy` waits on seven needs in Store and eight in ADC, and the
+test gate is the pull request's required checks.
 
 ## Context
 Both production apps deploy to Azure Container Apps from a single `deploy.yml` job on push to `main`,
-and every gate runs **before** anything rolls out. The `deploy` job waits on eleven needs in Store
-(`MMCA.Store/.github/workflows/deploy.yml:1187`) and twelve in ADC
-(`MMCA.ADC/.github/workflows/deploy.yml:1242`): the shared eleven are `changes`, `supply-chain`,
-`cost-guard`, the four recency gates (`dr-freshness`, `load-freshness`, `cross-service-freshness`,
-`cross-browser-freshness`), the chromium `e2e-gate`, `backend-test-gate`, `foundation` and
+and every gate runs **before** anything rolls out. The `deploy` job waits on seven needs in Store
+(`MMCA.Store/.github/workflows/deploy.yml:1083`) and eight in ADC
+(`MMCA.ADC/.github/workflows/deploy.yml:1145`): the shared seven are `changes`, `supply-chain`,
+`cost-guard`, the `freshness` job (whose four steps are the recency gates `dr-freshness`, `load-freshness`,
+`cross-service-freshness` and `cross-browser-freshness`), the chromium `e2e-gate`, `foundation` and
 `build-images`, and ADC adds `ai-eval-gate` for its AI session scorer (ADR-111). The
 image matrix pushes to ACR without rolling anything out. The rollout itself is one `azure/arm-deploy`
 step over `infra/main.bicep` (`MMCA.Store/.github/workflows/deploy.yml:1413-1419`,
@@ -134,11 +137,11 @@ verification fails.
 ## Rationale
 - **ARM success is the wrong success signal.** The smoke gate converts "the control plane accepted the
   template" into "the fleet is serving the revision this run built", which is the only claim a deploy
-  should be green on. Neither repo rests on it as its only backend backstop any more: in both, the
-  ui-scoped `e2e-gate` and `backend-test-gate` are exact complements over a code deploy, so exactly
-  one test gate runs before every rollout (`MMCA.Store/.github/workflows/deploy.yml:539,852,1209-1214`,
-  `MMCA.ADC/.github/workflows/deploy.yml:506,885,1266-1273`), and the smoke gate is a second line of
-  defence rather than the gate of record.
+  should be green on. Neither repo rests on it as its only backend backstop: in both, the test gate is
+  the pull request's required checks, because branch protection enforces admins and requires an
+  up-to-date branch, so the merged tree is the PR-tested tree
+  (`MMCA.Store/.github/workflows/deploy.yml:1084-1086`, `MMCA.ADC/.github/workflows/deploy.yml:1146-1148`),
+  and the smoke gate is a second line of defence rather than the gate of record.
 - **Activation is a different question from reachability, so it gets its own tier.** Every HTTP probe
   enters through the Gateway, and a healthy Gateway keeps answering from the previous backend
   revision when the new one never goes ready, so probes alone can only prove that *something* serves
