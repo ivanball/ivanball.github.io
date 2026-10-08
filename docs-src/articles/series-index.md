@@ -18,7 +18,8 @@ mode each pattern fixes, the real type and ADR behind the MMCA.Common implementa
 trade-offs, and how to apply the idea even if you never install the package.
 
 Each article stands on its own if you land on it from a search. This page is the index that ties them
-together: 52 deep-dives plus this map, 53 articles in all. The groups below run roughly from "why this
+together: 45 deep-dives, four tutorials, two opinion pieces and one case study, plus this map, 53
+articles in all. The groups below run roughly from "why this
 exists" to "how to build with it," so reading top to bottom is a reasonable curriculum, but every link
 is also a fine place to start.
 
@@ -140,9 +141,15 @@ then monthly evergreen.*
 
 *Tags: .NET, Software Architecture, C Sharp, Microservices, Programming*
 
-*Notes: 2026-10-02 refresh (framework v1.221.0, 131 ADRs 001-131; no new article this run, ADR-131
-was folded into Article 25, so the series stays at 53). Evidence read this run: the folder holds 53
-slug-named article files plus `README.md` (no `Article-NN-*` files; the number lives only in each
+*Notes: 2026-10-08 refresh (framework v1.233.0, `MMCA.Common/FACTS.md:4,14`; 132 accepted ADRs
+001-132, `Website/docs-src/adr/README.md:6`; no new article this run, ADR-132 is covered inside Article
+34 at `architecture-fitness-functions.md:82`, so the series stays at 53). Changed this run: the intro's
+"52 deep-dives plus this map" now follows the Format column of `README.md` (45 deep-dive rows, four
+tutorials at `README.md:41,42,49,50`, two opinion pieces at `:11,13`, one case study at `:51`, and this
+index at `:63`), and the license and repo-URL anchors moved to `Directory.Build.props:71,72`. The
+2026-10-02 refresh ran at framework v1.221.0 with 131 ADRs (ADR-131 folded into Article 25). Evidence
+read this run: the folder holds 53 slug-named article files plus `README.md` and `_ledger.md` (the
+build-skipped maintenance notes; no `Article-NN-*` files; the number lives only in each
 file's line-3 `Article #N` header), and a scripted pass compared all 52 list entries against their
 targets: every link resolves to an existing slug, every link text equals the target's line-1 H1 verbatim,
 and every list number equals the target's `Article #N`. `Website/assets/data/articles.js` has 53 rows
@@ -151,14 +158,17 @@ Medium url (n:49 at `articles.js:88`), and rows n:50, n:51 and n:52 (`articles.j
 carry the site date 2026-09-24 and an empty Medium url, so the header now says those three are
 site-only rather than unpublished, and the earlier "listed without a link" wording is gone (all 52
 entries link to their site page). `README.md:7` heads "The series (53 articles)". Body facts re-checked:
-Apache-2.0 (`MMCA.Common/Directory.Build.props:49`), .NET 10 (`Directory.Build.props:3`), repo URL
-(`Directory.Build.props:50`), the 34-category rubric (last category at
+Apache-2.0 (`MMCA.Common/Directory.Build.props:71`), .NET 10 (`Directory.Build.props:3`), repo URL
+(`Directory.Build.props:72`), the 34-category rubric (last category at
 `Website/docs-src/governance/ArchitectureEvaluationCriteria.md:890`), `dotnet new mmca-app`
 (`MMCA.Helpdesk/.template.config/template.json:7`), `MMCA.Common.API` (`MMCA.Common/FACTS.md:29`), the
 three `Website/docs-src/governance/*-ArchitectureScorecard.md` files and `Website/writing.html` exist.
 Article 35's link text carries the 2,254-test figure only because it reproduces that article's H1
-(`test-pyramid.md:1`); this hub asserts no test count of its own, and the figure is owned and verified
-by Article 35 (FACTS.md carries no total test count). `Personal/Medium/` (including
+(`test-pyramid.md:1`); this hub asserts no test count of its own, and the figure is owned by Article 35
+and the Common scorecard (`Website/docs-src/governance/common-ArchitectureScorecard.md:78`; FACTS.md
+carries no total test count). The 2026-10-08 audit could not reproduce 2,254 from a raw Grep (about
+6,590 `[Fact]`/`[Theory]` attributes under `MMCA.Common/Tests` across all tiers), so the link text stays
+tied to the H1 and any correction belongs to Article 35 first. `Personal/Medium/` (including
 `Medium-Campaign-Plan.md`) is retired (`Personal/Medium/README.md:3`), so this hub no longer measures
 its order against that calendar. History: the 2026-09-19 refresh grew the series from 50 to 53 and moved
 this hub from 50 to 53: the governed LLM boundary (`governed-llm-boundary.md`) joined "Run, extract, and

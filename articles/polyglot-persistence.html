@@ -6,24 +6,24 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>One entity model, four databases: polyglot persistence behind a single attribute · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="SQL Server, Cosmos, and SQLite behind a single entity model, with the engine chosen by attribute.">
+  <meta name="description" content="SQL Server, PostgreSQL, Cosmos, and SQLite behind a single entity model, with the engine chosen by attribute.">
   <link rel="canonical" href="https://ivanball.github.io/articles/polyglot-persistence.html">
   <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="One entity model, four databases: polyglot persistence behind a single attribute">
-  <meta property="og:description" content="SQL Server, Cosmos, and SQLite behind a single entity model, with the engine chosen by attribute.">
+  <meta property="og:description" content="SQL Server, PostgreSQL, Cosmos, and SQLite behind a single entity model, with the engine chosen by attribute.">
   <meta property="og:url" content="https://ivanball.github.io/articles/polyglot-persistence.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-11.png">
   <meta property="og:image:alt" content="One entity model, four databases: polyglot persistence behind a single attribute">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="One entity model, four databases: polyglot persistence behind a single attribute">
-  <meta name="twitter:description" content="SQL Server, Cosmos, and SQLite behind a single entity model, with the engine chosen by attribute.">
+  <meta name="twitter:description" content="SQL Server, PostgreSQL, Cosmos, and SQLite behind a single entity model, with the engine chosen by attribute.">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-11.png">
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"One entity model, four databases: polyglot persistence behind a single attribute","description":"SQL Server, Cosmos, and SQLite behind a single entity model, with the engine chosen by attribute.","url":"https://ivanball.github.io/articles/polyglot-persistence.html","mainEntityOfPage":"https://ivanball.github.io/articles/polyglot-persistence.html","image":"https://ivanball.github.io/assets/img/articles/article-11.png","datePublished":"2026-07-09T14:20:41Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":11,"sameAs":"https://medium.com/@ivanball76/one-entity-model-three-databases-polyglot-persistence-behind-a-single-attribute-760e77974d5d"}</script>
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"11 · Polyglot persistence: one model, three engines","item":"https://ivanball.github.io/articles/polyglot-persistence.html"}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"One entity model, four databases: polyglot persistence behind a single attribute","description":"SQL Server, PostgreSQL, Cosmos, and SQLite behind a single entity model, with the engine chosen by attribute.","url":"https://ivanball.github.io/articles/polyglot-persistence.html","mainEntityOfPage":"https://ivanball.github.io/articles/polyglot-persistence.html","image":"https://ivanball.github.io/assets/img/articles/article-11.png","datePublished":"2026-07-09T14:20:41Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":11,"sameAs":"https://medium.com/@ivanball76/one-entity-model-three-databases-polyglot-persistence-behind-a-single-attribute-760e77974d5d"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"11 · Polyglot persistence: one model, four engines","item":"https://ivanball.github.io/articles/polyglot-persistence.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
   <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -89,7 +89,7 @@
         <span aria-hidden="true">/</span>
         <a href="../articles/index.html">The MMCA.Common series</a>
         <span aria-hidden="true">/</span>
-        <span class="current">11 · Polyglot persistence: one model, three engines</span>
+        <span class="current">11 · Polyglot persistence: one model, four engines</span>
         <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
       </nav>
       <div class="doc-layout doc-layout--toc">
@@ -109,7 +109,7 @@
         <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
         <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
         <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
-        <li><a href="polyglot-persistence.html" aria-current="page">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="polyglot-persistence.html" aria-current="page">11 · Polyglot persistence: one model, four engines</a></li>
         <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
         <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
         <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
@@ -162,9 +162,9 @@
           <p class="article-meta"><time datetime="2026-07-09T14:20:41Z">July 9, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/one-entity-model-three-databases-polyglot-persistence-behind-a-single-attribute-760e77974d5d" target="_blank" rel="noopener">Also on Medium ↗</a></p>
           <figure class="article-hero"><img src="../assets/img/articles/article-11.webp" alt="" width="800" height="420" decoding="async"></figure>
           <p class="article-subtitle">A domain entity should not know which database engine stores it. Here is a design where
-          the same entity moves between SQL Server, PostgreSQL, Cosmos DB, and SQLite by changing one attribute,
-          with zero edits to the domain or application layer, plus the honest note that the machinery is shipped
-          and tested but not yet running in production.</p>
+          the same entity moves between SQL Server, PostgreSQL, Cosmos DB, and SQLite by changing one attribute
+          (plus the host&#39;s connection string for the target engine), with no edit to the domain entity, plus the
+          honest note that the plumbing runs in production while every production entity lives on SQL Server.</p>
           <hr>
           <p>Pick an entity. A <code>Session</code>, say. Where does it live? In almost every codebase the answer is welded
           into the entity itself, or at least into its persistence configuration: a SQL table here, a Cosmos
@@ -179,8 +179,9 @@
           <p>MMCA.Common makes it reversible. A domain entity carries no persistence-engine choice at all. It is a
           plain class. What decides whether it is stored in SQL Server, PostgreSQL, Cosmos DB, or SQLite is a
           single <code>[UseDataSource(&lt;engine&gt;)]</code> attribute on its EntityConfiguration, carried for you by one of four
-          thin base classes. Moving an entity between engines is a one-token change, and nothing above the
-          configuration class has to know it happened.</p>
+          thin base classes. Moving an entity between engines is a one-token change in that configuration, plus
+          the target engine&#39;s connection string and one AppHost line, and the entity itself never has to know it
+          happened.</p>
           <h2 id="two-axes-not-one">Two axes, not one</h2>
           <p>This is the companion to the database-per-service article (Article 10), and the two are deliberately
           orthogonal. It helps to name the axes.</p>
@@ -251,11 +252,14 @@
           (<code>DataSource.PostgreSQL</code>, <code>DataSource.CosmosDB</code>, <code>DataSource.Sqlite</code>). They exist purely so that a
           consumer can express the engine choice by <em>which base class they derive from</em>, without ever typing the
           attribute themselves.</p>
-          <h2 id="the-entity-move-is-one-token">The entity move is one token</h2>
+          <h2 id="the-code-change-is-one-token">The code change is one token</h2>
           <p>So what does it take to move <code>Session</code> from SQL Server to Cosmos? You change its configuration&#39;s base
           class from <code>EntityTypeConfigurationSQLServer&lt;Session, ...&gt;</code> to
           <code>EntityTypeConfigurationCosmos&lt;Session, ...&gt;</code>. Or, equivalently, you derive from the engine-aware base
-          directly and put <code>[UseDataSource(DataSource.CosmosDB)]</code> on the class. That is the change.</p>
+          directly and put <code>[UseDataSource(DataSource.CosmosDB)]</code> on the class. That is the change in code. The
+          host has to configure the target engine as well: a Cosmos connection string and one AppHost helper
+          line sit alongside the base-class change. Without them the resolver serves the entity from the engine
+          the host does configure (the nuance below), so the token alone does not move the storage.</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Before: relational</span>
 <span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">SessionConfiguration</span>
     : <span class="hljs-title">EntityTypeConfigurationSQLServer</span>&lt;<span class="hljs-title">Session</span>, <span class="hljs-title">SessionIdentifierType</span>&gt;
@@ -277,8 +281,11 @@
         <span class="hljs-comment">// relationships, column lengths, indexes...</span>
     }
 }</code></pre>
-          <p>The <code>Session</code> entity class does not change. The command handlers do not change. The query handlers do
-          not change. The DTOs and mappers do not change. Routing is the job of the <code>EntityDataSourceRegistry</code>,
+          <p>The <code>Session</code> entity class does not change, and neither do the DTOs and mappers. The command and query
+          handlers keep their code as long as they stay inside what the target engine supports: Cosmos has no
+          database transactions, no raw SQL, no <code>.Include()</code> between entities of the same source, and no
+          <code>Any(predicate)</code> translation, so a handler that leans on one of those needs attention before a Cosmos
+          move. Routing is the job of the <code>EntityDataSourceRegistry</code>,
           a singleton built lazily on first access: it reflects over the configuration assemblies, reads each
           config&#39;s <code>[UseDataSource]</code> attribute (and its logical database name), resolves the pair through
           <code>IDataSourceResolver</code> into a <code>DataSourceKey</code>, and records the result in a frozen lookup, rescanning
@@ -305,9 +312,9 @@
           and removes the foreign entity type from this model entirely. The scalar FK survives, so a logical
           join is still possible through a batch loader; what disappears is the impossible cross-database
           constraint. The compensating index is deliberately <strong>skipped on Cosmos</strong>, because Cosmos auto-indexes
-          every property and rejects explicit index definitions (adding one would fail model validation). That
-          Cosmos-index skip was added with ADR-018 precisely so the same configuration body stays portable to
-          Cosmos with no edits.</p>
+          every property and rejects explicit index definitions (adding one would fail model validation). The
+          convention reads that from the engine&#39;s <code>IsRelational</code> capability, and the skip exists precisely so
+          the same configuration body stays portable to Cosmos with no edits.</p>
           <p>The most important property of this convention: when every entity collapses onto one database (the
           monolith case), nothing is foreign and the convention is a structural no-op. The degraded model is
           byte-for-byte the single-database model. The boundary exists and is tested, but it costs nothing when
@@ -346,8 +353,11 @@ s =&gt; s.Event.IsPublished</code></pre>
           <code>SpecificationsDoNotNavigateToOtherEntities</code> test fails the test run if a specification navigates
           across an entity boundary the way the un-translatable version above does.</p>
           <h2 id="the-honest-adoption-note">The honest adoption note</h2>
-          <p>Here is the part most articles would quietly omit. All of the above is shipped and tested. None of it
-          is running in production yet.</p>
+          <p>Here is the part most articles would quietly omit. All of the above is shipped and tested, and the
+          engine-agnostic plumbing is in production: every ADC entity configuration runs through the engine-aware
+          base, the degrade convention is registered on every context (a structural no-op there, since nothing
+          is foreign), and <code>CrossSourceSpecification.BuildAsync</code> answers ADC&#39;s public session reads. What is not
+          in production is a second engine. No production entity routes to anything other than SQL Server.</p>
           <p>Today, every current production entity configuration uses the <code>EntityTypeConfigurationSQLServer</code>
           base. ADC runs SQL Server only, across four databases (the Name axis), with no entity on PostgreSQL,
           Cosmos, or SQLite in production. The SQLite engine backs the fast test database in MMCA.Common&#39;s own
@@ -362,16 +372,18 @@ s =&gt; s.Event.IsPublished</code></pre>
           green.</p>
           <p>So treat PostgreSQL, Cosmos, and SQLite as supported, exercised extension points rather than dormant
           ones, but do not read this as &quot;ADC is polyglot in production.&quot; It is not. The capability is real and
-          has been trialed end to end, but no production entity routes to a non-SQL engine today. Saying so is
-          the point of the §8 evaluation:
-          an extension point that is built and tested but not yet load-bearing is a different thing from one that is in daily
-          production, and conflating them is how architecture diagrams start lying.</p>
+          has been trialed end to end, but no production entity routes to a non-SQL-Server engine today. Saying
+          so is the point of the §8 evaluation:
+          plumbing that is load-bearing on one engine is a different thing from an entity that a second engine
+          serves in daily production, and conflating them is how architecture diagrams start lying.</p>
           <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
           <ul>
           <li><strong>Cosmos has no JOINs, and the framework does not pretend otherwise.</strong> The whole
           resolve-then-filter-by-FK machinery exists <em>because</em> you cannot join across containers or across
           physical sources. Cross-source navigation goes through batch loaders, and cross-source consistency
-          is the outbox&#39;s job (ADR-003), not a transaction&#39;s. There is no two-phase commit across engines.</li>
+          is the outbox&#39;s job (ADR-003), not a transaction&#39;s. There is no two-phase commit across engines, and
+          Cosmos has no database transactions at all (nor raw SQL, nor <code>Any(predicate)</code> translation), so a
+          handler that relies on one of them is not portable to Cosmos.</li>
           <li><strong><code>CrossSourceSpecification</code> fits bounded principal sets.</strong> It materializes the matching principal
           keys and embeds them in the predicate. That is ideal for &quot;published events&quot; or &quot;active tenants,&quot; but
           an unbounded principal set would inline a very large <code>IN</code> list. The class documents this limit
@@ -389,8 +401,9 @@ s =&gt; s.Event.IsPublished</code></pre>
           aggregate are dispatched in-process only, with no durable outbox row to replay from. That is a real
           reliability difference from the relational path, and it is a deliberate consequence of Cosmos having
           no relational <code>OutboxMessages</code> table.</li>
-          <li><strong>Trialed, then reverted, not deployed.</strong> As above: the extension points are built and tested, ADC trialed the
-          Cosmos/SQLite move and rolled it back to all-SQL-Server, and no production polyglot entity has shipped.
+          <li><strong>One engine in production, not four.</strong> As above: the plumbing runs in production on SQL Server, ADC
+          trialed the Cosmos/SQLite move and rolled it back to all-SQL-Server, and no production entity is
+          served by a second engine.
           Validate the engine behavior you depend on against your own data before you lean on it in production.</li>
           </ul>
           <p>None of these are reasons to weld the engine choice back into the entity. They are the reasons to keep
@@ -422,8 +435,8 @@ s =&gt; s.Event.IsPublished</code></pre>
           strategies, and four thin <code>EntityTypeConfigurationSQLServer/PostgreSQL/Cosmos/Sqlite</code> shims re-point
           the same entity to a different engine through one <code>[UseDataSource]</code> attribute, how
           <code>CrossDataSourceDegradeConvention</code> and <code>CrossSourceSpecification</code> keep cross-engine relationships and
-          predicates working without rewrites, and the honest note that this is shipped and tested but not yet
-          running in ADC production.</p>
+          predicates working without rewrites, and the honest note that the plumbing runs in ADC production while
+          every production entity lives on SQL Server.</p>
           <p><strong>Next in the series:</strong> navigation populators, the batch-loader that replaces EF Include chains
           once a relationship crosses a data-source boundary.</p>
           <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the persistence chapter of the
@@ -447,7 +460,7 @@ s =&gt; s.Event.IsPublished</code></pre>
             <ul>
             <li><a href="#two-axes-not-one">Two axes, not one</a></li>
             <li><a href="#the-configuration-hierarchy-where-the-engine-lives">The configuration hierarchy: where the engine lives</a></li>
-            <li><a href="#the-entity-move-is-one-token">The entity move is one token</a></li>
+            <li><a href="#the-code-change-is-one-token">The code change is one token</a></li>
             <li><a href="#when-a-relationship-crosses-an-engine-boundary">When a relationship crosses an engine boundary</a></li>
             <li><a href="#keeping-a-cross-source-predicate-translatable">Keeping a cross-source predicate translatable</a></li>
             <li><a href="#the-honest-adoption-note">The honest adoption note</a></li>

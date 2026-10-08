@@ -109,7 +109,7 @@
         <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
         <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
         <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
-        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, four engines</a></li>
         <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
         <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
         <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
@@ -161,17 +161,17 @@
           <h1 id="idempotency-in-one-attribute-safe-retries-for-http-apis">Idempotency in one attribute: safe retries for HTTP APIs</h1>
           <p class="article-meta"><time datetime="2026-07-16T13:46:11Z">July 16, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/idempotency-in-one-attribute-safe-retries-for-http-apis-065848fd03f4" target="_blank" rel="noopener">Also on Medium ↗</a></p>
           <figure class="article-hero"><img src="../assets/img/articles/article-18.webp" alt="" width="800" height="420" decoding="async"></figure>
-          <p class="article-subtitle">Clients retry. Resilient HTTP handlers retry harder. A <code>POST</code> that creates a resource must
+          <p class="article-subtitle">Clients retry, and not every client&#39;s retry policy knows which verbs are safe to resend. A <code>POST</code> that creates a resource must
           survive being sent twice. Here is the whole thing in one <code>[Idempotent]</code> attribute, formalized in ADR-017,
           plus the matching consumer-side inbox that handles the same problem on the broker.</p>
           <hr>
           <p>A user taps &quot;Place order.&quot; The request goes out. The phone&#39;s connection hiccups for two seconds, the
           client sees no response, and it retries. Your server received both requests. It just created two orders.</p>
-          <p>This is not an exotic failure. It is the <em>default</em> behavior of every retrying client and every resilient
-          HTTP handler in your stack. The whole point of a Polly retry policy (ADR-009 wires one onto every
-          outbound client) is to resend a request that did not visibly succeed. The policy cannot tell &quot;the server
-          never got it&quot; from &quot;the server got it and the response got lost.&quot; So it resends, and if your <code>POST</code> is
-          not idempotent, the retry that was supposed to save you just double-charged a customer.</p>
+          <p>This is not an exotic failure. It is the <em>default</em> behavior of every retrying client. A mobile app&#39;s retry
+          loop, or a partner integration whose Polly policy retries every verb, exists to resend a request that did
+          not visibly succeed. Neither can tell &quot;the server never got it&quot; from &quot;the server got it and the response
+          got lost.&quot; So it resends, and if your <code>POST</code> is not idempotent, the retry that was supposed to save you
+          just double-charged a customer.</p>
           <p>The fix is a contract: the client attaches a key that says &quot;this is the same logical request,&quot; and the
           server promises that the same key produces the same single effect. In MMCA.Common that contract is one
           attribute.</p>
@@ -179,8 +179,11 @@
           <p>The non-idempotent <code>POST</code> is a quiet, expensive bug. It does not throw. It does not log an error. It
           produces a second perfectly valid-looking row. You find out when finance reconciles, or when a customer
           complains about a duplicate charge, and by then the originating request is long gone from the logs.</p>
-          <p>And the pressure toward retries only increases as you harden the system. Add a resilience handler to your
-          HTTP clients and you have <em>more</em> automatic retries, not fewer. Resilience and idempotency are two halves
+          <p>And the pressure toward retries only increases as systems get hardened. A stock resilience handler retries
+          every verb unless it is told otherwise, which is exactly why MMCA&#39;s own outbound handlers switch the retry
+          off for <code>POST</code> and <code>PATCH</code> (ADR-009), and why the framework&#39;s UI client retries a <code>POST</code> only when it
+          carries an <code>Idempotency-Key</code> held constant across the attempts. A server cannot assume every caller is that
+          careful, and the ones that are still need the server to honor the key. Resilience and idempotency are two halves
           of the same coin: retries make the system robust to transient failure <em>only if</em> the operations being
           retried are safe to repeat. Idempotency is what makes &quot;just retry it&quot; a safe instruction.</p>
           <h2 id="the-mechanism-one-attribute-one-header">The mechanism: one attribute, one header</h2>
@@ -228,8 +231,8 @@
           <code>idempotency:{SHA-256(subject | method | route template | client key)}</code>, where the subject is the caller&#39;s
           user id (the <code>sub</code> claim, falling back to the mapped name-identifier claim) or, for an unauthenticated call,
           <code>anon:{remote address}</code> (<code>anon:unknown</code> when there is no address). The four parts are joined with a newline,
-          which none of them can contain, so no value can be crafted to forge a different tuple. That is a security
-          property before it is anything else. Keying on the bare client value makes the key space global: two callers who happen to
+          which an HTTP header value cannot carry, so the client&#39;s key cannot be crafted to spill into a neighboring
+          part and forge a different tuple. That is a security property before it is anything else. Keying on the bare client value makes the key space global: two callers who happen to
           pick the same value share an entry, so one user&#39;s serialized response body gets replayed to another, and
           because services can share a single cache instance the collision reaches across endpoints and across
           services too. Hashing also keeps the stored key bounded no matter what the client sends.</p>
@@ -250,8 +253,8 @@
           <p>The fast-path read is lock-free, so the common case (a unique key, no contention) pays almost nothing. A
           burst of concurrent duplicates collapses into a single execution rather than a race.</p>
           <p>Why a <em>distributed</em> lock and not a semaphore: a per-process lock only serializes duplicates that land on
-          the same replica. Both deployed apps run more than one, so two duplicates arriving at different replicas
-          both miss the cache, both execute, and the second overwrites the first&#39;s stored response. That is exactly
+          the same replica. Both deployed apps autoscale to more than one, so two duplicates arriving at different
+          replicas both miss the cache, both execute, and the second overwrites the first&#39;s stored response. That is exactly
           the double write the filter exists to prevent, and no amount of in-memory cleverness fixes it.</p>
           <p><code>AddCaching()</code> (called by <code>AddInfrastructure</code>) registers the lock unconditionally, right next to the cache,
           because the two are a pair: the lock guards the window that the cache entry closes. With an
@@ -312,13 +315,17 @@
           records each handled message by its <code>MessageId</code> in an <code>InboxMessage</code> table with a unique index.</li>
           <li><code>IntegrationEventConsumer</code> calls <code>TryBeginAsync(MessageId, eventType)</code> before invoking handlers: a
           message the inbox already holds is skipped and acked, never reapplied. <code>TryBegin</code> also <em>stages</em> the
-          inbox row, unsaved, in the scope&#39;s unit of work, so a handler that calls <code>SaveChangesAsync</code> on that
-          same scope commits the row in the same transaction as its own mutations. A handler that throws has the
-          staged row abandoned before the rethrow, so the redelivery is not mistaken for a duplicate, as long as
-          the row is still unsaved. If an earlier handler&#39;s save already committed it, the abandon cannot take it
-          back: the store logs that case, the redelivery is skipped as a duplicate, and the handlers that had not
-          yet run never run. A consume that reaches the end calls <code>CompleteAsync(...)</code> to persist whatever is
-          still unsaved.</li>
+          inbox row, unsaved, in the consume scope&#39;s unit of work, so a handler that calls <code>SaveChangesAsync</code>
+          through that same scope&#39;s context commits the row in the same transaction as its own mutations. The
+          framework&#39;s own handlers do not take that path: they derive from <code>ScopedIntegrationEventHandlerBase</code>,
+          which opens a DI scope of its own per delivery, so their saves never carry the staged row. For them the
+          row is written by <code>CompleteAsync(...)</code> once every handler has succeeded, which makes their mutations
+          and the inbox row two transactions: a crash between the two redelivers the event. A handler that throws
+          has the staged row abandoned before the rethrow, so the redelivery is not mistaken for a duplicate, as
+          long as the row is still unsaved. If an earlier same-scope handler&#39;s save already committed it, the
+          abandon cannot take it back: the store logs that case, the redelivery is skipped as a duplicate, and the
+          handlers that had not yet run never run. A consume that reaches the end calls <code>CompleteAsync(...)</code> to
+          persist whatever is still unsaved.</li>
           <li>The posture is resolved from the transport. <code>MessageBusSettings.EnableInbox</code> is a nullable bool left
           unset by default, and <code>IsInboxEnabled</code> reads that as on for a broker and off for the in-process
           provider, which has no redelivery to dedup. An explicit value wins in both directions: a host that sets
@@ -330,8 +337,10 @@
           scorecard credits the filter under §9 and §10, where the §10 row, scored Implementation 9, lists the
           filter taking a distributed lock with the stripe as fallback among its evidence, while §29 covers the Polly
           handlers and the outbox&#39;s graceful degradation), and the broker consumer path dedups by <code>MessageId</code> by
-          default on any broker transport. The remaining discipline is treating the explicit opt-out as a decision
-          with a cost, and keeping handlers safe to repeat wherever the inbox resolves off.</p>
+          default on any broker transport. That dedup is at-least-once-with-dedup, not exactly-once: the crash
+          window above still redelivers an event whose handlers already committed, so handlers must stay safe to
+          repeat with the inbox on. The remaining discipline is treating the explicit opt-out as a decision with a
+          cost, and writing every handler to be safe to repeat.</p>
           <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
           <ul>
           <li><strong>Clients must send a stable key, from a stable identity.</strong> Idempotency is a contract, not magic. If a
@@ -362,12 +371,17 @@
           counted on <code>idempotency.degraded</code> and the action runs unguarded rather than erroring. Availability wins
           deliberately, and the price is that duplicates can execute twice while the backend is down. Treat that
           metric as an alert, not a dashboard decoration.</li>
-          <li><strong>Consumer-side idempotency follows the transport.</strong> The inbox above resolves on for a broker and off
-          for the in-process provider, and a host can override either way with <code>MessageBus:EnableInbox</code>. Wherever
-          it resolves off, every consumer&#39;s idempotency is code you own and test.</li>
-          <li><strong>On an event with several handlers, the inbox row commits with the first handler that saves.</strong> A later
-          handler that then fails is not retried by the redelivery, which is skipped as a duplicate. Ordering and
-          partial failure across handlers of one event are therefore yours to reason about.</li>
+          <li><strong>The inbox narrows the consumer-side duplicate problem; it does not remove it.</strong> The inbox above
+          resolves on for a broker and off for the in-process provider, and a host can override either way with
+          <code>MessageBus:EnableInbox</code>. Wherever it resolves off, every duplicate reaches your handlers; wherever it
+          resolves on, a crash between a handler&#39;s commit and the inbox write still redelivers the event once
+          more. Either way, every consumer&#39;s idempotency is code you own and test.</li>
+          <li><strong>Partial failure across the handlers of one event cuts both ways.</strong> A handler that saves through the
+          consume scope&#39;s own context commits the inbox row with it, so a later handler that then fails is not
+          retried: the redelivery is skipped as a duplicate. Handlers built on <code>ScopedIntegrationEventHandlerBase</code>
+          save on their own scope and leave the row to <code>CompleteAsync</code>, so a failure among them redelivers the
+          event to every handler, including the ones that already committed. Ordering and partial failure across
+          handlers of one event are therefore yours to reason about.</li>
           </ul>
           <p>None of these are reasons to skip idempotent writes. They are the reasons to make the key contract
           explicit and to write your broker consumers defensively.</p>
@@ -399,7 +413,7 @@
           repeat at the edge with a key, and make your event consumers safe to repeat with an inbox, because
           at-least-once delivery will eventually hand you a duplicate.</strong></p>
           <hr>
-          <p><strong>What we covered:</strong> why retrying clients and resilient handlers turn a <code>POST</code> into a double-write, how
+          <p><strong>What we covered:</strong> why a retrying client turns a non-idempotent <code>POST</code> into a double-write, how
           the <code>[Idempotent]</code> attribute plus an <code>Idempotency-Key</code> header caches and replays the first response under a
           distributed lock that spans execute-and-store, why the record is bound to a hash of the request body so a
           reused key with a changed payload is refused instead of replayed, what the filter does when the cache or

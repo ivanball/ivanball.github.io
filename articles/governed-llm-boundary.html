@@ -109,7 +109,7 @@
         <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
         <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
         <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
-        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, four engines</a></li>
         <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
         <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
         <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
@@ -200,7 +200,7 @@
           the trade-offs.</p>
           <h2 id="the-mmca-answer-four-optional-packages-and-the-call-is-a-pipeline">The MMCA answer: four optional packages, and the call is a pipeline</h2>
           <p>The AI boundary is four of the twenty-two published framework packages (<code>MMCA.Common/FACTS.md:19</code>), all
-          at framework v1.221.0 (<code>:14</code>): <code>MMCA.Common.AI</code>, the governed pipeline (<code>:22</code>);
+          at framework v1.233.0 (<code>:14</code>): <code>MMCA.Common.AI</code>, the governed pipeline (<code>:22</code>);
           <code>MMCA.Common.AI.Anthropic</code> and <code>MMCA.Common.AI.OpenAI</code>, provider adapters that each register one
           <code>IAiProviderFactory</code> (<code>:23</code>, <code>:24</code>); and <code>MMCA.Common.AI.Testing</code>, the replay and golden-evaluation
           harness (<code>:34</code>). All four are optional: nothing in the metapackage drags them in, and a host that never
@@ -265,22 +265,25 @@ BoundedChatClient                <span class="hljs-comment">// what the call is 
           each applied to the buffered and the streaming path (the list is documented on the type at <code>:16-50</code>):</p>
           <ol>
           <li><strong>Output tokens.</strong> <code>MaxOutputTokens</code> is clamped down to the configured ceiling, while a caller asking
-          for less keeps its own smaller number (<code>:185-187</code>). Output tokens are the expensive half of a chat
+          for less keeps its own smaller number (<code>:197-199</code>). Output tokens are the expensive half of a chat
           call, so this is a cost bound.</li>
           <li><strong>Wall clock.</strong> Every call runs under a token linked to the caller&#39;s own and cancelled after
-          <code>Ai:Timeout</code> (<code>:270-275</code>). On the streaming path the timeout covers the whole stream rather than its
+          <code>Ai:Timeout</code> (<code>:280-285</code>). On the streaming path the timeout covers the whole stream rather than its
           first update (<code>:133-146</code>, with the reasoning at <code>:140-141</code>): a provider that opens a response and then
           stalls is exactly the failure a per-call budget exists to bound.</li>
           <li><strong>Tool use.</strong> While <code>Ai:AllowTools</code> is false, tools and the tool mode are stripped from the request
-          (<code>:189-193</code>). That is the difference between telling a model not to act and being unable to hand it
-          the means. While it is true, <code>FilterTools</code> (<code>:231-268</code>) offers a tool only when every registered
-          <code>IChatToolPolicy</code> allows it (<code>:251</code>), and a tool marked consequential only when the request also
-          confirms it by name (<code>:259</code>). The confirmation is checked on top of the policies, never instead of
-          them (<code>:256-258</code>), and with no policy at all every tool is stripped (<code>:241-244</code>).</li>
+          (<code>:201-205</code>). That is the difference between telling a model not to act and being unable to hand it
+          the means. While it is true, <code>FilterTools</code> (<code>:241-278</code>) offers a tool only when every registered
+          <code>IChatToolPolicy</code> allows it (<code>:261</code>), and a tool marked consequential only when the request also
+          confirms it by name (<code>:269</code>). The confirmation is checked on top of the policies, never instead of
+          them (<code>:266-268</code>), and with no policy at all every tool is stripped (<code>:248-254</code>). When the surviving
+          tools cannot honor the requested tool mode (none survive, or a <code>RequireSpecific</code> mode names a tool the
+          filter stripped), the mode falls back to auto so the model answers plainly (<code>CanHonorToolMode</code>,
+          <code>:181-191</code>, applied at <code>:209-212</code>).</li>
           <li><strong>Input size.</strong> When <code>Ai:PerCallInputTokenBudget</code> is set, an estimated input above the budget fails
-          the call locally instead of paying for it remotely (<code>:277-292</code>).</li>
+          the call locally instead of paying for it remotely (<code>:287-302</code>).</li>
           <li><strong>Model.</strong> The request goes out naming <code>Ai:Model</code>, and a request that names a different model is
-          refused (<code>:205-220</code>). Adapters differ in whether a per-request model id overrides the one the client
+          refused (<code>:215-230</code>). Adapters differ in whether a per-request model id overrides the one the client
           was built with, so pinning it here makes <code>PromptContract.Model</code> mean the same thing on every provider:
           the model the prompt was evaluated against, and the only one it may be sent to (<code>:43-49</code>).</li>
           </ol>
@@ -293,7 +296,7 @@ BoundedChatClient                <span class="hljs-comment">// what the call is 
           (<code>IAiTokenEstimator.cs:9-12</code>): a package whose whole point is keeping the model dependency small should
           not acquire a second one to count characters.</p>
           <p>One detail that costs nothing and prevents a real bug: the options a caller passes are never mutated.
-          Each call works on a clone (<code>BoundedChatClient.cs:183</code>), so a caller reusing one <code>ChatOptions</code> instance
+          Each call works on a clone (<code>BoundedChatClient.cs:195</code>), so a caller reusing one <code>ChatOptions</code> instance
           across requests does not silently inherit this client&#39;s clamping.</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Illustrative of the documented shape: the bounds BoundedChatClient applies.</span>
 <span class="hljs-function"><span class="hljs-keyword">private</span> ChatOptions <span class="hljs-title">Bound</span>(<span class="hljs-params">ChatOptions? options</span>)</span>
@@ -314,7 +317,9 @@ BoundedChatClient                <span class="hljs-comment">// what the call is 
     {
         <span class="hljs-comment">// Only the tools every IChatToolPolicy allows (and the caller confirmed, if consequential).</span>
         bounded.Tools = FilterTools(bounded);
-        <span class="hljs-keyword">if</span> (bounded.Tools <span class="hljs-keyword">is</span> <span class="hljs-literal">null</span>)
+
+        <span class="hljs-comment">// No tools left, or a RequireSpecific mode naming a stripped tool: fall back to auto.</span>
+        <span class="hljs-keyword">if</span> (!CanHonorToolMode(bounded))
         {
             bounded.ToolMode = <span class="hljs-literal">null</span>;
         }
@@ -325,8 +330,9 @@ BoundedChatClient                <span class="hljs-comment">// what the call is 
     {
         <span class="hljs-keyword">if</span> (bounded.ModelId <span class="hljs-keyword">is</span> { } requestedModel &amp;&amp; !<span class="hljs-built_in">string</span>.Equals(requestedModel, pinned, StringComparison.Ordinal))
         {
+            <span class="hljs-keyword">var</span> setting = <span class="hljs-string">$&quot;<span class="hljs-subst">{AiSettings.SectionName}</span>:<span class="hljs-subst">{<span class="hljs-keyword">nameof</span>(AiSettings.Model)}</span>&quot;</span>;
             <span class="hljs-keyword">throw</span> <span class="hljs-keyword">new</span> InvalidOperationException(
-                <span class="hljs-string">$&quot;The request names model &#x27;<span class="hljs-subst">{requestedModel}</span>&#x27; but Ai:Model pins &#x27;<span class="hljs-subst">{pinned}</span>&#x27;.&quot;</span>);
+                <span class="hljs-string">$&quot;The request names model &#x27;<span class="hljs-subst">{requestedModel}</span>&#x27; but <span class="hljs-subst">{setting}</span> pins &#x27;<span class="hljs-subst">{pinned}</span>&#x27;.&quot;</span>);
         }
 
         bounded.ModelId = pinned;
@@ -357,9 +363,9 @@ BoundedChatClient                <span class="hljs-comment">// what the call is 
         <span class="hljs-keyword">return</span>;
     }
 
-    <span class="hljs-keyword">throw</span> <span class="hljs-keyword">new</span> InvalidOperationException(
-        <span class="hljs-string">$&quot;The request&#x27;s estimated input size (<span class="hljs-subst">{estimated}</span> tokens) exceeds Ai:PerCallInputTokenBudget &quot;</span>
-        + <span class="hljs-string">$&quot;(<span class="hljs-subst">{budget}</span> tokens). The estimate is approximate: shorten the prompt or raise the budget deliberately.&quot;</span>);
+    <span class="hljs-keyword">var</span> setting = <span class="hljs-string">$&quot;<span class="hljs-subst">{AiSettings.SectionName}</span>:<span class="hljs-subst">{<span class="hljs-keyword">nameof</span>(AiSettings.PerCallInputTokenBudget)}</span>&quot;</span>;
+    <span class="hljs-keyword">throw</span> <span class="hljs-keyword">new</span> InvalidOperationException(<span class="hljs-built_in">string</span>.Create(CultureInfo.InvariantCulture,
+        <span class="hljs-string">$&quot;The request&#x27;s estimated input size (<span class="hljs-subst">{estimated}</span> tokens) exceeds <span class="hljs-subst">{setting}</span> (<span class="hljs-subst">{budget}</span> tokens).&quot;</span>));
 }</code></pre>
           <p>On the streaming path, the bound and the budget check run eagerly, outside the iterator
           (<code>BoundedChatClient.cs:124-130</code>): a request the configuration forbids is refused when it is made, not when
@@ -376,12 +382,12 @@ BoundedChatClient                <span class="hljs-comment">// what the call is 
           <p>The framework ships the extension point, two opt-in domain-neutral guardrails and no domain policy, and
           the interface documentation says why (<code>IChatGuardrail.cs:9-14</code>). <code>AddPiiRedactionGuardrail</code>
           (<code>Guardrails/GuardrailServiceCollectionExtensions.cs:33</code>) registers contact-detail redaction
-          (<code>PiiRedactionGuardrail.cs:39</code>). <code>AddContentPolicyGuardrail</code> (<code>:62</code>) registers <code>ContentPolicyGuardrail</code>
+          (<code>PiiRedactionGuardrail.cs:40</code>). <code>AddContentPolicyGuardrail</code> (<code>:62</code>) registers <code>ContentPolicyGuardrail</code>
           (<code>ContentPolicyGuardrail.cs:64</code>), which matches eight built-in prompt-injection markers (<code>:77-87</code>) in
           user-role content and redacts, blocks or ignores them per <code>InjectionMode</code> (<code>Redact</code> by default,
           <code>ContentPolicySettings.cs:35</code>), plus any request pattern the host adds and a response-side refusal on
           configured blocked patterns; one singleton serves as both a guardrail and a redactor (<code>ADR-120:40-47</code>).
-          Those two ship because neither judgement varies by application (<code>ADR-120:368-372</code>). What counts as an
+          Those two ship because neither judgement varies by application (<code>ADR-120:380-384</code>). What counts as an
           off-topic answer or a disallowed topic depends on the data the application holds and the jurisdiction it
           operates in, so a rule like that baked into a shared package would be wrong somewhere by construction.
           That policy stays with the feature that knows what its input is.</p>
@@ -425,7 +431,7 @@ BoundedChatClient                <span class="hljs-comment">// what the call is 
           reads it back off the options a call carried, and <code>PromptTaggingChatClient</code>
           (<code>Chat/PromptTaggingChatClient.cs:21</code>) puts it on the <code>gen_ai</code> span (<code>DependencyInjection.cs:183</code>).</p>
           <p><code>MMCA.Common.AI.Testing</code> turns that identity into two gates, and the framework runs both on its own
-          reference contract (<code>ADR-120:261</code>). <code>PromptContractPinTestsBase</code> (<code>PromptContractPinTestsBase.cs:25</code>) pins
+          reference contract (<code>ADR-120:273</code>). <code>PromptContractPinTestsBase</code> (<code>PromptContractPinTestsBase.cs:25</code>) pins
           every contract&#39;s hash in a JSON file, and its two facts fail on a contract with no recorded hash (<code>:39</code>)
           and on a recorded hash that no longer matches its contract (<code>:60</code>). <code>GoldenReplayTestsBase</code>
           (<code>GoldenReplayTestsBase.cs:24</code>) replays every case of a corpus through the real code against the answer
@@ -480,8 +486,8 @@ BoundedChatClient                <span class="hljs-comment">// what the call is 
           &quot;the model is spread through the app&quot;, and a dependency that is everywhere cannot be versioned,
           evaluated, capped or swapped.</p>
           <p>It ships the way every shared rule in this framework ships: as an abstract base subclassed in each repo&#39;s
-          architecture tests with that repo&#39;s architecture map (<code>:14-17</code>), one of 141 fitness test methods across 55
-          abstract <code>*TestsBase</code> classes, of which MMCA.Common&#39;s own build executes 339 (<code>MMCA.Common/FACTS.md:51</code>,
+          architecture tests with that repo&#39;s architecture map (<code>:14-17</code>), one of 153 fitness test methods across 61
+          abstract <code>*TestsBase</code> classes, of which MMCA.Common&#39;s own build executes 410 (<code>MMCA.Common/FACTS.md:51</code>,
           <code>:54</code>). A prompt or a bound must not become a type your domain depends on, and that sentence is a failing
           test rather than a code review comment.</p>
           <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
@@ -494,57 +500,57 @@ BoundedChatClient                <span class="hljs-comment">// what the call is 
           startup failure. It does not make &quot;the right guardrail&quot; one.</li>
           <li><strong>Retrieval is unexercised, on purpose.</strong> Nothing in the package addresses vector or hybrid search,
           embedding freshness or retrieved-content injection, and ADR-120 leaves the rubric&#39;s retrieval
-          criterion to the feature that builds one, if one ever is (<code>ADR-120:390-393</code>). The scorecard reads it as
+          criterion to the feature that builds one, if one ever is (<code>ADR-120:402-405</code>). The scorecard reads it as
           unexercised rather than unmet because the criterion is worded conditionally on such a store existing
           (<code>common-ArchitectureScorecard.md:80</code>).</li>
           <li><strong>The framework ships the evaluation harness, not the evaluation.</strong> The replay client, the golden base,
           the pin base and the protocol are framework code; the corpus, the assertions and any live-judge tier
           remain the feature&#39;s, because only the feature knows what a good answer is. The framework&#39;s own
-          reference contract proves the bases work, not that any product prompt is good (<code>ADR-120:386-389</code>). The
+          reference contract proves the bases work, not that any product prompt is good (<code>ADR-120:398-401</code>). The
           package governs the call. It does not make your feature evaluable for you.</li>
           <li><strong>The package governs the call and only the narrowest part of the content.</strong> Contact-detail redaction
           and a small injection-marker list ship; delimiting untrusted input, escaping it, constraining the
           response schema and any domain-specific check stay in the feature that knows what its input is
-          (<code>ADR-120:368-380</code>). The marker list is eight phrases on purpose, so ordinary prose about instructions
+          (<code>ADR-120:380-392</code>). The marker list is eight phrases on purpose, so ordinary prose about instructions
           survives it, which also means it catches the common phrasings rather than every phrasing.</li>
           <li><strong>Least-privilege tool calling is framework mechanism, not framework policy.</strong> With <code>Ai:AllowTools</code>
           true, a tool reaches the model only when every <code>IChatToolPolicy</code> allows it and, if consequential, the
-          request confirms it (<code>BoundedChatClient.cs:231-268</code>), and tools-on with no policy refuses to start
+          request confirms it (<code>BoundedChatClient.cs:241-278</code>), and tools-on with no policy refuses to start
           (<code>DependencyInjection.cs:219-226</code>). What a policy allows is still the application&#39;s to write, and the
           rubric&#39;s &quot;authorized per caller&quot; (<code>ArchitectureEvaluationCriteria.md:480</code>) is only as good as that
           policy.</li>
           <li><strong>Two defaults can refuse a host at startup.</strong> <code>Ai:RequireGuardrail</code> true and <code>Ai:AllowTools</code> with no
           policy are both registration-time failures, and the model pin turns a <code>PromptContract</code> that disagrees
-          with <code>Ai:Model</code> into a refused call (<code>ADR-120:356-359</code>). That is the intended direction, and it means
+          with <code>Ai:Model</code> into a refused call (<code>ADR-120:368-371</code>). That is the intended direction, and it means
           adopting the package is more than one line of registration.</li>
           <li><strong>Off by absence puts a null on the consumer.</strong> Nothing is registered when <code>Ai:Enabled</code> is false
           (<code>DependencyInjection.cs:128-132</code>), so a feature resolves with <code>GetService</code> and holds a nullable
           dependency. That is a branch in your code, written once per feature, that the framework will not write
-          for you (<code>ADR-120:339-344</code>).</li>
+          for you (<code>ADR-120:351-356</code>).</li>
           <li><strong>A cache hit still records usage.</strong> <code>UsageRecordingChatClient</code> sits inside the optional response cache
           (<code>DependencyInjection.cs:36-39</code>), so a hit counts what the call would have cost rather than what was
           billed. The provider span is absent on a hit, so the two are distinguishable, but a spend graph read
-          without that context over-reports (<code>ADR-120:364-367</code>).</li>
+          without that context over-reports (<code>ADR-120:376-379</code>).</li>
           <li><strong>The input budget is an estimate and says so.</strong> Message text plus instructions only, four characters
           to the token, everything else under-counted (<code>BoundedChatClient.cs:51-58</code>). Treat it as a runaway
           guardrail with headroom. The authoritative numbers arrive after the call.</li>
           <li><strong>A provider is two references and a name.</strong> A host adds an adapter package beside the governed one,
           calls its registration method and names it in <code>Ai:Provider</code>; the governed package cannot fall back to a
-          provider it was never handed (<code>ADR-120:345-349</code>). Two adapters ship (<code>MMCA.Common/FACTS.md:23</code>, <code>:24</code>),
+          provider it was never handed (<code>ADR-120:357-361</code>). Two adapters ship (<code>MMCA.Common/FACTS.md:23</code>, <code>:24</code>),
           anything else implements <code>IAiProviderFactory</code> or goes through the factory overload
           (<code>DependencyInjection.cs:113</code>), and a misnamed provider is a boot failure naming the registered ones
           (<code>AiProviderValidator.cs:34</code>).</li>
           <li><strong>An optional package nobody installs governs nothing, and adoption here is one feature.</strong> MMCA.ADC&#39;s
           Conference module takes the package in Infrastructure (<code>MMCA.ADC.Conference.Infrastructure.csproj:19</code>)
           and its service host takes it with the Anthropic adapter (<code>MMCA.ADC.Conference.Service.csproj:31</code>,
-          <code>:34</code>). The host calls <code>AddAnthropicAiProvider</code> (<code>MMCA.ADC.Conference.Service/Program.cs:139</code>),
-          <code>AddConferenceAiGuardrails</code> (<code>:150</code>), which registers the PII redactor, the content policy and the
+          <code>:34</code>). The host calls <code>AddAnthropicAiProvider</code> (<code>MMCA.ADC.Conference.Service/Program.cs:141</code>),
+          <code>AddConferenceAiGuardrails</code> (<code>:152</code>), which registers the PII redactor, the content policy and the
           module&#39;s own response guardrail (<code>MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:85</code>, <code>:95</code>,
-          <code>:96</code>, <code>:99</code>), and <code>AddMmcaChatClient</code> (<code>Program.cs:152</code>), then subscribes the meter and trace source by
-          name (<code>:171-172</code>). Its organizer-facing session scoring (<code>SessionScoringService.cs:46</code>) is the one
+          <code>:96</code>, <code>:99</code>), and <code>AddMmcaChatClient</code> (<code>Program.cs:154</code>), then subscribes the meter and trace source by
+          name (<code>:173-174</code>). Its organizer-facing session scoring (<code>SessionScoringService.cs:47</code>) is the one
           product feature in these repos that calls a model. MMCA.Store adopts none of it: §16 is N/A there
           because no product feature calls a model (<code>store-ArchitectureScorecard.md:57</code>). The rules are proven by
-          exactly one consumer (<code>ADR-120:394-396</code>).</li>
+          exactly one consumer (<code>ADR-120:406-408</code>).</li>
           </ul>
           <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
           <p>The shape ports to any stack with a DI container and a vendor SDK. <code>Microsoft.Extensions.AI</code> makes it

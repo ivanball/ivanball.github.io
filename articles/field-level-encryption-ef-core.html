@@ -109,7 +109,7 @@
         <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
         <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
         <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
-        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, four engines</a></li>
         <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
         <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
         <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
@@ -232,7 +232,7 @@ builder.Property(e =&gt; e.SocialSecurityNumber)
           version must actually be present. The validated ring is then copied into a <code>FrozenDictionary</code>, so
           mutating the dictionary you passed in cannot change which keys the converter uses afterwards. There is a
           <code>GenerateKey()</code> helper that produces a cryptographically random 32-byte key via
-          <code>RandomNumberGenerator.GetBytes(32)</code> for initial setup. The envelope sizes are fixed constants: a 1-byte
+          <code>RandomNumberGenerator.GetBytes(KeySize)</code> (with <code>KeySize = 32</code>) for initial setup. The envelope sizes are fixed constants: a 1-byte
           key version, a 12-byte nonce (96 bits, the size NIST recommends for GCM) and a 16-byte tag (128 bits).</p>
           <p><strong>The storage envelope is versioned and self-describing, and the ciphertext is non-deterministic.</strong> On
           write, <code>Encrypt</code> resolves the current key from the ring, takes the UTF-8 bytes of the plaintext, draws a
@@ -274,13 +274,16 @@ builder.Property(e =&gt; e.SocialSecurityNumber)
           <h2 id="the-honest-part-shipped-tested-latent">The honest part: shipped, tested, latent</h2>
           <p>Here is what separates this from a &quot;look what we built&quot; post. This converter is not in production. Zero
           columns across the four repositories are encrypted with it today. The plumbing is complete and the
-          encrypt/decrypt round-trip, the tag-validated integrity path, the 32-byte key guard on both construction
-          paths, the four ring-validation guards, the defensive copy of the caller&#39;s dictionary, the version byte
-          each write stamps, a full rotation round-trip, an unregistered version, a rewritten version byte, the
-          empty-string passthrough, and the too-short-ciphertext rejection are all exercised by
-          <code>EncryptedStringConverterTests</code> (21 cases), but no <code>*Configuration.cs</code> in
+          encrypt/decrypt round-trip, the 32-byte key guard on both construction paths, four of the five
+          ring-validation guards (every one except the null-entry check), the defensive copy of the caller&#39;s
+          dictionary, the version byte each write stamps, a full rotation round-trip, an unregistered version, a
+          rewritten version byte, the empty-string passthrough, and the too-short-ciphertext rejection are all
+          exercised by <code>EncryptedStringConverterTests</code> (21 cases), but no <code>*Configuration.cs</code> in
           any repo calls <code>.HasConversion(new EncryptedStringConverter(...))</code>. ADR-037 records that posture in the
-          open: the capability is proven by tests, not by any deployed column.</p>
+          open: the capability is proven by tests, not by any deployed column. It records the coverage limit just as
+          openly: the only tag failure a test provokes is the rewritten version byte, and no test flips a bit inside
+          the ciphertext body or decrypts under a wrong key at the same version, so integrity over the ciphertext
+          itself rests on the AES-GCM primitive rather than on a test.</p>
           <p>That is deliberate. The framework&#39;s job is to decide the algorithm, the key size, the nonce size, and the
           storage envelope once, in a single shared type, so that the first team to adopt it inherits a reviewed
           primitive instead of hand-rolling AES-GCM in a module. ADR-005 already names this converter as the
@@ -375,7 +378,7 @@ builder.Property(e =&gt; e.SocialSecurityNumber)
           <p><strong>Previously:</strong> Article 45, &quot;Feature Flags in the CQRS Pipeline: Gate Commands, Not Code.&quot;</p>
           <p><strong>Next in the series:</strong> Article 47, &quot;Security Headers and CSP for Blazor: One Middleware, Every Host,&quot;
           where the data-protection story moves from the column to the response.</p>
-          <p><em>Full reading order: the MMCA.Common series index (Article 50).</em></p>
+          <p><em>Full reading order: the MMCA.Common series index (Article 53).</em></p>
           <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the persistence chapter of the
           onboarding guide, or <code>dotnet add package MMCA.Common.Infrastructure</code> and try it.</em></p>
           <ul>

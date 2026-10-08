@@ -23,8 +23,8 @@ the message minutes later.
 Now the conference floor opens a live poll. Two hundred phones are looking at the same question, votes
 are landing several per second, and every one of them needs to light up the running tally on every other
 screen in under a second. Reach for the durable pipeline here and you inherit all the wrong costs. The
-outbox deliberately delays eligibility (`Outbox:ProcessingDelaySeconds`, default 5s, ADR-003) so an
-in-process handler can run first, which is exactly the latency you cannot pay. You would write a per-user
+outbox deliberately holds a fresh row back from its background processor for
+`Outbox:ProcessingDelaySeconds` (default 5s, ADR-003), which is exactly the latency you cannot pay. You would write a per-user
 inbox row for a tally that is worthless a second later and that nobody will ever open. You would persist
 data whose entire value is that it is on screen right now.
 
@@ -106,11 +106,14 @@ at the enqueue edge, and the same opaque string rides every hop unchanged. The p
 `PublishAsync(channelKey, eventName, payloadJson, ct)`, and no serializer type crosses it.
 
 Third, a queue that evicts cannot report a drop through its return value. The channel is configured
-`DropOldest`, so the underlying `TryWrite` always succeeds: it makes room rather than refusing the write.
+`DropOldest`, so until the queue is completed at host shutdown the underlying `TryWrite` cannot fail: it
+makes room rather than refusing the write.
 A bool return would therefore be a promise the queue cannot break, and an "if the enqueue failed, log
 it" branch written against it is dead code that makes every drop under backpressure look impossible. So
 the port method is `void Enqueue(LiveChannelPublishWorkItem workItem)`, and its own contract says the
-queue never rejects an item, leaving nothing for a caller to branch on. Drops go through the channel's
+queue never rejects an item, leaving nothing for a caller to branch on. The one write it refuses is a
+late one after shutdown has completed it, and that refusal is silent by design, because the host is
+stopping and the broadcast was best effort anyway. Drops go through the channel's
 `itemDropped` callback instead: each one increments a `DroppedCount` and logs a warning with the running
 total, so a drain falling behind is visible rather than inferred from missing client updates.
 
@@ -163,10 +166,12 @@ which registers a typed gRPC client and `Replace`s (not `TryAdd`s) the `ILiveCha
 registration with `LiveChannelPublisherGrpcAdapter`. The publishing handlers do not resolve that port at
 all: the vote and upvote domain-event handlers enqueue the pre-serialized payload onto the in-process
 publish queue and return. The single-reader drain worker resolves `ILiveChannelPublisher` per item, which in this process
-is the gRPC adapter, and it forwards the payload over `PushToChannel` under a tight two-second deadline,
-swallowing every failure (transport, resolution, broken circuit). Best-effort all the way down, and because
-the forwarding runs off the request path, neither a slow nor a down Notification service can add a
-millisecond to an Engagement vote.
+is the gRPC adapter, and it forwards the payload over `PushToChannel` under a tight two-second deadline.
+The adapter itself swallows nothing: a transport, resolution or broken-circuit failure propagates out of
+it to the drain, whose `BestEffort.ExecuteAsync` wrapper logs one Warning and counts it on the
+`besteffort.dispatch.failed` meter. Swallowing in the adapter as well would hide every push failure from
+that meter. The best-effort boundary is the drain, and because the forwarding runs off the request path,
+neither a slow nor a down Notification service can add a millisecond to an Engagement vote.
 
 The queue is applied everywhere, not just on the two hot paths. The four lower-frequency command handlers
 (closing a poll, opening one, submitting a question, moderating one) publish one broadcast per operator
@@ -182,10 +187,13 @@ guarded is a database read rather than a publish, which is a much smaller thing 
 broadcast path that has quietly stopped working is a number an operator can alert on instead of a log
 line nobody reads.
 
-On the Notification side, `LiveChannelGrpcService` receives the RPC and simply delegates to its own
-`ILiveChannelPublisher`, which in that host is the real `SignalRLiveChannelPublisher`. The payload's
-opacity is what makes this trivial: no service on the path deserializes it, so no shared payload type has
-to cross the wire.
+On the Notification side, `LiveChannelGrpcService` receives the RPC, checks its shape, and delegates to
+its own `ILiveChannelPublisher`, which in that host is the real `SignalRLiveChannelPublisher`. The check is
+the bounded-payload control for an unauthenticated internal endpoint: a channel key or event name that is
+blank, longer than its cap (200 and 100 characters) or outside `[a-z0-9:.-]`, or a payload over 64 KiB of
+UTF-8, is refused with `InvalidArgument` before it reaches the publisher. The payload's opacity is still
+what makes the relay trivial: the service counts its bytes and never deserializes it, and neither does
+any other hop, so no shared payload type has to cross the wire.
 
 The one piece of real infrastructure this needs is the transport profile from ADR-012. Notification's
 default Kestrel endpoint stays `Http1AndHttp2` so the SignalR WebSocket upgrade handshake still works,
@@ -217,8 +225,8 @@ _channel = Channel.CreateBounded<LiveChannelPublishWorkItem>(
 
 `DropOldest` is the right answer here precisely because the payload is ephemeral. If the drain falls
 behind, the oldest pending broadcast is the *least* valuable thing in the queue, since a newer poll
-tally supersedes it anyway. A consequence worth knowing: under `DropOldest`, `TryWrite` always
-succeeds, because the channel evicts to make room rather than refusing. A caller checking the return
+tally supersedes it anyway. A consequence worth knowing: under `DropOldest`, `TryWrite` on an open
+channel always succeeds, because the channel evicts to make room rather than refusing. A caller checking the return
 value learns nothing, so a drop is observable only through the `itemDropped` callback and the
 discarded-broadcast counter it feeds.
 
@@ -230,17 +238,22 @@ small capacity goes with it, because the bound then exists to refuse a runaway c
 absorb a burst.
 
 There is a prior question, though, and it decides whether a channel is the right home at all. An
-in-process queue is exactly as durable as the replica holding it: a deploy or a crash between the
-enqueue and the drain takes the pending items with it. That is the correct trade for a poll tally,
-whose value expires in a second anyway, and it is why the live-publish queue is the only bounded
-`Channel<T>` in MMCA.Common, MMCA.Store and MMCA.ADC. Work that a restart must not lose goes
+in-process queue is exactly as durable as the replica holding it. A graceful stop drains rather than
+drops: the drain worker completes the queue, cancels its in-flight publish (that one item is lost),
+then publishes what remains in FIFO order inside a single five-second budget and logs a count of
+whatever it has to abandon. A crash takes every pending item with it, and so does a stop whose budget
+runs out. That is the correct trade for a poll tally, whose value expires in a second anyway, and it
+is why the only bounded `Channel<T>` instances in MMCA.Common, MMCA.Store and MMCA.ADC both sit in
+ADC's Engagement module and both carry best-effort signals: the live-publish queue, and a capacity-one
+`DropWrite` flag (`BookmarkCacheEvictionSignal`) that coalesces any burst of bookmark changes into one
+pending cache eviction. Work that a restart must not lose goes
 in a row instead. ADC's AI scoring pass over an event's sessions is that kind of work, so the
 organizer's request writes one durable internal command row and returns, and the framework's processor
 claims it, restores the requesting organizer's principal and runs the pass through the ordinary CQRS
 pipeline under a per-event distributed-lock claim taken with a zero wait, so a duplicate trigger skips
 rather than queues behind the run in flight. That mechanism, and how it sits beside channels and cron,
-is Article 51 in this series, "Four ways to do work later: channels, cron and durable internal
-commands".
+is Article 51 in this series, "Four Ways to Do Work Later: Channels, Cron, the Outbox and Durable
+Internal Commands".
 
 The reusable idea is that "put it on a queue" is not a design decision, it is the start of one. The
 decisions are what happens when the queue is full, and whether losing the item on restart is
@@ -305,9 +318,11 @@ drops its stale result instead of overwriting the current holder's.
 The runner is a plain `BackgroundService` rather than a fixed-period one, for the same reason the
 outbox is: after each cycle it sleeps until the **earliest** `NextRunOn` across the store, read
 through `TimeProvider`, capped at the polling interval (30 seconds by default) and floored at one
-second so an overdue row another replica already holds cannot spin the loop. A host with one nightly
-job is not waking 2,880 times a day to find nothing due, and because every timestamp comes from
-`TimeProvider`, a test can drive months of schedule in microseconds. Cronos (MIT, zero dependencies)
+second so an overdue row another replica already holds cannot spin the loop. The cap means the wait
+shortens a sleep but never removes a wake: a host whose only job is nightly still runs a cycle every 30
+seconds. What the earliest-due read buys is punctuality, a job that starts on time rather than up to
+one interval late. And because every timestamp comes from `TimeProvider`, a test can drive months of
+schedule in microseconds. Cronos (MIT, zero dependencies)
 is the one piece bought rather than built: it turns a string into the next occurrence and has no
 opinion about storage or hosting.
 
@@ -346,12 +361,15 @@ The ADR names the sharp edges, and they are all consequences of the ephemeral co
 - **Multi-replica needs the backplane.** If a hub-hosting service runs more than one replica, group sends
   only reach connections on other replicas through the Redis backplane that `AddPushNotifications` wires
   when a `redis` connection string is present. Single-replica deployments need nothing extra.
-- **Best-effort is not delivery.** A publish can still be discarded at three points: the queue evicts its
-  oldest item under sustained backpressure, the drain worker swallows a publish failure, and the gRPC
-  adapter swallows a transport failure. None of them are silent now (the eviction is counted on
-  `DroppedCount` and logged with a running total, the drain's swallow is the shared `BestEffort` helper
-  so it is both logged and counted on a meter, and the adapter's is logged per occurrence), but that is
-  observability, not delivery. It is the correct posture for a hint over durable state, and it still means
+- **Best-effort is not delivery.** A publish can be discarded at four points: the queue evicts its oldest
+  item under sustained backpressure, the drain's `BestEffort` wrapper swallows a publish failure
+  (including every transport failure the gRPC adapter propagates to it), a graceful stop aborts the
+  in-flight publish and abandons whatever the five-second drain budget cannot reach, and an enqueue that
+  lands after shutdown has completed the queue is refused. Most of these are observable (the eviction is
+  counted on `DroppedCount` and logged with a running total, the swallow is logged and counted on the
+  `besteffort.dispatch.failed` meter, and an abandoned shutdown drain logs how many it dropped), but the
+  aborted in-flight item and a post-shutdown enqueue leave no trace, and observability is not delivery in
+  any case. It is the correct posture for a hint over durable state, and it still means
   "the event fired" is never a guarantee. If you ever need one, you are describing a durable notification,
   which is the other publisher path.
 
@@ -411,48 +429,82 @@ pattern, or `dotnet add package MMCA.Common.Infrastructure` and try it.*
 
 *Tags: .NET, C Sharp, SignalR, Real Time, Software Architecture*
 
-*Notes: 2026-10-02 audit pass (MMCA.Common v1.221.0). Body prose is unchanged this pass: the audit
-confirmed every body claim (hub constants, join/leave, the key pattern, the 1s match timeout, the
-per-user cap of 20, `IChannelJoinAuthorizer`, the `DropOldest`/1024/`SingleReader`/`itemDropped` queue,
-the nine-line SignalR publisher, the 2s gRPC deadline, the mixed Kestrel profile, the 5s outbox delay,
-the 30s/300s scheduler defaults, the 1s `MinimumWait`, Cronos, the single `CreateBounded` across the
-three repos, and every Engagement handler enqueueing with `BestEffort` and no CA1031). All drift was in
-this ledger's anchors, which are re-pinned below from source read in this run. Change history: the
+*Notes: 2026-10-08 refresh (MMCA.Common v1.233.0). Body changes, each re-read from source this run:
+(1) the scheduler smart wait no longer claims a nightly-only host avoids 2,880 wakes a day; the polling
+interval caps `ComputeWaitTime` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Scheduling/ScheduledJobRunner.cs:146-160`,
+doc `:137-141`), matching ADR-074's own retraction (`Website/docs-src/adr/074-recurring-job-scheduler.md:84-85`,
+Revision 2026-10-06 `:218-219`). (2) Two bounded channels, not one: `CreateBounded` appears in
+`.../Engagement.Application/Live/LiveChannelPublishQueue.cs:33` and
+`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/UserSessionBookmarks/Services/BookmarkCacheEvictionSignal.cs:27`
+(capacity 1, `DropWrite`, `SingleReader`, `:27-33`; singleton at `.../Engagement.Application/DependencyInjection.cs:58`,
+drained by `BookmarkCacheEvictionProcessor` registered at `.../Engagement.Infrastructure/DependencyInjection.cs:24`);
+zero in `MMCA.Common/Source` and `MMCA.Store/Source` by Grep this run. Neither is `Wait` mode, so the
+ledger's "no `Wait`-mode channel" statement below still holds. (3) Graceful shutdown drains rather than
+drops: `LiveChannelPublishProcessor.StopAsync` (`:53`) completes the queue (`:57`), cancels and awaits
+the worker (`:67`, in-flight publish aborted per doc `:34-35`), drains FIFO (`:72-75`, `DrainRemainingAsync`
+`:109`) inside one `ShutdownDrainBudget` of 5s (`:50`, `:59`), and logs the abandoned count (`:77-81`,
+message `:142`); class doc `:30-38`. (4) The gRPC adapter no longer swallows: failures propagate
+(`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Contracts/LiveChannelPublisherGrpcAdapter.cs:14-21`),
+only caller cancellation is converted to `OperationCanceledException` (`:51-54`); the swallow is the
+drain's `BestEffort.ExecuteAsync` (`LiveChannelPublishProcessor.cs:124-138`); Engagement's composition
+root says the same (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:249-251`).
+(5) `LiveChannelGrpcService` validates before delegating: caps 200/100/64 KiB (`.../Notification.Service/Grpc/LiveChannelGrpcService.cs:34-36`),
+charset `[a-z0-9:.-]` (`:43-44`), checks `:54-56`, `ValidateName` `:65-81`, `ValidatePayload` byte count
+only `:83-89`, `InvalidArgument` `:91-92`, delegation `:58-60`, doc `:24-29`. (6) The queue's never-fails
+statement is scoped to an open channel: `TryWrite` cannot fail "until Complete runs at host shutdown",
+and a later write is refused silently (`LiveChannelPublishQueue.cs:51-54`, `Complete` `:66`); the port
+contract still says the queue never rejects an item (`.../Engagement.Application/Live/ILiveChannelPublishQueue.cs:24`,
+`void Enqueue` `:30`). (7) The outbox sentence drops "so an in-process handler can run first": on the
+async save path local rows are inserted already leased, so the delay is not what keeps the processor off
+them (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxSettings.cs:33-38`,
+default 5 at `:41`; ADR-003 Processing delay bullet, `Website/docs-src/adr/003-outbox-dual-dispatch.md:54`). (8) The
+Trade-offs best-effort bullet lists four discard points and says which are traceless (the aborted
+in-flight item is rethrown as caller cancellation and not counted, `LiveChannelPublishProcessor.cs:100-105`).
+(9) Article 51's title is quoted as published (`Website/docs-src/articles/durable-internal-commands.md:1`).
+Correction to the 2026-10-02 entry below: its "audit confirmed every body claim" did not hold for items
+(1) to (5); this run re-pinned every anchor it cites against source read today and marks the rest as
+carried. ADR-039 gained a third revision (2026-10-06, `Website/docs-src/adr/039-live-channel-push.md:135-146`,
+anchor-only: cap default now `PushNotificationSettings.cs:46`, cap read in `NotificationHub.OnConnectedAsync`
+`:61`/`:63`).
+2026-10-02 audit pass (MMCA.Common v1.221.0): body prose unchanged that pass; drift was re-pinned in
+this ledger's anchors. Change history: the
 2026-09-19 pass re-based the "expensive work" example onto the durable internal command
 `ScoreEventSessionsInternalCommand` (ADR-114, Article 51), re-pinned the framework notification files
 into `Notifications/`, `Notifications/Live/` and `Notifications/Push/`, and added the channel-join
 authorizer and per-user cap to the body; the 2026-08-20 pass moved every Engagement swallow onto the
 shared `BestEffort.ExecuteAsync` helper (`MMCA.Common/Source/Core/MMCA.Common.Application/Services/BestEffort.cs`,
 one Warning plus `besteffort.dispatch.failed` on the `MMCA.Common.BestEffort` meter, not re-pinned this
-run). This pass: `AddPushNotifications` moved out of `DependencyInjection.cs` into the
+run). The 2026-10-02 pass: `AddPushNotifications` moved out of `DependencyInjection.cs` into the
 `DependencyInjection.Notifications.cs` partial; `OutboxSettings` moved to
 `Persistence/Outbox/Administration/`; `SchedulerSettings` moved to `Scheduling/`; ADR-039 gained a second
 revision (2026-09-07) and a re-anchor note (2026-09-25); `CastVoteHandler`'s constructor grew two
 dependencies, still with no queue and no publisher.
-Framework (MMCA.Common). `NotificationHub` anchors were confirmed by this pass's audit and are carried:
+Framework (MMCA.Common). `NotificationHub` anchors, re-pinned 2026-10-08:
 method-name constants (`Source/Core/MMCA.Common.Infrastructure/Notifications/NotificationHub.cs:30,33,36,39`),
-optional `IChannelJoinAuthorizer` constructor parameter (`:27`), regex cache with 1s timeout (`:41`),
-per-user cap read in `OnConnectedAsync` (`:56`), `JoinChannelAsync`/`LeaveChannelAsync` (`:119`, `:136`),
-`EnsureValidChannelKey` (`:166`) throwing `HubException` on a miss (`:174`).
+optional `IChannelJoinAuthorizer` constructor parameter (`:27`), 1s match timeout (`:44`) and regex cache (`:47`),
+per-user cap read in `OnConnectedAsync` (`:63`, method `:61`), `JoinChannelAsync`/`LeaveChannelAsync` (`:128`, `:145`),
+`EnsureValidChannelKey` (`:175`) throwing `HubException` on a miss (`:183`).
 `PushNotificationSettings.ChannelKeyPattern` defaults to `NotificationScopeKey.Pattern`
-(`Source/Core/MMCA.Common.Infrastructure/Notifications/Push/PushNotificationSettings.cs:29`), which is
+(`Source/Core/MMCA.Common.Infrastructure/Notifications/Push/PushNotificationSettings.cs:33`), which is
 `^(event|session):[0-9]+$` (`Source/Core/MMCA.Common.Shared/Notifications/NotificationScopeKey.cs:32`);
-`MaxConnectionsPerUser` defaults to 20 (`PushNotificationSettings.cs:42`). `SignalRLiveChannelPublisher`
+`MaxConnectionsPerUser` defaults to 20 (`PushNotificationSettings.cs:46`). `SignalRLiveChannelPublisher`
 (`Source/Core/MMCA.Common.Infrastructure/Notifications/Live/SignalRLiveChannelPublisher.cs:11-19`, nine lines).
-DI, re-read this run: `NullLiveChannelPublisher` is the `TryAddTransient` default
-(`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:326`); `AddPushNotifications` is declared in
+DI, re-read 2026-10-08: `NullLiveChannelPublisher` is the `TryAddTransient` default
+(`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:327`); `AddPushNotifications` is declared in
 the partial `Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:41`, wires the
 Redis backplane only when a `redis` connection string is present (`:50-62`) with the SEC-Common-53
 per-application channel prefix (`:53-61`, `ApplicationNamespace.Resolve` `:59`), and swaps in
 `SignalRLiveChannelPublisher` with a plain `AddTransient` (`:66`).
 UI `NotificationHubService` (`Source/Presentation/MMCA.Common.UI/Services/Notifications/NotificationHubService.cs`),
-re-read this run: single-subscriber `NotificationCallback` (`:60`), `Reconnected` re-joins via
-`RejoinChannelsAsync` (`:178`, method `:423`), `JoinChannelAsync` (`:231`), `LeaveChannelAsync` (`:264`),
-multicast `OnChannelEvent` (`:294`).
+re-read 2026-10-08: single-subscriber `NotificationCallback` (`:77`), `Reconnected` re-joins via
+`RejoinChannelsAsync` (`:226`, method `:698`), `JoinChannelAsync` (`:319`), `LeaveChannelAsync` (`:352`),
+multicast `OnChannelEvent` (`:382`).
 Outbox delay: `Outbox:ProcessingDelaySeconds` default 5 at
-`Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxSettings.cs:40`; ADR-039
+`Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxSettings.cs:41` (doc `:33-38`); ADR-039
 names the setting without a value (`Website/docs-src/adr/039-live-channel-push.md:19`).
-ADR-039, re-read this run: status `:3-10` (Accepted 2026-07-09, revised 2026-09-07 and 2026-09-25);
+ADR-039 (status and the 2026-10-06 revision re-read 2026-10-08; the section anchors after the status
+are carried from 2026-10-02): status `:3-10` (Accepted 2026-07-09, revised 2026-09-07 and 2026-09-25;
+the status block does not list the anchor-only Revision (2026-10-06) at `:135-146`);
 Context `:11`, Decision `:24`, Rationale `:53`, Trade-offs `:65-77` (lossy, type safety by convention,
 single-subscriber callback, backplane for multi-replica). **Revision (2026-07-24)** `:79-100`: (1)
 post-commit enqueue via domain-event handlers on `LivePollVoteChanged`/`SessionQuestionUpvoteChanged`
@@ -461,13 +513,15 @@ post-commit enqueue via domain-event handlers on `LivePollVoteChanged`/`SessionQ
 `IChannelJoinAuthorizer` (`:107-114`), per-user connection cap default 20 (`:115-119`), per-application
 backplane prefix (`:120-123`), and ADC's live-poll read scope (`:124-133`, ADC-side, outside this
 article's scope).
-ADC Engagement live path, re-read this run. Queue `.../Engagement.Application/Live/LiveChannelPublishQueue.cs`:
-`Capacity = 1024` (`:18`), the itemDropped comment (`:30`), `CreateBounded` with `DropOldest`,
+ADC Engagement live path. Queue `.../Engagement.Application/Live/LiveChannelPublishQueue.cs`, re-read
+2026-10-08: `Capacity = 1024` (`:18`), the itemDropped comment (`:30-32`), `CreateBounded` with `DropOldest`,
 `SingleReader = true`, `SingleWriter = false`, `itemDropped: OnItemDropped` (`:33-40`), `DroppedCount`
-(`:47`), the never-fails remarks (`:52-53`), the private `_channel.Writer.TryWrite` (`:58`),
-`OnItemDropped` (`:61`). `CreateBounded` appears in that one ADC file only (zero in MMCA.Common and
-MMCA.Store, per this pass's audit). The queue is registered as one concrete singleton exposed through the
-interface (`.../Engagement.Application/DependencyInjection.cs:53-54`).
+(`:47`), the never-fails-until-`Complete` remarks (`:51-54`), the private `_channel.Writer.TryWrite` (`:59`),
+`Complete` (`:66`), `OnItemDropped` (`:68`). `CreateBounded` appears in two ADC files (this one and
+`BookmarkCacheEvictionSignal.cs:27`, see the 2026-10-08 entry) and nowhere in MMCA.Common or MMCA.Store.
+The queue is registered as one concrete singleton exposed through the interface
+(`.../Engagement.Application/DependencyInjection.cs:53-54`). Handler anchors in the next block are
+carried from 2026-10-02, not re-read 2026-10-08.
 `CastVoteHandler` (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/LivePolls/UseCases/CastVote/CastVoteHandler.cs`)
 takes `(IUnitOfWork, IEventLiveValidationService, LivePollResultsBuilder, TimeProvider,
 IUniqueConstraintViolationDetector, ILogger)` (`:20-26`), no queue and no publisher; it saves at `:56`,
@@ -486,40 +540,43 @@ passed) `:190-203`, `EnqueueSubmittedAsync` `:205` with `BestEffort.ExecuteAsync
 payload switch built OUTSIDE the guard so an unknown action faults loudly (`:113-136`),
 `BestEffort.ExecuteAsync` `:138`, enqueue `:140`, count read `:145-148`, count enqueue `:154`.
 Drain worker `LiveChannelPublishProcessor` (`.../Engagement.Infrastructure/Live/LiveChannelPublishProcessor.cs`):
-class `:30-33` (a `BackgroundService`), rationale `:22`, operation prefix `"live-channel-publish:"` `:36`,
-`BestEffort.ExecuteAsync` `:45`, per-item `ILiveChannelPublisher` resolution `:51`, shutdown-only
-`OperationCanceledException` catch `:60`; registered `AddHostedService`
-(`.../Engagement.Infrastructure/DependencyInjection.cs:21`).
+re-read 2026-10-08: class `:41-44` (a `BackgroundService`), BestEffort rationale `:22-27`, shutdown
+rationale `:30-38`, operation prefix `"live-channel-publish:"` `:47`, `ShutdownDrainBudget` `:50`,
+`StopAsync` `:53-82`, shutdown-only `OperationCanceledException` catch `:100`, `BestEffort.ExecuteAsync`
+`:125`, per-item `ILiveChannelPublisher` resolution `:131`; registered `AddHostedService`
+(`.../Engagement.Infrastructure/DependencyInjection.cs:23`).
 Engagement's composition root states the no-await rule in a comment
-(`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:239-243`) and registers
-`AddNotificationLiveChannelClient()` at `:285`, after `AddScheduledJobs` at `:194`.
-gRPC ingress, re-read this run: `AddNotificationLiveChannelClient` defaults to `_grpc.notification` and
+(`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:243-251`) and registers
+`AddNotificationLiveChannelClient()` at `:291`, after `AddScheduledJobs` at `:198`.
+gRPC ingress, re-read 2026-10-08: `AddNotificationLiveChannelClient` defaults to `_grpc.notification` and
 `Replace`s the port with the adapter (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Contracts/DependencyInjection.cs:42`,
-`:48`); `LiveChannelPublisherGrpcAdapter` (`.../Notification.Contracts/LiveChannelPublisherGrpcAdapter.cs:20`,
-2s `PushDeadline` `:26`); `LiveChannelGrpcService` takes the host's `ILiveChannelPublisher`
-(`.../Notification.Service/Grpc/LiveChannelGrpcService.cs:31`). Notification's Kestrel profile:
-mixed-endpoint comment `.../Notification.Service/Program.cs:58-60` and default `Http1AndHttp2` endpoint
-`:73`. Not re-pinned this run (carried from the 2026-09-19 pass and not flagged by this pass's audit):
-the adapter's failure-swallow lines, the gRPC service's delegation line, the dedicated `Http2` `grpc`
-endpoint line, and the hub mapping line.
-Recurring job scheduler, grounded in `Website/docs-src/adr/074-recurring-job-scheduler.md` (not re-read
-this run; its anchors `:17-20`, `:30-35`, `:37-42`, `:67-71`, `:164-167`, `:177-180` are carried from
-2026-09-19) plus MMCA.Common source re-read this run. `ScheduledJobRunner`
-(`Source/Core/MMCA.Common.Infrastructure/Scheduling/ScheduledJobRunner.cs`): Cronos alias `:12`, class
-`:39-44` (a `BackgroundService` taking an optional `TimeProvider`, `:44`), `MinimumWait` 1s `:72`, cycle
-loop feeding `earliestNextRun` into `ComputeWaitTime` `:104-122`, `ComputeWaitTime` `:146` (doc
-`:138-142`), `CronSchedule.Parse(...).GetNextOccurrence(afterUtc, inclusive: false)` `:195`,
-`RunCycleAsync` returning the earliest upcoming occurrence `:208-213`, due-row read `:417-424`, the claim
-quoted in the code block (comment and statement verbatim, `.ConfigureAwait(false)` dropped) `:435-445`,
-missed-run policy comment `:484-486`, token-guarded outcome stamp `:497-512`, `InvokeJobAsync` `:528`
-opening a fresh scope per run `:532`. `SchedulerSettings.PollingIntervalSeconds` defaults to 30 and
-`LeaseSeconds` to 300 (`Source/Core/MMCA.Common.Infrastructure/Scheduling/SchedulerSettings.cs:34`,
-`:43`). `IScheduledJob` members, `ScheduledJobEntry` columns, `SchedulerModelGateTests` and the Cronos
-package pin are carried from the 2026-09-19 pass, not re-read this run. Adoption by grep for
-`AddScheduledJobs(` this run: Store Catalog (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:234`),
+`:48`); `LiveChannelPublisherGrpcAdapter` (`.../Notification.Contracts/LiveChannelPublisherGrpcAdapter.cs:29`,
+2s `PushDeadline` `:34` applied `:48`, propagate-not-swallow doc `:14-21`); `LiveChannelGrpcService` takes
+the host's `ILiveChannelPublisher` (`.../Notification.Service/Grpc/LiveChannelGrpcService.cs:31`) and
+delegates at `:58-60` after validation. Notification's Kestrel profile: mixed-endpoint comment
+`.../Notification.Service/Program.cs:57-67` (the dedicated Http2-only endpoint named `grpc` is declared in
+the `Kestrel:Endpoints` config section, `:61-64`) and default `Http1AndHttp2` endpoint `:72`;
+`MapGrpcService<LiveChannelGrpcService>` `:293`. The hub mapping line is carried from 2026-09-19, not
+re-pinned.
+Recurring job scheduler, grounded in `Website/docs-src/adr/074-recurring-job-scheduler.md` (smart-wait
+paragraph `:80-85` and Revision (2026-10-06) `:217-219` re-read 2026-10-08; its anchors `:17-20`,
+`:30-35`, `:37-42`, `:67-71`, `:164-167`, `:177-180` are carried from 2026-09-19) plus MMCA.Common
+source. `ScheduledJobRunner` (`Source/Core/MMCA.Common.Infrastructure/Scheduling/ScheduledJobRunner.cs`),
+re-read 2026-10-08: Cronos alias `:12`, class `:39-44` (a `BackgroundService` taking an optional
+`TimeProvider`, `:44`), `MinimumWait` 1s `:72`, cycle loop feeding `earliestNextRun` into
+`ComputeWaitTime` `:102-134`, `ComputeWaitTime` `:146-160` (doc `:137-141`; returns the lesser of the
+time until due and the polling interval, `:159`), `GetNextOccurrence(afterUtc, inclusive: false)` `:195`,
+`RunCycleAsync` `:213`, the claim's `ExecuteUpdateAsync` `:441` (block quoted from `:435-445`, comment
+and statement, `.ConfigureAwait(false)` dropped). Carried from 2026-10-02, not re-read: due-row read
+`:417-424`, missed-run policy comment `:484-486`, token-guarded outcome stamp `:497-512`,
+`InvokeJobAsync` `:528` opening a fresh scope per run `:532`. `SchedulerSettings.PollingIntervalSeconds`
+defaults to 30 and `LeaseSeconds` to 300 (`Source/Core/MMCA.Common.Infrastructure/Scheduling/SchedulerSettings.cs:34`,
+`:43`, re-read 2026-10-08). `IScheduledJob` members, `ScheduledJobEntry` columns, `SchedulerModelGateTests`
+and the Cronos package pin are carried from the 2026-09-19 pass. Adoption by grep for
+`AddScheduledJobs(` 2026-10-08: Store Catalog (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:234`),
 Sales (`.../MMCA.Store.Sales.Service/Program.cs:209`), Identity (`.../MMCA.Store.Identity.Service/Program.cs:196`);
-ADC Identity (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:234`), Engagement
-(`.../MMCA.ADC.Engagement.Service/Program.cs:194`), Conference (`.../MMCA.ADC.Conference.Service/Program.cs:344`);
+ADC Identity (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:245`), Engagement
+(`.../MMCA.ADC.Engagement.Service/Program.cs:198`), Conference (`.../MMCA.ADC.Conference.Service/Program.cs:352`);
 Helpdesk web host (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:91`).
 Illustrative-of-documented-shape: the scheduler code block pairs the three `IScheduledJob` member
 signatures (inline comments replace the XML docs) with the claim from `ScheduledJobRunner.cs:435-445`.

@@ -109,7 +109,7 @@
         <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
         <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
         <li><a href="database-per-service.html" aria-current="page">10 · Database-per-service inside a monolith</a></li>
-        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, four engines</a></li>
         <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
         <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
         <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
@@ -271,7 +271,7 @@
           and the reason it belongs in this article is that it lands as one more filter plus one more override
           on the routing you have already seen, rather than as a parallel mechanism.</p>
           <p>Shared-schema tenancy is a <strong>second named query filter.</strong> An entity that implements <code>ITenantEntity</code>
-          gets a required 64-character <code>TenantId</code> column, an index on it that widens to
+          gets a required 64-character <code>TenantId</code> column, on a relational engine an index on it that widens to
           (<code>TenantId</code>, <code>IsDeleted</code>) when the entity is soft-deletable too, so it matches the composed
           predicate instead of handing deleted rows back for the server to discard, and the predicate
           <code>e =&gt; CurrentTenantId == null || e.TenantId == CurrentTenantId</code>, applied to every matching entity
@@ -298,9 +298,12 @@
           on inserts and throws <code>CrossTenantWriteException</code> on any added, modified, or deleted entry belonging
           to a different tenant. With no tenant resolved it lets an already-tenanted row through as-is (that is
           how a background worker drains one tenant&#39;s work) and refuses only the insert that has no tenant to
-          supply. Reads are just as narrow: the repository&#39;s <code>ignoreQueryFilters: true</code> drops the named
-          <code>SoftDelete</code> filter only, through one shared array used at all eight call sites, so a
-          soft-delete-inclusive read still carries the tenant filter and cannot cross tenants by accident.</p>
+          supply. Reads through the repository are narrowed the same way: its <code>ignoreQueryFilters: true</code>
+          drops the named <code>SoftDelete</code> filter only, through one shared array used at all eight call sites, so a
+          soft-delete-inclusive repository read still carries the tenant filter. Outside the repository, reads
+          sit on discipline where writes sit on an invariant: EF&#39;s own parameterless <code>IgnoreQueryFilters()</code> on a
+          raw <code>Table</code> surface drops the tenant filter along with soft-delete. The framework source has no such
+          call site, but no build gate holds that count at zero.</p>
           <p>Database-per-tenant is then the smallest possible extension of everything above. A per-tenant entry
           overrides the connection string for one source and keeps the <strong>same <code>DataSourceKey</code></strong>, so the scoped
           <code>DbContextFactory</code> clones the resolver&#39;s <code>PhysicalDataSource</code> with the override, EF&#39;s model cache key
@@ -325,9 +328,11 @@
           survive: the outbox simply enumerates <code>(source, tenant)</code> pairs and drains one extra unit per tenant
           that keeps its own copy of a source. Routing never reads the row: the targets come from those
           configured pairs, and the nullable <code>TenantId</code> an <code>OutboxMessage</code> carries exists only so delivery can
-          restore the raising tenant (a row with no tenant stays valid). The per-scope context cache gains a
-          guard that throws if the scope&#39;s tenant changes after a routed context exists, which restates
-          one-scope-one-tenant where it would otherwise break silently. Cache entries get their isolation one
+          restore the raising tenant (a row with no tenant stays valid). The per-scope context cache carries
+          two guards that restate one-scope-one-tenant where it would otherwise break silently: one throws if
+          the scope&#39;s tenant changes after a routed context exists, the other throws if a context created
+          against the shared database before the tenant resolved would be handed to a tenant that overrides
+          that source. Cache entries get their isolation one
           layer up, in the caching decorators, since a singleton cache cannot observe scoped state; that
           belongs with the caching pattern rather than here.</p>
           <p>The whole thing is opt-in and inert until a host asks for it: <code>AddMultiTenancy(configuration)</code> on top
@@ -344,7 +349,8 @@
           <li><strong>No distributed transactions.</strong> When a save spans sources, <code>DbContextFactory.ExecuteInTransactionAsync</code>
           opens a transaction <strong>per source</strong> and commits them sequentially, best-effort. There is no
           two-phase commit. If the second commit fails after the first succeeded, you have a partially applied
-          change, and the outbox is what eventually reconciles the downstream effects. What the framework does
+          change, and the caller&#39;s replay is what reconciles it (the outbox delivers whatever events did
+          become durable, and nothing more). What the framework does
           buy you is that the partial state is <strong>observable rather than inferred</strong>: the commit loop records the
           partition at the failure point, so the thrown <code>TransactionCommitAmbiguousException</code> names each
           source&#39;s outcome (<code>CommittedSources</code>, <code>AmbiguousSource</code>, <code>RolledBackSources</code>) and appends that
@@ -392,7 +398,8 @@
           <code>CrossDataSourceDegradeConvention</code> reshaping cross-source relationships, how the same routing extends to
           a third axis (a second named query filter for the tenant, and database-per-tenant as a connection-string
           override behind the same key), and the one guarantee you give up: no two-phase commit, eventual
-          consistency across sources, with the outbox as the reconciler.</p>
+          consistency across sources carried by the outbox, and a partial commit made observable for the
+          caller&#39;s replay to reconcile.</p>
           <p><strong>Next in the series:</strong> polyglot persistence, the Engine axis that re-points an entity between SQL
           Server, PostgreSQL, Cosmos, and SQLite without touching the domain.</p>
           <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the 2-minute ADR-006 behind this
@@ -406,7 +413,7 @@
           
         <nav class="article-pager" aria-label="Series navigation">
           <a class="article-pager-link article-pager-link--prev" href="transactional-outbox-dotnet.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">09 · The transactional outbox</span></a>
-          <a class="article-pager-link article-pager-link--next" href="polyglot-persistence.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">11 · Polyglot persistence: one model, three engines</span></a>
+          <a class="article-pager-link article-pager-link--next" href="polyglot-persistence.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">11 · Polyglot persistence: one model, four engines</span></a>
         </nav>
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>

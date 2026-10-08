@@ -32,8 +32,8 @@ The failure is in the signature. A caller cannot pretend it does not exist, beca
 not an `Order`, it is "an `Order` or an explanation of why not."
 
 That swap is the single most pervasive idea in MMCA.Common. Practically every entity factory, every
-CQRS command and query handler, every controller action, and every service method returns `Result` or
-`Result<T>`. This article is about why, and about the small set of types that make it ergonomic enough
+CQRS command and query handler, and every UI service method returns `Result` or `Result<T>`, and every
+controller action turns a failed one into an HTTP error response at the edge. This article is about why, and about the small set of types that make it ergonomic enough
 to use everywhere.
 
 ## Why exceptions are not a control-flow mechanism
@@ -98,8 +98,9 @@ may stay on the success track or switch to failure. Control flows forward, with 
 
 The other two are conveniences over the same short-circuit: **`Tap(action)`** runs a side effect on the
 success value and hands back the same instance, and **`Ensure(predicate, error)`** fails the chain with a
-supplied `Error` when the value does not satisfy a predicate. Every one of them skips the delegate it was
-handed when the result is already a failure. A separate `ResultExtensions` class lifts `BindAsync`,
+supplied `Error` when the value does not satisfy a predicate. Every success-side delegate (the mapper, the
+binder, the side effect, the predicate) is skipped when the result is already a failure; only `Match` and
+`MatchAsync` run a delegate on the failure track, their `onFailure` branch. A separate `ResultExtensions` class lifts `BindAsync`,
 `MapAsync`, `TapAsync` and `MatchAsync` onto a pending `Task<Result<T>>`, so an asynchronous pipeline
 composes end to end without an `await` and a temporary local between every step.
 
@@ -232,7 +233,8 @@ The Result pattern is not free, and ADR-013 names the rough edges rather than hi
   framework-owned. That is not the only exception the framework catches, though. An ordered
   `IExceptionHandler` chain converges every escaped exception onto the same RFC 9457 ProblemDetails
   contract: a cancellation handler (499), a domain-exception handler (400), a `DbUpdate` handler (409),
-  a validation handler (400), and a catch-all (500, or 400 for a refused cross-tenant write), registered in that load-bearing order. So the
+  a validation handler (400), and a catch-all (500, except 400 for a refused cross-tenant write and the
+  status a server-rejected request already carries, such as 413 for an oversize body), registered in that load-bearing order. So the
   failure shape stays identical whether it arrived as a `Result` or as a throw.
 - **One status has to stand for a whole list of errors.** Every error serializes into the
   ProblemDetails body, but the status code can only be one number, so it is resolved by ranking: the
@@ -282,7 +284,7 @@ pattern, or `dotnet add package MMCA.Common.API` and try it.*
 
 *Tags: .NET, C Sharp, Software Architecture, Programming, Error Handling*
 
-*Notes: re-verified 2026-10-02 against MMCA.Common at v1.221.0 (FACTS.md). Type and behavior names, all read this
+*Notes: re-verified 2026-10-08 against MMCA.Common at v1.233.0 (`MMCA.Common/FACTS.md:4,14`). Type and behavior names, all read this
 run: `ErrorType` (ten members: Validation, Invariant, NotFound, Conflict, Unauthorized, Forbidden,
 UnprocessableEntity, Failure, Unexpected, TooManyRequests; `Source/Core/MMCA.Common.Shared/Abstractions/ErrorType.cs:10-49`,
 `Unexpected` at `:36-41`, `TooManyRequests` (HTTP 429, appended last so earlier numeric values do not move) at `:43-48`);
@@ -297,19 +299,26 @@ the "never half-built" invariant holds without the factories being the only spel
 `Result<T>`, `Match` `:260`, `Map` `:276`, `BindAsync` `:289`, `Bind` `:302`, `Tap` `:314`, `Ensure` `:334`,
 `MatchAsync` `:355`; on the non-generic `Result`, four combinators: `Combine` `:124`, `Match` `:155`, `OnFailure`
 `:169`, `Bind` `:187` (the class also declares the factories, conversions and state properties, hence
-"combinators", not "members"). `ResultExtensions` (`.../Abstractions/ResultExtensions.cs:10`) lifts the same shapes
-onto a pending `Task<Result<T>>`: `BindAsync` `:20`/`:39`, `MapAsync` `:58`, `TapAsync` `:77`, `MatchAsync`
-`:102`. ADR-013 names the four exception costs (`Website/docs-src/adr/013-result-pattern.md:20-23`) and documents
-the combinator surface (`:48-59`), but its `ErrorType` list (`:31-32`), its severity ranking (`:77-79`) and its
-mapping anchors predate `TooManyRequests`, so this article cites source, not the ADR, for the category list,
-the status table and the ranking. Production call sites: `.Map(...)` at
-`Source/Presentation/MMCA.Common.UI/Services/Api/EntityServiceBase.cs:75` and `:127`. Unit coverage
+"combinators", not "members"). Short-circuit: the success-side delegate is skipped on failure in `Map` (`:279`),
+`BindAsync` (`:292`), `Bind` (`:305`), `Tap` (`:318`) and `Ensure` (`:339-342`); `Match` and `MatchAsync` call
+`onFailure` on the failure track (`:265-266`, `:362-363`), and the non-generic `OnFailure` runs its action only on
+failure (`:169-176`). `ResultExtensions` (`.../Abstractions/ResultExtensions.cs:14`) lifts the same shapes
+onto a pending `Task<Result<T>>`: `BindAsync` `:24`/`:43`, `MapAsync` `:62`, `TapAsync` `:81`, `MatchAsync`
+`:106`. ADR-013 names the four exception costs (`Website/docs-src/adr/013-result-pattern.md:29-32`), documents
+the combinator surface (`:54-77`) and carries `TooManyRequests` in its category list (`:40-41`), its 429 and
+`ResourceExhausted` mapping (`:49-50`) and its ranking (`:94-96`); the article still cites source for the
+category list, the status table and the ranking so the anchors track the code. Controller actions do not return
+`Result`: they return `Task<ActionResult<...>>` or `Task<IActionResult>`
+(`Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:110`, `:158`, `:257`, `:320`, `:361`;
+`CrudEntityControllerBase.cs:98`) and route a failed `Result` through `HandleFailure`; the UI service methods
+return `Result`/`Result<T>` (`Source/Presentation/MMCA.Common.UI/Services/Api/EntityServiceBase.cs:68`, `:86`,
+`:143`, `:162`, `:188`). Production call sites: `.Map(...)` at `EntityServiceBase.cs:82` and `:139`. Unit coverage
 (`Tests/Core/MMCA.Common.Shared.Tests/Abstractions/ResultTests.cs`): `Map` `:119`/`:128`, `BindAsync`
 `:146`/`:156`/`:166`, `Match` `:184`/`:196`, `Bind` `:325`/`:334`, `Tap` `:352`/`:364`, `Ensure`
 `:377`/`:387`/`:396`, `MatchAsync` `:415`/`:425`, the non-generic `Match`/`OnFailure`/`Bind` at `:255-308`,
 implicit conversions at `:209-246`. The domain-factory snippet is condensed from ADC's `Speaker.Create`
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:116`: `Email.Create` with
-an early return at `:134`, `Result.Combine` over the three `SpeakerInvariants` checks at `:140`, the
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:116`: `Email.Create` at
+`:134` with an early return at `:136`, `Result.Combine` over the three `SpeakerInvariants` checks at `:140`, the
 `SpeakerChanged` domain event at `:170`, `Result.Success` at `:172`); parameters after `email`, the constructor
 arguments, the id selection and the social-link initializers are elided as comments. The application-handler
 snippet is the shared create pipeline `CreateCoreAsync`
@@ -327,7 +336,9 @@ the railway lives in the base. `DomainInvariantViolationException`
 (`AddCommonExceptionHandlers`, `Source/Presentation/MMCA.Common.API/DependencyInjection.cs:149`, doc comment
 `:143-148`, the five `AddExceptionHandler` registrations at `:154-158`: OperationCanceled 499, Domain 400,
 DbUpdate 409, Validation 400, catch-all Global 500, the Global handler answering 400 for
-`CrossTenantWriteException` at `.../Middleware/GlobalExceptionHandler.cs:47-53`) converges every escaped
+`CrossTenantWriteException` at `.../Middleware/GlobalExceptionHandler.cs:54-72` (type check `:54`, 400 at `:60`),
+passing a `BadHttpRequestException` through with the status it carries at `:74-98` (status set at `:82`, 413
+"Payload Too Large" title and detail at `:90-95`), and falling back to 500 at `:102`) converges every escaped
 exception onto the same RFC 9457 ProblemDetails contract. The status mapping lives in one shared internal class:
 `ErrorHttpMapping` holds the `FrozenDictionary` (`ErrorTypeToStatusCode`,
 `Source/Presentation/MMCA.Common.API/Middleware/ErrorHttpMapping.cs:20-32`, `Unexpected` to 500 at `:30`,
@@ -342,9 +353,8 @@ Two consumers call the status lookup: `ApiControllerBase.HandleFailure`
 (`Source/Presentation/MMCA.Common.API/Controllers/ApiControllerBase.cs:35`, status resolved at `:48`, errors
 extension at `:58`) and `UnhandledResultFailureFilter` (`.../Middleware/UnhandledResultFailureFilter.cs:36`,
 errors extension at `:47`); a third caller, `SupportsIfMatchAttribute`
-(`.../Concurrency/SupportsIfMatchAttribute.cs:217`), reuses `BuildErrorsExtension` alone. Source-comment drift
-observed, not an article claim: the ranking in the `ApiControllerBase` doc comment (`:26-30`) omits
-`TooManyRequests`. gRPC: `GrpcResultExceptionInterceptor`
+(`.../Concurrency/SupportsIfMatchAttribute.cs:217`), reuses `BuildErrorsExtension` alone. The `ApiControllerBase` doc comment states
+the same ranking, `TooManyRequests` (429) included (`ApiControllerBase.cs:25-30`, `:27`). gRPC: `GrpcResultExceptionInterceptor`
 (`Source/Presentation/MMCA.Common.Grpc/Interceptors/GrpcResultExceptionInterceptor.cs:19`); `TooManyRequests`
 maps to `StatusCode.ResourceExhausted` at `.../ResultGrpcExtensions.cs:49`. The section 15 (Best Practices & Code
 Quality) scorecard row (`Website/docs-src/governance/common-ArchitectureScorecard.md:79`, table header `:63`)
@@ -361,7 +371,7 @@ role-narrow, with the valueless shapes kept on the non-generic `Result` (ISP cri
 grounding cites `MMCA.Common/AGENTS.md:101` (Entity Model: `Create(...)` factories returning `Result<T>`,
 invariants composed with `Result.Combine()`), because `MMCA.Common/CLAUDE.md` is a stub importing it. Change
 history: the 2026-09-19 pass (v1.205.0) called `ErrorType` nine-valued; `TooManyRequests` landed in v1.219.0
-(`MMCA.Common/CHANGELOG.md:27-31`) with its factory, 429 mapping, rank 45 and gRPC `ResourceExhausted`, and
+(`MMCA.Common/CHANGELOG.md:280`, entries at `:284` and `:292`) with its factory, 429 mapping, rank 45 and gRPC `ResourceExhausted`, and
 this pass adds it to every list, re-anchors `Error.cs`, `ErrorHttpMapping.cs`, `ErrorTypeSeverity.cs` and the
 scorecard rows (shifted 16 lines up), replaces the invented `Speaker.Create(string name, Email email, ...)`
 snippet (which passed an `Email` to `EmailInvariants.EnsureEmailIsValid(string, string)`, `EmailInvariants.cs:23`)
@@ -369,6 +379,15 @@ with the condensed real factory, restores `LogCreated`/`OnCreatedAsync` to the p
 "the only way in is the static factories" to name the implicit conversions. Earlier passes called `ErrorType`
 eight-valued, `Result<T>` a three-combinator surface, and status selection first-error-wins. The subtitle's
 unqualified "throws zero exceptions" is narrowed to "for business outcomes" (`MMCA.Common.Domain`
-keeps argument guards such as `Specification.cs:52`) (subtitle edited in the same 2026-10-02 run).*
+keeps argument guards such as `Specification.cs:52`) (subtitle edited in the same 2026-10-02 run). 2026-10-08 pass (v1.233.0): the opening "every controller
+action, and every service method returns `Result`" is narrowed to factories, handlers and UI service methods,
+with controller actions translating a failed `Result` (they return `ActionResult`/`IActionResult`); "every one of
+them skips the delegate" is scoped to success-side delegates, naming `Match`/`MatchAsync` as the failure-track
+exception; the catch-all trade-off bullet adds the `BadHttpRequestException` pass-through (413 for an oversize
+body), added by Common #501; anchors re-read for `GlobalExceptionHandler.cs` (47-53 to 54-72), `ResultExtensions.cs`
+(10/20/39/58/77/102 to 14/24/43/62/81/106, shifted by the v1.232.1 doc pass), `EntityServiceBase.cs` (75/127 to
+82/139), ADR-013 (costs 20-23 to 29-32, combinators 48-59 to 54-77), `Speaker.cs` (early return 134 to 136) and
+`CHANGELOG.md` (27-31 to 280); the ADR-013 "predates `TooManyRequests`" note and the `ApiControllerBase`
+doc-comment drift note are retired, both now list `TooManyRequests`.*
 
 - Full series index: https://ivanball.github.io/writing.html

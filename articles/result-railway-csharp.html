@@ -109,7 +109,7 @@
         <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
         <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
         <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
-        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, four engines</a></li>
         <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
         <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
         <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
@@ -177,8 +177,8 @@
           <p>The failure is in the signature. A caller cannot pretend it does not exist, because the return type is
           not an <code>Order</code>, it is &quot;an <code>Order</code> or an explanation of why not.&quot;</p>
           <p>That swap is the single most pervasive idea in MMCA.Common. Practically every entity factory, every
-          CQRS command and query handler, every controller action, and every service method returns <code>Result</code> or
-          <code>Result&lt;T&gt;</code>. This article is about why, and about the small set of types that make it ergonomic enough
+          CQRS command and query handler, and every UI service method returns <code>Result</code> or <code>Result&lt;T&gt;</code>, and every
+          controller action turns a failed one into an HTTP error response at the edge. This article is about why, and about the small set of types that make it ergonomic enough
           to use everywhere.</p>
           <h2 id="why-exceptions-are-not-a-control-flow-mechanism">Why exceptions are not a control-flow mechanism</h2>
           <p>Exceptions are excellent at one job: aborting a computation that has gone genuinely wrong and unwinding
@@ -236,8 +236,9 @@
           </ul>
           <p>The other two are conveniences over the same short-circuit: <strong><code>Tap(action)</code></strong> runs a side effect on the
           success value and hands back the same instance, and <strong><code>Ensure(predicate, error)</code></strong> fails the chain with a
-          supplied <code>Error</code> when the value does not satisfy a predicate. Every one of them skips the delegate it was
-          handed when the result is already a failure. A separate <code>ResultExtensions</code> class lifts <code>BindAsync</code>,
+          supplied <code>Error</code> when the value does not satisfy a predicate. Every success-side delegate (the mapper, the
+          binder, the side effect, the predicate) is skipped when the result is already a failure; only <code>Match</code> and
+          <code>MatchAsync</code> run a delegate on the failure track, their <code>onFailure</code> branch. A separate <code>ResultExtensions</code> class lifts <code>BindAsync</code>,
           <code>MapAsync</code>, <code>TapAsync</code> and <code>MatchAsync</code> onto a pending <code>Task&lt;Result&lt;T&gt;&gt;</code>, so an asynchronous pipeline
           composes end to end without an <code>await</code> and a temporary local between every step.</p>
           <p>The non-generic base carries four combinators of its own, and <strong><code>Result.Combine(params ReadOnlySpan&lt;Result&gt;)</code></strong>
@@ -356,7 +357,8 @@
           framework-owned. That is not the only exception the framework catches, though. An ordered
           <code>IExceptionHandler</code> chain converges every escaped exception onto the same RFC 9457 ProblemDetails
           contract: a cancellation handler (499), a domain-exception handler (400), a <code>DbUpdate</code> handler (409),
-          a validation handler (400), and a catch-all (500, or 400 for a refused cross-tenant write), registered in that load-bearing order. So the
+          a validation handler (400), and a catch-all (500, except 400 for a refused cross-tenant write and the
+          status a server-rejected request already carries, such as 413 for an oversize body), registered in that load-bearing order. So the
           failure shape stays identical whether it arrived as a <code>Result</code> or as a throw.</li>
           <li><strong>One status has to stand for a whole list of errors.</strong> Every error serializes into the
           ProblemDetails body, but the status code can only be one number, so it is resolved by ranking: the

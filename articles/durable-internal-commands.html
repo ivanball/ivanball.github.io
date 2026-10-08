@@ -109,7 +109,7 @@
         <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
         <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
         <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
-        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, four engines</a></li>
         <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
         <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
         <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
@@ -201,16 +201,18 @@
           <p>The framework has four ways to do work later, and they are not interchangeable.</p>
           <p><strong>The bounded channel</strong> (ADR-121) is a <code>Channel&lt;T&gt;</code> singleton with a <code>SingleReader</code> <code>BackgroundService</code>
           drain, one per job kind. Its full mode is <code>DropOldest</code>, so under pressure it evicts the oldest item and
-          <code>TryWrite</code> always returns true, which means the producer cannot learn that anything was discarded
-          (<code>ADR-121:37-56</code>). It is in-process only: it does not survive a restart and does not span replicas
-          (<code>:135-137</code>). That is not a defect, it is the specification. Article 22 in this series covers it in full,
+          <code>TryWrite</code> returns true until the queue is completed at host shutdown (after which a write is refused just
+          as silently), which means the producer cannot learn that anything was discarded (<code>ADR-121:42-61</code>). It is
+          in-process only: it does not survive a restart and does not span replicas, and its bounded 5-second
+          shutdown flush narrows the loss at a graceful stop without making the queue durable (<code>:79-94</code>,
+          <code>:170-177</code>). That is not a defect, it is the specification. Article 22 in this series covers it in full,
           along with the live-channel case it exists for.</p>
           <p><strong>The recurring scheduler</strong> (ADR-074) carries cron occurrences: one row per registered job, and a missed
-          occurrence is deliberately not replayed (<code>ADR-114:28-36</code>). It answers &quot;sweep the audit trail nightly&quot;.
+          occurrence is deliberately not replayed (<code>ADR-114:31-39</code>). It answers &quot;sweep the audit trail nightly&quot;.
           Article 22 covers this one too, as the sibling contract for work a clock owns.</p>
           <p><strong>The transactional outbox</strong> (ADR-003) carries <em>events</em>. A row is written by the domain-event interceptor
           inside the same transaction as the aggregate change, and a processor drains it with a claim lease,
-          exponential backoff, dead-lettering and OpenTelemetry instrumentation (<code>ADR-114:16-26</code>). It answers &quot;this
+          exponential backoff, dead-lettering and OpenTelemetry instrumentation (<code>ADR-114:19-29</code>). It answers &quot;this
           happened, tell whoever cares&quot;. It does not answer &quot;do this later&quot;, and bending it to do so means
           expressing an instruction as an event, which is the modelling mistake ADR-007 and ADR-008 spend their
           length avoiding.</p>
@@ -218,10 +220,10 @@
           specific gap: a single unit of work, bound to a single aggregate, that must not be lost, and must not
           fire until the aggregate change actually commits.</p>
           <p>ADR-121 states the deciding question in one line: &quot;would losing this item be noticed as anything more
-          than a missed UI refresh?&quot; If yes, it is an internal command; if no, it is a channel item (<code>:130-133</code>).
+          than a missed UI refresh?&quot; If yes, it is an internal command; if no, it is a channel item (<code>:165-167</code>).
           The record is blunt about the symmetry of the mistake: putting must-run work on a <code>DropOldest</code> channel
           loses it silently, and putting a broadcast through a durable command pays a row, a poll interval and a
-          lease for something worth less than the write (<code>:148-151</code>).</p>
+          lease for something worth less than the write (<code>:188-190</code>).</p>
           <h2 id="the-mmca-answer-a-deferred-execution-is-the-inline-execution">The MMCA answer: a deferred execution IS the inline execution</h2>
           <p>Here is the decision that makes the rest of it cheap.</p>
           <p><code>IInternalCommand</code> is a marker interface deriving from <code>ICommand&lt;Result&gt;</code> and nothing else
@@ -233,13 +235,13 @@
           execution scope (<code>InternalCommandDispatcher.cs:75</code>), so what comes back from the container is already
           wrapped by Scrutor in the whole ADR-014 chain: the feature gate, the authorization check, logging, cache
           invalidation, validation, the timeout budget and the transaction, in that order, unchanged
-          (<code>ADR-114:53-62</code>).</p>
+          (<code>ADR-114:56-65</code>).</p>
           <p>That one decision is what the rest of this article is really about. It means a deferred command gets
           validated. It means a deferred command can require a permission. It means the logging decorator writes
           the same line it always wrote. None of that is job-queue code, because none of it is job-queue code
           anywhere else either.</p>
           <p>Compare that to what a general-purpose job library executes: a serialized method invocation, which passes
-          through none of your pipeline until you teach it to (<code>ADR-114:156-163</code>).</p>
+          through none of your pipeline until you teach it to (<code>ADR-114:165-172</code>).</p>
           <h2 id="scheduling-rides-the-callers-unit-of-work">Scheduling rides the caller&#39;s unit of work</h2>
           <p><code>IInternalCommandScheduler</code> exposes <code>ScheduleAsync(command, runAt)</code> and a <code>TimeSpan delay</code> overload, both
           returning <code>Result&lt;Guid&gt;</code> (<code>IInternalCommandScheduler.cs:45-62</code>). <code>runAt</code> is &quot;the earliest instant the
@@ -248,7 +250,7 @@
           busy queue takes to get there (<code>:23-27</code>).</p>
           <p>The write goes to the context handed back by the scope&#39;s own <code>IDbContextFactory</code>, which is the same
           instance the calling handler&#39;s repositories are using. From there the behavior splits, and the split is
-          the whole reason this mechanism exists (<code>ADR-114:64-80</code>):</p>
+          the whole reason this mechanism exists (<code>ADR-114:67-88</code>):</p>
           <ul>
           <li><strong>With a transaction active</strong>, the row is only enrolled. The caller&#39;s next save writes it, or the
           transactional pipeline saves it just before the commit when no save follows, so the caller&#39;s commit
@@ -264,35 +266,39 @@
           </ul>
           <p>That first bullet is the outbox&#39;s atomicity guarantee applied to an instruction instead of an event: a
           transaction that aborts schedules nothing. It is also precisely what a separate job store cannot give
-          you, and it is the single reason ADR-114 rejects Hangfire, Quartz.NET and a cloud queue. All three keep
-          their state somewhere your transaction does not reach, so an enqueue beside a rollback is a job with no
-          justification (<code>ADR-114:156-177</code>). The cloud-queue rejection is the interesting one, because it is
-          conditional: a broker queue is the right answer once the work must cross a process boundary or survive
-          the database being unavailable, and the standard way to enqueue it safely is to write an outbox row that
-          a processor forwards, which is this design plus one hop (<code>:171-177</code>).</p>
+          you, and it is the common thread in ADR-114&#39;s rejection of Hangfire, Quartz.NET and a cloud queue. All
+          three keep their state somewhere your transaction does not reach, so an enqueue beside a rollback is a job
+          with no justification (<code>ADR-114:161-186</code>). The record adds a reason of its own to each: Hangfire&#39;s
+          dashboard and <code>IJobFilter</code> pipeline duplicate the framework&#39;s operator surface and decorators in a second
+          vocabulary, Quartz.NET would mean two schedulers with two configuration surfaces, and a cloud queue adds
+          an infrastructure dependency and a cost line to every consumer (<code>:168-172</code>, <code>:176-178</code>, <code>:184-186</code>). The
+          cloud-queue rejection is the interesting one, because it is conditional: a broker queue is the right
+          answer once the work must cross a process boundary or survive the database being unavailable, and the
+          standard way to enqueue it safely is to write an outbox row that a processor forwards, which is this
+          design plus one hop (<code>:180-186</code>).</p>
           <h2 id="the-row-and-what-it-remembers">The row, and what it remembers</h2>
           <p><code>InternalCommandMessage</code> (<code>InternalCommandMessage.cs:21</code>) is deliberately not an auditable entity, for
           the same reason <code>OutboxMessage</code> is not: it is framework bookkeeping, not domain state, so it carries no
           soft-delete flag, no audit stamps and no concurrency token. Its concurrency control is the explicit claim
           lease (<code>:14-19</code>).</p>
           <p>The columns fall into four groups.</p>
-          <p><strong>The instruction</strong>: <code>CommandType</code> (<code>:43</code>), which is the identity the payload deserializes against, and
-          <code>Payload</code> (<code>:46</code>), the <code>System.Text.Json</code> output. The payload has to round-trip through JSON, which is a
+          <p><strong>The instruction</strong>: <code>CommandType</code> (<code>:46</code>), which is the identity the payload deserializes against, and
+          <code>Payload</code> (<code>:49</code>), the <code>System.Text.Json</code> output. The payload has to round-trip through JSON, which is a
           requirement rather than a style preference, and the guidance is to keep it to identifiers and scalars,
           never loaded aggregates (<code>IInternalCommand.cs:19-24</code>).</p>
-          <p><strong>The schedule</strong>: <code>ScheduledOn</code> (<code>:52</code>), the earliest UTC instant the row may run, equal to <code>CreatedOn</code>
-          (<code>:55</code>) for an immediate schedule.</p>
-          <p><strong>The outcome</strong>: <code>ProcessedOn</code> (<code>:61</code>), <code>Attempts</code> (<code>:64</code>), <code>LastError</code> (<code>:70</code>, truncated to the column
-          width) and <code>DeadLetteredOn</code> (<code>:77</code>), plus the lease pair <code>ClaimedBy</code> (<code>:84</code>) and <code>ClaimedUntil</code> (<code>:92</code>).</p>
-          <p><strong>The context it was written under</strong>: <code>CorrelationId</code> (<code>:98</code>), <code>TraceId</code> (<code>:101</code>), <code>SpanId</code> (<code>:104</code>),
-          <code>UserId</code> (<code>:111</code>), <code>UserRoles</code> (<code>:118</code>) and <code>TenantId</code> (<code>:124</code>).</p>
+          <p><strong>The schedule</strong>: <code>ScheduledOn</code> (<code>:55</code>), the earliest UTC instant the row may run, equal to <code>CreatedOn</code>
+          (<code>:58</code>) for an immediate schedule.</p>
+          <p><strong>The outcome</strong>: <code>ProcessedOn</code> (<code>:64</code>), <code>Attempts</code> (<code>:67</code>), <code>LastError</code> (<code>:73</code>, truncated to the column
+          width) and <code>DeadLetteredOn</code> (<code>:80</code>), plus the lease pair <code>ClaimedBy</code> (<code>:87</code>) and <code>ClaimedUntil</code> (<code>:95</code>).</p>
+          <p><strong>The context it was written under</strong>: <code>CorrelationId</code> (<code>:101</code>), <code>TraceId</code> (<code>:104</code>), <code>SpanId</code> (<code>:107</code>),
+          <code>UserId</code> (<code>:114</code>), <code>UserRoles</code> (<code>:121</code>) and <code>TenantId</code> (<code>:127</code>).</p>
           <p>That fourth group is the one people forget to build, and it is what turns a deferred command from a
           system call into a continuation of a user&#39;s request. Before the dispatcher runs, the processor calls the
           shared <code>AmbientOrigin.Restore</code> (<code>InternalCommandProcessor.cs:483</code>), the same helper every other
           background hop uses, so every hop restores the same shape. It sets the tenant first, then rebuilds a
           <code>ClaimsPrincipal</code> carrying the <code>sub</code> claim and one role claim per stored role, and hands it to
           <code>ScopedUserOverride</code>, a scoped carrier read by <code>ImpersonatingCurrentUserService</code>, which decorates whatever
-          <code>ICurrentUserService</code> the host registered (<code>ADR-114:102-114</code>). With no override set every member reads
+          <code>ICurrentUserService</code> the host registered (<code>ADR-114:110-122</code>). With no override set every member reads
           straight through, so an HTTP request behaves exactly as it did before the queue existed. The identity is
           stamped with an authentication type of <code>InternalCommand</code> (<code>InternalCommandProcessor.cs:66</code>), which is what
           makes <code>IsAuthenticated</code> true and names the hop the identity came back from.</p>
@@ -317,7 +323,7 @@
           mechanics (the startup delay, the smart wait, the per-source drain and the retry backoff) are the
           internal <code>PollingLoop</code> the outbox processor also runs (<code>PollingLoop.cs:12</code>, called from
           <code>InternalCommandProcessor.cs:75-79</code>); the claim, the execution and the stamping are its own
-          (<code>ADR-114:179-188</code>).</p>
+          (<code>ADR-114:188-197</code>).</p>
           <p>It waits a five-second startup delay before the first cycle (<code>PollingLoop.cs:18</code>, applied at <code>:51</code>), and
           returns immediately if the host owns no relational sources (<code>:53-57</code>). Each cycle fetches the due
           candidates per source, claims the due prefix of the batch with a lease token (<code>ClaimDueAsync</code>,
@@ -336,16 +342,16 @@
           rather than accidental: an outbox row&#39;s type may live in an assembly that has simply not loaded yet,
           while a queue row can only ever run on a host that registers a handler for it, so a host that cannot name
           the type has no such handler and retrying would burn the budget waiting for a fact that will not change
-          (<code>ADR-114:116-133</code>).</p>
+          (<code>ADR-114:124-142</code>).</p>
           <p>The settings mirror <code>OutboxSettings</code> where the semantics match (<code>InternalCommandsSettings.cs</code>):
-          <code>BatchSize</code> 50 (<code>:31</code>), <code>MaxAttempts</code> 5 (<code>:39</code>), <code>PollingIntervalSeconds</code> 2 (<code>:49</code>), <code>LeaseSeconds</code> 300
-          (<code>:69</code>), <code>RetryBackoffBaseSeconds</code> 10 (<code>:78</code>), <code>RetentionDays</code> 7 (<code>:94</code>), <code>CleanupIntervalHours</code> 6
-          (<code>:109</code>). Two deliberately differ. <code>ProcessingDelaySeconds</code> defaults to <code>0</code> rather than the outbox&#39;s 5
-          (<code>:58</code>), because that delay exists to bound a race with the in-process fast path that dispatches an event
+          <code>BatchSize</code> 50 (<code>:31</code>), <code>MaxAttempts</code> 5 (<code>:39</code>), <code>PollingIntervalSeconds</code> 2 (<code>:50</code>), <code>LeaseSeconds</code> 300
+          (<code>:70</code>), <code>RetryBackoffBaseSeconds</code> 10 (<code>:79</code>), <code>RetentionDays</code> 7 (<code>:95</code>), <code>CleanupIntervalHours</code> 6
+          (<code>:110</code>). Two deliberately differ. <code>ProcessingDelaySeconds</code> defaults to <code>0</code> rather than the outbox&#39;s 5
+          (<code>:59</code>), because that delay exists to bound a race with the in-process fast path that dispatches an event
           before the processor can, and a job queue has no such fast path. <code>MaxRetryBackoffSeconds</code> is its own
-          ceiling of 600 (<code>:87</code>) rather than reusing the lease, because a job queue wants a long lease for slow
+          ceiling of 600 (<code>:88</code>) rather than reusing the lease, because a job queue wants a long lease for slow
           handlers and a short ceiling on how long a transient failure parks a command, where the outbox gets one
-          number for both (<code>ADR-114:135-144</code>).</p>
+          number for both (<code>ADR-114:144-153</code>).</p>
           <h2 id="the-worked-example-an-email-that-must-survive-a-deploy">The worked example: an email that must survive a deploy</h2>
           <p>MMCA.Store&#39;s Sales module schedules a payment-failure notification. The command is fifteen lines and most
           of them are documentation:</p>
@@ -433,27 +439,34 @@
           the pass skips every session whose score was written at or after that instant, so a duplicate queued
           behind a running pass completes without a paid call, and a retry after a timeout or a killed replica
           resumes where the attempt stopped (<code>ScoreEventSessionsInternalCommand.cs:25-33</code>).</p>
-          <p>The trigger endpoint carries the same gate (<code>SessionSelectionController.cs:125</code>), because it only
+          <p>The trigger endpoint carries the same gate (<code>SessionSelectionController.cs:134</code>), because it only
           schedules: the decorator fires minutes later on the processor, and without the attribute an organizer who
           switched the pass off would still be told <code>202 Accepted</code> for work that is about to be refused
-          (<code>:115-121</code>). It schedules the command with the service clock&#39;s current instant as <code>RequestedAtUtc</code>
-          (<code>:132-136</code>), returns the failure when the schedule write fails (<code>:138-141</code>), and answers <code>202 Accepted</code>
-          otherwise (<code>:144</code>). Its <code>[NonIdempotent]</code> attribute records why caching the 202 would be wrong: it would
-          report acceptance for a request that never reached the queue, hiding a schedule failure the caller has to
-          act on (<code>:126</code>).</p>
+          (<code>:117-125</code>). Before it writes anything it checks that the event exists, and answers the same
+          event-not-found 404 the dashboard does for an unknown or soft-deleted id, because the pass would find no
+          sessions for that event and complete as a no-op, so a 202 would promise work that can never happen
+          (<code>:127-130</code>, <code>:142-146</code>). It then schedules the command with the service clock&#39;s current instant as
+          <code>RequestedAtUtc</code> (<code>:148-152</code>), returns the failure when the schedule write fails (<code>:154-157</code>), and answers
+          <code>202 Accepted</code> otherwise (<code>:160</code>). Its <code>[NonIdempotent]</code> attribute records why caching the 202 would be
+          wrong: it would report acceptance for a request that never reached the queue, hiding a schedule failure
+          the caller has to act on (<code>:135</code>).</p>
           <p>Three pieces of handler discipline are worth copying (<code>ScoreEventSessionsInternalCommandHandler.cs</code>):</p>
           <ul>
           <li><strong>Lock and skip, not lock and wait.</strong> The handler takes a per-event <code>IDistributedLock</code> claim with a
-          15-minute time-to-live (<code>:56</code>) and a wait of <code>TimeSpan.Zero</code> (<code>:63</code>), and the loser logs and returns
-          <code>Result.Success()</code> (<code>:82-86</code>). Queueing behind a pass already covering the same work would only pay for
+          15-minute time-to-live (<code>:61</code>) and a wait of <code>TimeSpan.Zero</code> (<code>:68</code>), and the loser logs and returns
+          <code>Result.Success()</code> (<code>:87-91</code>). Queueing behind a pass already covering the same work would only pay for
           it twice.</li>
-          <li><strong>A refusal is not retried, a fault is.</strong> A <code>Result</code> failure from the pass is a business outcome (no
-          sessions to score, the event is not scorable) and replaying it would pay for the same refusal again, so
-          it is logged and reported as success. An exception propagates instead, and the framework&#39;s backoff and
-          attempt ceiling decide how often it is replayed and when it is dead-lettered (<code>:22-29,90-94</code>).</li>
+          <li><strong>Success means every pending session was scored.</strong> A <code>Result</code> failure from the pass is returned as a
+          failure (<code>:95-101</code>), and so is a pass that scored some sessions but not others, as
+          <code>AiScoring.PartialFailure</code> (<code>:108-118</code>), so the processor backs off and retries both exactly as it would
+          a thrown exception, up to the attempt ceiling and the dead letter. The retry resumes rather than
+          restarts: the <code>RequestedAtUtc</code> skip leaves the scored sessions alone, so only the failed ones are paid
+          for again, at most <code>MaxAttempts - 1</code> extra calls per persistently failing session, and the dead letter
+          after the last attempt is the operator signal. An event with nothing to score is not a failure: the
+          runner answers it with zero counts (<code>:22-34</code>).</li>
           <li><strong>Idempotent as required.</strong> Re-running a pass rewrites the same per-session score rows rather than
           accumulating them, and the pass receives the command&#39;s <code>RequestedAtUtc</code> so it skips sessions already
-          scored for this request (<code>:30-36,88</code>).</li>
+          scored for this request (<code>:35-41,93</code>).</li>
           </ul>
           <p>The command&#39;s own remarks record what it replaced and why: an in-process channel plus a five-minute
           recovery sweep, where the channel was exactly as durable as the replica holding it, so a deploy or a
@@ -484,42 +497,42 @@
           <ul>
           <li><strong>One migration per relational data source.</strong> The table is in the model of every relational source
           (SQL Server, PostgreSQL and SQLite after ADR-113), so adopting the queue means
-          <code>dotnet ef migrations add AddInternalCommands</code> per source, applied before deploying (<code>ADR-114:192-196</code>).
+          <code>dotnet ef migrations add AddInternalCommands</code> per source, applied before deploying (<code>ADR-114:201-205</code>).
           The mapping is deliberately <strong>not</strong> gated on <code>InternalCommands:Enabled</code>, unlike the cron scheduler&#39;s job
           table, because a row must be able to commit in the same transaction as the aggregate change, a
           transaction does not span databases, and a flag that changed the schema would make enabling the queue a
-          migration rather than a deployment decision (<code>:97-100</code>).</li>
+          migration rather than a deployment decision (<code>:105-108</code>).</li>
           <li><strong>Execution is at-least-once, and it is a new obligation on ordinary commands.</strong> A replica that dies
           after its handler committed and before the row was stamped releases the row when its lease expires, and
           the command runs again. That is the same contract the outbox already places on event handlers, so it is
           not new for anyone using the framework, but a command handler previously only ever ran once per request
-          (<code>ADR-114:198-202</code>).</li>
+          (<code>ADR-114:207-211</code>).</li>
           <li><strong>A scheduled command runs with the scheduling user&#39;s authority, not the executing host&#39;s.</strong> That is
           what makes an <code>IRequiresPermission</code> command schedulable at all, and it means the row is a durable record
           of an authorization decision. If the user&#39;s roles change between scheduling and execution, the stored
           roles win. The record files that as deliberate (the decision was taken when the work was requested) and
           as the reason the row is under the same retention discipline as the outbox, because the payload can
-          carry personal data (<code>ADR-114:204-210</code>).</li>
+          carry personal data (<code>ADR-114:213-219</code>).</li>
           <li><strong>The polling interval is the fallback, and production stretches it.</strong> A schedule does not wait for the
           poll to be noticed: a row saved outright signals the processor, and a row enrolled in a transaction owes
-          a wake that the unit of work releases once the commit succeeds (<code>DbContextFactory.cs:472-474</code>). What the
-          interval bounds is how long an idle processor sleeps without a wake, because the smart wait is capped at
-          it (<code>PollingLoop.cs:104</code>, <code>ADR-114:75-78</code>). <code>PollingIntervalSeconds</code> ships at 2, the same default the
+          a wake that the unit of work releases once the commit succeeds (<code>DbContextFactory.cs:481</code>, <code>:634</code>). What
+          the interval bounds is how long an idle processor sleeps without a wake, because the smart wait is capped
+          at it (<code>PollingLoop.cs:104</code>, <code>ADR-114:83-86</code>). <code>PollingIntervalSeconds</code> ships at 2, the same default the
           outbox ships, so the divergence is a deployment decision rather than a framework one: ADC and Store both
-          run the queue at 60 seconds while pushing the outbox to 300 (<code>MMCA.ADC/infra/main.bicep:1700,1706</code>,
+          run the queue at 60 seconds while pushing the outbox to 300 (<code>MMCA.ADC/infra/main.bicep:1746,1752</code>,
           <code>MMCA.Store/infra/main.bicep:1493,1500</code>). A host that raises the interval accepts that much latency on
           any row whose wake never reaches an idle processor.</li>
           <li><strong>Two poll loops, not one.</strong> A host runs the outbox processor and the queue processor side by side,
           each with its own signal instance so a burst of schedules cannot consume the outbox&#39;s single pending
           wake-up. Both poll spans are suppressed from telemetry export by the same Aspire processor
-          (<code>ADR-114:223-228</code>). Two loops is two idle query streams against every source, which is exactly the
+          (<code>ADR-114:235-240</code>). Two loops is two idle query streams against every source, which is exactly the
           cost the 60-second production interval is paying down.</li>
           <li><strong>The duplication with the outbox is deliberate and bounded.</strong> Extending the outbox to carry commands
           was the tempting option and it is rejected on four counts: the two rows want different columns (a
           scheduled instant, an attempt budget, a captured principal), different indexes, different retention and
           different terminal semantics for an unresolvable type, and the outbox&#39;s poll predicate is the hottest
           query the framework issues, so widening it would make every outbox change a job-queue change
-          (<code>ADR-114:179-188</code>). The two processors share the loop mechanics through <code>PollingLoop</code> and nothing
+          (<code>ADR-114:188-197</code>). The two processors share the loop mechanics through <code>PollingLoop</code> and nothing
           else: each keeps its own tables, queries, logging, metrics and activities.</li>
           <li><strong>The payload is JSON, which is a real constraint on what a command can carry.</strong> Identifiers and
           scalars round-trip; a loaded aggregate does not, and should not be attempted (<code>IInternalCommand.cs:19-24</code>).
@@ -527,7 +540,7 @@
           because the world moved on between the schedule and the run.</li>
           <li><strong>Choosing between this and a channel is a per-job judgement no test enforces.</strong> ADR-121&#39;s question
           (&quot;would losing this item be noticed as anything more than a missed UI refresh?&quot;) is a rule a human
-          applies, and getting it wrong in either direction is silent (<code>ADR-121:130-133,148-151</code>).</li>
+          applies, and getting it wrong in either direction is silent (<code>ADR-121:165-167,188-190</code>).</li>
           </ul>
           <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
           <p>The mechanism ports to anything with a relational database and a background worker. Six steps, in the
@@ -565,9 +578,9 @@
           one, how ADR-121&#39;s question (&quot;would losing this be more than a missed UI refresh?&quot;) splits the ephemeral
           channel from the durable queue, why an internal command is an ordinary <code>ICommand&lt;Result&gt;</code> resolved as a
           closed handler so the whole ADR-014 decorator chain applies to a deferred run, how <code>ScheduleAsync</code> rides
-          the caller&#39;s unit of work so a rollback schedules nothing (and why that single property rules out
-          Hangfire, Quartz.NET and a cloud queue), what <code>InternalCommandMessage</code> remembers about the request that
-          scheduled it and how <code>AmbientOrigin.Restore</code> puts the tenant and the principal back, why
+          the caller&#39;s unit of work so a rollback schedules nothing (and why that property is the common thread in
+          ruling out Hangfire, Quartz.NET and a cloud queue), what <code>InternalCommandMessage</code> remembers about the
+          request that scheduled it and how <code>AmbientOrigin.Restore</code> puts the tenant and the principal back, why
           <code>[InternalCommandName]</code> makes a rename survivable and its absence loud, how the leased claim-execute-stamp
           cycle and its jittered backoff bound failure, and what the administration surface and the
           <code>MMCA.Common.InternalCommands</code> meter have to expose before a dead-letter path is an operational procedure

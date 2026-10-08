@@ -6,23 +6,23 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>Google, GitHub and Apple login without leaking tokens: external OAuth behind your own JWTs · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Sign in with Google or GitHub without leaking provider tokens: external identity exchanged for your own JWTs at the boundary.">
+  <meta name="description" content="Sign in with Google, GitHub or Apple without leaking provider tokens: external identity exchanged for your own JWTs at the boundary.">
   <link rel="canonical" href="https://ivanball.github.io/articles/external-oauth-login.html">
   <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="Google, GitHub and Apple login without leaking tokens: external OAuth behind your own JWTs">
-  <meta property="og:description" content="Sign in with Google or GitHub without leaking provider tokens: external identity exchanged for your own JWTs at the boundary.">
+  <meta property="og:description" content="Sign in with Google, GitHub or Apple without leaking provider tokens: external identity exchanged for your own JWTs at the boundary.">
   <meta property="og:url" content="https://ivanball.github.io/articles/external-oauth-login.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-26.png">
   <meta property="og:image:alt" content="Google, GitHub and Apple login without leaking tokens: external OAuth behind your own JWTs">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Google, GitHub and Apple login without leaking tokens: external OAuth behind your own JWTs">
-  <meta name="twitter:description" content="Sign in with Google or GitHub without leaking provider tokens: external identity exchanged for your own JWTs at the boundary.">
+  <meta name="twitter:description" content="Sign in with Google, GitHub or Apple without leaking provider tokens: external identity exchanged for your own JWTs at the boundary.">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-26.png">
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Google, GitHub and Apple login without leaking tokens: external OAuth behind your own JWTs","description":"Sign in with Google or GitHub without leaking provider tokens: external identity exchanged for your own JWTs at the boundary.","url":"https://ivanball.github.io/articles/external-oauth-login.html","mainEntityOfPage":"https://ivanball.github.io/articles/external-oauth-login.html","image":"https://ivanball.github.io/assets/img/articles/article-26.png","datePublished":"2026-07-26T14:22:48Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":26,"sameAs":"https://medium.com/@ivanball76/google-and-github-login-without-leaking-tokens-external-oauth-behind-your-own-jwts-d68ba5e3aca4"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Google, GitHub and Apple login without leaking tokens: external OAuth behind your own JWTs","description":"Sign in with Google, GitHub or Apple without leaking provider tokens: external identity exchanged for your own JWTs at the boundary.","url":"https://ivanball.github.io/articles/external-oauth-login.html","mainEntityOfPage":"https://ivanball.github.io/articles/external-oauth-login.html","image":"https://ivanball.github.io/assets/img/articles/article-26.png","datePublished":"2026-07-26T14:22:48Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":26,"sameAs":"https://medium.com/@ivanball76/google-and-github-login-without-leaking-tokens-external-oauth-behind-your-own-jwts-d68ba5e3aca4"}</script>
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"26 · External OAuth login behind your own JWTs","item":"https://ivanball.github.io/articles/external-oauth-login.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
   <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -109,7 +109,7 @@
         <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
         <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
         <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
-        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, four engines</a></li>
         <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
         <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
         <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
@@ -260,7 +260,15 @@
 <span class="hljs-comment">// OAuthControllerBase.ExchangeAsync (POST, [NonIdempotent], out of band): burn the code on first use.</span>
 <span class="hljs-keyword">if</span> (<span class="hljs-built_in">string</span>.IsNullOrWhiteSpace(request.Code)) { <span class="hljs-keyword">return</span> InvalidCode(); }
 <span class="hljs-keyword">var</span> cacheKey = OAuthExchangeCodePrefix + request.Code;
-<span class="hljs-comment">// The shared store, not a local copy: a code burned on another replica must be a miss here.</span>
+<span class="hljs-keyword">if</span> (distributedLock <span class="hljs-keyword">is</span> <span class="hljs-literal">null</span>) { <span class="hljs-keyword">return</span> <span class="hljs-keyword">await</span> RedeemExchangeCodeAsync(cacheKey, cancellationToken); }
+<span class="hljs-comment">// Multi-replica hosts: the read and the burn are one critical section under a distributed lock.</span>
+<span class="hljs-keyword">var</span> handle = <span class="hljs-keyword">await</span> distributedLock.TryAcquireAsync(
+    <span class="hljs-string">$&quot;lock:<span class="hljs-subst">{cacheKey}</span>&quot;</span>, RedeemLockTimeToLive, RedeemLockWait, cancellationToken);  <span class="hljs-comment">// 10 s lease, 5 s wait</span>
+<span class="hljs-keyword">if</span> (handle <span class="hljs-keyword">is</span> <span class="hljs-literal">null</span>) { <span class="hljs-keyword">return</span> InvalidCode(); }                 <span class="hljs-comment">// contended redeem =&gt; 400, never a second success</span>
+<span class="hljs-keyword">await</span> <span class="hljs-keyword">using</span> (handle) { <span class="hljs-keyword">return</span> <span class="hljs-keyword">await</span> RedeemExchangeCodeAsync(cacheKey, cancellationToken); }
+
+<span class="hljs-comment">// OAuthControllerBase.RedeemExchangeCodeAsync: the shared store, not a local copy, so a code</span>
+<span class="hljs-comment">// burned on another replica is a miss here.</span>
 <span class="hljs-keyword">var</span> response = <span class="hljs-keyword">await</span> cacheService.GetFromSharedStoreAsync&lt;AuthenticationResponse&gt;(cacheKey, cancellationToken);
 <span class="hljs-keyword">if</span> (<span class="hljs-built_in">string</span>.IsNullOrEmpty(response.AccessToken)) { <span class="hljs-keyword">return</span> InvalidCode(); }  <span class="hljs-comment">// missing/replayed/expired =&gt; 400</span>
 <span class="hljs-keyword">await</span> cacheService.RemoveAsync(cacheKey, cancellationToken);              <span class="hljs-comment">// single-use</span>
@@ -269,9 +277,14 @@
           tokens sit in the server-side cache the whole time. They reach the browser only through a same-origin
           POST response body, which history, the <code>Referer</code> header, and upstream access logs do not record. The
           exchange reads the code from the shared cache store rather than a per-replica copy, so a code already
-          burned on one replica is a miss on every other. The
+          burned on one replica is a miss on every other. That alone leaves a race: two replicas that both read
+          before either removes would both hand out the token pair. So a controller subclass that passes an
+          <code>IDistributedLock</code> to the base&#39;s four-argument constructor gets the read and the burn inside one lock
+          on <code>lock:{cacheKey}</code> (a ten-second lease, a five-second wait), and a redeem that cannot take the lock
+          is answered as an invalid code. A subclass that keeps the three-argument constructor gets no lock and
+          the plain read-then-burn, which is single-use only per replica. The
           code is burned on first read, so a leaked or replayed code buys nothing, and a blank, missing,
-          replayed, or expired code returns HTTP 400. The exchange is marked <code>[NonIdempotent]</code>, because
+          replayed, expired, or contended code returns HTTP 400. The exchange is marked <code>[NonIdempotent]</code>, because
           replaying a stored response would defeat the burn.</p>
           <h2 id="the-same-handshake-now-for-native-heads">The same handshake, now for native heads</h2>
           <p>A mobile head cannot intercept a redirect to a web URL, and the providers reject OAuth inside an
@@ -314,7 +327,8 @@
           password and link the provider from their profile. The verifier proves only the provider&#39;s side of the
           address, so only an account nobody can already sign into with a password is claimable by an email
           match; everyone else proves possession first. Once all three pass, <code>User.LinkExternalProvider</code>
-          attaches the provider to the existing account.</p>
+          attaches the provider to the existing account and marks its email confirmed, since the link only ever
+          follows a verified assertion.</p>
           <p>When no account owns the email at all, the flow <em>creates</em> one through <code>User.CreateExternal</code>, an
           <code>Attendee</code> with empty password hash and salt. The verifier runs on this branch too, but it does not
           gate the create (GitHub&#39;s OAuth flow asserts nothing, and refusing would close GitHub sign-up): the
@@ -370,7 +384,8 @@
           </ul>
           <p><strong>Adoption is one app deep, by design.</strong> ADC&#39;s Identity module wires the whole flow: a sealed
           <code>OAuthController</code> subclass carrying the <code>[ApiController]</code> / <code>[Route(&quot;auth/oauth&quot;)]</code> / <code>[ApiVersion(&quot;1.0&quot;)]</code>
-          attributes (the base cannot reliably inherit them), an <code>AuthenticationService</code> that overrides
+          attributes (the base cannot reliably inherit them) and taking an <code>IDistributedLock</code> it hands to the
+          four-argument base constructor, so a code redeems once across Identity replicas, an <code>AuthenticationService</code> that overrides
           <code>ExternalLoginAsync</code>, an Identity service host that calls <code>AddExternalAuthProviders</code>, and an AppHost
           that passes the UI&#39;s HTTPS endpoint to the service as <code>OAuth__UIBaseUrl</code> so the post-exchange redirect
           lands on the right host. MMCA.Store does none of this. It registers no OAuth schemes, defines no

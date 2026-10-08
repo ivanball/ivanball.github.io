@@ -69,7 +69,7 @@ Both do the identical three-step thing in `HandleAsync`:
 2. If it is gated, check `featureManager.IsEnabledAsync(featureGated.FeatureName)`
    (`FeatureGateCommandDecorator.cs:53`). Enabled means delegate to the inner handler as normal.
 3. If the flag is off, short-circuit: build and return a failure result carrying
-   `Error.NotFoundError("Feature.Disabled", ...)` (`FeatureGateCommandDecorator.cs:56-59`), without ever
+   `Error.NotFoundError("Feature.Disabled", ...)` (`FeatureGateCommandDecorator.cs:59-62`), without ever
    invoking the handler.
 
 Manufacturing that typed failure is the one subtle piece. `TResult` is unconstrained (it is `Result` for
@@ -115,10 +115,13 @@ public async Task<TResult> HandleAsync(TCommand command, CancellationToken cance
     if (await featureManager.IsEnabledAsync(featureGated.FeatureName).ConfigureAwait(false))
         return await inner.HandleAsync(command, cancellationToken).ConfigureAwait(false);
 
+    // The message reaches the user verbatim, so it is the generic wording DisabledFeatureHandler
+    // uses for a [FeatureGate] endpoint; the flag name is internal and stays out of it. Clients
+    // branch on the Feature.Disabled code.
     var createFailure = CreateFailure();
     return createFailure([Error.NotFoundError(
         "Feature.Disabled",
-        $"Feature '{featureGated.FeatureName}' is not currently available.")]);
+        "The requested feature is not currently available.")]);
 }
 ```
 
@@ -149,17 +152,22 @@ on the controller or action; the framework's own push-device controller carries
 `[FeatureGate(NotificationFeatures.PushNotifications)]` on the class
 (`MMCA.Common.API/Controllers/Notifications/DevicesController.cs:24`), not app-specific code in ADC.
 When the flag is off, `DisabledFeatureHandler`
-(`DisabledFeatureHandler.cs:13`) writes an RFC 9457 ProblemDetails response with status
-`404 Not Found` and the title `"Feature not available"` (`DisabledFeatureHandler.cs:18-26`).
+(`DisabledFeatureHandler.cs:14`) writes an RFC 9457 ProblemDetails response with status
+`404 Not Found`, the title `"Feature not available"` and the detail
+`"The requested feature is not currently available."` (`DisabledFeatureHandler.cs:19-27`).
 
 Both surfaces agree on one convention that is worth stating plainly: a disabled feature returns
 not-found, never `403 Forbidden`. The pipeline decorator short-circuits with `ErrorType.NotFound`; the
 edge handler returns `404`. Neither answer looks like a permissions problem, but neither body is
-anonymous either (ADR-031). The edge body is titled "Feature not available" (`DisabledFeatureHandler.cs:21`).
+anonymous either (ADR-031). The edge body is titled "Feature not available" (`DisabledFeatureHandler.cs:22`).
 The CQRS failure travels through the Result to ProblemDetails mapping, whose `errors` extension serializes
-each error's code and message (`ErrorHttpMapping.cs:62-69`), so the caller sees the `Feature.Disabled` code
-and a message naming the flag (`FeatureGateCommandDecorator.cs:57-59`). Turning a flag off makes the
-feature answer not-found and say that a feature is unavailable, not report a locked door.
+each error's code and message (`ErrorHttpMapping.cs:62-70`, with the message localized by code when the
+host registers an `IErrorLocalizer`, `:66`), so the caller sees the `Feature.Disabled` code and the same
+generic "The requested feature is not currently available." wording the edge uses as its detail
+(`FeatureGateCommandDecorator.cs:60-62`). The flag name stays out of the message on purpose, because the
+message reaches the user verbatim and the name is internal; clients branch on the code
+(`FeatureGateCommandDecorator.cs:56-58`). Turning a flag off makes the feature answer not-found and say
+that a feature is unavailable, not report a locked door.
 
 ## Trade-offs, honestly
 
@@ -204,7 +212,7 @@ feature answer not-found and say that a feature is unavailable, not report a loc
   The scoring command is a durable internal command that the framework's processor runs through the same
   decorator pipeline, so with its flag off the gate's failure completes the queued row rather than retrying
   it (`ScoreEventSessionsInternalCommand.cs:42-46`); its trigger endpoint also carries
-  `[FeatureGate(ConferenceFeatures.SessionScoring)]` (`SessionSelectionController.cs:125`), so that flag is
+  `[FeatureGate(ConferenceFeatures.SessionScoring)]` (`SessionSelectionController.cs:134`), so that flag is
   enforced at both surfaces. No query is gated. The flag inventory is wider than the pipeline usage:
   thirteen flag-name constants
   across six `*Features` classes (Common's Notifications and Privacy, ADC's Conference and Engagement,
@@ -255,21 +263,34 @@ pattern (ADR-031), or `dotnet add package MMCA.Common.Application` and gate your
 
 *Tags: .NET, C Sharp, Software Architecture, CQRS, Feature Flags*
 
-*Notes: verified names and behaviors from THIS run (2026-10-02, MMCA.Common v1.221.0).
+*Notes: verified names and behaviors from THIS run (2026-10-08, MMCA.Common v1.233.0; the prior run was
+2026-10-02 at v1.221.0). 2026-10-08 entry (v1.233.0): the CQRS disabled message is the generic
+"The requested feature is not currently available." in both decorators
+(`FeatureGateCommandDecorator.cs:60-62`, `FeatureGateQueryDecorator.cs:59-61`), with the reason in a
+source comment (`FeatureGateCommandDecorator.cs:56-58`), as ADR-031's Revision (2026-10-06) records
+(`Website/docs-src/adr/031-feature-flag-management.md:192-212`); the code block, step 3 and the 404
+paragraph were corrected from the previous flag-naming message `$"Feature '{featureGated.FeatureName}' is
+not currently available."`. `HandleAsync` now spans `FeatureGateCommandDecorator.cs:48-63` and
+`FeatureGateQueryDecorator.cs:48-62`. `DisabledFeatureHandler` class re-anchored `:13` to `:14`, result
+`:18-26` to `:19-27`, `Title` `:21` to `:22`, `Detail` `:23` added. `BuildErrorsExtension` re-anchored
+`:62-69` to `:62-70`, with `Message` localized by `Code` through `IErrorLocalizer` when one is registered
+(`ErrorHttpMapping.cs:66`). `[FeatureGate(ConferenceFeatures.SessionScoring)]` re-anchored
+`SessionSelectionController.cs:125` to `:134`. ADR-031 anchors refreshed (see below).
 `IFeatureGated` interface with sole member `string FeatureName { get; }`
 (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Markers/IFeatureGated.cs:10,16`).
 `FeatureGateCommandDecorator<TCommand, TResult>`
 (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/FeatureGateCommandDecorator.cs:20`):
 pass-through when `not IFeatureGated` (`:50-51`), `IFeatureManager.IsEnabledAsync(FeatureName)` (`:53`),
-short-circuit with `Error.NotFoundError("Feature.Disabled", ...)` and a message naming the flag (`:56-59`).
+short-circuit through `CreateFailure()` (`:59`) with `Error.NotFoundError("Feature.Disabled", ...)` and the
+generic message that keeps the flag name out (`:60-62`, reason in the comment `:56-58`).
 The cached failure factory is the static field `_createFailure` (`:38`), filled lazily by the
 `CreateFailure()` accessor via `ResultFailureFactory.Build<TResult>()` (`:44-45`) on the first
 short-circuit, not in a static initializer (remarks `:29-37`); the previous ledger called the delegate
-`CreateFailure` and implied eager construction, corrected this run.
+`CreateFailure` and implied eager construction, corrected in the 2026-10-02 run.
 `FeatureGateQueryDecorator<TQuery, TResult>` is the identical shape on the query side
-(`.../Decorators/FeatureGateQueryDecorator.cs:20`, `_createFailure` `:38`, `HandleAsync` `:48-60`).
+(`.../Decorators/FeatureGateQueryDecorator.cs:20`, `_createFailure` `:38`, `HandleAsync` `:48-62`, `Error.NotFoundError` `:59-61`).
 Registration as outermost decorator on both sides in `MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs`
-(re-anchored this run, previously `:143`/`:151`): commands `TransactionalCommandDecorator` (`:134`),
+(re-anchored in the 2026-10-02 run, previously `:143`/`:151`): commands `TransactionalCommandDecorator` (`:134`),
 `TimeoutCommandDecorator` (`:135`), `ValidatingCommandDecorator` (`:136`), `CachingCommandDecorator` (`:137`),
 `LoggingCommandDecorator` (`:138`), `AuthorizationCommandDecorator` (`:139`), `FeatureGateCommandDecorator`
 (`:140`); queries `TimeoutQueryDecorator` (`:143`), `ValidatingQueryDecorator` (`:144`), `CachingQueryDecorator`
@@ -281,17 +302,18 @@ HTTP edge: `AddHttpContextAccessor()` (`MMCA.Common/Source/Presentation/MMCA.Com
 `AddFeatureManagement().WithTargeting<CurrentUserTargetingContextAccessor>()` (`:105-106`) and
 `AddSingleton<IDisabledFeaturesHandler, DisabledFeatureHandler>()` (`:107`) (built-in
 Percentage/TimeWindow/Targeting filters noted in the surrounding comment, `:94-96`); `DisabledFeatureHandler`
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/FeatureManagement/DisabledFeatureHandler.cs:13`) writes a
-`404` RFC 9457 ProblemDetails (`:18-26`) titled "Feature not available" (`:21`); the CQRS failure's
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/FeatureManagement/DisabledFeatureHandler.cs:14`) writes a
+`404` RFC 9457 ProblemDetails (`:19-27`) titled "Feature not available" (`:22`) with the detail "The
+requested feature is not currently available." (`:23`) and no `errors` extension; the CQRS failure's
 `errors` extension is built by `BuildErrorsExtension`
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ErrorHttpMapping.cs:62-69`), which serializes
-`Code` and `Message`. `[FeatureGate(NotificationFeatures.PushNotifications)]` on the framework's
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ErrorHttpMapping.cs:62-70`), which serializes
+`Code` and `Message` (the message localized by code when an `IErrorLocalizer` is registered, `:66`). `[FeatureGate(NotificationFeatures.PushNotifications)]` on the framework's
 `DevicesController` (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Notifications/DevicesController.cs:24`).
-The 404 paragraph, Apply item 4 and the takeaway were rewritten this run: the previous text said a disabled
+The 404 paragraph, Apply item 4 and the takeaway were rewritten in the 2026-10-02 run: the previous text said a disabled
 feature is indistinguishable from a nonexistent one, which ADR-031's Revision (2026-10-01) records the code
 does not do.
 Flag-name constants, each preceded by `[FeatureFlag(FeatureFlagLifetime.Permanent, Owner = ...)]`, counted
-this run as thirteen in six `*Features` classes (previously twelve):
+in the 2026-10-02 run as thirteen in six `*Features` classes (previously twelve):
 `NotificationFeatures.cs:12` (`MMCA.Common/Source/Core/MMCA.Common.Shared/Notifications/`, attribute `:11`),
 `PrivacyFeatures.cs:12` (`MMCA.Common/Source/Core/MMCA.Common.Shared/Privacy/`, attribute `:11`),
 `CatalogFeatures.cs:21` (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/`, attribute `:20`),
@@ -299,7 +321,7 @@ this run as thirteen in six `*Features` classes (previously twelve):
 `ConferenceFeatures.cs:23` = `"Conference.SessionizeIntegration"` (attribute `:22`) and `ConferenceFeatures.cs:38`
 = `"Conference.SessionScoring"` (attribute `:37`) (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/`),
 `EngagementFeatures.cs:22,34,46,59,71,83,95` (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/`).
-Real gated use cases, counted this run as three (previously two), all commands, no query gated:
+Real gated use cases, counted in the 2026-10-02 run as three (previously two), all commands, no query gated:
 `VerifyPaymentCommand : ICacheInvalidating, IFeatureGated, IHasTimeout`
 (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/VerifyPayment/VerifyPaymentCommand.cs:20`,
 `Timeout` 20 s `:29`, `FeatureName => SalesFeatures.PaymentVerification` `:35`);
@@ -312,7 +334,7 @@ XML doc `:9-12`, so the previous ledger's `ITransactional` was wrong);
 `FeatureName => ConferenceFeatures.SessionScoring` `:48`, XML doc `:42-46` stating the processor runs it
 through the decorator pipeline and a failure completes the row rather than retrying); its trigger endpoint
 carries `[FeatureGate(ConferenceFeatures.SessionScoring)]`
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs:125`).
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs:134`).
 Flag lifecycle: `[FeatureFlag]`
 (`MMCA.Common/Source/Core/MMCA.Common.Shared/FeatureFlags/FeatureFlagAttribute.cs:32`) with `Lifetime` (`:38`),
 `RemoveBy` (`:46`, ISO format constant `:35`, parser `:60`) and `Owner` (`:52`); `FeatureFlagLifetime`
@@ -322,13 +344,14 @@ Flag lifecycle: `[FeatureFlag]`
 and `TemporaryFeatureFlagsAreNotPastRemoveBy` (`:70`), exposed as facts on `FeatureFlagLifecycleTestsBase`
 (`.../Bases/Governance/FeatureFlagLifecycleTestsBase.cs:10`, facts `:20-25`, `protected virtual Today` `:18`).
 Conventions and trade-offs from `Website/docs-src/adr/031-feature-flag-management.md`, re-anchored this run:
-the `404` convention with bodies that each state a feature is unavailable (`:58-62`), two enforcement points
-agree only by convention with no fitness rule (`:65-67`), flag debt with the expiry check shipped and adopted
-per repo (`:68-71`), missing key resolves to disabled and is fail-safe (`:72-74`). The Status lists three
-revisions (2026-08-18 `:4-6`, 2026-08-31 `:6-8`, 2026-09-11 `:10-14`); the record carries a fourth,
-Revision (2026-10-01) (`:165-179`), not listed in Status, which corrects the anonymous-404 reading and
-drove this run's rewrite. The flag-debt trade-off follows the Revision (2026-09-11) (`:122-163`), and the
-targeting caveat follows the narrowing paragraph of the Revision (2026-08-18) (`:110-113`).
+the `404` convention with bodies that each state a feature is unavailable (Decision bullet `:51-57`), two
+enforcement points agree only by convention with no fitness rule (`:76-78`), flag debt with the expiry check
+shipped and adopted per repo (`:79-82`), missing key resolves to disabled and is fail-safe (`:83-85`). The
+Status lists five revisions (2026-08-18 `:4-6`, 2026-08-31 `:6-8`, 2026-09-11 `:10-14`, 2026-10-01
+`:16-18`, 2026-10-06 `:20-22`). Revision (2026-10-01) (`:176-190`) corrects the anonymous-404 reading;
+Revision (2026-10-06) (`:192-212`) removes the flag name from the CQRS message and drove this run's
+rewrite. The flag-debt trade-off follows the Revision (2026-09-11) (`:133-174`), and the targeting caveat
+follows the narrowing paragraph of the Revision (2026-08-18) (`:121-124`).
 The targeting identifier is the JWT `sub` claim (`AuthClaimTypes.Subject`,
 `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/AuthClaimTypes.cs:34`) read through `FindUserIdValue()`
 (`ClaimsPrincipalExtensions.cs:26-28`, falling back to the mapped `ClaimTypes.NameIdentifier`), used at
@@ -336,7 +359,8 @@ The targeting identifier is the JWT `sub` claim (`AuthClaimTypes.Subject`,
 `ITargetingContextAccessor` at
 `MMCA.Common/Source/Presentation/MMCA.Common.API/FeatureManagement/CurrentUserTargetingContextAccessor.cs:54-55`.
 The single code block is an illustrative composite: the `IFeatureGated` body and the `HandleAsync` body are
-verbatim source (re-checked this run against `FeatureGateCommandDecorator.cs:48-60`); `VerifyPaymentCommand`
+verbatim source, including the three-line source comment (re-checked this run against
+`FeatureGateCommandDecorator.cs:48-63`); `VerifyPaymentCommand`
 is a real gated command shown with its three markers and its 20-second timeout; the three are shown together
 for reading, not as one contiguous file. Rubric tag §6 (CQRS & Event-Driven Design,
 `Website/docs-src/governance/ArchitectureEvaluationCriteria.md:229`): rubric v2 replaced §10 with Messaging &

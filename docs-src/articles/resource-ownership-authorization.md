@@ -258,7 +258,7 @@ customer's order exists (the rationale is in the helper's remarks, `OwnershipHel
 the wrapper's own summary, `OrdersController.cs:381-385`). That is the same axis, fitted to a resource
 whose owning id is not its route id by a single predicate.
 
-The query endpoints carry a third guard the mutating check does not need, and both filtered controllers
+The query endpoints carry a third guard the mutating check does not need, and both row-scoped controllers
 carry it. Each declares a private `RequireResolvableOwner()` wrapper (`OrdersController.cs:80-85`,
 `ShoppingCartsController.cs:79-84`) that delegates to `OwnershipHelper.RequireResolvableOwner` and maps a
 failure through `HandleFailure`. In `OrdersController` it runs before the query on both `GetAllAsync`
@@ -312,10 +312,10 @@ the reasoning at `:47-52`), an `Organizer` bypass role (`:54`), and a `userId` q
 route `id` (`:55`). The row-level half travels too: two Conference controllers override
 `GetExportSpecification()` through the same `OwnershipHelper.GetOwnershipSpecification`, yielding an
 `OwnedByUserSpecification` for an attendee and `null` for an Organizer
-(`MMCA.ADC/.../Conference.API/Controllers/Events/EventQuestionAnswersController.cs:107-112`,
-`MMCA.ADC/.../Conference.API/Controllers/Sessions/SessionQuestionAnswersController.cs:107-112`), set
-`AllowUnscopedExport` to the Organizer check (`:119` in each), and run the framework's resolvable-owner
-gate through a private `RequireResolvableOwner()` wrapper (`:135-136` in each). Same filter, same helper,
+(`MMCA.ADC/.../Conference.API/Controllers/Events/EventQuestionAnswersController.cs:109-114`,
+`MMCA.ADC/.../Conference.API/Controllers/Sessions/SessionQuestionAnswersController.cs:109-114`), set
+`AllowUnscopedExport` to the Organizer check (`:121` in each), and run the framework's resolvable-owner
+gate through a private `RequireResolvableOwner()` wrapper (`:137-138` in each). Same filter, same helper,
 different words, because the words are options rather than literals.
 
 ## Trade-offs, honestly
@@ -406,8 +406,30 @@ pattern, or `dotnet add package MMCA.Common.API` and try it.*
 
 *Tags: .NET, C Sharp, Security, Software Architecture, Web API*
 
-*Notes: 2026-10-02 refresh against MMCA.Common v1.221.0 (the consumers pin `MMCA.Common.*` 1.221.0,
-`MMCA.Store/Directory.Packages.props:8`). Three corrections are content rather than anchors. First,
+*Notes: 2026-10-08 refresh against MMCA.Common v1.233.0 (the consumers pin `MMCA.Common.*` 1.233.0,
+`MMCA.Store/Directory.Packages.props:8`). One content correction: the resolvable-owner paragraph said
+"both filtered controllers carry it", but the two controllers that carry the `RequireResolvableOwner()`
+wrapper are the row-scoped `OrdersController` (`:80`-`:85`, not filtered) and `ShoppingCartsController`
+(`:79`-`:84`), while the other filtered controller, `CustomersController` (filter `:35`), declares no
+`RequireResolvableOwner`, `GetOwnershipSpecification` or read-hook override (Grep, no matches); it now
+reads "both row-scoped controllers". Anchor moves (ADC #245 shifted both Q&A controllers by two lines):
+`EventQuestionAnswersController.cs` and `SessionQuestionAnswersController.cs` override
+`GetExportSpecification()` at `:109`-`:114` (was `:107`-`:112`), set `AllowUnscopedExport` (Organizer) at
+`:121` (was `:119`), and declare `RequireResolvableOwner()` at `:137`-`:138`, body to `:145` (was
+`:135`-`:136`); the Article 24 quotation sits at `permission-based-authorization.md:161`-`:162` (was
+`:157`); ADR-033 section anchors re-read (see the ADR line below). `[AllowMissingOwner]` in Store stays
+at ten sites. Left as is, with reasons: `IsAdmin` compares `ICurrentUserService.Role`
+(`OwnershipHelper.cs:21`), which is the first role claim only (`ICurrentUserService.cs:18`-`:21`, whose
+remarks steer membership checks to `Roles`/`IsInRole`), and ADC's Bookmarks POST uses
+`IsInRole(RoleNames.Organizer)` (`BookmarksController.cs:64`), so a multi-role principal whose first
+role is not the bypass role is not bypassed by either enforcement point; the article's description is
+accurate and the gap is a code-level question, not text drift. ADR-033 `:29` and `:77` say the bypass
+role is `Admin` by default, but `IsAdmin` has no default (`OwnershipHelper.cs:18`) and `BypassRole` is
+`[Required]` with none (`OwnerOrAdminFilterOptions.cs:23`-`:24`); the article follows the code and the
+ADR text is the stale side. Store's Catalog `ReviewsController` also delegates a per-record check to
+`OwnershipHelper.ValidateOwnershipAsync` (`ReviewsController.cs:290`); the article presents
+`OrdersController` as the instructive case, not the only one, so nothing it says is contradicted.
+Earlier, the 2026-10-02 refresh against v1.221.0 made three content corrections. First,
 `OwnershipHelper` carries the two fail-closed checks itself: `RequireResolvableOwner<TId>`
 (`OwnershipHelper.cs:91`-`:104`) and `ValidateOwnershipAsync<TId>` (`:133`-`:157`), added in v1.216.0 per
 ADR-033 Revision 2026-10-01 (`033-resource-ownership-authorization.md:330`-`:354`, the version at
@@ -417,8 +439,8 @@ null read specification without `AllowUnscopedExport` answers 403 `Export.RowSco
 "a controller that overrides neither queries unscoped" is true of the JSON reads only, and Orders,
 ShoppingCarts and both ADC question-answer controllers override `AllowUnscopedExport` to their bypass
 check while `CustomersController` sets it `true`. Third, `[AllowMissingOwner]` sites went from nine to ten
-(`CustomersController.DeleteAsync`, which carries a route `id`). Anchors confirmed unchanged this run (per
-the 2026-10-02 audit): `OwnerOrAdminFilter`
+(`CustomersController.DeleteAsync`, which carries a route `id`). Anchors confirmed unchanged (2026-10-02
+audit, none flagged by the 2026-10-08 audit): `OwnerOrAdminFilter`
 (`Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:31`, parameters `:32`-`:33`,
 bypass `:43`, claim `:49`, missing-claim 403 `:51`,`:53`, `TryGetOwnerParameter` call `:57`, deny `:63`,
 `HasAllowMissingOwner` `:61`/`:84`, mismatch `:73`,`:75`, fall-through `:79`, resolver `:93`, route
@@ -428,7 +450,7 @@ bypass `:43`, claim `:49`, missing-claim 403 `:51`,`:53`, `TryGetOwnerParameter`
 `Specification.cs:15`, `:23`, `AndSpecification` `:81`; `ICurrentUserService.cs:22`;
 `ShoppingCartByCustomerSpecification.cs:24`; `OrdersByCustomerSpecification.cs:18`; ADC
 `BookmarksController.cs:84`-`:85`, `:105`-`:106` and `Engagement.API/DependencyInjection.cs:43`, `:45`,
-`:47`-`:55`. Read this run: `OwnershipHelper` static class `:11`; `IsAdmin` `:18` (doc `:13`-`:17`,
+`:47`-`:55`. Read in the 2026-10-02 run and not flagged since: `OwnershipHelper` static class `:11`; `IsAdmin` `:18` (doc `:13`-`:17`,
 no-role-names sentence `:16`, `OrdinalIgnoreCase` compare `:21`); `GetOwnershipSpecification<TSpec,TId>`
 `:35` (`bypassRole` `:39`, bypass null `:46`,`:48`, claim `:51`, factory `:52`); `customer_id` overload
 `:65`-`:70` (literal `:70`, `bypassRole` `:68`); `RequireResolvableOwner` result `:101`-`:103`;
@@ -455,20 +477,22 @@ class doc fail-closed paragraph `:40`-`:47`; `GetOwnershipSpecification()` `:66`
 `:571`-`:573` (summary `:535`-`:542`, 404-not-403 `:562`-`:564`, once-per-request `:567`-`:568`);
 `GetExportSpecification` `:601`; `UnscopedExportRefused` `:608`-`:613`; `GetByIdAsync` 404 remarks
 `:351`-`:353`. ADC Conference: `EventQuestionAnswersController.cs` and `SessionQuestionAnswersController.cs`
-each override `GetExportSpecification()` at `:107`-`:112`, `AllowUnscopedExport` (Organizer) at `:119`,
-and declare the delegating `RequireResolvableOwner()` at `:135`-`:136`. ADC Bookmarks POST-create keeps an
+each override `GetExportSpecification()` at `:109`-`:114`, `AllowUnscopedExport` (Organizer) at `:121`,
+and declare the delegating `RequireResolvableOwner()` at `:137`-`:138` (body to `:145`). ADC Bookmarks POST-create keeps an
 inline non-Organizer check (`BookmarksController.cs:50`, `callerId` `:66`, comparison `:67`, `Forbidden`
-`:69`), not the filter. The single code block is illustrative-of-shape, assembled from the real members:
+`:69`, the `IsInRole(RoleNames.Organizer)` test at `:64`), not the filter. The single code block is illustrative-of-shape, assembled from the real members:
 the filter excerpt mirrors `OwnerOrAdminFilter.cs:43-79`, the two controller members are
 `OrdersController.cs:66-68` and `:80-85`. Broken Object Level Authorization / IDOR as OWASP API1 is
 industry framing, not a code claim; the Article 24 trade-offs quotation was confirmed by the audit
-(`permission-based-authorization.md:157`). ADR: `Website/docs-src/adr/033-resource-ownership-authorization.md`
+(`permission-based-authorization.md:161`-`:162`). ADR: `Website/docs-src/adr/033-resource-ownership-authorization.md`
 (deny-by-default bullet `:80`-`:91`; two failure shapes `:92`-`:94`; Store adoption and the per-record
-split `:100`-`:130`; the "a null specification means two different things" block `:132`-`:146`; ADC
-vocabulary `:148`-`:162`; the `[AllowMissingOwner]` audit table `:164`-`:175`; Revision 2026-09-10 (ADC
-both halves) `:294`-`:328`; Revision 2026-10-01 (gate and per-record check in the helper) `:330`-`:354`).
-The ADR's own consumer anchors are partly stale (it cites `ValidateOwnershipAsync` at
-`OrdersController.cs:379-395` and the ADC wrappers at `:128-136`), so every consumer anchor above is read
-from the controller source rather than from the ADR.*
+split `:100`-`:141`; the "a null specification means two different things" block `:143`-`:157`; ADC
+vocabulary `:159`-`:173`; the `[AllowMissingOwner]` audit section `:175`-`:189`, table `:179`-`:186`;
+Revision 2026-09-10 (ADC both halves) `:305`-`:340`; Revision 2026-10-01 (gate and per-record check in
+the helper) `:341`-`:366`, the v1.216.0 version at `:343`). The ADR's Adoption section cites
+`ValidateOwnershipAsync` at `OrdersController.cs:386-402` (`:131`), which is current; the ADC wrapper
+cite `:128-136` survives only in the historical Revision 2026-10-01 text (`:350`), and Revision
+2026-10-06 gives the current `:137-138` (`:380`-`:381`). Every consumer anchor above is still read from
+the controller source rather than from the ADR.*
 
 - Full series index: https://ivanball.github.io/writing.html

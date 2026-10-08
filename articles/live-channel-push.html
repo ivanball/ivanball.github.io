@@ -109,7 +109,7 @@
         <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
         <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
         <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
-        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, four engines</a></li>
         <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
         <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
         <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
@@ -173,8 +173,8 @@
           <p>Now the conference floor opens a live poll. Two hundred phones are looking at the same question, votes
           are landing several per second, and every one of them needs to light up the running tally on every other
           screen in under a second. Reach for the durable pipeline here and you inherit all the wrong costs. The
-          outbox deliberately delays eligibility (<code>Outbox:ProcessingDelaySeconds</code>, default 5s, ADR-003) so an
-          in-process handler can run first, which is exactly the latency you cannot pay. You would write a per-user
+          outbox deliberately holds a fresh row back from its background processor for
+          <code>Outbox:ProcessingDelaySeconds</code> (default 5s, ADR-003), which is exactly the latency you cannot pay. You would write a per-user
           inbox row for a tally that is worthless a second later and that nobody will ever open. You would persist
           data whose entire value is that it is on screen right now.</p>
           <p>The other instinct is to stand up a second SignalR hub for live traffic. That doubles the WebSocket
@@ -244,11 +244,14 @@ liveChannelPublishQueue.Enqueue(<span class="hljs-keyword">new</span> LiveChanne
           at the enqueue edge, and the same opaque string rides every hop unchanged. The port&#39;s contract is
           <code>PublishAsync(channelKey, eventName, payloadJson, ct)</code>, and no serializer type crosses it.</p>
           <p>Third, a queue that evicts cannot report a drop through its return value. The channel is configured
-          <code>DropOldest</code>, so the underlying <code>TryWrite</code> always succeeds: it makes room rather than refusing the write.
+          <code>DropOldest</code>, so until the queue is completed at host shutdown the underlying <code>TryWrite</code> cannot fail: it
+          makes room rather than refusing the write.
           A bool return would therefore be a promise the queue cannot break, and an &quot;if the enqueue failed, log
           it&quot; branch written against it is dead code that makes every drop under backpressure look impossible. So
           the port method is <code>void Enqueue(LiveChannelPublishWorkItem workItem)</code>, and its own contract says the
-          queue never rejects an item, leaving nothing for a caller to branch on. Drops go through the channel&#39;s
+          queue never rejects an item, leaving nothing for a caller to branch on. The one write it refuses is a
+          late one after shutdown has completed it, and that refusal is silent by design, because the host is
+          stopping and the broadcast was best effort anyway. Drops go through the channel&#39;s
           <code>itemDropped</code> callback instead: each one increments a <code>DroppedCount</code> and logs a warning with the running
           total, so a drain falling behind is visible rather than inferred from missing client updates.</p>
           <p>The implementation is chosen at the composition root, the same null-object discipline the durable sender
@@ -293,10 +296,12 @@ liveChannelPublishQueue.Enqueue(<span class="hljs-keyword">new</span> LiveChanne
           registration with <code>LiveChannelPublisherGrpcAdapter</code>. The publishing handlers do not resolve that port at
           all: the vote and upvote domain-event handlers enqueue the pre-serialized payload onto the in-process
           publish queue and return. The single-reader drain worker resolves <code>ILiveChannelPublisher</code> per item, which in this process
-          is the gRPC adapter, and it forwards the payload over <code>PushToChannel</code> under a tight two-second deadline,
-          swallowing every failure (transport, resolution, broken circuit). Best-effort all the way down, and because
-          the forwarding runs off the request path, neither a slow nor a down Notification service can add a
-          millisecond to an Engagement vote.</p>
+          is the gRPC adapter, and it forwards the payload over <code>PushToChannel</code> under a tight two-second deadline.
+          The adapter itself swallows nothing: a transport, resolution or broken-circuit failure propagates out of
+          it to the drain, whose <code>BestEffort.ExecuteAsync</code> wrapper logs one Warning and counts it on the
+          <code>besteffort.dispatch.failed</code> meter. Swallowing in the adapter as well would hide every push failure from
+          that meter. The best-effort boundary is the drain, and because the forwarding runs off the request path,
+          neither a slow nor a down Notification service can add a millisecond to an Engagement vote.</p>
           <p>The queue is applied everywhere, not just on the two hot paths. The four lower-frequency command handlers
           (closing a poll, opening one, submitting a question, moderating one) publish one broadcast per operator
           action, which is little enough to argue for awaiting <code>PublishAsync</code> inline. They enqueue anyway, and the
@@ -310,10 +315,13 @@ liveChannelPublishQueue.Enqueue(<span class="hljs-keyword">new</span> LiveChanne
           guarded is a database read rather than a publish, which is a much smaller thing to have to swallow, and a
           broadcast path that has quietly stopped working is a number an operator can alert on instead of a log
           line nobody reads.</p>
-          <p>On the Notification side, <code>LiveChannelGrpcService</code> receives the RPC and simply delegates to its own
-          <code>ILiveChannelPublisher</code>, which in that host is the real <code>SignalRLiveChannelPublisher</code>. The payload&#39;s
-          opacity is what makes this trivial: no service on the path deserializes it, so no shared payload type has
-          to cross the wire.</p>
+          <p>On the Notification side, <code>LiveChannelGrpcService</code> receives the RPC, checks its shape, and delegates to
+          its own <code>ILiveChannelPublisher</code>, which in that host is the real <code>SignalRLiveChannelPublisher</code>. The check is
+          the bounded-payload control for an unauthenticated internal endpoint: a channel key or event name that is
+          blank, longer than its cap (200 and 100 characters) or outside <code>[a-z0-9:.-]</code>, or a payload over 64 KiB of
+          UTF-8, is refused with <code>InvalidArgument</code> before it reaches the publisher. The payload&#39;s opacity is still
+          what makes the relay trivial: the service counts its bytes and never deserializes it, and neither does
+          any other hop, so no shared payload type has to cross the wire.</p>
           <p>The one piece of real infrastructure this needs is the transport profile from ADR-012. Notification&#39;s
           default Kestrel endpoint stays <code>Http1AndHttp2</code> so the SignalR WebSocket upgrade handshake still works,
           and its cleartext gRPC ingress lives on a <strong>dedicated <code>Http2</code>-only endpoint</strong> named <code>grpc</code> alongside it.
@@ -337,8 +345,8 @@ _channel = Channel.CreateBounded&lt;LiveChannelPublishWorkItem&gt;(
     itemDropped: OnItemDropped);</code></pre>
           <p><code>DropOldest</code> is the right answer here precisely because the payload is ephemeral. If the drain falls
           behind, the oldest pending broadcast is the <em>least</em> valuable thing in the queue, since a newer poll
-          tally supersedes it anyway. A consequence worth knowing: under <code>DropOldest</code>, <code>TryWrite</code> always
-          succeeds, because the channel evicts to make room rather than refusing. A caller checking the return
+          tally supersedes it anyway. A consequence worth knowing: under <code>DropOldest</code>, <code>TryWrite</code> on an open
+          channel always succeeds, because the channel evicts to make room rather than refusing. A caller checking the return
           value learns nothing, so a drop is observable only through the <code>itemDropped</code> callback and the
           discarded-broadcast counter it feeds.</p>
           <p>The other end of the same field is <code>FullMode = BoundedChannelFullMode.Wait</code>, paired with the
@@ -348,17 +356,22 @@ _channel = Channel.CreateBounded&lt;LiveChannelPublishWorkItem&gt;(
           small capacity goes with it, because the bound then exists to refuse a runaway caller rather than to
           absorb a burst.</p>
           <p>There is a prior question, though, and it decides whether a channel is the right home at all. An
-          in-process queue is exactly as durable as the replica holding it: a deploy or a crash between the
-          enqueue and the drain takes the pending items with it. That is the correct trade for a poll tally,
-          whose value expires in a second anyway, and it is why the live-publish queue is the only bounded
-          <code>Channel&lt;T&gt;</code> in MMCA.Common, MMCA.Store and MMCA.ADC. Work that a restart must not lose goes
+          in-process queue is exactly as durable as the replica holding it. A graceful stop drains rather than
+          drops: the drain worker completes the queue, cancels its in-flight publish (that one item is lost),
+          then publishes what remains in FIFO order inside a single five-second budget and logs a count of
+          whatever it has to abandon. A crash takes every pending item with it, and so does a stop whose budget
+          runs out. That is the correct trade for a poll tally, whose value expires in a second anyway, and it
+          is why the only bounded <code>Channel&lt;T&gt;</code> instances in MMCA.Common, MMCA.Store and MMCA.ADC both sit in
+          ADC&#39;s Engagement module and both carry best-effort signals: the live-publish queue, and a capacity-one
+          <code>DropWrite</code> flag (<code>BookmarkCacheEvictionSignal</code>) that coalesces any burst of bookmark changes into one
+          pending cache eviction. Work that a restart must not lose goes
           in a row instead. ADC&#39;s AI scoring pass over an event&#39;s sessions is that kind of work, so the
           organizer&#39;s request writes one durable internal command row and returns, and the framework&#39;s processor
           claims it, restores the requesting organizer&#39;s principal and runs the pass through the ordinary CQRS
           pipeline under a per-event distributed-lock claim taken with a zero wait, so a duplicate trigger skips
           rather than queues behind the run in flight. That mechanism, and how it sits beside channels and cron,
-          is Article 51 in this series, &quot;Four ways to do work later: channels, cron and durable internal
-          commands&quot;.</p>
+          is Article 51 in this series, &quot;Four Ways to Do Work Later: Channels, Cron, the Outbox and Durable
+          Internal Commands&quot;.</p>
           <p>The reusable idea is that &quot;put it on a queue&quot; is not a design decision, it is the start of one. The
           decisions are what happens when the queue is full, and whether losing the item on restart is
           acceptable at all, and the honest answers differ for a presence ping and for a job someone is waiting
@@ -412,9 +425,11 @@ _channel = Channel.CreateBounded&lt;LiveChannelPublishWorkItem&gt;(
           <p>The runner is a plain <code>BackgroundService</code> rather than a fixed-period one, for the same reason the
           outbox is: after each cycle it sleeps until the <strong>earliest</strong> <code>NextRunOn</code> across the store, read
           through <code>TimeProvider</code>, capped at the polling interval (30 seconds by default) and floored at one
-          second so an overdue row another replica already holds cannot spin the loop. A host with one nightly
-          job is not waking 2,880 times a day to find nothing due, and because every timestamp comes from
-          <code>TimeProvider</code>, a test can drive months of schedule in microseconds. Cronos (MIT, zero dependencies)
+          second so an overdue row another replica already holds cannot spin the loop. The cap means the wait
+          shortens a sleep but never removes a wake: a host whose only job is nightly still runs a cycle every 30
+          seconds. What the earliest-due read buys is punctuality, a job that starts on time rather than up to
+          one interval late. And because every timestamp comes from <code>TimeProvider</code>, a test can drive months of
+          schedule in microseconds. Cronos (MIT, zero dependencies)
           is the one piece bought rather than built: it turns a string into the next occurrence and has no
           opinion about storage or hosting.</p>
           <p>Two consequences worth stating plainly. A missed schedule runs <strong>once</strong> and then advances: the next
@@ -449,12 +464,15 @@ _channel = Channel.CreateBounded&lt;LiveChannelPublishWorkItem&gt;(
           <li><strong>Multi-replica needs the backplane.</strong> If a hub-hosting service runs more than one replica, group sends
           only reach connections on other replicas through the Redis backplane that <code>AddPushNotifications</code> wires
           when a <code>redis</code> connection string is present. Single-replica deployments need nothing extra.</li>
-          <li><strong>Best-effort is not delivery.</strong> A publish can still be discarded at three points: the queue evicts its
-          oldest item under sustained backpressure, the drain worker swallows a publish failure, and the gRPC
-          adapter swallows a transport failure. None of them are silent now (the eviction is counted on
-          <code>DroppedCount</code> and logged with a running total, the drain&#39;s swallow is the shared <code>BestEffort</code> helper
-          so it is both logged and counted on a meter, and the adapter&#39;s is logged per occurrence), but that is
-          observability, not delivery. It is the correct posture for a hint over durable state, and it still means
+          <li><strong>Best-effort is not delivery.</strong> A publish can be discarded at four points: the queue evicts its oldest
+          item under sustained backpressure, the drain&#39;s <code>BestEffort</code> wrapper swallows a publish failure
+          (including every transport failure the gRPC adapter propagates to it), a graceful stop aborts the
+          in-flight publish and abandons whatever the five-second drain budget cannot reach, and an enqueue that
+          lands after shutdown has completed the queue is refused. Most of these are observable (the eviction is
+          counted on <code>DroppedCount</code> and logged with a running total, the swallow is logged and counted on the
+          <code>besteffort.dispatch.failed</code> meter, and an abandoned shutdown drain logs how many it dropped), but the
+          aborted in-flight item and a post-shutdown enqueue leave no trace, and observability is not delivery in
+          any case. It is the correct posture for a hint over durable state, and it still means
           &quot;the event fired&quot; is never a guarantee. If you ever need one, you are describing a durable notification,
           which is the other publisher path.</li>
           </ul>

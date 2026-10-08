@@ -109,7 +109,7 @@
         <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
         <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
         <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
-        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, four engines</a></li>
         <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
         <li><a href="optimistic-concurrency-rowversion.html" aria-current="page">13 · Optimistic concurrency: RowVersion round-trips</a></li>
         <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
@@ -211,8 +211,10 @@
           <p><code>IWriteRepository.TouchConcurrencyToken</code> closes the hole that stamping alone leaves. Setting the original
           value does not make the entry dirty, so an applier that changed only child rows would leave the root
           <code>Unchanged</code>, EF would emit no root UPDATE, and there would be nothing for the database to compare the
-          token against. Under a conditional write the handler base marks the root as modified, so the save always
-          emits a root UPDATE carrying the caller&#39;s token.</p>
+          token against. Under a conditional write the handler base marks the root as modified, so the save emits
+          a root UPDATE carrying the caller&#39;s token. The one exit before that point is the idempotent no-op: a
+          mutation that calls <code>MutationContext.SkipSave</code> finishes successfully with nothing written, so no UPDATE
+          runs and no precondition is evaluated on that path.</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// The read DTO exposes the token; the API renders it as the response ETag.</span>
 <span class="hljs-keyword">public</span> <span class="hljs-keyword">record</span> <span class="hljs-title">class</span> <span class="hljs-title">SessionDTO</span> : <span class="hljs-title">IBaseDTO</span>&lt;<span class="hljs-title">SessionIdentifierType</span>&gt;, <span class="hljs-title">IConcurrencyAware</span>
 {
@@ -233,7 +235,7 @@
 <span class="hljs-comment">// The handler reports the token; the shared base does the stamping.</span>
 <span class="hljs-keyword">protected</span> <span class="hljs-keyword">override</span> <span class="hljs-built_in">byte</span>[]? RowVersion(UpdateSessionCommand command) =&gt; command.RowVersion;
 <span class="hljs-comment">// MutateEntityHandlerBase: SetOriginalRowVersion(entity, rowVersion), then</span>
-<span class="hljs-comment">// TouchConcurrencyToken(entity) so the save always emits a root UPDATE.</span>
+<span class="hljs-comment">// TouchConcurrencyToken(entity) so a conditional save emits a root UPDATE.</span>
 <span class="hljs-comment">// A stale token matches no row -&gt; DbUpdateConcurrencyException -&gt; 412 Precondition Failed.</span></code></pre>
           <p>That is the client contract: the read hands you an entity tag, and the edit is refused unless you state
           that tag back.</p>
@@ -320,8 +322,10 @@ PUT /orders/42/pay
           assemblies for every type whose simple name ends in <code>UpdateRequest</code> and flags any that <em>does</em> implement
           <code>IConcurrencyAware</code>, because a token in the body would give the same check a second, competing source.
           <code>ConcurrencyConventionTestsBase</code> exposes it as a single <code>[Fact]</code>,
-          <code>UpdateRequests_ShouldNotImplement_IConcurrencyAware</code>, and both consumers subclass it: ADC and Store each
-          supply their own <code>IArchitectureMap</code>. A module with no mutable aggregate is legitimately vacuous. This is
+          <code>UpdateRequests_ShouldNotImplement_IConcurrencyAware</code>, and all three consumers subclass it: ADC, Store
+          and Helpdesk each supply their own <code>IArchitectureMap</code>. A module with no mutable aggregate is legitimately
+          vacuous, and so is MMCA.Common&#39;s own subclass: the rule reads only module Application assemblies, and the
+          framework&#39;s map declares none. This is
           invariant-over-discipline (ADR-015), and it is the type-level half of the rule; the 428 is the caller-level
           half, so on a guarded action neither a request model nor a client can quietly reintroduce
           last-write-wins. Which actions are guarded is a separate question that no rule answers: the attribute is
@@ -332,7 +336,13 @@ PUT /orders/42/pay
           modules: Catalog and Identity edits are appliers over the shared handler base (changing a customer&#39;s
           email, changing a product&#39;s brand), and the Sales order transitions (<code>PayOrderHandler</code>,
           <code>DeliverOrderHandler</code>, <code>CancelOrderHandler</code>, <code>ShipOrderHandler</code>, <code>UpdateShipmentHandler</code>) each report the
-          command&#39;s token the same way. Both apps run one database per service (ADR-006), and every table mapped
+          command&#39;s token the same way. Two of them, <code>PayOrderHandler</code> and <code>CancelOrderHandler</code>, also compare the
+          token by hand (<code>OrderConcurrency.EnsureCurrent</code>) before they call the payment provider, because the
+          framework&#39;s check runs at the save, after the mutation, and a provider call cannot be taken back. That
+          compare is an early refusal, not the guard: the <code>WHERE</code>-clause check still runs on the save. A stale
+          token caught early is an <code>Error.Conflict</code> with code <code>Order.Concurrency.Stale</code>, which the filter relabels
+          to 412, so the <code>/orders/42/pay</code> exchange above answers 412 under that code rather than
+          <code>Concurrency.PreconditionFailed</code>. Both apps run one database per service (ADR-006), and every table mapped
           from an auditable entity carries the <code>RowVersion</code> column from the migration that creates it: Store&#39;s
           Catalog <code>InitialCreate</code> adds it to the aggregate tables (its inbox and outbox tables carry none), and the
           later <code>AddProductReviews</code> migration adds it with the review tables.</p>
@@ -371,9 +381,10 @@ PUT /orders/42/pay
           stamps on the tracked variant. A conflicting edit to the <em>same</em> variant then fails the precondition even
           when the product row was untouched. Two preconditions on one write is the price of keeping the aggregate
           boundary intact.</li>
-          <li><strong>Every conditional write touches the root.</strong> <code>TouchConcurrencyToken</code> marks the aggregate root modified
-          so the precondition is actually evaluated, which means a conditional write always emits a root UPDATE and
-          always advances the root&#39;s token, even when only a child row changed. Correctness over a spared
+          <li><strong>Every conditional write that saves touches the root.</strong> <code>TouchConcurrencyToken</code> marks the aggregate
+          root modified so the precondition is actually evaluated, which means a conditional write emits a root
+          UPDATE and advances the root&#39;s token, even when only a child row changed. (An idempotent no-op that calls
+          <code>SkipSave</code> writes nothing, so it neither touches the root nor evaluates the token.) Correctness over a spared
           statement: the cost is that every other editor holding that aggregate&#39;s tag now has a stale one.</li>
           <li><strong>Adoption is a schema step per database.</strong> Every auditable table needs the <code>RowVersion</code> column for the
           token to exist there, so a new database, or a table added later, has no version to condition on until

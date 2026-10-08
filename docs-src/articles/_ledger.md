@@ -21,15 +21,15 @@ Working file for `/update-medium` (underscore-prefixed, so the site build skips 
 **Anchor facts (current state, verify before publishing)**
 - .NET 10, C# preview (extension types), Apache-2.0, repo `https://github.com/ivanball/MMCA.Common`
   (confirmed via git remote).
-- Framework version **v1.221.0**, tracked in lockstep by every consumer (per `MMCA.Common/FACTS.md`).
-- 22 NuGet packages released in lockstep; **131 ADRs (001-131)** (per `Website/docs-src/adr/README.md`).
-- `MMCA.Common.Testing.Architecture` defines 141 test methods across 55 base classes;
-  Common's own build runs 339, plus a compile-time MSBuild layer guard (per `FACTS.md`).
+- Framework version **v1.233.0**, tracked in lockstep by every consumer (per `MMCA.Common/FACTS.md`).
+- 22 NuGet packages released in lockstep; **132 ADRs (001-132)** (per `Website/docs-src/adr/README.md`).
+- `MMCA.Common.Testing.Architecture` defines 153 test methods across 61 base classes;
+  Common's own build runs 410, plus a compile-time MSBuild layer guard (per `FACTS.md`).
 - Two-axis architecture index (current per-repo scorecards): Common **Maturity 96.6% (317/328),
   Implementation 86.0% (705/820)** across all 34 categories (none N/A now: §27 i18n is scored after
-  ADR-027 superseded the single-locale ADR-011); ADC **Maturity 96.9% (314/324), Implementation 86.0% (697/810)**; Store **Maturity 97.5% (308/316), Implementation 83.4% (659/790)**.
+  ADR-027 superseded the single-locale ADR-011); ADC **Maturity 96.9% (314/324), Implementation 86.0% (697/810)**; Store **Maturity 97.5% (308/316), Implementation 83.2% (657/790)**.
 - ~2,254 fast tests, no Docker. Two real consumer apps: MMCA.ADC (conference, Azure Container Apps) and
-  MMCA.Store (e-commerce, Stripe). Both consumers are pinned at 1.221.0 in lockstep.
+  MMCA.Store (e-commerce, Stripe). Both consumers are pinned at 1.233.0 in lockstep.
 
 > **Note on the scorecard:** the repo's committed `Website/docs-src/governance/common-ArchitectureScorecard.md` is now the
 > canonical **two-axis** scorecard (Maturity 96.6% (317/328) / Implementation 86.0% (705/820) as of the 2026-10-01 re-score at v1.218.0;
@@ -76,14 +76,14 @@ Working file for `/update-medium` (underscore-prefixed, so the site build skips 
 > ADC's two-axis scorecard is `Website/docs-src/governance/adc-ArchitectureScorecard.md` (Maturity 96.9% (314/324) / Implementation
 > 86.0% (697/810) as of the 2026-10-01 re-score). Store's is
 > `Website/docs-src/governance/store-ArchitectureScorecard.md` (Maturity 97.5% (308/316) / Implementation
-> 83.4% (659/790) as of the 2026-10-01 re-score). The cornerstone articles
+> 83.2% (657/790) as of the 2026-10-07 re-score). The cornerstone articles
 > frame proof as "scored, published, then fixed, then re-scored": the 80% snapshot predated several
 > remediations (the 13th package, lock files, the SBOM-gated release, `DependencyVersionTests`, the
 > ADR-005 erasure pathway), and the two-axis re-verification re-scored after they landed. The former
 > workspace eval files (`Docs/Architecture/ArchitectureEvaluation-MMCA.*.md`) are now pointer stubs, so
 > cite the in-repo scorecards. Re-derive numbers before publishing.
 
-> **Note on ADRs:** the set has grown to **131 (001-131)**. Each ADR maps to an article or is a recorded
+> **Note on ADRs:** the set has grown to **132 (001-132)**. Each ADR maps to an article or is a recorded
 > scope-out. Shared homes: ADR-017 (request idempotency) and ADR-021 (consumer-side inbox idempotency) are
 > both taught in **Article 18**; ADR-018 (polyglot persistence) is **Article 11**; ADR-001 (manual DTO
 > mapping) is **Article 23**; ADR-026 (two-tier caching) is **Article 19**; ADR-024 (two-channel
@@ -359,6 +359,16 @@ Working file for `/update-medium` (underscore-prefixed, so the site build skips 
 > sourcing) and **ADR-127** (the actor model) are documented rejections that ship nothing, so neither
 > needs an article. Every ADR in 001-131 and every functional group in G01-G28 now has an article cell or a
 > recorded scope-out.
+>
+> **2026-10-08 coverage audit** (full sweep at v1.233.0, against the grown ADR set 132 plus a re-inversion
+> of the whole matrix): no new article; every gap closes as a section of an existing piece. **ADR-132**
+> (build strictness: analyzers at error severity, the shared `.editorconfig` baseline, the
+> `--minimum-expected-tests` floors) is a new section of **Article 34**, with the coverage-floor detail
+> staying in **Article 35**. Versioned Terms of Service acceptance (`AddLegalAcceptance`, ADR-116 item 13)
+> is a new section of **Article 52**. Component-lifetime cancellation and `LatestLoadGuard` (gated by the
+> `LifetimeTokens` fitness rule) are a new §19 section of **Article 37**. The refresh-token reuse grace
+> window (`RefreshSessionSettings.ReuseGraceSeconds`, ADR-097 revised 2026-10-07) regrounds **Article 27**.
+> Every ADR in 001-132 and every functional group in G01-G28 now has an article cell or a recorded scope-out.
 
 **Coverage history**
 

@@ -109,7 +109,7 @@
         <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
         <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
         <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
-        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, four engines</a></li>
         <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
         <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
         <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
@@ -235,14 +235,18 @@
           deployed ADC and Store environments, the bicep templates point the authority straight at Identity&#39;s
           internal-ingress URL, with no gateway hop. Either way the validator carries one authority value owned
           by the host wiring and no key material, and <code>ValidIssuer</code> is deliberately left unpinned: the authority
-          is an internal address while the token&#39;s <code>iss</code> is the public origin, so the issuer is taken from the
-          discovery document.</p>
+          need not be the token&#39;s <code>iss</code> origin (locally it is the gateway&#39;s HTTPS endpoint; when deployed it is
+          Identity&#39;s internal-ingress URL while the token&#39;s <code>iss</code> is the public gateway origin), so the issuer is
+          taken from the discovery document.</p>
           <p>ADR-004&#39;s file name says &quot;dual-fetch&quot;, but the framework&#39;s own doc comments give that name to a
           different flow, so it is worth naming plainly: the shared login flow,
           <code>AuthenticationServiceBase&lt;TUser&gt;.LoginAsync</code> in <code>MMCA.Common.Application</code>, does an <strong>untracked</strong>
           read to validate credentials (so the adversarial majority of login traffic, the failed attempts, never
-          pays EF Core change-tracking cost), then a <strong>tracked</strong> re-fetch only on success to persist the rotated
-          refresh token. The base&#39;s own doc comment names it the &quot;untracked-then-tracked dual-fetch&quot;; the ADC and
+          pays EF Core change-tracking cost), then a <strong>tracked</strong> re-fetch only on success. Refresh tokens live in
+          their own session rows, so the re-fetch is not about persisting them: it loads the instance the app&#39;s
+          <code>CreateAccessToken</code> hook mints from (apps reach linked aggregates and navigations through it), and the
+          second lookup turns a race that deleted the account between the two steps into a clean 404. The base&#39;s
+          own doc comment names it the &quot;untracked-then-tracked dual-fetch&quot;; the ADC and
           Store Identity modules are thin sealed subclasses that supply the app-specific hooks (the untracked
           lookup, the claim set) and re-label it &quot;dual-fetch pattern&quot; in their class doc comments
           (<code>AuthenticationService.cs:20</code> in both ADC and Store). It is shared framework login code, not a
@@ -267,8 +271,7 @@
           <p>The rule of thumb: never let the token tell you how to verify it. The validator decides the algorithm;
           the token only supplies the signature.</p>
           <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
-          <p>The JWKS layer is the right model, but it is not free, and the §11 review of the framework names the
-          rough edges.</p>
+          <p>The JWKS layer is the right model, but it is not free, and the rough edges are worth naming.</p>
           <ul>
           <li><p><strong>Two round trips on successful login.</strong> The Identity service&#39;s login flow (the shared login
           dual-fetch above, not the JWKS layer itself) pays a tracked re-fetch, a second query on the success
@@ -305,10 +308,15 @@
           completion text out of telemetry when it finds none.</p>
           <p>The residuals are named in the ADR itself. <code>ASPNETCORE_ENVIRONMENT</code> is the trust root, so a host
           that misreports itself as Development gets every relaxation at once: the rule concentrates the risk
-          on one value instead of removing it. The other environment-conditional relaxations (the permissive
-          dev CORS policy, the cookie <code>Secure</code> flag, HSTS, the pseudo-locale) are plain <code>IsDevelopment()</code>
-          checks against an environment the host always supplies, not fail-closed gates. And the inventory is
-          manual: nothing fails a build when a new environment-conditional branch skips the rule.</p>
+          on one value instead of removing it. The other Development-gated relaxations (the permissive dev
+          CORS policy, the cookie <code>Secure</code> flag, HSTS and the CSP built from the same flag, the pseudo-locale,
+          the design-time database skip) are plain <code>IsDevelopment()</code> checks, not fail-closed gates: the
+          server-side ones read an environment the host always supplies, and the one UI-side check (the
+          culture switcher offering the pseudo-locale) reads a nullable environment and treats null as not
+          Development. Two endpoint mappings sit outside the rule altogether: the OpenAPI document and the
+          Scalar reference UI are gated on <code>!IsProduction()</code> rather than on Development, so a Staging host
+          gets them (both expose API description, not data). And the inventory is manual: nothing fails a
+          build when a new environment-conditional branch skips the rule.</p>
           </li>
           <li><p><strong>The invariants in this article fail the build.</strong> Executable tests run the real registration code
           and read the produced options back: the forwarded bearer handler&#39;s <code>ValidAlgorithms</code> must stay
@@ -319,13 +327,15 @@
           <code>AnonymousEndpointTestsBase</code> scans controllers and routable components by reflection and ships five
           facts: it fails on any <code>[AllowAnonymous]</code> outside an explicit allow-list, on a stale allow-list entry,
           on an empty scan, on an endpoint that declares neither <code>[Authorize]</code> nor <code>[AllowAnonymous]</code> (a
-          stricter gate each suite opts into, which the framework turns on for itself), and on a stale entry in
-          that second, undecorated allow-list. The framework&#39;s own allow-list holds 19 entries: ten
-          credential-exchange actions that cannot require a token because issuing one is what they do (login,
+          stricter gate that is on by default, which a repo not yet ready opts out of explicitly; Common, ADC,
+          Store and Helpdesk all keep it on), and on a stale entry in that second, undecorated allow-list. The
+          framework&#39;s own allow-list holds 21 entries: twelve credential-exchange actions that cannot require
+          a token because issuing one is what they do, or because the caller has no session yet (login,
           register, refresh, the OAuth exchange, the three provider challenges and the provider callback,
-          forgot-password and reset-password), six credential pages (the email-confirmation landing among
-          them), and three landing and outcome pages that render nothing depending on the caller. NetArchTest&#39;s
-          fluent API cannot express this pair, which is why
+          forgot-password and reset-password, and sending and confirming an email-confirmation link), six
+          credential pages (the email-confirmation landing among them), and three landing and outcome pages
+          that render nothing depending on the caller. NetArchTest&#39;s fluent API cannot express this pair,
+          which is why
           the rules live as full-name reflection and options-resolution tests instead. Two residuals stay
           honest. Minimal-API endpoints opt out through an <code>.AllowAnonymous()</code> builder call, which is endpoint
           metadata rather than an attribute, so the JWKS and OIDC discovery endpoints themselves sit outside

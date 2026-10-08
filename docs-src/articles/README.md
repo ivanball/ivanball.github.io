@@ -22,7 +22,7 @@ functions, and more. Every technical claim traces to real source, an ADR, or a s
 | 12 | [Navigation populators](navigation-populators.md) | P2/P3 | G11 | §8 | 002 | deep-dive |
 | 13 | [Optimistic concurrency: RowVersion to a required If-Match](optimistic-concurrency-rowversion.md) | P2/P3 | G07 | §8 | 035 | deep-dive |
 | 14 | [Self-ordering modules](self-ordering-modules.md) | P2 | G14 | §7 | 059 | deep-dive |
-| 15 | [Event-schema versioning](event-schema-versioning.md) | P3 | G04 | §6 | 010/083 | deep-dive |
+| 15 | [Event-schema versioning](event-schema-versioning.md) | P3 | G04 | §6 | 010/090 | deep-dive |
 | 16 | [JWKS cross-service auth](jwks-cross-service-auth.md) | P3 | G08 | §11 | 004/122 | deep-dive ★ |
 | 17 | [Password hashing done right](password-hashing.md) | P2/P4 | G08 | §11 | 102 | deep-dive |
 | 18 | [Idempotency in one attribute](idempotency-attribute.md) | P2 | G12 | §9,§29 | 017/021 | deep-dive |
@@ -41,7 +41,7 @@ functions, and more. Every technical claim traces to real source, an ADR, or a s
 | 31 | [Aspire: one command](aspire-one-command.md) | P2/P5 | G16 | §13,§33 | 023/025/041/066/070 | tutorial |
 | 32 | [Extracting a module to a gRPC service](extract-module-to-grpc-service.md) | P3/P5 | G13,G14 | §7,§9 | 007/008/012/088/089 | tutorial |
 | 33 | [Resilience and recovery objectives](resilience-recovery-objectives.md) | P3/P4 | G04,G13 | §29 | 009/087 | deep-dive |
-| 34 | [Architecture fitness functions](architecture-fitness-functions.md) | P4 | G25 | §3,§12,§25,§34 | 015/060/062/105/109/125/128 | deep-dive |
+| 34 | [Architecture fitness functions](architecture-fitness-functions.md) | P4 | G25 | §3,§12,§25,§34 | 015/060/062/105/109/125/128/132 | deep-dive |
 | 35 | [The test pyramid](test-pyramid.md) | P4 | G25 | §14,§21,§28 | 058/063/117 | deep-dive |
 | 36 | [Soft-delete vs the right to erasure](soft-delete-vs-erasure.md) | P3/P4 | G07,G23 | §30 | 005/047/076/095/119 | deep-dive ★ |
 | 37 | [A reusable Blazor UI framework](reusable-blazor-ui-framework.md) | P2/P5 | G15 | §18,§19,§20,§22,§23 | 056/067 | deep-dive |

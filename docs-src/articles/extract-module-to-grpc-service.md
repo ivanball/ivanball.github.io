@@ -122,13 +122,17 @@ and resilience details ride along automatically:
 
 - A `JwtForwardingClientInterceptor` copies the inbound `Authorization` header off the current
   `HttpContext` onto the outgoing call's metadata, so the caller's JWT rides along downstream and
-  distributed authorization works without each handler threading a token (it is a no-op outside an HTTP
-  request, for example in a background processor).
+  distributed authorization works without each handler threading a token. When the request carries no
+  `Authorization` header but authenticated with a bearer token from elsewhere (a SignalR hub connection
+  passes it as `?access_token=`), it forwards the token saved on the authentication ticket instead; a
+  header that is present always wins. It is a no-op outside an HTTP request, for example in a
+  background processor.
 - `AddStandardResilienceHandler()` gives every gRPC client a Polly retry, timeout, and
   circuit-breaker pipeline whose values come from `GrpcResilienceDefaults`. The timeouts and the retry
   budget are the HTTP clients' own. The retry fires only on a failure to reach the peer (an
   `HttpRequestException`), because every gRPC call is a POST and replaying one that reached the handler
-  could run it twice. The circuit breaker carries explicit gRPC values. A deliberate `SocketsHttpHandler` override forces
+  could run it twice. The circuit breaker's failure ratio, minimum throughput and break duration are
+  explicit gRPC values, while its sampling window is the HTTP clients' own. A deliberate `SocketsHttpHandler` override forces
   explicit HTTP/2 so the resilience handler cannot defeat the h2c negotiation.
 
 The `services.Replace(...)` is deliberate and uses `Replace`, not `TryAdd`. By the time this runs (after
@@ -261,7 +265,9 @@ app.MapReverseProxy();
 
 - **One correlation id for the whole hop, not one per service.** `GatewayCorrelationMiddleware`
   declares the `X-Correlation-ID` constant and, when the caller sent none, mints one from
-  `Activity.Current?.TraceId` with `HttpContext.TraceIdentifier` as the fallback. The part that makes
+  `Activity.Current?.TraceId` with `HttpContext.TraceIdentifier` as the fallback. A caller-supplied
+  value follows the services' own rule: it is cut to 64 characters, and replaced by a minted id when it
+  holds a non-ASCII or control character (Kestrel refuses to echo one). The part that makes
   it *one* id is that the value is written back onto the **request** headers before forwarding, so the
   downstream service's own middleware finds a header already present and adopts it instead of minting
   a second one. The response echo runs from `Response.OnStarting`, so it survives a proxied response
@@ -332,10 +338,13 @@ and JWKS-discovery wiring. There are two coherent profiles, and picking the wron
   and routes `/.well-known/*` on. In Azure Container Apps each service sets the direct in-cluster
   authority `http://<identity app>` instead, and the `http2` ingress carries the metadata fetch. Any service that **serves** gRPC over cleartext needs
   Profile A. ADC uses it.
-- **Profile B (consumer-only, one-directional gRPC, gRPC rides the HTTPS/ALPN endpoint).** Kestrel is
-  `Http1AndHttp2`; gRPC clients use the HTTPS endpoint where ALPN negotiates HTTP/2. The gateway cluster
-  declares no version pair, so YARP's negotiating default resolves to HTTP/1.1 against the cleartext
-  endpoint, and JWKS uses the single-argument `WithJwksDiscovery(identity)`.
+- **Profile B (`Http1AndHttp2`, no cluster version pair).** Kestrel is `Http1AndHttp2`, so the
+  cleartext endpoint speaks HTTP/1.1 (there is no ALPN without TLS), and the gateway cluster declares no
+  version pair, so YARP's negotiating default resolves to HTTP/1.1 against it. ADR-012 also describes a
+  consumer-only variant that carries gRPC over the HTTPS/ALPN endpoint with the single-argument
+  `WithJwksDiscovery(identity)`, and marks both of those halves historical: no deployed host is pure
+  Profile B. `Http1AndHttp2` survives only as the default-endpoint half of the mixed-endpoint profile
+  below, and every host that serves gRPC does so over cleartext h2c with the gateway-routed JWKS form.
 
 A 2026 update is the cautionary tale here: Store originally chose Profile B because its gRPC edges looked
 "consumer-only," but a one-directional topology still has services that **serve** inbound cleartext
@@ -536,5 +545,53 @@ had credited `MMCA.Common.Aspire.Hosting` with gRPC project references) and 2026
 33/15, Store's both-directions `IProxyConfig` gate, the `MMCA.Common.Gateway` reference and
 forwarded-headers step, four bypass kinds, Store Sales as a second mixed-endpoint host). Not settled
 this run: the ADR-004 attribution (validation authority in the services) was not re-read against
-the ADR text. Side finding, not edited here: ADR-012 still cites Notification `Program.cs:75` and
-`:293`/`:301`, which sit at `:73` and `:285`/`:293` today.*
+the ADR text.
+2026-10-08 pass (MMCA.Common v1.233.0, `MMCA.Common/FACTS.md:14`; was v1.221.0). Body corrections, all
+re-read: (1) only three breaker values are explicit, `FailureRatio` 0.5, `MinimumThroughput` 10 and
+`BreakDuration` 10 seconds
+(`MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/GrpcResilienceDefaults.cs:27`, `:30`, `:33`),
+while `SamplingDuration` delegates to `HttpResilienceDefaults.CircuitBreakerSamplingDuration`
+(`:21`). (2) `JwtForwardingClientInterceptor` falls back to the ticket's saved `access_token` when no
+`Authorization` header is present (documented
+`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Interceptors/JwtForwardingClientInterceptor.cs:20-24`,
+implemented in `ResolveAuthorization` `:117-133`, fallback `:130-132`; no-op without an
+`HttpContext` `:14-17`, `:119-122`). (3) `GatewayCorrelationMiddleware` sanitizes a caller-supplied
+id: `MaxLength` 64 (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Gateway/GatewayCorrelationMiddleware.cs:43`),
+`Sanitize` cuts and rejects non-printable-ASCII (`:87-91`, rule documented `:19-23`). (4) Profile B
+is reframed to ADR-012's 2026-10-07 revision (`Website/docs-src/adr/012-grpc-host-transport.md:9`):
+no deployed host is pure Profile B (`:271`), the HTTPS/ALPN gRPC bullet is historical (`:359-360`)
+and so is single-argument discovery (`:369-373`). Corrected anchors (values unchanged): ADR-012
+Profile A gateway `:325-330` (was `:307-312`), local/ACA JWKS `:331-338` (was `:313-320`), Profile B
+gateway `:361-364` (was `:341-344`); `MmcaGateway:ForwardHttp2` removal `MMCA.Common/CHANGELOG.md:2545`
+(was `:2292`); ADC AppHost (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs`) `WithJwksDiscovery`
+`:368-370` (was `:373-375`), `engagementService.WithReference(conferenceService).WaitFor(conferenceService)`
+`:266` (was `:271`), deadlock rationale `:256` and `:268` (were `:261`/`:273`), reverse edge `:269`
+(was `:274`); ADC Bicep in-cluster authority `MMCA.ADC/infra/main.bicep:2005`, `:2141`, `:2295` (were
+`:1937`/`:2071`/`:2223`); ADC gateway ordering (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs`)
+`AddGatewayRateLimiting` `:76`, `AddGatewayDownstreamHealthChecks` `:90`, `AddReverseProxy` `:148-151`,
+`UseCommonForwardedHeaders` `:160`, `UseGatewayCorrelation` `:165`, `UseCors` `:173`,
+`UseGatewayRateLimiting` `:180`, `MapReverseProxy` `:234` (were `:146-149`/`:158`/`:163`/`:168-171`/`:178`);
+ADC Notification (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs`)
+`ConfigureEndpointsWithHealthProbe(HttpProtocols.Http1AndHttp2, redeclareCleartextEndpoint: false)`
+`:72` (was `:73`), `AddGrpcServiceDefaults()` `:249` (was `:241`),
+`MapGrpcService<LiveChannelGrpcService>().AllowAnonymous()` `:293` (was `:285`),
+`UserNotificationExportGrpcService` `:301` (was `:293`); `GatewayCorrelationMiddleware` `HeaderName`
+`:36`, mint `:62-64`, request-header write `:68`, `Response.OnStarting` `:72`, `RequestDelegate`-only
+ctor `:29`, `UseGatewayCorrelation()` `:108` (were `:34`/`:53`/`:58`/`:27`/`:82`);
+`GatewayRateLimitingSettings.cs` section `:51`, `PermitLimit` 120 `:60`, `WindowSeconds` 60 `:64`,
+`GlobalConcurrencyLimit` 200 `:74`, `BypassPathPrefixes` empty `:85`, `SyntheticTrafficSecret` `:118`
+(header `:94`), `TrustedCallerSecret` `:154` (header `:126`); `GatewayHealthCheckExtensions.cs`
+`AddGatewayDownstreamHealthChecks` `:131` (overload `:149`), `BaseAddress` `:195`, `ProbeTimeout` 2
+seconds `:85` (applied `:196`, `:242`), `Unhealthy` `:240`, `Ready` tag `:241`; ADC `Routes` opens at
+`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:80` (was `:78`; 33 routes, unchanged);
+drift gates ADC `MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/RouteMapTests.cs` theory `:178-180`,
+route pin `:212-223`, cluster pin `:234-235` (were `:131`/`:179`/`:221`/`:239`), Store
+`MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/RouteMapTests.cs` theory `:201-203`, route pin
+`:220-231`, cluster pin `:298-299` (were `:46`/`:102`/`:126`/`:229`/`:246`; Store rationale `:31-35` not
+re-read). Unchanged and still exact per this run's audit: `GatewayRateLimitingExtensions.cs`,
+`MMCA.Common.Grpc/DependencyInjection.cs`, `ResultGrpcExtensions.cs`, `ModuleLoader.cs`,
+`MessageBusSettings.cs` and `MMCA.Common.Aspire.Hosting/Extensions.cs` anchors above; route counts
+33/15, limiter defaults 120/60/200, probe budget 2 seconds, breaker 0.5/10/10 seconds and ports
+8080/8081. The earlier side finding about ADR-012's Notification anchors is superseded: ADR-012 now
+cites `Program.cs:72` (correct) and `:292`/`:300` (`012-grpc-host-transport.md:344`), while the real
+lines are `:293`/`:301`, so it is off by one in the other direction (reported, not edited here).*

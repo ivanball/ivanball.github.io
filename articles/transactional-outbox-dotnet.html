@@ -109,7 +109,7 @@
         <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
         <li><a href="transactional-outbox-dotnet.html" aria-current="page">09 · The transactional outbox</a></li>
         <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
-        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, four engines</a></li>
         <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
         <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
         <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
@@ -197,7 +197,7 @@
           <p>The reason this pattern is often skipped is that wiring it by hand is tedious. In MMCA.Common it is
           automatic. Your aggregate records a domain event, and the framework does the rest.</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Inside your aggregate. You only declare that something happened:</span>
-AddDomainEvent(<span class="hljs-keyword">new</span> ProductVariantChanged(Id, newPrice));
+AddDomainEvent(<span class="hljs-keyword">new</span> InventoryAdjusted(Id, oldAvailableQuantity, AvailableQuantity));
 <span class="hljs-comment">// SaveChanges does the rest: your data row and the OutboxMessage row,</span>
 <span class="hljs-comment">// one transaction, same database as the aggregate.</span></code></pre>
           <p><code>AddDomainEvent</code> lives on the aggregate base (<code>AuditableAggregateRootEntity</code>), so any aggregate can
@@ -310,9 +310,13 @@ AddDomainEvent(<span class="hljs-keyword">new</span> ProductVariantChanged(Id, n
           see ADR-006.)</li>
           <li><strong>Smart waiting, not a hot loop.</strong> It wakes on a signal when new rows are written. When it sees rows
           that are pending but not yet eligible (messages become eligible a few seconds after creation, default
-          5s, so an in-process handler can run first), it sleeps only until the earliest becomes eligible.
+          5s), it sleeps only until the earliest becomes eligible.
           Otherwise it sleeps the full fallback interval (default 2s locally; deployed environments set it high,
-          for example 300s, to cut idle polling without adding latency).</li>
+          for example 300s, to cut idle polling without adding latency). The eligibility delay is not what
+          keeps the processor away from an event the saving process is still handling: on the async save path
+          a local domain event&#39;s row is inserted already leased (<code>Outbox:LeaseSeconds</code>, under a fresh lock
+          token), so no replica&#39;s poller claims it while the in-process dispatch runs, and a failed dispatch
+          releases that lease so the processor retries promptly instead of waiting out the full lease.</li>
           <li><strong>Batches and retries.</strong> It processes in batches of 50 and retries a failed message up to 5 times,
           with at-least-once delivery and OpenTelemetry metrics for dead-letter tracking. Retries back off
           exponentially: attempt <code>n</code> waits <code>Outbox:RetryBackoffBaseSeconds * 2^(n-1)</code> (default base 10s),

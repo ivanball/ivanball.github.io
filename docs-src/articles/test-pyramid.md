@@ -1,7 +1,7 @@
 # The test pyramid, not the ice-cream cone: 2,254 fast tests, zero Docker
 
 > Series: MMCA.Common · Article #35 (deep-dive) · Pillar P4 · Group G25 · Rubric §14 ·
-> Status: grounded in `MMCA.Common/CLAUDE.md` (Testing and Build & Test Commands sections),
+> Status: grounded in `MMCA.Common/AGENTS.md` (Build & Test and Testing sections),
 > `Website/docs-src/governance/common-ArchitectureScorecard.md` (§14, §28),
 > `Website/docs-src/adr/058-runtime-conformance-suites-as-a-package.md`,
 > `Website/docs-src/adr/063-accessibility-conformance-gate.md`,
@@ -99,8 +99,8 @@ how the pyramid stays consistent across three codebases instead of being rebuilt
   with an embedded dev keypair so tests exercise the same JWKS validation path production runs.
 - `MMCA.Common.Testing.E2E`, the Playwright base: browser fixtures, Blazor-aware navigation helpers that
   handle the InteractiveAuto hydration race, Identity page objects, and abstract workflow bases for the
-  Login, Register, Profile, Logout, password-reset and authorization journeys, four of which close with
-  an axe-core WCAG 2.1 AA assertion.
+  Login, Register, Profile, Logout, password-reset and authorization journeys (four of which close with
+  an axe-core WCAG 2.1 AA assertion), plus user-preferences and pseudo-localization bases.
 - `MMCA.Common.Testing.UI`, the bUnit base: `BunitComponentTestBase` registers MudBlazor's services,
   configures loose JSInterop, and wires real auth doubles so component tests resolve `<AuthorizeView>`
   cascades; the same package ships the `MarkupSnapshot` golden-markup helper and page-test bases for the
@@ -125,7 +125,7 @@ public sealed class CatalogTests : IntegrationTestBase<CatalogFixture>
     public async Task Get_returns_seeded_product()
     {
         var product = await GetAsync<ProductDto>("/api/products/1");
-        product.Name.Should().Be("Widget");
+        product!.Name.Should().Be("Widget");
     }
     // HttpClient, auth token, typed helpers, and per-test DB reset all come from the base.
 }
@@ -327,7 +327,7 @@ the floor only ever moves upward.
 
 The shape is right, but the scorecard names real gaps and one is squarely in the testing story.
 
-- **The UI tier's visual check is markup-deep, not pixel-deep.** The framework ships 26 reusable
+- **The UI tier's visual check is markup-deep, not pixel-deep.** The framework ships 29 reusable
   Blazor components in `MMCA.Common.UI`, some with real branching logic (`MobileCardList`,
   `MobileInfiniteScrollList`), and the pyramid carries a fast base layer *for the UI* under them: the
   `MMCA.Common.Testing.UI` bUnit base backs their component tests, a real-browser render-smoke gate
@@ -346,9 +346,9 @@ The shape is right, but the scorecard names real gaps and one is squarely in the
   floor (measured about 70.3%), enforced in CI and ratcheted up as the suite grows rather than left as
   an aspiration. What holds category 14 below the top band starts with mutation testing: there is none
   on the Core tier, so a green suite proves the lines run, not that every assertion would catch a
-  mutant. The scorecard names three structural gaps beside it: the integration tier (Redis, PostgreSQL,
-  package consumption, Bicep) runs on pull requests but is not a merge gate, the AppHost tier fails the
-  run without being a required check, and messaging never meets a real broker in the framework's own CI. Those are real limits,
+  mutant. Three structural gaps sit beside it: the integration tier (Redis, PostgreSQL, package
+  consumption, Bicep) runs on pull requests but is not a merge gate, the AppHost tier blocks the run
+  (a red fails it) without being a required merge check, and messaging never meets a real broker in the framework's own CI. Those are real limits,
   stated plainly.
 
 None of these argue against the pyramid. They are the cost of keeping the base fast and honest about
@@ -388,29 +388,29 @@ the UI tier's honest limit: markup-deep snapshots rather than pixel-deep renderi
 **Next in the series:** soft-delete vs the right to erasure, the GDPR conflict that was this
 framework's lowest-scoring category, and the boundary that resolved it.
 
-*MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the Testing section of the
-contributor guide, or `dotnet add package MMCA.Common.Testing` and reuse the integration base in your
+*MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the Testing section of its
+`AGENTS.md`, or `dotnet add package MMCA.Common.Testing` and reuse the integration base in your
 own app.*
 - ⭐ Repo: `https://github.com/ivanball/MMCA.Common`
-- 📄 The Testing and Build & Test Commands sections (`CLAUDE.md`) are in the repo; the testability
+- 📄 The Build & Test and Testing sections (`AGENTS.md`) are in the repo; the testability
   score (§14/§28) is the current number in `Website/docs-src/governance/common-ArchitectureScorecard.md`.
 
 *Tags: .NET, Testing, C Sharp, Software Architecture, Test Automation*
 
-*Notes (this run, 2026-10-02, re-verified at framework v1.221.0 (`MMCA.Common/FACTS.md:4`) against source,
-the Common scorecard, the rubric and ADR-058/063/117; supersedes the 2026-09-17 v1.205.0 ledger).
+*Notes (this run, 2026-10-08, re-verified at framework v1.233.0 (`MMCA.Common/FACTS.md:4`, `:14`) against source,
+the Common scorecard, the rubric and ADR-058/063/117; carries forward the 2026-10-02 v1.221.0 ledger, which superseded the 2026-09-17 v1.205.0 one).
 Header group cell corrected to G25, Testing & Quality Infrastructure
 (`Website/docs-src/onboarding/00-group-taxonomy.md:83`; G28 is Common AI Integration at `:82`, G26 the ADC
 engagement layer at `:78`); the group's page keeps the file name `group-28-testing-infrastructure.md`.
 Suite size: about 2,254 `[Fact]`/`[Theory]` behind `--minimum-expected-tests 2000`
-(`MMCA.Common/.github/workflows/ci.yml:158-161`); `dotnet-coverage` returns the test exit code (`:154`);
-unit-tier coverage floor 68.3%, measured 70.3% (comment `:448-449`, `awk -v m="68.3"` at `:462`); gallery
-a11y matrix `chromium, firefox, webkit` (`:257`). Scorecard evidence 2026-10-01 at v1.218.0
+(`MMCA.Common/.github/workflows/ci.yml:160-163`); `dotnet-coverage` returns the test exit code (`:156`);
+unit-tier coverage floor 68.3%, measured 70.3% (comment `:395-396`, `awk -v m="68.3"` at `:409`); gallery
+a11y matrix `chromium, firefox, webkit` (`:232`). Scorecard evidence 2026-10-07 at v1.233.0
 (`Website/docs-src/governance/common-ArchitectureScorecard.md:5`), Maturity 96.6% (317/328) (`:9`),
 Implementation 86.0% (705/820) (`:10`). Category 8 Data Architecture is maturity 4 / implementation 9 with
 ADR-018's non-SQL engines latent (`:72`). Category 14 is 4/9 (`:78`) and is held at 9 by no mutation
-testing plus three structural gaps (integration tier not a merge gate, Redis `ci.yml:837` and PostgreSQL
-`ci.yml:881`; AppHost tier `continue-on-error: true` at `ci.yml:976`; no real broker in Common CI), so the
+testing plus three structural gaps (integration tier not a merge gate, Redis `ci.yml:784` and PostgreSQL
+`ci.yml:828`; AppHost tier `ci.yml:905`, blocking but not a required merge check per `:910-911`, where the scorecard row's "advisory, `continue-on-error: true`, `ci.yml:976`" is stale; no real broker in Common CI), so the
 trade-off bullet's "single Exemplary gap" was corrected this run. Category 28 is 4/9, markup not pixels
 (`:92`). Rubric quotes re-cut to the exact wording
 (`Website/docs-src/governance/ArchitectureEvaluationCriteria.md:430,433,440`). Packages: 22 published
@@ -418,20 +418,20 @@ trade-off bullet's "single Exemplary gap" was corrected this run. Category 28 is
 types and the hash it keys on per `MMCA.Common/AGENTS.md:141`), `Testing`, `Testing.Architecture`,
 `Testing.Aspire`, `Testing.E2E`, `Testing.UI` (`:38-42`); "five of nineteen" corrected and the AI.Testing
 bullet added. Testing.UI's `MarkupSnapshot` and the identity page-test bases per ADR-058's 2026-09-25
-revision (`Website/docs-src/adr/058-runtime-conformance-suites-as-a-package.md:286-313`). ADR-058 status
-`:4`, later revisions 2026-09-10 (`:246`), 2026-09-22 (`:264`), 2026-09-25 (`:286`), 2026-10-01 (`:315`);
-seven contract bases (`:29`). Gateway probe gate is switchable:
+revision (`Website/docs-src/adr/058-runtime-conformance-suites-as-a-package.md:289-316`). ADR-058 status
+`:4`, later revisions 2026-09-10 (`:249`), 2026-09-22 (`:267`), 2026-09-25 (`:289`), 2026-10-01 (`:318`), 2026-10-06 (`:343`), 2026-10-07 (`:361`);
+seven contract bases (`:32`). Gateway probe gate is switchable:
 `MMCA.Common/Source/Hosting/MMCA.Common.Testing/Conformance/MmcaGatewayHardeningTestsBase.cs:111` (default
 true), inverse assertion `:308`, overridden to false by
 `MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/GatewayHardeningTests.cs:89` and
 `MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/GatewayHardeningTests.cs:93`. The runtime OpenAPI guard
-reads no committed file (ADR-058 `:104-109`), while both consumers commit their documents and diff them in
-CI (`:288-294`), so the "no committed snapshots" sentence was scoped to the runtime guard. UI web heads boot
-over Production-pinned factories (ADR-058 `:142-145`;
+reads no committed file (ADR-058 `:107-111`), while both consumers commit their documents and diff them in
+CI (`:291-294`), so the "no committed snapshots" sentence was scoped to the runtime guard. UI web heads boot
+over Production-pinned factories (ADR-058 `:147-148`;
 `MMCA.ADC/Tests/Hosts/MMCA.ADC.UI.Web.Tests/ConferenceUiHostApplicationFactory.cs:17` derives
 `ProductionHostApplicationFactory`, which pins Production at
 `MMCA.Common/Source/Hosting/MMCA.Common.Testing/Fixtures/ProductionHostApplicationFactory.cs:37`). Helpdesk
-pins all four `MMCA.Common.Testing*` packages at 1.221.0 (`MMCA.Helpdesk/Directory.Packages.props:93-96`).
+pins all four `MMCA.Common.Testing*` packages at 1.233.0 (`MMCA.Helpdesk/Directory.Packages.props:93-96`).
 AppHost tier, read in `MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/`:
 `Fixtures/AppHostFixtureBase.cs:41` (collection fixture), readiness-not-liveness docstring `:23-28`, the
 branch-not-`SkipWhen` rule `:35-38`, `SkipReason` `:56`, `IsAvailable` `:59`, default requirement opt-in
@@ -440,16 +440,16 @@ plus Docker `:79-80`, `SuppliesE2eRsaKeys` `:92`, gate evaluated first `:105-111
 `Probes/AppHostProbePaths.cs:18,26,32,35`; `Fixtures/AppHostTestBase.cs:29` with `CreateHttpClient` `:44`,
 `GetConnectionStringAsync` `:54`, `CreateBearerToken` `:74` and assertions `:98,113,127,147,203,246`
 (`AssertDataSourceAsync` at `:246` added this run). The snippet's skip line was corrected to the branch
-form, as ADC writes it (`MMCA.ADC/Tests/Integration/MMCA.ADC.AppHost.SmokeTests/AdcAppHostSmokeTests.cs:59,69-71`).
+form, as the base's own documentation prescribes (`Fixtures/AppHostFixtureBase.cs:35-38`); the ADC AppHost smoke project once cited here was removed 2026-10-07 (ADR-117 `:21`, `:294-295`).
 The E2E sentence was corrected: ADC's E2E workflow brings the Aspire stack up in CI
 (`MMCA.ADC/.github/workflows/e2e.yml:3-4`, step `:200`), which contradicts ADR-117's "deployed environment"
-wording (`Website/docs-src/adr/117-apphost-integration-test-base.md:27-29`, not edited here); the eight-day
-red nightly is ADR-117 `:43`. Deploy gates: chromium-only, UI-scoped `e2e-gate`
-(`MMCA.ADC/.github/workflows/deploy.yml:861,875`, UI filter `:57`; `MMCA.Store/.github/workflows/deploy.yml:833,847`)
-plus `cross-browser-freshness` (ADC `:987`, 10-day window comment `:963-980`; Store `:946`, `:964`), now
-named in the enforcement paragraph. Trade-offs: 26 `.razor` components under
-`MMCA.Common/Source/Presentation/MMCA.Common.UI/Components` (Glob, this run) replace "roughly a dozen";
-the SQL Server Testcontainers job (`ci.yml:918`) runs
+wording (`Website/docs-src/adr/117-apphost-integration-test-base.md:39`, not edited here); the eight-day
+red nightly is ADR-117 `:52-53`. Deploy gates: chromium-only, UI-scoped `e2e-gate`
+(`MMCA.ADC/.github/workflows/deploy.yml:806,820`, UI filter `:57`; `MMCA.Store/.github/workflows/deploy.yml:752,765`)
+plus `cross-browser-freshness` (ADC `:923`, 10-day window comment `:907-916`; Store `:857`, `:869`), now
+named in the enforcement paragraph. Trade-offs: 29 `.razor` components under
+`MMCA.Common/Source/Presentation/MMCA.Common.UI/Components` (Glob `Components/*/*.razor`, re-counted 2026-10-08; 26 on 2026-10-02) replace "roughly a dozen";
+the SQL Server Testcontainers job (`ci.yml:865`) runs
 `MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.SQLServer.Tests/SQLServerPersistenceTests.cs:112,144,175`
 (identity insert, stale row-version save, outbox in the same save). The subtitle's "no Docker" is scoped to
 the inner loop, because the Redis, PostgreSQL and SQL Server Testcontainers jobs and the AppHost tier's
@@ -458,11 +458,11 @@ onboarding citation were removed: the group page does not carry that characteriz
 2026-10-02 audit's confirmations without re-opening this run: `IntegrationTestBase.cs:31,42-48,51-71,75`,
 `JwtTokenGenerator.cs:14,131`, `SqlServerIntegrationTestFixtureBase.cs:90,183`,
 `MultiSourceSqliteIntegrationTests.cs:44-51,97,120,138,167-183`, `AxeOptions.cs:12-15,17,22,35,40,44`, the
-four Identity workflow bases (`UserLoginTestsBase.cs:82`, `UserRegistrationTestsBase.cs:95`,
-`ProfileManagementTestsBase.cs:191`, `PasswordResetTestsBase.cs:88,99`), `E2ETestBase.cs:372`,
+four Identity workflow bases (`UserLoginTestsBase.cs:82`, `UserRegistrationTestsBase.cs:99`,
+`ProfileManagementTestsBase.cs:191`, `PasswordResetTestsBase.cs:88,99`), `E2ETestBase.cs:529,539`,
 `PageExtensions.cs:326-327`, `MMCA.Common/global.json:3`, ADR-015's structure/registration trade-off
-(`Website/docs-src/adr/015-architecture-fitness-functions.md:83`), and the Helpdesk subclasses
+(`Website/docs-src/adr/015-architecture-fitness-functions.md:93`), and the Helpdesk subclasses
 (`DecoratorPipelineOrderTests.cs:36`, `MiddlewarePipelineOrderTests.cs:15`). The illustrative `CatalogTests`
-snippet is composed for shape; the base type and helpers are real. 2026-10-07: the AppHost-tier sentences (consumers boot their real AppHost through E2E; the framework tier fails the run but is not a required check) follow `MMCA.ADC/AGENTS.md:77`, `MMCA.Store/AGENTS.md:76` and `MMCA.Common/.github/workflows/ci.yml:910-911`.*
+snippet is composed for shape; the base type and helpers are real. 2026-10-07: the AppHost-tier sentences (consumers boot their real AppHost through E2E; the framework tier fails the run but is not a required check) follow `MMCA.ADC/AGENTS.md:77`, `MMCA.Store/AGENTS.md:76` and `MMCA.Common/.github/workflows/ci.yml:910-911`. 2026-10-08 (Common v1.233.0, `FACTS.md:14`): UI component count 26 -> 29 (`Components/Legal/TermsAcceptanceGate.razor`, `Components/Forms/DeleteConfirmationDialog.razor` and `Components/Auth/ChangePasswordCard.razor` added); the header grounding and footer move from `CLAUDE.md` (now only an `@AGENTS.md` import) to `MMCA.Common/AGENTS.md` `## Build & Test` (`:9`) and `## Testing` (`:145`), and the CTA from the contributor guide (`MMCA.Common/CONTRIBUTING.md` has no Testing section) to that `AGENTS.md` section; the E2E bullet adds `Workflows/Preferences/UserPreferencesTestsBase.cs:21` and `Workflows/Globalization/PseudoLocalizationTestsBase.cs:52`, the four axe closes unchanged; the trade-off bullet's AppHost clause is grounded in `ci.yml:910-911` rather than attributed to the scorecard, whose row 14 (`common-ArchitectureScorecard.md:78`) still reads advisory at a stale `ci.yml:976` and says 309 executed fitness methods against `FACTS.md:54`'s 410; the `CatalogTests` snippet null-forgives because `GetAsync<T>` returns `Task<T?>` (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/Fixtures/IntegrationTestBase.cs:51`). About 2,254 tests is kept as the scorecard states it (`:78`).*
 
 - Full series index: https://ivanball.github.io/writing.html

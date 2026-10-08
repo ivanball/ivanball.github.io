@@ -109,7 +109,7 @@
         <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
         <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
         <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
-        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, four engines</a></li>
         <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
         <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
         <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
@@ -175,8 +175,10 @@
           throws on a missing required member. Nothing on the wire told them the shape changed. They were already
           deployed and running, and you reshaped the contract under them.</p>
           <p>This is not a hypothetical. With database-per-service and async integration over the outbox, consumers
-          resolve an event <em>solely by its type string</em>: the outbox serializes the event to JSON keyed by
-          <code>EventType</code>, and the broker path binds by .NET message type. There is no schema registry in the middle
+          resolve an event <em>by its identity, never by its shape</em>: the outbox serializes the event to JSON keyed by
+          an <code>EventType</code> that holds the event&#39;s declared <code>[EventName]</code> identity when it has one (and its
+          assembly-qualified type name otherwise), and the broker path binds by .NET message type. Neither key says
+          anything about which fields the payload carries. There is no schema registry in the middle
           saying &quot;this is a different shape than you expect.&quot; A producer that reshapes a payload silently breaks
           every consumer, and it does it in production, asynchronously, where it is hardest to trace.</p>
           <h2 id="why-it-matters">Why it matters</h2>
@@ -266,21 +268,28 @@ x.RegisterUpcastedIntegrationEventConsumer&lt;ProductVariantChanged&gt;(); <span
           <p>ADR-010 is candid that the field is a signal, not a complete mechanism.</p>
           <ul>
           <li><strong><code>SchemaVersion</code> by itself does not stop a consumer breaking on a real reshape.</strong> It is a value on
-          the wire, and the load-bearing half is the discipline: new type plus upcaster. That half has
-          framework support in the registration extension point (ADR-090): a typed
+          the wire, and the load-bearing half is the discipline: new type plus upcaster. Two mechanisms back
+          that discipline. A frozen wire-contract snapshot, <code>IntegrationEventContractTestsBase</code>, rebuilds every
+          integration event&#39;s member set and compares it with a committed copy, so a missing, extra or retyped
+          member, or a new event, fails the build until someone versions the event and updates the snapshot in
+          the same commit; ADC, Store and Helpdesk each subclass it, while Common does not freeze its own event.
+          And the reshape itself has framework support in the registration extension point (ADR-090): a typed
           <code>IEventUpcaster&lt;TSource, TTarget&gt;</code>, <code>AddEventUpcaster&lt;...&gt;()</code>, a chaining registry that preserves the envelope, a draining broker consumer for the retired queue, and two fitness
           functions that reject two upcasters claiming one source contract or a target that does not raise
           <code>SchemaVersion</code>. Two gaps stay open and are worth naming: the framework itself still ships no V2 event
           of its own (its one concrete integration event stays at version 1, so the first real consumer
           migration will be the pipeline&#39;s first production use), and outbox type-name aliasing for a type
           deleted ahead of policy is deliberately out of scope, because the policy keeps the old type alive
-          until every consumer has drained it.</li>
+          until every consumer has drained it. That second gap is narrower than it sounds: the outbox stores and
+          resolves an event&#39;s declared <code>[EventName]</code> identity, so an event that declares one stays resolvable
+          through a rename or a namespace or assembly move, and only a type with no declared identity that is
+          deleted early leaves its rows unresolvable.</li>
           <li><strong>The convention test covers a real event in MMCA.Common, but the framework&#39;s own coverage is one
           event wide.</strong> Common ships exactly one concrete integration event, the sealed record
           <code>OutputCacheEvictionRequested</code>, and <code>CommonArchitectureMap</code> registers the Domain assembly it lives
           in, so <code>EventVersioningConventionTests</code> runs against a real event in Common&#39;s own build. Enforcement
-          runs at five points: the framework itself plus four consumer trees (ADC, Store, Helpdesk, and a
-          local-only two-module sample), each subclassing the same base and running the identical rules
+          runs at four points: the framework itself plus three consumer trees (ADC, Store, and Helpdesk),
+          each subclassing the same base and running the identical rules
           against its own event assemblies. One caveat rides along: Common&#39;s map declares no modules, so the
           Shared-layer half of the namespace rule is relaxed for the framework&#39;s own event, while every
           module-bearing consumer is still held to it. The framework supplies the rule; the consumers still

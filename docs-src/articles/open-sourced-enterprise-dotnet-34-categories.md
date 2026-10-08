@@ -3,7 +3,7 @@
 > Series: MMCA.Common · Article #1 (cornerstone) · Pillar P1/P4 · Rubric: all
 > Status: grounded in `MMCA.Common/README.md`, `MMCA.Common/AGENTS.md`, `MMCA.Common/FACTS.md`,
 > `Website/docs-src/governance/common-ArchitectureScorecard.md`, `Website/docs-src/onboarding/00-index.md`. No em
-> dashes. Current facts (22 packages, 131 ADRs, two-axis index M 96.6% / I 86.0%).
+> dashes. Current facts (22 packages, 132 ADRs, two-axis index M 96.6% / I 86.0%).
 
 **Subtitle:** A .NET 10 framework for DDD, Clean Architecture, and CQRS, built as a modular monolith
 that extracts to microservices without a rewrite, and scored in the open against a 34-category rubric.
@@ -101,7 +101,7 @@ The inward-pointing dependency rule (Domain must never reference EF Core or ASP.
 
 Those fitness functions do not live as copy-pasted test code in each repo. They live once, in a
 shipped package, `MMCA.Common.Testing.Architecture`, which exposes a reusable rule library and abstract
-test bases (**141 test methods across 55 base classes**). MMCA.Common's own build executes 339 fitness
+test bases (**153 test methods across 61 base classes**). MMCA.Common's own build executes 410 fitness
 tests built on them. MMCA.ADC and MMCA.Store subclass the same bases and supply their own architecture
 map, and so does MMCA.Helpdesk, the reference app the templates are staged from, so the rules are
 literally identical in every codebase that runs them.
@@ -207,12 +207,16 @@ why that extraction point is something you build now, not a migration you surviv
 
 *Tags: .NET, C Sharp, Software Architecture, Microservices, Open Source*
 
-*Notes / honest gaps: every figure below was re-read from source on 2026-10-02 against framework v1.221.0
-(`MMCA.Common/FACTS.md:4,14`). The two-axis scores are the current indices in the canonical
+*Notes / honest gaps: every figure below was re-read from source on 2026-10-08 against framework v1.233.0
+(`MMCA.Common/FACTS.md:4,14`). The 2026-10-08 pass changed only owned figures and anchors: the fitness suite
+from 141 methods / 55 bases / 339 executed to 153 / 61 / 410 (`FACTS.md:51,54`), the ADR count from 131 to 132
+(`Website/docs-src/adr/README.md:6`), the lockstep pins from 1.221.0 to 1.233.0, and the scorecard evidence stamp
+from 2026-10-01 at v1.218.0 to 2026-10-07 at v1.233.0; both indices are unchanged. The two-axis scores are the
+current indices in the canonical
 `Website/docs-src/governance/common-ArchitectureScorecard.md` (Maturity 96.6% = 317/328,
 `common-ArchitectureScorecard.md:9`; Implementation 86.0% = 705/820, `common-ArchitectureScorecard.md:10`),
-evidence dated 2026-10-01 at v1.218.0 (`common-ArchitectureScorecard.md:5`). The article keeps its deliberate
-framing (scored against the original committed snapshot, then re-scored): this run moved Maturity from 97.0%
+evidence dated 2026-10-07 at v1.233.0 (`common-ArchitectureScorecard.md:5`). The article keeps its deliberate
+framing (scored against the original committed snapshot, then re-scored): the 2026-10-02 run moved Maturity from 97.0%
 (318/328) to 96.6% because category 1 SOLID dropped to Maturity 3 / Implementation 8
 (`common-ArchitectureScorecard.md:12,65`, "only SRP and DIP are enforced automatically"), so SOLID left the
 top-marks list and is named as the counter-example. Implementation stays the weaker axis by design, by about 10.6
@@ -242,11 +246,11 @@ source of truth; its list carries `MMCA.Common.AI` (`FACTS.md:22`), the provider
 governed language-model boundary of ADR-120 (`Website/docs-src/adr/README.md:133`), and the metapackage that
 ships no assembly in place of the Core 6 is ADR-101 (`Website/docs-src/adr/README.md:114`; the six references at
 `MMCA.Common/Source/MMCA.Common/MMCA.Common.csproj:26-31`). `FACTS.md` delegates the ADR count and range to the
-canonical index (131 accepted ADRs, 001-131, `Website/docs-src/adr/README.md:6`). Lockstep holds: every
-`MMCA.Common.*` pin reads 1.221.0 in Store (`MMCA.Store/Directory.Packages.props:8-113`), ADC
-(`MMCA.ADC/Directory.Packages.props:103-139`) and Helpdesk (`MMCA.Helpdesk/Directory.Packages.props:82-98`).
+canonical index (132 accepted ADRs, 001-132, `Website/docs-src/adr/README.md:6`). Lockstep holds: every
+`MMCA.Common.*` pin reads 1.233.0 in Store (`MMCA.Store/Directory.Packages.props:8-107`), ADC
+(`MMCA.ADC/Directory.Packages.props:99-131`) and Helpdesk (`MMCA.Helpdesk/Directory.Packages.props:82-98`).
 "Two deployed apps are built on it" replaces "consume the same nineteen packages", because neither app pins every
-published package. The 141-test-methods-across-55-abstract-`*TestsBase`-classes figure and the 339 fitness tests
+published package. The 153-test-methods-across-61-abstract-`*TestsBase`-classes figure and the 410 fitness tests
 MMCA.Common's own build executes are `FACTS.md:51` and `FACTS.md:54-55`. `FACTS.md:52-53` names Common, ADC and
 Store as the subclassing repos; MMCA.Helpdesk is added from source, with 33 `*TestsBase` subclass declarations
 across 8 files in `MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/` and its own map at
@@ -257,14 +261,16 @@ depends on `UI` plus `Shared` only (ADR-042, `Website/docs-src/adr/README.md:55`
 so it sits above the layer stack, not beside it. The fast-test figure is the scorecard's category 14 row (roughly
 2,254 `[Fact]`/`[Theory]`, `common-ArchitectureScorecard.md:78`, matching the Top-5 strengths block at `:45`, so
 the earlier 1,880 follow-up is resolved), and the 2,000-test zero-discovery floor is the literal
-`--minimum-expected-tests 2000` on the unit tier (`MMCA.Common/.github/workflows/ci.yml:161`); both keep moving,
-so re-read before publishing. The twelve-projects and roughly-9,000-lines figure is anchored on
+`--minimum-expected-tests 2000` on the unit tier (`MMCA.Common/.github/workflows/ci.yml:163`); both keep moving,
+so re-read before publishing. The 2,254 figure is kept as the scorecard owns it, though the 2026-10-08 audit could
+not reproduce it: a raw Grep counts about 6,589 `[Fact]`/`[Theory]` attributes under `MMCA.Common/Tests` across
+all tiers, so the scope behind 2,254 is the scorecard's to re-derive. The twelve-projects and roughly-9,000-lines figure is anchored on
 `Website/docs-src/guides/common-GETTING-STARTED.md:10` ("12 projects and roughly 9,000 lines of C# and Razor"),
 the commands on `:15-16`. The Compliance and Privacy gap is real but answered: ADR-005
 (`Website/docs-src/adr/README.md:18`) plus an `IAnonymizable` erasure extension point
 (`MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IAnonymizable.cs:22`) and a PII fitness function
 (`PiiConventionTestsBase`, `MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/PiiConventionTestsBase.cs:7`),
-so the "scored, then fixed" framing is deliberate. Apache-2.0 is `MMCA.Common/Directory.Build.props:49`. Two
+so the "scored, then fixed" framing is deliberate. Apache-2.0 is `MMCA.Common/Directory.Build.props:71`. Two
 claims are deliberately left as written because read-only repo files cannot settle them. First, "the framework
 ships a `dotnet new` pack" whose content is staged at pack time: the staging mechanism is real but lives in
 MMCA.Helpdesk (`MMCA.Helpdesk/build/templates/stage.ps1`), not in MMCA.Common, so the wording is loose about which

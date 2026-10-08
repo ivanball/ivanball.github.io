@@ -109,7 +109,7 @@
         <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
         <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
         <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
-        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, four engines</a></li>
         <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
         <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
         <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
@@ -268,8 +268,9 @@ services.AddPermissions(ConferencePermissionGrants.Apply);
           <code>[AllowAnonymous]</code>. The capability mechanism itself still confers nothing beyond explicit claims until a
           host calls <code>AddPermissions(...)</code>, and any policy name that is not a <code>perm:</code> name is delegated untouched.</p>
           <p>Adoption is a per-module decision, and every module in both real apps has made it. ADC&#39;s Conference module
-          defines eleven capabilities, including the seven-member <code>ContentManagement</code> subset granted to its own
-          <code>ContentEditor</code> role; its Engagement module defines three (among them <code>engagement:live:manage</code>, granted to
+          defines twelve capabilities, including the seven-member <code>ContentManagement</code> subset granted to its own
+          <code>ContentEditor</code> role (<code>conference:speakers:link</code> stays Organizer-only, because linking a speaker to a
+          user account confers a speaker identity); its Engagement module defines three (among them <code>engagement:live:manage</code>, granted to
           <code>Organizer</code>, gating the conference-day live-poll management endpoints); its Notification module grants the
           framework&#39;s own <code>notifications:manage</code> to <code>Organizer</code>; and its Identity module defines three, two of which
           alias the framework-owned <code>users:manage</code> and <code>roles:manage</code> from <code>AdministrationPermissions</code> so the shared

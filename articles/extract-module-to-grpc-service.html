@@ -109,7 +109,7 @@
         <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
         <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
         <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
-        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, four engines</a></li>
         <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
         <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
         <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
@@ -248,13 +248,17 @@ services.AddEngagementBookmarkCountClient();   <span class="hljs-comment">// shi
           <ul>
           <li>A <code>JwtForwardingClientInterceptor</code> copies the inbound <code>Authorization</code> header off the current
           <code>HttpContext</code> onto the outgoing call&#39;s metadata, so the caller&#39;s JWT rides along downstream and
-          distributed authorization works without each handler threading a token (it is a no-op outside an HTTP
-          request, for example in a background processor).</li>
+          distributed authorization works without each handler threading a token. When the request carries no
+          <code>Authorization</code> header but authenticated with a bearer token from elsewhere (a SignalR hub connection
+          passes it as <code>?access_token=</code>), it forwards the token saved on the authentication ticket instead; a
+          header that is present always wins. It is a no-op outside an HTTP request, for example in a
+          background processor.</li>
           <li><code>AddStandardResilienceHandler()</code> gives every gRPC client a Polly retry, timeout, and
           circuit-breaker pipeline whose values come from <code>GrpcResilienceDefaults</code>. The timeouts and the retry
           budget are the HTTP clients&#39; own. The retry fires only on a failure to reach the peer (an
           <code>HttpRequestException</code>), because every gRPC call is a POST and replaying one that reached the handler
-          could run it twice. The circuit breaker carries explicit gRPC values. A deliberate <code>SocketsHttpHandler</code> override forces
+          could run it twice. The circuit breaker&#39;s failure ratio, minimum throughput and break duration are
+          explicit gRPC values, while its sampling window is the HTTP clients&#39; own. A deliberate <code>SocketsHttpHandler</code> override forces
           explicit HTTP/2 so the resilience handler cannot defeat the h2c negotiation.</li>
           </ul>
           <p>The <code>services.Replace(...)</code> is deliberate and uses <code>Replace</code>, not <code>TryAdd</code>. By the time this runs (after
@@ -359,7 +363,9 @@ app.MapReverseProxy();</code></pre>
           <ul>
           <li><strong>One correlation id for the whole hop, not one per service.</strong> <code>GatewayCorrelationMiddleware</code>
           declares the <code>X-Correlation-ID</code> constant and, when the caller sent none, mints one from
-          <code>Activity.Current?.TraceId</code> with <code>HttpContext.TraceIdentifier</code> as the fallback. The part that makes
+          <code>Activity.Current?.TraceId</code> with <code>HttpContext.TraceIdentifier</code> as the fallback. A caller-supplied
+          value follows the services&#39; own rule: it is cut to 64 characters, and replaced by a minted id when it
+          holds a non-ASCII or control character (Kestrel refuses to echo one). The part that makes
           it <em>one</em> id is that the value is written back onto the <strong>request</strong> headers before forwarding, so the
           downstream service&#39;s own middleware finds a header already present and adopts it instead of minting
           a second one. The response echo runs from <code>Response.OnStarting</code>, so it survives a proxied response
@@ -427,10 +433,13 @@ app.MapReverseProxy();</code></pre>
           and routes <code>/.well-known/*</code> on. In Azure Container Apps each service sets the direct in-cluster
           authority <code>http://&lt;identity app&gt;</code> instead, and the <code>http2</code> ingress carries the metadata fetch. Any service that <strong>serves</strong> gRPC over cleartext needs
           Profile A. ADC uses it.</li>
-          <li><strong>Profile B (consumer-only, one-directional gRPC, gRPC rides the HTTPS/ALPN endpoint).</strong> Kestrel is
-          <code>Http1AndHttp2</code>; gRPC clients use the HTTPS endpoint where ALPN negotiates HTTP/2. The gateway cluster
-          declares no version pair, so YARP&#39;s negotiating default resolves to HTTP/1.1 against the cleartext
-          endpoint, and JWKS uses the single-argument <code>WithJwksDiscovery(identity)</code>.</li>
+          <li><strong>Profile B (<code>Http1AndHttp2</code>, no cluster version pair).</strong> Kestrel is <code>Http1AndHttp2</code>, so the
+          cleartext endpoint speaks HTTP/1.1 (there is no ALPN without TLS), and the gateway cluster declares no
+          version pair, so YARP&#39;s negotiating default resolves to HTTP/1.1 against it. ADR-012 also describes a
+          consumer-only variant that carries gRPC over the HTTPS/ALPN endpoint with the single-argument
+          <code>WithJwksDiscovery(identity)</code>, and marks both of those halves historical: no deployed host is pure
+          Profile B. <code>Http1AndHttp2</code> survives only as the default-endpoint half of the mixed-endpoint profile
+          below, and every host that serves gRPC does so over cleartext h2c with the gateway-routed JWKS form.</li>
           </ul>
           <p>A 2026 update is the cautionary tale here: Store originally chose Profile B because its gRPC edges looked
           &quot;consumer-only,&quot; but a one-directional topology still has services that <strong>serve</strong> inbound cleartext

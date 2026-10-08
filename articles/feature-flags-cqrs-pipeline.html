@@ -109,7 +109,7 @@
         <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
         <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
         <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
-        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, four engines</a></li>
         <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
         <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
         <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
@@ -207,7 +207,7 @@
           <li>If it is gated, check <code>featureManager.IsEnabledAsync(featureGated.FeatureName)</code>
           (<code>FeatureGateCommandDecorator.cs:53</code>). Enabled means delegate to the inner handler as normal.</li>
           <li>If the flag is off, short-circuit: build and return a failure result carrying
-          <code>Error.NotFoundError(&quot;Feature.Disabled&quot;, ...)</code> (<code>FeatureGateCommandDecorator.cs:56-59</code>), without ever
+          <code>Error.NotFoundError(&quot;Feature.Disabled&quot;, ...)</code> (<code>FeatureGateCommandDecorator.cs:59-62</code>), without ever
           invoking the handler.</li>
           </ol>
           <p>Manufacturing that typed failure is the one subtle piece. <code>TResult</code> is unconstrained (it is <code>Result</code> for
@@ -249,10 +249,13 @@
     <span class="hljs-keyword">if</span> (<span class="hljs-keyword">await</span> featureManager.IsEnabledAsync(featureGated.FeatureName).ConfigureAwait(<span class="hljs-literal">false</span>))
         <span class="hljs-keyword">return</span> <span class="hljs-keyword">await</span> inner.HandleAsync(command, cancellationToken).ConfigureAwait(<span class="hljs-literal">false</span>);
 
+    <span class="hljs-comment">// The message reaches the user verbatim, so it is the generic wording DisabledFeatureHandler</span>
+    <span class="hljs-comment">// uses for a [FeatureGate] endpoint; the flag name is internal and stays out of it. Clients</span>
+    <span class="hljs-comment">// branch on the Feature.Disabled code.</span>
     <span class="hljs-keyword">var</span> createFailure = CreateFailure();
     <span class="hljs-keyword">return</span> createFailure([Error.NotFoundError(
         <span class="hljs-string">&quot;Feature.Disabled&quot;</span>,
-        <span class="hljs-string">$&quot;Feature &#x27;<span class="hljs-subst">{featureGated.FeatureName}</span>&#x27; is not currently available.&quot;</span>)]);
+        <span class="hljs-string">&quot;The requested feature is not currently available.&quot;</span>)]);
 }</code></pre>
           <p>(This block is a faithful composite: the interface and the <code>HandleAsync</code> body are verbatim from source,
           and <code>VerifyPaymentCommand</code> is a real gated command, shown together so the opt-in and the enforcement read
@@ -278,16 +281,21 @@
           <code>[FeatureGate(NotificationFeatures.PushNotifications)]</code> on the class
           (<code>MMCA.Common.API/Controllers/Notifications/DevicesController.cs:24</code>), not app-specific code in ADC.
           When the flag is off, <code>DisabledFeatureHandler</code>
-          (<code>DisabledFeatureHandler.cs:13</code>) writes an RFC 9457 ProblemDetails response with status
-          <code>404 Not Found</code> and the title <code>&quot;Feature not available&quot;</code> (<code>DisabledFeatureHandler.cs:18-26</code>).</p>
+          (<code>DisabledFeatureHandler.cs:14</code>) writes an RFC 9457 ProblemDetails response with status
+          <code>404 Not Found</code>, the title <code>&quot;Feature not available&quot;</code> and the detail
+          <code>&quot;The requested feature is not currently available.&quot;</code> (<code>DisabledFeatureHandler.cs:19-27</code>).</p>
           <p>Both surfaces agree on one convention that is worth stating plainly: a disabled feature returns
           not-found, never <code>403 Forbidden</code>. The pipeline decorator short-circuits with <code>ErrorType.NotFound</code>; the
           edge handler returns <code>404</code>. Neither answer looks like a permissions problem, but neither body is
-          anonymous either (ADR-031). The edge body is titled &quot;Feature not available&quot; (<code>DisabledFeatureHandler.cs:21</code>).
+          anonymous either (ADR-031). The edge body is titled &quot;Feature not available&quot; (<code>DisabledFeatureHandler.cs:22</code>).
           The CQRS failure travels through the Result to ProblemDetails mapping, whose <code>errors</code> extension serializes
-          each error&#39;s code and message (<code>ErrorHttpMapping.cs:62-69</code>), so the caller sees the <code>Feature.Disabled</code> code
-          and a message naming the flag (<code>FeatureGateCommandDecorator.cs:57-59</code>). Turning a flag off makes the
-          feature answer not-found and say that a feature is unavailable, not report a locked door.</p>
+          each error&#39;s code and message (<code>ErrorHttpMapping.cs:62-70</code>, with the message localized by code when the
+          host registers an <code>IErrorLocalizer</code>, <code>:66</code>), so the caller sees the <code>Feature.Disabled</code> code and the same
+          generic &quot;The requested feature is not currently available.&quot; wording the edge uses as its detail
+          (<code>FeatureGateCommandDecorator.cs:60-62</code>). The flag name stays out of the message on purpose, because the
+          message reaches the user verbatim and the name is internal; clients branch on the code
+          (<code>FeatureGateCommandDecorator.cs:56-58</code>). Turning a flag off makes the feature answer not-found and say
+          that a feature is unavailable, not report a locked door.</p>
           <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
           <ul>
           <li><strong>The two surfaces must be kept in agreement by hand.</strong> Gating the controller but not the command (or
@@ -331,7 +339,7 @@
           The scoring command is a durable internal command that the framework&#39;s processor runs through the same
           decorator pipeline, so with its flag off the gate&#39;s failure completes the queued row rather than retrying
           it (<code>ScoreEventSessionsInternalCommand.cs:42-46</code>); its trigger endpoint also carries
-          <code>[FeatureGate(ConferenceFeatures.SessionScoring)]</code> (<code>SessionSelectionController.cs:125</code>), so that flag is
+          <code>[FeatureGate(ConferenceFeatures.SessionScoring)]</code> (<code>SessionSelectionController.cs:134</code>), so that flag is
           enforced at both surfaces. No query is gated. The flag inventory is wider than the pipeline usage:
           thirteen flag-name constants
           across six <code>*Features</code> classes (Common&#39;s Notifications and Privacy, ADC&#39;s Conference and Engagement,

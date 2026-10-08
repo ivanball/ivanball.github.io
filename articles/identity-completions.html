@@ -6,23 +6,23 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>Finishing Identity: Second Factor, Email Confirmation and Stored Permission Grants · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="A TOTP second factor, an email-confirmation gate, and operator-editable permission grants, each arriving as an opt-in extension.">
+  <meta name="description" content="A TOTP second factor, an email-confirmation gate, operator-editable permission grants and versioned Terms of Service acceptance, each arriving as an opt-in extension.">
   <link rel="canonical" href="https://ivanball.github.io/articles/identity-completions.html">
   <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="Finishing Identity: Second Factor, Email Confirmation and Stored Permission Grants">
-  <meta property="og:description" content="A TOTP second factor, an email-confirmation gate, and operator-editable permission grants, each arriving as an opt-in extension.">
+  <meta property="og:description" content="A TOTP second factor, an email-confirmation gate, operator-editable permission grants and versioned Terms of Service acceptance, each arriving as an opt-in extension.">
   <meta property="og:url" content="https://ivanball.github.io/articles/identity-completions.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Finishing Identity: Second Factor, Email Confirmation and Stored Permission Grants">
-  <meta name="twitter:description" content="A TOTP second factor, an email-confirmation gate, and operator-editable permission grants, each arriving as an opt-in extension.">
+  <meta name="twitter:description" content="A TOTP second factor, an email-confirmation gate, operator-editable permission grants and versioned Terms of Service acceptance, each arriving as an opt-in extension.">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Finishing Identity: Second Factor, Email Confirmation and Stored Permission Grants","description":"A TOTP second factor, an email-confirmation gate, and operator-editable permission grants, each arriving as an opt-in extension.","url":"https://ivanball.github.io/articles/identity-completions.html","mainEntityOfPage":"https://ivanball.github.io/articles/identity-completions.html","datePublished":"2026-09-24T12:00:00Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":52}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Finishing Identity: Second Factor, Email Confirmation and Stored Permission Grants","description":"A TOTP second factor, an email-confirmation gate, operator-editable permission grants and versioned Terms of Service acceptance, each arriving as an opt-in extension.","url":"https://ivanball.github.io/articles/identity-completions.html","mainEntityOfPage":"https://ivanball.github.io/articles/identity-completions.html","datePublished":"2026-09-24T12:00:00Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":52}</script>
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"52 · Finishing identity","item":"https://ivanball.github.io/articles/identity-completions.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
   <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -109,7 +109,7 @@
         <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
         <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
         <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
-        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, four engines</a></li>
         <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
         <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
         <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
@@ -161,9 +161,10 @@
           <h1 id="finishing-identity-second-factor-email-confirmation-and-stored-permission-grants">Finishing Identity: Second Factor, Email Confirmation and Stored Permission Grants</h1>
           <p class="article-meta"><time datetime="2026-09-24T12:00:00Z">September 24, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera</p>
           <p class="article-subtitle">A framework that owns sign-in for two deployed apps cannot add a second factor by
-          adding a step. Here is how a TOTP challenge, an email-confirmation gate and operator-editable
-          permission grants arrive as optional constructor arguments, a marker type and a decorator, so a
-          consumer that adopts none of them observes nothing at all.</p>
+          adding a step. Here is how a TOTP challenge, an email-confirmation gate, operator-editable permission
+          grants and versioned Terms of Service acceptance arrive as optional constructor arguments, a marker
+          type, a decorator and an unset setting, so a consumer that adopts none of them observes nothing at
+          all.</p>
           <hr>
           <p>There is a moment in every shared authentication library where the interesting work is done and the
           awkward work is left. The framework already owns sign-in: password verification, brute-force
@@ -173,11 +174,12 @@
           It is ten lines, and every one of them executes in both deployed apps the moment the package is
           restored, including the app that never asked for two-factor and has no column to answer the query
           from.</p>
-          <p>That is the actual problem this article is about, and it is not a cryptography problem. Four
+          <p>That is the actual problem this article is about, and it is not a cryptography problem. Five
           capabilities were missing from the framework&#39;s identity story: a second authentication factor, email
-          confirmation, permission grants an operator can change without a deploy, and a user and role
-          administration API. Each of them is easy to write and dangerous to insert. <strong>ADR-116</strong> is the record
-          of inserting them anyway, without changing the behavior of anything already deployed.</p>
+          confirmation, permission grants an operator can change without a deploy, a user and role
+          administration API, and a record of which version of the Terms of Service each user accepted. Each
+          of them is easy to write and dangerous to insert. <strong>ADR-116</strong> is the record of inserting them anyway,
+          without changing the behavior of anything already deployed.</p>
           <p>The series has already covered the pieces these plug into: Article 16 for cross-service token
           validation, Article 24 for permission-based authorization and its compiled registry, Article 27 for
           the rotating refresh token and the sign-in pipeline the new claim rides on. This article is about
@@ -195,37 +197,37 @@
           not a feature in a library, it is a behavior change in somebody else&#39;s production, delivered by a
           version bump. The framework&#39;s own history is the argument: the 1.188.0 release needed an
           <code>UPGRADING.md</code> section with eight items, one of which (a fallback authorization policy) broke
-          unannotated endpoints (<code>ADR-116:42-46</code>).</p>
+          unannotated endpoints (<code>ADR-116:45-49</code>).</p>
           <p>So the question is not &quot;how do I implement TOTP.&quot; It is &quot;how do I ship TOTP so that the app which
           does not want it cannot possibly be affected by it.&quot;</p>
           <h2 id="the-mmca-answer-the-unadopted-path-is-unreachable-not-merely-disabled">The MMCA answer: the unadopted path is unreachable, not merely disabled</h2>
           <p><code>AuthenticationServiceBase&lt;TUser&gt;</code> takes the two new collaborators as constructor parameters, both
           optional and both defaulted to null: <code>ITwoFactorAuthenticator? twoFactor = null</code> and
           <code>IOptions&lt;EmailConfirmationSettings&gt;? emailConfirmationSettings = null</code>
-          (<code>AuthenticationServiceBase.cs:69-70</code>). Every existing subclass keeps compiling, because it simply
+          (<code>AuthenticationServiceBase.cs:70-71</code>). Every existing subclass keeps compiling, because it simply
           passes fewer arguments, and the documentation on those parameters says what null means: &quot;while it is
-          null the sign-in flow has no second-factor step at all&quot; (<code>:52-62</code>).</p>
+          null the sign-in flow has no second-factor step at all&quot; (<code>:53-63</code>).</p>
           <p>That is not the same as a configuration flag, and the difference is the whole point.
           <code>ChallengeSecondFactorAsync</code> is a two-line expression body: with no authenticator injected it
           returns <code>TwoFactorOutcome.NotEnrolled</code> outright, and only otherwise delegates to
-          <code>twoFactor.ChallengeAsync</code> (<code>:504-510</code>). An unadopted consumer pays no query, no branch and no
+          <code>twoFactor.ChallengeAsync</code> (<code>:530-536</code>). An unadopted consumer pays no query, no branch and no
           allocation. A disabled feature has a code path that runs and decides to do nothing; an absent
           collaborator has no code path at all. Only the second one is safe to ship to a system you cannot
           test.</p>
           <p>The email gate is built the same way. <code>CheckEmailConfirmed</code> returns success immediately unless the
           host supplied settings with <code>RequireConfirmedEmail</code> set, and even then refuses only a user whose type
-          implements <code>IEmailConfirmableUser</code> and reports <code>IsEmailConfirmed: false</code> (<code>:480-490</code>). Two
+          implements <code>IEmailConfirmableUser</code> and reports <code>IsEmailConfirmed: false</code> (<code>:506-516</code>). Two
           independent conditions, both off by default, one of them a type test the app controls.</p>
           <p><strong>Where the two gates sit in the login sequence is a decision, not an accident.</strong> Both run after the
-          password has been proved: <code>CheckEmailConfirmed</code> at <code>:164</code>, the second-factor challenge at <code>:170</code>,
-          under a comment that gives the reason (<code>:160-163</code>). They return distinct, actionable errors (&quot;confirm
+          password has been proved: <code>CheckEmailConfirmed</code> at <code>:182</code>, the second-factor challenge at <code>:188</code>,
+          under a comment that gives the reason (<code>:178-181</code>). They return distinct, actionable errors (&quot;confirm
           your address&quot;, &quot;send a code&quot;), and an actionable error is an information leak if an anonymous caller
           can trigger it. Reaching either gate proves the caller owns the account, so neither is readable by
           somebody sweeping addresses.</p>
           <p>Login reaches the challenge through a private wrapper, <code>ChallengeSecondFactorCountingFailuresAsync</code>
-          (<code>:522-535</code>), which counts a wrong code against the account exactly like a wrong password, so the
+          (<code>:548-561</code>), which counts a wrong code against the account exactly like a wrong password, so the
           same lockout that throttles password guessing throttles code guessing per account. A missing code is
-          the ordinary first leg of the challenge and is not counted (<code>:512-516</code>). For an app with no
+          the ordinary first leg of the challenge and is not counted (<code>:538-543</code>). For an app with no
           authenticator the wrapper costs nothing either: the inner call answers <code>NotEnrolled</code>, which is not a
           failure, and no counter is touched.</p>
           <h2 id="the-step-up-assertion-is-a-claim-and-presence-is-the-whole-test">The step-up assertion is a claim, and presence is the whole test</h2>
@@ -235,13 +237,13 @@
           time-based code (<code>:65</code>) or <code>recovery</code> for a single-use recovery code (<code>:68</code>).</p>
           <p>Three details make this cheap to adopt.</p>
           <p><strong>The claim is stamped without the app&#39;s hook participating.</strong> <code>LoginAsync</code> arms a private field with
-          the outcome (<code>AuthenticationServiceBase.cs:191</code>) and clears it in a <code>finally</code> (<code>:198</code>); the token is
+          the outcome (<code>AuthenticationServiceBase.cs:209</code>) and clears it in a <code>finally</code> (<code>:216</code>); the token is
           minted through <code>CreateAccessTokenForSession</code>, which hands that field to the session issuer&#39;s
           <code>MintForSession</code>, and the issuer appends the claim to whatever claim set the app&#39;s <code>CreateAccessToken</code>
-          returned (<code>:457-462</code>, <code>:469-470</code>). No subclass signature changed, so no consumer edits a method to
+          returned (<code>:482-491</code>, <code>:495-496</code>). No subclass signature changed, so no consumer edits a method to
           start emitting <code>mfa</code>.</p>
           <p><strong>A rotation does not silently drop it.</strong> <code>RefreshTokenAsync</code> reads the method back off the presented
-          token (<code>:332</code>) and carries it into the new one, then clears the field (<code>:347</code>). Without that, a
+          token (<code>:358</code>) and carries it into the new one, then clears the field (<code>:373</code>). Without that, a
           step-up would quietly expire at the next refresh and a user who did present a second factor would
           look like one who never had.</p>
           <p><strong>Presence is the assertion, and absence denies.</strong> A token for an account with no second factor
@@ -252,7 +254,7 @@
           <p>One more small thing worth stealing. The map from outcome to claim value has a default case that
           returns null with a comment explaining it: an outcome the map has not been taught about means the
           enum grew and this method did not, and it must not silently mint an <code>mfa</code> claim
-          (<code>AuthenticationServiceBase.cs:543-552</code>). A switch over an enum whose unknown arm asserts an identity
+          (<code>AuthenticationServiceBase.cs:569-578</code>). A switch over an enum whose unknown arm asserts an identity
           fact is a vulnerability waiting for its next contributor.</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Illustrative of the documented shape: the two gates and the optional collaborator.</span>
 <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">abstract</span> <span class="hljs-keyword">class</span> <span class="hljs-title">AuthenticationServiceBase</span>&lt;<span class="hljs-title">TUser</span>&gt;(<span class="hljs-params">
@@ -305,11 +307,11 @@
           window, recovery codes. <code>ITwoFactorStore</code> is the persistence, and the consumer writes it, over its
           own <code>User</code> aggregate. The DI call is explicit about the split: it &quot;deliberately registers no
           <code>ITwoFactorStore</code>&quot;, because the account&#39;s secret and recovery hashes belong to the app&#39;s own
-          aggregate (<code>Infrastructure/DependencyInjection.Auth.cs:28-32</code>).</p>
+          aggregate (<code>Infrastructure/DependencyInjection.Auth.cs:29-32</code>).</p>
           <p>This is the same trade the framework already made for password material and for user lookups, and
           ADR-116 states the reason plainly: the two deployed apps model users differently, and a
           framework-owned user table would either be too thin to use or force columns an app has no place for
-          (<code>ADR-116:35-40</code>). Every consumer that wants two-factor writes one class. That is deliberate
+          (<code>ADR-116:38-43</code>). Every consumer that wants two-factor writes one class. That is deliberate
           duplication, bought on purpose.</p>
           <p>The settings carry the RFC 6238 defaults every authenticator app assumes: six digits, a thirty-second
           step (<code>TwoFactorSettings.cs:34</code>), one step of tolerated skew on each side, which widens the accepted
@@ -319,7 +321,7 @@
           against one period cannot read codes minted with another (<code>:9-14</code>).</p>
           <p>Email confirmation reuses the password-reset design rather than inventing one, down to the record
           shape, the hashing, the attempt cap and the throttle, under its own key prefix so issuing a
-          confirmation link cannot invalidate an outstanding reset link (<code>ADR-116:90-101</code>). And
+          confirmation link cannot invalidate an outstanding reset link (<code>ADR-116:93-104</code>). And
           <code>RequireConfirmedEmail</code> defaults to false, with the reason written next to it: turning it on locks
           out every existing account whose address was never confirmed, so a host backfills its rows as
           confirmed first and flips the flag afterwards (<code>EmailConfirmationSettings.cs:47-55</code>). With it off the
@@ -336,20 +338,20 @@
           Changing who can do what is a deploy.</p>
           <p>Stored grants layer over it. <code>LayeredPermissionRegistry</code> decorates whatever <code>IPermissionRegistry</code> the
           host already registered and <strong>unions</strong> the stored set with the compiled one
-          (<code>Infrastructure/DependencyInjection.Auth.cs:108-153</code>, the <code>TryDecorate</code> call and its order-tolerant
-          fallback at <code>:135-150</code>). The union is the security property: <strong>there is no deny row.</strong> A stored edit
+          (<code>Infrastructure/DependencyInjection.Auth.cs:139-184</code>, the <code>TryDecorate</code> call and its order-tolerant
+          fallback at <code>:166-181</code>). The union is the security property: <strong>there is no deny row.</strong> A stored edit
           can only widen a role, so the effective permission set never depends on evaluation order, and a data
           change can never disable an endpoint the code guarantees. Removing a compiled capability stays a code
-          change (<code>ADR-116:261-263</code>).</p>
+          change (<code>ADR-116:291-293</code>).</p>
           <p>Two more decisions hold this up.</p>
           <p><strong>The opt-in is a marker type, and it is what maps the table.</strong> <code>PermissionGrantModelGate</code> is an
           empty sealed class that is never injected anywhere
           (<code>PermissionGrantModelGate.cs:19</code>), registered by <code>AddStoredPermissionGrants</code>
-          (<code>DependencyInjection.Auth.cs:116</code>). <code>ApplicationDbContext</code> resolves it from the root provider with
+          (<code>DependencyInjection.Auth.cs:147</code>). <code>ApplicationDbContext</code> resolves it from the root provider with
           <code>GetService</code>, so its absence reads as &quot;this host did not opt in&quot; rather than failing every context
-          construction (<code>ApplicationDbContext.cs:913-918</code>), and applies the grant configuration only then, and
+          construction (<code>ApplicationDbContext.cs:914-919</code>), and applies the grant configuration only then, and
           only in the context instance whose physical source matches the configured <code>DataSourceName</code>
-          (<code>:943</code>, default <code>&quot;Default&quot;</code> at <code>PermissionGrantSettings.cs:33</code>). A host that never calls
+          (<code>:944</code>, default <code>&quot;Default&quot;</code> at <code>PermissionGrantSettings.cs:33</code>). A host that never calls
           <code>AddStoredPermissionGrants</code> keeps a byte-identical model, and an opted-in host gets the table in
           exactly one of its databases.</p>
           <p><strong>The authorization read stays synchronous, so the cache is part of the contract.</strong>
@@ -357,7 +359,7 @@
           role on demand inside it means blocking I/O on every such request, so the grants are held as a
           per-role in-memory snapshot, rebuilt on a timer and immediately after an edit by an invalidator that
           is the same instance as the cache, &quot;so an edit and the reads that follow it cannot end up looking at
-          two different snapshots&quot; (<code>Infrastructure/DependencyInjection.Auth.cs:120-126</code>). <code>CacheSeconds</code>
+          two different snapshots&quot; (<code>Infrastructure/DependencyInjection.Auth.cs:151-157</code>). <code>CacheSeconds</code>
           defaults to 300 (<code>PermissionGrantSettings.cs:25</code>), documented as exactly what it is: the bound on how
           stale another replica may be after an edit, because invalidation is per process (<code>:14-23</code>).</p>
           <p>A cold cache grants nothing, which is the safe direction, and the compiled layer answers from the
@@ -368,23 +370,23 @@
           ship this one complete, unlike the user half, because every input is framework-owned: the registry
           answers what the code grants, the catalog enumerates what the code <em>can</em> grant, and the store holds
           what data grants (<code>:16-21</code>).</p>
-          <p>Its write method, <code>SetStoredPermissionsAsync</code> (<code>:120</code>), refuses two things, and both refusals are the
+          <p>Its write method, <code>SetStoredPermissionsAsync</code> (<code>:114</code>), refuses two things, and both refusals are the
           kind you only think of after an incident.</p>
-          <p><strong>It refuses <code>AdministrationPermissions.ManageRoles</code>, outright</strong> (<code>:139-146</code>). That is the permission
+          <p><strong>It refuses <code>AdministrationPermissions.ManageRoles</code>, outright</strong> (<code>:142-149</code>). That is the permission
           guarding this very surface. Granting it from a row would make access to role administration a matter
           of data, and deleting that row would lock every operator out of the one screen that could restore it.
           The check runs <em>before</em> the catalog test and regardless of whether the host compiled the permission
-          in, because the error message has to name the real reason rather than &quot;unknown&quot; (<code>:137-138</code>). A host
+          in, because the error message has to name the real reason rather than &quot;unknown&quot; (<code>:140-141</code>). A host
           that wants a role to administer roles compiles that grant in.</p>
-          <p><strong>It refuses any permission outside the compiled catalog</strong> (<code>:148-160</code>). A stored row that no endpoint
+          <p><strong>It refuses any permission outside the compiled catalog</strong> (<code>:151-163</code>). A stored row that no endpoint
           checks is not a grant, it is a typo, and the difference between &quot;refused at the API&quot; and &quot;written and
           silently inert&quot; is the difference between a user error and a support ticket six months later.</p>
           <p>Everything else about the write is deliberately boring, which is the compliment: a set is a diff
           rather than a truncate-and-insert, so only changed permissions are written, an unchanged submission
-          writes nothing, and the <code>GrantedAt</code> stamps of untouched rows survive (<code>:32-37</code>, writes at <code>:162-190</code>).
+          writes nothing, and the <code>GrantedAt</code> stamps of untouched rows survive (<code>:32-37</code>, writes at <code>:165-192</code>).
           The snapshot is invalidated once, in a <code>finally</code> after the writes. Each grant and revoke commits on
           its own, so a failure part-way through leaves earlier rows written, and the invalidation therefore
-          runs on every exit rather than only on success (<code>:165-167</code>, <code>:191-194</code>).</p>
+          runs on every exit rather than only on success (<code>:167-169</code>, <code>:193-196</code>).</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Illustrative of the documented shape: the two refusals on a set.</span>
 <span class="hljs-keyword">var</span> desired = <span class="hljs-keyword">new</span> HashSet&lt;<span class="hljs-built_in">string</span>&gt;(permissions.Select(p =&gt; p.Trim()), StringComparer.Ordinal);
 
@@ -445,6 +447,53 @@
           its subclass at <code>Admin/Roles</code> therefore gets <code>GET Admin/Roles/catalog</code>, and the editor draws from a
           closed list rather than a free-text box. The closed list is why the &quot;unknown permission&quot; refusal
           above is a safety net rather than the primary defense.</p>
+          <h2 id="terms-of-service-acceptance-the-server-owns-the-version">Terms of Service acceptance: the server owns the version</h2>
+          <p>The fifth completion records which version of the Terms of Service each user agreed to, and asks
+          again when that version moves. It has the same shape as the other four, plus one rule of its own:
+          the version a user consents to is never the client&#39;s to name.</p>
+          <p><code>AddLegalAcceptance(configuration)</code> (<code>Infrastructure/DependencyInjection.Auth.cs:104</code>) binds
+          <code>LegalAcceptanceOptions</code> from the <code>Legal</code> section and nothing else (<code>:109-110</code>). It deliberately
+          registers no <code>ILegalAcceptanceService</code>, because the accepted version and instant belong to the app&#39;s
+          own <code>User</code> aggregate (<code>:93-95</code>), and it skips <code>ValidateOnStart</code> because its one setting has no
+          invalid value (<code>:106-108</code>). Unset is the off switch: with no <code>CurrentTermsVersion</code> the registration
+          flow asks for nothing, the read endpoint reports every user as current, and the accept endpoint has
+          nothing to accept (<code>LegalAcceptanceOptions.cs:8-10</code>, section <code>&quot;Legal&quot;</code> at <code>:15</code>, the setting at
+          <code>:21</code>).</p>
+          <p><strong>It reaches sign-up without an eighth constructor parameter.</strong> The options travel through
+          <code>AuthenticationValidators</code>, the registration parameter object, as an optional constructor argument
+          (<code>AuthenticationValidators.cs:28</code>), and <code>AuthenticationServiceBase</code> reads the version from there
+          (<code>AuthenticationServiceBase.cs:105-120</code>), so the app&#39;s <code>AuthenticationService</code> needs no change
+          (<code>DependencyInjection.Auth.cs:98-101</code>). With a version configured, <code>RegisterAsync</code> refuses a request
+          whose <code>AcceptedTerms</code> flag is false with <code>LegalAcceptanceErrors.TermsNotAccepted</code>
+          (<code>AuthenticationServiceBase.cs:233-239</code>). The flag is all the client sends, because the anonymous
+          register page cannot read the version; the app&#39;s <code>CreateUser</code> override stamps the server&#39;s own
+          <code>CurrentTermsVersion</code> on a user that implements <code>ILegalAcceptingUser</code> (<code>:111-115</code>).</p>
+          <p><strong>The rules live in one static class, so a consumer cannot forget one.</strong> <code>ILegalAcceptingUser</code>
+          (<code>Domain/Auth/ILegalAcceptingUser.cs:21</code>) is three members: the accepted version (<code>:24</code>), the instant
+          (<code>:27</code>), and <code>AcceptTerms</code>, which returns a <code>Result</code> so the aggregate keeps the last word, and which
+          treats accepting the version already on record as an ordinary repeat (<code>:31-37</code>). The rest is
+          <code>LegalAcceptancePolicy</code> (<code>Application/Auth/Legal/LegalAcceptancePolicy.cs:10</code>, remark <code>:6-8</code>).
+          <code>EnsureAcceptsCurrentVersion</code> fails when no version is configured and when the supplied version
+          differs ordinally, so a client that showed stale terms cannot record consent to the new ones
+          (<code>:24-36</code>, failing with <code>LegalAcceptanceErrors.VersionNotCurrent</code>). <code>Normalize</code> rebuilds the standing
+          from the accepted version and instant alone, so the answer never depends on a consumer filling
+          <code>IsCurrent</code> correctly (<code>:38-52</code>).</p>
+          <p><code>LegalAcceptanceControllerBase</code> (<code>API/Controllers/Legal/LegalAcceptanceControllerBase.cs:45</code>,
+          <code>[Authorize]</code> at <code>:44</code>) applies both. A derived controller supplies the route and nothing else
+          (<code>:19-21</code>). <code>GET</code> answers <code>IsCurrent = true</code> without calling the app&#39;s service when no version is
+          configured, so a client never blocks a user on a host that has not opted in (<code>:65-69</code>), and every
+          other answer passes through <code>Normalize</code> (<code>:83</code>). <code>POST</code> is <code>[Idempotent]</code> (<code>:94</code>) and runs the
+          version check before anything is recorded (<code>:109-111</code>).</p>
+          <p><strong>The re-acceptance dialog cannot be dismissed.</strong> <code>TermsAcceptanceGate</code>
+          (<code>UI/Components/Legal/TermsAcceptanceGate.razor.cs:29</code>) is a layout component the host adds itself.
+          Its dialog turns off backdrop click, Escape, close-on-navigation and the close button (<code>:37-45</code>), so
+          accepting or signing out are the only exits, and the comment above those options says why navigation
+          is on the list: a list page rewrites its own URL right after it loads, and the dialog provider
+          otherwise closes every open dialog on a location change (<code>:32-35</code>). The gate reads the standing from
+          <code>OnAfterRenderAsync</code>, never during prerender, because the bearer token is only readable once the
+          renderer is interactive (<code>:25-26</code>).</p>
+          <p>The capability shipped in MMCA.Common 1.223.0 (<code>MMCA.Common/CHANGELOG.md:230</code>). One consumer runs it,
+          covered in the trade-offs below.</p>
           <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
           <ul>
           <li><strong>Two-factor ships unadopted, and the article will not pretend otherwise.</strong> A search across both
@@ -452,22 +501,36 @@
           implementation of <code>ITwoFactorStore</code> in either MMCA.ADC or MMCA.Store. The capability is framework
           code with handler bases, settings, a claim and a challenge, waiting for its first adopter. Email
           confirmation and stored grants, by contrast, are both live: ADC&#39;s Identity service calls
-          <code>AddEmailConfirmation</code> (<code>Program.cs:230</code>) and <code>AddStoredPermissionGrants</code> (<code>:276</code>), Store&#39;s calls
+          <code>AddEmailConfirmation</code> (<code>Program.cs:235</code>) and <code>AddStoredPermissionGrants</code> (<code>:287</code>), Store&#39;s calls
           the same two (<code>Program.cs:183</code>, <code>:220</code>), both apps&#39; <code>User</code> implements <code>IEmailConfirmableUser</code>
           (<code>ADC User.cs:35</code>, <code>Store User.cs:30</code>), and both route the two controller bases
           (<code>ADC AdminRolesController.cs:37</code>, <code>UsersAdminController.cs:26</code>; <code>Store AdminRolesController.cs:36</code>,
           <code>AdminUsersController.cs:28</code>).</li>
+          <li><strong>Terms acceptance has one adopter, and its gate fails open.</strong> ADC&#39;s Identity service calls
+          <code>AddLegalAcceptance</code> (<code>Program.cs:241</code>), its <code>User</code> implements <code>ILegalAcceptingUser</code>
+          (<code>ADC User.cs:35</code>), it routes a <code>LegalAcceptanceController</code> (<code>LegalAcceptanceController.cs:28</code>), and
+          its Identity UI module contributes the gate (<code>IdentityUIModule.cs:40</code>); the same search finds none
+          of the four in MMCA.Store or MMCA.Helpdesk. Every non-success outcome of the gate&#39;s read renders
+          nothing, because the gate exists to ask for consent and never to take the app down with the API
+          (<code>TermsAcceptanceGate.razor.cs:26-27</code>), so while the read endpoint is failing nobody is asked. A
+          user created by an external-login path outside <code>RegisterAsync</code> starts unstamped and is asked on
+          first sign-in (<code>AuthenticationServiceBase.cs:116-117</code>).</li>
           <li><strong>Registering a service is not the same as changing behavior, and that is a documentation burden.</strong>
           Adopting two-factor takes two steps, not one: the DI call, and then the app passing the resolved
-          <code>ITwoFactorAuthenticator</code> to its base constructor (<code>Infrastructure/DependencyInjection.Auth.cs:34-37</code>).
+          <code>ITwoFactorAuthenticator</code> to its base constructor (<code>Infrastructure/DependencyInjection.Auth.cs:35-37</code>).
           Adopting confirmation takes three: the DI call, <code>RequireConfirmedEmail</code>, and the <code>User</code> implementing
-          the contract. Every one of those gaps is a place where somebody believes a feature is on and it is
-          not. The safety is real and the confusion is real, and they are the same property.</li>
+          the contract. Adopting Terms acceptance takes four: the DI call, a configured
+          <code>Legal:CurrentTermsVersion</code>, the <code>User</code> contract with a <code>CreateUser</code> override that stamps it, and an
+          app-written <code>ILegalAcceptanceService</code> behind a routed controller subclass. Every one of those gaps is
+          a place where somebody believes a feature is on and it is not. The safety is real and the confusion
+          is real, and they are the same property.</li>
           <li><strong>Optional constructor parameters are a one-way widening.</strong> The pattern that makes this
           source-compatible also means the base constructor&#39;s parameter list grows with every optional
           collaborator. It stands at seven: five required collaborators plus the two optional ones
-          (<code>AuthenticationServiceBase.cs:63-70</code>). This scales to a few more and not to a dozen; at some point
-          the honest refactor is an options object, and that one will not be source-compatible.</li>
+          (<code>AuthenticationServiceBase.cs:64-71</code>). Terms acceptance takes the other route, through the
+          <code>AuthenticationValidators</code> parameter object (<code>AuthenticationValidators.cs:28</code>), which is why the
+          count stays at seven. This scales to a few more and not to a dozen; at some point the honest
+          refactor is an options object, and that one will not be source-compatible.</li>
           <li><strong>Stored grants are per-process cached, so a replica can be stale.</strong> An edit is live immediately on
           the replica that served it and reaches the others within <code>CacheSeconds</code>
           (<code>PermissionGrantSettings.cs:18-19</code>). A cross-replica push would put a broker on the authorization
@@ -475,19 +538,20 @@
           outliving the interval, because the layer can only widen.</li>
           <li><strong>A stored grant reaches another service only through a token claim.</strong> Where modules run as separate
           services, the host that mints tokens is the one that holds the grants, so a permission granted by a
-          row lands on the holder&#39;s next sign-in rather than within <code>CacheSeconds</code> (<code>ADR-116:296-299</code>). That
+          row lands on the holder&#39;s next sign-in rather than within <code>CacheSeconds</code> (<code>ADR-116:326-329</code>). That
           is the same latency a role change has always had, and it is the price of keeping the grant table in
           one host instead of replicating it.</li>
           <li><strong>Adopting the table is a migration in the consumer, and it joins the hard-delete allowlist.</strong> The
           grant store hard-deletes a revoked grant, which makes it an exception to the framework&#39;s
           soft-delete default, and consumers running the same fitness rule have to add the type to their own
-          allowlist when they upgrade (<code>ADR-116:287-290</code>).</li>
+          allowlist when they upgrade (<code>ADR-116:317-320</code>).</li>
           <li><strong>No enrollment page ships.</strong> Two-factor enrollment (with its QR code and its show-recovery-codes-once
-          screen) stays with the consumers. The email confirmation landing page is the one page of the four
-          completions that <code>MMCA.Common.UI</code> ships, anonymous at <code>/confirm-email</code> (<code>ConfirmEmail.razor:1-3</code>),
-          and the administration surface ships as routeless components the app routes, authorizes and links
-          for itself (<code>ADR-116:173-201</code>). Two consumers have not yet wanted the same enrollment page, and the
-          rule is that a component gets promoted when they do.</li>
+          screen) stays with the consumers. The email confirmation landing page is the one page of the five
+          completions that <code>MMCA.Common.UI</code> ships, anonymous at <code>/confirm-email</code> (<code>ConfirmEmail.razor:1-3</code>);
+          the Terms gate ships as a layout component the host adds, and the administration surface ships as
+          routeless components the app routes, authorizes and links for itself (<code>ADR-116:176-204</code>,
+          <code>:249-274</code>). Two consumers have not yet wanted the same enrollment page, and the rule is that a
+          component gets promoted when they do.</li>
           </ul>
           <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
           <p>The identity mechanics here are standard. What is worth copying is the shape of the extension.</p>
@@ -517,6 +581,9 @@
           <li><strong>If the read is synchronous, make the cache part of the contract.</strong> Say out loud what the
           staleness bound is and which direction a cold cache fails in. &quot;Grants nothing on a cold cache&quot; is a
           design statement; discovering it in production is not.</li>
+          <li><strong>Let the server own the version of anything a user consents to.</strong> The client sends a yes, the
+          server stamps the version it enforces, a request naming any other version is refused, and every
+          answer is re-derived from what was recorded rather than from a consumer&#39;s own <code>IsCurrent</code>.</li>
           </ol>
           <p>The rule of thumb: <strong>in a shared framework, the cost of a feature is paid by the consumers who do not
           want it. Design so that bill is exactly zero, and adoption becomes a decision instead of an upgrade
@@ -528,8 +595,10 @@
           password check and why, how the <code>mfa</code> claim is stamped by a token wrapper and carried through
           rotation with presence as the whole test, why the framework ships no user table for two-factor
           material, how stored permission grants union with the compiled registry behind a marker type that
-          maps the table, the two refusals <code>SetStoredPermissionsAsync</code> makes, and how the two administration
-          controller bases gate on capabilities rather than role names.</p>
+          maps the table, the two refusals <code>SetStoredPermissionsAsync</code> makes, how the two administration
+          controller bases gate on capabilities rather than role names, and how versioned Terms of Service
+          acceptance keeps the version on the server and holds a non-dismissable dialog open until the user
+          accepts or signs out.</p>
           <p><strong>Next in the series:</strong> Article 53, the series index: every pattern in one place, from the Result
           railway to this one.</p>
           <p><em>MMCA.Common is open source. Star the repo, read the 2-minute ADR-116 behind this pattern, or
@@ -563,6 +632,7 @@
             <li><a href="#stored-grants-operator-editable-and-structurally-unable-to-deny">Stored grants: operator-editable, and structurally unable to deny</a></li>
             <li><a href="#two-refusals-that-are-worth-more-than-the-feature">Two refusals that are worth more than the feature</a></li>
             <li><a href="#the-administration-api-is-two-bases-gated-on-capabilities">The administration API is two bases, gated on capabilities</a></li>
+            <li><a href="#terms-of-service-acceptance-the-server-owns-the-version">Terms of Service acceptance: the server owns the version</a></li>
             <li><a href="#trade-offs-honestly">Trade-offs, honestly</a></li>
             <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>
             </ul>

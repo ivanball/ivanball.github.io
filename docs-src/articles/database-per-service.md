@@ -145,7 +145,7 @@ and the reason it belongs in this article is that it lands as one more filter pl
 on the routing you have already seen, rather than as a parallel mechanism.
 
 Shared-schema tenancy is a **second named query filter.** An entity that implements `ITenantEntity`
-gets a required 64-character `TenantId` column, an index on it that widens to
+gets a required 64-character `TenantId` column, on a relational engine an index on it that widens to
 (`TenantId`, `IsDeleted`) when the entity is soft-deletable too, so it matches the composed
 predicate instead of handing deleted rows back for the server to discard, and the predicate
 `e => CurrentTenantId == null || e.TenantId == CurrentTenantId`, applied to every matching entity
@@ -174,9 +174,12 @@ separate from the audit and domain-event interceptors and registered between the
 on inserts and throws `CrossTenantWriteException` on any added, modified, or deleted entry belonging
 to a different tenant. With no tenant resolved it lets an already-tenanted row through as-is (that is
 how a background worker drains one tenant's work) and refuses only the insert that has no tenant to
-supply. Reads are just as narrow: the repository's `ignoreQueryFilters: true` drops the named
-`SoftDelete` filter only, through one shared array used at all eight call sites, so a
-soft-delete-inclusive read still carries the tenant filter and cannot cross tenants by accident.
+supply. Reads through the repository are narrowed the same way: its `ignoreQueryFilters: true`
+drops the named `SoftDelete` filter only, through one shared array used at all eight call sites, so a
+soft-delete-inclusive repository read still carries the tenant filter. Outside the repository, reads
+sit on discipline where writes sit on an invariant: EF's own parameterless `IgnoreQueryFilters()` on a
+raw `Table` surface drops the tenant filter along with soft-delete. The framework source has no such
+call site, but no build gate holds that count at zero.
 
 Database-per-tenant is then the smallest possible extension of everything above. A per-tenant entry
 overrides the connection string for one source and keeps the **same `DataSourceKey`**, so the scoped
@@ -206,9 +209,11 @@ keep working unchanged. The entity registry, the migrations assembly, and the pe
 survive: the outbox simply enumerates `(source, tenant)` pairs and drains one extra unit per tenant
 that keeps its own copy of a source. Routing never reads the row: the targets come from those
 configured pairs, and the nullable `TenantId` an `OutboxMessage` carries exists only so delivery can
-restore the raising tenant (a row with no tenant stays valid). The per-scope context cache gains a
-guard that throws if the scope's tenant changes after a routed context exists, which restates
-one-scope-one-tenant where it would otherwise break silently. Cache entries get their isolation one
+restore the raising tenant (a row with no tenant stays valid). The per-scope context cache carries
+two guards that restate one-scope-one-tenant where it would otherwise break silently: one throws if
+the scope's tenant changes after a routed context exists, the other throws if a context created
+against the shared database before the tenant resolved would be handed to a tenant that overrides
+that source. Cache entries get their isolation one
 layer up, in the caching decorators, since a singleton cache cannot observe scoped state; that
 belongs with the caching pattern rather than here.
 
@@ -228,7 +233,8 @@ ADR-006 lists the bill in plain terms, and it is a real bill.
 - **No distributed transactions.** When a save spans sources, `DbContextFactory.ExecuteInTransactionAsync`
   opens a transaction **per source** and commits them sequentially, best-effort. There is no
   two-phase commit. If the second commit fails after the first succeeded, you have a partially applied
-  change, and the outbox is what eventually reconciles the downstream effects. What the framework does
+  change, and the caller's replay is what reconciles it (the outbox delivers whatever events did
+  become durable, and nothing more). What the framework does
   buy you is that the partial state is **observable rather than inferred**: the commit loop records the
   partition at the failure point, so the thrown `TransactionCommitAmbiguousException` names each
   source's outcome (`CommittedSources`, `AmbiguousSource`, `RolledBackSources`) and appends that
@@ -280,7 +286,8 @@ entities, the collapse property that makes monolith and distributed the same cod
 `CrossDataSourceDegradeConvention` reshaping cross-source relationships, how the same routing extends to
 a third axis (a second named query filter for the tenant, and database-per-tenant as a connection-string
 override behind the same key), and the one guarantee you give up: no two-phase commit, eventual
-consistency across sources, with the outbox as the reconciler.
+consistency across sources carried by the outbox, and a partial commit made observable for the
+caller's replay to reconcile.
 
 **Next in the series:** polyglot persistence, the Engine axis that re-points an entity between SQL
 Server, PostgreSQL, Cosmos, and SQLite without touching the domain.
@@ -293,36 +300,57 @@ design, or install it and watch the single-database case behave like a plain mon
 
 *Tags: .NET, C Sharp, Software Architecture, Data Engineering, EF Core*
 
-*Notes: 2026-10-02 evidence refresh (verified against source today, MMCA.Common v1.221.0). This
-entry replaces the earlier per-run ledger (2026-06-30, 2026-07-21/26, 2026-08-14, 2026-08-15,
-2026-08-19, 2026-09-19 refreshes), whose line anchors had drifted; the current anchors follow. Paths
-under `Infrastructure/` mean `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/`.
-Fixed this run (three body claims plus the header):
+*Notes: 2026-10-08 evidence refresh (verified against source today, MMCA.Common v1.233.0). Paths
+under `Infrastructure/` mean `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/`. Fixed this run
+(four body claims; every anchor in the 2026-10-02 entry below is corrected in place to v1.233.0):
+(a) The read-narrowing sentence said reads were "just as narrow" as writes and could not cross
+tenants by accident. Only the repository path is narrowed (`SoftDeleteFilterOnly` at
+`Infrastructure/Persistence/Repositories/EFReadRepository.cs:41`, eight call sites, re-confirmed). The
+body now scopes that claim to the repository and names the raw-surface gap, as ADR-073 Trade-offs
+states it (`Website/docs-src/adr/073-multi-tenancy-model.md:250-257`: reads are on discipline where
+writes are on an invariant; no gate holds the parameterless count). A Grep of `MMCA.Common/Source`
+for `IgnoreQueryFilters()` today returns only the two doc comments (`EFReadRepository.cs:38`,
+`Infrastructure/Persistence/Interceptors/TenantSaveChangesInterceptor.cs:32`), zero call sites.
+(b) "A guard" on the per-scope context cache became two: `GuardRoutedTenantUnchanged`
+(`Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:202-218`, throw `:211`, called
+`:125`) and `GuardSharedContextNotRoutable` (`:227-238`, throw `:232`, called `:129`), which refuses a
+shared-database context created before the tenant resolved once that tenant overrides the source.
+(c) The commit-failure bullet and the closing summary called the outbox "the reconciler". Source
+assigns reconciliation of a partial commit to the caller's replay (`DbContextFactory.cs:540-544`,
+"the caller's replay is what reconciles it"), with the outbox delivering only what became durable
+(`:536-537`); the outbox stays the cross-source consistency mechanism (`:501`), which the body keeps.
+(d) The tenant index is created only on a relational engine (`Engine.Capabilities.IsRelational`,
+`Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:544`; widening keyed on
+`IAuditableEntity` `:546-553`; column `:532-535`; owned types excluded `:527`). The body now says so.
+Not changed: every other body claim re-read against the anchors below.
+Prior entry, 2026-10-02 (verified then at MMCA.Common v1.221.0). It replaced the earlier per-run
+ledger (2026-06-30, 2026-07-21/26, 2026-08-14, 2026-08-15, 2026-08-19, 2026-09-19 refreshes), whose
+line anchors had drifted. Fixed in that run (three body claims plus the header):
 (1) The per-tenant outbox paragraph said there was no `OutboxMessage` schema change and no `TenantId`
 column. Wrong: `public string? TenantId { get; init; }` is at
-`Infrastructure/Persistence/Outbox/OutboxMessage.cs:93` (doc-comment `:88-92`: restored around
+`Infrastructure/Persistence/Outbox/OutboxMessage.cs:95` (doc-comment `:90-94`: restored around
 delivery, null for a tenant-less host and for rows written before the column existed), filled from the
-raising scope's origin at `:144`, and mapped at `Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:681`.
-`Website/docs-src/adr/073-multi-tenancy-model.md:322-329` (Revision 2026-10-01) retracts the same
+raising scope's origin at `:146`, and mapped at `Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:682`.
+`Website/docs-src/adr/073-multi-tenancy-model.md:340-369` (Revision 2026-10-01) retracts the same
 wording in the ADR. Routing still does not depend on the column: `GetOutboxTargets()` at
-`Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:141-142` (rationale `:134-140`) returns
+`Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:147-148` (rationale `:140-146`) returns
 the `(source, tenant)` targets, and `ProcessSourceAsync` opens its scope through
-`scopeFactory.CreateTenantScope(target)` at `:181`, which sets the tenant before the context is
-obtained (`Infrastructure/Persistence/DataSources/TenantDataSourceTargets.cs:92-100`). The body now
+`scopeFactory.CreateTenantScope(target)` at `:187`, which sets the tenant before the context is
+obtained (`Infrastructure/Persistence/DataSources/TenantDataSourceTargets.cs:100-109`). The body now
 says the column exists only so delivery can restore the tenant.
 (2) The system-context sentence named "the outbox loop, the migration runner, and the seeders". The
-`ApplicationDbContext.ApplyTenantFilters` remarks (`ApplicationDbContext.cs:508-510`) name the outbox
+`ApplicationDbContext.ApplyTenantFilters` remarks (`ApplicationDbContext.cs:509-511`) name the outbox
 processor, the seeders and the retention jobs, so the sentence follows that list (the migration runner
 is not named in source; removed). Added the per-row delivery behavior: `DispatchMessagesAsync` remarks
-`OutboxProcessor.cs:476-485` (captured user, roles, tenant and correlation id restored onto a FRESH
-scope per row), the row scope at `:509` and `AmbientOrigin.Restore(..., message.TenantId, ...)` at
-`:514-520` (tenant argument `:518`).
+`OutboxProcessor.cs:445-464` (captured user, roles, tenant and correlation id restored onto a FRESH
+scope per row), the row scope at `:501` and `AmbientOrigin.Restore(..., message.TenantId, ...)` at
+`:508-514` (tenant argument `:512`).
 (3) The configuration block used an invented `ConnectionStrings:Default` key. The bound top-level key
 is `SQLServerConnectionString`
 (`Infrastructure/Persistence/DataSources/ConnectionStringSettings.cs:43`, plus
 `SQLServerMigrationsAssembly` `:49`), as Helpdesk configures it
 (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/appsettings.json:46-48`); the per-source entry key
-`SQLServerConnectionString` is `Infrastructure/Persistence/DataSources/DataSourceEntrySettings.cs:56`.
+`SQLServerConnectionString` is `Infrastructure/Persistence/DataSources/DataSourceEntrySettings.cs:58`.
 (4) Header: `MMCA.Common/CLAUDE.md` is a stub importing `AGENTS.md`; the sections are
 `MMCA.Common/AGENTS.md:107` ("Multi-Database Strategy (database per service)") and `:119` ("Outbox and
 Internal Commands"). There is no "Outbox Pattern" section.
@@ -334,16 +362,16 @@ switch through `DataSourceEngines.For(key.Engine).CreateDbContext(...)` at
 `:14-16`); `DataSourceModelCacheKeyFactory` (`Infrastructure/Persistence/DbContexts/DataSourceModelCacheKeyFactory.cs:16`,
 `Create` `:19`, wired by `ReplaceService` at `ApplicationDbContext.cs:350`); `EntityDataSourceRegistry`
 lazy build plus one rescan (`Infrastructure/Persistence/DataSources/EntityDataSourceRegistry.cs:16`),
-key derivation `:172-176`, fail-fast conflict `:145`; `DataSourceResolver` default collapse
-(`Infrastructure/Persistence/DataSources/DataSourceResolver.cs:320-324`); registrations
+key derivation `:172-185` (`UseDatabase` -> module -> `Default` chain `:180-182`), fail-fast conflict `:145`; `DataSourceResolver` default collapse
+(`Infrastructure/Persistence/DataSources/DataSourceResolver.cs:323-326`); registrations
 `TryAddScoped<IDbContextFactory, DbContextFactory>` and
 `TryAddSingleton<IPhysicalDbContextFactory, PhysicalDbContextFactory>` at
 `Infrastructure/DependencyInjection.cs:108-109`; `CrossDataSourceDegradeConvention` collapse no-op
 remark at `Infrastructure/Persistence/Conventions/CrossDataSourceDegradeConvention.cs:27-28`.
-Tenancy anchors (all `ApplicationDbContext.cs` unless named): `SoftDeleteFilterName` `:474`,
-`TenantFilterName` `:477`, `TenantIdMaxLength = 64` `:483`, `OnModelCreating` `:416` calling
-`ApplyTenantFilters` `:419`, its body from `:514` with `HasQueryFilter(TenantFilterName, filter)` at
-`:572`; interceptors added as `AddInterceptors(auditInterceptor, tenantInterceptor,
+Tenancy anchors (all `ApplicationDbContext.cs` unless named): `SoftDeleteFilterName` `:475`,
+`TenantFilterName` `:478`, `TenantIdMaxLength = 64` `:484`, `OnModelCreating` `:417` calling
+`ApplyTenantFilters` `:420`, its body from `:515` with `HasQueryFilter(TenantFilterName, filter)` at
+`:573`; interceptors added as `AddInterceptors(auditInterceptor, tenantInterceptor,
 domainEventInterceptor)` at `:307`; `TryAddSingleton<TenantSaveChangesInterceptor>()` at
 `Infrastructure/DependencyInjection.cs:70`. `TenantSaveChangesInterceptor`
 (`Infrastructure/Persistence/Interceptors/TenantSaveChangesInterceptor.cs:36`) throws
@@ -357,17 +385,17 @@ answers 400 (`:133`); it is registered right after `UseAuthentication`
 `Infrastructure/Persistence/Repositories/EFReadRepository.cs:41`, passed to `IgnoreQueryFilters` at
 eight sites (`:58`, `:87`, `:108`, `:204`, `:394`, `:471`, `:485`, `:582`; grep-confirmed).
 DB-per-tenant: `ResolveTenantOverride` at
-`Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:168`, called at `:104`;
-`GuardRoutedTenantUnchanged` throws at `:201-210`. Transactions: `ExecuteInTransactionAsync` at
-`DbContextFactory.cs:544`, `TryCommit` `:712` (called `:620`), `AbandonAfterCommitFailure` invoked
-`:736` (declared `:753`); `TransactionCommitAmbiguousException`
+`Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:169`, called at `:105`;
+`GuardRoutedTenantUnchanged` at `:202-218` (throw `:211`). Transactions: `ExecuteInTransactionAsync` at
+`DbContextFactory.cs:551`, `TryCommit` `:719` (called `:627`), `AbandonAfterCommitFailure` invoked
+`:743` (declared `:760`); `TransactionCommitAmbiguousException`
 (`Infrastructure/Persistence/DbContexts/Factory/TransactionCommitAmbiguousException.cs`) exposes
 `CommittedSources` `:76`, `AmbiguousSource` `:85`, `RolledBackSources` `:93`, and appends
 `" Per-source outcome: ..."` at `:117`. Registration: `services.AddInfrastructure` at
 `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:79`, `services.AddMultiTenancy` at `:92`;
 the two demo tenants (`acme` shared, `globex` overriding `Default` to `Helpdesk_Globex`) at
 `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/appsettings.json:29-45`. ADR-073 adoption and the two
-honest costs: `Website/docs-src/adr/073-multi-tenancy-model.md:201-206` and `:246-250`.
+honest costs: `Website/docs-src/adr/073-multi-tenancy-model.md:219-224` and `:263-268`.
 Honest gaps: both JSON blocks are representative shapes, not verbatim files (Helpdesk's real
 `Tenancy` block also sets `RequireTenant: false`, `ResolutionOrder`, `ClaimType` and `HeaderName`);
 cache-key tenant isolation is deliberately left to the caching-pattern article.*

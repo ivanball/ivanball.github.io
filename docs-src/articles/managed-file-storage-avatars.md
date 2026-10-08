@@ -5,8 +5,9 @@
 > `IFileStorageService.cs`, `FileUploadOptions.cs`, `NullFileStorageService.cs`,
 > `AzureBlobFileStorageService.cs`, `FileStorageSettings.cs`, `IImageProcessor.cs`,
 > `ImageSharpImageProcessor.cs`, `ImageContentSniffer.cs`, `IMediaPickerService.cs`,
-> `DeleteBlobInternalCommandHandlerBase.cs`, and Infrastructure `DependencyInjection.cs` and
-> `DependencyInjection.Notifications.cs`.
+> `DeleteBlobInternalCommandHandlerBase.cs`, Infrastructure `DependencyInjection.cs` and
+> `DependencyInjection.Notifications.cs`, and MMCA.Common's `Directory.Build.props` and
+> `Directory.Packages.props`.
 > No em dashes.
 
 **Subtitle:** A user uploads a profile photo. It is attacker-controlled bytes with GPS coordinates
@@ -86,22 +87,24 @@ But storage is the boring half. The security boundary is the image processor.
 
 `IImageProcessor` (`IImageProcessor.cs:11`) has one method,
 `NormalizeToSquareJpegAsync`, and its implementation `ImageSharpImageProcessor`
-(`ImageSharpImageProcessor.cs:16`) does something that looks like image resizing and is actually a
-security control. It reads the header and refuses anything too big to decode, then decodes only the first
-frame of the upload, bakes EXIF orientation into the pixels, center-crops to an exact square, strips every
-metadata profile, and re-encodes as a fresh JPEG:
+(`ImageSharpImageProcessor.cs:20`) does something that looks like image resizing and is actually a
+security control. It reads and decodes only through a configuration that registers four formats, reads
+the header and refuses anything too big to decode, then decodes only the first frame of the upload, bakes
+EXIF orientation into the pixels, center-crops to an exact square, strips every metadata profile, and
+re-encodes as a fresh JPEG:
 
 ```csharp
 // ImageSharpImageProcessor.NormalizeToSquareJpegAsync (illustrative of shape)
+// Every read goes through CreateDecoderOptions: JPEG, PNG, WebP and GIF decoders only.
 // Header only: Identify reads the declared dimensions without allocating a frame.
-var info = await Image.IdentifyAsync(content, cancellationToken);
+var info = await Image.IdentifyAsync(CreateDecoderOptions(maxFrames: uint.MaxValue), content, cancellationToken);
 if (TooLargeToDecode(info.Width, info.Height))
 {
     return Result.Failure<byte[]>(Error.Validation("Image.TooLarge", ...));
 }
 
 // One frame only: an animated file never expands into every frame's pixel buffer.
-using var image = await Image.LoadAsync(new DecoderOptions { MaxFrames = 1 }, content, cancellationToken);
+using var image = await Image.LoadAsync(CreateDecoderOptions(maxFrames: 1), content, cancellationToken);
 // ...then the same TooLargeToDecode check re-runs on the decoded frame.
 
 // AutoOrient BEFORE stripping metadata, or portrait phone photos come out rotated.
@@ -117,33 +120,43 @@ await image.SaveAsync(output, new JpegEncoder { Quality = 85 }, cancellationToke
 ```
 
 The point is what does *not* survive. A full decode-then-re-encode means only the pixel grid crosses the
-boundary. EXIF GPS is gone because the metadata profiles are nulled (`ImageSharpImageProcessor.cs:88-90`).
+boundary. EXIF GPS is gone because the metadata profiles are nulled (`ImageSharpImageProcessor.cs:92-94`).
 The polyglot payload is gone because the bytes that carried it were never re-emitted: the output is a new
 JPEG the encoder wrote from a decoded bitmap. One operation kills both classes of problem, and it does so
 by construction rather than by a blocklist you have to keep updating.
 
 The header check in front of the decode is not a size nicety. The avatar contract's 2 MB cap bounds the
 *compressed* bytes, which a decompression bomb satisfies happily: a 2 MB PNG can declare 40000x40000 and
-cost roughly 6 GB of frame buffer the moment it is decoded (`ImageSharpImageProcessor.cs:23-24`). So the
-processor bounds the decoded frame instead, with `MaxDecodedPixels` at 50,000,000 (`:27`) and
-`MaxDecodedDimension` at 20,000 (`:34`); the edge ceiling sits beside the area one because a 1 x 200000
-strip is inside the area limit and still pathological for the resampler (`:30-32`). `Image.IdentifyAsync`
-applies both to the declared header before a single frame is allocated (`:48`), and the same predicate
-(`:115-118`) re-applies them to the decoded frame (`:70-76`), so a header that under-reports its real
+cost roughly 6 GB of frame buffer the moment it is decoded (`ImageSharpImageProcessor.cs:27-28`). So the
+processor bounds the decoded frame instead, with `MaxDecodedPixels` at 50,000,000 (`:31`) and
+`MaxDecodedDimension` at 20,000 (`:38`); the edge ceiling sits beside the area one because a 1 x 200000
+strip is inside the area limit and still pathological for the resampler (`:34-36`). `Image.IdentifyAsync`
+applies both to the declared header before a single frame is allocated (`:52`), and the same predicate
+(`:147-150`) re-applies them to the decoded frame (`:74-80`), so a header that under-reports its real
 size does not get through. Past either ceiling the upload is
-`Error.Validation("Image.TooLarge", ...)` (`:50-56`): a clean 400 rather than the OutOfMemoryException the
+`Error.Validation("Image.TooLarge", ...)` (`:54-60`): a clean 400 rather than the OutOfMemoryException the
 upload was built to provoke.
 
 The frame count is bounded as well as the frame size. The decode passes
-`new DecoderOptions { MaxFrames = 1 }` (`ImageSharpImageProcessor.cs:66`): the output is a single JPEG
+`CreateDecoderOptions(maxFrames: 1)` (`ImageSharpImageProcessor.cs:70`): the output is a single JPEG
 built from the first frame, and decoding every frame of an animated file is how a small upload becomes
-hundreds of megabytes of pixel buffers (`:63-65`).
+hundreds of megabytes of pixel buffers (`:67-69`).
+
+The set of formats is bounded too. `CreateDecoderOptions` (`ImageSharpImageProcessor.cs:127-138`) builds
+the `DecoderOptions` for both the header read and the decode around an ImageSharp `Configuration` that
+registers exactly four modules: JPEG, PNG, WebP and GIF (`:129-133`). Every other format ImageSharp ships,
+TIFF and BMP among them, stays unregistered, so a payload in one of them fails as
+`UnknownImageFormatException` before any of that format's decoder code runs (`:112-119`). That matters
+because a library's attack surface is every decoder it can reach, not only the formats you meant to
+accept: this allowlist is the stated reason the ImageSharp TIFF advisories are unreachable here (see the
+trade-offs below).
 
 Undecodable content is a validation failure too, not an exception. The processor catches
 `UnknownImageFormatException` and `InvalidImageContentException` and returns
-`Error.Validation("Image.Undecodable", ...)` (`ImageSharpImageProcessor.cs:99-105`), so a garbage upload
-is a clean 400, not a 500. And because the processor has no external configuration, it is *always*
-registered as the real implementation (`DependencyInjection.cs:336`), unlike storage: there is no Null
+`Error.Validation("Image.Undecodable", ...)` (`ImageSharpImageProcessor.cs:103-109`), so a garbage upload
+or an unregistered format is a clean 400, not a 500. And because the processor has no external
+configuration, it is *always* registered as the real implementation (`DependencyInjection.cs:337`),
+unlike storage: there is no Null
 image processor, because there is no safe way to skip the re-encode.
 
 Ahead of the processor sits `ImageContentSniffer` (`ImageContentSniffer.cs:10`), a static, dependency-free
@@ -178,8 +191,8 @@ browser's file input; only the gesture in front of it changes.
 
 ## Trade-offs, honestly
 
-ADR-045 owns its rough edges in its Consequences section, and they are real design choices rather than
-oversights.
+ADR-045 owns most of its rough edges in its Consequences section, the build files record the rest, and
+they are real design choices rather than oversights.
 
 - **The avatars container is public-read by design.** Avatar URLs render in `<img>` tags on
   anonymous-visible surfaces without SAS-token plumbing on every request. The cost is that anyone with the
@@ -199,15 +212,26 @@ oversights.
   requires a `Storage Blob Data Contributor` grant for the app identity. That is a bicep-level infrastructure
   grant, which is the correct place for it, but it does mean the app will not authenticate until the role
   assignment exists. It is not a connection string you can paste in.
-- **ImageSharp joins the dependency set under the Six Labors Split License.** It ships under Apache-2.0
-  terms for open-source and small-revenue use, which covers this project, and it is vuln-audited like every
-  other dependency. The ADR is explicit that the license note must be revisited if the project's revenue
-  posture changes.
+- **ImageSharp joins the dependency set under the Six Labors Split License, pinned to v3.** It ships
+  under Apache-2.0 terms for open-source and small-revenue use, which covers this project, and the ADR is
+  explicit that the license note must be revisited if the project's revenue posture changes. v4 requires a
+  commercial license key at build time, so the package is held at 3.1.12 and excluded from dependency
+  sweeps (`MMCA.Common/Directory.Packages.props:134-144`), and a fitness test fails the build if its major
+  version passes 3 (`DependencyVersionTestsBase.cs:49`).
+- **That pin carries five accepted advisories.** Five ImageSharp 3.1.12 advisories published 2026-10-07
+  are patched only in 4.1.2, which the pin rules out, so the NuGet audit suppresses them, each with its
+  reachability argument written beside it (`MMCA.Common/Directory.Build.props:33-52`). Four do not reach
+  this code: two TIFF encoder overruns (nothing encodes TIFF), a BigTIFF decoder loop (the TIFF decoder
+  is not registered), and HistogramEqualization (nothing calls it). The fifth, GHSA-gwg2-r3hj-4w44 (ICC
+  CLUT parsing allocating from unvalidated dimensions), is reachable in principle through an
+  authenticated avatar upload that carries an ICC profile. It is accepted as a bounded denial-of-service
+  risk until a patched 3.x or a v4 license exists (`:43-46`). The re-encode still guarantees that what is
+  stored is only pixels; this one is about the cost of decoding, not about what survives it.
 
 Be precise about status: the framework legs are implemented and shipped in MMCA.Common, and two MMCA.ADC
 services wire them end to end. The Identity service calls `AddAzureBlobFileStorage(builder.Configuration)`
-at startup for avatars (`MMCA.ADC.Identity.Service/Program.cs:242`) and the Conference service calls it for
-speaker session assets (`MMCA.ADC.Conference.Service/Program.cs:353`). On the Identity side,
+at startup for avatars (`MMCA.ADC.Identity.Service/Program.cs:253`) and the Conference service calls it for
+speaker session assets (`MMCA.ADC.Conference.Service/Program.cs:361`). On the Identity side,
 `SetUserAvatarHandler` is the only request-path handler that calls `IFileStorageService`, for the upload
 itself (`SetUserAvatarHandler.cs:117`). Every avatar blob delete is a durable
 `DeleteAvatarBlobInternalCommand` scheduled through `IInternalCommandScheduler`: the replaced blob once
@@ -228,7 +252,7 @@ default: MMCA.Store has not adopted it.
 The pattern ports to any stack and any blob store. The rules are short:
 
 1. **Never trust the declared content type or the file extension.** Sniff the leading magic bytes and accept
-   only the formats you actually support.
+   only the formats you actually support, and register only those decoders in the image library.
 2. **Re-encode every uploaded image; do not store the original.** A full decode-then-re-encode is the single
    move that strips EXIF GPS (PII) and defeats polyglot payloads, because only pixels survive. Resize to the
    size you will actually serve while you are at it.
@@ -253,11 +277,12 @@ picture.** Storage is the easy half; the re-encode is the boundary that matters.
 content-type confusion, polyglot payloads); how `IFileStorageService` gives an upload-by-blob-name boundary
 with an inert `NullFileStorageService` default that fails clearly and an `AddAzureBlobFileStorage` swap to the
 real Azure implementation; how the real security boundary is the full re-encode in `ImageSharpImageProcessor`
-(header size check, single-frame decode, auto-orient, center-crop, strip all metadata, re-encode JPEG)
-fronted by `ImageContentSniffer`'s magic-byte check; the avatar contract (256x256 JPEG, 2 MB,
-random-suffixed public-read blob, URL as `[Pii]`, blob deletes as durable internal commands); and the
-honest trade-offs (public-read container, cache staleness, eventual blob deletion, a data-plane role grant,
-the Six Labors Split License).
+(four-format decoder allowlist, header size check, single-frame decode, auto-orient, center-crop, strip
+all metadata, re-encode JPEG) fronted by `ImageContentSniffer`'s magic-byte check; the avatar contract
+(256x256 JPEG, 2 MB, random-suffixed public-read blob, URL as `[Pii]`, blob deletes as durable internal
+commands); and the honest trade-offs (public-read container, cache staleness, eventual blob deletion, a
+data-plane role grant, the Six Labors Split License and its v3 pin with five suppressed advisories, one of
+them reachable in principle).
 
 **Next in the series:** HTTP API versioning, proven not just claimed, one header-based policy adopted by every service and kept honest by a shared fitness contract that runs two live versions.
 
@@ -268,10 +293,27 @@ the Six Labors Split License).
 
 *Tags: .NET, C Sharp, Software Architecture, Security, Cloud*
 
-*Notes (re-sourced 2026-10-02 against MMCA.Common v1.221.0): every claim below was re-read from source*
-*this run. Changes since the 2026-09-19 pass, all now in the body: the options-carrying `UploadAsync`*
+*Notes (re-sourced 2026-10-08 against MMCA.Common v1.233.0): every claim below was re-read from source*
+*this run. 2026-10-08 changes, all now in the body: `ImageSharpImageProcessor` gained the private*
+*`CreateDecoderOptions(uint maxFrames)` helper (`ImageSharpImageProcessor.cs:127-138`, doc :112-126) whose*
+*`Configuration` registers only the JPEG, PNG, WebP and GIF modules (:129-133), so TIFF, BMP and every other*
+*format fail as `UnknownImageFormatException` -> `Image.Undecodable`; the header read is*
+*`Image.IdentifyAsync(CreateDecoderOptions(maxFrames: uint.MaxValue), content, cancellationToken)` (:52) and*
+*the decode is `Image.LoadAsync(CreateDecoderOptions(maxFrames: 1), ...)` (:70), so the literal*
+*`new DecoderOptions { MaxFrames = 1 }` no longer appears and the code block shows the helper; the body adds*
+*the four-format allowlist as a control and a trade-off bullet on the five SixLabors.ImageSharp 3.1.12*
+*advisories suppressed in `MMCA.Common/Directory.Build.props:33-52` (GHSA-j9gm-c75j-xc9q, GHSA-jjfr-hcj7-qf5w,*
+*GHSA-wmxv-xphr-5c9g, GHSA-j3p4-wp97-rph4, GHSA-gwg2-r3hj-4w44; reasoning :35-46, GHSA-gwg2 reachable in*
+*principle via an authenticated avatar upload, accepted as bounded DoS at :43-46), replacing the earlier*
+*"vuln-audited like every other dependency" line; the v3 pin is `Directory.Packages.props:134-138` (license*
+*comment) and :141-144 (HELD at 3.1.12, excluded from sweeps), enforced by*
+*`DependencyVersionTestsBase.ImageSharp_MustNotExceed_MajorVersion3` (`DependencyVersionTestsBase.cs:49`). Every*
+*`ImageSharpImageProcessor` anchor moved by +4 (new usings), `IImageProcessor` registration moved to*
+*`DependencyInjection.cs:337` (the body previously cited :336, which is the Null storage default), and the ADC*
+*consumer anchors moved (Identity :253, Conference :361). The 2026-10-02 pass recorded these changes from the*
+*2026-09-19 pass: the options-carrying `UploadAsync`*
 *overload is ABSTRACT (ADR-045 records it becoming abstract in v1.210.0 at :99-101), not a default*
-*interface member; the decode is bounded to one frame (`DecoderOptions { MaxFrames = 1 }`); the*
+*interface member; the decode is bounded to one frame (`MaxFrames`); the*
 *`AddAzureBlobFileStorage` registration lives in the partial `DependencyInjection.Notifications.cs`; ADR-045*
 *gained a third Revision (2026-10-01) making avatar blob deletion a durable internal command, so the avatar*
 *contract, the trade-offs and the consumer paragraph describe scheduled, eventual deletion; and the ADC blob*
@@ -294,22 +336,26 @@ the Six Labors Split License).
 *(missing `ContainerName`) and :127-130 (neither `ServiceUri` nor `ConnectionString`); absolute-`ServiceUri`*
 *comment at :125 and check at :126; `DefaultAzureCredential` production branch at :135; `ConnectionString`*
 *branch at :136; `AzureBlobFileStorageService` registered at :139. In `DependencyInjection.cs`: Null default*
-*`TryAddTransient` at :335 and `IImageProcessor` always-real `TryAddSingleton` at :336. Settings*
+*`TryAddTransient` at :336 and `IImageProcessor` always-real `TryAddSingleton` at :337. Settings*
 *`FileStorageSettings` (`FileStorageSettings.cs:10`): `SectionName = "FileStorage"` at :13, `ServiceUri` at*
 *:16, `ConnectionString` at :19, `ContainerName` at :22.*
 *Image boundary: `IImageProcessor` (`IImageProcessor.cs:11`), single `NormalizeToSquareJpegAsync` at :18;*
-*`ImageSharpImageProcessor` (`ImageSharpImageProcessor.cs:16`): `MaxDecodedPixels = 50_000_000L` at :27 and*
-*`MaxDecodedDimension = 20_000` at :34 (SEC-Common-28, rationale at :18-26 and :29-33, the 40000x40000 ~6 GB*
-*example at :24, the 1 x 200000 strip at :30), header-only `Image.IdentifyAsync` at :48 ->*
-*`Error.Validation("Image.TooLarge", ...)` at :50-56, single-frame `Image.LoadAsync(new DecoderOptions {*
-*MaxFrames = 1 }, ...)` at :66 (rationale :63-65), decoded-frame re-check at :70-76, `TooLargeToDecode`*
-*predicate at :115-118, `AutoOrient()` + `ResizeMode.Crop` to `Size(size, size)` at :80-86, metadata nulled*
-*(Exif/Xmp/Iptc) at :88-90, `JpegEncoder { Quality = 85 }` at :95, undecodable caught*
+*`ImageSharpImageProcessor` (`ImageSharpImageProcessor.cs:20`): `MaxDecodedPixels = 50_000_000L` at :31 and*
+*`MaxDecodedDimension = 20_000` at :38 (SEC-Common-28, rationale at :22-30 and :33-37, the 40000x40000 ~6 GB*
+*example at :27-28, the 1 x 200000 strip at :34-36), header-only*
+*`Image.IdentifyAsync(CreateDecoderOptions(maxFrames: uint.MaxValue), ...)` at :52 ->*
+*`Error.Validation("Image.TooLarge", ...)` at :54-60, single-frame*
+*`Image.LoadAsync(CreateDecoderOptions(maxFrames: 1), ...)` at :70 (rationale :67-69), decoded-frame re-check*
+*at :74-80, `AutoOrient()` + `ResizeMode.Crop` to `Size(size, size)` at :84-90, metadata nulled*
+*(Exif/Xmp/Iptc) at :92-94, `JpegEncoder { Quality = 85 }` at :99, undecodable caught*
 *(`UnknownImageFormatException`/`InvalidImageContentException`) -> `Error.Validation("Image.Undecodable", ...)`*
-*at :99-105. Magic-byte validator `ImageContentSniffer` (static, `ImageContentSniffer.cs:10`): `IsAllowedImage`*
+*at :103-109, `CreateDecoderOptions` at :127-138 (four configuration modules :129-133, current default memory*
+*allocator :135, `MaxFrames` :137), `TooLargeToDecode` predicate at :147-150. Magic-byte validator `ImageContentSniffer` (static, `ImageContentSniffer.cs:10`): `IsAllowedImage`*
 *at :15, JPEG `FF D8 FF` at :21-22, 8-byte PNG signature at :27-28, RIFF/`WEBP` at :33-36.*
 *ADR-045 (`Website/docs-src/adr/045-managed-file-storage-and-avatars.md`, Accepted 2026-07-11 at :4): Status*
-*:3-13 flags three revisions; the ImageSharp/Six Labors Split License Decision bullet at :31-36; the*
+*:3-13 flags three revisions (the fourth, 2026-10-06, is anchor-only); the ImageSharp/Six Labors Split*
+*License Decision bullet at :31-36 (its Consequences line :60 still reads "vuln-audited like everything*
+*else", which the 2026-10-07 suppressions qualify); the*
 *BR-116a avatar contract (256x256, 2 MB, `{userId}-{random8}.jpg`, public-read `avatars` container, durable*
 *`DeleteAvatarBlobInternalCommand` on replace/remove/erase, `[Pii]` URL nulled on anonymize with the delete*
 *scheduled in the same transaction, GDPR export) at :41-48; Consequences at :50-61 (public-read + random*
@@ -317,12 +363,14 @@ the Six Labors Split License).
 *:58-59, license revisit :60-61). Revisions: 2026-09-07 decode ceilings at :63-75, 2026-09-12 at :77-109*
 *(avatar-only scope SUPERSEDED by ADR-123, options overload abstract since v1.210.0 at :99-101), 2026-10-01*
 *at :111-134 (durable avatar blob deletion; replace/remove schedule post-commit so a failed schedule leaves a*
-*logged orphan, :127-132). Client affordance: `IMediaPickerService` (`IMediaPickerService.cs:9`,*
+*logged orphan, :127-132), 2026-10-06 at :136-155 (anchor-only, no behavior change; its*
+*`ImageSharpImageProcessor` anchors :48/:27/:34/:30/:115/:70 predate the 2026-10-07 helper and now read*
+*:52/:31/:38/:34/:147/:74). Client affordance: `IMediaPickerService` (`IMediaPickerService.cs:9`,*
 *`IsSupported` at :12, cancelled/denied returns null and affordance-switch note per doc :4-7);*
 *`NullMediaPickerService` web default at `NullMediaPickerService.cs:7`, `IsSupported => false` at :10.*
 *Consumers: MMCA.ADC Identity `AddAzureBlobFileStorage(builder.Configuration)` at*
-*`MMCA.ADC.Identity.Service/Program.cs:242` (BR-116a/ADR-045 comment at :240-241) and ADC Conference at*
-*`MMCA.ADC.Conference.Service/Program.cs:353` (comment at :350) for session assets. `SetUserAvatarHandler`*
+*`MMCA.ADC.Identity.Service/Program.cs:253` (BR-116a/ADR-045 comment at :251-252) and ADC Conference at*
+*`MMCA.ADC.Conference.Service/Program.cs:361` (comment at :358-360) for session assets. `SetUserAvatarHandler`*
 *(`:27`) injects `IFileStorageService` (`:30`) and `IInternalCommandScheduler` (`:31`); upload at :117,*
 *`entity.SetAvatarUrl` at :127; replaced blob scheduled post-commit in `OnMutatedAsync` at :158-160 with the*
 *failed-schedule log at :162-165; the orphaned new blob scheduled on a failed save at :78-88 via*
@@ -335,9 +383,9 @@ the Six Labors Split License).
 *`NotFound` to success at :53-57. `Profile.razor.cs` (Identity.UI) injects `IMediaPickerService` at `:22`.*
 *MMCA.Store has not adopted it (no `IFileStorageService`, `AddAzureBlobFileStorage` or `IMediaPickerService`*
 *reference under `MMCA.Store/Source`, per this run's audit).*
-*Anchor facts (not recounted here): 22 NuGet packages (`MMCA.Common/FACTS.md:19`), 131 accepted ADRs*
-*(001-131, `Website/docs-src/adr/README.md:6`), framework v1.221.0 (`FACTS.md:14`), MMCA.Common index*
-*Maturity 96.6% (317/328) / Implementation 86.0% (705/820), evidence as of 2026-10-01 at v1.218.0*
+*Anchor facts (not recounted here): 22 NuGet packages (`MMCA.Common/FACTS.md:19`), 132 accepted ADRs*
+*(001-132, `Website/docs-src/adr/README.md:6`), framework v1.233.0 (`FACTS.md:14`), MMCA.Common index*
+*Maturity 96.6% (317/328) / Implementation 86.0% (705/820), evidence as of 2026-10-07 at v1.233.0*
 *(`Website/docs-src/governance/common-ArchitectureScorecard.md:5`, `:9`, `:10`), ImageSharp under the Six*
 *Labors Split License. The code block is illustrative of shape (elided using/try/await scaffolding, the*
 *decoded-frame re-check body and the message arguments), not a verbatim copy; every named call and value in*

@@ -109,7 +109,7 @@
         <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
         <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
         <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
-        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, four engines</a></li>
         <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
         <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
         <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
@@ -173,7 +173,7 @@
           that declares its own dependencies so the host can assemble everything in the right order.</p>
           <p>The framework ships a <code>dotnet new</code> pack, so you type none of that plumbing (ADR-065). Hand-rolling it
           costs a day before you write a line of business logic, and ADR-065 measures that starting cost against
-          the framework&#39;s reference app: 12 projects, 136 files, and 11,532 lines of plumbing, an 827-line
+          the framework&#39;s reference app: 12 projects, 137 files, and 11,571 lines of plumbing, an 827-line
           <code>.editorconfig</code> among them, plus the 100-line <code>Directory.Packages.props</code> that carries every package pin
           (58 of them in the seed today), several of those lines load-bearing in ways nothing tells you about
           until much later.</p>
@@ -217,8 +217,8 @@ dotnet test  <span class="hljs-literal">--solution</span> Contoso.Support.slnx  
           block appended to the <em>staged</em> <code>.editorconfig</code>; every other analyzer stays at error. <code>SA1210</code> cannot
           sort your namespace against <code>MMCA.Common.*</code> without knowing your name: an app namespace sorts above it
           for <code>Contoso.Support</code> and below it for <code>Zeta.App</code>, so no checked-in order survives both. <code>SA1211</code> is
-          the same story one level down, on the identifier-alias file whose aliases re-sort when a shape flag
-          renames them. <code>IDE0021</code> is the flags rather than the renames: the aggregate&#39;s private constructor
+          the same story one level down, on the identifier-alias file whose two aliases re-sort when <code>--child</code>
+          renames them. <code>IDE0021</code> is the shape flags rather than the renames: the aggregate&#39;s private constructor
           assigns one property per optional axis, so <code>--no-status --no-description --no-owner</code> together leave it
           with a single statement, which the baseline then wants as an expression body. It is one-time, and the
           generated README carries the exact commands (one <code>dotnet format analyzers</code> run restores the two
@@ -236,9 +236,10 @@ dotnet test  <span class="hljs-literal">--solution</span> Contoso.Support.slnx  
           <pre class="doc-pre" tabindex="0"><code class="">BaseEntity&lt;TId&gt;  -&gt;  AuditableBaseEntity&lt;TId&gt;  -&gt;  AuditableAggregateRootEntity&lt;TId&gt;</code></pre>
           <p><code>BaseEntity&lt;TId&gt;</code> gives you a <code>required init</code> identifier (set once at construction, immutable after,
           while EF still materializes through the parameterless constructor). <code>AuditableBaseEntity&lt;TId&gt;</code> adds the
-          audit fields (<code>CreatedOn/By</code>, <code>LastModifiedOn/By</code>) and the soft-delete <code>IsDeleted</code> flag, all stamped
-          automatically. <code>AuditableAggregateRootEntity&lt;TId&gt;</code> adds the domain-event collection and aggregate
-          helpers.</p>
+          audit fields (<code>CreatedOn/By</code>, <code>LastModifiedOn/By</code>, and <code>DeletedOn/By</code> for a soft delete), stamped
+          automatically at save; the soft-delete <code>IsDeleted</code> flag, which the entity&#39;s own <code>Delete()</code> method sets;
+          and a <code>RowVersion</code> concurrency token. <code>AuditableAggregateRootEntity&lt;TId&gt;</code> adds the domain-event
+          collection and aggregate helpers.</p>
           <p>The load-bearing idiom is the <strong>private constructor plus static <code>Create</code> factory returning
           <code>Result&lt;T&gt;</code></strong>. You cannot <code>new</code> an invalid aggregate into existence; the factory is the only door, and
           it enforces the invariants:</p>
@@ -358,7 +359,7 @@ dotnet test  <span class="hljs-literal">--solution</span> Contoso.Support.slnx  
           <code>Register(services, configuration, applicationSettings)</code> method that wires all of the module&#39;s services.
           The interface ships default-implemented members (<code>Dependencies =&gt; []</code>, <code>RequiresDependencies =&gt; false</code>,
           an empty <code>RegisterDisabledStubs</code>), so a minimal module implements only <code>Name</code> and <code>Register</code>:</p>
-          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Application layer (representative)</span>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// API layer (representative): the module&#x27;s entry point</span>
 <span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">PromotionsModule</span> : <span class="hljs-title">IModule</span>
 {
     <span class="hljs-keyword">public</span> <span class="hljs-built_in">string</span> Name =&gt; <span class="hljs-string">&quot;Promotions&quot;</span>;
@@ -371,10 +372,17 @@ dotnet test  <span class="hljs-literal">--solution</span> Contoso.Support.slnx  
         IConfigurationBuilder configuration,
         ApplicationSettings applicationSettings</span>)</span>
     {
-        services.AddScoped&lt;ICouponRepository, CouponRepository&gt;();
-        <span class="hljs-comment">// handlers, validators, and mappers are picked up by convention scanning (next step)</span>
+        <span class="hljs-comment">// One call per layer. Handlers, validators, and mappers are picked up by the</span>
+        <span class="hljs-comment">// Application layer&#x27;s convention scan (next step); CouponRepository is</span>
+        <span class="hljs-comment">// registered by the Infrastructure layer&#x27;s own extension.</span>
+        services.AddModulePromotionsApplication(applicationSettings);
+        services.AddModulePromotionsInfrastructure();
+        services.AddModulePromotionsAPI();
     }
 }</code></pre>
+          <p>The class lives in the module&#39;s API project, the one layer that references both Application and
+          Infrastructure, so it is the natural place to compose them. The generated module keeps <code>Register</code> to a
+          single line that delegates to an <code>Add{Module}Module</code> extension making those three calls.</p>
           <p><code>Dependencies</code> is what lets the framework do something genuinely useful: <code>ModuleLoader</code> discovers every
           <code>IModule</code> in the assemblies the host names and registers them in <strong>topological order</strong> (Kahn&#39;s
           algorithm) based on declared dependencies, so a module is always wired after the modules it depends on.
@@ -391,9 +399,10 @@ dotnet test  <span class="hljs-literal">--solution</span> Contoso.Support.slnx  
           that backs the decorated handlers can be registered before or after them. The generated host spells the
           sequence out by hand:</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Host composition root: the generated Web/Program.cs, abridged (representative module names)</span>
+services.AddCommonExceptionHandlers();                  <span class="hljs-comment">// ProblemDetails exception handlers</span>
 services.AddApplication();                              <span class="hljs-comment">// core services, event dispatcher</span>
 services.AddInfrastructure(builder.Configuration);      <span class="hljs-comment">// repos, UoW, DbContexts, caching, outbox</span>
-services.AddAPI(modulesSettings);                       <span class="hljs-comment">// controllers, idempotency, exception handlers</span>
+services.AddAPI(modulesSettings);                       <span class="hljs-comment">// controllers, idempotency, feature flags, error localization</span>
 services.AddErrorResources&lt;OrdersErrorResources&gt;();     <span class="hljs-comment">// one per module: error-code translations</span>
 services.AddErrorResources&lt;PromotionsErrorResources&gt;();
 
@@ -513,9 +522,11 @@ dotnet new mmca<span class="hljs-literal">-query</span> <span class="hljs-litera
           <li><strong>The DI order is guarded, but not completely.</strong> <code>AddApplicationDecorators()</code> seals the pipeline, so
           a module scan placed after it throws at startup. A handler registered by hand after it still runs
           undecorated with no warning. The generated solution ships <code>DecoratorPipelineOrderTests</code>, which builds
-          the module&#39;s registration sequence and asserts the decorator nesting for one command and one query,
-          and the framework exposes <code>VerifyDecoratorPipeline()</code> for a fitness test that checks every handler
-          (the next article covers fitness tests).</li>
+          the module&#39;s registration sequence, asserts the decorator nesting for one command and one query, and
+          runs the framework&#39;s <code>VerifyDecoratorPipeline()</code> over the module&#39;s whole handler set, so no handler
+          the module registers escapes the pipeline. It runs the module&#39;s own registration rather than the
+          host&#39;s <code>Program.cs</code>, so a handler the host registers by hand after the seal is still silent (the next
+          article covers fitness tests).</li>
           <li><strong>Markers are easy to forget.</strong> <code>ITransactional</code> and <code>ICacheInvalidating</code> are opt-in by presence.
           Forget the marker and you lose the behavior silently. The upside (no behavior you did not ask for) is
           also the trap (no behavior you forgot to ask for).</li>

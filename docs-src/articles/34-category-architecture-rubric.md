@@ -216,12 +216,12 @@ gaps and all, and then score one of your own systems against the rubric.*
 
 *Tags: Software Architecture, .NET, Engineering Management, Code Quality, Technical Leadership*
 
-*Notes (2026-10-02 refresh, framework v1.221.0): the two-axis indices (Maturity 96.6% = 317/328, Implementation
+*Notes (2026-10-08 refresh, framework v1.233.0): the two-axis indices (Maturity 96.6% = 317/328, Implementation
 86.0% = 705/820), the all-34-categories-scored / no-N/A status and the per-category scores are taken from the
 canonical two-axis scorecard, `Website/docs-src/governance/common-ArchitectureScorecard.md` (`:9` Maturity index,
 `:10` Implementation index, `:104` "N/A (excluded from denominators): none", sigma-weight 82). Scorecard evidence
-stamp: 2026-10-01 at v1.218.0, git HEAD `f93bc6e2`, dirty tree (`:5`); the framework is v1.221.0 per
-`MMCA.Common/FACTS.md:4,14`, so the scorecard trails FACTS and the article claims only that each re-verification
+stamp: 2026-10-07 at v1.233.0, git HEAD `55e427b3`, clean tree (`:5`); the framework is v1.233.0 per
+`MMCA.Common/FACTS.md:4,14`, so the scorecard and FACTS agree on the version, and the article claims only that each re-verification
 stamps the version and commit it read. Twenty-two published packages (`FACTS.md:19`). Category row N sits at
 scorecard line 64+N (`:65` to `:98`). Section 16 AI-Native Application Architecture is Maturity 4 / Implementation
 9 on weight 2 (`:80`), scored because `MMCA.Common.AI` ships a model-calling feature (`:104`). The Maturity-3
@@ -236,25 +236,25 @@ section 3 (`:67`), Microservices section 7 (`:71`), Testability section 14 (`:78
 supersedes the single-locale ADR-011 (`Website/docs-src/adr/README.md:24,40`). Section 20 Design System is
 Implementation 8 (`:84`), section 21 Accessibility 9 (`:85`) and section 22 Responsive 9 (`:86`); the dark-theme
 WCAG AA contrast values are at `Source/Presentation/MMCA.Common.UI/Theme/MMCATheme.cs:66,93`, locked by the
-`ui-e2e` job (`.github/workflows/ci.yml:248`, `browser: [chromium, firefox, webkit]` matrix at `:257`, all three
-required per `:258-260`). Section 14 Testability rests on a CI line-coverage floor of 68.3% (the `Enforce coverage
-floor (unit/arch/bUnit tier, generated code excluded)` step at `ci.yml:451`, `m="68.3"` at `:462`, 70.3% measured
-per `:449`). Section 9 API & Contract Design is Maturity 4 / Implementation 9 (`:73`), section 10 Messaging &
+`ui-e2e` job (`.github/workflows/ci.yml:223`, `browser: [chromium, firefox, webkit]` matrix at `:232`, all three
+required per `:233-235`). Section 14 Testability rests on a CI line-coverage floor of 68.3% (the `Enforce coverage
+floor (unit/arch/bUnit tier, generated code excluded)` step at `ci.yml:398`, `m="68.3"` at `:409`, 70.3% measured
+per `:396`). Section 9 API & Contract Design is Maturity 4 / Implementation 9 (`:73`), section 10 Messaging &
 Integration Architecture is weight 3, Maturity 4 / Implementation 9 (`:74`), section 11 Security is Maturity 4 /
 Implementation 8 (`:75`), section 23 Front-End Performance is Maturity 4 / Implementation 8 (`:87`), and slice
 cohesion section 5 (`:69`) and Resilience section 29 (`:93`) are Maturity 4. The insight section's convention-only
-survivor is section 17: `sample-deployment-validate` (`ci.yml:819`) runs two compile-only `az bicep build` steps
-(`:831`, `:835`) and is absent from the 8 required contexts (scorecard `:81`, read from the branch-protection
+survivor is section 17: `sample-deployment-validate` (`ci.yml:766`) runs two compile-only `az bicep build` steps
+(`:778`, `:782`) and is absent from the 8 required contexts (scorecard `:81`, read from the branch-protection
 API); section 12 Performance & Scalability is the merge-enforced counterpart at Maturity 4 (`:76`), gated by the
-`Performance gate (BenchmarkDotNet Short + baseline verify)` job (`ci.yml:356`) running `--filter "*" --job Short
---exporters json` (`:388`) then `build/perfgate` against the committed `perf-baseline.json` (`:397`). The
+`Performance gate (BenchmarkDotNet Short + baseline verify)` job (`ci.yml:311`) running `--filter "*" --job Short
+--exporters json` (`:343`) then `build/perfgate` against the committed `perf-baseline.json` (`:352`). The
 idempotency guard resolves an `IDistributedLock`
 (`Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyFilter.cs:149`) and `AddCaching` registers
 `RedisDistributedLock` whenever a Redis multiplexer is present
-(`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:86-94`; SET with When.NotExists and an
+(`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:88-96`; SET with When.NotExists and an
 expiry plus compare-and-delete at
 `Source/Core/MMCA.Common.Infrastructure/Concurrency/RedisDistributedLock.cs:37,67`). The SBOM release gate is
-`.github/workflows/release.yml:101`; the MassTransit pin guard is
+`.github/workflows/release.yml:106` (the `Generate SBOM (CycloneDX)` step; hard-gate comment `:103-105`); the MassTransit pin guard is
 `Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/DependencyVersionTests.cs:9`. Rubric facts are from
 `Website/docs-src/governance/ArchitectureEvaluationCriteria.md`: version 2 of 2026-09-04 (`:15-23`, ADR-110),
 section 10 Messaging & Integration Architecture (`:329`), section 16 AI-Native Application Architecture (`:469`),
@@ -263,7 +263,13 @@ and section 32 breaking-change policy (`:850`); the scorecard states Implementat
 on purpose as the original snapshot: the earlier single-axis baseline (80% / 218 of 272 / 28 applicable) and the
 first-scored lowest category (Compliance, soft-delete only, no erasure) are from MMCA.Common commit `f518099`,
 `ArchitectureScorecard.md:3` and `:42`; the "MassTransit will retry" comment and the `ServiceContractAttribute`
-claiming a nonexistent test are at `:100` and `:117` of the same commit. Neither is in the current scorecard. This
+claiming a nonexistent test are at `:100` and `:117` of the same commit. Neither is in the current scorecard. 2026-10-08
+run (Common v1.233.0): no reader-visible claim changed; Notes header v1.221.0 to v1.233.0; scorecard stamp
+2026-10-01 / v1.218.0 / `f93bc6e2` dirty to 2026-10-07 / v1.233.0 / `55e427b3` clean, so "the scorecard trails
+FACTS" became "agree"; `ci.yml` anchors re-read (`ui-e2e` 248/257/258-260 to 223/232/233-235, coverage floor
+451/462/449 to 398/409/396, `sample-deployment-validate` 819/831/835 to 766/778/782, Performance gate 356/388/397 to
+311/343/352); SBOM gate `release.yml:101` to `:106`; `DependencyInjection.Caching.cs:86-94` to `:88-96`. Scorecard
+rows `:76` and `:81` still cite the pre-shift `ci.yml` lines (upstream drift, not corrected here). 2026-10-02
 run: maturity 97.0% (318/328) to 96.6% (317/328); section 16 from 3/6 to 4/9; SOLID dropped from the Maturity 4 /
 Implementation 9 cluster (it is 3/8); section 27 and section 20 implementation 9 to 8; lowest implementation 6
 (section 16 alone) to 8 (15 categories); Maturity-3 set 16/17/30 to 1/17/30; packages nineteen to twenty-two;

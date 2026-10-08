@@ -97,15 +97,19 @@ Identity. When no gateway is passed, the helper falls back to Identity's own HTT
 deployed ADC and Store environments, the bicep templates point the authority straight at Identity's
 internal-ingress URL, with no gateway hop. Either way the validator carries one authority value owned
 by the host wiring and no key material, and `ValidIssuer` is deliberately left unpinned: the authority
-is an internal address while the token's `iss` is the public origin, so the issuer is taken from the
-discovery document.
+need not be the token's `iss` origin (locally it is the gateway's HTTPS endpoint; when deployed it is
+Identity's internal-ingress URL while the token's `iss` is the public gateway origin), so the issuer is
+taken from the discovery document.
 
 ADR-004's file name says "dual-fetch", but the framework's own doc comments give that name to a
 different flow, so it is worth naming plainly: the shared login flow,
 `AuthenticationServiceBase<TUser>.LoginAsync` in `MMCA.Common.Application`, does an **untracked**
 read to validate credentials (so the adversarial majority of login traffic, the failed attempts, never
-pays EF Core change-tracking cost), then a **tracked** re-fetch only on success to persist the rotated
-refresh token. The base's own doc comment names it the "untracked-then-tracked dual-fetch"; the ADC and
+pays EF Core change-tracking cost), then a **tracked** re-fetch only on success. Refresh tokens live in
+their own session rows, so the re-fetch is not about persisting them: it loads the instance the app's
+`CreateAccessToken` hook mints from (apps reach linked aggregates and navigations through it), and the
+second lookup turns a race that deleted the account between the two steps into a clean 404. The base's
+own doc comment names it the "untracked-then-tracked dual-fetch"; the ADC and
 Store Identity modules are thin sealed subclasses that supply the app-specific hooks (the untracked
 lookup, the claim set) and re-label it "dual-fetch pattern" in their class doc comments
 (`AuthenticationService.cs:20` in both ADC and Store). It is shared framework login code, not a
@@ -137,8 +141,7 @@ the token only supplies the signature.
 
 ## Trade-offs, honestly
 
-The JWKS layer is the right model, but it is not free, and the §11 review of the framework names the
-rough edges.
+The JWKS layer is the right model, but it is not free, and the rough edges are worth naming.
 
 - **Two round trips on successful login.** The Identity service's login flow (the shared login
   dual-fetch above, not the JWKS layer itself) pays a tracked re-fetch, a second query on the success
@@ -174,10 +177,15 @@ rough edges.
 
   The residuals are named in the ADR itself. `ASPNETCORE_ENVIRONMENT` is the trust root, so a host
   that misreports itself as Development gets every relaxation at once: the rule concentrates the risk
-  on one value instead of removing it. The other environment-conditional relaxations (the permissive
-  dev CORS policy, the cookie `Secure` flag, HSTS, the pseudo-locale) are plain `IsDevelopment()`
-  checks against an environment the host always supplies, not fail-closed gates. And the inventory is
-  manual: nothing fails a build when a new environment-conditional branch skips the rule.
+  on one value instead of removing it. The other Development-gated relaxations (the permissive dev
+  CORS policy, the cookie `Secure` flag, HSTS and the CSP built from the same flag, the pseudo-locale,
+  the design-time database skip) are plain `IsDevelopment()` checks, not fail-closed gates: the
+  server-side ones read an environment the host always supplies, and the one UI-side check (the
+  culture switcher offering the pseudo-locale) reads a nullable environment and treats null as not
+  Development. Two endpoint mappings sit outside the rule altogether: the OpenAPI document and the
+  Scalar reference UI are gated on `!IsProduction()` rather than on Development, so a Staging host
+  gets them (both expose API description, not data). And the inventory is manual: nothing fails a
+  build when a new environment-conditional branch skips the rule.
 - **The invariants in this article fail the build.** Executable tests run the real registration code
   and read the produced options back: the forwarded bearer handler's `ValidAlgorithms` must stay
   `[RsaSha256]`, the `RequireHttpsMetadata` resolution above is asserted step by step (including the
@@ -187,13 +195,15 @@ rough edges.
   `AnonymousEndpointTestsBase` scans controllers and routable components by reflection and ships five
   facts: it fails on any `[AllowAnonymous]` outside an explicit allow-list, on a stale allow-list entry,
   on an empty scan, on an endpoint that declares neither `[Authorize]` nor `[AllowAnonymous]` (a
-  stricter gate each suite opts into, which the framework turns on for itself), and on a stale entry in
-  that second, undecorated allow-list. The framework's own allow-list holds 19 entries: ten
-  credential-exchange actions that cannot require a token because issuing one is what they do (login,
+  stricter gate that is on by default, which a repo not yet ready opts out of explicitly; Common, ADC,
+  Store and Helpdesk all keep it on), and on a stale entry in that second, undecorated allow-list. The
+  framework's own allow-list holds 21 entries: twelve credential-exchange actions that cannot require
+  a token because issuing one is what they do, or because the caller has no session yet (login,
   register, refresh, the OAuth exchange, the three provider challenges and the provider callback,
-  forgot-password and reset-password), six credential pages (the email-confirmation landing among
-  them), and three landing and outcome pages that render nothing depending on the caller. NetArchTest's
-  fluent API cannot express this pair, which is why
+  forgot-password and reset-password, and sending and confirming an email-confirmation link), six
+  credential pages (the email-confirmation landing among them), and three landing and outcome pages
+  that render nothing depending on the caller. NetArchTest's fluent API cannot express this pair,
+  which is why
   the rules live as full-name reflection and options-resolution tests instead. Two residuals stay
   honest. Minimal-API endpoints opt out through an `.AllowAnonymous()` builder call, which is endpoint
   metadata rather than an attribute, so the JWKS and OIDC discovery endpoints themselves sit outside
@@ -246,45 +256,72 @@ pattern, or `dotnet add package MMCA.Common.API` and try it.*
 
 *Tags: .NET, C Sharp, Software Architecture, Microservices, Authentication*
 
-*Notes (evidence audit, 2026-10-02, MMCA.Common v1.221.0): Read this run. ADR-004
+*Notes (evidence audit, 2026-10-08, MMCA.Common v1.233.0): Read this run; five body claims changed.
+(1) Common's anonymous allow-list is 21 entries, not 19:
+`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Api/AnonymousEndpointTests.cs:22-66`,
+twelve actions `:26-50` (the two added are `SendEmailConfirmationAsync` and `ConfirmEmailAsync` on the
+generic `EmailConfirmationControllerBase`, `:42-43`), six credential pages `:56-61`, three landing pages `:63-65`,
+stricter gate `:71`, `MinimumScannedTypes => 21` `:75`. (2) The undecorated-endpoint gate is on by
+default and opt-out, not opt-in:
+`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Api/AnonymousEndpointTestsBase.cs:69`
+(`RequireExplicitAuthorizationDecision => true`, doc "On by default ... opts out explicitly" `:54-60`);
+all four suites keep it on (Common `:71`, ADC `:139`, Store `:86`, Helpdesk `:45`). (3) The login
+tracked re-fetch does not persist the refresh token: refresh tokens live in their own session rows,
+and the re-fetch loads the instance the `CreateAccessToken` hook mints from and turns the delete race
+into a 404 (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:195-198`,
+`GetByIdAsync` `:199`, `Error.NotFound` `:200-203`). (4) The unpinned-`ValidIssuer` reason is "the
+authority need not be the `iss` origin", not "the authority is an internal address": locally the
+authority is the gateway's HTTPS endpoint (ADR-004 `:69-74`;
+`MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:332-335`). (5) ADR-122's
+plain-check inventory (`:47-78`) scopes the non-nullable environment to server-side checks, names the
+UI-side pseudo-locale check that treats null as not Development (`:50-51`, `:68-74`;
+`MMCA.Common/Source/Presentation/MMCA.Common.UI/Globalization/CultureSwitcher.razor:24-27`), adds CSP
+(`:65-66`) and the design-time database skip (`:75-78`), and names `MapCommonOpenApi` and
+`MapCommonScalarUi` as `!IsProduction()` mappings outside the rule (`:80-87`); the body now states all
+of that. The trade-offs lead-in no longer attributes the login rough edges to the §11 review: the §11
+row (`Website/docs-src/governance/common-ArchitectureScorecard.md:75`) covers JWKS, fail-closed
+resolution and the anonymous-endpoint gate, and no scorecard, backlog or ADR line names the login
+round trips or the race window (the buffer-pool remark is engineering judgement, not a cited
+measurement). Earlier entry (2026-10-02, v1.221.0), anchors refreshed 2026-10-08: ADR-004
 (`Website/docs-src/adr/004-authentication-dual-fetch.md`) is titled "Cross-Service Token Validation
 via JWKS / OIDC Discovery" (`:1`) and never uses the phrase "dual-fetch" in its body: the body's former
 framing ("discover the key, fall back to an empty set. That is the dual-fetch") was unsupported and is
-replaced by what the ADR does say. Empty-set issuer hygiene: `:32-34` and `:112-114`; central mapping
-of both well-known endpoints `:35-40`; unpinned `ValidIssuer` `:59-61`, confirmed in source at
-`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.Authentication.cs:94-99`.
-Discovery routing and its fallback (ADR-004 `:73-80`) are the local AppHost path only:
+replaced by what the ADR does say. Empty-set issuer hygiene: `:34-37` and `:151`; central mapping
+of both well-known endpoints `:38-43`; unpinned `ValidIssuer` `:69-74`, confirmed in source at
+`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.Authentication.cs:96-101`.
+Discovery routing and its fallback (ADR-004 `:86-102`) are the local AppHost path only:
 `MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:309-311` (`WithJwksDiscovery`,
-optional gateway), gateway-vs-fallback comment `:325-331`, endpoint choice `:332-333`. Both deployed
+optional gateway), gateway-vs-fallback comment `:321-331`, endpoint choice `:332-334`, environment
+variable set `:335`. Both deployed
 environments set the authority to Identity's internal ingress directly, so the body's former "JWKS
 discovery is routed through the YARP gateway ... the gateway route updates, not every consumer" was
-wrong for production and is rewritten: `MMCA.ADC/infra/main.bicep:1937`, `:2071`, `:2223` and
-`MMCA.Store/infra/main.bicep:1681`, `:1813` (`Authentication__JwtBearer__Authority` =
+wrong for production and is rewritten: `MMCA.ADC/infra/main.bicep:2005`, `:2141`, `:2295` and
+`MMCA.Store/infra/main.bicep:1684`, `:1819` (`Authentication__JwtBearer__Authority` =
 `'http://${identityApp.name}'`). The JWKS bullet the body sources is `MMCA.Common/AGENTS.md:131` under
 `### Microservices Extraction Boundaries` (`:125`); `MMCA.Common/CLAUDE.md` is now only an `@AGENTS.md`
 import, so the citation moved (that bullet still says "discovery routes through the gateway", which is
-true of the AppHost path only). Login dual-fetch, behavior unchanged, anchors moved:
-`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:63` (class),
-`LoginAsync` `:105`, untracked `FindUntrackedByEmailAsync` `:130`, tracked `Repository.GetByIdAsync`
-`:181`, "untracked-then-tracked dual-fetch" doc comment `:21`; ADC
+true of the AppHost path only). Login dual-fetch anchors:
+`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:64` (class),
+`LoginAsync` `:123`, untracked `FindUntrackedByEmailAsync` `:148`, tracked `Repository.GetByIdAsync`
+`:199`, "untracked-then-tracked dual-fetch" doc comment `:22`; ADC
 `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:20`
 ("dual-fetch pattern", class `:50`) and Store
 `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/AuthenticationService.cs:20`
-(class `:26`). Forwarded JWT bearer moved to the partial file
-`WebApplicationBuilderExtensions.Authentication.cs`: sole public `AddForwardedJwtBearer` `:51-56`,
-three-step resolution `:63-65`, `RequireHttpsMetadataConfigKey` const `:24`,
-`InsecureJwtMetadataWarningStartupFilter` registration `:67-71`, private `AddForwardedJwtBearerCore`
-`:76`, forwarded RS256 pin `ValidAlgorithms = [SecurityAlgorithms.RsaSha256]` `:107`; in-process
-`BuildValidationParameters` `:207`, RS256 pin `:230`, HS256 pin `:246`. Public surface is in
-`MMCA.Common.API/PublicAPI.Shipped.txt` (extension form `:429`, const `:483`, static form `:578`); the
+(class `:26`) (consumer anchors carried, not re-read 2026-10-08). Forwarded JWT bearer lives in the
+partial file `WebApplicationBuilderExtensions.Authentication.cs`: sole public `AddForwardedJwtBearer`
+`:52-57`, three-step resolution `:64-66`, `RequireHttpsMetadataConfigKey` const `:25`,
+`InsecureJwtMetadataWarningStartupFilter` registration `:68-72`, private `AddForwardedJwtBearerCore`
+`:77`, forwarded RS256 pin `ValidAlgorithms = [SecurityAlgorithms.RsaSha256]` `:109`; in-process
+`BuildValidationParameters` `:215`, RS256 pin `:238`, HS256 pin `:254`. Public surface is in
+`MMCA.Common.API/PublicAPI.Shipped.txt` (extension form `:441`, const `:498`, static form `:594`); the
 Unshipped file carries no `*REMOVED*` lines and no bare-bool overload is present. h2c opt-out with
-justification comments: ADC `main.bicep:1941`, `:2075`, `:2227` (comments `:1938-1940`,
-`:2072-2074`, `:2224-2226`), Store `main.bicep:1686`, `:1818` (comments `:1682-1685`, `:1814-1817`).
-Dev CORS in `WebApplicationBuilderExtensions.cs`: credentialed `AllowCredentials()` `:136`,
-`#pragma warning disable S5122` `:138`, `AllowAnyOrigin()` `:140`, restore `:143`. ADR-122 fold-in
-(new body bullet, user-approved): `Website/docs-src/adr/122-dev-only-relaxations-fail-closed.md`
-decision `:22-23`, three gates `:27-40`, `RequireHttpsMetadata` as the hybrid `:42-45`, plain checks
-`:47-67`, trade-offs `:88-96`; source verified this run:
+justification comments: ADC `main.bicep:2009`, `:2145`, `:2299` (comments `:2006-2008`,
+`:2142-2144`, `:2296-2298`), Store `main.bicep:1689`, `:1824` (comments `:1685-1688`, `:1820-1823`).
+Dev CORS in `WebApplicationBuilderExtensions.cs`: credentialed `AllowCredentials()` `:142`,
+`#pragma warning disable S5122` `:144`, `AllowAnyOrigin()` `:146`, restore `:149`. ADR-122 fold-in
+(body bullet, user-approved): `Website/docs-src/adr/122-dev-only-relaxations-fail-closed.md`
+decision `:21-23`, three gates `:27-40`, `RequireHttpsMetadata` as the hybrid `:42-45`, plain checks
+`:47-78`, `!IsProduction()` mappings `:80-87`, rationale from `:102`; source verified 2026-10-02:
 `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/SensitiveDataLoggingGate.cs:35-36`
 (AND of setting and `environment?.IsDevelopment() == true`, null rule `:18-22`),
 `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Mail/SmtpTransportSecurity.cs:48`
@@ -292,26 +329,24 @@ decision `:22-23`, three gates `:27-40`, `RequireHttpsMetadata` as the hybrid `:
 `MMCA.Common/Source/Core/MMCA.Common.AI/DependencyInjection.cs:262` (`IsDevelopmentHost`), called at
 `:177`, "Fails CLOSED" remark `:257`. Anonymous-endpoint fitness: Common's subclass
 `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Api/AnonymousEndpointTests.cs:14`
-holds 19 entries (`:22-61`), not 18: the ten actions are unchanged (`:26-45`) and the credential pages
-are six (`:51-56`, `ConfirmEmail` added beside `ForgotPassword`, `Login`, `OAuthComplete`, `Register`,
-`ResetPassword`), plus `Forbidden`, `Home`, `NotFound` (`:58-60`); stricter gate `:66`,
-`MinimumScannedTypes => 21` `:70`. Consumer floors: ADC 80
-(`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Api/AnonymousEndpointTests.cs:151`, gate
-`:146`), Store 37 (was 35;
-`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Api/AnonymousEndpointTests.cs:98`, gate
-`:90`), Helpdesk 1
+(anchors as in the 2026-10-08 entry above). Consumer floors: ADC 80
+(`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Api/AnonymousEndpointTests.cs:144`, gate
+`:139`), Store 37 (was 35;
+`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Api/AnonymousEndpointTests.cs:94`, gate
+`:86`), Helpdesk 1
 (`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/AnonymousEndpointTests.cs:35`, gate
-`:45`). Counts per `MMCA.Common/FACTS.md`: 141 test methods across 55 abstract `*TestsBase` classes
-(`:51`), of which Common's own build executes 339 (`:54`); 22 published packages (`:19`); v1.221.0 as
-of 2026-10-02 (`:4`, `:14`). Governance: the §11 Security row is at
-`Website/docs-src/governance/common-ArchitectureScorecard.md:75`, and the backlog's open-work table
-holds #11 at 4 / 8 (`Website/docs-src/governance/common-RemediationBacklog.md:12`, item `:38`,
-Implementation lever "not yet identified" at `:99`). The earlier backlog anchors (`:1066-1104`, the
-1.160.0 consumer-sweep pin, the 2026-08-23 re-adjudication, the checked bullets at `:1557-1559`) no
-longer exist after the backlog restructure and are dropped. The scorecard row itself still cites the
-stale `WebApplicationBuilderExtensions.cs:601` and `:751,767`; that is the scorecard's drift, not
-this article's. Carried from the 2026-10-02 audit's CONFIRMED verdicts and not re-opened in this
-apply pass: `JwtSettings.cs:30` (RS256 default), `RsaJwksProvider.cs:21` (PublicationOnly lazy,
+`:45`). Counts per `MMCA.Common/FACTS.md`: 153 test methods across 61 abstract `*TestsBase` classes
+(`:51`), of which Common's own build executes 410 (`:54`); 22 published packages (`:19`); v1.233.0 as
+of 2026-10-07 (`:4`, `:14`). Governance: the §11 Security row is at
+`Website/docs-src/governance/common-ArchitectureScorecard.md:75` and cites
+`WebApplicationBuilderExtensions.Authentication.cs:109`; the backlog's open-work table holds #11 at
+4 / 8 with a named Implementation lever (authenticate the broker origin headers, give in-cluster gRPC
+a service identity, default tenant resolution to claim-only;
+`Website/docs-src/governance/common-RemediationBacklog.md:12`, item heading `:37`). The earlier
+backlog anchors (`:1066-1104`, the 1.160.0 consumer-sweep pin, the 2026-08-23 re-adjudication, the
+checked bullets at `:1557-1559`) no longer exist after the backlog restructure and are dropped.
+Carried from the 2026-10-02 audit's CONFIRMED verdicts and not re-opened in either apply pass:
+`JwtSettings.cs:30` (RS256 default), `RsaJwksProvider.cs:21` (PublicationOnly lazy,
 public-only export, empty set), `JwksEndpointExtensions.cs:20`, `TokenService.cs:197`
 (`GetPrincipalFromExpiredToken` pin), `InsecureJwtMetadataWarningStartupFilter.cs:26`,
 `GatewayCorsExtensions.cs:38`, `AnonymousEndpointTestsBase.cs:30` (five facts), the invariant tests

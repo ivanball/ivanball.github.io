@@ -25,7 +25,7 @@ that declares its own dependencies so the host can assemble everything in the ri
 
 The framework ships a `dotnet new` pack, so you type none of that plumbing (ADR-065). Hand-rolling it
 costs a day before you write a line of business logic, and ADR-065 measures that starting cost against
-the framework's reference app: 12 projects, 136 files, and 11,532 lines of plumbing, an 827-line
+the framework's reference app: 12 projects, 137 files, and 11,571 lines of plumbing, an 827-line
 `.editorconfig` among them, plus the 100-line `Directory.Packages.props` that carries every package pin
 (58 of them in the seed today), several of those lines load-bearing in ways nothing tells you about
 until much later.
@@ -80,8 +80,8 @@ constructor shape**. Three analyzer rules, and only three, ship dropped to `sugg
 block appended to the *staged* `.editorconfig`; every other analyzer stays at error. `SA1210` cannot
 sort your namespace against `MMCA.Common.*` without knowing your name: an app namespace sorts above it
 for `Contoso.Support` and below it for `Zeta.App`, so no checked-in order survives both. `SA1211` is
-the same story one level down, on the identifier-alias file whose aliases re-sort when a shape flag
-renames them. `IDE0021` is the flags rather than the renames: the aggregate's private constructor
+the same story one level down, on the identifier-alias file whose two aliases re-sort when `--child`
+renames them. `IDE0021` is the shape flags rather than the renames: the aggregate's private constructor
 assigns one property per optional axis, so `--no-status --no-description --no-owner` together leave it
 with a single statement, which the baseline then wants as an expression body. It is one-time, and the
 generated README carries the exact commands (one `dotnet format analyzers` run restores the two
@@ -107,9 +107,10 @@ BaseEntity<TId>  ->  AuditableBaseEntity<TId>  ->  AuditableAggregateRootEntity<
 
 `BaseEntity<TId>` gives you a `required init` identifier (set once at construction, immutable after,
 while EF still materializes through the parameterless constructor). `AuditableBaseEntity<TId>` adds the
-audit fields (`CreatedOn/By`, `LastModifiedOn/By`) and the soft-delete `IsDeleted` flag, all stamped
-automatically. `AuditableAggregateRootEntity<TId>` adds the domain-event collection and aggregate
-helpers.
+audit fields (`CreatedOn/By`, `LastModifiedOn/By`, and `DeletedOn/By` for a soft delete), stamped
+automatically at save; the soft-delete `IsDeleted` flag, which the entity's own `Delete()` method sets;
+and a `RowVersion` concurrency token. `AuditableAggregateRootEntity<TId>` adds the domain-event
+collection and aggregate helpers.
 
 The load-bearing idiom is the **private constructor plus static `Create` factory returning
 `Result<T>`**. You cannot `new` an invalid aggregate into existence; the factory is the only door, and
@@ -259,7 +260,7 @@ The interface ships default-implemented members (`Dependencies => []`, `Requires
 an empty `RegisterDisabledStubs`), so a minimal module implements only `Name` and `Register`:
 
 ```csharp
-// Application layer (representative)
+// API layer (representative): the module's entry point
 public sealed class PromotionsModule : IModule
 {
     public string Name => "Promotions";
@@ -272,11 +273,19 @@ public sealed class PromotionsModule : IModule
         IConfigurationBuilder configuration,
         ApplicationSettings applicationSettings)
     {
-        services.AddScoped<ICouponRepository, CouponRepository>();
-        // handlers, validators, and mappers are picked up by convention scanning (next step)
+        // One call per layer. Handlers, validators, and mappers are picked up by the
+        // Application layer's convention scan (next step); CouponRepository is
+        // registered by the Infrastructure layer's own extension.
+        services.AddModulePromotionsApplication(applicationSettings);
+        services.AddModulePromotionsInfrastructure();
+        services.AddModulePromotionsAPI();
     }
 }
 ```
+
+The class lives in the module's API project, the one layer that references both Application and
+Infrastructure, so it is the natural place to compose them. The generated module keeps `Register` to a
+single line that delegates to an `Add{Module}Module` extension making those three calls.
 
 `Dependencies` is what lets the framework do something genuinely useful: `ModuleLoader` discovers every
 `IModule` in the assemblies the host names and registers them in **topological order** (Kahn's
@@ -298,9 +307,10 @@ sequence out by hand:
 
 ```csharp
 // Host composition root: the generated Web/Program.cs, abridged (representative module names)
+services.AddCommonExceptionHandlers();                  // ProblemDetails exception handlers
 services.AddApplication();                              // core services, event dispatcher
 services.AddInfrastructure(builder.Configuration);      // repos, UoW, DbContexts, caching, outbox
-services.AddAPI(modulesSettings);                       // controllers, idempotency, exception handlers
+services.AddAPI(modulesSettings);                       // controllers, idempotency, feature flags, error localization
 services.AddErrorResources<OrdersErrorResources>();     // one per module: error-code translations
 services.AddErrorResources<PromotionsErrorResources>();
 
@@ -440,9 +450,11 @@ The shape buys consistency, and it asks for discipline in return:
 - **The DI order is guarded, but not completely.** `AddApplicationDecorators()` seals the pipeline, so
   a module scan placed after it throws at startup. A handler registered by hand after it still runs
   undecorated with no warning. The generated solution ships `DecoratorPipelineOrderTests`, which builds
-  the module's registration sequence and asserts the decorator nesting for one command and one query,
-  and the framework exposes `VerifyDecoratorPipeline()` for a fitness test that checks every handler
-  (the next article covers fitness tests).
+  the module's registration sequence, asserts the decorator nesting for one command and one query, and
+  runs the framework's `VerifyDecoratorPipeline()` over the module's whole handler set, so no handler
+  the module registers escapes the pipeline. It runs the module's own registration rather than the
+  host's `Program.cs`, so a handler the host registers by hand after the seal is still silent (the next
+  article covers fitness tests).
 - **Markers are easy to forget.** `ITransactional` and `ICacheInvalidating` are opt-in by presence.
   Forget the marker and you lose the behavior silently. The upside (no behavior you did not ask for) is
   also the trap (no behavior you forgot to ask for).
@@ -511,11 +523,12 @@ host sequence read from `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs
 :130, `AddApplicationDecorators` :132); the module's own scan at
 `Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Application/DependencyInjection.cs:35`. Seed fitness test
 `Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/DecoratorPipelineOrderTests.cs:35` (subclass of
-`DecoratorPipelineOrderTestsBase`, one command plus one query, sequence at :59-61); no stage or
-template exclusion names it. Transactional rollback on business failure at
-`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:599`
-(`RunTransactionalAttemptAsync`), `if (result is Result { IsFailure: true })` at :608, the "Business
-failure: atomicity over partial persistence" comment at :610, `RollbackTransaction();` at :613.
+`DecoratorPipelineOrderTestsBase`, one command plus one query, sequence at :59-61;
+`ComposedPipeline_LeavesNoHandlerUndecorated` at :64-77 calls `services.VerifyDecoratorPipeline()` at
+:76); no stage or template exclusion names it. Transactional rollback on business failure at
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:606`
+(`RunTransactionalAttemptAsync`), `if (result is Result { IsFailure: true })` at :615, the "Business
+failure: atomicity over partial persistence" comment at :617, `RollbackTransaction();` at :620.
 `IModule` defaults at `Modules/IModule.cs:17` (`Dependencies => []`), :23 (`RequiresDependencies =>
 false`), :34 (`RegisterDisabledStubs`); Kahn at `Modules/ModuleLoader.cs:275`; `ModulesSettings.SectionName
 = "Modules"` at `Settings/ModulesSettings.cs:10`. Entity chain, `ICommandHandler`, `ITransactional`,
@@ -523,12 +536,13 @@ false`), :34 (`RegisterDisabledStubs`); Kahn at `Modules/ModuleLoader.cs:275`; `
 (`BaseEntity.cs:37`, `AuditableBaseEntity.cs:13`, `AuditableAggregateRootEntity.cs:13`,
 `ICommandHandler.cs:9,17`, `ITransactional.cs:6`, `ICacheInvalidating.cs:14`, `IQueryCacheable.cs:23,28`),
 not re-opened this pass. Scaffolding figures from `Website/docs-src/adr/065-scaffolding-templates.md`:
-seed tally 12 projects, 136 files, 11,532 lines at :38-39, method re-run 2026-10-01 at :40-42 (129 files
-and 10,394 lines under `Source/` and `Tests/`, plus 1,138 lines across seven root build files), the
-827-line `.editorconfig` and 100-line `Directory.Packages.props` with 58 pins at :43 (the audit
-re-counted the three file figures on disk). "One thing the scaffold deliberately does not hand over"
-and the three relaxed rules at ADR-065 :78-97; the wire-contract freeze shipping under the adopter's
-names at :99-115; the smoke job (`ci.yml:120`) generating three solutions at :157-164, cases at
+seed tally 12 projects, 137 files, 11,571 lines at :42-43, method re-run 2026-10-06 at Helpdesk
+`f6ef4b0` at :44-46 (130 files and 10,500 lines under `Source/` and `Tests/`, plus 1,071 lines across
+seven root build files), the 827-line `.editorconfig` and 100-line `Directory.Packages.props` with 58
+pins at :47. "One thing the scaffold deliberately does not hand over" and the three relaxed rules at
+ADR-065 :83-102 (`SA1211` aliases renamed by `--child` at :88-89, matching `stage.ps1:1193-1195`); the
+wire-contract freeze shipping under the adopter's names at :104-124; the smoke job (`ci.yml:120`)
+generating three solutions at :162-173, cases at
 `MMCA.Helpdesk/build/templates/smoke.ps1:117`, :123, :129 (Contoso.Support, Zeta.Warehouse,
 Nordic.Books); `template-smoke` is advisory, the one required check being `build-and-test`
 (`MMCA.Helpdesk/AGENTS.md`, Contribution Flow). Generated README
@@ -538,7 +552,7 @@ at :117-120, "Your integration-event wire contract is already frozen" at :122-13
 :206, seven wire-ups at :171. Wire-ups from
 `MMCA.Helpdesk/templates/mmca-module/.template.config/template.json:264` (`manualInstructions`), sqlite
 entry :268, server-engine entry :271, step 5 being two host edits (module assembly into the
-`DiscoverAndRegister` list, then `AddErrorResources`) in both entries; ADR-065 :124-126 agrees. Source
+`DiscoverAndRegister` list, then `AddErrorResources`) in both entries; ADR-065 :126-136 agrees. Source
 inconsistency still recorded rather than resolved: the README says "seven wire-ups" at :171 and "six
 wire-ups" at :225; the article follows `template.json`. ALL code blocks are labeled representative (the
 `Coupon`/`Promotions` example is invented; the Step 6 block is an abridged shape of the generated
@@ -552,6 +566,26 @@ host-named assemblies; trade-off bullets updated for the seal, `DecoratorPipelin
 `VerifyDecoratorPipeline`; Authorization bullet gained `IRequiresMfa`; scan list gained
 integration-event handlers, projectors and appliers; all framework doc anchors moved from `CLAUDE.md`
 to `AGENTS.md`; decorator anchors :117-153 -> :114-153; rollback anchors :573/:582/:584/:587 ->
-:599/:608/:610/:613.*
+:599/:608/:610/:613. 2026-10-08 pass against MMCA.Common v1.233.0. Corrections: seed tally 136 files /
+11,532 lines -> 137 / 11,571 (ADR-065 :42-43, re-run 2026-10-06 at :44-46), and the ADR anchors above
+moved to match; `SA1211` wording "when a shape flag renames them" -> "when `--child` renames them"
+(`MMCA.Helpdesk/build/templates/stage.ps1:1193-1195`, ADR-065 :88-89); the Step 5 `IModule` block
+relabeled from Application to API layer and rewritten to the per-layer composition, after
+`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.API/TicketsModule.cs:6`, :13, :17-18
+delegating to `AddTicketsModule` at `MMCA.Helpdesk.Tickets.API/DependencyInjection.cs:15-19`
+(Application, Infrastructure, API); the Step 6 `AddAPI` comment "exception handlers" removed, since
+`AddAPI` at `MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:45-113` registers
+controllers (:47), the idempotency and owner filters (:84-85), feature management (:105-106) and error
+localization (:110), while exception handlers come from `AddCommonExceptionHandlers()` at :149-161,
+which the generated host calls at `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:75` (now
+in the Step 6 block; the other host anchors :78-132 re-read unchanged); the trade-off bullet now says
+the seed `DecoratorPipelineOrderTests` itself calls `VerifyDecoratorPipeline()` over the module's
+handler set (:64-77, :76), with the caveat that it runs the module registration (:59-61), not
+`Program.cs`; the entity paragraph now separates the save-path stamps from `IsDeleted`:
+`MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/AuditableBaseEntity.cs` declares `IsDeleted` at
+:20 (set by `Delete()` at :67-77, :77), `CreatedOn/By` and `LastModifiedOn/By` at :25-31, `DeletedOn`
+:39 and `DeletedBy` :45 (stamped by the audit interceptor, doc :60-63), `RowVersion` :53; rollback
+anchors :599/:608/:610/:613 -> :606/:615/:617/:620. "Green solution in about a minute" (Step 0) is
+not a figure any source on disk records; left as the author's own observation.*
 
 - Full series index: https://ivanball.github.io/writing.html

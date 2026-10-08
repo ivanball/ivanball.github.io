@@ -109,7 +109,7 @@
         <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
         <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
         <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
-        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, four engines</a></li>
         <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
         <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
         <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
@@ -231,7 +231,7 @@ dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal"
           </ol>
           <p>Those fitness functions do not live as copy-pasted test code in each repo. They live once, in a
           shipped package, <code>MMCA.Common.Testing.Architecture</code>, which exposes a reusable rule library and abstract
-          test bases (<strong>141 test methods across 55 base classes</strong>). MMCA.Common&#39;s own build executes 339 fitness
+          test bases (<strong>153 test methods across 61 base classes</strong>). MMCA.Common&#39;s own build executes 410 fitness
           tests built on them. MMCA.ADC and MMCA.Store subclass the same bases and supply their own architecture
           map, and so does MMCA.Helpdesk, the reference app the templates are staged from, so the rules are
           literally identical in every codebase that runs them.</p>

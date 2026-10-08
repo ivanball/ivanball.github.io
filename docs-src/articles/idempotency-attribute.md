@@ -7,7 +7,7 @@
 > `Website/docs-src/adr/017-request-idempotency.md`, `Website/docs-src/onboarding/group-12-api-hosting-mapping.md`,
 > and `Website/docs-src/governance/common-ArchitectureScorecard.md` (§6, §9, §10, §29). No em dashes.
 
-**Subtitle:** Clients retry. Resilient HTTP handlers retry harder. A `POST` that creates a resource must
+**Subtitle:** Clients retry, and not every client's retry policy knows which verbs are safe to resend. A `POST` that creates a resource must
 survive being sent twice. Here is the whole thing in one `[Idempotent]` attribute, formalized in ADR-017,
 plus the matching consumer-side inbox that handles the same problem on the broker.
 
@@ -16,11 +16,11 @@ plus the matching consumer-side inbox that handles the same problem on the broke
 A user taps "Place order." The request goes out. The phone's connection hiccups for two seconds, the
 client sees no response, and it retries. Your server received both requests. It just created two orders.
 
-This is not an exotic failure. It is the *default* behavior of every retrying client and every resilient
-HTTP handler in your stack. The whole point of a Polly retry policy (ADR-009 wires one onto every
-outbound client) is to resend a request that did not visibly succeed. The policy cannot tell "the server
-never got it" from "the server got it and the response got lost." So it resends, and if your `POST` is
-not idempotent, the retry that was supposed to save you just double-charged a customer.
+This is not an exotic failure. It is the *default* behavior of every retrying client. A mobile app's retry
+loop, or a partner integration whose Polly policy retries every verb, exists to resend a request that did
+not visibly succeed. Neither can tell "the server never got it" from "the server got it and the response
+got lost." So it resends, and if your `POST` is not idempotent, the retry that was supposed to save you
+just double-charged a customer.
 
 The fix is a contract: the client attaches a key that says "this is the same logical request," and the
 server promises that the same key produces the same single effect. In MMCA.Common that contract is one
@@ -32,8 +32,11 @@ The non-idempotent `POST` is a quiet, expensive bug. It does not throw. It does 
 produces a second perfectly valid-looking row. You find out when finance reconciles, or when a customer
 complains about a duplicate charge, and by then the originating request is long gone from the logs.
 
-And the pressure toward retries only increases as you harden the system. Add a resilience handler to your
-HTTP clients and you have *more* automatic retries, not fewer. Resilience and idempotency are two halves
+And the pressure toward retries only increases as systems get hardened. A stock resilience handler retries
+every verb unless it is told otherwise, which is exactly why MMCA's own outbound handlers switch the retry
+off for `POST` and `PATCH` (ADR-009), and why the framework's UI client retries a `POST` only when it
+carries an `Idempotency-Key` held constant across the attempts. A server cannot assume every caller is that
+careful, and the ones that are still need the server to honor the key. Resilience and idempotency are two halves
 of the same coin: retries make the system robust to transient failure *only if* the operations being
 retried are safe to repeat. Idempotency is what makes "just retry it" a safe instruction.
 
@@ -90,8 +93,8 @@ One thing that contract does not say out loud: the client's key is not the cache
 `idempotency:{SHA-256(subject | method | route template | client key)}`, where the subject is the caller's
 user id (the `sub` claim, falling back to the mapped name-identifier claim) or, for an unauthenticated call,
 `anon:{remote address}` (`anon:unknown` when there is no address). The four parts are joined with a newline,
-which none of them can contain, so no value can be crafted to forge a different tuple. That is a security
-property before it is anything else. Keying on the bare client value makes the key space global: two callers who happen to
+which an HTTP header value cannot carry, so the client's key cannot be crafted to spill into a neighboring
+part and forge a different tuple. That is a security property before it is anything else. Keying on the bare client value makes the key space global: two callers who happen to
 pick the same value share an entry, so one user's serialized response body gets replayed to another, and
 because services can share a single cache instance the collision reaches across endpoints and across
 services too. Hashing also keeps the stored key bounded no matter what the client sends.
@@ -120,8 +123,8 @@ The fast-path read is lock-free, so the common case (a unique key, no contention
 burst of concurrent duplicates collapses into a single execution rather than a race.
 
 Why a *distributed* lock and not a semaphore: a per-process lock only serializes duplicates that land on
-the same replica. Both deployed apps run more than one, so two duplicates arriving at different replicas
-both miss the cache, both execute, and the second overwrites the first's stored response. That is exactly
+the same replica. Both deployed apps autoscale to more than one, so two duplicates arriving at different
+replicas both miss the cache, both execute, and the second overwrites the first's stored response. That is exactly
 the double write the filter exists to prevent, and no amount of in-memory cleverness fixes it.
 
 `AddCaching()` (called by `AddInfrastructure`) registers the lock unconditionally, right next to the cache,
@@ -192,13 +195,17 @@ genuinely idempotent inbox consumer (dedup by `MessageId` via `IInboxStore`):
   records each handled message by its `MessageId` in an `InboxMessage` table with a unique index.
 - `IntegrationEventConsumer` calls `TryBeginAsync(MessageId, eventType)` before invoking handlers: a
   message the inbox already holds is skipped and acked, never reapplied. `TryBegin` also *stages* the
-  inbox row, unsaved, in the scope's unit of work, so a handler that calls `SaveChangesAsync` on that
-  same scope commits the row in the same transaction as its own mutations. A handler that throws has the
-  staged row abandoned before the rethrow, so the redelivery is not mistaken for a duplicate, as long as
-  the row is still unsaved. If an earlier handler's save already committed it, the abandon cannot take it
-  back: the store logs that case, the redelivery is skipped as a duplicate, and the handlers that had not
-  yet run never run. A consume that reaches the end calls `CompleteAsync(...)` to persist whatever is
-  still unsaved.
+  inbox row, unsaved, in the consume scope's unit of work, so a handler that calls `SaveChangesAsync`
+  through that same scope's context commits the row in the same transaction as its own mutations. The
+  framework's own handlers do not take that path: they derive from `ScopedIntegrationEventHandlerBase`,
+  which opens a DI scope of its own per delivery, so their saves never carry the staged row. For them the
+  row is written by `CompleteAsync(...)` once every handler has succeeded, which makes their mutations
+  and the inbox row two transactions: a crash between the two redelivers the event. A handler that throws
+  has the staged row abandoned before the rethrow, so the redelivery is not mistaken for a duplicate, as
+  long as the row is still unsaved. If an earlier same-scope handler's save already committed it, the
+  abandon cannot take it back: the store logs that case, the redelivery is skipped as a duplicate, and the
+  handlers that had not yet run never run. A consume that reaches the end calls `CompleteAsync(...)` to
+  persist whatever is still unsaved.
 - The posture is resolved from the transport. `MessageBusSettings.EnableInbox` is a nullable bool left
   unset by default, and `IsInboxEnabled` reads that as on for a broker and off for the in-process
   provider, which has no redelivery to dedup. An explicit value wins in both directions: a host that sets
@@ -210,8 +217,10 @@ before dead-lettering. So the honest framing is: the HTTP write path is idempote
 scorecard credits the filter under §9 and §10, where the §10 row, scored Implementation 9, lists the
 filter taking a distributed lock with the stripe as fallback among its evidence, while §29 covers the Polly
 handlers and the outbox's graceful degradation), and the broker consumer path dedups by `MessageId` by
-default on any broker transport. The remaining discipline is treating the explicit opt-out as a decision
-with a cost, and keeping handlers safe to repeat wherever the inbox resolves off.
+default on any broker transport. That dedup is at-least-once-with-dedup, not exactly-once: the crash
+window above still redelivers an event whose handlers already committed, so handlers must stay safe to
+repeat with the inbox on. The remaining discipline is treating the explicit opt-out as a decision with a
+cost, and writing every handler to be safe to repeat.
 
 ## Trade-offs, honestly
 
@@ -243,12 +252,17 @@ with a cost, and keeping handlers safe to repeat wherever the inbox resolves off
   counted on `idempotency.degraded` and the action runs unguarded rather than erroring. Availability wins
   deliberately, and the price is that duplicates can execute twice while the backend is down. Treat that
   metric as an alert, not a dashboard decoration.
-- **Consumer-side idempotency follows the transport.** The inbox above resolves on for a broker and off
-  for the in-process provider, and a host can override either way with `MessageBus:EnableInbox`. Wherever
-  it resolves off, every consumer's idempotency is code you own and test.
-- **On an event with several handlers, the inbox row commits with the first handler that saves.** A later
-  handler that then fails is not retried by the redelivery, which is skipped as a duplicate. Ordering and
-  partial failure across handlers of one event are therefore yours to reason about.
+- **The inbox narrows the consumer-side duplicate problem; it does not remove it.** The inbox above
+  resolves on for a broker and off for the in-process provider, and a host can override either way with
+  `MessageBus:EnableInbox`. Wherever it resolves off, every duplicate reaches your handlers; wherever it
+  resolves on, a crash between a handler's commit and the inbox write still redelivers the event once
+  more. Either way, every consumer's idempotency is code you own and test.
+- **Partial failure across the handlers of one event cuts both ways.** A handler that saves through the
+  consume scope's own context commits the inbox row with it, so a later handler that then fails is not
+  retried: the redelivery is skipped as a duplicate. Handlers built on `ScopedIntegrationEventHandlerBase`
+  save on their own scope and leave the row to `CompleteAsync`, so a failure among them redelivers the
+  event to every handler, including the ones that already committed. Ordering and partial failure across
+  handlers of one event are therefore yours to reason about.
 
 None of these are reasons to skip idempotent writes. They are the reasons to make the key contract
 explicit and to write your broker consumers defensively.
@@ -284,7 +298,7 @@ at-least-once delivery will eventually hand you a duplicate.**
 
 ---
 
-**What we covered:** why retrying clients and resilient handlers turn a `POST` into a double-write, how
+**What we covered:** why a retrying client turns a non-idempotent `POST` into a double-write, how
 the `[Idempotent]` attribute plus an `Idempotency-Key` header caches and replays the first response under a
 distributed lock that spans execute-and-store, why the record is bound to a hash of the request body so a
 reused key with a changed payload is refused instead of replayed, what the filter does when the cache or
@@ -300,8 +314,29 @@ onboarding guide, or `dotnet add package MMCA.Common.API` and try it.*
 
 *Tags: .NET, C Sharp, Web API, Distributed Systems, Resilience*
 
-*Notes: re-verified in source 2026-10-02 at framework v1.221.0 (`MMCA.Common/FACTS.md:4,14`). **Corrected this
-pass (2026-10-02):** (1) `IdempotencyRecord` is `(int StatusCode, string ResponseBody, string RequestBodyHash,
+*Notes: re-verified in source 2026-10-08 at framework v1.233.0 (`MMCA.Common/FACTS.md:4,14`). **Corrected this
+pass (2026-10-08):** (a) Opener and "Why it matters": MMCA's own resilience handlers never replay a POST or PATCH
+(`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:56-63`, `DisableFor` at `:63`; typed-client handler
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:170-177`, `DisableFor` at `:177`;
+recorded in `Website/docs-src/adr/009-resilience-and-recovery-objectives.md:47,97`), and the UI client base retries a
+POST or PATCH only when it carries an `Idempotency-Key` (`IsReplaySafe`,
+`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/AuthenticatedServiceBase.cs:124-148`), which
+`EntityServiceBase` stamps on creates and holds across attempts (`.../Services/Api/EntityServiceBase.cs:18`, `:174`).
+The opener's "ADR-009 wires one onto every outbound client" retry premise and the "more automatic retries" sentence
+are reframed around a client or third-party retry policy; the subtitle and recap follow. (b) Inbox bullet: the
+framework's handlers derive from `ScopedIntegrationEventHandlerBase`, which opens its own scope
+(`MMCA.Common/Source/Core/MMCA.Common.Application/DomainEvents/ScopedIntegrationEventHandlerBase.cs:51`), so their
+saves never carry the staged row; `CompleteAsync` writes it after every handler succeeds
+(`IntegrationEventConsumer.cs:77-81`, `:123`; `EfInboxStore.cs:16-25`; ADR-021 Revision 2026-10-06,
+`Website/docs-src/adr/021-consumer-inbox-idempotency.md:29-32`, `:78-91`). (c) Handlers must be idempotent with the
+inbox on too (`IntegrationEventConsumer.cs:80-81`; ADR-021 `:78-80`, `:90-91`): the section close and the transport
+trade-off bullet are rewritten. (d) The several-handlers trade-off is narrowed to same-scope handlers and gains the
+`ScopedIntegrationEventHandlerBase` full-redelivery case (`EfInboxStore.cs:96-114`, log-and-false `:101-108`;
+`IInboxStore.cs:57-62`). (e) Replicas: both apps run `minReplicas: 1` and autoscale to two or more
+(`MMCA.ADC/infra/main.bicep:1916`, `:2390`; `MMCA.Store/infra/main.bicep:1591`, `:1978-1979`), so "run more than one"
+becomes "autoscale to more than one". (f) Newline separator: narrowed to the client key, since an HTTP header value
+cannot carry a newline; the source comment (`IdempotencyFilter.cs:548`) asserts it for every component, but nothing
+validates the subject claim or the decoded-path route fallback (`:544-546`). **Earlier pass (2026-10-02):** (1) `IdempotencyRecord` is `(int StatusCode, string ResponseBody, string RequestBodyHash,
 string? Location = null, string? ETag = null)`
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyRecord.cs:21-26`; hash doc `:9-13`,
 header docs `:14-20`). `BuildRecord` (`.../Idempotency/IdempotencyFilter.cs:463-501`) stores the ETag the action
@@ -316,9 +351,9 @@ replayed 201 lacks its `Location`, are rewritten. (2) The cache-key subject is `
 SHA-256 hashed under the `idempotency:` prefix (`:550-552`, prefix `:76`) in `BuildCacheKey` (`:539-553`), with
 the SECURITY rationale in the class remarks (`:60-66`). The earlier `user_id` claim wording is removed. (3) Inbox
 abandon: the consumer calls `inbox.Abandon(...)` and ignores its result
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Consumers/IntegrationEventConsumer.cs:101`).
-`EfInboxStore.Abandon` (`.../Persistence/Inbox/EfInboxStore.cs:93-111`) returns false and logs when a handler's
-save already committed the row (`:98-104`), and the contract says the redelivery is then treated as a duplicate
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Consumers/IntegrationEventConsumer.cs:102`).
+`EfInboxStore.Abandon` (`.../Persistence/Inbox/EfInboxStore.cs:96-114`) returns false and logs when a handler's
+save already committed the row (`:101-108`), and the contract says the redelivery is then treated as a duplicate
 and the remaining handlers do not run again (`.../Persistence/Inbox/IInboxStore.cs:57-62`). The inbox bullet is
 narrowed and a trade-off bullet added. (4) §10 attribution: the scorecard no longer records a twenty-fifth-wave 8
 to 9 lift. The §10 row (`Website/docs-src/governance/common-ArchitectureScorecard.md:74`, Implementation 9) lists
@@ -347,22 +382,22 @@ create action carries it (`.../Controllers/AggregateRootEntityControllerBase.cs:
 (`.../Idempotency/IdempotencySettings.cs:15-16`). The Infrastructure DI registration is split into partials:
 `AddInfrastructure` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:57`) calls
 `AddCaching` at `:140`, and `AddCaching` (`.../DependencyInjection.Caching.cs:26`) registers the lock through
-`TryAddSingleton<IDistributedLock>` (`:86-100`; `RedisDistributedLock` `:94`, `InProcessDistributedLock`
-`:99`). The Redis acquire is `SET ... NX PX` (`.../Concurrency/RedisDistributedLock.cs:11`, `When.NotExists` at
+`TryAddSingleton<IDistributedLock>` (`:88-102`; `RedisDistributedLock` `:96`, `InProcessDistributedLock`
+`:101`). The Redis acquire is `SET ... NX PX` (`.../Concurrency/RedisDistributedLock.cs:11`, `When.NotExists` at
 `:67`), single-instance and not Redlock (`:20`), with a Lua compare-and-delete release script (`:37`); the
 in-process fallback warns once (`.../Concurrency/InProcessDistributedLock.cs:75`). Contract:
 `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/IDistributedLock.cs:30` (not reentrant `:20`,
 best-effort and not consensus `:24`). Stripe: `MMCA.Common/Source/Core/MMCA.Common.Shared/Concurrency/KeyedSemaphoreStripe.cs:22`
 (width 256 `:25`, acquire `:60`, the `Releaser` only releases `:78-85`), class doc `:8-16`. Inbox posture:
 `MessageBusSettings.EnableInbox` is `bool?` (`.../Messaging/MessageBusSettings.cs:133`), `IsInboxEnabled`
-`:141`, `RetryLimit` default 5 `:92`; registration `.../DependencyInjection.Messaging.cs:107-123`
-(`EfInboxStore` `:109`, `NoOpInboxStore` `:117`, `InboxDisabledWarningService` `:122`); `UseMessageRetry`
-`:286` and `:326`. Consumer: `TryBeginAsync` `IntegrationEventConsumer.cs:81` (staging rationale `:76-80`),
-rethrow `:108`, `CompleteAsync` `:122`. `InboxMessages` table
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:724`) with a
-unique `MessageId` index (`:726-728`) inside `ConfigureInbox` (`:721`, invoked `:426`). ADR-021
-(`Website/docs-src/adr/021-consumer-inbox-idempotency.md:8`, revised 2026-08-26). At-least-once outbox delivery
-from ADR-003. Scorecard: evidence stamp 2026-10-01 at v1.218.0 (`common-ArchitectureScorecard.md:5`), Maturity
+`:141`, `RetryLimit` default 5 `:92`; registration `.../DependencyInjection.Messaging.cs:108-124`
+(`EfInboxStore` `:110`, `NoOpInboxStore` `:118`, `InboxDisabledWarningService` `:123`); `UseMessageRetry`
+`:292` and `:332`. Consumer: `TryBeginAsync` `IntegrationEventConsumer.cs:82` (staging rationale `:77-81`),
+rethrow `:109`, `CompleteAsync` `:123`. `InboxMessages` table
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:725`) with a
+unique `MessageId` index (`:728-730`) inside `ConfigureInbox` (`:722`, invoked `:427`). ADR-021
+(`Website/docs-src/adr/021-consumer-inbox-idempotency.md:8`, revised 2026-10-06 and 2026-10-07, `:29-33`). At-least-once outbox delivery
+from ADR-003. Scorecard: evidence stamp 2026-10-07 at v1.233.0 (`common-ArchitectureScorecard.md:5`), Maturity
 96.6% (317/328) `:9`, Implementation 86.0% (705/820) `:10`; §6 credits the inbox consumer `:70`, §9 the filter
 `:73`, §10 the filter's `IDistributedLock` `:74`, §29 the Polly handlers plus outbox degradation `:93`. NOT
 RESOLVED this pass: the header lists Rubric §9,§29 while the grounding line and this ledger cite §6, §9, §10 and

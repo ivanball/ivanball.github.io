@@ -1,12 +1,13 @@
 # Modular monolith to microservices, without the rewrite
 
 > Series: MMCA.Common · Article #2 (cornerstone thesis) · Pillar P1/P3 · Groups G07,G13,G14 ·
-> Rubric §7 · ADRs 006/007/008 · Status: grounded in `MMCA.Common/CLAUDE.md` (its microservice
-> extraction-boundaries section), `Website/docs-src/adr/006-database-per-service.md`, `Website/docs-src/adr/007-grpc-extraction.md`,
+> Rubric §7 · ADRs 006/007/008 · Status: grounded in `MMCA.Common/AGENTS.md` (its "Microservices
+> Extraction Boundaries" section), `Website/docs-src/adr/006-database-per-service.md`, `Website/docs-src/adr/007-grpc-extraction.md`,
 > `Website/docs-src/adr/008-service-extraction-topology.md`, and `Website/docs-src/onboarding/group-14-module-system-composition.md`
-> + `group-13-grpc-contracts.md`, with source re-read 2026-10-02 at v1.221.0 (`MessageBusSettings.cs`,
+> + `group-13-grpc-contracts.md`, with source re-read 2026-10-08 at v1.233.0 (`MessageBusSettings.cs`,
 > `ArchitectureRules.Transport.cs`, `ResultGrpcExtensions.cs`, ADC `IBookmarkCountService.cs`,
-> `GetSessionBookmarkCountHandler.cs`, Engagement.Contracts `DependencyInjection.cs`). No em dashes.
+> `GetSessionBookmarkCountHandler.cs`, Engagement.Contracts `DependencyInjection.cs`, Conference.Service
+> `Program.cs`). No em dashes.
 
 **Subtitle:** "Monolith or microservices" is the wrong question. Build the extraction point now, keep it tested,
 and cut the service later, on a boundary you have already proven.
@@ -102,14 +103,18 @@ the wire hop does not poison your error handling.
 The last leak is everything around the services. Cross-service auth uses JWKS, not a shared secret:
 `IJwksProvider` (`RsaJwksProvider`) exposes signing keys, and `JwksEndpointExtensions` serves
 `/.well-known/jwks.json`, so an extracted service validates a forwarded token against the issuer's
-public keys, discovered through the gateway. A single YARP reverse-proxy gateway is the only client
+public keys. Under the Aspire AppHost each service discovers those keys through the gateway; in
+production each service points its JWT authority straight at the Identity service. A single YARP reverse-proxy gateway is the only client
 entry point, owning the route-to-service map; clients never address a service directly.
 `MMCA.Common.Aspire.Hosting` wires the broker, JWKS discovery, and the per-service data sources for
 the extracted topology.
 
 ADR-008 names the payoff precisely: each extracted service is just **the monolith with one module
-enabled.** The `ModuleLoader` still runs, only with one module's `Enabled=true`; disabled peers are
-satisfied by `Disabled*` stubs, which the host then replaces with gRPC clients. The Domain,
+enabled.** The `ModuleLoader` still runs, but each service host names only its own module assembly,
+so peer modules are never discovered and their interfaces are wired by gRPC clients the host
+registers. (The `Disabled*` stubs belong to a combined host that discovers a module and finds it
+disabled.) Because the host names its module list in code, folding services back together is a
+host-level change, not configuration alone. The Domain,
 Application, and Shared code is byte-for-byte identical whether it runs in-process or extracted.
 
 ## What the boundary looks like in code
@@ -118,8 +123,9 @@ The whole thesis fits in one DI swap. The same handler depends on the same inter
 registration line differs between the two topologies.
 
 ```csharp
-// Application code depends ONLY on the interface. It never sees the transport.
+// Application code depends on the interface. It never sees the transport.
 public sealed class GetSessionBookmarkCountHandler(
+    IUnitOfWork unitOfWork,
     IBookmarkCountService bookmarkCountService) : IQueryHandler<GetSessionBookmarkCountQuery, Result<int>>
 {
     // ... var count = await bookmarkCountService.GetBookmarkCountForSessionAsync(query.SessionId, cancellationToken);
@@ -129,8 +135,8 @@ public sealed class GetSessionBookmarkCountHandler(
 // MONOLITH host: the real in-process implementation is registered (peer module enabled).
 //   -> IBookmarkCountService = the concrete Engagement service. Delivery is a method call.
 
-// EXTRACTED host: after ModuleLoader runs, the peer is disabled (a Disabled* stub holds the slot),
-// then the .Contracts DI helper overwrites it with the gRPC adapter:
+// EXTRACTED host: it names only the Conference assembly, so no Engagement registration exists here,
+// and the .Contracts DI helper adds the gRPC adapter (Replace, so it would also win over a stub):
 services.Replace(ServiceDescriptor.Scoped<IBookmarkCountService, BookmarkCountServiceGrpcAdapter>());
 //   -> same interface, now a gRPC call. GetSessionBookmarkCountHandler does not change.
 ```
@@ -197,7 +203,7 @@ install it and try the split for yourself.*
 
 *Tags: .NET, C Sharp, Software Architecture, Microservices, Modular Monolith*
 
-*Notes: 2026-10-02 re-verify at framework v1.221.0 (`MMCA.Common/FACTS.md:14`); every anchor below was
+*Notes: 2026-10-08 re-verify at framework v1.233.0 (`MMCA.Common/FACTS.md:14`); every anchor below was
 re-read in this run. Messaging: `IMessageBus`
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Messaging/IMessageBus.cs:28`), `InProcessMessageBus`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/InProcessMessageBus.cs:19`) and
@@ -214,13 +220,24 @@ and subclassed in Common, ADC, Store, Helpdesk and the MMCA.ECommerce sample. Da
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/DataSourceResolver.cs:16`, the
 collapse onto Default described at :191 and :294) and `EntityDataSourceRegistry`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/EntityDataSourceRegistry.cs:21`).
-Modules: `ModuleLoader` (`MMCA.Common/Source/Core/MMCA.Common.Application/Modules/ModuleLoader.cs:16`) and the
-`Disabled*` stubs, e.g. `DisabledBookmarkCountService`
+Modules: `ModuleLoader` (`MMCA.Common/Source/Core/MMCA.Common.Application/Modules/ModuleLoader.cs:16`, the
+disabled-module stub path `module.RegisterDisabledStubs(services)` at :119) and the `Disabled*` stubs, e.g.
+`DisabledBookmarkCountService`
 (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/UserSessionBookmarks/DisabledBookmarkCountService.cs:7`).
+The extracted Conference host passes only its own assembly to `AddModuleHost`
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:373-375`), so no Engagement stub is
+registered (header comment at :36-39, pipeline comment at :393-397), and registers
+`AddEngagementBookmarkCountClient()` at :420; ADR-008's 2026-10-01 Revision
+(`Website/docs-src/adr/008-service-extraction-topology.md:154`) states the same, while the payoff wording
+"the monolith with one module enabled" stays at its :47.
 Auth: `IJwksProvider` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/IJwksProvider.cs:11`, serving
 `/.well-known/jwks.json` per its doc comment at :6), `RsaJwksProvider`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/RsaJwksProvider.cs:14`) and `JwksEndpointExtensions`
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Endpoints/JwksEndpointExtensions.cs:15`). gRPC and
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Endpoints/JwksEndpointExtensions.cs:15`). JWKS
+discovery through the gateway is AppHost-only (`WithJwksDiscovery(identityService, gateway)` at
+`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:368-370`); in production each service's
+`Authentication__JwtBearer__Authority` is `http://${identityApp.name}` (`MMCA.ADC/infra/main.bicep:2005`,
+:2141, :2295). gRPC and
 Result over the wire: `GrpcResultExceptionInterceptor`
 (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Interceptors/GrpcResultExceptionInterceptor.cs:19`,
 catching `ResultFailureException` at :34 and mapping its errors through `ToRpcException()` in
@@ -235,27 +252,36 @@ adapters call it, e.g. `ex.ToResult<EventLiveInfo>()`
 `BookmarkCountServiceGrpcAdapter`
 (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Contracts/BookmarkCountServiceGrpcAdapter.cs:14`) returns a
 plain count and has no `Result` to rebuild. The `.Contracts` convention:
-`MMCA.Common/Directory.Build.props:153` (the `EndsWith('.Contracts')` item group) with
-`<Protobuf Include="Protos\**\*.proto" GrpcServices="Both" />` at :160. Worked example:
+`MMCA.Common/Directory.Build.props:175` (the `EndsWith('.Contracts')` item group) with
+`<Protobuf Include="Protos\**\*.proto" GrpcServices="Both" />` at :182. Worked example:
 `IBookmarkCountService` carries `[ServiceContract]` and declares
 `Task<int> GetBookmarkCountForSessionAsync(SessionIdentifierType sessionId, CancellationToken)`
 (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/UserSessionBookmarks/IBookmarkCountService.cs:10`
 and :19); `GetSessionBookmarkCountHandler`
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/UseCases/GetSessionBookmarkCount/GetSessionBookmarkCountHandler.cs:14`,
+primary constructor `(IUnitOfWork unitOfWork, IBookmarkCountService bookmarkCountService)` at :15-16,
 implementing `IQueryHandler<GetSessionBookmarkCountQuery, Result<int>>` at :16) makes the call at :43 and
 returns `Result.Success(count)` at :45; the code sample's `services.Replace(...)` line is verbatim source
 (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Contracts/DependencyInjection.cs:49`, inside
-`AddEngagementBookmarkCountClient` at :43). Aspire hosting: `MMCA.Common.Aspire.Hosting` ships four source
-files (`Extensions.cs`, `H2cHealthCheckExtensions.cs`, `H2cEndpointHealthCheck.cs`,
+`AddEngagementBookmarkCountClient` at :43; the comment at :47-48 notes Replace wins over an in-process
+registration or a disabled stub where one exists). Aspire hosting: `MMCA.Common.Aspire.Hosting` ships five
+source files (`BrokerSelection.cs`, `Extensions.cs`, `H2cHealthCheckExtensions.cs`, `H2cEndpointHealthCheck.cs`,
 `ServiceBusEmulatorResource.cs`); `MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs`
 exposes `AddMessageBroker` (:160), `WithBroker` (:252, second overload :280), `WithJwksDiscovery` (:309),
 `WithE2eRsaKeys` (:353) and
 `WithSQLServerDataSource`/`WithPostgreSQLDataSource`/`WithCosmosDataSource`/`WithSqliteDataSource`
 (:483/:513/:542/:567), and **no** gRPC project-reference API (the only gRPC mention is a prose comment at
 :322). ADC's AppHost wires gRPC peers with stock Aspire `WithReference`
-(`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:269-301`; the Conference to Engagement reference at
-:274 carries no `WaitFor`). Repo and license: `ivanball/MMCA.Common`, Apache-2.0
-(`MMCA.Common/Directory.Build.props:49-50`). Changes this run: the license/URL anchor was re-anchored to
+(`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:264-296`; the Conference to Engagement reference at
+:269 carries no `WaitFor`). Repo and license: `ivanball/MMCA.Common`, Apache-2.0
+(`MMCA.Common/Directory.Build.props:71-72`). Changes this run (2026-10-08): section 4's module paragraph and
+the code sample's extracted-host comment were corrected (an extracted host names only its own module
+assembly, so no `Disabled*` stub holds the peer's slot; the stubs serve a combined host), the JWKS sentence
+was corrected (gateway discovery is AppHost-only, production points at Identity directly), the code sample's
+handler constructor gained its `IUnitOfWork` parameter, the header source moved from `MMCA.Common/CLAUDE.md`
+to `MMCA.Common/AGENTS.md:125`, the Aspire.Hosting file count went from four to five (`BrokerSelection.cs`),
+and the `Directory.Build.props` anchors (153/160 to 175/182, 49-50 to 71-72) and AppHost anchors (269-301/274
+to 264-296/269) were re-anchored. The 2026-10-02 run: the license/URL anchor was re-anchored to
 49-50; the error-model paragraph was corrected (the trailer-to-`Result` rebuild is `ToResult()` in
 `ResultGrpcExtensions`, called by Result-returning adapters, not something the bookmark adapter does); the
 code sample's handler shape now matches source (primary constructor plus `IQueryHandler`); a "now" was

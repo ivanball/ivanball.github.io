@@ -109,7 +109,7 @@
         <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
         <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
         <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
-        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, four engines</a></li>
         <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
         <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
         <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
@@ -216,8 +216,10 @@ Validating -&gt; Timeout -&gt; Transactional -&gt; Concrete Handler</code></pre>
           <p>And for queries, one decorator shorter: everything the command chain carries except the transaction.</p>
           <pre class="doc-pre" tabindex="0"><code class="">FeatureGate -&gt; Authorization -&gt; Logging -&gt; Caching -&gt;
 Validating -&gt; Timeout -&gt; Concrete Handler</code></pre>
-          <p>(The framework also has an optional <code>Profiling</code> decorator layered on top when profiling is enabled, via a
-          separate <code>AddApplicationProfiling()</code> call.)</p>
+          <p>(The framework also ships an optional pair of MiniProfiler decorators, <code>ProfilingCommandDecorator</code> and
+          <code>ProfilingQueryDecorator</code>, registered only by a separate opt-in <code>AddApplicationProfiling()</code> call; called
+          after <code>AddApplicationDecorators()</code>, they wrap both chains from the outside. No consumer host calls it
+          today.)</p>
           <p>Each position is a deliberate cost-and-correctness argument:</p>
           <ul>
           <li><strong>Feature-gating is outermost</strong> so a disabled feature is rejected with zero downstream work: no
@@ -272,7 +274,7 @@ Validating -&gt; Timeout -&gt; Concrete Handler</code></pre>
           <p>The transactional decorator wraps the handler in <code>IUnitOfWork.ExecuteInTransactionAsync</code> <strong>only when the
           command implements <code>ITransactional</code></strong>. Three outcomes, three behaviors:</p>
           <ul>
-          <li><strong>An exception rolls back.</strong> The transaction unwinds, nothing is persisted.</li>
+          <li><strong>An exception from the handler rolls back.</strong> The transaction unwinds, nothing is persisted.</li>
           <li><strong>A business failure (<code>Result.IsFailure</code>, no exception) also rolls back.</strong> This is the subtle one. A
           failed <code>Result</code> means the handler decided &quot;no&quot; through a value rather than an exception, and the unit of
           work treats that decision exactly like a thrown fault:
@@ -282,7 +284,11 @@ Validating -&gt; Timeout -&gt; Concrete Handler</code></pre>
           committed and there is nothing stale to evict.</li>
           <li><strong>A success commits and then invalidates the cache.</strong> Only a success reaches <code>CommitTransaction()</code>.
           In-process domain events are flushed <em>after</em> the commit, so a handler never acts on state that could
-          still roll back, and cache eviction runs <em>outside</em> the transaction boundary against committed state.</li>
+          still roll back, and cache eviction runs <em>outside</em> the transaction boundary against committed state.
+          The one failure this cannot classify is the commit itself: the database may have applied the
+          transaction and lost only the acknowledgement, so a failed commit is never retried or treated as a
+          rollback. It surfaces as a <code>TransactionCommitAmbiguousException</code>, its writes possibly durable, and
+          the caller owns recovery.</li>
           </ul>
           <p>That &quot;a business failure rolls back like an exception&quot; rule is the kind of decision that, in scattered
           code, would be implemented three different ways in three handlers. Here it is one place, one behavior,
@@ -379,8 +385,9 @@ Validating -&gt; Timeout -&gt; Concrete Handler</code></pre>
 forwarded headers -&gt; HTTPS redirect (skipped for cleartext HTTP/2) -&gt; response compression -&gt;
 routing -&gt; CORS -&gt; authentication -&gt; tenant resolution -&gt; rate limiter -&gt;
 soft-deleted-user check -&gt; authorization -&gt; output cache -&gt; JWKS + OIDC discovery -&gt; controllers</code></pre>
-          <p>Four of those adjacencies are load-bearing, and the builder re-validates every one of them while it
-          builds the step list, each with its reason carried in the exception it would throw:</p>
+          <p>Four of those orderings are load-bearing, two of them strict adjacencies, and the builder re-validates
+          every one of them while it builds the step list, each with its reason carried in the exception it would
+          throw:</p>
           <ul>
           <li><strong>The pre-forwarded capture immediately before forwarded headers.</strong> The capture step stashes the real
           transport scheme and host before <code>UseForwardedHeaders</code> rewrites them from the <code>X-Forwarded-*</code> headers,
@@ -395,7 +402,7 @@ soft-deleted-user check -&gt; authorization -&gt; output cache -&gt; JWKS + OIDC
           principal and routes anonymous traffic down a no-limiter branch, so an unpopulated user makes every
           request look anonymous and the per-user cap never engages.</li>
           </ul>
-          <p>The gRPC exemption on the HTTPS redirect is a step predicate rather than an adjacency, and it is keyed
+          <p>The gRPC exemption on the HTTPS redirect is a step predicate rather than an ordering rule, and it is keyed
           on the protocol Kestrel negotiated, not on the request&#39;s content type. The step runs ahead of routing,
           so no endpoint metadata exists yet; what does exist is the negotiated protocol, which no header can
           fake. Cleartext HTTP/2 is exactly the gRPC-over-plaintext case that a 307 would break, and every
@@ -417,7 +424,7 @@ soft-deleted-user check -&gt; authorization -&gt; output cache -&gt; JWKS + OIDC
           the fast unit tier, and a reorder goes red before the semantics go quiet. Swapping two steps still
           compiles and still passes every analyzer, but it no longer passes the test pass. Second, <strong>the
           extension point is scoped</strong>. The method takes an optional configure delegate: a host can insert,
-          replace, or remove steps by name, and the builder re-validates the load-bearing adjacencies at
+          replace, or remove steps by name, and the builder re-validates the load-bearing orderings at
           startup, so a customized edge fails while the host is starting instead of misordering silently. A
           host whose edge is genuinely different still composes its own, which is what the Blazor UI hosts and
           the YARP gateways do; the escape hatch comes in two sizes, not one.</p>
