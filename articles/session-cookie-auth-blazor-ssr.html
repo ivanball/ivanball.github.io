@@ -109,7 +109,7 @@
         <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
         <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
         <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
-        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, four engines</a></li>
         <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
         <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
         <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
@@ -275,7 +275,9 @@ endpoints.MapPost(<span class="hljs-string">&quot;/auth/session/token&quot;</spa
           <code>ITokenRefresher</code> and <code>ISessionCookieSync</code> with handoff implementations, so the circuit keeps calling the
           gateway server-to-server and trades tokens with the cookies only as protected handoffs. Before anything
           is forwarded, the proxy endpoint refuses a cross-origin caller (403 <code>cross_origin_rejected</code>), requires an
-          <code>X-CSRF: 1</code> header on every unsafe method (403 <code>csrf_header_required</code>), and validates or refreshes the
+          <code>X-CSRF: 1</code> header on every unsafe method (403 <code>csrf_header_required</code>) except an HTTP/2 WebSocket
+          handshake (an extended <code>CONNECT</code>, which a browser cannot add a header to, so the same-origin <code>Origin</code>
+          gate carries it instead), and validates or refreshes the
           session through <code>ICookieSessionRefresher.ValidateOrRefreshAsync</code>. When the identity endpoint is
           unreachable it answers 503 <code>session_refresh_unavailable</code> and keeps the cookies, rather than signing the
           user out over a blip. Both Web UI hosts register the proxy after their session-cookie wiring and map it
@@ -293,10 +295,10 @@ endpoints.MapPost(<span class="hljs-string">&quot;/auth/session/token&quot;</spa
           <p>Cookie-based auth reintroduces a concern that a pure bearer-header design does not have: a cross-site page
           can cause the browser to send your cookies. The framework pays that tax with defense-in-depth rather than a
           single control, at two layers. On the session endpoints, the cookies carry a <code>SameSite</code> mode (framework
-          default <code>Lax</code>, so they are not sent on cross-site subrequests), the refresh endpoint rejects cross-site
-          POSTs by checking the <code>Sec-Fetch-Site</code> header (<code>IsCrossSite</code>), and the cookie endpoints disable antiforgery
-          deliberately (they carry no antiforgery token and are guarded by <code>SameSite</code> + <code>Sec-Fetch-Site</code> + POST-only
-          instead). On the proxied data path, the same-origin check and the <code>X-CSRF</code> header carry CSRF: a custom
+          default <code>Lax</code>, so they are not sent on cross-site subrequests), the <code>/auth/session/token</code> refresh endpoint
+          additionally rejects cross-site POSTs by checking the <code>Sec-Fetch-Site</code> header (<code>IsCrossSite</code>), and the
+          cookie seed and clear endpoints (<code>POST</code> and <code>DELETE /auth/session-cookie</code>) disable antiforgery deliberately
+          (they carry no antiforgery token and rest on the cookies&#39; <code>SameSite</code> mode alone). On the proxied data path, the same-origin check and the <code>X-CSRF</code> header carry CSRF: a custom
           header cannot be sent cross-origin without a preflight, and the proxy answers <code>OPTIONS</code> itself with no
           CORS grant. That makes <code>SameSite</code> a usability choice there rather than the CSRF control. The proxy
           defaults it to <code>Strict</code>; both apps choose <code>Lax</code>, so a signed-in user following a mailed deep link keeps
@@ -344,8 +346,9 @@ endpoints.MapPost(<span class="hljs-string">&quot;/auth/session/token&quot;</spa
           <li><strong>The proxy removes theft, not use.</strong> An injected script runs same-origin and passes both proxy gates,
           so it can still act as the user while the page is open; it just cannot carry a token away. Content
           Security Policy stays the control for that.</li>
-          <li><strong>CSRF surface a header-only design would not have.</strong> <code>SameSite</code> plus <code>Sec-Fetch-Site</code> plus POST-only on
-          the session endpoints, and an origin gate plus <code>X-CSRF</code> on the proxy, is solid, but it is a surface, and
+          <li><strong>CSRF surface a header-only design would not have.</strong> <code>SameSite</code> on the session endpoints plus a
+          <code>Sec-Fetch-Site</code> check on the token endpoint, and an origin gate plus <code>X-CSRF</code> on the proxy, is solid,
+          but it is a surface, and
           a reviewer has to understand both layers to trust it.</li>
           <li><strong>Expiry is checked, not cryptographically enforced, at the SSR edge.</strong> A tampered cookie produces claims
           that fail at the API on the next call, but the one prerendered HTML pass is produced from unverified
@@ -372,9 +375,9 @@ endpoints.MapPost(<span class="hljs-string">&quot;/auth/session/token&quot;</spa
           is exchanged on the server and never serialized to the client.</li>
           <li><strong>Refresh before authentication on GETs.</strong> A small middleware that mints a fresh access token before the
           auth handler runs closes the &quot;expired between requests&quot; gap without a client round-trip.</li>
-          <li><strong>Budget for CSRF.</strong> Cookies bring it back. <code>SameSite</code> plus a <code>Sec-Fetch-Site</code> check plus POST-only
-          endpoints protects the session endpoints, and a strict same-origin check plus a custom header protects a
-          cookie-authenticated proxy: a defensible, layered answer.</li>
+          <li><strong>Budget for CSRF.</strong> Cookies bring it back. <code>SameSite</code> cookies protect the session endpoints, with a
+          <code>Sec-Fetch-Site</code> check on the one that hands out session state, and a strict same-origin check plus a
+          custom header protects a cookie-authenticated proxy: a defensible, layered answer.</li>
           <li><strong>Share the key ring before you scale out.</strong> The moment a cookie-minting host runs more than one
           replica, per-process keys become random sign-outs. Persist the ring to one shared store with an
           application discriminator, and keep encryption of the ring at rest as a separate switch so a lagging
@@ -392,7 +395,7 @@ endpoints.MapPost(<span class="hljs-string">&quot;/auth/session/token&quot;</spa
           refresh middleware, why the design is safe only because the API stays the validation
           boundary, why a scaled-out cookie host also needs a shared DataProtection key ring (ADR-069, adopted by
           both apps, with Store&#39;s blob URI gated behind a readiness flag), and the CSRF and dual-path costs that buys.</p>
-          <p><strong>Next in the series:</strong> external OAuth login, adding Google and GitHub sign-in behind your own local
+          <p><strong>Next in the series:</strong> external OAuth login, adding Google, GitHub and Apple sign-in behind your own local
           JWTs (ADR-036), where an <code>OAuthControllerBase</code> swaps a single-use, short-lived cached code for the JWT
           pair so the tokens never ride the redirect URL.</p>
           <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the 2-minute ADR-022 behind this

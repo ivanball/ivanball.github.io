@@ -109,7 +109,7 @@
         <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
         <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
         <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
-        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, four engines</a></li>
         <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
         <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
         <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
@@ -235,19 +235,24 @@
           <p>The last leak is everything around the services. Cross-service auth uses JWKS, not a shared secret:
           <code>IJwksProvider</code> (<code>RsaJwksProvider</code>) exposes signing keys, and <code>JwksEndpointExtensions</code> serves
           <code>/.well-known/jwks.json</code>, so an extracted service validates a forwarded token against the issuer&#39;s
-          public keys, discovered through the gateway. A single YARP reverse-proxy gateway is the only client
+          public keys. Under the Aspire AppHost each service discovers those keys through the gateway; in
+          production each service points its JWT authority straight at the Identity service. A single YARP reverse-proxy gateway is the only client
           entry point, owning the route-to-service map; clients never address a service directly.
           <code>MMCA.Common.Aspire.Hosting</code> wires the broker, JWKS discovery, and the per-service data sources for
           the extracted topology.</p>
           <p>ADR-008 names the payoff precisely: each extracted service is just <strong>the monolith with one module
-          enabled.</strong> The <code>ModuleLoader</code> still runs, only with one module&#39;s <code>Enabled=true</code>; disabled peers are
-          satisfied by <code>Disabled*</code> stubs, which the host then replaces with gRPC clients. The Domain,
+          enabled.</strong> The <code>ModuleLoader</code> still runs, but each service host names only its own module assembly,
+          so peer modules are never discovered and their interfaces are wired by gRPC clients the host
+          registers. (The <code>Disabled*</code> stubs belong to a combined host that discovers a module and finds it
+          disabled.) Because the host names its module list in code, folding services back together is a
+          host-level change, not configuration alone. The Domain,
           Application, and Shared code is byte-for-byte identical whether it runs in-process or extracted.</p>
           <h2 id="what-the-boundary-looks-like-in-code">What the boundary looks like in code</h2>
           <p>The whole thesis fits in one DI swap. The same handler depends on the same interface; only the
           registration line differs between the two topologies.</p>
-          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Application code depends ONLY on the interface. It never sees the transport.</span>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Application code depends on the interface. It never sees the transport.</span>
 <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">GetSessionBookmarkCountHandler</span>(<span class="hljs-params">
+    IUnitOfWork unitOfWork,
     IBookmarkCountService bookmarkCountService</span>) : IQueryHandler&lt;GetSessionBookmarkCountQuery, Result&lt;<span class="hljs-built_in">int</span>&gt;&gt;</span>
 {
     <span class="hljs-comment">// ... var count = await bookmarkCountService.GetBookmarkCountForSessionAsync(query.SessionId, cancellationToken);</span>
@@ -257,8 +262,8 @@
 <span class="hljs-comment">// MONOLITH host: the real in-process implementation is registered (peer module enabled).</span>
 <span class="hljs-comment">//   -&gt; IBookmarkCountService = the concrete Engagement service. Delivery is a method call.</span>
 
-<span class="hljs-comment">// EXTRACTED host: after ModuleLoader runs, the peer is disabled (a Disabled* stub holds the slot),</span>
-<span class="hljs-comment">// then the .Contracts DI helper overwrites it with the gRPC adapter:</span>
+<span class="hljs-comment">// EXTRACTED host: it names only the Conference assembly, so no Engagement registration exists here,</span>
+<span class="hljs-comment">// and the .Contracts DI helper adds the gRPC adapter (Replace, so it would also win over a stub):</span>
 services.Replace(ServiceDescriptor.Scoped&lt;IBookmarkCountService, BookmarkCountServiceGrpcAdapter&gt;());
 <span class="hljs-comment">//   -&gt; same interface, now a gRPC call. GetSessionBookmarkCountHandler does not change.</span></code></pre>
           <p>The transport choice is one line at the composition edge. Everything above it is untouched.</p>

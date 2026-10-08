@@ -163,9 +163,9 @@ match, not because they are the same row.
 Each concrete value object (`Email`, `Money`, `Address`, `DateRange`) uses the same private-constructor
 plus static `Create` returning `Result<T>` idiom, so an invalid `Email` simply cannot be constructed.
 The validation lives in static *invariants* classes (`EmailInvariants`, `AddressInvariants`). Only
-`AddressInvariants`'s `MaxLength` constants are actually reused elsewhere, and both reuse sites sit
+`AddressInvariants`'s `MaxLength` fields are actually reused elsewhere, and both reuse sites sit
 inside MMCA.Common: `AddressValidationRules` reads them for FluentValidation, and the `OwnsAddress`
-mapping extension reads the same six constants for `HasMaxLength` on the owned `Address` columns, so a
+mapping extension reads the same six fields for `HasMaxLength` on the owned `Address` columns, so a
 consuming app (Store's `CustomerConfiguration`) gets the field-length rule from one source of truth
 through a single `builder.OwnsAddress(p => p.Address);` call (a second `OwnsOne` there overrides only
 the unicode facet, never a length). `EmailInvariants.MaxLength` does not get
@@ -337,9 +337,20 @@ or `dotnet add package MMCA.Common.API` and try it.*
 
 *Tags: .NET, C Sharp, Software Architecture, Programming, Domain-Driven Design*
 
-*Notes: re-verified 2026-10-02 against MMCA.Common v1.221.0 (`MMCA.Common/FACTS.md:14`); every
-anchor below was re-read from source this run (paths under `Source/` are relative to `MMCA.Common/`).
-**This run's changes:** header `Status` re-grounded on source folders (the `MMCA.Common/CLAUDE.md`
+*Notes: re-verified 2026-10-08 against MMCA.Common v1.233.0 (`MMCA.Common/FACTS.md:14`); paths
+under `Source/` are relative to `MMCA.Common/`.
+**2026-10-08 run (v1.233.0):** body prose unchanged (every claim still holds); anchors re-based in
+place: `OwnsAddress` `HasMaxLength` reads (`EntityTypeBuilderExtensions.cs:144,150,155,160,165,170`, were
+`:138-164`), `AddStronglyTypedIds` (`DependencyInjection.cs:377`, registry `:381`, converter registration
+`:384`), the `ConfigureConventions` strongly typed identifier block (comment `:402-406`, `GetService` `:407`,
+`Apply` `:409`), the `Directory.Build.props` alias link block (`:153-157`, was `:131-135`), the
+interceptor lines (`AuditSaveChangesInterceptor.cs:38`, `:41`, `:63`, `:69`;
+`DomainEventSaveChangesInterceptor.cs:242`), ADR-068 (`:40-41`, `:47-53`, `:67`) and ADR-115 (`:57-59`,
+`:10-11`, `:108-118`). Re-checked and unchanged: `AggregateConventionTestsBase` and
+`EntityConventionTestsBase` fact lines, the `ArchitectureRules.Entities.cs` rule start lines, the
+ADR-129 anchors, `ApplicationDbContext.cs:31-33,290,294-297`, and the scorecard row `:68` with indices
+`:9`/`:10`.
+**2026-10-02 run's changes:** header `Status` re-grounded on source folders (the `MMCA.Common/CLAUDE.md`
 "Entity Model" section it cited does not exist; that file holds only a `# CLAUDE.md` heading);
 `DeletedOn/By` added to the audit-field list; the identifier-alias sentence narrowed to where the alias
 is actually linked; Store `CustomerConfiguration` sentence widened for its unicode-only `OwnsOne`; the
@@ -363,11 +374,11 @@ protected helpers: `SetItems` (`:60`), the overridable `ValidateSetItems` (`:87`
 `:115-118`; `Error.NotFound` is `Error.cs:23`), `RemoveChildOrNotFound` (`:158`), `RestoreChild`
 (`:214`) and `DeleteChildren` (`:275`). Only roots carry events: the domain-event interceptor walks
 `ChangeTracker.Entries<IAggregateRoot>()`
-(`Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:221`).
+(`Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:242`).
 **Audit stamping:** `AuditSaveChangesInterceptor(TimeProvider)`
-(`Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/AuditSaveChangesInterceptor.cs:30`,
-`SavingChangesAsync` at `:33`, `StampAuditFields` at `:55` walking
-`context.ChangeTracker.Entries<IAuditableEntity>()` at `:61`). `ApplicationDbContext` delegates the
+(`Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/AuditSaveChangesInterceptor.cs:38`,
+`SavingChangesAsync` at `:41`, `StampAuditFields` at `:63` walking
+`context.ChangeTracker.Entries<IAuditableEntity>()` at `:69`). `ApplicationDbContext` delegates the
 concern on purpose: its class doc assigns audit stamping to that interceptor (`ApplicationDbContext.cs:31-32`)
 and `OnConfiguring` (`:290`) resolves it (`:297`) so stamping happens "via the EF interceptor pipeline
 rather than inline in SaveChangesAsync" (`:294-296`).
@@ -388,11 +399,11 @@ from one source file. Its calls match shipped signatures: `Result.Combine(params
 MMCA.Common: `AddressValidationRules` reads them for FluentValidation
 (`Source/Core/MMCA.Common.Application/Validation/AddressValidationRules.cs:37,47,57,67,77,87`), and the
 `OwnsAddress` mapping extension reads them for EF `HasMaxLength` on the owned `Address` columns
-(`Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeBuilderExtensions.cs:138,144,149,154,159,164`).
+(`Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeBuilderExtensions.cs:144,150,155,160,165,170`).
 Store's `CustomerConfiguration` (61 lines) maps `Address` through `builder.OwnsAddress(p => p.Address);`
 (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Infrastructure/Persistence/EntityConfiguration/CustomerConfiguration.cs:42`)
 and then re-enters the same owned navigation with `builder.OwnsOne(p => p.Address, ...)` (`:47`) that sets
-only `IsUnicode()` on the six columns; it names no `AddressInvariants` constant itself.
+only `IsUnicode()` on the six columns; it names no `AddressInvariants` field itself.
 `EmailInvariants.MaxLength` (256, `Source/Core/MMCA.Common.Shared/ValueObjects/Contact/EmailInvariants.cs:14`)
 has no executable reference outside its own file: the only other mentions are a doc-comment usage
 example (`Source/Core/MMCA.Common.Infrastructure/Persistence/Conversions/EmailValueConverter.cs:16`)
@@ -408,7 +419,7 @@ an alias of `SpeakerDTO.EmailMaxLength`, which declares the 255
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Speakers/SpeakerDTO.cs:27`).
 **Identifier alias:** `global using UserIdentifierType = int;`
 (`Source/Core/MMCA.Common.Domain/GlobalUsings.IdentifierType.cs:1`), linked into every `MMCA.Common*`
-project other than `MMCA.Common.Domain` by `MMCA.Common/Directory.Build.props:131-135`.
+project other than `MMCA.Common.Domain` by `MMCA.Common/Directory.Build.props:153-157`.
 **Fitness enforcement:** the merge-gated `AggregateConventionTests`
 (`Tests/Architecture/MMCA.Common.Architecture.Tests/Domain/AggregateConventionTests.cs:9`) drives
 `AggregateConventionTestsBase`
@@ -422,9 +433,9 @@ name), held at 8 by two open criteria: strategic DDD realized downstream, and th
 a plain string by deliberate decision. Current indices: Maturity 96.6% (317/328, `:9`) and
 Implementation 86.0% (705/820, `:10`). The article states no index value in its body.
 **ADR mapping:** ADR-068 names the memberless `public abstract record ValueObject` base
-(`Website/docs-src/adr/068-value-objects-as-validated-primitives.md:39-40`), the private-constructor plus
-`Result`-returning `Create` factory shape (`:46-52`), and records that the shape is fitness-enforced by
-`ArchitectureRules.DomainFactoriesReturnResult` (`:65`).
+(`Website/docs-src/adr/068-value-objects-as-validated-primitives.md:40-41`), the private-constructor plus
+`Result`-returning `Create` factory shape (`:47-53`), and records that the shape is fitness-enforced by
+`ArchitectureRules.DomainFactoriesReturnResult` (`:67`).
 **Strongly typed identifiers:** `IStronglyTypedId<TSelf, TValue> : IParsable<TSelf>` with its
 `TValue Value` getter and `static abstract TSelf From(TValue)`
 (`Source/Core/MMCA.Common.Shared/Identifiers/IStronglyTypedId.cs:60`, `:65`, `:72`, the `IParsable<TSelf>`
@@ -435,18 +446,18 @@ default implementations just below), the `StronglyTypedId` static helper (`Stron
 `.RegisterAll` (`:119`), `StronglyTypedIdRegistry` (`StronglyTypedIdRegistry.cs:22`),
 `StronglyTypedIdMappings<TSelf, TValue>` with `ToValue`/`ToIdentifier`
 (`StronglyTypedIdMappings.cs:31,38,43`), the opt-in call `AddStronglyTypedIds`
-(`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:376`, registry at `:380`, converter
-registration at `:383`), `StronglyTypedIdModelConfiguration.Apply`
+(`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:377`, registry at `:381`, converter
+registration at `:384`), `StronglyTypedIdModelConfiguration.Apply`
 (`Source/Core/MMCA.Common.Infrastructure/Persistence/Conventions/StronglyTypedIdModelConfiguration.cs:21,29`),
 and `StronglyTypedIdValueConverter<TSelf, TValue>` / `NullableStronglyTypedIdValueConverter<TSelf, TValue>` /
 `StronglyTypedIdValueComparer<TSelf>`
 (`Source/Core/MMCA.Common.Infrastructure/Persistence/Conversions/StronglyTypedIdValueConverter.cs:28,56,80`).
 The registry resolve and the pre-convention apply happen in `ApplicationDbContext.ConfigureConventions`
-(`ApplicationDbContext.cs:378`; comment `:401-405`, `GetService<StronglyTypedIdRegistry>` `:406`, `Apply`
-`:408`), where the comment records that absent the service it is a no-op and the aliases stay the
+(`ApplicationDbContext.cs:378`; comment `:402-406`, `GetService<StronglyTypedIdRegistry>` `:407`, `Apply`
+`:409`), where the comment records that absent the service it is a no-op and the aliases stay the
 identifier model. The posture (aliases default, wrapper opt-in, nothing migrates) is ADR-115
-(`Website/docs-src/adr/115-strongly-typed-identifiers-opt-in.md:54`), which revisits ADR-048 and
-ADR-085 (`:7-8`) and records the MVC `TypeConverter` binding finding (`:103-112`).
+(`Website/docs-src/adr/115-strongly-typed-identifiers-opt-in.md:57-59`), which revisits ADR-048 and
+ADR-085 (`:10-11`) and records the MVC `TypeConverter` binding finding (`:108-118`).
 **2026-10-02 ADR-129 fold-in** (section "One contract, and which half the build holds", header ADR
 cell and `Status` line, one closing clause in "What we covered"): the gated/convention split is
 ADR-129's Decision (`Website/docs-src/adr/129-tactical-aggregate-contract.md:22-24`) and its first

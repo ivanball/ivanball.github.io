@@ -70,8 +70,8 @@ instead of being missed in some forgotten validator.
 The address family is the worked example of composition all the way up. `AddressValidationRules.cs` ships
 six field fragments (`AddressLine1Rules<T>` through `CountryRules<T>`), and `AddressValidator` is a
 composite `AbstractValidator<Address>` whose entire body is six `Include(...)` calls. It owns **no**
-`RuleFor` chains of its own. The address fragments also pull their length limits from `AddressInvariants`
-constants in `MMCA.Common.Shared` rather than baking numeric literals into the rule, so the domain
+`RuleFor` chains of its own. The address fragments also pull their length limits from the
+`AddressInvariants` fields in `MMCA.Common.Shared` rather than baking numeric literals into the rule, so the domain
 invariant and its validator agree by construction. The max length for a city lives in exactly one place
 across the entire solution, and the validator references it.
 
@@ -183,7 +183,7 @@ and consistent, so the domain factory is free to focus on the rules only it can 
   story, and a reviewer must check both altitudes to know a command is fully guarded.
 - **It overlaps the domain factory at the edges.** "Required" and "max length" can be expressed both as a
   validator fragment and as a domain invariant. The kit keeps the structural copy in the validator and
-  sources address limits from the same `AddressInvariants` constants the domain uses, so the two agree by
+  sources address limits from the same `AddressInvariants` fields the domain uses, so the two agree by
   construction. Where a field has no shared constant, keeping the two in sync is a discipline, not a
   compiler guarantee.
 
@@ -226,7 +226,7 @@ guide, or `dotnet add package MMCA.Common.Application` and try it.*
 
 *Tags: .NET, C Sharp, Validation, Software Architecture, FluentValidation*
 
-*Notes: source-verified 2026-10-02 against MMCA.Common v1.221.0 (per `MMCA.Common/FACTS.md`), paths
+*Notes: source-verified 2026-10-08 against MMCA.Common v1.233.0 (`MMCA.Common/FACTS.md:14`), paths
 relative to `MMCA.Common/Source/Core/MMCA.Common.Application/` unless prefixed. Rule fragments, all
 eleven, in `Validation/CommonValidationRules.cs`: `RequiredStringRules<T>` (:42), `OptionalStringRules<T>`
 (:54), `EmailRules<T>` (:65), `AbsoluteUrlRules<T>` (:86), `PositiveIntRules<T>` (:101),
@@ -242,15 +242,18 @@ its class doc (:187-188); `MMCA.Common.Shared/Auth/PasswordComplexity.cs` declar
 (:21), `MaximumLength = 128` (:24) and the four Unicode-category regexes (:28, :32, :36, :43). The code
 block is verbatim from `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/Validation/
 RegisterRequestValidator.cs:12-25` (includes :16-19); its caps come from
-`MMCA.ADC.Identity.Domain/Users/UserInvariants.cs:12,15,18`, which the domain's own email check uses
-(:29). Other `EmailRules` users: ADC `SpeakerValidationRules.cs:46`, `EventValidationRules.cs:67`;
+`MMCA.ADC.Identity.Domain/Users/UserInvariants.cs:12,15,18` (`const`), which the domain's own checks use
+(`EnsureEmailIsValid` :38, `EmailMaxLength` read at :44; first and last name at :63, :68). Other `EmailRules`
+users: ADC `SpeakerValidationRules.cs:46`, `EventValidationRules.cs:123` (inside
+`EventOrganizerContactEmailRules<T>`, :115);
 `StrongPasswordRules` also in ADC `ChangePasswordRequestValidator.cs:18`. Uneven adoption: Store
 `MMCA.Store.Identity.Application/Users/Validation/RegisterRequestValidator.cs:17-20` (email, literal 100)
 and :22-25 (password, 8/128, no `Matches`), composing only `AddressValidator` (:35-37); Common
 `Auth/Validation/LoginRequestValidator.cs:15` and `ForgotPasswordRequestValidator.cs:14` hand-write
 `RuleFor(x => x.Email)`. Address family: `Validation/AddressValidationRules.cs`, `AddressValidator` :13
 with six `Include` calls :17-22, fragments :31-88 reading `AddressInvariants`
-(`MMCA.Common.Shared/ValueObjects/Contact/AddressInvariants.cs:9`). Command bridge:
+(`MMCA.Common.Shared/ValueObjects/Contact/AddressInvariants.cs:9`, the six limits declared
+`public static readonly int` at :12-27, not `const`). Command bridge:
 `UpdateEntityCommand<TEntity, TUpdateRequest, TIdentifierType>(Id, Request, RowVersion)` implements
 `ICommandWithRequest<TUpdateRequest>` (`UseCases/Crud/UpdateEntityCommand.cs:48-52`);
 `ICommandWithRequest<TRequest>.Request` (`UseCases/Contracts/ICommandWithRequest.cs:14-17`); create path:
@@ -272,7 +275,10 @@ through a scoped repository is at :70-72. Decorator order: `DependencyInjection.
 `MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ErrorHttpMapping.cs:22`. FluentValidation 12:
 `MMCA.Common/Directory.Packages.props:30` (`FluentValidation.DependencyInjectionExtensions` 12.1.1). There
 is no dedicated ADR for validation; it is governed by the CQRS-decorator ADRs (ADR-014) and the layering
-fitness tests. Change history (2026-10-02): re-anchored every Common cite after the `DependencyInjection`
+fitness tests. Change history (2026-10-08, v1.233.0): every Common anchor re-checked and holding;
+stamp refreshed; ADC anchors re-based (`EventValidationRules.cs:67` to :123, the `UserInvariants`
+email-check cite :29 to :38/:44); "`AddressInvariants` constants" reworded to "fields" in the body and
+trade-offs, since the six limits are `static readonly`, not `const`. Change history (2026-10-02): re-anchored every Common cite after the `DependencyInjection`
 partial split (scan moved to `DependencyInjection.ModuleScanning.cs`) and a one-to-three-line shift in
 `CommonValidationRules.cs`; replaced the illustrative `CreateSessionRequestValidator` block (no such type)
 with ADC's real `RegisterRequestValidator`; replaced the nonexistent `CreateSessionCommand` example with

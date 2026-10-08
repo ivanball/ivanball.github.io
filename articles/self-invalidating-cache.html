@@ -109,7 +109,7 @@
         <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
         <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
         <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
-        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, four engines</a></li>
         <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
         <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
         <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
@@ -210,15 +210,21 @@
           members, so a hand-written implementer keeps compiling when one is added.</p>
           <p>The two specialized reads each close a gap a plain <code>GetAsync</code> leaves open. <code>TryGetAsync</code> reports
           presence separately from the value, because for a value type a miss and a cached <code>default</code> (<code>0</code>,
-          <code>false</code>, <code>Guid.Empty</code>) look identical; the shipped stores override it with a real presence check.
-          <code>GetFromSharedStoreAsync</code> reads the shared store and never a process-local copy, for single-use records
-          (an OAuth exchange code, a password-reset or email-confirmation token, the last accepted second-factor
-          time step) whose consumption on one replica must be visible on every other replica at once; the hybrid
-          backend below is the store that overrides it. (<code>IncrementAsync</code> is the single entry point for the
-          brute-force and rate-limit counters of ADR-029 instead of a read-then-write pair at each call site. The
-          distributed backend overrides it, but with the same read-modify-write shape rather than a Redis <code>INCR</code>,
-          because the counter lives in the adapter&#39;s own JSON layout: the override buys one call site, not
-          atomicity.)</p>
+          <code>false</code>, <code>Guid.Empty</code>) look identical. The default member infers presence from a non-null <code>GetAsync</code>
+          result, which is exact for reference and nullable types; the memory and distributed stores override it
+          with a real presence check, and the hybrid store does not, so through the hybrid backend a value-type
+          miss still reads as found.
+          <code>GetFromSharedStoreAsync</code> reads the shared store and never a process-local copy, for values whose change
+          on one replica must be visible on every other replica at once: single-use records (an OAuth exchange
+          code, a password-reset or email-confirmation token, the last accepted second-factor time step), the
+          registration counter read, and the two flags whose removal must be seen everywhere (the login lockout
+          flag and the soft-deleted-user marker). The hybrid backend below is the store that overrides it.
+          (<code>IncrementAsync</code> is the single entry point for the brute-force and rate-limit counters of ADR-029
+          instead of a read-then-write pair at each call site. The distributed and hybrid backends both override
+          it, each with the same read-modify-write shape rather than a Redis <code>INCR</code>, because <code>StackExchangeRedisCache</code>
+          stores every entry as a Redis hash (<code>absexp</code>, <code>sldexp</code>, <code>data</code>) and an <code>INCR</code> string at the same key
+          would fail the next read: the override buys one call site, not atomicity. The hybrid override keeps
+          both legs on L2, so no replica counts from a stale local copy.)</p>
           <p><code>GetOrCreateAsync</code> is the most interesting of the default members, because of who does <em>not</em> use
           it. It is get, then take a per-key lock from a process-wide stripe,
           double-check, run the factory, store the result. That is the read-through shape the query decorator below
@@ -261,9 +267,9 @@
           constraint is a keyspace rule, not a performance one. <code>HybridCache</code> writes its own payload layout, which
           is not the UTF-8 JSON the distributed adapter writes, so it writes under a disjoint <code>hc:</code> keyspace: an
           old-format entry is simply invisible to the new service and vice versa, including while a rolling deploy
-          runs both. That rule generalizes a real production failure this framework already took once, a Redis
-          <code>INCR</code> counter written as a string and read back by a hash-shaped path, which answered <code>WRONGTYPE</code> and
-          surfaced as a 500 on login. Two serialization formats must never share one keyspace, so the second
+          runs both. That rule generalizes a real failure this framework already shipped once, a Redis <code>INCR</code>
+          counter written as a string and read back by a hash-shaped path, which answered <code>WRONGTYPE</code> and
+          surfaced as a 500 on the endpoints owning the counter (registration and login). Two serialization formats must never share one keyspace, so the second
           writer gets its own.</li>
           </ul>
           <p>Be honest about what &quot;opt-in&quot; means in a deployed system: all seven ADC and Store services call
@@ -277,9 +283,9 @@
           The constant sits in one place (<code>CacheOptions.DefaultDuration</code>, a bare <code>TimeSpan</code>) precisely so the
           hybrid backend, whose entry options are a different type entirely, defaults to the same policy instead of
           hard-coding the figure a second time, and one binding layer sits above it: <code>CacheSettings.DefaultDuration</code>
-          is bound from the <code>Cache</code> configuration section, defaults to that same constant, and is what both the
-          distributed and the hybrid adapter actually read, so a host can retune the figure without the two
-          disagreeing. A query only earns a longer life when it explicitly declares one.</p>
+          is bound from the <code>Cache</code> configuration section, defaults to that same constant, and is what all three
+          backends (memory, distributed and hybrid) actually read, so a host can retune the figure without any
+          two of them disagreeing. A query only earns a longer life when it explicitly declares one.</p>
           <h2 id="the-read-path-opt-in-by-marker-interface">The read path: opt in by marker interface</h2>
           <p>A query caches by implementing <code>IQueryCacheable</code> (it supplies the cache key and the retention duration).
           The <code>CachingQueryDecorator</code> does the read-through:</p>
@@ -351,9 +357,10 @@
           </ul>
           <p>Be honest about its reach: it is a helper, not a rule the compiler enforces, and the two caching
           decorators still hand-roll the same shape against their own logger. The API package does route through
-          it: its tag-eviction extension wraps every <code>EvictByTagAsync</code> in <code>BestEffort.ExecuteAsync</code> under
-          <code>CancellationToken.None</code>, so the posture crosses the package boundary rather than stopping at the
-          Application layer. The cross-service eviction consumer in the edge-tier section below is the one caller
+          it: its best-effort tag-eviction extension, <code>TryEvictTagsAsync</code>, wraps each <code>EvictByTagAsync</code> in
+          <code>BestEffort.ExecuteAsync</code> under <code>CancellationToken.None</code>, so the posture crosses the package boundary
+          rather than stopping at the Application layer (its sibling <code>EvictTagsAsync</code> is the plain variant: it
+          evicts on the caller&#39;s token and lets a failure propagate). The cross-service eviction consumer in the edge-tier section below is the one caller
           that still hand-rolls the swallow, log and count, against its own <code>cache.eviction.failed</code> instrument. The
           portable part is the shape, not the call site. Log once, count once, never rethrow, except cancellation.</p>
           <h2 id="the-two-key-transformations-the-pipeline-applies">The two key transformations the pipeline applies</h2>
@@ -489,9 +496,13 @@
           <p>ADC is the first worked case. Bookmark counts are owned by Engagement and served by Conference. Engagement&#39;s
           bookmark handler subscribes to the <em>domain</em> event the aggregate raises on create, reactivate and delete
           alike (the delete path runs on the framework&#39;s generic <code>DeleteEntityCommand</code> and has no handler of its
-          own to hook), and publishes the eviction carrying the tag <code>conference:sessions</code>. Conference registers
-          both halves: the handler in its service collection and the consumer inside its broker configuration. A
-          star lands in about a broker round trip. The 60-second TTL on <code>BookmarkCountsCache</code> is the backstop for
+          own to hook), and only raises a coalescing signal. A hosted <code>BookmarkCacheEvictionProcessor</code> drains
+          that signal, publishes the eviction carrying the tag <code>conference:sessions</code> inside
+          <code>BestEffort.ExecuteAsync</code>, then waits a ten-second pacing window before reading again. Conference
+          registers both halves: the handler in its service collection and the consumer inside its broker
+          configuration. An isolated star lands in about a broker round trip; a burst of stars at a session
+          changeover collapses into one trailing broadcast per window per replica, because one eviction per star
+          would keep that whole tag permanently cold under conference-day load. The 60-second TTL on <code>BookmarkCountsCache</code> is the backstop for
           a dropped or delayed message, not the mechanism that clears the entry.</p>
           <p>Store runs the same path from the other kind of caller. Catalog&#39;s <code>CustomerErasedHandler</code> consumes
           Identity&#39;s <code>CustomerErased</code>, clears the reviewer&#39;s name, title and body while keeping the star rating,
@@ -540,8 +551,10 @@
           exists for scaled-out deployments. The two-level backend narrows the window rather than closing it: an
           eviction clears L2 and the evicting process&#39;s L1, but every other replica&#39;s L1 copy survives until its
           local expiration, capped at 30 seconds by default (<code>Cache:LocalCacheDuration</code> retunes it). Single-use
-          records read through <code>GetFromSharedStoreAsync</code>, and counters, skip L1 entirely, so that window never
-          applies to a token that must not be used twice. That is a deliberate trade, and it is the same order of
+          records, counters, and the flags that must clear everywhere at once (the login lockout flag and the
+          soft-deleted-user marker) read through <code>GetFromSharedStoreAsync</code> or increment on L2 and skip L1
+          entirely, so that window never applies to a token that must not be used twice or a flag that must not
+          linger. That is a deliberate trade, and it is the same order of
           staleness as the delayed second eviction the write path already performs.</li>
           <li><strong>The edge tier trades a data-leak risk for its speed.</strong> <code>PublicEndpointOutputCachePolicy</code> serves one
           cached response verbatim to every later caller, so it is safe only on endpoints that are

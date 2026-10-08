@@ -1,7 +1,7 @@
 # Problem Details across HTTP and gRPC (RFC 9457)
 
 > Series: MMCA.Common · Article #20 · Pillar P2 · Groups G12, G13 · Rubric §9 ·
-> Status: grounded in `MMCA.Common/AGENTS.md` (Result pattern, Microservices Extraction Boundaries),
+> Status: grounded in `MMCA.Common/AGENTS.md` (Microservices Extraction Boundaries),
 > `Website/docs-src/onboarding/group-12-api-hosting-mapping.md`, `group-13-grpc-contracts.md`, and
 > `Website/docs-src/governance/common-ArchitectureScorecard.md` (§9). No em dashes.
 
@@ -90,8 +90,10 @@ monitoring can tell an abandoned request from a server error), `DomainExceptionH
 violation -> 400), `DbUpdateExceptionHandler` (concurrency or constraint -> 409, with a deliberately
 generic message so schema names do not leak), `ValidationExceptionHandler` (FluentValidation -> 400
 with a per-property errors dictionary), and `GlobalExceptionHandler` as the catch-all 500. Together
-they guarantee one invariant: every error leaving the API, thrown or returned, is an RFC 9457 Problem
-Details with a sensible status.
+they guarantee one invariant: every error an action returns or throws leaves the API as an RFC 9457
+Problem Details with a sensible status. The invariant covers the MVC pipeline, not the middleware in
+front of it: the rate limiter rejects with a bare 429 (it sets a rejection status and writes no body),
+and an unmatched route is a bare 404, because the framework does not call `UseStatusCodePages`.
 
 There is also a guard against the most insidious bug in this space: a controller that calls
 `Ok(result)` on a *failed* `Result`. Without a guard that serializes as a misleading `200 OK` carrying
@@ -142,15 +144,19 @@ The same edge standardizes the things that drift if left to each endpoint:
 - **Header-based API versioning.** Versioning is configured at the host edge as a header concern, not
   baked into route strings per controller.
 - **Disabled features speak the same dialect.** A `[FeatureGate]` on an off flag returns an RFC 9457
-  404 (via `DisabledFeatureHandler`), not a bespoke 403, so a disabled feature is indistinguishable
-  from a route that does not exist and still matches the API's error shape.
+  404 (via `DisabledFeatureHandler`), not a bespoke 403, so a disabled feature reads as absent and
+  still matches the API's error shape. It is not disguised as a missing route: the body is titled
+  "Feature not available", while an unknown route answers with an empty-body 404.
 
 ## Trade-offs, honestly
 
 The scorecard scores §9 (API and Contract Design) at Maturity 4 of 4 and Implementation 9 of 10
 (weighted 8/18). The category sits at the maturity ceiling: the contract is defined once and checked by
-a build, not by review. What is left is the last implementation point, and two honest notes say where
-it lives.
+a build, not by review. What is left is the last implementation point, and the scorecard names four
+reasons for holding it: the baseline covers only the framework-owned surface, the purity rule's run in
+the framework's own repo is vacuous, a single `v1` OpenAPI document is served even though versioning is
+header-based, and integration events have a frozen-snapshot gate but no AsyncAPI-style published
+contract. The first two are the honest notes below.
 
 - **The contract snapshot is guarded at two levels, on purpose.** The framework generates an OpenAPI
   document: the host registers it with ASP.NET Core's built-in `AddOpenApi()`, `AddCommonOpenApi()`
@@ -169,25 +175,30 @@ it lives.
   so the test guards document generation rather than any concrete API. The concrete surface stays
   guarded by the consumer hosts' own contract-snapshot tests, where the endpoints actually live. Two
   levels, one boundary, nothing duplicated.
-- **`[ServiceContract]` has a dedicated rule that guards more than it currently catches.** The
-  Shared-layer `[ServiceContract]` attribute tags the wire surface of an extracted service (the
-  interfaces, event records, and boundary DTOs). `ServiceContractsDoNotDependOnServiceInternals` scans
+- **`[ServiceContract]` has a dedicated rule that bites in the consumers and asserts nothing in the
+  framework.** The Shared-layer `[ServiceContract]` attribute tags the wire surface of an extracted
+  service: the interface its callers depend on. It also accepts classes and structs, but the reference
+  consumers mark interfaces only, and no integration event record or DTO carries it.
+  `ServiceContractsDoNotDependOnServiceInternals` scans
   every assembly the architecture map registers for types carrying that marker and fails the build,
   naming the offending type, when one reaches into the producing service's Domain, Application, or
   Infrastructure. It is attribute-driven rather than layer-driven for a specific reason: no repo
   registers a Contracts layer in its map today, so a layer-iterating rule would pass vacuously forever,
   while an attribute-driven one starts biting the moment a repo marks its first contract type. The
   honest part is that MMCA.Common marks no type with the attribute, so the framework's own run of the
-  rule asserts nothing. The attribute is an adoptable marker, and the rule standing behind it is a
-  ratchet rather than a check that catches violations daily.
+  rule asserts nothing and is a ratchet there. The consumers are where it bites: ADC marks six Shared
+  interfaces (`ISessionBookmarkValidationService` and `IEventLiveValidationService` among them) and
+  Store marks four (`IProductVariantService`, `ICustomerService` and two export services), and both
+  repos run the rule on every build.
 
 So the enforcement story reads cleanly in three parts. The error *mapping* is enforced where it is
 defined (a frozen table reused on both transports, plus the 200-with-error-body filter). The contract
 *shape* is enforced by a baseline a build diffs. The contract *purity* invariant is enforced by a
 dedicated fitness rule, alongside the layer and transport rules (ADR-015) that guard the same boundary
-from the layer side. The remaining implementation point is exactly the honesty above: a purity rule no
-framework type exercises yet, and half of the snapshot gate that by design can only run in the repos
-that own the concrete API surface.
+from the layer side. The remaining implementation point is the four gaps named above: a purity rule no
+framework type exercises, half of the snapshot gate that by design can only run in the repos that own
+the concrete API surface, one OpenAPI document for a header-versioned API, and no published contract
+for integration events.
 
 ## Apply this even without MMCA
 
@@ -216,7 +227,7 @@ survive a transport change, how MMCA.Common maps `ErrorType` to status through a
 reused by `ApiControllerBase.HandleFailure` over HTTP and `GrpcResultExceptionInterceptor` over gRPC,
 how a guard closes the 200-with-error-body trap, and how §9 keeps that contract honest (a committed
 OpenAPI baseline the framework's own build diffs, consumer hosts snapshotting their concrete surface,
-and a dedicated `[ServiceContract]` purity rule waiting on the first marked type).
+and a dedicated `[ServiceContract]` purity rule that bites on the interfaces the consumers mark).
 
 **Next in the series:** notifications as a vertical slice, the one concrete bounded context the
 framework ships, across push, in-app inbox, and email.
@@ -228,12 +239,44 @@ included), or `dotnet add package MMCA.Common.API` and try it.*
 
 *Tags: .NET, C Sharp, Software Architecture, gRPC, API Design*
 
+*Notes (2026-10-08 refresh against MMCA.Common v1.233.0; this run's changes, each anchor re-read).
+Header blockquote drops "Result pattern": `MMCA.Common/AGENTS.md` has no such section (headings `:5`
+to `:158`; "Microservices Extraction Boundaries" at `:125`). The Problem Details invariant is scoped to
+the MVC pipeline: the API rate limiter sets `RejectionStatusCode` 429 with no `OnRejected` writer
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:399`),
+and no `UseStatusCodePages` call exists under `MMCA.Common/Source` (the one hit is a doc comment in
+`.../Authorization/Fallback/FallbackAuthorizationHandler.cs:19`). The disabled-feature 404 carries
+Title "Feature not available" and its Detail
+(`.../MMCA.Common.API/FeatureManagement/DisabledFeatureHandler.cs:22-23`), so it is distinguishable from an
+unknown route; the "indistinguishable" wording was dropped. The scorecard row
+(`Website/docs-src/governance/common-ArchitectureScorecard.md:73`) holds Implementation 9 for four
+reasons, not two; the single-document reason anchors at `.../Startup/Endpoints/OpenApiEndpointExtensions.cs:28,65`
+and the event-snapshot gate is `MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Contracts/IntegrationEventContractTestsBase.cs`
+(the scorecard cites `:35-53`; not re-read this run). `[ServiceContract]` targets Interface, Class and Struct
+(`MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/ServiceContractAttribute.cs:22`) and its doc
+says consumers mark interfaces only (`:16-18`). Consumer marks: ADC six
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Sessions/ISessionBookmarkValidationService.cs:10`,
+`.../Conference.Shared/Events/Live/IEventLiveValidationService.cs:12`,
+`.../MMCA.ADC.Engagement.Shared/UserSessionBookmarks/IBookmarkCountService.cs:10`,
+`.../MMCA.ADC.Engagement.Shared/Exports/IUserEngagementExportService.cs:13`,
+`.../MMCA.ADC.Identity.Shared/Users/IAttendeeQueryService.cs:10`,
+`.../MMCA.ADC.Notification.Shared/UserNotifications/IUserNotificationExportService.cs:13`); Store four
+(`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Products/IProductVariantService.cs:33`,
+`.../MMCA.Store.Identity.Shared/Customers/ICustomerService.cs:25`,
+`.../MMCA.Store.Sales.Shared/Exports/IUserSalesExportService.cs:20`,
+`.../MMCA.Store.Catalog.Shared/Exports/IUserCatalogExportService.cs:19`). Both run the rule:
+`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Layering/ServiceContractPurityTests.cs:9` and
+`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Layering/ServiceContractPurityTests.cs:9`.
+Corrected in place below: `OAuthControllerBase.cs` `:35` to `:50` (base at `:54`),
+`AddCommonOpenApi` `:95-109` to `:101-115` (doc `:82-93` to `:87-100`), and the stale
+`ApiControllerBase` source-doc drift note (the doc comment carries `TooManyRequests` at `:27`).*
+
 *Notes (2026-10-02 refresh against MMCA.Common v1.221.0; every anchor below re-read this run, and an
 anchor not re-read was dropped rather than carried). HTTP edge: `ApiControllerBase.HandleFailure`
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/ApiControllerBase.cs:35`; class at `:16`;
 ranked status at `:47-48` via `ErrorHttpMapping.GetStatusCode(errorList)`). Not every controller derives
 from it: `EntityControllerBase` does (`.../Controllers/EntityControllerBase.cs:34-40`), while
-`OAuthControllerBase` (`.../Controllers/OAuthControllerBase.cs:35`) and `ServiceInfoControllerBase`
+`OAuthControllerBase` (`.../Controllers/OAuthControllerBase.cs:50`, base `: ControllerBase` at `:54`) and `ServiceInfoControllerBase`
 (`.../Controllers/ServiceInfoControllerBase.cs:30`) derive from `ControllerBase` directly, so the body
 says "result-returning controller bases". `ErrorHttpMapping` is the ten-entry
 `FrozenDictionary<ErrorType, int>` at
@@ -243,8 +286,8 @@ fence renders it; the list overload at `:51-52` (doc from `:41`) delegates to
 `ErrorTypeSeverity.MostSevere`. Ranking: `MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/ErrorTypeSeverity.cs:38-50`
 (Unexpected 70, Unauthorized 60, Forbidden 50, TooManyRequests 45, Conflict 40, NotFound 30,
 UnprocessableEntity 20, Invariant/Validation/Failure 10; doc list at `:18-25`; `MostSevere` at `:71`).
-Source-doc drift, not an article error: the `ApiControllerBase.cs:25-30` doc comment still lists the
-ranking without `TooManyRequests`. Exception chain registered in order at
+The `ApiControllerBase.cs:25-30` doc comment lists the same ranking, `TooManyRequests` (429) at `:27`.
+Exception chain registered in order at
 `MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:154-158`
 (OperationCanceled, Domain, DbUpdate, Validation, Global); `UnhandledResultFailureFilter` added globally
 at `:50`. gRPC edge: `GrpcResultExceptionInterceptor.ToTransportException`
@@ -262,8 +305,8 @@ ADC adapters, `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Contracts/`:
 `:58` and `ex.ToResult<T>()` at `:85`; `EventLiveValidationServiceGrpcAdapter.cs` catches at
 `:56,112,141,173` and returns `ex.ToResult<T>()` at `:61,117,146,178`; class remarks at `:20` and `:21`
 name the framework's own `RpcException.ToResult` decoder. OpenAPI:
-`AddCommonOpenApi()` (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:95-109`,
-doc `:82-93`) registers no document; it installs the parameter backfill and the strongly-typed-id
+`AddCommonOpenApi()` (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:101-115`,
+doc `:87-100`) registers no document; it installs the parameter backfill and the strongly-typed-id
 transformers, and the host calls `AddOpenApi()` itself. `MapCommonOpenApi()` at
 `.../Startup/Endpoints/OpenApiEndpointExtensions.cs:60` (non-Production guard `:62`, missing-`v1`
 startup throw `:67`, `AllowAnonymous` `:74`); `MapCommonScalarUi()` at `:89`. Baseline gate:

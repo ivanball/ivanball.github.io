@@ -1,7 +1,7 @@
 # Notifications as a vertical slice: in-app inbox, real-time push, native push, and email
 
 > Series: MMCA.Common · Article #21 (deep-dive) · Pillar P2 · Group G10 · Rubric §5 · ADR-024 + ADR-044 ·
-> Status: grounded in `MMCA.Common/CLAUDE.md` ("Push Notifications"),
+> Status: grounded in `MMCA.Common/AGENTS.md` ("Push notifications", under Other Framework Pieces),
 > `Website/docs-src/adr/024-push-notifications.md`,
 > `Website/docs-src/adr/044-native-push-delivery.md`, and
 > `Website/docs-src/onboarding/group-10-notifications.md`. The durable-inbox plus transient-push pattern is
@@ -76,8 +76,8 @@ by POSTing to `NotificationsController`. The handler runs in a deliberate order:
    title and body via `PushNotificationInvariants`, checks that the dedup key and the optional scope
    key each stay within 128 characters (the 64-character hash the handler passes always fits, so in
    practice only the scope key can trip it), and returns a `Result<PushNotification>`. It is saved with
-   `Status = Pending` and a snapshot `RecipientCount`. That save stands alone precisely so a lost
-   race on the dedup key can be caught and answered (next section).
+   `Status = Pending` and a snapshot `RecipientCount`. That save stands alone, so a lost race on the
+   dedup key fails right there, before any inbox row exists, and propagates (next section).
 4. **Fan out the inbox rows, in a second save.** For every recipient the handler creates a
    `UserNotification` row, the durable per-user inbox entry that survives a missed real-time delivery.
    Both writes are issued before any transport is touched. Storage first, delivery second.
@@ -121,13 +121,13 @@ if (recipients.Count == 0) { return Result.Failure(...Validation...); }
 var notification = PushNotification.Create(
     title, body, sentByUserId, recipients.Count, dedupKey, scopeKey);  // scopeKey: optional view filter
 await _repository.AddAsync(notification, ct);
-try { await _unitOfWork.SaveChangesAsync(ct); }                    // save 1: the audit row alone
-catch { /* CA1031: lost the filtered-unique-index race? requery by key, return the winner */ throw; }
-
+await _unitOfWork.SaveChangesAsync(ct);                            // save 1: the audit row alone;
+                                                                   // a lost dedup race throws here
 foreach (var userId in recipients) { /* create a UserNotification inbox row */ }
 await _unitOfWork.SaveChangesAsync(ct);                            // save 2: the inbox rows, still no delivery
 
-try { await _push.SendToUsersAsync(recipients, title, body, ct); notification.MarkAsSent(); }
+// LiveMetadata: { "scopeKey": scopeKey } for a scoped send, null for an unscoped one
+try { await _push.SendToUsersAsync(recipients, title, body, LiveMetadata(scopeKey), ct); notification.MarkAsSent(); }
 catch { notification.MarkAsFailed(); }                            // CA1031: SignalR leg owns the status
 
 try { await _nativePush.SendToUsersAsync(recipients, title, body, ct); } // ADR-044: OS-level leg
@@ -147,8 +147,12 @@ the OS-level native push added in ADR-044) written in that order, keeps the inbo
 of truth.
 
 The send carries a second optional key alongside `DedupKey`: an opaque `ScopeKey` (for example
-`"event:2"`), stamped by the sending application and stored on the audit aggregate. The framework
-attaches no meaning to it. An app whose notifications belong to one edition of something sets it, and
+`"event:2"`), stamped by the sending application and stored on the audit aggregate. The live SignalR
+leg forwards it as metadata under `NotificationScopeKey.MetadataKey` (`"scopeKey"`), so a connected
+client viewing another scope can leave the notification out of its toast and badge; an unscoped send
+carries no metadata at all. Common ships a canonical format for it (`NotificationScopeKey.ForEvent`
+and `ForSession`, matching `^(event|session):[0-9]+$`), but the send path checks only its length, and
+reads compare it as an opaque string. An app whose notifications belong to one edition of something sets it, and
 every caller that omits it sends an unscoped notification. ADC resolves the current published event
 and scopes to `event:{id}`. When no event resolves it fails narrow rather than wide: it answers with
 the last key it resolved or, on an instance that has never resolved one, with `event:0`, a
@@ -177,17 +181,18 @@ Underneath, `DedupKey` is a real column on the `PushNotification` aggregate hold
 sender-scoped hash (the column allows 128 characters, validated in the factory, and the hash is
 always 64), with a filtered unique index over it. That matters because the handler's
 up-front lookup is a check-then-act: two concurrent retries of the same send can both pass it, and
-the loser only discovers the conflict when it tries to insert. So the audit save is its own
-`SaveChangesAsync`, wrapped in a catch that requeries by key: if the row exists now, the concurrent
-send is the cause and the caller gets that notification back; anything else is rethrown untouched and
-reaches the exception middleware. The requery runs on `CancellationToken.None`, so a save aborted by
-the caller's own token can still be classified. The database, not the application, arbitrates the
-race.
+the loser only discovers the conflict when it tries to insert. That insert is the audit save, its
+own `SaveChangesAsync` with nothing wrapped around it, so the loser fails there on the unique index
+and the persistence exception propagates. `DbUpdateExceptionHandler` answers it with a 409 Conflict,
+and `TransactionalCommandDecorator` rolls the attempt back whole. The client's retry then reaches the
+dedup lookup, which finds the winner's row and returns that notification without sending anything.
+The database, not the application, arbitrates the race.
 
-That catch is deliberately broad (a suppressed CA1031), and the reason is a layer rule rather than
-laziness: Application has no EF Core dependency, so `DbUpdateException` is not a type this file is
-allowed to name. The requery is what narrows it. It is the same swallow-and-requery shape the
-framework's inbox store uses on its own unique index; only the nameable exception differs.
+The handler does not try to recover in place, and the reason is a layer rule plus an engine quirk
+rather than laziness. Application has no EF Core dependency, so nothing in its contract can detach
+the failed insert: it stays tracked, and the commit would throw on it anyway. And on PostgreSQL the
+unique violation has already aborted the transaction a requery would have to run in. Rolling back
+and letting the retry find the winner is the shape that holds on every engine.
 
 ## The push channel: an adapter chosen at composition, not branched at runtime
 
@@ -256,13 +261,14 @@ ids are client-generated GUIDs, so they are not enumerable.
 ## The in-app inbox: pure CQRS read/write, scoped to the caller
 
 The inbox is the durable channel, exposed by `InboxController` to any authenticated user (unlike the
-organizer-only send and history endpoints). Four slices back it:
+send and history endpoints, which need the notification-management capability). Four slices back it:
 
 - `GetMyNotificationsHandler` joins `UserNotification` to `PushNotification` (title and body live on the
   push aggregate, read state lives on the per-user row) and projects a `UserNotificationDTO`, newest
   first, paginated and capped at 500 rows per page. This cross-aggregate read is done in the query, not
-  via a navigation populator, because the two aggregates reference each other by ID only. That matters:
-  in ADC `UserNotification` lives in its own database.
+  via a navigation populator, because the two aggregates reference each other by ID only. The single
+  query works because both aggregates map to the same `Notification` logical data source, so the join
+  never spans two databases.
 - `GetUnreadNotificationCountHandler` counts unread rows for the bell badge.
 - `MarkNotificationReadHandler` verifies the row belongs to the requesting user before flipping it. The
   domain method `UserNotification.MarkAsRead(DateTime readOnUtc)` takes the read instant as a parameter
@@ -294,9 +300,12 @@ The entire push, inbox, and device surface sits behind one feature flag,
 `NotificationFeatures.PushNotifications`. All three controllers carry
 `[FeatureGate(NotificationFeatures.PushNotifications)]`, so the whole channel can be switched off
 per-environment with no code change. Authorization splits along the three controllers:
-`NotificationsController` (send plus history) requires the organizer policy, while `InboxController`
+`NotificationsController` (send plus history) requires a capability, not a role:
+`[HasPermission(NotificationPermissions.Manage)]`, the `notifications:manage` permission, which the
+host grants to whichever roles it chooses (ADC grants it to the Organizer role alone). `InboxController`
 and `DevicesController` require only an authenticated caller. That asymmetry encodes the rule "anyone
-reads their own inbox and registers their own devices, only organizers broadcast."
+reads their own inbox and registers their own devices, only holders of the send capability
+broadcast."
 
 ## Identifier aliases keep the IDs honest
 
@@ -329,8 +338,10 @@ at the call site and gives you a single place to change the underlying type late
 - **Deduplication is opt-in, and it is check-then-act plus a database index.** A send that carries no
   key gets no protection at all. When a key is present, the up-front
   lookup is a race the handler cannot win on its own, so correctness rests on the filtered unique
-  index and on a broad catch that has to requery to classify what it caught. That is a real cost in
-  handler complexity, paid to keep Application free of an EF Core dependency.
+  index plus the rollback. The losing concurrent caller gets a 409 rather than the winner's
+  notification and has to retry; only that retry, answered by the dedup lookup, returns the result.
+  That is a real cost pushed onto the client, paid to keep Application free of an EF Core dependency
+  and the behavior identical on every engine.
 - **The scope key is a view filter, not a security boundary.** It narrows what a scoped read returns,
   but a read that supplies no scope still sees every notification, scoped ones included. It organizes
   an inbox by edition; it does not isolate anything. Authorization remains the caller-scoped `UserId`
@@ -361,8 +372,9 @@ The vertical-slice discipline ports to any stack:
 4. **Scope every read and mutation to the caller** inside the slice, rather than relying on a
    cross-cutting filter to remember.
 5. **Let the database arbitrate a deduplication race.** An application-level "does it already exist?"
-   check is check-then-act and two retries will both pass it. Back it with a unique index and treat
-   the insert failure as an answer, not just an error.
+   check is check-then-act and two retries will both pass it. Back it with a unique index, let the
+   losing insert fail and roll its whole attempt back, and let the retry get its answer from the
+   lookup, which then finds the winner.
 
 The takeaway: a framework earns trust by showing one complete feature built on its own rules. Build that
 feature as a cohesive vertical slice, and it teaches the patterns better than any amount of base-class
@@ -392,8 +404,30 @@ example, or `dotnet add package MMCA.Common.API` and try it.*
 
 *Tags: .NET, C Sharp, Software Architecture, SignalR, Vertical Slice*
 
-*Notes: refreshed 2026-10-02 against MMCA.Common v1.221.0 (paths below are under `MMCA.Common/` unless
-stated). Changes this run: the opt-in dedup key is sender-scoped and hashed (step 1, step 3, the code
+*Notes: refreshed 2026-10-08 against MMCA.Common v1.233.0 (paths below are under `MMCA.Common/` unless
+stated). Changes this run: the handler was rewritten in Common #498 (2026-10-04) and #516
+(2026-10-06), so the audit-save catch and requery are gone; step 3, the code block, the retry-safety
+section (both paragraphs), the dedup trade-off and Apply #5 are re-grounded on propagate-and-roll-back
+(the lost race fails the bare audit save, surfaces as a 409 through
+`Source/Presentation/MMCA.Common.API/Middleware/DbUpdateExceptionHandler.cs` (class `:17`, 409
+`:33`), the `ITransactional` decorator rolls back, and the retry hits the dedup lookup; class doc
+"Deduplication race" `SendPushNotificationHandler.cs:33`-`:41`, recover-in-place rationale
+`:37`-`:40`); the send gate is restated as a capability, not an organizer role
+(`NotificationsController.cs:29`; `Source/Core/MMCA.Common.Shared/Notifications/NotificationPermissions.cs`
+`Manage = "notifications:manage"` `:10`, host-grants doc `:4`-`:5`; ADC grant
+`MMCA.ADC/Source/Modules/Notification/MMCA.ADC.Notification.Shared/Authorization/NotificationPermissionGrants.cs:38`),
+in the inbox section and the feature-gate section; the scope key is restated as forwarded on the live
+leg (`LiveMetadata(notification.ScopeKey)` `SendPushNotificationHandler.cs:123`, `LiveMetadata`
+`:178`-`:181`; `Source/Core/MMCA.Common.Shared/Notifications/NotificationScopeKey.cs` class `:20`,
+`Pattern` `:32`, `MetadataKey = "scopeKey"` `:39`, `ForEvent` `:44`, `ForSession` `:50`; send
+validator length-only `SendPushNotificationRequestValidator.cs:27`-`:29`) and the code block's
+SignalR call carries that metadata; the inbox "own database" sentence is corrected (both
+configurations carry `[UseDatabase("Notification")]`,
+`.../EntityTypeConfiguration/Notifications/UserNotificationConfiguration.cs:14` and
+`PushNotificationConfiguration.cs:15`; join `GetMyNotificationsHandler.cs:48`-`:51`); the header
+cites `MMCA.Common/AGENTS.md` (Other Framework Pieces), since `MMCA.Common/CLAUDE.md` is only an
+`@AGENTS.md` import; every handler, DI and hub anchor below is re-pointed.
+Previous refresh 2026-10-02 (v1.221.0): the opt-in dedup key is sender-scoped and hashed (step 1, step 3, the code
 block and the retry-safety section restated); the at-least-once consequence of running the live legs
 inside the transaction is added to the transaction trade-off; ADC's scope fallback is restated (it
 fails narrow to the last resolved key or an `event:0` sentinel, never to null); the Redis backplane's
@@ -401,21 +435,21 @@ per-application channel prefix is added; three "as it always did / as before" ph
 every DI anchor is re-pointed (the push registrations live in `DependencyInjection.Notifications.cs`).
 Handler, re-read in full this run:
 `Source/Core/MMCA.Common.Application/Notifications/PushNotifications/UseCases/Send/SendPushNotificationHandler.cs`.
-"Atomicity" XML doc `:21`-`:29` (live legs re-run under the execution strategy on a transient fault of
-the final save, at-least-once for SignalR and native, exactly-once for inbox rows, `:27`-`:29`);
-`INativePushSender nativePushSender` injected `:36`. Dedup: whitespace to null, otherwise
-`SenderScopedDedupKey(command.SentByUserId, command.DedupKey)` (`:49`-`:51`), which is
-`Convert.ToHexString(SHA256.HashData(...$"{sentByUserId}:{clientKey}"))` (`:185`-`:187`; its XML doc
-`:178`-`:181` states the result is always 64 characters); lookup and hit `:52`-`:60` (`LogDedupHit`
-`:57`); `FindByDedupKeyAsync` `:194`-`:203` via `unitOfWork.GetReadRepository<...>` `:196`.
-Recipients `:63`-`:64`, empty-set `Validation` failure `:66`-`:72`. `PushNotification.Create(...)`
-called `:75`-`:81` with the hashed `dedupKey` and `command.Request.ScopeKey`. Repositories via
-`unitOfWork.GetRepository<...>` `:88` and `:125`. Audit save alone `:93`, inside the CA1031 catch
-(pragma `:95`, `catch (Exception)` `:96`, layer-rule rationale `:99`-`:107`, requery on
-`CancellationToken.None` `:109`-`:113`, `LogDedupRaceRequery` `:116`, rethrow `:121`). Inbox rows
-`:126`-`:130`, second save `:132`. SignalR leg `:135`-`:152` (`MarkAsSent` `:143`, `MarkAsFailed`
-`:150`); native leg `:158`-`:171` (call `:160`-`:164`, `LogNativePushFailed` call `:170`,
-`[LoggerMessage]` `:211`, declaration `:212`); final save `:173`; DTO returned `:175`.
+"Atomicity" XML doc `:21`-`:31` (live legs re-run under the execution strategy on a transient fault of
+the final save, at-least-once for SignalR and native, exactly-once for inbox rows, `:28`-`:30`);
+"Deduplication race" XML doc `:33`-`:41`; `INativePushSender nativePushSender` injected `:47`. Dedup:
+whitespace to null, otherwise `SenderScopedDedupKey(command.SentByUserId, command.DedupKey)`
+(`:60`-`:62`), which is `Convert.ToHexString(SHA256.HashData(...$"{sentByUserId}:{clientKey}"))`
+(`:168`-`:170`; its XML doc `:161`-`:164` states the result is always 64 characters); lookup and hit
+`:63`-`:71` (`LogDedupHit` `:68`); `FindByDedupKeyAsync` `:188`-`:197` via
+`unitOfWork.GetReadRepository<...>` `:190`. Recipients `:74`-`:75`, empty-set `Validation` failure
+`:77`-`:83`. `PushNotification.Create(...)` called `:86`-`:92` with the hashed `dedupKey` and
+`command.Request.ScopeKey`. Repositories via `unitOfWork.GetRepository<...>` `:99` and `:106`. Audit
+save alone, bare and uncaught, `:103` (propagate comment `:102`). Inbox rows `:107`-`:111`, second
+save `:113`. SignalR leg `:117`-`:135` (metadata `:123`, `MarkAsSent` `:126`, CA1031 pragma `:129`,
+`MarkAsFailed` `:133`); native leg `:141`-`:154` (call `:143`-`:147`, CA1031 pragma `:149`,
+`LogNativePushFailed` call `:153`, `[LoggerMessage]` `:205`, declaration `:206`); final save `:156`;
+DTO returned `:158`. The only CA1031 suppressions left are the two delivery legs.
 Command and decorator: `SendPushNotificationCommand.cs:21`-`:23` (`ITransactional` `:23`,
 "Transactional on purpose" doc `:11`-`:19`, sender-scoped `DedupKey` doc `:25`-`:35`);
 `Source/Core/MMCA.Common.Application/UseCases/Decorators/TransactionalCommandDecorator.cs` passes a
@@ -448,10 +482,10 @@ filter `:50`; `GetUnreadCount/GetUnreadNotificationCountHandler.cs` caller `:25`
 `MarkRead/MarkNotificationReadHandler.cs` id plus caller `:26`, `TimeProvider` injected `:15` and used
 `:38`.
 DI: `Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs` `AddInfrastructure` `:57` calls
-`AddServices()` `:234` (declared `:294`), which does `TryAddTransient` for `IEmailSender` ->
-`SmtpEmailSender` `:324`, `IPushNotificationSender` -> `NullPushNotificationSender` `:325`,
-`ILiveChannelPublisher` -> `NullLiveChannelPublisher` `:326`, `INativePushSender` ->
-`NullNativePushSender` `:330`, `IPushDeviceRegistrar` -> `NullPushDeviceRegistrar` `:331`.
+`AddServices()` `:235` (declared `:295`), which does `TryAddTransient` for `IEmailSender` ->
+`SmtpEmailSender` `:325`, `IPushNotificationSender` -> `NullPushNotificationSender` `:326`,
+`ILiveChannelPublisher` -> `NullLiveChannelPublisher` `:327`, `INativePushSender` ->
+`NullNativePushSender` `:331`, `IPushDeviceRegistrar` -> `NullPushDeviceRegistrar` `:332`.
 `Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs`: `AddPushNotifications`
 `:41`, `AddSignalR()` `:48`, `redis` connection string `:50`, per-application `ChannelPrefix` with
 `AddStackExchangeRedis` `:53`-`:61`, `SignalRPushNotificationSender` `:65`,
@@ -461,8 +495,8 @@ DI: `Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs` `AddInfrastr
 `NullNotificationRecipientProvider` at `Source/Core/MMCA.Common.Application/Notifications/DependencyInjection.cs:75`.
 Hub and sender: `Source/Core/MMCA.Common.Infrastructure/Notifications/NotificationHub.cs`
 `[Authorize]` `:24`, class `:25`, `ReceiveNotificationMethod` `:30` (plus `ReceiveChannelEventMethod`
-`:33`, `JoinChannelMethod` `:36`, `LeaveChannelMethod` `:39`, `JoinChannelAsync` `:119`,
-`LeaveChannelAsync` `:136`, per ADR-039);
+`:33`, `JoinChannelMethod` `:36`, `LeaveChannelMethod` `:39`, `JoinChannelAsync` `:128`
+(`[HubMethodName]` `:127`), `LeaveChannelAsync` `:145` (`[HubMethodName]` `:144`), per ADR-039);
 `Source/Core/MMCA.Common.Infrastructure/Notifications/Push/SignalRPushNotificationSender.cs`
 `BatchSize = 100` `:14`, `SendToUsersAsync(userIds, title, body, metadata = null, cancellationToken)`
 `:24`, sends on `NotificationHub.ReceiveNotificationMethod` `:20`, `:30`, `:38`;
@@ -473,12 +507,17 @@ minutes `:41`, and on no event or a failure (`catch` `:74`) answers from `LastRe
 (`:79`-`:83`, `:124`-`:128`): the last resolved key or `UnresolvedScopeKey` = `event:0` `:39`, a key
 no row carries; the "never answers unscoped" reasoning is its own remarks `:20`-`:24`.
 ADR mapping: `Website/docs-src/adr/024-push-notifications.md` records the scope key (status `:5`-`:6`),
-the per-application backplane channel (`:9`-`:10`) and the sender-scoped dedup key (`:13`, decision
-`:37`-`:48`); the ADR-024 + ADR-044 mapping holds.
-Carried forward, not re-read this run: `AttendeeNotificationRecipientProvider` (ADC),
+the per-application backplane channel (`:9`-`:10`), the sender-scoped dedup key (`:13`), the
+propagate-and-roll-back dedup race (`:14`, decision `:43`-`:57`) and the WebSockets-only hub client
+(`:15`); the ADR-024 + ADR-044 mapping holds.
+Carried forward from the 2026-10-02 read, not re-read this run: the command and decorator, aggregate,
+EF configuration (bar the `[UseDatabase]` lines), inbox controller and slices (bar the join and the
+validator), `DependencyInjection.Notifications.cs`, `SignalRPushNotificationSender` and ADC scope
+provider anchors above (ADR-024 `:39`-`:51` independently cites `SendPushNotificationCommand.cs:23`
+and `PushNotificationConfiguration.cs:69`-`:73` at v1.233.0), plus `AttendeeNotificationRecipientProvider` (ADC),
 `PushNotificationInvariants`, `SmtpEmailSender` building a fresh `SmtpClient` per send, the idempotent
 `UserNotification.MarkAsRead`, `GlobalUsings.NotificationIdentifierType.cs`, the `DevicesController`
 delete documentation, and the content of `Website/docs-src/adr/044-native-push-delivery.md`.
 The `SendPushNotificationHandler` code block is an illustrative reconstruction of the step order, not
-a verbatim copy: it simplifies variable names, collapses the requery branch of the CA1031 catch to a
-comment and drops the `Result<PushNotification>` unwrap. Next article: Article 22, live channel push.*
+a verbatim copy: it simplifies variable names, inlines the `LiveMetadata` dictionary as a comment and
+drops the `Result<PushNotification>` unwrap. Next article: Article 22, live channel push.*

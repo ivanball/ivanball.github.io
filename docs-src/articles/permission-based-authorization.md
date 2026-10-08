@@ -138,8 +138,9 @@ metadata at all requires an authenticated caller and a deliberate anonymous rout
 host calls `AddPermissions(...)`, and any policy name that is not a `perm:` name is delegated untouched.
 
 Adoption is a per-module decision, and every module in both real apps has made it. ADC's Conference module
-defines eleven capabilities, including the seven-member `ContentManagement` subset granted to its own
-`ContentEditor` role; its Engagement module defines three (among them `engagement:live:manage`, granted to
+defines twelve capabilities, including the seven-member `ContentManagement` subset granted to its own
+`ContentEditor` role (`conference:speakers:link` stays Organizer-only, because linking a speaker to a
+user account confers a speaker identity); its Engagement module defines three (among them `engagement:live:manage`, granted to
 `Organizer`, gating the conference-day live-poll management endpoints); its Notification module grants the
 framework's own `notifications:manage` to `Organizer`; and its Identity module defines three, two of which
 alias the framework-owned `users:manage` and `roles:manage` from `AdministrationPermissions` so the shared
@@ -222,29 +223,51 @@ pattern, or `dotnet add package MMCA.Common.API` and try it.*
 
 *Tags: .NET, C Sharp, Software Architecture, Security, Authorization*
 
-*Notes: re-verified against source 2026-10-02 (MMCA.Common v1.221.0, `FACTS.md:14`). This run's
+*Notes: re-verified against source 2026-10-08 (MMCA.Common v1.233.0, `FACTS.md:14`; findings
+`Docs/Planning/Quality/medium-apply-2026-10-08/24-permission-based-authorization.json`). Changes in this
+pass: ADC's Conference module "defines eleven capabilities" became twelve, with the Organizer-only
+`SpeakersLink` (`conference:speakers:link`) named as the one outside the content-editor subset
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferencePermissions.cs:55`,
+its Organizer-only rationale `:49-54`, `All` listing twelve at `:58-72`, the seven-member
+`ContentManagement` at `:79-88`). The 2026-10-02 anchors below were re-read on 2026-10-08 and corrected
+in place where they moved: ADC `Program.cs` `AddTokenPermissionGrants` `:269` to `:280` and
+`AddStoredPermissionGrants` `:276` to `:287`; `AddStoredPermissionGrants` declared at
+`DependencyInjection.Auth.cs:139` with the `TryDecorate<IPermissionRegistry, LayeredPermissionRegistry>`
+at `:170` (the old `:139-149` range no longer reaches it); `AuthorizationExtensions.cs` forwarding
+`:133-134` to `:135-136` and handler/provider registration `:68` to `:70-72`; `QuestionsManage` `:26`
+to `:27`; `ContentManagement` `:70` to `:79-88`. Re-read and unchanged: `TokenService.cs:129-141` and
+`:30`, `LayeredPermissionRegistry.cs:12,30,49`, `AuthorizationGate.cs:40,46-48,52`,
+`ClaimsPrincipalExtensions.cs:59-67,75-77,94-97`, `ICurrentUserService.cs:45`,
+`AuthorizationExtensions.cs:20-22`, `PermissionPolicyProvider.cs:35`,
+`PermissionAuthorizationHandler.cs:24-33` (block still verbatim), `IPermissionRegistry.cs:29`,
+`PermissionRegistry.cs:16`, `PermissionRegistryBuilder.cs:34`, `IdentityPermissions.cs:13,26,41,49`,
+`IdentityPermissionGrants.cs:36`, `ConferencePermissionGrants.cs:47-48`, `EngagementPermissionGrants.cs:37`,
+`NotificationPermissionGrants.cs:38`, Store `Program.cs:213,220` and Store `AddPermissions` `:66`/`:45`/`:52`.
+Not re-read in this pass: ADC `TokenPermissionGrants.cs`, the ADR-020 and scorecard anchors, and the
+nineteen-test count (carried from the 2026-10-02 audit). Prior pass: re-verified against source
+2026-10-02 (MMCA.Common v1.221.0). That run's
 changes: the token paragraph said baking a `permission` claim into the token was optional and role-derived
 resolution the default; the framework `TokenService` emits one claim per granted permission into every
 access token (`MMCA.Common.Infrastructure/Auth/TokenService.cs:129-141`, registry field at `:30`), and both
 Identity hosts apply every module's grant map before minting (ADC
-`MMCA.ADC.Identity.Service/Program.cs:269`, the map at `Authorization/TokenPermissionGrants.cs:16-24,44-45`;
+`MMCA.ADC.Identity.Service/Program.cs:280`, the map at `Authorization/TokenPermissionGrants.cs:16-24,44-45`;
 Store `MMCA.Store.Identity.Service/Program.cs:213`), so the paragraph and Apply-this step 4 ("keeps tokens
 small by default") were rewritten. The claim that `GetRoleValues` is the only role reader was narrowed: the
 CQRS gate reads `ICurrentUserService.Roles`
 (`MMCA.Common.Application/Interfaces/Infrastructure/Auth/ICurrentUserService.cs:45-62`), a separate
 default member over the same three claim types with a single-`Role` fallback. The claim that the registry
 and catalog "can never answer from different maps" was narrowed to the base wiring, because both Identity
-hosts call `AddStoredPermissionGrants` (ADC `Program.cs:276`, Store `Program.cs:220`), which decorates
+hosts call `AddStoredPermissionGrants` (ADC `Program.cs:287`, Store `Program.cs:220`), which decorates
 `IPermissionRegistry` with `LayeredPermissionRegistry` while the catalog stays compiled
-(`MMCA.Common.Infrastructure/DependencyInjection.Auth.cs:139-149`; union-only at
+(`MMCA.Common.Infrastructure/DependencyInjection.Auth.cs:139`, decorated at `:170`; union-only at
 `MMCA.Common.Application/Auth/Permissions/LayeredPermissionRegistry.cs:12,30,49`). "The question queue"
-became "feedback questions" to match `QuestionsManage` (`ConferencePermissions.cs:26`). Anchors re-read
-this run: `GetRoleValues` (`MMCA.Common.Shared/Auth/ClaimsPrincipalExtensions.cs:59-67`), `HasRole`
+became "feedback questions" to match `QuestionsManage` (`ConferencePermissions.cs:27`). Anchors re-read
+in that run: `GetRoleValues` (`MMCA.Common.Shared/Auth/ClaimsPrincipalExtensions.cs:59-67`), `HasRole`
 (`:75-77`), `HasPermissionClaim` (`:94-97`); `AuthorizationGate.Evaluate`
 (`MMCA.Common.Application/UseCases/Decorators/AuthorizationGate.cs:40`) checks the registry then the claim
 at `:46-48` and returns `Error.Forbidden` at `:52-55`; `AddAuthorizationPolicies` "one authorization model"
 statement at `MMCA.Common.API/Authorization/AuthorizationExtensions.cs:20-22`, with both contracts
-forwarding to one built `PermissionRegistry` at `:133-134`; ADC `IdentityPermissions`
+forwarding to one built `PermissionRegistry` at `:135-136`; ADC `IdentityPermissions`
 (`MMCA.ADC.Identity.Shared/Authorization/IdentityPermissions.cs`): `UsersRead` at `:13`, the
 `UsersManage` / `RolesManage` aliases at `:26,41`, `All` at `:49-52` holding only `UsersRead` (the aliases
 are granted by name in `IdentityPermissionGrants.cs:36-38`). Confirmed by the 2026-10-02 audit and carried:
@@ -253,9 +276,9 @@ are granted by name in `IdentityPermissionGrants.cs:36-38`). Confirmed by the 20
 `PermissionRegistryBuilder.Grant` unioning via `HashSet.UnionWith` (`PermissionRegistryBuilder.cs:34`);
 `PermissionPolicyProvider` non-`perm:` fall-through (`MMCA.Common.API/Authorization/PermissionPolicyProvider.cs:35`);
 `PermissionAuthorizationHandler` two-source body at `PermissionAuthorizationHandler.cs:24-33` (the handler
-block is verbatim); handler and provider registration at `AuthorizationExtensions.cs:68`;
+block is verbatim); handler and provider registration at `AuthorizationExtensions.cs:70-72`;
 `ConferencePermissionGrants.Apply` (Organizer `All` at `:47`, ContentEditor `ContentManagement` at `:48`),
-`ConferencePermissions` eleven constants with the seven-member `ContentManagement` subset at `:70`;
+`ConferencePermissions` twelve constants with the seven-member `ContentManagement` subset at `:79-88`;
 `EngagementPermissionGrants.cs:37`; `NotificationPermissionGrants.cs:38`; Store `AddPermissions` in all
 three modules (`MMCA.Store.Identity.API/DependencyInjection.cs:66`, Catalog `:45`, Sales `:52`) and its
 eleven permissions; no role names in MMCA.Common. ADR context:

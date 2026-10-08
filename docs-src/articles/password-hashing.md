@@ -44,9 +44,9 @@ MMCA.Common ships one production password hasher, split the Clean-Architecture w
 `IPasswordHasher` port sits in `MMCA.Common.Application` and its single `PasswordHasher`
 implementation in `MMCA.Common.Infrastructure`. It makes the right call on every axis:
 
-- **PBKDF2-HMAC-SHA512 at 600,000 iterations** (OWASP 2023 guidance). PBKDF2 is a *key derivation
-  function*: a deliberately expensive hash. Six hundred thousand iterations means each guess costs the
-  attacker 600,000 SHA-512 operations, not one. That turns "billions of guesses per second" into a rate
+- **PBKDF2-HMAC-SHA512 at 600,000 iterations** (at or above OWASP's 2023 PBKDF2 guidance). PBKDF2 is
+  a *key derivation function*: a deliberately expensive hash. Six hundred thousand iterations means
+  each guess costs the attacker 600,000 HMAC-SHA512 operations, not one. That turns "billions of guesses per second" into a rate
   where offline brute force against a strong password stops being worth the electricity.
 - **A 32-byte cryptographically random salt per password**, with a 64-byte output. The salt means two
   users with the same password get different hashes, so an attacker cannot crack once and apply
@@ -104,8 +104,12 @@ old hashes needs. It also means the credential table decides which primitive run
 marker and no way to assert from configuration which path a given login took, and the weaker format
 stays reachable for as long as the branch exists. MMCA.Common takes the other side: one path, and a
 credential in any other shape fails rather than authenticating through a fast hash. Changing the
-algorithm itself stays cheap because it sits behind `IPasswordHasher`: swapping PBKDF2 for Argon2id is
-an Infrastructure registration change, and the application handlers never name a hashing primitive.
+algorithm itself stays cheap because it sits behind `IPasswordHasher`: the registration is a single
+Infrastructure line, and the application handlers never name a hashing primitive. One coupling
+survives the interface. To keep an unknown address from answering faster than a wrong password, the
+login path runs a throwaway verification against material shaped like this hasher's output (a 64-byte
+hash over a 32-byte salt), so a replacement with different sizes has to keep that dummy call paying the
+full derivation cost rather than rejecting it on length, or the timing difference comes back.
 
 ## Defense in depth: PII at rest, not just passwords
 
@@ -140,17 +144,20 @@ A credible security post owns its rough edges, and a few sit around this hash ra
   because their authority is an internal-ingress cleartext URL, and their deployment templates say so
   beside the setting). Permissive dev CORS is a development affordance in the code, not a
   recommendation for what you run in production.
-- **Iteration counts are a moving target.** 600,000 PBKDF2-SHA512 iterations matches 2023 OWASP
-  guidance; that number ratchets up with hardware. Here it is a private constant pinned by a test, not
+- **Iteration counts are a moving target.** 600,000 PBKDF2-SHA512 iterations sits at or above 2023
+  OWASP guidance; that guidance ratchets up with hardware. Here it is a private constant pinned by a test, not
   a setting, and because the stored record carries no iteration count, raising it is a deliberate code
   change that needs a plan for the hashes already stored. Revisit it anyway, and prefer a memory-hard
   KDF (Argon2id) when you can, which is exactly why the algorithm lives behind an interface here.
 
-The current §11 entry itself names three reasons it holds at Implementation 8, all upstream of the
-hash: the rubric's threat-model criterion is unmet, authorization is RBAC with a capability layer plus
-opt-in ownership checks rather than a full resource- or attribute-based policy engine, and the
-failed-login counter behind the brute-force lockout is documented as non-atomic. None of these
-undermine the storage scheme. They are the operational and governance work that surrounds a correct
+The current §11 entry itself names three reasons it holds at Implementation 8: the rubric's
+threat-model criterion is unmet, authorization is RBAC with a capability layer plus opt-in ownership
+checks rather than a full resource- or attribute-based policy engine, and the failed-login counter
+behind the brute-force lockout is documented as non-atomic. It also records that service-to-service
+and tenant trust is met only in part: a broker consumer restores user identity and tenant from unsigned
+message headers, in-cluster gRPC forwards the user token over cleartext HTTP/2, and the default tenant
+resolution lets a request header choose the tenant when a token carries no tenant claim. All of it sits
+upstream of the hash, and none of it undermines the storage scheme. They are the operational and governance work that surrounds a correct
 hash.
 
 ## Apply this even without MMCA
@@ -159,8 +166,9 @@ The rules port to any stack, and they are short enough to memorize:
 
 1. **Never store plaintext, and never use a fast hash** (MD5, SHA-1, plain SHA-256/512) for passwords.
    Use a purpose-built KDF: Argon2id if available, otherwise PBKDF2-HMAC-SHA512 or bcrypt/scrypt.
-2. **Tune the work factor to current guidance** (600k+ PBKDF2-SHA512 iterations at the time of writing)
-   and revisit it as hardware improves.
+2. **Tune the work factor to current guidance** (the OWASP Password Storage Cheat Sheet publishes a
+   figure per hash function; this hasher runs 600,000 PBKDF2-SHA512 iterations) and revisit it as
+   hardware improves.
 3. **Salt every password** with a per-user cryptographically random value. The salt does not need to be
    secret; it needs to be unique.
 4. **Compare in constant time.** Use your platform's timing-safe primitive
@@ -194,14 +202,38 @@ response replayed instead of a duplicate.
 
 *Tags: .NET, C Sharp, Software Architecture, Security, Cryptography*
 
-*Notes (re-sourced 2026-10-02 against MMCA.Common v1.221.0): every anchor below was re-read this run.
+*Notes (re-sourced 2026-10-08 against MMCA.Common v1.233.0; previous pass 2026-10-02 at v1.221.0):
+every anchor below was re-read this run. 2026-10-08 entry (v1.233.0): `PasswordHasher.cs` body
+unchanged (75 lines, anchors below still hold). REWORDED: "each guess costs 600,000 SHA-512 operations"
+now reads "600,000 HMAC-SHA512 operations" (one PBKDF2 iteration is one HMAC-SHA512 over
+`HashAlgorithmName.SHA512`, `PasswordHasher.cs:36`, `:73`). HEDGED (external fact, not settleable
+in-repo): "matches / is OWASP 2023 guidance" and the checklist's "600k+ PBKDF2-SHA512 at the time of
+writing" now say "at or above" and point readers at the OWASP cheat sheet's per-hash figure; the only
+in-repo support is the code comment `PasswordHasher.cs:21`, and the audit reports the cheat sheet's
+600,000 figure as its PBKDF2-HMAC-SHA256 value with a lower SHA-512 value, which would make 600,000
+above guidance rather than equal to it. NARROWED: the Argon2id swap is no longer called a pure
+registration change; `AuthenticationServiceBase.BurnPasswordVerificationCost`
+(`Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:615-625`, call site `:155`)
+runs `VerifyPassword(password, new byte[64], new byte[32])` at `:624`, which only pays the full
+derivation cost because `PasswordHasher.cs:55` accepts exactly that shape. EXTENDED: the section 11 row
+(`Website/docs-src/governance/common-ArchitectureScorecard.md:75`, still 3 / 4 / 8 / 12/24, re-scored
+by Website #244 on 2026-10-07) keeps the same three hold-at-8 reasons and adds "Service-to-service and
+tenant trust is met only in part" (unsigned `MMCA-*` headers restored at
+`Infrastructure/Messaging/Consumers/ConsumerOriginRestore.cs:50`, cleartext h2c JWT forwarding
+`Grpc/DependencyInjection.cs:95`, default `[Claim, Header]` tenant order
+`Infrastructure/Persistence/Tenancy/TenancySettings.cs:56`), so the trade-offs paragraph names it.
+RE-ANCHORED in place below: `DependencyInjection.cs` `:314` to `:315`; ADR-005 `:23` to `:25`; ADR-037
+item 10 `:122` to `:123` and zero adoption `:136-141` to `:137-142`; `LoginProtectionService.cs`
+non-atomic `:55` to `:78-86`, backoff `:77` (`:71-78`) to `:102` (`:98-103`), reset `:85-86` to
+`:117-118` (called on success at `AuthenticationServiceBase.cs:207`); the Authentication partial and
+CORS and bicep anchors as listed at the end.
 Port and adapter: `IPasswordHasher` in `MMCA.Common.Application` (namespace
 `MMCA.Common.Application.Interfaces.Infrastructure.Auth`,
 `Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Auth/IPasswordHasher.cs:1`, interface at
 `:6`); the single `PasswordHasher` in `MMCA.Common.Infrastructure` (namespace
 `MMCA.Common.Infrastructure.Auth`, `Source/Core/MMCA.Common.Infrastructure/Auth/PasswordHasher.cs:5`,
 class at `:12`), registered by `TryAddSingleton<IPasswordHasher, PasswordHasher>`
-(`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:314`). Behavior, unchanged:
+(`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:315`). Behavior, unchanged:
 PBKDF2-HMAC-SHA512 (`HashAlgorithmName.SHA512`, `PasswordHasher.cs:36` on the write path and `:73`
 inside `ComputePbkdf2Hash` at `:68-74`), `Iterations = 600_000` (`:24`, a private const), `SaltSize = 32`
 (`:15`), `HashSize = 64` (`:18`), the canonical-material guard (`:55-58`, SECURITY rationale `:49-54`),
@@ -229,9 +261,9 @@ needing a plan for stored hashes. "now recorded in its own decision record" lost
 `AesGcm` (`:200`, `:235`), nonce 12 (`:78`), tag 16 (`:81`), key guards `:130` (single key) and `:166`
 (per ring entry), envelope `[key version (1)][nonce (12)][ciphertext (N)][tag (16)]` assembled at
 `:203-208` and documented at `:38-44`, 29 bytes of overhead; re-read line by line this run.
-`Website/docs-src/adr/037-field-level-encryption-at-rest.md` Decision item 10 starts at `:122` and records
-zero adoption at `:136-141` (re-anchored from `:135-140`); ADR-005 names the converter for retrievable
-fields (`Website/docs-src/adr/005-soft-delete-vs-erasure.md:23`). Section 11 Security RE-ANCHORED to
+`Website/docs-src/adr/037-field-level-encryption-at-rest.md` Decision item 10 starts at `:123` and records
+zero adoption at `:137-142`; ADR-005 names the converter for retrievable
+fields (`Website/docs-src/adr/005-soft-delete-vs-erasure.md:25`). Section 11 Security RE-ANCHORED to
 `Website/docs-src/governance/common-ArchitectureScorecard.md:75` (from `:91`, which is now section 27) =
 Weight 3, **Maturity 4 / Implementation 8**, weighted 12/24, unchanged. DRIFTED (2026-10-02): the row
 credits alg pinning, the PBKDF2 hasher, permission-based authz and rate limiting plus brute-force
@@ -239,25 +271,28 @@ protection, and lists the ADR-037 converter only as "ships but is latent/unadopt
 dropped from the strength list and the body says it is not part of the credit. The row's hold-at-8
 reasons are now THREE (threat-model criterion unmet; RBAC with capability indirection plus opt-in
 ownership rather than ABAC; failed-login counter documented non-atomic,
-`Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:55`), and vault binding is no
+`Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:78-86`; the row itself still
+cites `:55`), and vault binding is no
 longer a limitation (the row records opt-in `AddCommonKeyVaultConfiguration` via
 `DefaultAzureCredential`), so the trade-offs paragraph was rewritten to the three. Scorecard-side drift
 (not an article defect): the row still cites ADR-032 and `Infrastructure/Services/PasswordHasher.cs:9,53`
 plus `Services/PasswordHasherTests.cs` (11 tests). Brute force: exponential backoff
-`LoginProtectionService.cs:77` (clamped shift, `:71-78`), counter and lockout cleared in
-`ResetFailedAttemptsAsync` (`:85-86`). Analyzers: `TreatWarningsAsErrors` at
+`LoginProtectionService.cs:102` (clamped shift, `:98-103`), counter and lockout cleared in
+`ResetFailedAttemptsAsync` (`:117-118`), which a successful login calls
+(`AuthenticationServiceBase.cs:207`). Analyzers: `TreatWarningsAsErrors` at
 `MMCA.Common/Directory.Build.props:7`; five analyzers, no dedicated security analyzer. Header
 re-pointed from `MMCA.Common/CLAUDE.md` (now a stub importing `AGENTS.md`, `:3`) to
 `MMCA.Common/AGENTS.md`, whose `:131` states the `AddForwardedJwtBearer` resolution order. ANCHORS
 REBASED (2026-10-02): the HTTPS-metadata bullet's behavior is unchanged, but the code moved into the
 partial `Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.Authentication.cs`:
-`RequireHttpsMetadataConfigKey` `:24`, the single public `AddForwardedJwtBearer` `:51-56`, the resolve
-chain argument then key then `!environment.IsDevelopment()` `:63-65`, the
-`InsecureJwtMetadataWarningStartupFilter` registration `:67-71` (type at
-`Startup/Auth/InsecureJwtMetadataWarningStartupFilter.cs:15`), private `AddForwardedJwtBearerCore` `:76`.
-Permissive dev CORS unchanged: `AllowAnyOrigin` at `WebApplicationBuilderExtensions.cs:140` inside the
-S5122 pragma (`:138` disable, `:143` restore). Production opt-outs with justification beside the setting
-re-anchored: `MMCA.ADC/infra/main.bicep:1941,2075,2227` (comments `:1938-1940`, `:2072-2074`,
-`:2224-2226`) and `MMCA.Store/infra/main.bicep:1686,1818` (comments `:1682-1685`, `:1814-1817`).*
+`RequireHttpsMetadataConfigKey` `:25`, the single public `AddForwardedJwtBearer` `:52-57`, the resolve
+chain argument then key then `!environment.IsDevelopment()` `:64-66`, the
+`InsecureJwtMetadataWarningStartupFilter` registration `:68-72` (type at
+`Startup/Auth/InsecureJwtMetadataWarningStartupFilter.cs:15`), private `AddForwardedJwtBearerCore` `:77`
+(re-anchored 2026-10-08 from `:24`, `:51-56`, `:63-65`, `:67-71`, `:76`).
+Permissive dev CORS unchanged: `AllowAnyOrigin` at `WebApplicationBuilderExtensions.cs:146` inside the
+S5122 pragma (`:144` disable, `:149` restore). Production opt-outs with justification beside the setting
+re-anchored 2026-10-08: `MMCA.ADC/infra/main.bicep:2009,2145,2299` (comments `:2006-2008`, `:2142-2144`,
+`:2296-2298`) and `MMCA.Store/infra/main.bicep:1689,1824` (comments `:1685-1688`, `:1820-1823`).*
 
 - Full series index: https://ivanball.github.io/writing.html

@@ -2,7 +2,7 @@
 
 > Series: MMCA.Common · Article #9 (cornerstone deep-dive) · Pillar P2/P3 · Group G04 · Rubric §6,§8 ·
 > ADR-003 · ADR-066 · ADR-075 · ADR-087 · ADR-100 · ADR-107 · Status: grounded in `Website/docs-src/onboarding/group-04-events-outbox.md`, `MMCA.Common/CLAUDE.md`,
-> and `Website/docs-src/adr/003-outbox-dual-dispatch.md`, re-verified against MMCA.Common v1.221.0 source (see Notes). No em dashes.
+> and `Website/docs-src/adr/003-outbox-dual-dispatch.md`, re-verified against MMCA.Common v1.233.0 source (see Notes). No em dashes.
 
 **Subtitle:** "Save to the database, then publish to the broker" is a dual write with no atomicity.
 Here is the at-least-once pattern that fixes it, in one SaveChanges call.
@@ -56,7 +56,7 @@ automatic. Your aggregate records a domain event, and the framework does the res
 
 ```csharp
 // Inside your aggregate. You only declare that something happened:
-AddDomainEvent(new ProductVariantChanged(Id, newPrice));
+AddDomainEvent(new InventoryAdjusted(Id, oldAvailableQuantity, AvailableQuantity));
 // SaveChanges does the rest: your data row and the OutboxMessage row,
 // one transaction, same database as the aggregate.
 ```
@@ -187,9 +187,13 @@ A background service, `OutboxProcessor`, drains the outbox. The details that mak
   see ADR-006.)
 - **Smart waiting, not a hot loop.** It wakes on a signal when new rows are written. When it sees rows
   that are pending but not yet eligible (messages become eligible a few seconds after creation, default
-  5s, so an in-process handler can run first), it sleeps only until the earliest becomes eligible.
+  5s), it sleeps only until the earliest becomes eligible.
   Otherwise it sleeps the full fallback interval (default 2s locally; deployed environments set it high,
-  for example 300s, to cut idle polling without adding latency).
+  for example 300s, to cut idle polling without adding latency). The eligibility delay is not what
+  keeps the processor away from an event the saving process is still handling: on the async save path
+  a local domain event's row is inserted already leased (`Outbox:LeaseSeconds`, under a fresh lock
+  token), so no replica's poller claims it while the in-process dispatch runs, and a failed dispatch
+  releases that lease so the processor retries promptly instead of waiting out the full lease.
 - **Batches and retries.** It processes in batches of 50 and retries a failed message up to 5 times,
   with at-least-once delivery and OpenTelemetry metrics for dead-letter tracking. Retries back off
   exponentially: attempt `n` waits `Outbox:RetryBackoffBaseSeconds * 2^(n-1)` (default base 10s),
@@ -418,15 +422,40 @@ pattern, or `dotnet add package MMCA.Common.API` and try it.*
 
 *Tags: .NET, C Sharp, Microservices, Distributed Systems, Software Architecture*
 
-*Notes: 2026-10-02 re-verification pass against MMCA.Common v1.221.0 (audit findings
-`Reports/update-medium/2026-10-02/09.json`). Section history: "The write that skips the whole
+*Notes: 2026-10-08 re-verification pass against MMCA.Common v1.233.0 (findings
+`Docs/Planning/Quality/medium-apply-2026-10-08/09-transactional-outbox-dotnet.json`). Changes in this
+pass: the smart-waiting bullet credited the 5s processing delay with letting the in-process handler
+run first; v1.233.0 (`MMCA.Common/CHANGELOG.md:26`, release header `:13`) inserts async-path local
+domain-event rows already leased under a fresh lock token, so the bullet now names the lease as what
+keeps the poller off the row and the failed-dispatch lease release as what makes the retry prompt
+(`Persistence/Outbox/Administration/OutboxSettings.cs` `ProcessingDelaySeconds` 5 `:41`, "does not
+bound the duplicate-dispatch window" doc `:34-38`; `Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs`
+class remarks `:17-23`, lease field `:66`, lease stamped `:310-311` from `:314-316`; ADR-003 Status
+revision 2026-10-07 `:34-36` and the processing-delay rationale `:54`). The illustrative snippet raised
+`ProductVariantChanged(Id, newPrice)`, an invented two-argument shape of what is really an integration
+event (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Products/IntegrationEvents/ProductVariantChanged.cs:34`,
+`BaseIntegrationEvent` `:41`), which is exactly the case the article says is not dispatched
+in-process; it now shows a real pure domain event raised by a real aggregate,
+`InventoryAdjusted(Id, oldAvailableQuantity, AvailableQuantity)` (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Inventory/InventoryItem.cs:172`;
+`Inventory/DomainEvents/InventoryAdjusted.cs:6-10`, `BaseDomainEvent`). Header stamp v1.221.0 to
+v1.233.0. Re-read on 2026-10-08 and corrected in place below where they moved: `OutboxSettings.cs`,
+`DbContextFactory.cs`, `UnitOfWork.cs`, `DomainEventSaveChangesInterceptor.cs`, `OutboxProcessor.cs`,
+`EFRepository.cs`, `IntegrationEventConsumer.cs`, `DependencyInjection.cs`,
+`DependencyInjection.Messaging.cs` and every `AddAuditTrail` call site (still seven hosts; ADC's
+three moved). Re-read and unchanged: the `MessageBusSettings.cs` anchors, `PollingLoop.cs`,
+`TransactionCommitAmbiguousException.cs`, `SQLServerDbContext.cs`. Everything else below is carried
+from the 2026-10-02 pass, not re-read in this one. `EFRepository.ExecuteUpdateAsync` also calls
+`StampRowVersion(builder)` (`:157`, declared `:168`) after the audit block; the article's block stops
+before it and stays accurate. Prior pass:
+2026-10-02 against MMCA.Common v1.221.0 (audit findings `Reports/update-medium/2026-10-02/09.json`).
+Section history: "The write that skips the whole
 pipeline" was added 2026-07-27 (the set-based-write audit-field trap was taught only inside Article
 49's reconciliation section, and it lives here because this article teaches the `SaveChangesAsync`
 sequence whose first step is "stamp audit fields"); "When the commit itself is ambiguous" 2026-08-01,
 its per-source outcome paragraph 2026-08-15 (MMCA.Common PR #248); the transport-selection paragraph
 2026-08-07; "The third participant in that sequence: the change trail" 2026-08-14; "When the
 consumer runs out of retries" 2026-08-19; the outbox-posture and transaction-contract paragraphs
-2026-09-19. Changes in this pass: the inbox bullet described an opt-in inbox with `NoOpInboxStore`
+2026-09-19. Changes in the 2026-10-02 pass: the inbox bullet described an opt-in inbox with `NoOpInboxStore`
 as the default, a check-before/record-after consumer and "five service hosts"; it now teaches the
 broker default-ON inbox, the staged row and the seven explicit `EnableInbox: true` hosts (ADR-021
 Revision 2026-08-26). The ADR-066 emulator tier read "nightly and non-gating"; it is deploy-gating
@@ -435,7 +464,7 @@ scheduler dependency of its retention purge; the interceptor paragraph and the S
 gained the optional tenant step. The ADR-107 contract decides five things after its 2026-10-01
 revision (`FlushEnrolledCommandsBeforeCommitAsync`). The set-based-write block lost the
 `?? TimeProvider.System` fallback and now also shows the `LastModifiedBy` stamp. "One property above
-it" corrected to two. Anchors read in this pass (paths under
+it" corrected to two. Anchors (paths under
 `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/` unless stated). Outbox posture
 (`Website/docs-src/adr/100-outbox-opt-in-resolved-from-messaging-mode.md`, Accepted 2026-08-29 at
 `:4`, Decision item 1 at `:41-47`, the in-process default trade-off at `:113-118`):
@@ -444,14 +473,14 @@ explicit-false Warning doc `:127-130`), `IsInboxEnabled` `:141`, `EnableOutbox` 
 `:143-166`, the monolith's explicit `true` at `:159-161`), `IsOutboxEnabled` `:175`. The in-process
 test-host clause follows from that rule (an `InProcess` host with `EnableOutbox` unset resolves OFF
 at `:175` and writes no rows); ADR-100 carries no test-host text, so it is no longer attributed to
-ADR-100's own wording. `DependencyInjection.cs`: `IOutboxSignal` `:205`, transport-decision comment
-`:207-212`, guard call `:215`, enabled registration `:217-221`, disabled `:222-225`.
-`DependencyInjection.Messaging.cs`: `EnsureOutboxAvailableForProvider` declared `:196`, guard `:198`,
-throw `:200-201`, doc `:178-191`, second call site `:59`; `EfInboxStore` registered when
-`IsInboxEnabled` `:107-109`, `NoOpInboxStore` on an explicit false `:115-117` with the Warning comment
-`:119-120`. Inbox consume path: `Messaging/Consumers/IntegrationEventConsumer.cs` stages the row via
-`TryBeginAsync` (`:76-81`) and calls `Abandon` on a handler failure (`:101`) before rethrowing
-(`:108`). ADR-021 (`Website/docs-src/adr/021-consumer-inbox-idempotency.md`): Status revisions
+ADR-100's own wording. `DependencyInjection.cs`: `IOutboxSignal` `:206`, transport-decision comment
+`:208-213`, guard call `:216`, enabled registration `:218-222`, disabled `:223-226`.
+`DependencyInjection.Messaging.cs`: `EnsureOutboxAvailableForProvider` declared `:202`, guard `:204`,
+throw `:206-207`, doc `:184-197`, second call site `:60`; `EfInboxStore` registered when
+`IsInboxEnabled` `:108-110`, `NoOpInboxStore` on an explicit false `:116-118` with the Warning comment
+`:120-122`. Inbox consume path: `Messaging/Consumers/IntegrationEventConsumer.cs` stages the row via
+`TryBeginAsync` (`:82`) and calls `Abandon` on a handler failure (`:102`) before rethrowing
+(`:109`). ADR-021 (`Website/docs-src/adr/021-consumer-inbox-idempotency.md`): Status revisions
 `:4-11`, opt-in superseded `:53-55`, check-before superseded `:60-62`, window narrowed `:76-79`,
 explicit `EnableInbox: true` on four ADC and three Store service hosts `:81-87` (Store Sales
 `appsettings.json:58` re-read), five of seven consuming from the broker `:96-97`. Audit trail:
@@ -463,7 +492,7 @@ explicit `EnableInbox: true` on four ADC and three Store service hosts `:81-87` 
 `:297-298`, the tenant interceptor between them when registered `:305-308` (otherwise `:311`), the
 trail last through `GetService` `:319-322` (comment `:314-318`). `AddAuditTrail` call sites:
 `MMCA.Store` Sales `Program.cs:208`, Catalog `:233`, Identity `:195`; `MMCA.ADC` Identity
-`Program.cs:238`, Conference `:348`, Engagement `:198`; `MMCA.Helpdesk`
+`Program.cs:249`, Conference `:356`, Engagement `:202`; `MMCA.Helpdesk`
 `Source/Hosts/MMCA.Helpdesk.Web/Program.cs:90`. Transaction contract
 (`Website/docs-src/adr/107-transaction-execution-contract.md`, Accepted 2026-09-03 at `:4`, revised
 2026-09-25 `:5-8` and 2026-10-01 `:9-11`): Decision `:39-42`, re-entrant join `:50-58`, retriable
@@ -471,29 +500,30 @@ unit and `ResetForRetry` `:60-68`, failed-Result rollback and the enrolled-comma
 commit never retried `:82-89`, per-source outcome `:91-98`, best-effort rollback `:100-104`, deferred
 flush and drop `:106-110`, Revision `:202`. Source:
 `MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IUnitOfWork.cs:63`;
-`Persistence/UnitOfWork.cs:76-79`; `MMCA.Common.Application/UseCases/Decorators/TransactionalCommandDecorator.cs`
+`Persistence/UnitOfWork.cs:91-94`; `MMCA.Common.Application/UseCases/Decorators/TransactionalCommandDecorator.cs`
 class `:22`, `ITransactional` check `:30`, call `:33`. `Persistence/DbContexts/Factory/DbContextFactory.cs`:
-`ExecuteInTransactionAsync` `:544`, `strategy.ExecuteAsync` `:571`, `ResetForRetry` call `:574`
-(declared `:829`, `ChangeTracker.Clear()` `:834`), failed `Result` `:608` with `RollbackTransaction`
-call `:613` (declared `:477`), `FlushEnrolledCommandsBeforeCommitAsync` call `:618` (declared `:674`,
-throw `:691-697`, save `:699`), `TryCommit` call `:620` (declared `:712`), `FlushDeferredAsync` call
-`:634`, `AbandonAfterCommitFailure` call `:736` (declared `:753`), rethrow past the strategy
-`:585-586` with the inner-chain comment `:581-584`, `SupportsTransactions` `:853-854`
+`ExecuteInTransactionAsync` `:551`, `strategy.ExecuteAsync` `:578`, `ResetForRetry` call `:581`
+(declared `:836`, `ChangeTracker.Clear()` `:841`), failed `Result` `:615` with `RollbackTransaction`
+call `:620` (declared `:484`), `FlushEnrolledCommandsBeforeCommitAsync` call `:625` (declared `:681`,
+throw `:698-704`, save `:706`), `TryCommit` call `:627` (declared `:719`), `FlushDeferredAsync` call
+`:641`, `AbandonAfterCommitFailure` call `:743` (declared `:760`), rethrow past the strategy
+`:592-593` with the inner-chain comment `:588-591`, `SupportsTransactions` `:860-861`
 (`Engine.Capabilities.IsRelational`, false for Cosmos);
-`Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs` `FlushDeferredAsync` `:145`,
-`DropDeferred` `:162`. Delivery side: `Persistence/Outbox/Processing/OutboxProcessor.cs`
-`ClaimEligibleAsync` declared `:367`, invoked `:214`; `ComputeRetryBackoffSeconds` `:680-681`
+`Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs` `FlushDeferredAsync` `:160`,
+`DropDeferred` `:177`. Delivery side: `Persistence/Outbox/Processing/OutboxProcessor.cs`
+`ClaimEligibleAsync` declared `:333`, invoked `:221`; `ComputeRetryBackoffSeconds` `:865-866`
 (delegating to `Persistence/Polling/PollingLoop.cs:183`, jitter `0.8 + NextDouble() * 0.4` at
-`:193`), applied `:588` and `:660`. Consume-side faults: `RegisterIntegrationEventConsumer<TEvent>`
+`:193`), applied `:547` and `:845`. Consume-side faults: `RegisterIntegrationEventConsumer<TEvent>`
 (`Messaging/Consumers/IntegrationEventConsumerExtensions.cs:60`), `bool registerFaultConsumer = true`
 (`:61`), guard `:71`, the same opt-out on the sibling overloads (`:124`/`:134`, `:159-160`).
-Set-based write: the block is verbatim from `Persistence/Repositories/EFRepository.cs:140-154` inside
-`ExecuteUpdateAsync`, empty-assignment guard `:137-138`, `Entities.Where(where).ExecuteUpdateAsync(builder.Apply, ...)`
-replay `:156`. Carried from the 2026-10-02 audit's CONFIRMED verdicts, not re-read in this apply
-step: `Persistence/Outbox/Administration/OutboxSettings.cs` (`RetentionDays` 7 `:65`, `0` disables;
-`CleanupIntervalHours` 6 `:73`; `LeaseSeconds` 300 `:82`, `[Range(10, 3600)]` `:81`;
-`RetryBackoffBaseSeconds` 10 `:99`, `[Range(1, 3600)]` `:98`; `DeadLetterRetentionDays` fallback
-`:108`, doc `:101-106`), `OutboxDisabledNoticeService.cs:22` (restore path `:35-38`),
+Set-based write: the block is verbatim from `Persistence/Repositories/EFRepository.cs:141-155` inside
+`ExecuteUpdateAsync`, empty-assignment guard `:138-139`, `Entities.Where(where).ExecuteUpdateAsync(builder.Apply, ...)`
+replay `:159`. Re-read 2026-10-08:
+`Persistence/Outbox/Administration/OutboxSettings.cs` (`RetentionDays` 7 `:66`, `0` disables;
+`CleanupIntervalHours` 6 `:74`; `LeaseSeconds` 300 `:85`, `[Range(10, 3600)]` `:84`;
+`RetryBackoffBaseSeconds` 10 `:102`, `[Range(1, 3600)]` `:101`; `DeadLetterRetentionDays` fallback
+`:111`, doc `:104-109`). Confirmed by the 2026-10-02 audit, with the `TransactionCommitAmbiguousException.cs`,
+`SQLServerDbContext.cs`, `MessageBusSettings.cs` and `PollingLoop.cs` anchors re-read unchanged on 2026-10-08: `OutboxDisabledNoticeService.cs:22` (restore path `:35-38`),
 `TransactionCommitAmbiguousException.cs` (sealed `:22`, `CommittedSources` `:76`, `AmbiguousSource`
 `:85`, `RolledBackSources` `:93`, `ComposeMessage` `:99`), `Persistence/DbContexts/SQLServerDbContext.cs:63-66`
 (`EnableRetryOnFailure`, 5 retries, 10s), `MessageBusProvider` (`Messaging/MessageBusSettings.cs:236`,

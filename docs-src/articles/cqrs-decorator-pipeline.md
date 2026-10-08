@@ -88,8 +88,10 @@ FeatureGate -> Authorization -> Logging -> Caching ->
 Validating -> Timeout -> Concrete Handler
 ```
 
-(The framework also has an optional `Profiling` decorator layered on top when profiling is enabled, via a
-separate `AddApplicationProfiling()` call.)
+(The framework also ships an optional pair of MiniProfiler decorators, `ProfilingCommandDecorator` and
+`ProfilingQueryDecorator`, registered only by a separate opt-in `AddApplicationProfiling()` call; called
+after `AddApplicationDecorators()`, they wrap both chains from the outside. No consumer host calls it
+today.)
 
 Each position is a deliberate cost-and-correctness argument:
 
@@ -147,7 +149,7 @@ carries an ASCII nesting diagram of both chains in its own doc comment.
 The transactional decorator wraps the handler in `IUnitOfWork.ExecuteInTransactionAsync` **only when the
 command implements `ITransactional`**. Three outcomes, three behaviors:
 
-- **An exception rolls back.** The transaction unwinds, nothing is persisted.
+- **An exception from the handler rolls back.** The transaction unwinds, nothing is persisted.
 - **A business failure (`Result.IsFailure`, no exception) also rolls back.** This is the subtle one. A
   failed `Result` means the handler decided "no" through a value rather than an exception, and the unit of
   work treats that decision exactly like a thrown fault:
@@ -158,6 +160,10 @@ command implements `ITransactional`**. Three outcomes, three behaviors:
 - **A success commits and then invalidates the cache.** Only a success reaches `CommitTransaction()`.
   In-process domain events are flushed *after* the commit, so a handler never acts on state that could
   still roll back, and cache eviction runs *outside* the transaction boundary against committed state.
+  The one failure this cannot classify is the commit itself: the database may have applied the
+  transaction and lost only the acknowledgement, so a failed commit is never retried or treated as a
+  rollback. It surfaces as a `TransactionCommitAmbiguousException`, its writes possibly durable, and
+  the caller owns recovery.
 
 That "a business failure rolls back like an exception" rule is the kind of decision that, in scattered
 code, would be implemented three different ways in three handlers. Here it is one place, one behavior,
@@ -281,8 +287,9 @@ routing -> CORS -> authentication -> tenant resolution -> rate limiter ->
 soft-deleted-user check -> authorization -> output cache -> JWKS + OIDC discovery -> controllers
 ```
 
-Four of those adjacencies are load-bearing, and the builder re-validates every one of them while it
-builds the step list, each with its reason carried in the exception it would throw:
+Four of those orderings are load-bearing, two of them strict adjacencies, and the builder re-validates
+every one of them while it builds the step list, each with its reason carried in the exception it would
+throw:
 
 - **The pre-forwarded capture immediately before forwarded headers.** The capture step stashes the real
   transport scheme and host before `UseForwardedHeaders` rewrites them from the `X-Forwarded-*` headers,
@@ -297,7 +304,7 @@ builds the step list, each with its reason carried in the exception it would thr
   principal and routes anonymous traffic down a no-limiter branch, so an unpopulated user makes every
   request look anonymous and the per-user cap never engages.
 
-The gRPC exemption on the HTTPS redirect is a step predicate rather than an adjacency, and it is keyed
+The gRPC exemption on the HTTPS redirect is a step predicate rather than an ordering rule, and it is keyed
 on the protocol Kestrel negotiated, not on the request's content type. The step runs ahead of routing,
 so no endpoint metadata exists yet; what does exist is the negotiated protocol, which no header can
 fake. Cleartext HTTP/2 is exactly the gRPC-over-plaintext case that a 307 would break, and every
@@ -321,7 +328,7 @@ the order is data: a conformance test base mirroring the decorator one asserts t
 the fast unit tier, and a reorder goes red before the semantics go quiet. Swapping two steps still
 compiles and still passes every analyzer, but it no longer passes the test pass. Second, **the
 extension point is scoped**. The method takes an optional configure delegate: a host can insert,
-replace, or remove steps by name, and the builder re-validates the load-bearing adjacencies at
+replace, or remove steps by name, and the builder re-validates the load-bearing orderings at
 startup, so a customized edge fails while the host is starting instead of misordering silently. A
 host whose edge is genuinely different still composes its own, which is what the Blazor UI hosts and
 the YARP gateways do; the escape hatch comes in two sizes, not one.
@@ -397,10 +404,31 @@ pattern, or `dotnet add package MMCA.Common.API` and try it.*
 
 *Tags: .NET, C Sharp, Software Architecture, CQRS, Design Patterns*
 
-*Notes: 2026-10-02 refresh against MMCA.Common v1.221.0. Every anchor below was re-read against
-current source this run unless marked otherwise; the 2026-09-19 ledger is replaced rather than appended to, because most of
-its line numbers had moved and `DependencyInjection.cs` is now split into three partial files.
-**Three body corrections this run.** (1) Header: `MMCA.Common/CLAUDE.md` is a five-line `@AGENTS.md`
+*Notes: 2026-10-08 refresh against MMCA.Common v1.233.0. The anchors named in the 2026-10-08 entry
+were re-read this run and corrected in place below; every other anchor carries from the 2026-10-02
+refresh (MMCA.Common v1.221.0), which re-read all of them unless marked otherwise and replaced the
+2026-09-19 ledger, because most of its line numbers had moved and `DependencyInjection.cs` is split
+into three partial files.
+**2026-10-08 entry (MMCA.Common v1.233.0).** Three body changes. (1) Profiling: `AddApplicationProfiling()`
+(`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:160`, doc "Registers
+MiniProfiler decorators" `:156`) registers the pair at `:162-163` with no toggle; it wraps from the
+outside only when called after `AddApplicationDecorators()`, and a Grep of `MMCA.ADC/Source`,
+`MMCA.Store/Source` and `MMCA.Helpdesk/Source` finds no call (ADR-014 `:56-58`: "No consumer host wires
+it today"). The parenthetical is narrowed to that. (2) Commit ambiguity: a handler exception rolls back
+(`DbContextFactory.cs:664-667`), but a failed commit is never retried or rolled back and surfaces as
+`TransactionCommitAmbiguousException` (rationale `:532-537`, thrown past the execution strategy at
+`:592-593`); the success bullet gained that clause and the exception bullet is scoped to the handler.
+(3) Edge invariants: `Build()` (`MiddlewarePipelineBuilder.cs:252`) carries two `RequireImmediatelyBefore`
+(`:254-257`, `:259-262`) and two `RequirePrecedes` (`:264-267`, `:269-272`), so "four adjacencies" is
+now "four orderings, two of them strict adjacencies", and the startup re-validation sentence says
+"orderings". Re-anchored in place: `FeatureGateCommandDecorator.cs:60`, ADR-014 (`:79-80`,
+`:225-232`, `:371`, `:380`), `DbContextFactory.cs` (all +7), `WebApplicationExtensions.cs`
+(`ApplyPipeline` `:170`, `IsLocalRedirectTarget` `:159`). Header left citing `MMCA.Common/AGENTS.md`:
+its "DI Registration Sequence" (`:72`, sentence `:74`) says `AddMmcaApplicationPipeline` runs
+`AddInfrastructure(config)` and `AddAPI(modulesSettings)`, but the method (`DependencyInjection.cs:207-216`)
+runs only `AddApplication()`, the configure delegate and `AddApplicationDecorators()`; the body follows
+the code, and the AGENTS.md drift is reported for its owner.
+**2026-10-02 body corrections.** (1) Header: `MMCA.Common/CLAUDE.md` is a five-line `@AGENTS.md`
 import, so the header cites `MMCA.Common/AGENTS.md`, where "DI Registration Sequence" is at `:72`,
 "CQRS Decorator Pipeline" at `:76` and the two chain lines at `:81-82`. (2) Validation: the body said
 the decorator "resolves the registered `IValidator<TCommand>`" (singular).
@@ -430,16 +458,16 @@ outermost at `:148`), `SealPipeline(services)` at `:150`. The XML doc carries th
 query-side validation placement at `:96-100` ("On the query side it sits INSIDE caching", `:98`) and
 the business-failure sentence at `:107-108`. Optional profiling: `AddApplicationProfiling()` registers
 `ProfilingCommandDecorator` and `ProfilingQueryDecorator` at `:162-163`. ADR-014 states both current
-chains in its Revision (2026-08-26) at `:221-228`, records the shared authorization gate in its
-Revision (2026-09-19) from `:367` (`Evaluate` at `:376`), and states the decorators-last scope at
-`:75-76`. Order pinned by `DecoratorPipelineOrderTestsBase`
+chains in its Revision (2026-08-26) at `:225-232`, records the shared authorization gate in its
+Revision (2026-09-19) from `:371` (`Evaluate` at `:380`), and states the decorators-last scope at
+`:79-80`. Order pinned by `DecoratorPipelineOrderTestsBase`
 (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/Conformance/DecoratorPipelineOrderTestsBase.cs:38`),
 `protected virtual` lists at `:49` (commands) and `:61` (queries, `ValidatingQueryDecorator` at
 `:67`); the framework subclass
 (`MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Tests/Conformance/DecoratorPipelineOrderTests.cs:23`)
 overrides only `ConfigureServices` (`:26`).
 **Per-decorator behavior.** `FeatureGateCommandDecorator` short-circuits with `Error.NotFoundError(...)`
-(`UseCases/Decorators/FeatureGateCommandDecorator.cs:57`). Both authorization decorators call
+(`UseCases/Decorators/FeatureGateCommandDecorator.cs:60`). Both authorization decorators call
 `AuthorizationGate.Evaluate` (`AuthorizationCommandDecorator.cs:62`, `AuthorizationQueryDecorator.cs:57`);
 the gate is at `AuthorizationGate.cs:40`, with the permission check at `:46-56`, the MFA step-up at
 `:60-68` and the capability-first comment at `:58-59` (audit-file anchors; only the `Evaluate` line
@@ -454,12 +482,12 @@ not a failure (`:61-63`, `IsFailure` at `:126`). `TransactionalCommandDecorator`
 non-`ITransactional` commands through (`:30`) and otherwise calls
 `unitOfWork.ExecuteInTransactionAsync` (`:33`).
 **Transactional path.** `DbContextFactory.ExecuteInTransactionAsync`
-(`MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:544`) runs each
-attempt through `RunTransactionalAttemptAsync` (`:599`): the quoted business-failure snippet is
-`:608-614` (rollback at `:613`), then `FlushEnrolledCommandsBeforeCommitAsync` (`:618`, declared
-`:674`) saves enrolled internal-command rows and throws on any other unsaved tracked change, then
-`TryCommit()` (called `:620`, declared `:712`, `context.Database.CommitTransaction()` at `:731`), and
-deferred domain events flush post-commit through `FlushDeferredAsync` (`:634`). The pre-commit flush
+(`MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:551`) runs each
+attempt through `RunTransactionalAttemptAsync` (`:606`): the quoted business-failure snippet is
+`:615-621` (rollback at `:620`), then `FlushEnrolledCommandsBeforeCommitAsync` (`:625`, declared
+`:681`) saves enrolled internal-command rows and throws on any other unsaved tracked change, then
+`TryCommit()` (called `:627`, declared `:719`, `context.Database.CommitTransaction()` at `:738`), and
+deferred domain events flush post-commit through `FlushDeferredAsync` (`:641`). The pre-commit flush
 is not described in the body: it does not change the three outcomes the article lists.
 **DI sequence.** The pipeline-sealed guard: `ThrowIfPipelineSealed` in
 `DependencyInjection.ModuleScanning.cs:49` (module scan) and `DependencyInjection.Crud.cs:80,142,193`
@@ -489,8 +517,8 @@ enforces the four invariants at `:254-257` (capture immediately before forwarded
 limiting, ADR-019) and `:269-272` (forwarded headers precede the HTTPS redirect).
 `WebApplicationExtensions.cs` holds the `extension(WebApplication app)` block (`:37`), both
 `UseCommonMiddlewarePipeline` overloads (`:48`, `:60`) and the private `ApplyPipeline` they route
-through (`:168`), alongside `UseCommonRequestLocalization` (`:73`), two `MapCultureEndpoint` overloads
-(`:102`, `:115`) and `IsLocalRedirectTarget` (`:158`). The order is frozen by
+through (`:170`), alongside `UseCommonRequestLocalization` (`:73`), two `MapCultureEndpoint` overloads
+(`:102`, `:115`) and `IsLocalRedirectTarget` (`:159`). The order is frozen by
 `MiddlewarePipelineOrderTestsBase` (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/Conformance/MiddlewarePipelineOrderTestsBase.cs:29`),
 `ExpectedStepNames` at `:38` with `PreForwardedCapture` at `:43`. ADR-079's header records the
 protocol-keyed exemption and the `CommonForwardedHeaders.Create()` factory

@@ -109,7 +109,7 @@
         <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
         <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
         <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
-        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, four engines</a></li>
         <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
         <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
         <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
@@ -264,7 +264,7 @@
           (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Conventions/RestrictDeleteByDefaultConvention.cs:42</code>)
           is an <code>IModelFinalizingConvention</code> that makes <code>DeleteBehavior.Restrict</code> the default for every
           relationship nobody configured, registered per engine by the shared <code>ApplicationDbContext</code> at model
-          finalization (<code>Persistence/DbContexts/ApplicationDbContext.cs:399</code>). A delete that would orphan rows
+          finalization (<code>Persistence/DbContexts/ApplicationDbContext.cs:400</code>). A delete that would orphan rows
           fails loudly instead of quietly taking the children with it, and a genuine cascade becomes a decision
           somebody recorded with <code>.OnDelete(DeleteBehavior.Cascade)</code> in an entity configuration. Two things are
           deliberately left alone: an ownership foreign key keeps the cascade EF requires, and any behavior a
@@ -295,7 +295,7 @@ configurationBuilder.Conventions.Add(_ =&gt; <span class="hljs-keyword">new</spa
           <p>ADR-095 makes the fix a convention rather than a per-index habit. <code>SoftDeleteUniqueIndexConvention</code>
           (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Conventions/SoftDeleteUniqueIndexConvention.cs:34</code>)
           is a model-finalizing convention registered once by the shared <code>ApplicationDbContext</code>
-          (<code>Persistence/DbContexts/ApplicationDbContext.cs:392</code>), so it reaches every module, every database and
+          (<code>Persistence/DbContexts/ApplicationDbContext.cs:393</code>), so it reaches every module, every database and
           every consumer with nothing to opt into. At finalization it walks every non-owned <code>IAuditableEntity</code>
           type (<code>:46-47</code>) and filters every unique index on it (<code>:61-64</code>) on that engine&#39;s soft-delete
           predicate (<code>= false</code> on PostgreSQL, <code>= 0</code> on the other relational engines), built by the same
@@ -336,7 +336,7 @@ configurationBuilder.Conventions.Add(_ =&gt; <span class="hljs-keyword">new</spa
           already issued. A bearer credential keeps passing validation until it expires on its own clock, which
           can be minutes after the account was deactivated.</p>
           <p>ADR-047 closes that door. <code>SoftDeletedUserMiddleware</code>
-          (<code>Source/Presentation/MMCA.Common.API/Middleware/SoftDeletedUserMiddleware.cs:33</code>, business rule
+          (<code>Source/Presentation/MMCA.Common.API/Middleware/SoftDeletedUserMiddleware.cs:37</code>, business rule
           BR-133 named in its class doc at <code>:11</code>) runs in the shared pipeline <strong>after authentication and before authorization</strong>.
           That ordering is a declarative step list (ADR-079):
           <code>Startup/Pipeline/MiddlewarePipelineBuilder.cs</code> registers <code>UseAuthentication()</code> at <code>:105</code>, the
@@ -349,27 +349,29 @@ configurationBuilder.Conventions.Add(_ =&gt; <span class="hljs-keyword">new</spa
           <code>DeleteUserHandlerBase.cs:146-148</code>), and the marker lasts 15 minutes
           (<code>SoftDeletedUserCache.MarkerDuration</code>, <code>Source/Core/MMCA.Common.Application/Auth/SoftDeletedUserCache.cs:32</code>),
           the default access-token lifetime, because it has to outlive every token issued before the delete.
-          Every host honors it (<code>SoftDeletedUserMiddleware.cs:102-109</code>), so on any host that shares that cache
+          Every host honors it (<code>SoftDeletedUserMiddleware.cs:105-112</code>), so on any host that shares that cache
           the deleted user&#39;s token is refused on its next request, not at its own expiry. On a cache miss, a
           host that runs Identity falls back to <code>ISoftDeletedUserValidator</code>
           (<code>Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Auth/ISoftDeletedUserValidator.cs:7</code>,
           one <code>IsUserSoftDeletedAsync</code> method at <code>:15</code>), which the framework implements once as
           <code>SoftDeletedUserValidator&lt;TUser&gt;</code> (<code>Source/Core/MMCA.Common.Application/Users/SoftDeletedUserValidator.cs:20</code>),
           a single filter-bypassing existence query that an Identity module closes over its own <code>User</code> at
-          registration. The middleware caches that answer asymmetrically: &quot;deleted&quot; as the 15-minute marker,
-          &quot;not deleted&quot; for only 30 seconds (<code>NotDeletedLookupDuration</code>, <code>SoftDeletedUserMiddleware.cs:39</code>,
-          chosen at <code>:147</code>). So a live user costs at most one status query per 30 seconds per cache scope, not
-          one per request.</p>
+          registration. Only a &quot;deleted&quot; answer is ever cached, written back as the same 15-minute marker
+          (<code>SoftDeletedUserMiddleware.cs:152-169</code>). A &quot;not deleted&quot; answer is never cached (<code>:133-135</code>, class
+          doc <code>:17-19</code>): every replica keeps its own local copy of a cached value, so a cached live answer would
+          outlive a delete made on another replica. The price is paid on the Identity host: one shared-store
+          read plus one validator query per authenticated request.</p>
           <p>The marker write is best effort: a failure is logged and the erasure still succeeds
-          (<code>DeleteUserHandlerBase.cs:150-153</code>). That failure is the one case with a residual window. An
-          Identity host still catches the deleted account once any cached &quot;not deleted&quot; answer lapses, within
-          30 seconds; a host with no validator has nothing to fall back to, so the existing access token stays
-          usable until it expires, which is exactly what the logged warning says (<code>DeleteUserHandlerBase.cs:199-200</code>).</p>
+          (<code>DeleteUserHandlerBase.cs:150-153</code>). That failure is the one case with a residual window, and only
+          one kind of host feels it. An Identity host finds no marker, queries the validator on the next
+          request and rejects the deleted account there (<code>SoftDeletedUserMiddleware.cs:136-173</code>); a host with
+          no validator has nothing to fall back to, so the existing access token stays usable until it expires,
+          which is exactly what the logged warning says (<code>DeleteUserHandlerBase.cs:199-200</code>).</p>
           <p>Two honest edges. Anonymous requests pass straight through with no lookup
-          (<code>SoftDeletedUserMiddleware.cs:74-82</code>), so unauthenticated traffic pays nothing. And the validator is
-          resolved lazily (<code>SoftDeletedUserMiddleware.cs:111</code>) rather than injected as a parameter, so a host that
+          (<code>SoftDeletedUserMiddleware.cs:72-80</code>), so unauthenticated traffic pays nothing. And the validator is
+          resolved lazily (<code>SoftDeletedUserMiddleware.cs:114</code>) rather than injected as a parameter, so a host that
           does not register one (a non-Identity extracted service, or MMCA.Helpdesk&#39;s single Tickets host) still
-          honors the marker and passes only a cache miss through (<code>:112-119</code>): Identity is the source of truth,
+          honors the marker and passes a cache miss, or an unreachable cache, through (<code>:115-122</code>): Identity is the source of truth,
           and the marker carries what it decided. Lazy
           resolution is what keeps one pipeline correct in both Identity-hosting and non-Identity hosts without a
           per-host variant.</p>

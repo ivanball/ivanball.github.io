@@ -109,7 +109,7 @@
         <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
         <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
         <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
-        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, four engines</a></li>
         <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
         <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
         <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
@@ -223,20 +223,22 @@
           <h3 id="the-re-encode-is-the-boundary">The re-encode is the boundary</h3>
           <p><code>IImageProcessor</code> (<code>IImageProcessor.cs:11</code>) has one method,
           <code>NormalizeToSquareJpegAsync</code>, and its implementation <code>ImageSharpImageProcessor</code>
-          (<code>ImageSharpImageProcessor.cs:16</code>) does something that looks like image resizing and is actually a
-          security control. It reads the header and refuses anything too big to decode, then decodes only the first
-          frame of the upload, bakes EXIF orientation into the pixels, center-crops to an exact square, strips every
-          metadata profile, and re-encodes as a fresh JPEG:</p>
+          (<code>ImageSharpImageProcessor.cs:20</code>) does something that looks like image resizing and is actually a
+          security control. It reads and decodes only through a configuration that registers four formats, reads
+          the header and refuses anything too big to decode, then decodes only the first frame of the upload, bakes
+          EXIF orientation into the pixels, center-crops to an exact square, strips every metadata profile, and
+          re-encodes as a fresh JPEG:</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// ImageSharpImageProcessor.NormalizeToSquareJpegAsync (illustrative of shape)</span>
+<span class="hljs-comment">// Every read goes through CreateDecoderOptions: JPEG, PNG, WebP and GIF decoders only.</span>
 <span class="hljs-comment">// Header only: Identify reads the declared dimensions without allocating a frame.</span>
-<span class="hljs-keyword">var</span> info = <span class="hljs-keyword">await</span> Image.IdentifyAsync(content, cancellationToken);
+<span class="hljs-keyword">var</span> info = <span class="hljs-keyword">await</span> Image.IdentifyAsync(CreateDecoderOptions(maxFrames: <span class="hljs-built_in">uint</span>.MaxValue), content, cancellationToken);
 <span class="hljs-keyword">if</span> (TooLargeToDecode(info.Width, info.Height))
 {
     <span class="hljs-keyword">return</span> Result.Failure&lt;<span class="hljs-built_in">byte</span>[]&gt;(Error.Validation(<span class="hljs-string">&quot;Image.TooLarge&quot;</span>, ...));
 }
 
 <span class="hljs-comment">// One frame only: an animated file never expands into every frame&#x27;s pixel buffer.</span>
-<span class="hljs-keyword">using</span> <span class="hljs-keyword">var</span> image = <span class="hljs-keyword">await</span> Image.LoadAsync(<span class="hljs-keyword">new</span> DecoderOptions { MaxFrames = <span class="hljs-number">1</span> }, content, cancellationToken);
+<span class="hljs-keyword">using</span> <span class="hljs-keyword">var</span> image = <span class="hljs-keyword">await</span> Image.LoadAsync(CreateDecoderOptions(maxFrames: <span class="hljs-number">1</span>), content, cancellationToken);
 <span class="hljs-comment">// ...then the same TooLargeToDecode check re-runs on the decoded frame.</span>
 
 <span class="hljs-comment">// AutoOrient BEFORE stripping metadata, or portrait phone photos come out rotated.</span>
@@ -250,30 +252,39 @@ image.Metadata.IptcProfile = <span class="hljs-literal">null</span>;
 
 <span class="hljs-keyword">await</span> image.SaveAsync(output, <span class="hljs-keyword">new</span> JpegEncoder { Quality = <span class="hljs-number">85</span> }, cancellationToken);</code></pre>
           <p>The point is what does <em>not</em> survive. A full decode-then-re-encode means only the pixel grid crosses the
-          boundary. EXIF GPS is gone because the metadata profiles are nulled (<code>ImageSharpImageProcessor.cs:88-90</code>).
+          boundary. EXIF GPS is gone because the metadata profiles are nulled (<code>ImageSharpImageProcessor.cs:92-94</code>).
           The polyglot payload is gone because the bytes that carried it were never re-emitted: the output is a new
           JPEG the encoder wrote from a decoded bitmap. One operation kills both classes of problem, and it does so
           by construction rather than by a blocklist you have to keep updating.</p>
           <p>The header check in front of the decode is not a size nicety. The avatar contract&#39;s 2 MB cap bounds the
           <em>compressed</em> bytes, which a decompression bomb satisfies happily: a 2 MB PNG can declare 40000x40000 and
-          cost roughly 6 GB of frame buffer the moment it is decoded (<code>ImageSharpImageProcessor.cs:23-24</code>). So the
-          processor bounds the decoded frame instead, with <code>MaxDecodedPixels</code> at 50,000,000 (<code>:27</code>) and
-          <code>MaxDecodedDimension</code> at 20,000 (<code>:34</code>); the edge ceiling sits beside the area one because a 1 x 200000
-          strip is inside the area limit and still pathological for the resampler (<code>:30-32</code>). <code>Image.IdentifyAsync</code>
-          applies both to the declared header before a single frame is allocated (<code>:48</code>), and the same predicate
-          (<code>:115-118</code>) re-applies them to the decoded frame (<code>:70-76</code>), so a header that under-reports its real
+          cost roughly 6 GB of frame buffer the moment it is decoded (<code>ImageSharpImageProcessor.cs:27-28</code>). So the
+          processor bounds the decoded frame instead, with <code>MaxDecodedPixels</code> at 50,000,000 (<code>:31</code>) and
+          <code>MaxDecodedDimension</code> at 20,000 (<code>:38</code>); the edge ceiling sits beside the area one because a 1 x 200000
+          strip is inside the area limit and still pathological for the resampler (<code>:34-36</code>). <code>Image.IdentifyAsync</code>
+          applies both to the declared header before a single frame is allocated (<code>:52</code>), and the same predicate
+          (<code>:147-150</code>) re-applies them to the decoded frame (<code>:74-80</code>), so a header that under-reports its real
           size does not get through. Past either ceiling the upload is
-          <code>Error.Validation(&quot;Image.TooLarge&quot;, ...)</code> (<code>:50-56</code>): a clean 400 rather than the OutOfMemoryException the
+          <code>Error.Validation(&quot;Image.TooLarge&quot;, ...)</code> (<code>:54-60</code>): a clean 400 rather than the OutOfMemoryException the
           upload was built to provoke.</p>
           <p>The frame count is bounded as well as the frame size. The decode passes
-          <code>new DecoderOptions { MaxFrames = 1 }</code> (<code>ImageSharpImageProcessor.cs:66</code>): the output is a single JPEG
+          <code>CreateDecoderOptions(maxFrames: 1)</code> (<code>ImageSharpImageProcessor.cs:70</code>): the output is a single JPEG
           built from the first frame, and decoding every frame of an animated file is how a small upload becomes
-          hundreds of megabytes of pixel buffers (<code>:63-65</code>).</p>
+          hundreds of megabytes of pixel buffers (<code>:67-69</code>).</p>
+          <p>The set of formats is bounded too. <code>CreateDecoderOptions</code> (<code>ImageSharpImageProcessor.cs:127-138</code>) builds
+          the <code>DecoderOptions</code> for both the header read and the decode around an ImageSharp <code>Configuration</code> that
+          registers exactly four modules: JPEG, PNG, WebP and GIF (<code>:129-133</code>). Every other format ImageSharp ships,
+          TIFF and BMP among them, stays unregistered, so a payload in one of them fails as
+          <code>UnknownImageFormatException</code> before any of that format&#39;s decoder code runs (<code>:112-119</code>). That matters
+          because a library&#39;s attack surface is every decoder it can reach, not only the formats you meant to
+          accept: this allowlist is the stated reason the ImageSharp TIFF advisories are unreachable here (see the
+          trade-offs below).</p>
           <p>Undecodable content is a validation failure too, not an exception. The processor catches
           <code>UnknownImageFormatException</code> and <code>InvalidImageContentException</code> and returns
-          <code>Error.Validation(&quot;Image.Undecodable&quot;, ...)</code> (<code>ImageSharpImageProcessor.cs:99-105</code>), so a garbage upload
-          is a clean 400, not a 500. And because the processor has no external configuration, it is <em>always</em>
-          registered as the real implementation (<code>DependencyInjection.cs:336</code>), unlike storage: there is no Null
+          <code>Error.Validation(&quot;Image.Undecodable&quot;, ...)</code> (<code>ImageSharpImageProcessor.cs:103-109</code>), so a garbage upload
+          or an unregistered format is a clean 400, not a 500. And because the processor has no external
+          configuration, it is <em>always</em> registered as the real implementation (<code>DependencyInjection.cs:337</code>),
+          unlike storage: there is no Null
           image processor, because there is no safe way to skip the re-encode.</p>
           <p>Ahead of the processor sits <code>ImageContentSniffer</code> (<code>ImageContentSniffer.cs:10</code>), a static, dependency-free
           magic-byte check. <code>IsAllowedImage</code> accepts a payload only when its leading bytes match a JPEG, PNG, or
@@ -301,8 +312,8 @@ image.Metadata.IptcProfile = <span class="hljs-literal">null</span>;
           path (<code>IMediaPickerService.cs:6-7</code>). The same upload endpoint serves a phone&#39;s native picker and a
           browser&#39;s file input; only the gesture in front of it changes.</p>
           <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
-          <p>ADR-045 owns its rough edges in its Consequences section, and they are real design choices rather than
-          oversights.</p>
+          <p>ADR-045 owns most of its rough edges in its Consequences section, the build files record the rest, and
+          they are real design choices rather than oversights.</p>
           <ul>
           <li><strong>The avatars container is public-read by design.</strong> Avatar URLs render in <code>&lt;img&gt;</code> tags on
           anonymous-visible surfaces without SAS-token plumbing on every request. The cost is that anyone with the
@@ -322,15 +333,26 @@ image.Metadata.IptcProfile = <span class="hljs-literal">null</span>;
           requires a <code>Storage Blob Data Contributor</code> grant for the app identity. That is a bicep-level infrastructure
           grant, which is the correct place for it, but it does mean the app will not authenticate until the role
           assignment exists. It is not a connection string you can paste in.</li>
-          <li><strong>ImageSharp joins the dependency set under the Six Labors Split License.</strong> It ships under Apache-2.0
-          terms for open-source and small-revenue use, which covers this project, and it is vuln-audited like every
-          other dependency. The ADR is explicit that the license note must be revisited if the project&#39;s revenue
-          posture changes.</li>
+          <li><strong>ImageSharp joins the dependency set under the Six Labors Split License, pinned to v3.</strong> It ships
+          under Apache-2.0 terms for open-source and small-revenue use, which covers this project, and the ADR is
+          explicit that the license note must be revisited if the project&#39;s revenue posture changes. v4 requires a
+          commercial license key at build time, so the package is held at 3.1.12 and excluded from dependency
+          sweeps (<code>MMCA.Common/Directory.Packages.props:134-144</code>), and a fitness test fails the build if its major
+          version passes 3 (<code>DependencyVersionTestsBase.cs:49</code>).</li>
+          <li><strong>That pin carries five accepted advisories.</strong> Five ImageSharp 3.1.12 advisories published 2026-10-07
+          are patched only in 4.1.2, which the pin rules out, so the NuGet audit suppresses them, each with its
+          reachability argument written beside it (<code>MMCA.Common/Directory.Build.props:33-52</code>). Four do not reach
+          this code: two TIFF encoder overruns (nothing encodes TIFF), a BigTIFF decoder loop (the TIFF decoder
+          is not registered), and HistogramEqualization (nothing calls it). The fifth, GHSA-gwg2-r3hj-4w44 (ICC
+          CLUT parsing allocating from unvalidated dimensions), is reachable in principle through an
+          authenticated avatar upload that carries an ICC profile. It is accepted as a bounded denial-of-service
+          risk until a patched 3.x or a v4 license exists (<code>:43-46</code>). The re-encode still guarantees that what is
+          stored is only pixels; this one is about the cost of decoding, not about what survives it.</li>
           </ul>
           <p>Be precise about status: the framework legs are implemented and shipped in MMCA.Common, and two MMCA.ADC
           services wire them end to end. The Identity service calls <code>AddAzureBlobFileStorage(builder.Configuration)</code>
-          at startup for avatars (<code>MMCA.ADC.Identity.Service/Program.cs:242</code>) and the Conference service calls it for
-          speaker session assets (<code>MMCA.ADC.Conference.Service/Program.cs:353</code>). On the Identity side,
+          at startup for avatars (<code>MMCA.ADC.Identity.Service/Program.cs:253</code>) and the Conference service calls it for
+          speaker session assets (<code>MMCA.ADC.Conference.Service/Program.cs:361</code>). On the Identity side,
           <code>SetUserAvatarHandler</code> is the only request-path handler that calls <code>IFileStorageService</code>, for the upload
           itself (<code>SetUserAvatarHandler.cs:117</code>). Every avatar blob delete is a durable
           <code>DeleteAvatarBlobInternalCommand</code> scheduled through <code>IInternalCommandScheduler</code>: the replaced blob once
@@ -349,7 +371,7 @@ image.Metadata.IptcProfile = <span class="hljs-literal">null</span>;
           <p>The pattern ports to any stack and any blob store. The rules are short:</p>
           <ol>
           <li><strong>Never trust the declared content type or the file extension.</strong> Sniff the leading magic bytes and accept
-          only the formats you actually support.</li>
+          only the formats you actually support, and register only those decoders in the image library.</li>
           <li><strong>Re-encode every uploaded image; do not store the original.</strong> A full decode-then-re-encode is the single
           move that strips EXIF GPS (PII) and defeats polyglot payloads, because only pixels survive. Resize to the
           size you will actually serve while you are at it.</li>
@@ -372,11 +394,12 @@ image.Metadata.IptcProfile = <span class="hljs-literal">null</span>;
           content-type confusion, polyglot payloads); how <code>IFileStorageService</code> gives an upload-by-blob-name boundary
           with an inert <code>NullFileStorageService</code> default that fails clearly and an <code>AddAzureBlobFileStorage</code> swap to the
           real Azure implementation; how the real security boundary is the full re-encode in <code>ImageSharpImageProcessor</code>
-          (header size check, single-frame decode, auto-orient, center-crop, strip all metadata, re-encode JPEG)
-          fronted by <code>ImageContentSniffer</code>&#39;s magic-byte check; the avatar contract (256x256 JPEG, 2 MB,
-          random-suffixed public-read blob, URL as <code>[Pii]</code>, blob deletes as durable internal commands); and the
-          honest trade-offs (public-read container, cache staleness, eventual blob deletion, a data-plane role grant,
-          the Six Labors Split License).</p>
+          (four-format decoder allowlist, header size check, single-frame decode, auto-orient, center-crop, strip
+          all metadata, re-encode JPEG) fronted by <code>ImageContentSniffer</code>&#39;s magic-byte check; the avatar contract
+          (256x256 JPEG, 2 MB, random-suffixed public-read blob, URL as <code>[Pii]</code>, blob deletes as durable internal
+          commands); and the honest trade-offs (public-read container, cache staleness, eventual blob deletion, a
+          data-plane role grant, the Six Labors Split License and its v3 pin with five suppressed advisories, one of
+          them reachable in principle).</p>
           <p><strong>Next in the series:</strong> HTTP API versioning, proven not just claimed, one header-based policy adopted by every service and kept honest by a shared fitness contract that runs two live versions.</p>
           <p><em>MMCA.Common is open source. Star the repo, read the 2-minute ADR behind this pattern, or
           <code>dotnet add package MMCA.Common.Infrastructure</code> and try it.</em></p>

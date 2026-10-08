@@ -109,7 +109,7 @@
         <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
         <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
         <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
-        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, four engines</a></li>
         <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
         <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
         <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
@@ -193,106 +193,122 @@
           module inherits the same answer instead of re-litigating it per app.</p>
           <h2 id="the-mmca-answer-one-hashed-session-per-device-rotated-on-every-use">The MMCA answer: one hashed session per device, rotated on every use</h2>
           <p>The workflow is split in two, and the split is the first design decision. <code>AuthenticationServiceBase&lt;TUser&gt;</code>
-          (<code>AuthenticationServiceBase.cs:63</code>) decides who is signed in: credentials, lockout, the app&#39;s gates.
+          (<code>AuthenticationServiceBase.cs:64</code>) decides who is signed in: credentials, lockout, the app&#39;s gates.
           <code>IAuthSessionIssuer</code> (<code>IAuthSessionIssuer.cs:26</code>) decides what they are handed: the multi-device refresh
           sessions, rotation, reuse detection, the per-user cap and the session claims on the access token, &quot;so this
-          workflow never touches a session row&quot; (<code>AuthenticationServiceBase.cs:40-43</code>). The framework&#39;s implementation
-          is the sealed <code>AuthSessionIssuer</code> (<code>AuthSessionIssuer.cs:39</code>), registered scoped by <code>AddInfrastructure</code>
+          workflow never touches a session row&quot; (<code>AuthenticationServiceBase.cs:41-44</code>). The framework&#39;s implementation
+          is the sealed <code>AuthSessionIssuer</code> (<code>AuthSessionIssuer.cs:41</code>), registered scoped by <code>AddInfrastructure</code>
           (<code>MMCA.Common.Infrastructure/DependencyInjection.cs:176</code>). Both apps&#39; Identity modules subclass the base,
           hand it the issuer, and change nothing about the token logic. Here is the model, piece by piece.</p>
           <p><strong>The access token is stateless; the refresh side is one row per signed-in device.</strong> The access token is a
           signed JWT whose <code>exp</code> comes from <code>JwtSettings.AccessTokenExpirationMinutes</code> (default 15 minutes,
           <code>JwtSettings.cs:61</code>), written by <code>TokenService.GenerateAccessToken</code> (<code>TokenService.cs:101</code>, expiry stamped at
-          <code>:148</code>). The refresh side is <code>RefreshSession</code>, a sealed framework record with one row per signed-in device
-          (<code>RefreshSession.cs:39</code>): the user id, a token hash, an issue instant, an expiry, and revocation
-          bookkeeping (<code>:69,72,75,78,81,87,90</code>). Refresh tokens are deliberately absent from the credential contract
-          the user aggregate exposes to the workflow: <code>IAuthUser</code> carries password material only
+          <code>:148</code>). The refresh side is <code>RefreshSession</code>, a sealed framework class kept as a flat bookkeeping record,
+          with one row per signed-in device (<code>RefreshSession.cs:43</code>): the user id, a token hash, an issue instant, an
+          expiry, and revocation bookkeeping (<code>:73,76,79,82,85,91,94</code>). Refresh tokens are deliberately absent from the
+          credential contract the user aggregate exposes to the workflow: <code>IAuthUser</code> carries password material only
           (<code>IAuthUser.cs:9-14,20,23</code>). A user holds as many live sessions as they have signed-in devices, bounded by a
-          per-user cap (<code>AuthSessionIssuer.cs:17-26</code>). Every access token the issuer mints names the session behind it
+          per-user cap (<code>AuthSessionIssuer.cs:17-28</code>). Every access token the issuer mints names the session behind it
           in a <code>sid</code> claim, stamped by a pass-through token service that wraps the real one
-          (<code>SessionStampingTokenService</code>, <code>AuthSessionIssuer.cs:474</code>, claim added at <code>:506-511</code>), so the app&#39;s claim
+          (<code>SessionStampingTokenService</code>, <code>AuthSessionIssuer.cs:544</code>, claim added at <code>:576-581</code>), so the app&#39;s claim
           code never has to know the claim exists.</p>
           <p><strong>The stored value is a digest, not the token.</strong> <code>TokenService.GenerateRefreshToken</code> draws 64 bytes from
           <code>RandomNumberGenerator.GetBytes</code> and base64-encodes them (<code>TokenService.cs:155,157,158</code>). That plaintext
           lives only in the response that hands it to the client. What the store keeps is <code>RefreshSession.TokenHash</code>,
-          an unsalted hex SHA-256 digest of the token&#39;s UTF-8 bytes (<code>RefreshSession.cs:72,173-177</code>), exactly 64
-          characters wide (<code>:41-42</code>). The digest is deterministic on purpose, because lookup is by hash: a presented
+          an unsalted hex SHA-256 digest of the token&#39;s UTF-8 bytes (<code>RefreshSession.cs:76,177-181</code>), exactly 64
+          characters wide (<code>:45-46</code>). The digest is deterministic on purpose, because lookup is by hash: a presented
           token finds its row through <code>FindByTokenHashAsync(RefreshSession.HashToken(token))</code>
-          (<code>AuthSessionIssuer.cs:286-288</code>). A database read therefore yields digests, and a digest is not something
+          (<code>AuthSessionIssuer.cs:309-311</code>). A database read therefore yields digests, and a digest is not something
           you can present.</p>
-          <p><strong>Issuing opens a session; refreshing rotates one.</strong> Login (<code>AuthenticationServiceBase.cs:105</code>, issuing at
-          <code>:194</code>) and registration (<code>:203</code>, issuing at <code>:279</code>) both route through <code>IssueTokensAsync</code> (<code>:417</code>), which
-          hands the user to <code>IAuthSessionIssuer.IssueAsync</code> (<code>:425</code>). The issuer opens a fresh session
-          (<code>AuthSessionIssuer.cs:75</code>, body <code>OpenSessionAsync</code> at <code>:322</code>) before the access token is minted, because
-          the token carries the session&#39;s id, then saves it (<code>:81</code>) and returns the token pair (<code>:83-86</code>). Refresh runs
-          its own path. <code>RefreshTokenAsync</code> (<code>AuthenticationServiceBase.cs:283</code>) calls <code>RotateAsync</code>
-          (<code>:337</code>; <code>AuthSessionIssuer.cs:90</code>), which resolves the presented token to its session
-          (<code>ResolveRotatableSessionAsync</code>, called at <code>:101</code>, body <code>:275</code>) and then rotates it (<code>RotateSessionAsync</code>,
-          called at <code>:109</code>, body <code>:361</code>). Rotation mints a successor session (<code>:369-376</code>) and claims the presented row
-          through <code>IRefreshSessionStore.TryRotateAsync</code> (<code>:384-386</code>), which revokes it with reason <code>Rotated</code> and links
-          it to that successor via <code>ReplacedByTokenHash</code> (<code>EFRefreshSessionStore.cs:125-130</code>; <code>RefreshSession.cs:54,87</code>).
+          <p><strong>Issuing opens a session; refreshing rotates one.</strong> Login (<code>AuthenticationServiceBase.cs:123</code>, issuing at
+          <code>:212</code>) and registration (<code>:221</code>, issuing at <code>:305</code>) both route through <code>IssueTokensAsync</code> (<code>:443</code>), which
+          hands the user to <code>IAuthSessionIssuer.IssueAsync</code> (<code>:451</code>). The issuer opens a fresh session
+          (<code>AuthSessionIssuer.cs:77</code>, body <code>OpenSessionAsync</code> at <code>:352</code>) before the access token is minted, because
+          the token carries the session&#39;s id, then saves it (<code>:83</code>) and returns the token pair (<code>:85-88</code>). Refresh runs
+          its own path. <code>RefreshTokenAsync</code> (<code>AuthenticationServiceBase.cs:309</code>) calls <code>RotateAsync</code>
+          (<code>:363</code>; <code>AuthSessionIssuer.cs:92</code>), which resolves the presented token to its session
+          (<code>ResolveRotatableSessionAsync</code>, called at <code>:103</code>, body <code>:298</code>) and then rotates it (<code>RotateSessionAsync</code>,
+          called at <code>:111</code>, body <code>:394</code>). Rotation mints a successor session (<code>:402-409</code>) and claims the presented row
+          through <code>IRefreshSessionStore.TryRotateAsync</code> (<code>:417-419</code>), which revokes it with reason <code>Rotated</code> and links
+          it to that successor via <code>ReplacedByTokenHash</code> (<code>EFRefreshSessionStore.cs:138-143</code>; <code>RefreshSession.cs:58,91</code>).
           The successor is a new row with a new id, so the access token handed back carries a new <code>sid</code> too
-          (<code>AuthSessionIssuer.cs:116-122</code>). The consequence is the important part: the instant a successor is issued,
+          (<code>AuthSessionIssuer.cs:118-124</code>). The consequence is the important part: the instant a successor is issued,
           the token that bought it is spent, and the rotated row it leaves behind is precisely what makes a replay
-          visible. There is no grace period.</p>
+          visible. One carve-out keeps ordinary concurrency from reading as theft: a spent token that comes back within
+          a few seconds of its rotation (<code>RefreshSessions:ReuseGraceSeconds</code>, default 10, range 0-300,
+          <code>RefreshSessionSettings.cs:97-98</code>) is treated as a race, not a replay.</p>
           <p><strong>Refresh binds to the same principal through the expired access token.</strong> <code>RefreshTokenAsync</code> requires the
           client to present the just-expired access token alongside the refresh token, and runs it through
-          <code>TokenService.GetPrincipalFromExpiredToken</code> (<code>AuthenticationServiceBase.cs:297</code>). That method validates
+          <code>TokenService.GetPrincipalFromExpiredToken</code> (<code>AuthenticationServiceBase.cs:323</code>). That method validates
           issuer, audience, signing key, and the pinned algorithm, and skips only the lifetime check
           (<code>TokenService.cs:174,178,179,180,182,187</code>, with the algorithm re-checked against the header at <code>:196-197</code>).
           An unsigned, wrong-audience, or algorithm-swapped token yields no principal and the refresh fails
-          (<code>AuthenticationServiceBase.cs:298-302</code>). The user id rides the standard <code>sub</code> claim
-          (<code>TokenService.cs:110-116</code>), read at <code>AuthenticationServiceBase.cs:307</code> and used to load the account at
-          <code>:314</code>. A second factor the user already verified rides across the rotation too: the <code>mfa</code> claim is read off
-          the signature-validated presented token and stamped on the successor (<code>:327-332</code>).</p>
-          <p><strong>One error, four different consequences.</strong> <code>ResolveRotatableSessionAsync</code> (<code>AuthSessionIssuer.cs:275</code>) is
-          the reuse-detection step, and it separates cases the caller cannot tell apart. A blank token, an unknown
-          hash, or one belonging to another account says nothing about a live session and fails alone (<code>:281-284</code>,
-          <code>:290-293</code>): revoking the family on it would let anyone holding one of this user&#39;s expired access tokens sign
-          them out everywhere by posting a random string. A <strong>revoked</strong> row splits by why it died (<code>IsReuseSignal</code>,
-          <code>:409-417</code>). A row that was rotated away (it carries a successor hash) or already flagged as reuse has come
-          back, which is the BR-206 reuse signal, so every live session the user holds is revoked with reason
-          <code>ReuseDetected</code> (<code>:305-309</code>, <code>RefreshSession.cs:60</code>). A row that was signed out or evicted by the session cap
-          only lost its session, which is not a theft signal, so that request fails alone and the user&#39;s other devices
-          keep working (<code>:297-303</code>). Any other or missing reason counts as reuse, the conservative answer for a row the
-          code does not recognize (<code>:403-407,416</code>). An <strong>expired</strong> row is an ordinary end of life, so that device
-          re-authenticates and the rest are untouched (<code>:312-314</code>). Every branch answers with the same
-          <code>Auth.InvalidRefreshToken</code> error (<code>:257-261</code>), so the distinction lives in what happens behind it, not in
-          what the caller learns.</p>
-          <p><strong>A simultaneous replay gets the replay answer.</strong> Two requests presenting the same still-live token both
-          read an un-revoked row, so the store arbitrates rather than memory: <code>TryRotateAsync</code> is a conditional
-          update on <code>RevokedAt IS NULL</code> (<code>EFRefreshSessionStore.cs:125</code>), and the request that loses the claim is
-          treated exactly as a replay, whole live family revoked (<code>AuthSessionIssuer.cs:388-398</code>). A caller cannot
-          distinguish the two situations, and neither does the workflow.</p>
+          (<code>AuthenticationServiceBase.cs:324-328</code>). The user id rides the standard <code>sub</code> claim
+          (<code>TokenService.cs:110-116</code>), read at <code>AuthenticationServiceBase.cs:333</code> and used to load the account at
+          <code>:340</code>. A second factor the user already verified rides across the rotation too: the <code>mfa</code> claim is read off
+          the signature-validated presented token and stamped on the successor (<code>:353-358</code>).</p>
+          <p><strong>Five outcomes, two answers.</strong> <code>ResolveRotatableSessionAsync</code> (<code>AuthSessionIssuer.cs:298</code>) is the
+          reuse-detection step, and it separates cases that mostly look identical from outside. A blank token, an
+          unknown hash, or one belonging to another account says nothing about a live session and fails alone
+          (<code>:304-307</code>, <code>:313-316</code>): revoking the family on it would let anyone holding one of this user&#39;s expired access
+          tokens sign them out everywhere by posting a random string. A <strong>revoked</strong> row splits by why it died
+          (<code>IsReuseSignal</code>, <code>:462-470</code>). A row that was signed out or evicted by the session cap only lost its session,
+          which is not a theft signal, so that request fails alone and the user&#39;s other devices keep working
+          (<code>:320-326</code>). A row that was rotated away (it carries a successor hash) or already flagged as reuse has come
+          back, and what that means depends on when. Rotated less than <code>ReuseGraceSeconds</code> ago, it is a race between
+          sibling requests (another tab, or one browser served by two replicas), answered <code>409 Conflict</code> with
+          <code>Auth.RefreshSuperseded</code> and nothing revoked (<code>:328-333</code>; <code>IsWithinRotationGrace</code> at <code>:479-487</code>). Rotated
+          longer ago, or already flagged as reuse at any age, it is the BR-206 reuse signal, so every live session the
+          user holds is revoked with reason <code>ReuseDetected</code> (<code>:335-339</code>, <code>RefreshSession.cs:64</code>). Only the <code>Rotated</code>
+          reason qualifies for the grace, a revocation stamped slightly ahead of the local clock (another replica&#39;s)
+          counts as inside it, and a grace of <code>0</code> turns it off (<code>:476-477,483-486</code>). Any other or missing reason counts
+          as reuse, the conservative answer for a row the code does not recognize (<code>:456-461,469</code>). An <strong>expired</strong> row
+          is an ordinary end of life, so that device re-authenticates and the rest are untouched (<code>:342-344</code>). Four of
+          the five outcomes answer with the same <code>Auth.InvalidRefreshToken</code> error (<code>:267-271</code>), so an unknown token, an
+          expired one and a replayed one look identical to the caller and the distinction lives in what happens behind
+          it. The race is the one deliberate exception: <code>Auth.RefreshSuperseded</code> (<code>:278-282</code>) tells the client its
+          session is intact and to retry with the token the winning request received.</p>
+          <p><strong>A simultaneous refresh is a race first, and a replay only past the grace.</strong> Two requests presenting the
+          same still-live token both read an un-revoked row, so the store arbitrates rather than memory:
+          <code>TryRotateAsync</code> (<code>EFRefreshSessionStore.cs:121</code>) is a conditional update on <code>RevokedAt IS NULL</code> (<code>:138</code>),
+          and only one request claims the row. The loser&#39;s tracked copy was read before that claim and still shows the
+          row live, so it re-reads the row untracked, as the database holds it now (<code>AuthSessionIssuer.cs:427-429</code>),
+          and branches the way the lookup path does. A row that a sign-out or a cap eviction reached first fails that
+          request alone (<code>:430-436</code>). A row the winning request rotated inside the grace answers 409 with nothing
+          revoked (<code>:438-441</code>). A row rotated longer ago than the grace, flagged as reuse, or unreadable is
+          indistinguishable from a replay and gets the replay answer: the whole live family is revoked (<code>:443-450</code>).</p>
           <p><strong>The expiry slides on every rotation.</strong> Every session is stamped with its issue instant plus
-          <code>RefreshTokenLifetime</code>, both when one is opened (<code>AuthSessionIssuer.cs:334</code>) and when a successor is minted
-          (<code>:374</code>). That property reads <code>TokenService.RefreshTokenLifetime</code> (<code>TokenService.cs:165</code>), derived from
+          <code>RefreshTokenLifetime</code>, both when one is opened (<code>AuthSessionIssuer.cs:364</code>) and when a successor is minted
+          (<code>:407</code>). That property reads <code>TokenService.RefreshTokenLifetime</code> (<code>TokenService.cs:165</code>), derived from
           <code>JwtSettings.RefreshTokenExpirationDays</code> (<code>JwtSettings.cs:64</code>, default 7 days). A device that refreshes at
           least once inside each window stays signed in indefinitely; re-authentication is required only after a full
           lifetime passes with no successful refresh, or after a revocation. If the configured value is non-positive,
-          the issuer falls back to the seven-day BR-205 default (and to fifteen minutes for the access token) rather
-          than failing startup (<code>AuthSessionIssuer.cs:55-59</code>; interface default <code>ITokenService.cs:40</code>).</p>
+          the issuer falls back to the seven-day BR-205 default rather than failing startup
+          (<code>AuthSessionIssuer.cs:60-61</code>). It holds a fifteen-minute fallback for the access token too (<code>:57-58</code>), but
+          that one sets only the expiry the response reports (<code>:88</code>, <code>:124</code>): the JWT&#39;s own <code>exp</code> is stamped from the
+          raw <code>AccessTokenExpirationMinutes</code> (<code>TokenService.cs:148</code>), which <code>JwtSettings.Validate</code> does not range-check
+          (<code>JwtSettings.cs:70-85</code>).</p>
           <p><strong>A per-user cap bounds the family.</strong> <code>RefreshSessionSettings.MaxActiveSessionsPerUser</code> binds
           <code>RefreshSessions:MaxActiveSessionsPerUser</code>, default 10, range 1-1000 (<code>RefreshSessionSettings.cs:34-35</code>),
           validated at startup (<code>MMCA.Common.Infrastructure/DependencyInjection.cs:168-171</code>). Opening one session past
           the cap revokes the user&#39;s oldest live session with reason <code>SessionCapExceeded</code> rather than refusing the
-          sign-in (<code>EnforceSessionCapAsync</code> at <code>AuthSessionIssuer.cs:442</code>, eviction loop <code>:451-454</code>, constant
-          <code>ReasonSessionCap</code> at <code>RefreshSession.cs:63</code>). Expired-but-unrevoked rows authenticate nobody and do not
+          sign-in (<code>EnforceSessionCapAsync</code> at <code>AuthSessionIssuer.cs:512</code>, eviction loop <code>:521-524</code>, constant
+          <code>ReasonSessionCap</code> at <code>RefreshSession.cs:67</code>). Expired-but-unrevoked rows authenticate nobody and do not
           count against the cap; they age out with the framework&#39;s retention sweep, <code>RefreshSessionCleanupService</code>
           over the <code>RefreshSessions:RetentionDays</code> window (default 30, <code>RefreshSessionSettings.cs:71-72</code>), which the
-          host runs once <code>RefreshSessions:Enabled</code> is set (<code>DependencyInjection.cs:181-184</code>).</p>
+          host runs once <code>RefreshSessions:Enabled</code> is set (<code>DependencyInjection.cs:182-186</code>).</p>
           <p><strong>Explicit revocation names one device or takes them all.</strong> <code>RevokeTokenAsync</code>
-          (<code>AuthenticationServiceBase.cs:352</code>) hands an optional refresh token to <code>SignOutAsync</code>
-          (<code>AuthSessionIssuer.cs:148</code>). A live session belonging to that user is revoked alone with reason
-          <code>SignedOut</code>, which is the sign-out-this-device path (<code>:162-169</code>). Anything else (an unknown token, another
+          (<code>AuthenticationServiceBase.cs:378</code>) hands an optional refresh token to <code>SignOutAsync</code>
+          (<code>AuthSessionIssuer.cs:150</code>). A live session belonging to that user is revoked alone with reason
+          <code>SignedOut</code>, which is the sign-out-this-device path (<code>:164-171</code>). Anything else (an unknown token, another
           account&#39;s token, an already-revoked row) leaves the caller unidentifiable, so the request degrades to
           revoking every live session the user holds rather than reporting success for a revocation that reached
-          nothing (<code>:172</code>). Beside it sit a deliberate sign-out-everywhere (<code>RevokeAllSessionsAsync</code>,
-          <code>AuthenticationServiceBase.cs:369</code>, into <code>SignOutEverywhereAsync</code>, <code>AuthSessionIssuer.cs:177</code>), a device list
-          (<code>GetSessionsAsync</code> <code>:386</code>, <code>ListActiveAsync</code> <code>:191</code>), and a revoke-by-session-id (<code>RevokeSessionByIdAsync</code>
-          <code>:402</code>, <code>RevokeSessionAsync</code> <code>:227</code>) whose ownership check is the store query itself, so another account&#39;s
-          session id and one that never existed both answer <code>NotFound</code> (<code>:232-240</code>).</p>
-          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// AuthSessionIssuer.ResolveRotatableSessionAsync: one error, four consequences (shape, not byte-for-byte).</span>
+          nothing (<code>:174</code>). Beside it sit a deliberate sign-out-everywhere (<code>RevokeAllSessionsAsync</code>,
+          <code>AuthenticationServiceBase.cs:395</code>, into <code>SignOutEverywhereAsync</code>, <code>AuthSessionIssuer.cs:179</code>), a device list
+          (<code>GetSessionsAsync</code> <code>:412</code>, <code>ListActiveAsync</code> <code>:193</code>), and a revoke-by-session-id (<code>RevokeSessionByIdAsync</code>
+          <code>:428</code>, <code>RevokeSessionAsync</code> <code>:231</code>) whose ownership check is the store query itself, so another account&#39;s
+          session id and one that never existed both answer <code>NotFound</code> (<code>:236-244</code>).</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// AuthSessionIssuer.ResolveRotatableSessionAsync: five outcomes, two answers (shape, not byte-for-byte).</span>
 <span class="hljs-keyword">if</span> (<span class="hljs-built_in">string</span>.IsNullOrWhiteSpace(refreshToken))
 {
     <span class="hljs-keyword">return</span> Failure(InvalidRefreshTokenError());
@@ -311,8 +327,13 @@
         <span class="hljs-keyword">return</span> Failure(InvalidRefreshTokenError()); <span class="hljs-comment">// signed out or cap-evicted: this device alone</span>
     }
 
+    <span class="hljs-keyword">if</span> (IsWithinRotationGrace(session, now))
+    {
+        <span class="hljs-keyword">return</span> Failure(RefreshSupersededError());   <span class="hljs-comment">// 409: a sibling rotated it a moment ago, nothing revoked</span>
+    }
+
     <span class="hljs-keyword">await</span> RevokeLiveSessionsAsync(userId, RefreshSession.ReasonReuseDetected, now, ct);
-    <span class="hljs-keyword">await</span> refreshSessions.SaveChangesAsync(ct);     <span class="hljs-comment">// BR-206: a rotated-away token came back</span>
+    <span class="hljs-keyword">await</span> refreshSessions.SaveChangesAsync(ct);     <span class="hljs-comment">// BR-206: a rotated-away token came back past the grace</span>
     <span class="hljs-keyword">return</span> Failure(InvalidRefreshTokenError());
 }
 
@@ -325,28 +346,46 @@
     s.ReplacedByTokenHash <span class="hljs-keyword">is</span> <span class="hljs-keyword">not</span> <span class="hljs-literal">null</span>
     || s.<span class="hljs-function">ReasonRevoked <span class="hljs-keyword">is</span> <span class="hljs-title">not</span> (<span class="hljs-params">RefreshSession.ReasonSignedOut <span class="hljs-keyword">or</span> RefreshSession.ReasonSessionCap</span>)</span>;
 
+<span class="hljs-comment">// IsWithinRotationGrace: only a Rotated row, revoked less than ReuseGraceSeconds ago (0 turns it off).</span>
+<span class="hljs-function"><span class="hljs-built_in">bool</span> <span class="hljs-title">IsWithinRotationGrace</span>(<span class="hljs-params">RefreshSession s, DateTime now</span>)</span> =&gt;
+    grace &gt; TimeSpan.Zero
+    &amp;&amp; s.ReasonRevoked == RefreshSession.ReasonRotated
+    &amp;&amp; s.RevokedAt <span class="hljs-keyword">is</span> { } revokedAt
+    &amp;&amp; now - revokedAt &lt; grace;
+
 <span class="hljs-comment">// RotateSessionAsync: the store, not memory, decides which request owns the rotation.</span>
 <span class="hljs-keyword">var</span> refreshToken = tokenService.GenerateRefreshToken();
 <span class="hljs-keyword">var</span> successor = RefreshSession.Create(userId, refreshToken, now, now.Add(RefreshTokenLifetime), ipAddress, userAgent);
 <span class="hljs-keyword">if</span> (!<span class="hljs-keyword">await</span> refreshSessions.TryRotateAsync(session, successor.Value!, now, ct))
 {
+    <span class="hljs-keyword">var</span> current = <span class="hljs-keyword">await</span> refreshSessions.FindByIdUntrackedAsync(session.Id, ct); <span class="hljs-comment">// the row as stored now</span>
+    <span class="hljs-keyword">if</span> (current <span class="hljs-keyword">is</span> <span class="hljs-keyword">not</span> <span class="hljs-literal">null</span> &amp;&amp; !IsReuseSignal(current))
+    {
+        <span class="hljs-keyword">return</span> Failure(InvalidRefreshTokenError()); <span class="hljs-comment">// lost to a sign-out or cap eviction: this device alone</span>
+    }
+
+    <span class="hljs-keyword">if</span> (current <span class="hljs-keyword">is</span> <span class="hljs-keyword">not</span> <span class="hljs-literal">null</span> &amp;&amp; IsWithinRotationGrace(current, now))
+    {
+        <span class="hljs-keyword">return</span> Failure(RefreshSupersededError());   <span class="hljs-comment">// lost to a sibling inside the grace: 409, nothing revoked</span>
+    }
+
     <span class="hljs-keyword">await</span> RevokeLiveSessionsAsync(userId, RefreshSession.ReasonReuseDetected, now, ct);
     <span class="hljs-keyword">await</span> refreshSessions.SaveChangesAsync(ct);
-    <span class="hljs-keyword">return</span> Failure(InvalidRefreshTokenError());     <span class="hljs-comment">// lost the claim: answered exactly like a replay</span>
+    <span class="hljs-keyword">return</span> Failure(InvalidRefreshTokenError());     <span class="hljs-comment">// past the grace, flagged, or unreadable: the replay answer</span>
 }</code></pre>
           <h2 id="both-apps-inherit-it-the-oauth-path-opens-the-same-session">Both apps inherit it; the OAuth path opens the same session</h2>
           <p>The rotation, reuse detection, session cap, and lifetime logic are identical in ADC and Store because
           neither one owns a copy. ADC&#39;s <code>AuthenticationService</code> (<code>AuthenticationService.cs:50</code>) and Store&#39;s
           (<code>AuthenticationService.cs:26</code>) each take an <code>IAuthSessionIssuer</code> (ADC <code>:56</code>, Store <code>:31</code>) and forward it into
-          the base constructor (ADC <code>:58</code>, Store <code>:33</code>); the token lifetimes and the cap are configuration (the <code>Jwt</code>
+          the base constructor (ADC <code>:59</code>, Store <code>:33</code>); the token lifetimes and the cap are configuration (the <code>Jwt</code>
           and <code>RefreshSessions</code> sections), not constructor arguments (ADC <code>:44-47</code>). What the subclasses supply is
           app-specific hooks: the claim set (ADC&#39;s <code>speaker_id</code>, Store&#39;s <code>customer_id</code>), the deactivated-account
           gates, the registration side effect. They mint through the base&#39;s <code>TokenService</code> property, which is the
-          issuer&#39;s <code>sid</code>-stamping wrapper (<code>AuthenticationServiceBase.cs:98</code>). The security-relevant token workflow is
+          issuer&#39;s <code>sid</code>-stamping wrapper (<code>AuthenticationServiceBase.cs:99</code>). The security-relevant token workflow is
           not in either subclass.</p>
           <p>That single-source property is what makes ADC&#39;s external OAuth login (ADR-036) fall in line for free. The
-          external-login body (<code>ExternalLoginCoreAsync</code>, ADC <code>AuthenticationService.cs:204</code>) ends by calling the shared
-          <code>IssueTokensAsync</code> (<code>:316</code>), so a federated sign-in opens a refresh session through exactly the path a
+          external-login body (<code>ExternalLoginCoreAsync</code>, ADC <code>AuthenticationService.cs:226</code>) ends by calling the shared
+          <code>IssueTokensAsync</code> (<code>:338</code>), so a federated sign-in opens a refresh session through exactly the path a
           password sign-in takes: hashed at rest, counted against the same per-user cap, rotated through the same
           chain. A user who signed in with Google gets the same guarantees as one who typed a password, because both
           go through the same issuer.</p>
@@ -356,34 +395,42 @@
           <li><strong>Every device is its own row, so sign-ins grow a table.</strong> A session is a device fact rather than an
           account fact, which is the point: signing in on a second device leaves the first signed in
           (<code>AuthSessionIssuer.cs:17-18</code>). The cost is unbounded growth without two guards, and both are there: a
-          per-user cap that evicts the oldest live session (<code>:442,451-454</code>) and a retention sweep that hard-deletes
+          per-user cap that evicts the oldest live session (<code>:512,521-524</code>) and a retention sweep that hard-deletes
           dead rows after <code>RetentionDays</code> (<code>RefreshSessionSettings.cs:54-58</code>). A revoked row survives that window
           because it is the evidence the reuse check reads; once it is swept, the same replay reads as an unknown
           token and fails alone. The thirty-day default sits well past the seven-day token lifetime, so a token still
           capable of being replayed always has its row, and lowering the window below that lifetime gives the
           guarantee up (<code>:60-66</code>).</li>
-          <li><strong>Reuse detection is aggressive by design.</strong> Two browser tabs refreshing at the same instant present the
-          same still-live token, one of them loses the <code>TryRotateAsync</code> claim, and the loser is answered as a replay
-          with the family revoked (<code>AuthSessionIssuer.cs:388-398</code>). A benign race is indistinguishable from theft, so
-          failing closed is chosen over a convenient short reuse-grace window.</li>
+          <li><strong>Reuse detection is aggressive, past a short grace.</strong> Two browser tabs refreshing at nearly the same
+          instant present the same token. Inside <code>ReuseGraceSeconds</code> (default 10, <code>RefreshSessionSettings.cs:97-98</code>)
+          the second request is answered 409 and retries, whether it lands on the rotated row or loses the
+          <code>TryRotateAsync</code> claim (<code>AuthSessionIssuer.cs:328-333</code>, <code>:438-441</code>). The grace cuts both ways: a stolen token
+          replayed within that window of a legitimate rotation gets the same 409 instead of revoking the family,
+          because the two cannot be told apart there (<code>RefreshSessionSettings.cs:90-94</code>). Past the window a benign
+          race is again indistinguishable from theft and still revokes the family (<code>AuthSessionIssuer.cs:443-450</code>),
+          and a row already flagged as reuse revokes it at any age. A grace of <code>0</code> fails closed on every rotated token
+          that comes back.</li>
           <li><strong>Only a rotated token is evidence.</strong> A token from a device that was signed out or cap-evicted fails alone
-          (<code>:297-303</code>), so an ordinary sign-out never ends the user&#39;s other sessions. The flip side is that a thief
-          replaying a token whose device was already signed out triggers nothing beyond that one rejection; the
-          family-wide response is reserved for the case that proves two parties held the same lineage.</li>
+          (<code>:320-326</code>, and <code>:430-436</code> when it loses the rotation claim), so an ordinary sign-out never ends the user&#39;s
+          other sessions. The flip side is that a thief replaying a token whose device was already signed out triggers
+          nothing beyond that one rejection; the family-wide response is reserved for the case that proves two parties
+          held the same lineage.</li>
           <li><strong>The refresh path is server-side write state.</strong> Unlike the fully stateless access token, every issue
-          inserts a row and every refresh revokes one and inserts its successor (<code>OpenSessionAsync</code> <code>:322-348</code>,
-          <code>RotateSessionAsync</code> <code>:361-401</code>), so refresh always costs a write to the Identity database. That is the
+          inserts a row and every refresh revokes one and inserts its successor (<code>OpenSessionAsync</code> <code>:352-378</code>,
+          <code>RotateSessionAsync</code> <code>:394-454</code>), so refresh always costs a write to the Identity database. That is the
           price of being able to revoke.</li>
           <li><strong>No absolute cap anchored to the opening login.</strong> Because the expiry is re-stamped on every rotation
-          (<code>:374</code>), the seven-day window bounds inactivity, not total session age, and a continuously active client
+          (<code>:407</code>), the seven-day window bounds inactivity, not total session age, and a continuously active client
           stays signed in indefinitely. The per-user cap bounds how many devices, and the retention sweep bounds how
           long a dead row lingers, but neither ends a chain that keeps refreshing. An absolute cap on session age is
           deliberately not imposed.</li>
           <li><strong>A non-positive configured lifetime falls back silently.</strong> A zero or negative <code>RefreshTokenExpirationDays</code>
-          (or a test double reporting <code>TimeSpan.Zero</code> via the interface default, <code>ITokenService.cs:40</code>) is treated as
-          absent and reverts to the seven-day baseline rather than failing startup
-          (<code>AuthSessionIssuer.cs:58-59</code>). A misconfiguration quietly reverts to the default instead of surfacing an
-          error.</li>
+          is treated as absent and reverts to the seven-day baseline rather than failing startup
+          (<code>AuthSessionIssuer.cs:60-61</code>); a test double that leaves <code>ITokenService.RefreshTokenLifetime</code> alone lands
+          on the same seven days through the interface default (<code>ITokenService.cs:40</code>). A misconfiguration quietly
+          reverts to the default instead of surfacing an error. The access-token side is looser still: its
+          fifteen-minute fallback (<code>AuthSessionIssuer.cs:57-58</code>) reaches only the expiry the response reports, not
+          the token, whose <code>exp</code> comes from the raw configured value (<code>TokenService.cs:148</code>).</li>
           </ul>
           <p>None of these are reasons to skip rotation. They are the reasons to wire it knowing what it does and does not
           promise.</p>
@@ -401,22 +448,27 @@
           <li><strong>Bind refresh to the presented (expired) access token, and pin the algorithm.</strong> Read the principal from
           the expired token while skipping only the lifetime check, and re-verify issuer, audience, key, and
           algorithm so the token cannot tell you how to trust it.</li>
-          <li><strong>Split your rejections behind one error message.</strong> An unknown token fails alone, an expired session fails
-          alone, a signed-out session fails alone, and a rotated-away session that comes back revokes the user&#39;s
-          whole live family. Record why each row was revoked so the detector can tell those apart, and return one
-          indistinguishable error for all of them so the detector does not double as an oracle.</li>
+          <li><strong>Split your rejections behind one error message, and give the race its own answer.</strong> An unknown token
+          fails alone, an expired session fails alone, a signed-out session fails alone, and a rotated-away session
+          that comes back revokes the user&#39;s whole live family. Record why and when each row was revoked so the
+          detector can tell those apart, and return one indistinguishable error for all of them so the detector does
+          not double as an oracle. If two tabs or two replicas legitimately race, answer a token rotated a few seconds
+          ago with a distinct, retryable conflict rather than a sign-out, knowing a thief inside that window gets the
+          same pass.</li>
           </ol>
           <p>The takeaway: <strong>a refresh token you rotate on every use, store only as a hash, and answer with a family-wide
-          revoke the instant a rotated-away one reappears, turns a long-lived stealable secret into a session that ends
-          itself.</strong> The stateless access token stays fast; the write on refresh is what buys you the ability to revoke
-          one device or all of them.</p>
+          revoke the instant a rotated-away one reappears past a few seconds&#39; race grace, turns a long-lived stealable
+          secret into a session that ends itself.</strong> The stateless access token stays fast; the write on refresh is what
+          buys you the ability to revoke one device or all of them.</p>
           <hr>
           <p><strong>What we covered:</strong> why a stateless access token forces a refresh token and a refresh token forces a theft
           story, how MMCA.Common splits who-is-signed-in from what-they-are-handed and keeps one hashed
           <code>RefreshSession</code> row per signed-in device, rotated through a store-arbitrated claim, how a rotated-away row
-          is the reuse signal that revokes a user&#39;s whole live family while a signed-out, cap-evicted or expired one
-          fails alone, and the honest trade-offs (a growing table, aggressive reuse detection, a server-side write per
-          refresh, no absolute session-age cap, a silent lifetime fallback) that come with choosing to fail closed.</p>
+          is the reuse signal that revokes a user&#39;s whole live family once a short race grace has passed (inside it the
+          answer is a retryable 409) while a signed-out, cap-evicted or expired one fails alone, and the honest
+          trade-offs (a growing table, aggressive reuse detection softened by a grace a thief can also use, a
+          server-side write per refresh, no absolute session-age cap, a silent lifetime fallback) that come with
+          choosing to fail closed past the grace.</p>
           <p><strong>Next in the series:</strong> the write-once REST surface every entity inherits: generic entity controllers that
           give a new aggregate its full CRUD API without a hand-written controller per type.</p>
           <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the 2-minute ADR-097 behind this

@@ -109,7 +109,7 @@
         <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
         <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
         <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
-        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, four engines</a></li>
         <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
         <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
         <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
@@ -288,9 +288,9 @@
           <p>Each concrete value object (<code>Email</code>, <code>Money</code>, <code>Address</code>, <code>DateRange</code>) uses the same private-constructor
           plus static <code>Create</code> returning <code>Result&lt;T&gt;</code> idiom, so an invalid <code>Email</code> simply cannot be constructed.
           The validation lives in static <em>invariants</em> classes (<code>EmailInvariants</code>, <code>AddressInvariants</code>). Only
-          <code>AddressInvariants</code>&#39;s <code>MaxLength</code> constants are actually reused elsewhere, and both reuse sites sit
+          <code>AddressInvariants</code>&#39;s <code>MaxLength</code> fields are actually reused elsewhere, and both reuse sites sit
           inside MMCA.Common: <code>AddressValidationRules</code> reads them for FluentValidation, and the <code>OwnsAddress</code>
-          mapping extension reads the same six constants for <code>HasMaxLength</code> on the owned <code>Address</code> columns, so a
+          mapping extension reads the same six fields for <code>HasMaxLength</code> on the owned <code>Address</code> columns, so a
           consuming app (Store&#39;s <code>CustomerConfiguration</code>) gets the field-length rule from one source of truth
           through a single <code>builder.OwnsAddress(p =&gt; p.Address);</code> call (a second <code>OwnsOne</code> there overrides only
           the unicode facet, never a length). <code>EmailInvariants.MaxLength</code> does not get

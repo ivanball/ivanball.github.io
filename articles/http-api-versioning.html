@@ -109,7 +109,7 @@
         <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
         <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
         <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
-        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, four engines</a></li>
         <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
         <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
         <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
@@ -201,9 +201,9 @@
           host through one call, and keeps it exercised by a shared contract test that proves two live versions
           coexist.</p>
           <p><strong>One registration wires the whole policy.</strong> <code>AddCommonApiVersioning</code>
-          (<code>WebApplicationBuilderExtensions.cs:37</code>) is the entire decision, in one place: the reader, the
-          default behavior, the reporting, and the one guard that keeps document generation from tripping over
-          any of it.</p>
+          (<code>WebApplicationBuilderExtensions.cs:39</code>) is the entire decision, in one place: the reader, the
+          default behavior, the reporting (and the filter that keeps it intact through the output cache), and the
+          one guard that keeps document generation from tripping over any of it.</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-function"><span class="hljs-keyword">public</span> IServiceCollection <span class="hljs-title">AddCommonApiVersioning</span>()</span>
 {
     <span class="hljs-comment">// DefaultApiVersion is deliberately not set: 1.0 is already the framework default, and the API</span>
@@ -222,23 +222,37 @@
 
     services.AddApiParameterDescriptorBackfill();                <span class="hljs-comment">// guards OpenAPI generation</span>
 
+    <span class="hljs-comment">// Report the version headers ahead of the body, so an output-cache hit still carries them.</span>
+    services.Configure&lt;MvcOptions&gt;(<span class="hljs-keyword">static</span> options =&gt;
+        options.Filters.Add(<span class="hljs-keyword">new</span> ApiVersionReportingResultFilter()));
+
     <span class="hljs-keyword">return</span> services;
 }</code></pre>
           <p>Three of those lines carry the design. The reader is a <code>HeaderApiVersionReader(&quot;api-version&quot;)</code>
-          (<code>WebApplicationBuilderExtensions.cs:46</code>), so routes and query strings stay version-free: a caller
+          (<code>WebApplicationBuilderExtensions.cs:48</code>), so routes and query strings stay version-free: a caller
           opts into a newer shape by adding one header, not by rewriting the URL. <code>AssumeDefaultVersionWhenUnspecified</code>
-          (<code>WebApplicationBuilderExtensions.cs:44</code>) means a client that never sends the header keeps getting
+          (<code>WebApplicationBuilderExtensions.cs:46</code>) means a client that never sends the header keeps getting
           <code>1.0</code>, so introducing versioning was not a breaking change for any existing caller. And
-          <code>ReportApiVersions</code> (<code>WebApplicationBuilderExtensions.cs:45</code>) means every response carries the
+          <code>ReportApiVersions</code> (<code>WebApplicationBuilderExtensions.cs:47</code>) means every response carries the
           supported and deprecated version lists in its headers, so a client can see which versions a service
           still honors and which are on the way out without reading a changelog.</p>
+          <p>&quot;Every response&quot; includes a cached one, and that takes the last line of the block. The versioning
+          library writes its report from a <code>Response.OnStarting</code> callback, but the output cache snapshots the
+          response headers when the body starts, before those callbacks run, so a cache hit would replay a
+          response with no version report. <code>ApiVersionReportingResultFilter</code>
+          (<code>Caching/ApiVersionReportingResultFilter.cs:21</code>), registered as a global MVC filter
+          (<code>WebApplicationBuilderExtensions.cs:60</code>), writes <code>api-supported-versions</code> and <code>api-deprecated-versions</code>
+          before the result writes its body, so the cached entry stores them; the library&#39;s own callback then
+          finds them present and adds nothing. It reports through whatever <code>IReportApiVersions</code> the host
+          registered (<code>ApiVersionReportingResultFilter.cs:33</code>, <code>:39</code>), so a host with reporting off still
+          reports nothing (ADR-046).</p>
           <p>Two more details in that block carry less design and more hard-won experience, and the first of them is
           a line that is not there. <code>1.0</code> is the default because the <code>Asp.Versioning</code> library already defaults to
           it, so the registration says nothing at all: setting <code>DefaultApiVersion</code> explicitly, in either the
           versioning options or the explorer options that inherit them, trips the library&#39;s own analyzers
-          (AV0011/AV0024), and the comment standing in its place (<code>WebApplicationBuilderExtensions.cs:39-41</code>)
+          (AV0011/AV0024), and the comment standing in its place (<code>WebApplicationBuilderExtensions.cs:41-43</code>)
           exists so the next reader does not &quot;fix&quot; the omission. And <code>AddApiParameterDescriptorBackfill</code>
-          (<code>WebApplicationBuilderExtensions.cs:54</code>) installs <code>ApiParameterDescriptorBackfillProvider</code>, added in
+          (<code>WebApplicationBuilderExtensions.cs:56</code>) installs <code>ApiParameterDescriptorBackfillProvider</code>, added in
           v1.146.0 after a real failure: MVC leaves <code>ApiParameterDescription.ParameterDescriptor</code> null for a route
           token with no matching action parameter, and <code>Asp.Versioning.OpenApi</code>, the document pipeline in use when
           the guard shipped, dereferenced it without a null check, so a host that routed <code>api/v{version:apiVersion}/...</code>
@@ -284,8 +298,8 @@
           check, and the same invariant-over-discipline posture the framework prefers (ADR-015): without a second
           working version, everything above would be asserted rather than proven.</p>
           <p><strong>Every REST host adopts it the same way.</strong> The extracted services call <code>AddCommonApiVersioning</code> in
-          their startup: ADC&#39;s Conference (<code>MMCA.ADC.Conference.Service/Program.cs:217</code>), Identity (<code>:150</code>),
-          Engagement (<code>:147</code>), and Notification (<code>:136</code>) hosts, Store&#39;s Catalog (<code>:140</code>), Sales (<code>:147</code>), and
+          their startup: ADC&#39;s Conference (<code>MMCA.ADC.Conference.Service/Program.cs:220</code>), Identity (<code>:154</code>),
+          Engagement (<code>:150</code>), and Notification (<code>:139</code>) hosts, Store&#39;s Catalog (<code>:140</code>), Sales (<code>:147</code>), and
           Identity (<code>:134</code>) hosts, and the monolith reference host
           (<code>MMCA.Helpdesk.Web/Program.cs:35</code>). One call per host, and the reader, default, and reporting choices
           cannot drift apart between services. The discovery exemplar is narrower than the registration: only ADC&#39;s
@@ -309,9 +323,10 @@
           <li><strong>Header versioning is less discoverable than a URL segment, and the OpenAPI document is one
           dev/CI-only <code>v1</code>.</strong> A version chosen by header does not show up in a copied URL or a browser address
           bar, so the version in play is only visible to a caller that reads request and response headers. The
-          generated contract does not follow the versioning axis either. Each host registers the plain <code>v1</code>
-          document itself with <code>services.AddOpenApi()</code>, next to <code>AddCommonOpenApi</code>, which registers no document
-          and only configures the ones present (<code>WebApplicationBuilderExtensions.cs:95</code>). <code>MapCommonOpenApi</code>
+          generated contract does not follow the versioning axis either. Each extracted service host registers
+          the plain <code>v1</code> document itself with <code>services.AddOpenApi()</code> (Helpdesk&#39;s monolith host serves no
+          OpenAPI document at all), next to <code>AddCommonOpenApi</code>, which registers no document and only configures
+          the ones present (<code>WebApplicationBuilderExtensions.cs:101</code>). <code>MapCommonOpenApi</code>
           then maps that single document with <code>app.MapOpenApi().AllowAnonymous()</code>
           (<code>Startup/Endpoints/OpenApiEndpointExtensions.cs:74</code>, document name <code>v1</code> at <code>:28</code>), throws at startup
           when no <code>v1</code> document was registered (<code>:65-71</code>), and is a no-op in Production (<code>:62</code>). So the <code>2.0</code>
@@ -321,7 +336,7 @@
           build time and commit it per service host (four in ADC, three in Store, for example
           <code>MMCA.ADC.Conference.Service/openapi/MMCA.ADC.Conference.Service.json</code>), and an &quot;OpenAPI documents are
           current&quot; CI step fails a PR whose document changed without being committed (<code>MMCA.ADC/.github/workflows/deploy.yml:305</code>,
-          <code>MMCA.Store/.github/workflows/deploy.yml:287</code>). That makes the contract diffable in review, but it
+          <code>MMCA.Store/.github/workflows/deploy.yml:291</code>). That makes the contract diffable in review, but it
           stays a development and CI artifact: never served in production, and not a place the <code>2.0</code> shape is
           asserted (the committed Conference document carries <code>/ServiceInfo</code> and no <code>ServiceInfoV2Response</code>).</li>
           </ul>
@@ -350,8 +365,9 @@
           <hr>
           <p><strong>What we covered:</strong> why &quot;we support versioning&quot; is untestable when only <code>1.0</code> ever ships, how
           <code>AddCommonApiVersioning</code> wires a header-based policy (default <code>1.0</code> inherited from the library,
-          assume-default-when-unspecified, report-versions, <code>api-version</code> reader, plus the parameter-descriptor
-          backfill that keeps OpenAPI generation from failing) in one call, how <code>ServiceInfoControllerBase</code> ships a
+          assume-default-when-unspecified, report-versions, <code>api-version</code> reader, plus the result filter that keeps
+          the version headers on output-cached responses and the parameter-descriptor backfill that keeps OpenAPI
+          generation from failing) in one call, how <code>ServiceInfoControllerBase</code> ships a
           real deprecated <code>1.0</code> alongside a <code>2.0</code> so <code>ServiceInfoVersioningContractTestsBase</code> can prove two versions
           coexist rather than assert it, and the honest current-reality caveats (only the discovery endpoint has
           a <code>2.0</code>, adoption is per host, the attributes are repeated per subclass, and the OpenAPI contract is a

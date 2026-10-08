@@ -109,7 +109,7 @@
         <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
         <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
         <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
-        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, four engines</a></li>
         <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
         <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
         <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
@@ -180,7 +180,7 @@
           <p><strong>MMCA.ADC</strong> is the Atlanta Developers Conference application. Its domain is events: conferences,
           sessions, speakers, rooms, categories, and the questions attendees ask. It carries four modules:</p>
           <ul>
-          <li><strong>Identity</strong> (the <code>User</code> aggregate, JWT auth, plus social login via Google and GitHub),</li>
+          <li><strong>Identity</strong> (the <code>User</code> aggregate, JWT auth, plus social login via Google, GitHub and Sign in with Apple),</li>
           <li><strong>Conference</strong> (events, sessions, speakers, rooms, categories, questions and answers, social
           activities, partners and session assets, across twenty-two domain REST controllers),</li>
           <li><strong>Engagement</strong> (session bookmarks, event and session feedback, and the conference-day live layer:
@@ -189,8 +189,9 @@
           <li><strong>Notification</strong> (a thin SignalR module hosting the real-time notification hub).</li>
           </ul>
           <p>It is deployed to Azure Container Apps, one container image per deployable (the four services, the
-          Gateway, and the web UI), and a merge to <code>main</code> is the deploy: the pipeline builds, tests, and rolls
-          the release out. That is a harder claim than &quot;it builds&quot;: the framework is carrying a six-image
+          Gateway, and the web UI), and a merge to <code>main</code> is the deploy: the full build and test tiers gate the
+          pull request against the exact tree that merges, and the merge push builds the images and rolls the
+          release out. That is a harder claim than &quot;it builds&quot;: the framework is carrying a six-image
           production topology, not a sample project.</p>
           <p><strong>MMCA.Store</strong> is an e-commerce application. Its domain is selling things: a product catalog, orders and
           carts, and the payment plumbing around them. It carries three modules:</p>
@@ -215,11 +216,11 @@
           <p>None of that topology is hand-rolled per app. It comes from the framework:</p>
           <ul>
           <li><strong>The same packages, at the same number.</strong> MMCA.Common publishes twenty-two packages, and each app pins
-          the subset it uses at one identical version literal: ADC pins twenty <code>MMCA.Common.*</code> entries
+          the subset it uses at one identical version literal: ADC pins nineteen <code>MMCA.Common.*</code> entries
           (<code>.Shared</code>, <code>.Domain</code>, <code>.Application</code>, <code>.Infrastructure</code>, <code>.AI</code>, <code>.AI.Anthropic</code>, <code>.AI.Testing</code>,
           <code>.API</code>, <code>.Grpc</code>, <code>.Gateway</code>, <code>.UI</code>, <code>.UI.Maui</code>, <code>.UI.Web</code>, <code>.Aspire</code>, <code>.Aspire.Hosting</code>, <code>.Testing</code>,
-          <code>.Testing.Architecture</code>, <code>.Testing.Aspire</code>, <code>.Testing.E2E</code>, <code>.Testing.UI</code>), Store pins seventeen of
-          those, taking none of the <code>.AI</code> packages.</li>
+          <code>.Testing.Architecture</code>, <code>.Testing.E2E</code>, <code>.Testing.UI</code>), Store pins sixteen of those, taking none of
+          the <code>.AI</code> packages.</li>
           <li><strong>The same patterns.</strong> <code>Result&lt;T&gt;</code> for error flow, the CQRS command/query split with the same
           decorator order (commands run FeatureGate then Authorization then Logging then Caching then
           Validating then Timeout then Transactional then the handler; queries run FeatureGate then
@@ -248,7 +249,7 @@
           <li>Tag a new MMCA.Common version (the version comes from the git tag via MinVer). All twenty-two packages
           publish at that same version.</li>
           <li>In each consumer, bump every <code>MMCA.Common.*</code> entry in <code>Directory.Packages.props</code> to the new version
-          in one pass. ADC keeps its twenty entries and Store its seventeen on the same number.</li>
+          in one pass. ADC keeps its nineteen entries and Store its sixteen on the same number.</li>
           <li>Build, run the fitness tests and the rest of the suite, deploy.</li>
           </ol>
           <p>The framework&#39;s versioning policy doc (<code>common-VERSIONING.md</code>, canonical in the published docs
@@ -298,8 +299,9 @@
           thirteen declare their handler contract over a generic parameter and are exempt by design, so the
           family deepens the pattern without widening the enforced surface.
           <strong>For both, the real surface lives in MMCA.Store and MMCA.ADC.</strong> For performance and
-          cost, the framework ships an in-repo BenchmarkDotNet hot-path harness (§12) and a released cost guide
-          (§31); only full load/stress data lives in the consumer apps.</p>
+          cost, the framework ships an in-repo BenchmarkDotNet hot-path harness plus a weekly load tier on SQLite
+          (§12) and a released cost guide (§31); what a library cannot carry is capacity-provisioning evidence,
+          which only a deployed app can supply.</p>
           <p>That is not a weakness to hide; it is the reason the two apps exist. The framework supplies the base
           classes, the enforced layering, and the extraction points. The apps supply the proof that those things
           hold up against two different real domains and two different production deployments. The

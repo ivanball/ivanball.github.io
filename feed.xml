@@ -21,7 +21,7 @@
       <link>https://ivanball.github.io/articles/identity-completions.html</link>
       <guid isPermaLink="true">https://ivanball.github.io/articles/identity-completions.html</guid>
       <pubDate>Thu, 24 Sep 2026 12:00:00 GMT</pubDate>
-      <description>A TOTP second factor, an email-confirmation gate, and operator-editable permission grants, each arriving as an opt-in extension.</description>
+      <description>A TOTP second factor, an email-confirmation gate, operator-editable permission grants and versioned Terms of Service acceptance, each arriving as an opt-in extension.</description>
       <category>Auth &amp; the edge</category>
       <category>ADR 116</category>
     </item>
@@ -217,6 +217,7 @@
       <category>ADR 023</category>
       <category>ADR 025</category>
       <category>ADR 041</category>
+      <category>ADR 070</category>
     </item>
     <item>
       <title>Rate limiting and brute-force protection</title>
@@ -260,7 +261,7 @@
       <link>https://ivanball.github.io/articles/external-oauth-login.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/google-and-github-login-without-leaking-tokens-external-oauth-behind-your-own-jwts-d68ba5e3aca4</guid>
       <pubDate>Sun, 26 Jul 2026 14:22:48 GMT</pubDate>
-      <description>Sign in with Google or GitHub without leaking provider tokens: external identity exchanged for your own JWTs at the boundary.</description>
+      <description>Sign in with Google, GitHub or Apple without leaking provider tokens: external identity exchanged for your own JWTs at the boundary.</description>
       <category>Auth &amp; the edge</category>
       <category>ADR 036</category>
     </item>
@@ -391,11 +392,11 @@
       <category>ADR 002</category>
     </item>
     <item>
-      <title>Polyglot persistence: one model, three engines</title>
+      <title>Polyglot persistence: one model, four engines</title>
       <link>https://ivanball.github.io/articles/polyglot-persistence.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/one-entity-model-three-databases-polyglot-persistence-behind-a-single-attribute-760e77974d5d</guid>
       <pubDate>Thu, 09 Jul 2026 14:20:41 GMT</pubDate>
-      <description>SQL Server, Cosmos, and SQLite behind a single entity model, with the engine chosen by attribute.</description>
+      <description>SQL Server, PostgreSQL, Cosmos, and SQLite behind a single entity model, with the engine chosen by attribute.</description>
       <category>Data &amp; persistence</category>
       <category>ADR 018</category>
     </item>

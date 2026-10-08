@@ -109,7 +109,7 @@
         <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
         <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
         <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
-        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, four engines</a></li>
         <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
         <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
         <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
@@ -385,7 +385,7 @@
           customer&#39;s order exists (the rationale is in the helper&#39;s remarks, <code>OwnershipHelper.cs:110-115</code>, and in
           the wrapper&#39;s own summary, <code>OrdersController.cs:381-385</code>). That is the same axis, fitted to a resource
           whose owning id is not its route id by a single predicate.</p>
-          <p>The query endpoints carry a third guard the mutating check does not need, and both filtered controllers
+          <p>The query endpoints carry a third guard the mutating check does not need, and both row-scoped controllers
           carry it. Each declares a private <code>RequireResolvableOwner()</code> wrapper (<code>OrdersController.cs:80-85</code>,
           <code>ShoppingCartsController.cs:79-84</code>) that delegates to <code>OwnershipHelper.RequireResolvableOwner</code> and maps a
           failure through <code>HandleFailure</code>. In <code>OrdersController</code> it runs before the query on both <code>GetAllAsync</code>
@@ -437,10 +437,10 @@
           route <code>id</code> (<code>:55</code>). The row-level half travels too: two Conference controllers override
           <code>GetExportSpecification()</code> through the same <code>OwnershipHelper.GetOwnershipSpecification</code>, yielding an
           <code>OwnedByUserSpecification</code> for an attendee and <code>null</code> for an Organizer
-          (<code>MMCA.ADC/.../Conference.API/Controllers/Events/EventQuestionAnswersController.cs:107-112</code>,
-          <code>MMCA.ADC/.../Conference.API/Controllers/Sessions/SessionQuestionAnswersController.cs:107-112</code>), set
-          <code>AllowUnscopedExport</code> to the Organizer check (<code>:119</code> in each), and run the framework&#39;s resolvable-owner
-          gate through a private <code>RequireResolvableOwner()</code> wrapper (<code>:135-136</code> in each). Same filter, same helper,
+          (<code>MMCA.ADC/.../Conference.API/Controllers/Events/EventQuestionAnswersController.cs:109-114</code>,
+          <code>MMCA.ADC/.../Conference.API/Controllers/Sessions/SessionQuestionAnswersController.cs:109-114</code>), set
+          <code>AllowUnscopedExport</code> to the Organizer check (<code>:121</code> in each), and run the framework&#39;s resolvable-owner
+          gate through a private <code>RequireResolvableOwner()</code> wrapper (<code>:137-138</code> in each). Same filter, same helper,
           different words, because the words are options rather than literals.</p>
           <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
           <p>The §11 review is blunt about the edges of this, and they are real.</p>

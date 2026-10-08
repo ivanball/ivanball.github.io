@@ -109,7 +109,7 @@
         <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
         <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
         <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
-        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, four engines</a></li>
         <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
         <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
         <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
@@ -225,7 +225,13 @@
           request. That is how both the source XML docs and the onboarding chapter describe it. There is a fluent
           face as well: <code>And</code>, <code>Or</code>, and <code>Not</code> ship as extension members on <code>ISpecification</code>, so
           <code>spec.And(other).Not()</code> reads left to right instead of inside out while the abstract base stays
-          untouched. Composition is live in production
+          untouched. A composed specification is criteria-only, and the combinators enforce that. The framework
+          also ships <code>QuerySpecification</code>, a specification that carries query shape (includes, ordering, paging,
+          tracking, soft-delete scope) alongside its <code>Criteria</code>, so one object describes a whole read that the
+          spec-taking <code>ListAsync</code> honors in full. Hand a shaped one to <code>And</code>, <code>Or</code>, or <code>Not</code> and the combinator&#39;s
+          constructor throws <code>ArgumentException</code> instead of silently dropping the shape; an unshaped one composes
+          like any other, and predicates that belong with a shaped read are composed inside its own <code>Criteria</code>.
+          Composition is live in production
           today, in five consumer read paths across two applications. Three are in ADC: the paged sessions read
           ANDs the public-session filter with the speaker-scoped one rather than substituting, because dropping
           the public filter for a speaker-scoped request would leak non-accepted sessions to non-privileged

@@ -109,7 +109,7 @@
         <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
         <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
         <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
-        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, four engines</a></li>
         <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
         <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
         <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
@@ -215,8 +215,8 @@
           </ul>
           <p>The key design idea: the rule <em>bodies</em> ship in the package once. You do not copy them. You supply a tiny
           map of your assemblies and subclass the bases, and you inherit roughly the same suite that runs across
-          MMCA.Common, MMCA.Store, MMCA.ADC and MMCA.Helpdesk (141 test methods across 55 abstract <code>*TestsBase</code>
-          classes; the framework&#39;s own build executes 339 of them).</p>
+          MMCA.Common, MMCA.Store, MMCA.ADC and MMCA.Helpdesk (153 test methods across 61 abstract <code>*TestsBase</code>
+          classes; the framework&#39;s own build executes 410 of them).</p>
           <blockquote>
           <p><strong>If you scaffolded with <code>dotnet new mmca-app</code>, steps 1 through 4 are already done.</strong> The generated
           solution ships the architecture-test project, the <code>IArchitectureMap</code>, and every applicable base
@@ -230,7 +230,7 @@
           <code>Tests/Architecture/*.Architecture.Tests</code>), and reference the package:</p>
           <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet add package MMCA.Common.Testing.Architecture</code></pre>
           <p>The package brings the NetArchTest engine (NetArchTest.eNhancedEdition), the <code>ArchitectureRules</code> rule
-          library, the diagnostic helpers, and the 55 abstract <code>*TestsBase</code> classes. You will not write rule
+          library, the diagnostic helpers, and the 61 abstract <code>*TestsBase</code> classes. You will not write rule
           logic; you will point the rules at your assemblies and subclass the bases.</p>
           <h2 id="step-2-implement-iarchitecturemap-one-anchor-type-per-layer">Step 2: implement <code>IArchitectureMap</code>, one anchor type per layer</h2>
           <p>This is the only real work, and it is small. <code>IArchitectureMap</code> is the single extension point every rule is
@@ -259,7 +259,10 @@
           <p>That is the &quot;what to scan&quot; half. The package&#39;s <code>ArchitectureRules</code> are the &quot;what to assert&quot; half. The
           framework&#39;s own <code>CommonArchitectureMap</code> is module-less (every layer is a framework layer, seven <code>Framework(...)</code>
           entries, one anchor per layer it scans); ADC&#39;s <code>AdcArchitectureMap</code> adds module entries the same way. Your map looks like one of those,
-          scaled to your solution.</p>
+          scaled to your solution. One map per solution is the usual shape, not a limit: MMCA.Common also runs a
+          second map, <code>FrameworkModuleArchitectureMap</code>, that registers its own Shared, Domain and Application
+          assemblies as one <code>Module(...)</code> named <code>Framework</code>, so the module-scoped DDD rules (sealed entities, no
+          public aggregate constructors, immutable DTOs) actually run over the aggregates the framework ships.</p>
           <h2 id="step-3-subclass-the-test-bases-to-inherit-the-rule-library">Step 3: subclass the test bases to inherit the rule library</h2>
           <p>Now your test classes shrink to thin sealed subclasses that supply the map and inherit the <code>[Fact]</code>s.
           Two of the most valuable bases to start with:</p>
@@ -306,7 +309,7 @@ dotnet test <span class="hljs-literal">--project</span> Tests/Architecture/MyApp
           <p>Because they run in the normal tier, a violated invariant fails CI exactly like a failing unit test. One
           operational note: Microsoft Testing Platform fails the build if a test project discovers zero tests, so
           make sure your subclasses are public and actually inherit <code>[Fact]</code>s. The framework&#39;s CI even floors its
-          test steps with <code>--minimum-expected-tests</code> (<code>1</code> on the ADC CI runs, <code>2650</code> on the Store CI runs, <code>2000</code> on MMCA.Common&#39;s own
+          test steps with <code>--minimum-expected-tests</code> (<code>5000</code> on ADC&#39;s CI run, <code>2650</code> on Store&#39;s CI run, <code>2000</code> on MMCA.Common&#39;s own
           solution-wide run, <code>40</code> on its Helpdesk canary) so neither an empty suite nor a silently shrunken one can
           pass. Where a step carries no floor the workflow says why, as ADC&#39;s live-judge step does: every case
           there skips itself without an API key, and a zero-run must not red the deploy.</p>

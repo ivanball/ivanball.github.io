@@ -109,7 +109,7 @@
         <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
         <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
         <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
-        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, four engines</a></li>
         <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
         <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
         <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
@@ -221,8 +221,8 @@
           title and body via <code>PushNotificationInvariants</code>, checks that the dedup key and the optional scope
           key each stay within 128 characters (the 64-character hash the handler passes always fits, so in
           practice only the scope key can trip it), and returns a <code>Result&lt;PushNotification&gt;</code>. It is saved with
-          <code>Status = Pending</code> and a snapshot <code>RecipientCount</code>. That save stands alone precisely so a lost
-          race on the dedup key can be caught and answered (next section).</li>
+          <code>Status = Pending</code> and a snapshot <code>RecipientCount</code>. That save stands alone, so a lost race on the
+          dedup key fails right there, before any inbox row exists, and propagates (next section).</li>
           <li><strong>Fan out the inbox rows, in a second save.</strong> For every recipient the handler creates a
           <code>UserNotification</code> row, the durable per-user inbox entry that survives a missed real-time delivery.
           Both writes are issued before any transport is touched. Storage first, delivery second.</li>
@@ -264,13 +264,13 @@
 <span class="hljs-keyword">var</span> notification = PushNotification.Create(
     title, body, sentByUserId, recipients.Count, dedupKey, scopeKey);  <span class="hljs-comment">// scopeKey: optional view filter</span>
 <span class="hljs-keyword">await</span> _repository.AddAsync(notification, ct);
-<span class="hljs-keyword">try</span> { <span class="hljs-keyword">await</span> _unitOfWork.SaveChangesAsync(ct); }                    <span class="hljs-comment">// save 1: the audit row alone</span>
-<span class="hljs-keyword">catch</span> { <span class="hljs-comment">/* CA1031: lost the filtered-unique-index race? requery by key, return the winner */</span> <span class="hljs-keyword">throw</span>; }
-
+<span class="hljs-keyword">await</span> _unitOfWork.SaveChangesAsync(ct);                            <span class="hljs-comment">// save 1: the audit row alone;</span>
+                                                                   <span class="hljs-comment">// a lost dedup race throws here</span>
 <span class="hljs-keyword">foreach</span> (<span class="hljs-keyword">var</span> userId <span class="hljs-keyword">in</span> recipients) { <span class="hljs-comment">/* create a UserNotification inbox row */</span> }
 <span class="hljs-keyword">await</span> _unitOfWork.SaveChangesAsync(ct);                            <span class="hljs-comment">// save 2: the inbox rows, still no delivery</span>
 
-<span class="hljs-keyword">try</span> { <span class="hljs-keyword">await</span> _push.SendToUsersAsync(recipients, title, body, ct); notification.MarkAsSent(); }
+<span class="hljs-comment">// LiveMetadata: { &quot;scopeKey&quot;: scopeKey } for a scoped send, null for an unscoped one</span>
+<span class="hljs-keyword">try</span> { <span class="hljs-keyword">await</span> _push.SendToUsersAsync(recipients, title, body, LiveMetadata(scopeKey), ct); notification.MarkAsSent(); }
 <span class="hljs-keyword">catch</span> { notification.MarkAsFailed(); }                            <span class="hljs-comment">// CA1031: SignalR leg owns the status</span>
 
 <span class="hljs-keyword">try</span> { <span class="hljs-keyword">await</span> _nativePush.SendToUsersAsync(recipients, title, body, ct); } <span class="hljs-comment">// ADR-044: OS-level leg</span>
@@ -287,8 +287,12 @@
           the OS-level native push added in ADR-044) written in that order, keeps the inbox as the single source
           of truth.</p>
           <p>The send carries a second optional key alongside <code>DedupKey</code>: an opaque <code>ScopeKey</code> (for example
-          <code>&quot;event:2&quot;</code>), stamped by the sending application and stored on the audit aggregate. The framework
-          attaches no meaning to it. An app whose notifications belong to one edition of something sets it, and
+          <code>&quot;event:2&quot;</code>), stamped by the sending application and stored on the audit aggregate. The live SignalR
+          leg forwards it as metadata under <code>NotificationScopeKey.MetadataKey</code> (<code>&quot;scopeKey&quot;</code>), so a connected
+          client viewing another scope can leave the notification out of its toast and badge; an unscoped send
+          carries no metadata at all. Common ships a canonical format for it (<code>NotificationScopeKey.ForEvent</code>
+          and <code>ForSession</code>, matching <code>^(event|session):[0-9]+$</code>), but the send path checks only its length, and
+          reads compare it as an opaque string. An app whose notifications belong to one edition of something sets it, and
           every caller that omits it sends an unscoped notification. ADC resolves the current published event
           and scopes to <code>event:{id}</code>. When no event resolves it fails narrow rather than wide: it answers with
           the last key it resolved or, on an instance that has never resolved one, with <code>event:0</code>, a
@@ -313,16 +317,17 @@
           sender-scoped hash (the column allows 128 characters, validated in the factory, and the hash is
           always 64), with a filtered unique index over it. That matters because the handler&#39;s
           up-front lookup is a check-then-act: two concurrent retries of the same send can both pass it, and
-          the loser only discovers the conflict when it tries to insert. So the audit save is its own
-          <code>SaveChangesAsync</code>, wrapped in a catch that requeries by key: if the row exists now, the concurrent
-          send is the cause and the caller gets that notification back; anything else is rethrown untouched and
-          reaches the exception middleware. The requery runs on <code>CancellationToken.None</code>, so a save aborted by
-          the caller&#39;s own token can still be classified. The database, not the application, arbitrates the
-          race.</p>
-          <p>That catch is deliberately broad (a suppressed CA1031), and the reason is a layer rule rather than
-          laziness: Application has no EF Core dependency, so <code>DbUpdateException</code> is not a type this file is
-          allowed to name. The requery is what narrows it. It is the same swallow-and-requery shape the
-          framework&#39;s inbox store uses on its own unique index; only the nameable exception differs.</p>
+          the loser only discovers the conflict when it tries to insert. That insert is the audit save, its
+          own <code>SaveChangesAsync</code> with nothing wrapped around it, so the loser fails there on the unique index
+          and the persistence exception propagates. <code>DbUpdateExceptionHandler</code> answers it with a 409 Conflict,
+          and <code>TransactionalCommandDecorator</code> rolls the attempt back whole. The client&#39;s retry then reaches the
+          dedup lookup, which finds the winner&#39;s row and returns that notification without sending anything.
+          The database, not the application, arbitrates the race.</p>
+          <p>The handler does not try to recover in place, and the reason is a layer rule plus an engine quirk
+          rather than laziness. Application has no EF Core dependency, so nothing in its contract can detach
+          the failed insert: it stays tracked, and the commit would throw on it anyway. And on PostgreSQL the
+          unique violation has already aborted the transaction a requery would have to run in. Rolling back
+          and letting the retry find the winner is the shape that holds on every engine.</p>
           <h2 id="the-push-channel-an-adapter-chosen-at-composition-not-branched-at-runtime">The push channel: an adapter chosen at composition, not branched at runtime</h2>
           <p>The real-time channel is two cooperating types. <code>NotificationHub</code> is an <code>[Authorize]</code>d SignalR <code>Hub</code>.
           For this durable-push slice it contributes a <code>ReceiveNotification</code> method-name constant, the client-side
@@ -377,13 +382,14 @@
           ids are client-generated GUIDs, so they are not enumerable.</p>
           <h2 id="the-in-app-inbox-pure-cqrs-readwrite-scoped-to-the-caller">The in-app inbox: pure CQRS read/write, scoped to the caller</h2>
           <p>The inbox is the durable channel, exposed by <code>InboxController</code> to any authenticated user (unlike the
-          organizer-only send and history endpoints). Four slices back it:</p>
+          send and history endpoints, which need the notification-management capability). Four slices back it:</p>
           <ul>
           <li><code>GetMyNotificationsHandler</code> joins <code>UserNotification</code> to <code>PushNotification</code> (title and body live on the
           push aggregate, read state lives on the per-user row) and projects a <code>UserNotificationDTO</code>, newest
           first, paginated and capped at 500 rows per page. This cross-aggregate read is done in the query, not
-          via a navigation populator, because the two aggregates reference each other by ID only. That matters:
-          in ADC <code>UserNotification</code> lives in its own database.</li>
+          via a navigation populator, because the two aggregates reference each other by ID only. The single
+          query works because both aggregates map to the same <code>Notification</code> logical data source, so the join
+          never spans two databases.</li>
           <li><code>GetUnreadNotificationCountHandler</code> counts unread rows for the bell badge.</li>
           <li><code>MarkNotificationReadHandler</code> verifies the row belongs to the requesting user before flipping it. The
           domain method <code>UserNotification.MarkAsRead(DateTime readOnUtc)</code> takes the read instant as a parameter
@@ -411,9 +417,12 @@
           <code>NotificationFeatures.PushNotifications</code>. All three controllers carry
           <code>[FeatureGate(NotificationFeatures.PushNotifications)]</code>, so the whole channel can be switched off
           per-environment with no code change. Authorization splits along the three controllers:
-          <code>NotificationsController</code> (send plus history) requires the organizer policy, while <code>InboxController</code>
+          <code>NotificationsController</code> (send plus history) requires a capability, not a role:
+          <code>[HasPermission(NotificationPermissions.Manage)]</code>, the <code>notifications:manage</code> permission, which the
+          host grants to whichever roles it chooses (ADC grants it to the Organizer role alone). <code>InboxController</code>
           and <code>DevicesController</code> require only an authenticated caller. That asymmetry encodes the rule &quot;anyone
-          reads their own inbox and registers their own devices, only organizers broadcast.&quot;</p>
+          reads their own inbox and registers their own devices, only holders of the send capability
+          broadcast.&quot;</p>
           <h2 id="identifier-aliases-keep-the-ids-honest">Identifier aliases keep the IDs honest</h2>
           <p>A small but consistent detail: the notification entities do not type their keys as bare <code>int</code>. The slice
           uses solution-wide identifier aliases declared once in
@@ -442,8 +451,10 @@
           <li><strong>Deduplication is opt-in, and it is check-then-act plus a database index.</strong> A send that carries no
           key gets no protection at all. When a key is present, the up-front
           lookup is a race the handler cannot win on its own, so correctness rests on the filtered unique
-          index and on a broad catch that has to requery to classify what it caught. That is a real cost in
-          handler complexity, paid to keep Application free of an EF Core dependency.</li>
+          index plus the rollback. The losing concurrent caller gets a 409 rather than the winner&#39;s
+          notification and has to retry; only that retry, answered by the dedup lookup, returns the result.
+          That is a real cost pushed onto the client, paid to keep Application free of an EF Core dependency
+          and the behavior identical on every engine.</li>
           <li><strong>The scope key is a view filter, not a security boundary.</strong> It narrows what a scoped read returns,
           but a read that supplies no scope still sees every notification, scoped ones included. It organizes
           an inbox by edition; it does not isolate anything. Authorization remains the caller-scoped <code>UserId</code>
@@ -473,8 +484,9 @@
           <li><strong>Scope every read and mutation to the caller</strong> inside the slice, rather than relying on a
           cross-cutting filter to remember.</li>
           <li><strong>Let the database arbitrate a deduplication race.</strong> An application-level &quot;does it already exist?&quot;
-          check is check-then-act and two retries will both pass it. Back it with a unique index and treat
-          the insert failure as an answer, not just an error.</li>
+          check is check-then-act and two retries will both pass it. Back it with a unique index, let the
+          losing insert fail and roll its whole attempt back, and let the retry get its answer from the
+          lookup, which then finds the winner.</li>
           </ol>
           <p>The takeaway: a framework earns trust by showing one complete feature built on its own rules. Build that
           feature as a cohesive vertical slice, and it teaches the patterns better than any amount of base-class

@@ -109,7 +109,7 @@
         <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
         <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
         <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
-        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, four engines</a></li>
         <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
         <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
         <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
@@ -210,6 +210,39 @@
           <p>One boundary is worth naming: both gates assert structure and registration, never what a booted host
           actually does, so the conformance suites that prove the framework&#39;s runtime contracts against a host
           that really started are a separate shipped tier, covered in Article 35.</p>
+          <h2 id="beneath-both-gates-a-build-that-does-not-compile-a-warning">Beneath both gates: a build that does not compile a warning</h2>
+          <p>The layer guard and the fitness suite answer structural questions. Underneath them sits a cheaper
+          layer that answers per-line ones on every compile, and it rests on the same conviction: a warning that
+          does not fail the build is a comment nobody has to act on (ADR-132).</p>
+          <p><strong>Warnings are errors.</strong> Each repo&#39;s root <code>Directory.Build.props</code> sets <code>TreatWarningsAsErrors</code> and
+          <code>CodeAnalysisTreatWarningsAsErrors</code> (<code>MMCA.Common/Directory.Build.props:7</code>, <code>:13</code>), pins <code>AnalysisLevel</code>
+          to <code>latest</code> with <code>AnalysisMode</code> <code>All</code> (<code>:11-12</code>), and turns on <code>EnforceCodeStyleInBuild</code> (<code>:14</code>), so the
+          IDE-only style rules run in the command-line build too. Five third-party analyzer packages, Meziantou,
+          Microsoft.VisualStudio.Threading, Roslynator, SonarAnalyzer and StyleCop, ride into every project except
+          a Docker Compose <code>.dcproj</code> (<code>:130-150</code>), with their versions pinned through Central Package Management
+          (<code>MMCA.Common/Directory.Packages.props:223</code>, <code>:229-232</code>). The shared <code>.editorconfig</code> then sets
+          <code>dotnet_analyzer_diagnostic.severity = error</code> (<code>MMCA.Common/.editorconfig:312</code>): every diagnostic
+          starts as an error, and a rule that does not apply here is turned off by name with its reason beside
+          it, so the exception list is something a reviewer can read rather than something implied by silence.</p>
+          <p><strong>One baseline, shared above a marker.</strong> Everything above the <code># REPO-SPECIFIC DELTAS</code> line
+          (<code>MMCA.Common/.editorconfig:821</code>, the same line in all four repos) is meant to be identical across
+          MMCA.Common, MMCA.Store, MMCA.ADC and MMCA.Helpdesk, as the file&#39;s own header says (<code>:5-8</code>); per-repo
+          overrides go below it. Code that moves from a consumer into the framework meets the same rules on
+          arrival, and a workspace script compares the four shared slices so a drifted line is an exit code
+          rather than something a reader has to spot in an 800-line file. An edit above the marker is therefore
+          a four-repo change.</p>
+          <p><strong>An empty run is a failure.</strong> A green test step proves only that the tests which ran passed, and a
+          broken filter or a discovery failure can turn a suite into zero tests and still report success. So the
+          solution-wide unit runs carry <code>--minimum-expected-tests</code>: 2000 in MMCA.Common, against a suite of about
+          2,254 (<code>MMCA.Common/.github/workflows/ci.yml:160-163</code>), 5000 in MMCA.ADC
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:366</code>) and 2650 in MMCA.Store
+          (<code>MMCA.Store/.github/workflows/deploy.yml:338</code>). That is the same vacuity guard the form-count floor
+          below applies to a single gate, applied to the whole run. The line-coverage floor that sits beside it
+          belongs to the test pyramid and is covered in Article 35
+          (<a href="test-pyramid.html">The test pyramid, not the ice-cream cone: 2,254 fast tests, zero Docker</a>).</p>
+          <p>The honest cost is suppression pressure: at error severity, suppressing a rule is the fastest way to
+          green, and in a diff it looks exactly like a deliberate relaxation. Nothing in this layer stops that;
+          review of <code>.editorconfig</code> and <code>NoWarn</code> changes does.</p>
           <h2 id="defined-once-identical-everywhere">Defined once, identical everywhere</h2>
           <p>Here is the part that makes the fitness functions scale across more than one repo without rotting into
           three slightly-different copies.</p>
@@ -219,7 +252,7 @@
           package defines:</p>
           <ul>
           <li><code>ArchitectureRules</code>, the reusable rule library that expresses the actual assertions.</li>
-          <li>A set of 55 abstract <code>*TestsBase</code> classes holding 141 test methods (for example
+          <li>A set of 61 abstract <code>*TestsBase</code> classes holding 153 test methods (for example
           <code>LayerDependencyTestsBase</code>, <code>DomainPurityTestsBase</code>, <code>MicroserviceExtractionTestsBase</code>,
           <code>PiiConventionTestsBase</code>, <code>FolderWidthTestsBase</code>, <code>DataResidencyTestsBase</code>,
           <code>RawSqlConventionTestsBase</code>, <code>ClockReadTestsBase</code>).</li>
@@ -229,9 +262,13 @@
           <code>FolderWidthTestsBase</code> a repo root, <code>ProtoContractTestsBase</code> a solution file and a list of <code>.proto</code>
           paths.</li>
           </ul>
-          <p>Each repo supplies exactly <strong>one</strong> map implementation that declares its own layer and module
+          <p>Each repo supplies <strong>one</strong> primary map implementation that declares its own layer and module
           assemblies, and its arch-test classes shrink to thin sealed subclasses (three to ten lines) that
-          inherit the real <code>[Fact]</code>s.</p>
+          inherit the real <code>[Fact]</code>s. MMCA.Common adds a second, <code>FrameworkModuleArchitectureMap</code>, for one
+          reason: its primary map declares its own Shared, Domain and Application assemblies as framework layers,
+          where the module-scoped DDD rules (sealed entities, no public setters, immutable DTOs and events) would
+          match nothing, so the second map registers them as one module and <code>ImmutabilityTests</code> and
+          <code>EntityConventionTests</code> run those rules over the aggregates the framework actually ships.</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// In MMCA.Common: one anchor type per package, then the test class is a 3-line subclass.</span>
 <span class="hljs-keyword">internal</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">CommonArchitectureMap</span> : <span class="hljs-title">ArchitectureMapBase</span> { <span class="hljs-comment">/* layer + module assemblies */</span> }
 
@@ -240,12 +277,15 @@
     <span class="hljs-keyword">protected</span> <span class="hljs-keyword">override</span> IArchitectureMap Map { <span class="hljs-keyword">get</span>; } = <span class="hljs-keyword">new</span> CommonArchitectureMap();
     <span class="hljs-comment">// The [Fact]s live in the base. This subclass just supplies the map.</span>
 }</code></pre>
-          <p>MMCA.Store, MMCA.ADC and MMCA.Helpdesk consume the same package and supply their own maps
+          <p>MMCA.Store and MMCA.ADC consume the same package, MMCA.Helpdesk builds the same project from
+          Common&#39;s source by default (its committed <code>local.props</code> swaps the package for a project reference),
+          and each supplies its own map
           (<code>StoreArchitectureMap</code>, <code>AdcArchitectureMap</code>, <code>HelpdeskArchitectureMap</code>), so the reference app is held
           to the framework&#39;s own layering, module-isolation and transport-at-edges rules rather than exempted
           from them. The consequence is that <strong>the same compiled rule runs identically across all four
           codebases.</strong> &quot;Domain must not depend on Application&quot; is one rule body, not four drifting copies. When
-          the rule improves, every consumer inherits the improvement on the next package bump. One shared package
+          the rule improves, every consumer inherits the improvement on the next package bump (MMCA.Helpdesk, in
+          its default source mode, on its next build). One shared package
           also means no per-repo <code>ArchitectureTestHelper</code> duplication, and so none of the drift that four copies
           of a rule invite: exactly the kind of drift fitness functions are
           supposed to prevent. It is also a maintainability win
@@ -347,8 +387,11 @@
           the SQL server into a different region from its Container Apps, and it still blocks by name the stale
           &quot;central United States&quot; claim its policy once carried. MMCA.Store reads the single-region sentence in
           its disaster-recovery runbook and forbids ADC&#39;s two regions from being copied across. A compliance
-          statement is usually the last thing anybody thinks of as testable, and it is one of the few that a
-          build can check outright.</p>
+          statement is usually the last thing anybody thinks of as testable, and it is one a build can check
+          outright, with one honest gap in when the check runs. Both deployed apps classify any Markdown-only
+          pull request as docs-only and run their <code>CI.slnf</code> tests only on a code diff, so a pull request that
+          edits only <code>PRIVACY.md</code> (or, in MMCA.Store, only the disaster-recovery runbook, its other input) never
+          runs this test. The drift still fails a build, on the next pull request that touches code.</p>
           <h2 id="freezing-the-wire-the-contract-no-single-repos-build-can-see">Freezing the wire: the contract no single repo&#39;s build can see</h2>
           <p>A <code>.proto</code> file is not source in the ordinary sense. It is a published contract, and what makes it
           dangerous is that breaking it looks exactly like editing a local file. Renumber a field, retype one,
@@ -372,16 +415,16 @@
           frozen but no longer present, are each a violation with its own prefix (<code>:68-71</code>). That is the same
           both-directions discipline the navigation-doc gate uses below, aimed at a wire format instead of a table.</p>
           <p>What gets pinned is exactly what a peer can observe: the <code>package</code>, every rpc with its name, request and
-          response types and <strong>both</strong> streaming flags (<code>:199-209</code>), every message field with its name, declared
-          type, label and <strong>number</strong> (<code>:220-228</code>), and every enum value with its number (<code>:212-218</code>). Nested
+          response types and <strong>both</strong> streaming flags (<code>:293-304</code>), every message field with its name, declared
+          type, label and <strong>number</strong> (<code>:314-322</code>), and every enum value with its number (<code>:306-312</code>). Nested
           messages and enums are qualified under their parent, while a <code>oneof</code> contributes no name segment because
-          on the wire it does not (<code>:183-185</code>). Deliberately not pinned: <code>syntax</code>, <code>import</code> and every <code>option</code>,
+          on the wire it does not (<code>:271-273</code>). Deliberately not pinned: <code>syntax</code>, <code>import</code> and every <code>option</code>,
           <code>csharp_namespace</code> included (<code>:28-31</code>). The line is drawn at &quot;would a deployed peer notice.&quot; Pin the
           file-level options and a reordered import turns into a red build, which is the fastest way to teach a
           team to regenerate the snapshot without reading it.</p>
           <p>Adoption is the shape this tier always uses. MMCA.ADC&#39;s subclass pins the seven protos its four
-          <code>*.Contracts</code> projects compile, against seventy-six frozen lines
-          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Contracts/ProtoContractTests.cs:9-18</code>, list at <code>:20-97</code>);
+          <code>*.Contracts</code> projects compile, against eighty-three frozen lines
+          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Contracts/ProtoContractTests.cs:9-18</code>, list at <code>:20-105</code>);
           MMCA.Store&#39;s pins four
           (<code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Contracts/ProtoContractTests.cs:13-19</code>). MMCA.Common
           ships no <code>.proto</code> of its own, because it supplies the gRPC plumbing and not the contracts, so it
@@ -462,10 +505,15 @@ phantom.Should().BeEmpty(
           parse anchors ever drifted, which is the vacuity trap one level up. The
           base reads those resources from <code>ResourceAssembly</code>, which defaults to the <em>derived</em> type&#39;s assembly
           (<code>:51</code>), because resolving against its own would look for the consumer&#39;s template inside the
-          framework package and always throw. MMCA.Helpdesk declares no subclass at all: an
-          inapplicable gate rather than an unadopted one. The honest limit is that this is a text gate over
-          infrastructure-as-code. It proves the two files agree; it does not prove the deployment ran or that
-          the query behind an alert measures what it claims. The alerting mechanism itself sits with the
+          framework package and always throw. MMCA.Common, which deploys nothing, runs the base against its
+          framework deployment sample through <code>SampleDeploymentObservabilityTests</code>, with a floor of 4 and the
+          only <code>RequireWorkbook</code> opt-in in the workspace. MMCA.Helpdesk declares no subclass at all: an
+          inapplicable gate rather than an unadopted one. The honest limits are two. This is a text gate over
+          infrastructure-as-code: it proves the two files agree, not that the deployment ran or that the query
+          behind an alert measures what it claims. And it pairs only the SLO alerts declared between the parse
+          anchors. Each consumer provisions six further operational alerts (dead-lettered outbox messages, a
+          failed revision activation, the gateway availability probe among them) after that loop closes, and
+          the gate neither requires nor forbids a runbook section for any of those twelve (ADR-062). The alerting mechanism itself sits with the
           telemetry it watches, in Article 48.</p>
           <h2 id="the-third-kind-a-fitness-function-for-cost">The third kind: a fitness function for cost</h2>
           <p>Structural rules assert shape. Documentation rules assert honesty. There is a third thing worth failing
@@ -560,7 +608,8 @@ phantom.Should().BeEmpty(
           hope is not an architecture.</strong> If a rule matters, make it fail the build.</p>
           <hr>
           <p><strong>What we covered:</strong> why a diagram is not enforcement, how MMCA.Common guards the inward-dependency rule
-          twice (compile-time MSBuild plus runtime NetArchTest), how the rule bodies live once in
+          twice (compile-time MSBuild plus runtime NetArchTest), the warnings-as-errors analyzer baseline and CI
+          test-count floors beneath both, how the rule bodies live once in
           <code>MMCA.Common.Testing.Architecture</code> and run identically across four repos via <code>IArchitectureMap</code>, the
           three rule families that matter most (<code>LayerDependencyTests</code>, <code>DomainPurityTests</code>,
           <code>MicroserviceExtractionTests</code>), two gates on what a method body may call (raw-string SQL and the
@@ -597,6 +646,7 @@ phantom.Should().BeEmpty(
             <ul>
             <li><a href="#why-a-diagram-is-not-enforcement">Why a diagram is not enforcement</a></li>
             <li><a href="#enforced-twice-compile-time-and-runtime">Enforced twice: compile-time and runtime</a></li>
+            <li><a href="#beneath-both-gates-a-build-that-does-not-compile-a-warning">Beneath both gates: a build that does not compile a warning</a></li>
             <li><a href="#defined-once-identical-everywhere">Defined once, identical everywhere</a></li>
             <li><a href="#the-rules-that-matter-most">The rules that matter most</a></li>
             <li><a href="#freezing-the-wire-the-contract-no-single-repos-build-can-see">Freezing the wire: the contract no single repo&#39;s build can see</a></li>

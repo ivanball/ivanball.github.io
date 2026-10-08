@@ -1,7 +1,7 @@
 # A list page in a few lines: a reusable Blazor UI framework with the same discipline as the backend
 
-> Series: MMCA.Common · Article #37 (deep-dive) · Pillar P2,P5 · Group G15 · Rubric §18,§19,§20,§23 · ADR-067 ·
-> Status: grounded in `MMCA.Common/Source/Presentation/MMCA.Common.UI` (v1.221.0 source),
+> Series: MMCA.Common · Article #37 (deep-dive) · Pillar P2,P5 · Group G15 · Rubric §18,§19,§20,§22,§23 · ADR-056 · ADR-067 ·
+> Status: grounded in `MMCA.Common/Source/Presentation/MMCA.Common.UI` (v1.233.0 source),
 > `Website/docs-src/onboarding/group-15-common-ui-framework.md`, `group-25-adc-host-composition.md`. No em dashes.
 
 **Subtitle:** This series has been backend all the way down. But the front end is where DRY usually goes to die: every list screen re-implements paging, sort, filter, loading, and teardown. Here is the same ports-and-base-classes discipline, applied to Blazor, so a list page is a few lines instead of a few hundred.
@@ -93,15 +93,18 @@ desktop grid gets for free from paging:
 ```csharp
 [Parameter] public int MaxRenderedItems { get; set; } = 500;
 
-// Stop fetching once the rendered-item cap is reached so the DOM (and memory) stay
-// bounded even for very large result sets.
-_hasMore = _items.Count < _totalCount && _items.Count < MaxRenderedItems;
+// Keep fetching only while the last page added something new, more rows exist, and the
+// rendered-item cap is not reached, so the DOM (and memory) stay bounded.
+private bool HasMoreAfter(int appended) =>
+    appended > 0 && _items.Count < _totalCount && _items.Count < MaxRenderedItems;
 ```
 
 Infinite scroll has an obvious failure mode that is easy to ship without noticing: it is unbounded by
 construction, so a 40,000-row result set becomes 40,000 DOM nodes on the least capable device you
 support. The cap makes "there is more data" and "we will keep rendering it" two different questions,
-and answers the second one no.
+and answers the second one no. The `appended > 0` term closes a quieter loop: a page that added
+nothing new (an empty page, or a window shifted by a whole page) stops the list instead of having the
+re-observed sentinel request the same page forever.
 
 Note what is *not* here: there is no separate mobile app, no duplicated page, and no parallel route
 tree. One page class serves both layouts, which is why the responsive behavior is verifiable at all.
@@ -114,7 +117,7 @@ A page in this framework never injects a raw `HttpClient`. It injects `IEntitySe
 
 The behavior behind that interface comes from an abstract base, `EntityServiceBase<TEntityDTO, TIdentifierType>`. A concrete module service is mostly an endpoint string. Every verb routes through one dispatch chokepoint, `SendRequestAsync`, so retry, auth, and error handling are applied identically to every call. The error handling is the subtle, valuable part: the call runs through an `HttpResultExecutor` that turns transport faults into failures, and every response is read through a `ProblemDetailsResultReader` that rebuilds the server's structured Problem Details payload (a domain failure, a validation failure) as a `Result` with its original `ErrorType` intact. The base states the rule in source: nothing in it throws for a server answer, and the only exception that escapes is the caller's own cancellation. A backend `Result.Failure` therefore surfaces to the page as the server's real message and error type, not a generic "server error."
 
-`EntityServiceBase` derives in turn from `AuthenticatedServiceBase`, which owns the two cross-cutting concerns of any outbound API call. One is a Polly retry policy: three retries with exponential backoff (2, 4, and 8 seconds plus up to a second of jitter) on `HttpRequestException` or a retryable status, meaning any 5xx except the permanent 501 and 505, plus 408 and 429, with each retried response disposed so a sustained outage does not leak connections. The other is stamping the JWT bearer token onto a freshly created `"APIClient"` `HttpClient` from `IHttpClientFactory`. That base exists for a precise Blazor Server reason, documented in source: `IHttpClientFactory` builds its handler chain in a separate DI scope from the Blazor circuit, so the conventional delegating handler cannot reach the circuit-scoped storage that holds the in-memory access token. Reading the token directly and setting the header on a fresh client is the smallest correct fix for that scope mismatch.
+`EntityServiceBase` derives in turn from `AuthenticatedServiceBase`, which owns the two cross-cutting concerns of any outbound API call. One is a Polly retry policy: three retries with exponential backoff (2, 4, and 8 seconds plus up to a second of jitter) on `HttpRequestException` or a retryable status, meaning any 5xx except the permanent 501 and 505, plus 408 and 429, with each retried response disposed so a sustained outage does not leak connections. A status is retried only when re-sending is safe: GET, PUT, DELETE and the other idempotent verbs always are, while a POST or PATCH is retried only when its request carried an `Idempotency-Key` the server deduplicates on, because without one a retried create is a second request. The other is stamping the JWT bearer token onto a freshly created `"APIClient"` `HttpClient` from `IHttpClientFactory`. That base exists for a precise Blazor Server reason, documented in source: `IHttpClientFactory` builds its handler chain in a separate DI scope from the Blazor circuit, so the conventional delegating handler cannot reach the circuit-scoped storage that holds the in-memory access token. Reading the token directly and setting the header on a fresh client is the smallest correct fix for that scope mismatch.
 
 The shape is the same one the backend uses for everything: an interface the consumer programs against, a base class that carries the 80 percent, and a composition root that wires the transport. The UI is just another consumer of ports.
 
@@ -138,6 +141,25 @@ During the SSR pre-render pass, the base serializes the grid's already-fetched r
 
 Navigation state is handled with a complementary principle: the URL is the source of truth. Paging, sort, and filter live in the query string (terse keys like `p`, `ps`, `s`, `sd`, `f:<name>`), so deep links and browser back-and-forward replay a list view exactly. A companion service codes state into and out of the address bar, emitting a key only when it differs from the default so a pristine list page yields a clean query-less URL, and using replace-history rather than push so each filter keystroke does not pollute the back stack. The noisier scroll position lives in a per-circuit `ListPageStateService` backed by an in-memory dictionary that mirrors through `sessionStorage`, so state survives circuit teardown, force-load navigations, and the SSR-to-WASM transition. URL plus memory plus session plus the prerender cache cover the full matrix of how a user can leave a list and come back to it.
 
+## Component lifetime: a token that cannot throw, a load that cannot land late
+
+Two more state failures belong to a component's lifetime rather than to any one fetch, and the package closes both once.
+
+The first is teardown. A component owns a `CancellationTokenSource` that its `Dispose` cancels and disposes, and every awaited call takes its token. Reading `Token` off a disposed source throws `ObjectDisposedException`, so a load or handler that resumes after the user navigated away crashes the circuit instead of stopping. The extension `ComponentLifetimeExtensions.LifetimeToken` returns the live token while the source is live, and an already-cancelled token once the source is cancelled, disposed, or was never created, so late work ends through its ordinary `OperationCanceledException` path. `DataGridListPageBase` links every fetch to it, `DetailPageBase` exposes it as `PageToken`, and the package's own notification, session and role-admin pages pass `_cts.LifetimeToken()` to each call. A convention like that decays unless something checks it, so it is a fitness rule: `LifetimeTokenConventionTestsBase`, subclassed in each repo, fails on any direct `_cts.Token` read under the component root, and fails too when the scan reaches fewer code-behind files than expected, so a moved folder cannot turn the gate vacuous.
+
+The second is ordering. Blazor reuses a routed component instance across route-parameter changes, so a page that opens entity 100 (slow) and then 101 (fast) receives 100's answer after 101 has rendered, and an unconditional assignment leaves the URL on 101 while the page holds 100. `LatestLoadGuard` gives each load a generation and a token, cancelling the load it supersedes:
+
+```csharp
+var (token, generation) = LoadGuard.Begin();
+var result = await Service.GetByIdAsync(Id, cancellationToken: token);
+if (!LoadGuard.IsCurrent(generation))
+{
+    return; // a newer load owns the page
+}
+```
+
+`DetailPageBase` carries one for every detail page, and the framework's role editor and ADC's public event, session and speaker detail pages use it directly. It is not thread-safe by contract: it is built for the renderer's synchronization context, where lifecycle methods and event callbacks are already serialized. The list base answers the same question its own way, returning the newest call's rows to every superseded call.
+
 ## The shell ships in the package too: modules plug in with IUIModule
 
 A base class removes the duplication inside a page. The next duplication up is the application shell
@@ -148,7 +170,7 @@ and adding a module means editing all three.
 `MMCA.Common.UI` ships that shell instead. The package owns the router, the main layout, the nav
 menu, and the routable pages an app should not have to re-author: sign in, register, home,
 not-found, forbidden, and the notification surfaces including the inbox. A module edits none of it.
-It implements a four-member interface, `IUIModule`, and registers itself:
+It implements a five-member interface, `IUIModule`, and registers itself:
 
 ```csharp
 public interface IUIModule
@@ -157,14 +179,16 @@ public interface IUIModule
     Assembly Assembly { get; }
     IReadOnlyList<Type> AppBarComponentTypes => [];
     IReadOnlyList<Type> LayoutComponentTypes => [];
+    IReadOnlyList<Type> ContentHeaderComponentTypes => [];
 }
 ```
 
-Two of the four default to empty, so a module that contributes only pages and navigation is two
+Three of the five default to empty, so a module that contributes only pages and navigation is two
 properties. `NavItems` are the module's links, each with an optional required role or claim, so the
 shell trims the menu to what the current user may actually reach. `Assembly` is how the module's
-`@page` routes get discovered. The last two are extension points: component types the shell renders
-into the top app bar (a cart icon with a badge) or at the root of the layout (a drawer, an overlay).
+`@page` routes get discovered. The last three are extension points: component types the shell renders
+into the top app bar (a cart icon with a badge), at the root of the layout (a drawer, an overlay), or
+at the top of the main content region above the page body (a banner the user must see first).
 
 The discovery happens at runtime, not compile time. `Routes.razor` injects `IEnumerable<IUIModule>`
 and hands `UIModules.Select(m => m.Assembly)` to the `Router`'s `AdditionalAssemblies`, while
@@ -190,31 +214,31 @@ Token refresh is the cleanest example, because the right answer genuinely differ
 // A same-origin JS helper POSTs to /auth/session/token; the cookie rides along;
 // the host refreshes server-side and returns ONLY the access token. JS never
 // sees the refresh token, so there is no XSS exfiltration surface for it.
-public sealed class SameOriginProxyTokenRefresher : ITokenRefresher { /* ... */ }
+public sealed class SameOriginProxyTokenRefresher : ISessionAwareTokenRefresher { /* ... */ }
 
 // Blazor Server with the same-origin API proxy enabled (AddCommonSameOriginApiProxy
 // swaps this in): the circuit asks /auth/session/handoff for a protected handoff and
 // opens it on the server, so the access token only ever exists in circuit memory.
-internal sealed class HandoffTokenRefresher : ITokenRefresher { /* ... */ }
+internal sealed class HandoffTokenRefresher : ISessionAwareTokenRefresher { /* ... */ }
 
 // MAUI: there is no browser DOM, hence no XSS surface. The refresh token sits in
 // OS SecureStorage (iOS Keychain / Android Keystore) and is exchanged directly
 // against auth/refresh.
-public sealed class DirectApiTokenRefresher : ITokenRefresher { /* ... */ }
+public sealed class DirectApiTokenRefresher : ISessionAwareTokenRefresher { /* ... */ }
 ```
 
-All three return `Task<string?>`, and the null is load-bearing: `null` means "no valid session exists," and the caller treats that as a logout, not an error to catch. The higher-level `AuthUIService` calls the same code path regardless of host. Above it, a custom `JwtAuthenticationStateProvider` reads claims from the stored JWT client-side and pushes auth-state changes so Blazor's `AuthorizeView` and `CascadingAuthenticationState` react instantly after login or refresh, with the server still validating every request as the real authority. The whole client-side auth surface, login, register, OAuth code-exchange, logout, refresh, change-password, sits behind `IAuthUIService` and depends only on `Shared` auth DTOs, so it too honors the UI-to-Shared-only rule.
+All three return `Task<string?>` from `ITokenRefresher`, and that `null` answers two different things: "there is no session" and "the attempt failed transiently." So each also implements `ISessionAwareTokenRefresher`, which extends `ITokenRefresher` with a `TryAcquireAccessTokenAsync` that reports which one happened. Token storage starts its signed-out grace period only on the definitive "no session," so one 429 or one dropped connection does not sign a signed-in user out. The higher-level `AuthUIService` calls the same code path regardless of host. Above it, a custom `JwtAuthenticationStateProvider` reads claims from the stored JWT client-side and pushes auth-state changes so Blazor's `AuthorizeView` and `CascadingAuthenticationState` react instantly after login or refresh, with the server still validating every request as the real authority. The whole client-side auth surface, login, register, OAuth code-exchange, logout, refresh, change-password, password reset, and the list of active sessions with single and all-session revoke, sits behind `IAuthUIService` and depends only on `Shared` auth DTOs, so it too honors the UI-to-Shared-only rule.
 
 The payoff is concrete. Adding a platform, or a stricter mode of an existing one, is "implement these interfaces," not "fork the UI." The threat model differs per host, so the implementations differ, but the components above them never know.
 
 ## Trade-offs, honestly
 
 - **This is opinionated UI infrastructure coupled to MudBlazor.** `DataGridListPageBase` is built around `MudDataGrid<T>`, `GridState<T>`, and MudBlazor's viewport observer. The base is reusable across your screens, but it is not framework-agnostic: swapping out MudBlazor would mean rewriting it. The trade is the usual one for a design system, a smaller surface and consistency in exchange for a hard dependency.
-- **The test layer is thorough, and its residuals are narrow.** The shared primitives and the two mobile list components both carry a fast bUnit suite, a render-snapshot tier diffs their markup against committed baselines and fails the build on an unintended structural change, and Playwright axe (WCAG 2.1 AA) plus a render smoke run as a real-browser CI job against a self-hosted gallery, with all three engines (chromium, firefox, and webkit) blocking merge gates. The most logic-heavy component, the desktop `DataGridListPageBase`, carries its own direct bUnit suite (`DataGridListPageBaseTests`, 35 facts and a theory that drive the base through a concrete test page, covering initial load, grid filters translated into the fetch call, page and sort state mirrored to the URL, failed-`Result` and exception paths, error and cancel toast severities, superseded loads returning the newest rows, URL-driven restoration, density and scroll persistence, the mobile card path, the virtualized-window fetch path, and a regression guard for the disposed-token-source race). What the layer does not cover is narrow: the visual check is markup-snapshot rather than pixel diffing, and there is no mutation testing on the core tier.
+- **The test layer is thorough, and its residuals are narrow.** The shared primitives and the two mobile list components both carry a fast bUnit suite, a render-snapshot tier diffs their markup against committed baselines and fails the build on an unintended structural change, and Playwright axe (WCAG 2.1 AA) plus a render smoke run as a real-browser CI job against a self-hosted gallery, with all three engines (chromium, firefox, and webkit) blocking merge gates. The most logic-heavy component, the desktop `DataGridListPageBase`, carries its own direct bUnit suite (`DataGridListPageBaseTests`, 40 facts and a theory that drive the base through a concrete test page, covering initial load, grid filters translated into the fetch call, page and sort state mirrored to the URL, failed-`Result` and exception paths, error and cancel toast severities, superseded loads returning the newest rows, URL-driven restoration, density and scroll persistence, the mobile card path, the virtualized-window fetch path, and a regression guard for the disposed-token-source race). What the layer does not cover is narrow: the visual check is markup-snapshot rather than pixel diffing, and there is no mutation testing on the core tier.
 - **Render-mode handling is genuinely complex.** The three-channel persistence (URL, memory, session) plus the prerender cache, plus the `BL0005` suppressions to set the grid page from outside the component, plus catch-and-degrade around every JS interop call, is a lot of machinery. It is the right machinery for the InteractiveAuto lifecycle, but it is not simple, and it earns its keep only because it is written once.
-- **There is still design-system residue, and it sits in the shell's own CSS.** MudBlazor is the only component library: the package ships no Bootstrap, and the shared `NavMenu` brand row is a plain flex row with no CSS framework classes. The residue the design-system scorecard names is narrower: the shared layout's scoped stylesheets (`NavMenu.razor.css`, `MainLayout.razor.css`) fight MudBlazor with dozens of `!important` declarations and some raw nav colors instead of tokens, inline style declarations sit across a handful of razor files with no inline-style guard in the framework, and the brand hex is still restated outside the drift guard. The mobile infinite-scroll list is DOM-bounded by a `MaxRenderedItems` cap, so it is not part of that residue. The dark palette clears its own contrast scan: the filled-primary button label and error-alert text take dark on-color text (`rgba(0,0,0,0.87)`), locked by a blocking dark-mode axe gate, so both light and dark modes are AA-gated. Client-side Web Vitals are measured too: a `WebVitalsE2ETests` suite asserts LCP, FCP, TTFB, CLS, and INP budgets against the gallery inside the required `ui-e2e` gate on all three engines (INP is skipped only where an engine cannot sample it), so a front-end-performance regression fails the build.
+- **There is still design-system residue, and it sits in the shell's own CSS.** MudBlazor is the only component library: the package ships no Bootstrap, and the shared `NavMenu` brand row is a plain flex row with no CSS framework classes. The residue the design-system scorecard names is narrower: the shared layout's scoped stylesheets (`NavMenu.razor.css`, `MainLayout.razor.css`) fight MudBlazor with dozens of `!important` declarations and some raw nav colors instead of tokens, and the brand hex is still restated outside the drift guard. Inline styles are not part of it: an inline-style fitness test (`InlineStyleTests`) keeps styling in `app.css` or a component's scoped stylesheet, and the framework's razor markup carries none. The mobile infinite-scroll list is DOM-bounded by a `MaxRenderedItems` cap, so it is not part of that residue either. The dark palette clears its own contrast scan: the filled-primary button label and error-alert text take dark on-color text (`rgba(0,0,0,0.87)`), locked by a blocking dark-mode axe gate, so both light and dark modes are AA-gated. Client-side Web Vitals are measured too: a `WebVitalsE2ETests` suite asserts LCP, FCP, TTFB, CLS, and INP budgets against the gallery inside the required `ui-e2e` gate on all three engines (INP is skipped only where an engine cannot sample it), so a front-end-performance regression fails the build.
 
-None of these argue for going back to per-page plumbing. They argue for closing the last gaps (moving the shell's `!important` overrides and inline styles onto tokens, adding pixel-level visual regression) and being clear-eyed that a UI framework is still a framework: a dependency you adopt, not a thing you get for free.
+None of these argue for going back to per-page plumbing. They argue for closing the last gaps (moving the shell's `!important` overrides and raw nav colors onto tokens, adding pixel-level visual regression) and being clear-eyed that a UI framework is still a framework: a dependency you adopt, not a thing you get for free.
 
 ## Apply this even without MMCA
 
@@ -230,7 +254,7 @@ The takeaway: **a UI framework is "compose, don't repeat" applied to the front e
 
 ---
 
-**What we covered:** why every list screen re-implements the same paging and loading plumbing, how `DataGridListPageBase<TDto>` folds it into one reusable Blazor base so a concrete page is tiny, how the `IEntityService` / `EntityServiceBase` / `AuthenticatedServiceBase` pipeline binds the UI to a DTO contract with Polly retry and server errors returned as `Result` values, how `MMCATheme` plus a `BrandColors` fitness test keep the design tokens from drifting, how `PersistentComponentState` and URL-as-source-of-truth kill the render-mode flash, how the package ships the application shell so a module plugs into it by implementing `IUIModule` instead of the host wiring it in by hand, and how one `ITokenRefresher` interface with per-host implementations lets one component set run on Server, WASM, and MAUI.
+**What we covered:** why every list screen re-implements the same paging and loading plumbing, how `DataGridListPageBase<TDto>` folds it into one reusable Blazor base so a concrete page is tiny, how the `IEntityService` / `EntityServiceBase` / `AuthenticatedServiceBase` pipeline binds the UI to a DTO contract with Polly retry and server errors returned as `Result` values, how `MMCATheme` plus a `BrandColors` fitness test keep the design tokens from drifting, how `PersistentComponentState` and URL-as-source-of-truth kill the render-mode flash, how a lifetime token and `LatestLoadGuard` keep torn-down and superseded loads from crashing the circuit or landing on the wrong entity, how the package ships the application shell so a module plugs into it by implementing `IUIModule` instead of the host wiring it in by hand, and how one `ITokenRefresher` interface with per-host implementations lets one component set run on Server, WASM, and MAUI.
 
 **Next in the series:** internationalization and theming, en-US and Spanish localization plus a
 day/dark mode toggle, both persisted on one cookie-and-profile mechanism.
@@ -240,79 +264,81 @@ day/dark mode toggle, both persisted on one cookie-and-profile mechanism.
 
 *Tags: .NET, Blazor, C Sharp, Front End, Software Architecture*
 
-*Notes: 2026-10-02 refresh against framework v1.221.0 (`MMCA.Common/FACTS.md:4`), every claim
-re-opened in source this run. Paths below are relative to `MMCA.Common/Source/Presentation/MMCA.Common.UI/`
-unless stated. (1) DataGridListPageBase: errors go through `[Inject] protected IToastService Toast`
-(`Pages/Common/DataGridListPageBase.cs:24`; `ISnackbar` appears only inside the internal adapter
-`Services/MudToastService.cs:19-23`); `LoadFailed` `:42`; `GridRef` is a get-only virtual property
-(`:130`), so a page overrides it rather than binding `@ref` to it; `LoadServerDataAsync` `:510-521` takes a
-six-argument fetch delegate returning `Task<Result<(IReadOnlyList<TDto> Items, int TotalItems)>>` (`:512`),
-records itself as the newest load and answers through `NewestPagedResultAsync` (`:556-566`); the SSR
-shortcut is `:532-543`; cancellation and exception toasts `:710-726` (`Toast.Info` `:716`, `Toast.Error`
-`:723`); a failed `Result` goes through `FailedFetch` (`:738-743`, `NotifyOnFailure` `:740`). The
-viewport switch block is verbatim `:310-317` inside `NotifyBrowserViewportChangeAsync` (`:307-320`),
-`IBrowserViewportService` injected at `:26`; `PersistedGridState` record `:1100`, persisted at `:192`;
-rows-per-page restore `:413`, `:468`. (2) Example page: rewritten this run to a compiling shape. The
-prior sketch passed `_service.GetPagedAsync` as a method group and used `@ref="GridRef"`; neither binds,
-because `IEntityService.GetPagedAsync` has seven parameters (`includeChildren` before the token,
-`Common/Interfaces/IEntityService.cs:31-38`) against the six-argument delegate, and `GridRef` is get-only.
-The block mirrors a real page, `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.UI/Pages/Customers/CustomerList.razor.cs:24-25`
-(`_dataGrid` field plus `GridRef` override) and `:29-33` (the `(state, cancellationToken)` method with the
-lambda), with markup `CustomerList.razor:43-46` (`@ref="_dataGrid"`, `ServerData="LoadServerData"`,
-`Loading="IsLoading"`). It stays an illustrative sketch (ProductDto is invented). Source-comment drift,
-not fixed here: the remark at `DataGridListPageBase.cs:501-502` says a page "still passes the method
-group", which the seven-parameter interface does not allow. (3) Data access: every `IEntityService`
-member returns a `Result` (`IEntityService.cs:11-15`, members `:25-68`, NotFound rule `:45-49`);
-`EntityServiceBase` doc `Services/Api/EntityServiceBase.cs:14-30` ("Nothing here throws for a server
-answer" `:26`); `SendRequestAsync<T>` `:328` runs `HttpResultExecutor.ExecuteAsync` (`:336`) and
-`ProblemDetailsResultReader.ReadAsync<T>` (`:343`), non-generic overload `:358-371`. `ServiceExceptionHelper`
-and `EnsureSuccessStatusCode` no longer exist in this package, so the old "pull Problem Details before
-EnsureSuccessStatusCode throws" wording is replaced. Polly: `Services/Api/AuthenticatedServiceBase.cs`
-`IsRetryableResponse` `:106-115` (501/505 excluded, 408/429 included), backoff 2/4/8 s plus up to 1 s
-jitter `:119-122`, `WaitAndRetryAsync(3, ...)` disposing retried responses `:137-140`; the DI-scope
-rationale for the fresh `"APIClient"` is unchanged (`:51`, per the 2026-10-02 audit, not re-opened).
-(4) Token refresh: `ITokenRefresher` `Services/Auth/Tokens/ITokenRefresher.cs:13`,
-`Task<string?> AcquireAccessTokenAsync` `:20`; `SameOriginProxyTokenRefresher.cs:11`;
-`DirectApiTokenRefresher.cs:25`; third implementation `HandoffTokenRefresher`
-(`MMCA.Common.UI.Web/SameOriginProxy/HandoffSessionServices.cs:7-14`, internal), swapped in by
-`AddCommonSameOriginApiProxy` (`MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxyServiceExtensions.cs:83`)
-and enabled by ADC (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:156`). (5) Theme:
-`BrandColors` holds 37 `public const string` values (counted by grep this run), doc `Theme/BrandColors.cs:4-8`
-("Every hex value in MMCATheme (light and dark) is one of these constants"), Primary `:13`, Teal 700
-versus Teal 600 contrast comment `:22-24` (`MMCATheme.cs:21` points there); `MMCATheme.Instance` `:11`,
-brand references `:18-24`, dark `PrimaryContrastText`/`ErrorContrastText` `rgba(0,0,0,0.87)` `:66`, `:93`,
-`FontFamily` Inter-first `:119`, `DefaultBorderRadius = "6px"` `:193`; `Theme/MmcaThemeProviders.razor:12`
-(`<MudThemeProvider Theme="@Theme" ...>`) and `:34` (`Theme` defaults to `MMCATheme.Instance`);
-`BrandColorTokenTests` (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Theme/BrandColorTokenTests.cs:35-39`,
-five `--mmca-*` tokens); CSS mirror `wwwroot/app.css:61-63`; `@font-face` blocks from `:9`;
-`html, body` Inter `:99-100`. Bare `<MmcaThemeProviders />`: `Layout/MainLayout.razor:14`,
-`MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Components/Layout/MainLayout.razor:10` (ADC
-`PresenterLayout.razor:6` not re-opened this run). Font file sizes and license carried from the
-2026-09-19 pass, not re-measured. (6) Design-system residue: Bootstrap is gone (`wwwroot/app.css:108`,
-"the Bootstrap reboot this RCL no longer ships"; `Layout/NavMenu.razor:18` brand row with "no CSS
-framework classes"; toggler `.nav-toggler` `:62`), so the trade-off bullet and closing line no longer
-name Bootstrap chrome. Scorecard section 20 (`Website/docs-src/governance/common-ArchitectureScorecard.md:84`)
-names the residual: 41 `!important` declarations in the scoped layout CSS (re-counted this run: 27 in
-`Layout/NavMenu.razor.css`, 14 in `Layout/MainLayout.razor.css`), raw nav colors, 19 inline styles with no
-Common inline-style guard, brand hex defined twice. (7) Tests and gates: `DataGridListPageBaseTests.cs`
-has 35 `[Fact]` plus 1 `[Theory]` (`:633`), counted by grep this run; superseded-load facts `:384`, `:413`;
-disposed-CTS guard `:449`; `RestoreGridState` `:839`, `:853`. Web Vitals:
-`MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/WebVitals/WebVitalsE2ETests.cs:19-23` (LCP 2500,
-FCP 1800, TTFB 800, CLS 0.1, INP 200), budget record `:47-48`, INP skip `:104`. `ci.yml` `ui-e2e` job
-`:248`, name `:249`, matrix `[chromium, firefox, webkit]` `:257`, promotion note `:258-260`; the only
-`continue-on-error` is `:976` on `apphost-testing` (`:958`). Scorecard rows: section 14 `:78` (no mutation
-testing), 18 `:82`, 20 `:84`, 22 `:86`, 23 `:87` (Web Vitals on all three engines), 28 `:92` (markup not
-pixel). (8) Shell: `IUIModule.cs:13,16,19,22`; `Routes.razor:7` inject, `:12` `AppAssembly`, `:13`
-`AdditionalAssemblies`, `:14` `NotFoundPage`; `Layout/MainLayout.razor:101-102`; `NavItem.cs:20`
-(`RequiredRole`, `RequiredClaim`, plus `RequiredPermission` not covered here); `Layout/NavMenu.razor:9`
-inject, filters `:257-259`, section split `:262-264`. Mobile: `Common/BreakpointConstants.cs:13-16`;
-`Components/Lists/MobileInfiniteScrollList.razor.cs:52` and `:220`. Adopter file anchors (ADC Conference,
-Engagement, Identity; Store Catalog, Sales, Identity; `Notifications/NotificationUIModule.cs`; gallery
-`GalleryUIModule.cs`) are carried from the 2026-09-19 pass and were not re-opened this run; Helpdesk
-still has its own `Routes.razor` and `MainLayout`. Header cells (Rubric, ADR) left as they were: the series
-index (`Website/docs-src/articles/README.md:47`) maps this article to sections 18, 19, 20, 22, 23 and ADRs
-056/067, proposed in the run's result rather than changed here. History: first written with the
-2026-07-27 responsive section, IUIModule section added 2026-08-07 (ADR-067), audit passes 2026-08-14,
-2026-08-20 and 2026-09-19 (v1.205.0); the long per-pass ledger they produced is superseded by this one.*
+*Notes: 2026-10-08 refresh against framework v1.233.0 (`MMCA.Common/FACTS.md:4`, `:14`). Paths below are
+relative to `MMCA.Common/Source/Presentation/MMCA.Common.UI/` unless stated. Re-opened in source this run:
+items (1), (4), (7) counts, (8) and (9); anchors in (3) partly, (5) and (6) and the ci.yml anchors in (7)
+are corrected to the 2026-10-08 audit's re-reads and were not re-opened by this apply. (1) DataGridListPageBase:
+errors go through `[Inject] protected IToastService Toast` (`Pages/Common/DataGridListPageBase.cs:24`, not
+re-opened; `ISnackbar` appears only inside the internal adapter `Services/MudToastService.cs:19-23`);
+`LoadFailed` `:53`; `GridRef` is a get-only virtual property (`:141`), so a page overrides it rather than
+binding `@ref` to it; `LoadServerDataAsync` `:521-532` takes a six-argument fetch delegate returning
+`Task<Result<(IReadOnlyList<TDto> Items, int TotalItems)>>` (`:523`), records itself as the newest load
+(`:529-530`) and answers through `NewestPagedResultAsync` (`:571`); cancellation and exception toasts
+`Toast.Info` `:744`, `Toast.Error` `:751`; a failed `Result` goes through `FailedFetch` (`NotifyOnFailure`
+`:772`). The viewport switch block is verbatim `:321-328` inside `NotifyBrowserViewportChangeAsync`
+(`:318-331`); `PersistedGridState` record `:1132`, persisted at `:203`; rows-per-page restore anchors
+(`:413`, `:468` at v1.221.0) not re-opened. (2) Example page: an illustrative sketch mirroring
+`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.UI/Pages/Customers/CustomerList.razor.cs:24-25`
+and `:29-33`, markup `CustomerList.razor:43-46` (carried, not re-opened); `IEntityService.GetPagedAsync`
+has seven parameters (`Common/Interfaces/IEntityService.cs:31-38`), so the lambda, not a method group, is
+required. Source-comment drift, not fixed here: `DataGridListPageBase.cs:512-513` still says a page
+"still passes the method group". (3) Data access: `IEntityService.cs:11-15`, members `:25-68`, NotFound rule
+`:45-49` (carried); `EntityServiceBase` doc `Services/Api/EntityServiceBase.cs:14-30`, `SendRequestAsync<T>`
+`:351`, `HttpResultExecutor` `:359`, `ProblemDetailsResultReader` `:366`, non-generic overload `:381-397`
+(audit anchors). Polly (`Services/Api/AuthenticatedServiceBase.cs`, re-opened): policy doc `:20-26`,
+`IsRetryableResponse` `:108-122` (501/505 `:110`, replay check `:115`, 5xx/408/429 `:120-121`),
+`IsReplaySafe` `:124-148` (POST/PATCH need a non-blank `Idempotency-Key`, `:141-147`), backoff `:152-155`,
+`WaitAndRetryAsync(3, ...)` disposing retried responses `:170-173`, `"APIClient"` const `:29`, DI-scope
+rationale `:53-58`. The replay-safety condition is new to the article this run. (4) Token refresh:
+`ITokenRefresher` `Services/Auth/Tokens/ITokenRefresher.cs:17-24` (one `Task<string?>` method, per audit);
+`ISessionAwareTokenRefresher.cs:12` extends it, null-means-two-things rationale `:3-11`,
+`TryAcquireAccessTokenAsync` `:17`; implementations `SameOriginProxyTokenRefresher.cs:16`,
+`DirectApiTokenRefresher.cs:35-37`, `HandoffTokenRefresher` (`MMCA.Common.UI.Web/SameOriginProxy/HandoffSessionServices.cs:14`,
+internal), swapped in by `AddCommonSameOriginApiProxy` and enabled by ADC
+(`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:161`, audit anchor). `IAuthUIService.cs` also carries
+`RequestPasswordResetAsync` `:60`, `ResetPasswordAsync` `:67`, `GetSessionsAsync` `:75`, `RevokeSessionAsync`
+`:84`, `RevokeAllSessionsAsync` `:94`; the prose list now names them. (5) Theme (audit anchors): `BrandColors`
+37 `public const string` values, doc `Theme/BrandColors.cs:4-8`, Teal 700 comment `:22-24`; `MMCATheme.Instance`
+`:11`, dark `PrimaryContrastText`/`ErrorContrastText` `:66`, `:93`, `FontFamily` `:129`, `DefaultBorderRadius`
+`:203`; `Theme/MmcaThemeProviders.razor:14` and `:36`; `BrandColorTokenTests`
+(`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Theme/BrandColorTokenTests.cs:35-39`); CSS mirror
+`wwwroot/app.css:63-67`, `html, body` Inter `:100`. Bare `<MmcaThemeProviders />`: `Layout/MainLayout.razor:16`
+(re-opened). Font sizes and license carried from 2026-09-19. (6) Design-system residue: Bootstrap note
+`wwwroot/app.css:113` (audit anchor). `!important` re-counted this run: 42 (28 in `Layout/NavMenu.razor.css`,
+14 in `Layout/MainLayout.razor.css`); the prose says "dozens". Inline styles: Common bans them through
+`InlineStyleTests : InlineStyleTestsBase`
+(`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Ui/ComponentConventions/InlineStyleTests.cs:12`,
+Common #513), so the trade-off bullet and closing line no longer name them; the scorecard row
+(`Website/docs-src/governance/common-ArchitectureScorecard.md:84`, "19 inline styles ... no inline-style
+guard") is stale against code and is not relied on. (7) Tests and gates: `DataGridListPageBaseTests.cs` has
+40 `[Fact]` plus 1 `[Theory]` (`:792`), 41 attributes counted by grep this run; superseded-load facts `:384`,
+`:413`, disposed-CTS guard `:608` (audit anchors). Web Vitals `MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/WebVitals/WebVitalsE2ETests.cs:19-23`,
+`:47-48`, `:104` (carried). `ci.yml` `ui-e2e` job `:223`, matrix `:232`, promotion note `:233-235` (audit
+anchors). Scorecard rows: 14 `:78`, 18 `:82`, 20 `:84`, 22 `:86`, 23 `:87`, 28 `:92` (carried). (8) Shell:
+`Common/Interfaces/IUIModule.cs:14`, `:17`, `:20`, `:23`, `:29` (`ContentHeaderComponentTypes`, Common #501),
+rendered at the top of the main content region (`Layout/MainLayout.razor:77`, collected `:157`); `Routes.razor`
+and `NavMenu.razor` anchors carried from 2026-10-02 (`Routes.razor:7`, `:12-14`; `NavItem.cs:20`;
+`Layout/NavMenu.razor:9`, `:257-264`). Mobile: `Common/BreakpointConstants.cs:13-16` (carried);
+`Components/Lists/MobileInfiniteScrollList.razor.cs:52` (cap 500), `:218` (`_hasMore = HasMoreAfter(appended)`),
+`:270-277` (`HasMoreAfter`, with the `appended > 0` stop). Adopter file anchors carried from 2026-09-19;
+Helpdesk still has its own `Routes.razor` and `MainLayout`. (9) Component lifetime (new section this run,
+rubric section 19): `Common/ComponentLifetimeExtensions.cs:18`, `LifetimeToken` `:26-42` (null or cancelled
+`:28-31`, disposed-without-cancel `:37-41`), rationale `:3-17`; `DataGridListPageBase.cs:816-817` (fetch CTS
+linked to it); `Pages/Common/DetailPageBase.cs:26`, `PageToken` `:36`, `LoadGuard` `:43`; framework page
+uses `Pages/Notifications/NotificationInbox.razor.cs:219`, `Pages/Auth/Sessions.razor.cs:92`,
+`Pages/Administration/RoleAdminList.razor.cs:121`; fitness rule
+`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Ui/ArchitectureRules.LifetimeTokens.cs:28`
+(missing root `:34-37`, minimum code-behind `:48-52`, message `:61-64`), base
+`Bases/Ui/LifetimeTokenConventionTestsBase.cs:13`, `:28-29`. `Common/LatestLoadGuard.cs:38`, 100-versus-101
+rationale `:6-9`, not-thread-safe contract `:33-35`, `Begin` `:50-59`, `IsCurrent` `:67`; direct uses
+`Pages/Administration/RoleAdminEdit.razor.cs:42`, `:162`, `:174`; ADC detail pages per
+`Website/docs-src/onboarding/00-dependency-manifest.md:3997`, `:4274`, `:4566`; onboarding treatment
+`Website/docs-src/onboarding/group-15-common-ui-framework.md:177-206`. The code sketch passes the token by
+name, as `Common/ResultUiExtensions.cs:47` does. Header: Rubric and ADR cells aligned this run to the series
+index row (`Website/docs-src/articles/README.md:47`: sections 18, 19, 20, 22, 23; ADRs 056/067). History:
+first written with the 2026-07-27 responsive section, IUIModule section added 2026-08-07 (ADR-067), audit
+passes 2026-08-14, 2026-08-20, 2026-09-19 (v1.205.0) and 2026-10-02 (v1.221.0); this 2026-10-08 pass adds
+the fifth `IUIModule` member, the session-aware refresher, Polly replay safety, the inline-style guard, the
+`HasMoreAfter` stop, the 40-fact test count and the component-lifetime section.*
 
 - Full series index: https://ivanball.github.io/writing.html

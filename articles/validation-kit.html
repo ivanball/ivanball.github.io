@@ -109,7 +109,7 @@
         <li><a href="validation-kit.html" aria-current="page">08 · Compose validators, don&#39;t copy them</a></li>
         <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
         <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
-        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, four engines</a></li>
         <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
         <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
         <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
@@ -217,8 +217,8 @@
           <p>The address family is the worked example of composition all the way up. <code>AddressValidationRules.cs</code> ships
           six field fragments (<code>AddressLine1Rules&lt;T&gt;</code> through <code>CountryRules&lt;T&gt;</code>), and <code>AddressValidator</code> is a
           composite <code>AbstractValidator&lt;Address&gt;</code> whose entire body is six <code>Include(...)</code> calls. It owns <strong>no</strong>
-          <code>RuleFor</code> chains of its own. The address fragments also pull their length limits from <code>AddressInvariants</code>
-          constants in <code>MMCA.Common.Shared</code> rather than baking numeric literals into the rule, so the domain
+          <code>RuleFor</code> chains of its own. The address fragments also pull their length limits from the
+          <code>AddressInvariants</code> fields in <code>MMCA.Common.Shared</code> rather than baking numeric literals into the rule, so the domain
           invariant and its validator agree by construction. The max length for a city lives in exactly one place
           across the entire solution, and the validator references it.</p>
           <h2 id="one-validator-for-the-request-free-for-the-command">One validator for the request, free for the command</h2>
@@ -316,7 +316,7 @@
           story, and a reviewer must check both altitudes to know a command is fully guarded.</li>
           <li><strong>It overlaps the domain factory at the edges.</strong> &quot;Required&quot; and &quot;max length&quot; can be expressed both as a
           validator fragment and as a domain invariant. The kit keeps the structural copy in the validator and
-          sources address limits from the same <code>AddressInvariants</code> constants the domain uses, so the two agree by
+          sources address limits from the same <code>AddressInvariants</code> fields the domain uses, so the two agree by
           construction. Where a field has no shared constant, keeping the two in sync is a discipline, not a
           compiler guarantee.</li>
           </ul>
