@@ -15,9 +15,9 @@ the same one that runs through the whole codebase: application and domain code t
 forwarder) is chosen at the composition root, and a default is always registered so nothing has to
 be configured for DI to resolve. [`NullPushNotificationSender`](#nullpushnotificationsender) and
 [`NullLiveChannelPublisher`](#nulllivechannelpublisher) are no-ops
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:325-326`),
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:326-327`),
 `IEmailSender` defaults to the real [`SmtpEmailSender`](#smtpemailsender)
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:324`), and
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:325`), and
 `INotificationRecipientProvider` gets its default in the Application layer
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/DependencyInjection.cs:75`).
 
@@ -27,7 +27,7 @@ they have different durability guarantees:
 1. **The durable in-app inbox.** Every send writes one [`UserNotification`](#usernotification) row
    per recipient, so a user who was offline at send time still sees the message when they next open
    their inbox
-   (`MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/PushNotifications/UseCases/Send/SendPushNotificationHandler.cs:124-132`).
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/PushNotifications/UseCases/Send/SendPushNotificationHandler.cs:105-113`).
    This is the persistent half of the two-channel model ([ADR-024](https://ivanball.github.io/docs/adr/024-push-notifications.html)).
 2. **The transient SignalR push.** [`IPushNotificationSender`](#ipushnotificationsender) fans the
    same message out to any connections the recipient has open right now via the
@@ -45,7 +45,7 @@ they have different durability guarantees:
    live layer for poll and question updates. This rides the same hub but through
    [`ILiveChannelPublisher`](#ilivechannelpublisher) and the hub's `JoinChannel`/`LeaveChannel`
    group membership rather than per-user targeting
-   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/NotificationHub.cs:118-143`).
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/NotificationHub.cs:127-152`).
 
 A fifth transport, plain **email**, is present as [`IEmailSender`](#iemailsender) /
 [`SmtpEmailSender`](#smtpemailsender) (MailDev locally, real SMTP in production) but is a
@@ -156,13 +156,13 @@ write and the recipient writes would leave a committed row carrying the key that
 delivered, and every retry of that key would then report success forever
 (`SendPushNotificationCommand.cs:11-19`). Inside that transaction the handler runs a deliberate
 ordering
-(`MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/PushNotifications/UseCases/Send/SendPushNotificationHandler.cs:41-176`):
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/PushNotifications/UseCases/Send/SendPushNotificationHandler.cs:52-159`):
 
 - **Dedup lookup first** (lines 39-50). When a key is present the handler requeries for an existing
   [`PushNotification`](#pushnotification) with that key and, on a hit, returns it mapped to a DTO
   without sending anything again. The lookup goes through
   `unitOfWork.GetReadRepository<...>()` rather than an injected repository, so it reads the same
-  data source the write below targets (`SendPushNotificationHandler.cs:194-203`).
+  data source the write below targets (`SendPushNotificationHandler.cs:188-197`).
 - **Resolve recipients** through [`INotificationRecipientProvider`](#inotificationrecipientprovider),
   failing early with a `PushNotification.NoRecipients` validation error when the set is empty
   (lines 52-62).
@@ -215,11 +215,11 @@ paths together. It owns the format (`event:{id}` via `ForEvent`, `session:{id}` 
 both rendered under `InvariantCulture` so a culture with non-ASCII digits cannot produce a key the
 guard rejects) and, in the same file, the regular expression that validates one:
 `^(event|session):[0-9]+$`
-(`MMCA.Common/Source/Core/MMCA.Common.Shared/Notifications/NotificationScopeKey.cs:32,37-44,51`),
+(`MMCA.Common/Source/Core/MMCA.Common.Shared/Notifications/NotificationScopeKey.cs:32,44-51,58`),
 compiled once through a source-generated `[GeneratedRegex]` with a one-second match timeout
-(`NotificationScopeKey.cs:57`). That constant is also the default of
+(`NotificationScopeKey.cs:64`). That constant is also the default of
 [`PushNotificationSettings`](group-14-module-system-composition.md#pushnotificationsettings)`.ChannelKeyPattern`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/PushNotificationSettings.cs:29`), which
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/PushNotificationSettings.cs:33`), which
 is what [`NotificationHub`](#notificationhub) enforces before a client may join a group. Producer and
 guard therefore cannot drift apart: keeping the format and its pattern in one type is the whole point
 of the class ([Rubric §15, Best Practices & Code Quality]).
@@ -311,13 +311,13 @@ It **caps concurrent connections per user** on the replica it runs on, counting 
 dictionary and refusing the surplus with a `HubException`, then handing the slot straight back so the
 refused connections cannot lock the account out once aborted ones drain (the cap is
 `PushNotificationSettings.MaxConnectionsPerUser`, 20 by default:
-`NotificationHub.cs:46-51,56-72,90-109`,
-`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/PushNotificationSettings.cs:42`).
+`NotificationHub.cs:49-58,63-81,99-118`,
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/PushNotificationSettings.cs:46`).
 It **manages channel (SignalR group) membership** through `JoinChannel`/`LeaveChannel`, validating
 each channel key against the configured pattern with a cached, one-second-timeout `Regex` so a bad
 key throws `HubException` rather than opening an injection or ReDoS hole
-(`NotificationHub.cs:41-44,166-176`). And before it creates that group membership it consults an
-**entitlement check** (`NotificationHub.cs:121-122,145-164`) ([Rubric §11, Security]).
+(`NotificationHub.cs:44-47,175-185`). And before it creates that group membership it consults an
+**entitlement check** (`NotificationHub.cs:130-131,154-173`) ([Rubric §11, Security]).
 
 That check is `IChannelJoinAuthorizer`
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Notifications/IChannelJoinAuthorizer.cs:16`),
@@ -326,7 +326,7 @@ it exists is that **shape is not entitlement**: the pattern proves a key is well
 caller may read what is published to it, and the keys are consecutive integers, so enumerating them
 costs nothing. A host that publishes anything channel-scoped which is not public to every signed-in
 user has to register one. ADC does, per connection in the Notification host
-(`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:231`), and the implementation is
+(`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:239`), and the implementation is
 [`LiveChannelJoinAuthorizer`](#livechanneljoinauthorizer): it refuses an unauthenticated principal,
 admits the privileged read audience without a lookup (`ConferenceReadAudience.PrivilegedRoles`, the
 same Organizer / ContentEditor pair that reads the unfiltered catalog through REST), and otherwise
@@ -359,7 +359,7 @@ The live channel is where the extracted-service topology shows through
 ([Rubric §7, Microservices Readiness]). In a monolith the default
 [`NullLiveChannelPublisher`](#nulllivechannelpublisher) is registered, and a host that maps the hub
 swaps in the real [`SignalRLiveChannelPublisher`](#signalrlivechannelpublisher)
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:326`,
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:327`,
 `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:66`). In extracted ADC, Engagement is a *different* process from the
 one that owns the WebSocket, so Engagement's live layer depends on
 [`ILiveChannelPublisher`](#ilivechannelpublisher) as usual but the composition root `Replace`s the
@@ -382,19 +382,19 @@ Serving both a WebSocket and an h2c gRPC ingress from one host is the mixed-endp
 named `grpc` (8081 in the container, 5996 locally) is declared in the `Kestrel:Endpoints` config
 section and resolved by peers as `_grpc.notification` through the
 `services__notification__grpc__0` entry
-(`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:58-73`). The host maps the hub
-itself at `/hubs/notifications` via `MapNotificationHub()` (`Program.cs:272-276`, the path coming
+(`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:57-72`). The host maps the hub
+itself at `/hubs/notifications` via `MapNotificationHub()` (`Program.cs:280-284`, the path coming
 from `PushNotificationSettings.HubPath`,
-`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/PushNotificationSettings.cs:17`) and both
-gRPC services on that dedicated endpoint (`Program.cs:285,293`). The two gRPC surfaces are **not**
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/PushNotificationSettings.cs:21`) and both
+gRPC services on that dedicated endpoint (`Program.cs:293,301`). The two gRPC surfaces are **not**
 protected alike, and the difference is deliberate: the live-channel ingress is mapped
-`.AllowAnonymous()` (`Program.cs:285`) because it is reachable only on the internal service network
+`.AllowAnonymous()` (`Program.cs:293`) because it is reachable only on the internal service network
 and its caller (Engagement's
 [`LiveChannelPublishProcessor`](group-22-engagement-module.md#livechannelpublishprocessor) background
 drain) has no HttpContext and forwards no bearer
 (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Grpc/LiveChannelGrpcService.cs:16-23`),
 while the export rpc is mapped with `.RequireAuthorization()` because its response carries personal
-data keyed by a raw user id (`Program.cs:289-293`).
+data keyed by a raw user id (`Program.cs:297-301`).
 
 ## The module host, native-device registration, and the privacy export
 
@@ -585,7 +585,7 @@ without any of the four ever taking the others down, and without a retried reque
 - **Why it's built this way**: keeping the interface in Application (and the SMTP dependency in
   Infrastructure) is what lets a test host register a no-op sender and production register
   [SmtpEmailSender](#smtpemailsender). Registration is `TryAddTransient<IEmailSender, SmtpEmailSender>()`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:324`), so the `TryAdd` lets
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:325`), so the `TryAdd` lets
   a host pre-register its own sender and win.
 - **Where it's used**: the framework's own consumer is the password-reset flow:
   [ForgotPasswordHandlerBase<TUser, TCommand>](group-14-module-system-composition.md#forgotpasswordhandlerbasetuser-tcommand)
@@ -639,14 +639,14 @@ without any of the four ever taking the others down, and without a retried reque
   of the business of knowing each live event's schema; the presentation and UI layers agree on the
   contract. Non-delivery to absent clients is the intended semantics, not a gap. The default registration
   is the inert [NullLiveChannelPublisher](#nulllivechannelpublisher)
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:326`), replaced by
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:327`), replaced by
   [SignalRLiveChannelPublisher](#signalrlivechannelpublisher) when a host opts into the SignalR wiring
   (same file, line 632).
 - **Where it's used**: ADC's conference-day live layer does **not** inject it into command handlers.
   Handlers enqueue a work item and a single-reader hosted drain,
   [LiveChannelPublishProcessor](group-22-engagement-module.md#livechannelpublishprocessor), resolves the
   publisher from a fresh scope per work item and calls `PublishAsync` in FIFO order
-  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/Live/LiveChannelPublishProcessor.cs:50-56`).
+  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/Live/LiveChannelPublishProcessor.cs:130-136`).
   `[Rubric §29, Resilience & Business Continuity]` assesses whether a degraded dependency stays contained:
   the drain wraps each publish in [BestEffort](group-03-querying-specifications.md#besteffort)
   (`LiveChannelPublishProcessor.cs:45-58`), which turns any non-cancellation failure into one Warning log
@@ -691,7 +691,7 @@ without any of the four ever taking the others down, and without a retried reque
   so the `TryAdd` finds the slot already taken.
 - **Where it's used**: [SendPushNotificationHandler](#sendpushnotificationhandler) takes it as a primary
   constructor dependency
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/PushNotifications/UseCases/Send/SendPushNotificationHandler.cs:34`),
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/PushNotifications/UseCases/Send/SendPushNotificationHandler.cs:45`),
   resolves the audience, then hands it to [IPushNotificationSender](#ipushnotificationsender). Until an
   app registers its own provider,
   [NullNotificationRecipientProvider](#nullnotificationrecipientprovider) returns an empty audience.
@@ -722,14 +722,14 @@ without any of the four ever taking the others down, and without a retried reque
 - **Why it's built this way**: three targeting methods rather than one "audience" parameter keeps each
   call site's intent explicit and lets the SignalR implementation map user-targeting to hub groups
   directly. The default registration is the no-op
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:325`) so a host with no
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:326`) so a host with no
   real-time transport still resolves the port; the SignalR wiring replaces it with `AddTransient` (same
   file, line 631), a deliberate override rather than a `TryAdd`.
 - **Where it's used**: [SendPushNotificationHandler](#sendpushnotificationhandler) fans a message out
-  through this port (`SendPushNotificationHandler.cs:35`) after persisting the
+  through this port (`SendPushNotificationHandler.cs:46`) after persisting the
   [PushNotification](#pushnotification) record and its per-user
   [UserNotification](#usernotification) rows. That handler also carries a second, separate delivery leg,
-  `INativePushSender` (`SendPushNotificationHandler.cs:36`), which is the OS-level channel of
+  `INativePushSender` (`SendPushNotificationHandler.cs:47`), which is the OS-level channel of
   [ADR-044](https://ivanball.github.io/docs/adr/044-native-push-delivery.html) rather than part of this
   port.
 
@@ -953,10 +953,10 @@ without any of the four ever taking the others down, and without a retried reque
   filtered to `query.UserId`, ordered by `pn.CreatedOn` descending then `un.Id` descending (line 51),
   projected into `UserNotificationDTO` (lines 48-61, mapping id, push id, title, body, `IsRead`, `ReadOn`,
   and `SentOn = pn.CreatedOn`); count the joined set (line 63); page it with `Skip(skip).Take(take)` and
-  materialize (lines 65-67); wrap total, page size and floored page number into
-  [PaginationMetadata](group-01-result-error-handling.md#paginationmetadata) (line 71) and return a
+  materialize (lines 65-67); wrap total, the clamped requested page size (`Math.Clamp(query.PageSize, 1, MaxPageSize)`) and floored page number into
+  [PaginationMetadata](group-01-result-error-handling.md#paginationmetadata) (line 73) and return a
   successful [PagedCollectionResult<T>](group-01-result-error-handling.md#pagedcollectionresultt)
-  (line 72).
+  (line 74).
 - **Why it's built this way**: both repositories are read through `TableNoTracking`, which is correct for
   a read (no change-tracking overhead since nothing is saved). Server-side projection into the DTO means
   only the needed columns cross the wire, and the count runs against the *same* joined expression so the
@@ -966,8 +966,10 @@ without any of the four ever taking the others down, and without a retried reque
   did. The `un.Id` tie-break after `CreatedOn` makes the sort a total order: without it, two notifications
   created in the same instant have no defined relative order, so they could swap places between two
   `OFFSET` pages and one would repeat while the other vanished (the comment on lines 46-47 states exactly
-  that). The metadata reports the clamped `take` and the floored page number (line 71) so the response
-  describes the page actually served: the comment on lines 69-70 makes that explicit, and it matters
+  that). The metadata reports the clamped requested page size and the floored page number (line 73) so the response
+  describes the page actually served. It deliberately uses the clamped request rather than `take`: a page
+  past the 32-bit offset range reads nothing (`take` 0), and a zero page size would report zero pages for a
+  non-empty inbox (the comment on lines 69-72 says so). It matters
   because the `[Range]` attributes at the API boundary (`NotificationInboxController.cs:44-45`) do not
   protect a direct in-process caller.
 - **Where it's used**: injected as a closed `IQueryHandler` into [InboxController](#inboxcontroller)
@@ -1031,10 +1033,10 @@ without any of the four ever taking the others down, and without a retried reque
   each row would have kept. The repository contract spells out the cost of the bypass: no domain events,
   global query filters still apply to the predicate, and the update runs on the ambient transaction when
   one is active
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IRepository.cs:460-481`).
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IRepository.cs:460-483`).
   Audit fields are not lost either: because `ExecuteUpdate` skips the save pipeline's audit interceptor,
   `EFRepository` stamps `LastModifiedOn` and `LastModifiedBy` itself unless the caller set them
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFRepository.cs:140-154`).
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFRepository.cs:141-155`).
   `[Rubric §12, Performance & Scalability]`: one statement regardless of inbox size, with no
   materialization. `[Rubric §4, DDD]` assesses whether state changes go through the aggregate rather than
   around it: here they go around it on purpose, and the invariant `MarkAsRead` protects (an already-read
@@ -1099,8 +1101,9 @@ without any of the four ever taking the others down, and without a retried reque
   `CreatedOn` descending then `Id` descending with `Skip`/`Take` and materialize the entities through the
   executor (lines 35-41); run them through `dtoMapper.MapToDTOs` (line 43); build
   [PaginationMetadata](group-01-result-error-handling.md#paginationmetadata) from the total, the clamped
-  `take` and the floored page number (line 47); return a successful
-  [PagedCollectionResult<T>](group-01-result-error-handling.md#pagedcollectionresultt) (line 49).
+  requested page size (`Math.Clamp(query.PageSize, 1, MaxPageSize)`, not `take`, so a page past the offset
+  range that reads nothing still reports a non-zero size) and the floored page number (line 49); return a
+  successful [PagedCollectionResult<T>](group-01-result-error-handling.md#pagedcollectionresultt) (line 51).
 - **Why it's built this way**: the `ThenByDescending(n => n.Id)` tie-break (line 38) makes the order
   total, so two notifications sent in the same instant cannot repeat or skip across `OFFSET` pages, the
   same guarantee the inbox handler gets from its `un.Id` tie-break. History has no per-user state, so
@@ -1242,25 +1245,29 @@ without any of the four ever taking the others down, and without a retried reque
   strands. This type collapses both halves onto one static class (`NotificationScopeKey.cs:11-19`).
   The `Pattern` constant (`NotificationScopeKey.cs:32`) is literally the default value of
   `PushNotificationSettings.ChannelKeyPattern`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/PushNotificationSettings.cs:29`), the
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/PushNotificationSettings.cs:33`), the
   regex [NotificationHub](#notificationhub) enforces before a client may join a group
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/NotificationHub.cs:169`), so every key the
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/NotificationHub.cs:178`), so every key the
   factories produce is a key the hub accepts by construction. `[Rubric §15, Best Practices & Code
   Quality]` assesses whether shared literals are centralized: the alternative here was a hand-written
   interpolation at each call site, which is what this replaced. `[Rubric §12, Performance &
-  Scalability]` shows in `[GeneratedRegex]` (`NotificationScopeKey.cs:57`): the regex is compiled at
+  Scalability]` shows in `[GeneratedRegex]` (`NotificationScopeKey.cs:64`): the regex is compiled at
   build time by the source generator rather than parsed at runtime, and it carries a 1000 ms match
   timeout. `[Rubric §27, i18n]` is the subtle one: `ForEvent` and `ForSession` format the identifier
-  under `CultureInfo.InvariantCulture` (`NotificationScopeKey.cs:38,44`) so a thread culture with
+  under `CultureInfo.InvariantCulture` (`NotificationScopeKey.cs:45,51`) so a thread culture with
   non-ASCII digits cannot produce a key that its own `Pattern` would reject.
-- **Walkthrough**: three constants first, `EventPrefix = "event"` (line 23), `SessionPrefix = "session"`
-  (line 26), and `Pattern = "^(event|session):[0-9]+$"` (line 32). Then two factories,
-  `ForEvent(long)` (lines 37-38) and `ForSession(long)` (lines 43-44), both built with
+- **Walkthrough**: four constants first, `EventPrefix = "event"` (line 23), `SessionPrefix = "session"`
+  (line 26), `Pattern = "^(event|session):[0-9]+$"` (line 32), and `MetadataKey = "scopeKey"` (line 39),
+  the key under which a live (SignalR) notification's metadata carries its scope key so a client can
+  leave a notification for another scope out of its toast and badge; the sender writes it
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/PushNotifications/UseCases/Send/SendPushNotificationHandler.cs:181`)
+  and an unscoped send carries no metadata at all. Then two factories,
+  `ForEvent(long)` (lines 44-45) and `ForSession(long)` (lines 50-51), both built with
   `string.Create(CultureInfo.InvariantCulture, $"...")`, which formats into a stack buffer without an
-  intermediate allocation. `IsValid(string?)` (lines 51-52) short-circuits on null or empty before
+  intermediate allocation. `IsValid(string?)` (lines 58-59) short-circuits on null or empty before
   running the generated matcher. The matcher itself is the private partial property `ScopeKeyRegex`
-  (lines 57-58), declared `[GeneratedRegex(Pattern, RegexOptions.ExplicitCapture,
-  matchTimeoutMilliseconds: 1000)]`; the comment above it (lines 54-56) records why `ExplicitCapture` is
+  (lines 64-65), declared `[GeneratedRegex(Pattern, RegexOptions.ExplicitCapture,
+  matchTimeoutMilliseconds: 1000)]`; the comment above it (lines 61-63) records why `ExplicitCapture` is
   safe, it only suppresses the unused capture group of the alternation and leaves the pattern text and
   `IsMatch` semantics identical.
 - **Why it's built this way**: a scope key crosses three subsystems (the send request, the persisted
@@ -1314,7 +1321,7 @@ without any of the four ever taking the others down, and without a retried reque
   bound is exactly that. `[Rubric §24, Forms/Validation/UX Safety]`: the UI validation and the server
   validation cannot disagree because they read the same constant, and the framework's send page test
   exercises the boundary through it
-  (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Pages/Notifications/NotificationSendTests.cs:114`).
+  (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Pages/Notifications/NotificationSendTests.cs:139`).
 - **Walkthrough**: two positional parameters (line 6); two `public const int` limits (lines 15, 21);
   and `ScopeKey` as a nullable `init` property (line 28) rather than a third positional parameter,
   which the comment (lines 23-27) notes was deliberate so every existing caller keeps compiling. Null,
@@ -1629,8 +1636,8 @@ without any of the four ever taking the others down, and without a retried reque
     blast radius of a surface that cannot authenticate its caller.
 - **Why it's built this way (security posture)**: there is deliberately **no `[Authorize]`**, and the
   endpoint is mapped with an explicit `.AllowAnonymous()`
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:285`). The comment above it
-  (`Program.cs:281-284`) says why the opt-out is stated rather than implied: the framework's fallback
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:293`). The comment above it
+  (`Program.cs:289-292`) says why the opt-out is stated rather than implied: the framework's fallback
   authorization policy gates any endpoint that declares nothing (SEC-Common-16), which would have silenced
   the whole live layer. `[Rubric §11, Security]`:
   the doc comment (`LiveChannelGrpcService.cs:16-23`) gives two reasons. First, this surface is reachable
@@ -1641,16 +1648,16 @@ without any of the four ever taking the others down, and without a retried reque
   background drain, which runs with no `HttpContext` and therefore forwards no bearer token.
   Transport-wise it rides the [ADR-012](https://ivanball.github.io/docs/adr/012-grpc-host-transport.html)
   mixed-endpoint profile: Notification keeps its default endpoint `Http1AndHttp2` for SignalR WebSockets
-  (`Program.cs:73`) and serves this h2c gRPC ingress on a dedicated `Http2`-only endpoint named `grpc`
+  (`Program.cs:72`) and serves this h2c gRPC ingress on a dedicated `Http2`-only endpoint named `grpc`
   (port 8081 in the container, 5996 locally), declared in the `Kestrel:Endpoints` config section rather
-  than in code; the full reasoning is spelled out at `Program.cs:58-72`.
-- **Where it's used**: mapped by the Notification service's `Program.cs` (`Program.cs:285`); invoked by
+  than in code; the full reasoning is spelled out at `Program.cs:57-71`.
+- **Where it's used**: mapped by the Notification service's `Program.cs` (`Program.cs:293`); invoked by
   [LiveChannelPublisherGrpcAdapter](#livechannelpublishergrpcadapter) running inside Engagement.
 
 ---
 
 ### LiveChannelPublisherGrpcAdapter
-> MMCA.ADC.Notification.Contracts · `MMCA.ADC.Notification.Contracts` · `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Contracts/LiveChannelPublisherGrpcAdapter.cs:20` · Level 1 · class (sealed partial)
+> MMCA.ADC.Notification.Contracts · `MMCA.ADC.Notification.Contracts` · `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Contracts/LiveChannelPublisherGrpcAdapter.cs:29` · Level 1 · class (sealed)
 
 - **What it is**: the **client** half of the live-channel ingress. It is a hand-written adapter that
   implements the framework port [ILiveChannelPublisher](#ilivechannelpublisher) on top of the generated
@@ -1658,49 +1665,54 @@ without any of the four ever taking the others down, and without a retried reque
   actually travels to the Notification host over the wire.
 - **Depends on**: [ILiveChannelPublisher](#ilivechannelpublisher) (Level 0, the implemented port); the
   generated `LiveChannelPushService.LiveChannelPushServiceClient` from the `.Contracts` `.proto`
-  (injected via the primary constructor,
-  `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Contracts/LiveChannelPublisherGrpcAdapter.cs:20-22`);
-  `ILogger<LiveChannelPublisherGrpcAdapter>` and the source-generated `[LoggerMessage]` pattern. It talks
-  to [LiveChannelGrpcService](#livechannelgrpcservice) on the far side.
+  (its only constructor dependency, injected via the primary constructor,
+  `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Contracts/LiveChannelPublisherGrpcAdapter.cs:29-30`).
+  It talks to [LiveChannelGrpcService](#livechannelgrpcservice) on the far side.
 - **Concept introduced, the hand-written adapter over a generated gRPC client.** `[Rubric §1, SOLID]`
   assesses dependency inversion: Engagement's live handlers depend only on `ILiveChannelPublisher`, and
   whether that resolves to the in-process SignalR publisher or this remote adapter is a composition-root
   decision (class doc, `LiveChannelPublisherGrpcAdapter.cs:7-12`). `[Rubric §7, Microservices Readiness]`
   assesses whether a module survives extraction: this class is exactly the piece that makes the extracted
   topology work without touching a single handler.
-  `[Rubric §29, Resilience & Business Continuity]` assesses graceful degradation, and this adapter is the
-  clearest example in the group: live channel events are ephemeral by contract
-  ([ADR-039](https://ivanball.github.io/docs/adr/039-live-channel-push.html)), so **every** failure
-  (transport, name resolution, an open circuit) is logged and swallowed, never rethrown
-  (`LiveChannelPublisherGrpcAdapter.cs:13-18`). A publishing command can therefore never fail because
-  Notification is down or slow.
+  `[Rubric §29, Resilience & Business Continuity]` assesses graceful degradation, and the policy is
+  enforced one layer up. Live channel events are ephemeral by contract
+  ([ADR-039](https://ivanball.github.io/docs/adr/039-live-channel-push.html)), but a failure
+  (transport, name resolution, an open circuit) **propagates** from this adapter
+  (`LiveChannelPublisherGrpcAdapter.cs:13-28`, ADR-096). The only caller, Engagement's
+  `LiveChannelPublishProcessor`, runs every publish inside `BestEffort.ExecuteAsync` off the request
+  path, which swallows the failure, logs one Warning and counts it on `besteffort.dispatch.failed`
+  (operation `live-channel-publish:*`); swallowing in the adapter as well would hide every push failure
+  from that metric ([ADR-121](https://ivanball.github.io/docs/adr/121-ephemeral-in-process-work-queue.html)).
+  A publishing command never awaits this adapter, so a down Notification service still cannot fail it.
 - **Walkthrough**
-  - `PushDeadline` (`LiveChannelPublisherGrpcAdapter.cs:26`), a private `static readonly TimeSpan` of
+  - `PushDeadline` (`LiveChannelPublisherGrpcAdapter.cs:34`), a private `static readonly TimeSpan` of
     **2 seconds**. The comment above it (`:24-25`) explains the choice: it is deliberately tighter than
     the shared resilience pipeline's 30-second attempt timeout, because a live event that takes longer
-    than two seconds is stale anyway and the publishing request should not be held hostage waiting for it.
+    than two seconds is stale anyway and the publishing drain should not be held hostage waiting for it.
   - `PublishAsync(channelKey, eventName, payloadJson, cancellationToken)`
-    (`LiveChannelPublisherGrpcAdapter.cs:29`) builds a `PushToChannelRequest` from the three opaque
+    (`LiveChannelPublisherGrpcAdapter.cs:37`) builds a `PushToChannelRequest` from the three opaque
     strings and awaits `client.PushToChannelAsync(...)` with `deadline: DateTime.UtcNow.Add(PushDeadline)`
     and the caller's token (`:33-41`).
-  - The `catch (Exception ex)` (`:44`) sits under a justified `#pragma warning disable CA1031`
-    (`:43`, restored at `:45`) whose justification text is the contract itself: best-effort, no failure
-    may escape. It calls `LogPushFailed(ex, channelKey, eventName)` (`:47`), a source-generated
-    `[LoggerMessage]` at **Warning** level (`:51-52`). `[Rubric §13, Observability]`: the failure is
-    invisible to the caller but not to the operator.
+  - The only catch is a filtered `catch (RpcException ex) when (ex.StatusCode == StatusCode.Cancelled
+    && cancellationToken.IsCancellationRequested)` (`:51`), which rethrows as
+    `OperationCanceledException(ex.Status.Detail, ex, cancellationToken)` (`:53`). The gRPC client reports
+    the caller's own cancellation as a `Cancelled` `RpcException`, which `BestEffort` would otherwise count
+    as a failed push on every host shutdown. Every other failure leaves untouched, so
+    `[Rubric §13, Observability]` is served by the caller's one Warning and metric rather than a log line
+    here (the adapter no longer takes an `ILogger`).
 - **Why it's built this way**: writing the adapter by hand (rather than letting consumers inject the
-  generated client directly) is what keeps the gRPC dependency out of the Engagement handlers, and it is
-  the only place the best-effort policy has to be stated. Compare its sibling
-  [UserNotificationExportServiceGrpcAdapter](#usernotificationexportservicegrpcadapter), which is
-  deliberately the opposite: there, transport failures **do** propagate, because the caller needs to know
-  the export section is unavailable.
+  generated client directly) is what keeps the gRPC dependency out of the Engagement handlers. The
+  best-effort policy is stated once, in the caller's `BestEffort` wrapper, so a swallow here would only
+  blind that wrapper. Its sibling
+  [UserNotificationExportServiceGrpcAdapter](#usernotificationexportservicegrpcadapter) also lets
+  transport failures propagate, because the caller needs to know the export section is unavailable.
 - **Where it's used**: registered by the Notification.Contracts
   [DependencyInjection](#dependencyinjection-2)'s `AddNotificationLiveChannelClient`, which uses
   `services.Replace(...)` so the adapter overwrites the framework's
   [NullLiveChannelPublisher](#nulllivechannelpublisher) default
   (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Contracts/DependencyInjection.cs:48`). The one caller
   today is the Engagement service's composition root
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:285`).
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:291`).
 
 ---
 
@@ -1733,7 +1745,7 @@ without any of the four ever taking the others down, and without a retried reque
   best-effort by design).
 - **Where it's used**: registered as the framework default with
   `services.TryAddTransient<ILiveChannelPublisher, NullLiveChannelPublisher>()`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:326`) so the port is always
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:327`) so the port is always
   resolvable; `AddPushNotifications` adds the SignalR implementation over it
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:66`), and in ADC Engagement's composition root `services.Replace(...)`
   overwrites it with the [LiveChannelPublisherGrpcAdapter](#livechannelpublishergrpcadapter)
@@ -1764,7 +1776,7 @@ without any of the four ever taking the others down, and without a retried reque
   `AddPushNotifications()`. The send handler always calls the port; whether anything reaches a browser is
   a composition-root decision.
 - **Where it's used**: registered as the default `IPushNotificationSender` by `AddInfrastructure`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:325`); superseded by the
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:326`); superseded by the
   SignalR sender in any host that calls `AddPushNotifications`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:65`).
 
@@ -1887,7 +1899,7 @@ without any of the four ever taking the others down, and without a retried reque
   would be a breaking public-API change. Unlike push, email has **no** null-object default:
   `SmtpEmailSender` itself is what `AddInfrastructure` registers as `IEmailSender`
   (`services.TryAddTransient<IEmailSender, SmtpEmailSender>()`,
-  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:324`), so a host that never
+  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:325`), so a host that never
   configures SMTP settings still resolves a real sender that will fail at send time rather than silently
   no-op.
 - **Where it's used**: injected as `IEmailSender` by callers (the port, not this class); the transient
@@ -1933,13 +1945,13 @@ without any of the four ever taking the others down, and without a retried reque
     name. Shape is not entitlement, though (SEC-ADC-25 / the join-authorizer note below): a well-formed
     key alone does not mean the caller is entitled to it, which is what
     [IChannelJoinAuthorizer](group-07-persistence-ef-core.md#ichanneljoinauthorizer) closes when a host
-    registers one. `OnConnectedAsync`/`OnDisconnectedAsync` (`NotificationHub.cs:52-84`) additionally cap
+    registers one. `OnConnectedAsync`/`OnDisconnectedAsync` (`NotificationHub.cs:59-93`) additionally cap
     live connections per user identifier **on this replica** at `PushNotificationSettings.MaxConnectionsPerUser`
-    (default 20, `PushNotificationSettings.cs:42`), the same per-process bound the in-memory rate limiters
+    (default 20, `PushNotificationSettings.cs:46`), the same per-process bound the in-memory rate limiters
     use: it constrains what one token can do to one process, the resource actually being exhausted.
   - `[Rubric §12, Performance & Scalability]` assesses whether hot paths avoid repeated work. The
     compiled `Regex` is cached in a static `ConcurrentDictionary` keyed by the pattern string
-    (`NotificationHub.cs:43-44`, offsets unchanged in this span) so join/leave calls never recompile it,
+    (`NotificationHub.cs:46-47`, offsets unchanged in this span) so join/leave calls never recompile it,
     and each match runs under a 1-second timeout (`ChannelKeyMatchTimeout`) to bound worst-case matching
     (a defense against catastrophic-backtracking, ReDoS-style input).
 - **Walkthrough**
@@ -1954,38 +1966,45 @@ without any of the four ever taking the others down, and without a retried reque
     drifting on a magic string.
   - `ChannelKeyMatchTimeout` (1 second) and the `ChannelKeyRegexCache` (`StringComparer.Ordinal`) back the
     validation helper.
-  - `ConnectionsPerUser` (`NotificationHub.cs:51`): a static `ConcurrentDictionary<string, int>`,
+  - `ConnectionsPerUser` (`NotificationHub.cs:58`): a static `ConcurrentDictionary<string, int>`,
     `StringComparer.Ordinal`, tracking live connection count per user identifier on this replica.
-  - `OnConnectedAsync` (`NotificationHub.cs:54-72`): when `MaxConnectionsPerUser` is positive and
+  - `SlotItemKey` (`NotificationHub.cs:42`): a private const, `"mmca.hub.slot"`, the key of the
+    per-connection marker in `Context.Items` that says this connection holds a counted slot.
+  - `OnConnectedAsync` (`NotificationHub.cs:61-81`): when `MaxConnectionsPerUser` is positive and
     `Context.UserIdentifier` is set, atomically increments the count with `AddOrUpdate`
-    (`:61`); if the new count exceeds the cap, it gives the slot straight back via `Decrement`
-    (`:66`, so a refused connection cannot keep counting against the user and lock it out once the
+    (`:68`); if the new count exceeds the cap, it gives the slot straight back via `Decrement`
+    (`:73`, so a refused connection cannot keep counting against the user and lock it out once the
     aborted ones drain) and throws `HubException("Too many concurrent connections for this account.")`
-    (`:67`); otherwise it calls `base.OnConnectedAsync()` (`:71`).
-  - `OnDisconnectedAsync` (`NotificationHub.cs:75-84`): decrements the caller's count, then calls
-    `base.OnDisconnectedAsync(exception)`.
-  - `Decrement(string userId)` (`NotificationHub.cs:90-109`): a lock-free loop over
+    (`:74`); otherwise it marks the connection with `Context.Items[SlotItemKey] = true` (`:77`) and
+    calls `base.OnConnectedAsync()` (`:80`).
+  - `OnDisconnectedAsync` (`NotificationHub.cs:84-93`): decrements the caller's count **only if** the
+    connection carries the marker (`Context.Items.Remove(SlotItemKey)`, `:87`), then calls
+    `base.OnDisconnectedAsync(exception)`. The guard exists because SignalR also runs
+    `OnDisconnectedAsync` for a connection whose `OnConnectedAsync` threw; releasing a slot for that
+    refused connection would erode the cap one refusal at a time (doc comment on `ConnectionsPerUser`,
+    `:52-57`).
+  - `Decrement(string userId)` (`NotificationHub.cs:99-118`): a lock-free loop over
     `TryGetValue`/`TryRemove`/`TryUpdate` that removes the entry entirely at zero, so the dictionary
     tracks only users who are actually connected rather than everyone who ever was.
-  - `JoinChannelAsync(string channelKey)` (`NotificationHub.cs:119`): attributed
+  - `JoinChannelAsync(string channelKey)` (`NotificationHub.cs:128`): attributed
     `[HubMethodName(JoinChannelMethod)]`, it validates the key via `EnsureValidChannelKey`
     (`:121`), then awaits `EnsureAuthorizedForChannelAsync(channelKey)` (`:122`) before calling
     `Groups.AddToGroupAsync(Context.ConnectionId, channelKey, Context.ConnectionAborted)` (`:127-128`).
-  - `LeaveChannelAsync(string channelKey)` (`NotificationHub.cs:136`):
+  - `LeaveChannelAsync(string channelKey)` (`NotificationHub.cs:145`):
     `[HubMethodName(LeaveChannelMethod)]`, validates then `Groups.RemoveFromGroupAsync(...)` with the same
     connection token (`:141-142`). Leaving is not re-checked against the authorizer.
-  - `EnsureAuthorizedForChannelAsync` (`NotificationHub.cs:149-164`): a no-op when `joinAuthorizer` is
+  - `EnsureAuthorizedForChannelAsync` (`NotificationHub.cs:158-173`): a no-op when `joinAuthorizer` is
     `null`; otherwise awaits `joinAuthorizer.CanJoinAsync(Context.User, channelKey, Context.ConnectionAborted)`
     and throws `HubException("Not authorized for this channel.")` on a `false` result, so a caller not
     entitled to the channel is refused before the group membership is created and never receives a single
     published payload.
   - Both `JoinChannelAsync`/`LeaveChannelAsync` take **no `CancellationToken` parameter**, and the comment
-    at `NotificationHub.cs:124-126` explains why: a hub method signature is the client-visible RPC
+    at `NotificationHub.cs:133-135` explains why: a hub method signature is the client-visible RPC
     contract bound by SignalR's dispatcher, so the cancellation token comes from the connection
     (`Context.ConnectionAborted`) instead, and the repo's `CancellationTokenConventionTests` carry an
     explicit exemption for it. `[Rubric §15, Best Practices & Code Quality]`: the convention is enforced
     by a test, and the deviation is documented at the deviation site.
-  - `EnsureValidChannelKey` (`NotificationHub.cs:166`): `GetOrAdd`s the cached `Regex` for
+  - `EnsureValidChannelKey` (`NotificationHub.cs:175`): `GetOrAdd`s the cached `Regex` for
     `settings.Value.ChannelKeyPattern`; an empty or non-matching key throws
     `HubException("Invalid channel key.")` (`:174`), which SignalR surfaces to the caller rather than
     tearing down the connection.
@@ -1995,7 +2014,7 @@ without any of the four ever taking the others down, and without a retried reque
   The thin hub plus a configured channel-key pattern is the framework default; the pattern lives in
   [PushNotificationSettings](group-14-module-system-composition.md#pushnotificationsettings) (it defaults
   to [NotificationScopeKey](#notificationscopekey)`.Pattern`,
-  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/PushNotificationSettings.cs:29`) so a host
+  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/PushNotificationSettings.cs:33`) so a host
   tunes which channels exist without touching code. The connection cap and the optional join authorizer
   are additive: neither changes the wire contract, and both are `null`/zero-safe so an existing host that
   configures neither keeps behaving exactly as before.
@@ -2003,9 +2022,9 @@ without any of the four ever taking the others down, and without a retried reque
   which reads the path from settings and only maps when push is enabled
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/SignalRExtensions.cs:22-31`); the default
   path is `/hubs/notifications`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/PushNotificationSettings.cs:17`), and in
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/PushNotificationSettings.cs:21`), and in
   ADC the Notification service calls it at
-  `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:276`. It is driven by
+  `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:284`. It is driven by
   [SignalRPushNotificationSender](#signalrpushnotificationsender) (per-user notification delivery) and
   [SignalRLiveChannelPublisher](#signalrlivechannelpublisher) (ephemeral channel events), both via
   `IHubContext<NotificationHub>`. `AddPushNotifications` registers the `IUserIdProvider`
@@ -2177,7 +2196,7 @@ without any of the four ever taking the others down, and without a retried reque
 ---
 
 ### SendPushNotificationHandler
-> MMCA.Common.Application · `MMCA.Common.Application.Notifications.PushNotifications.UseCases.Send` · `MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/PushNotifications/UseCases/Send/SendPushNotificationHandler.cs:32` · Level 9 · class (sealed partial)
+> MMCA.Common.Application · `MMCA.Common.Application.Notifications.PushNotifications.UseCases.Send` · `MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/PushNotifications/UseCases/Send/SendPushNotificationHandler.cs:43` · Level 9 · class (sealed partial)
 
 - **What it is**: the command handler for the push-notification broadcast. It short-circuits duplicate
   sends by deduplication key, resolves recipients, persists a sender-side audit aggregate plus one inbox
@@ -2190,7 +2209,7 @@ without any of the four ever taking the others down, and without a retried reque
   by [ADR-044](https://ivanball.github.io/docs/adr/044-native-push-delivery.html)),
   [PushNotificationDTOMapper](#pushnotificationdtomapper) (the success-payload mapper), and `ILogger<>`
   (all injected via the primary constructor,
-  `MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/PushNotifications/UseCases/Send/SendPushNotificationHandler.cs:32-38`);
+  `MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/PushNotifications/UseCases/Send/SendPushNotificationHandler.cs:43-49`);
   the persisted aggregates are [PushNotification](#pushnotification) and
   [UserNotification](#usernotification). Implements
   [ICommandHandler<in TCommand, TResult>](group-05-cqrs-pipeline.md#icommandhandlerin-tcommand-tresult)
@@ -2201,80 +2220,83 @@ without any of the four ever taking the others down, and without a retried reque
   separately performs two best-effort real-time pushes (SignalR, then native OS push). These are
   different reliability tiers on purpose: the aggregate and inbox rows are the **durable** record a
   recipient can retrieve later, while the SignalR and native pushes are the **immediate** deliveries that
-  an offline user may miss. The class doc (`SendPushNotificationHandler.cs:20-30`) states the atomicity
+  an offline user may miss. The class doc (`SendPushNotificationHandler.cs:21-31`) states the atomicity
   contract that ties the durable half together: all three saves are one unit because
   [SendPushNotificationCommand](#sendpushnotificationcommand) is `ITransactional`.
 - **Walkthrough** (teaching order)
-  1. **deduplication gate** (`SendPushNotificationHandler.cs:45-60`): the command's
+  1. **deduplication gate** (`SendPushNotificationHandler.cs:56-71`): the command's
      [DedupKey](#sendpushnotificationcommand) is normalized so whitespace counts as absent
-     (`SendPushNotificationHandler.cs:49-51`, "a blank header cannot claim the single empty key"), and a
+     (`SendPushNotificationHandler.cs:60-62`, "a blank header cannot claim the single empty key"), and a
      present key is replaced by its sender-scoped hash (see `SenderScopedDedupKey` below), so another
      caller reusing the same client key can neither suppress this send nor be handed this sender's
-     notification (comment `SendPushNotificationHandler.cs:46-48`); when a key is present, `FindByDedupKeyAsync` looks for an already-persisted notification and, on a hit,
+     notification (comment `SendPushNotificationHandler.cs:57-59`); when a key is present, `FindByDedupKeyAsync` looks for an already-persisted notification and, on a hit,
      logs and returns the existing one mapped to a DTO **without sending again**
-     (`SendPushNotificationHandler.cs:54-59`).
-  2. **resolve recipients** (`SendPushNotificationHandler.cs:63-64`) via the app-specific
+     (`SendPushNotificationHandler.cs:65-70`).
+  2. **resolve recipients** (`SendPushNotificationHandler.cs:74-75`) via the app-specific
      [INotificationRecipientProvider](#inotificationrecipientprovider) (in ADC,
      [AttendeeNotificationRecipientProvider](#attendeenotificationrecipientprovider)). An empty set
      short-circuits to a `Result.Failure` with an [Error](group-01-result-error-handling.md#error)
-     `Validation` code `PushNotification.NoRecipients` (`SendPushNotificationHandler.cs:66-72`), before
+     `Validation` code `PushNotification.NoRecipients` (`SendPushNotificationHandler.cs:77-83`), before
      any rows are written.
-  3. **create the audit aggregate** (`SendPushNotificationHandler.cs:75-81`) via
+  3. **create the audit aggregate** (`SendPushNotificationHandler.cs:86-92`) via
      `PushNotification.Create(title, body, sentByUserId, recipientIds.Count, dedupKey, scopeKey)`;
-     propagate errors on failure (`SendPushNotificationHandler.cs:82-85`), then add to the repository
-     (`SendPushNotificationHandler.cs:88-89`). This is where the aggregate's
+     propagate errors on failure (`SendPushNotificationHandler.cs:93-96`), then add to the repository
+     (`SendPushNotificationHandler.cs:99-100`). This is where the aggregate's
      [PushNotificationCreated](#pushnotificationcreated) domain event is captured to the outbox
      ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)).
-  4. **first save, with a race requery** (`SendPushNotificationHandler.cs:91-122`): the save is wrapped
-     in a `try/catch (Exception)` under a justified `#pragma warning disable CA1031`
-     (`SendPushNotificationHandler.cs:95-97`). The long comment
-     (`SendPushNotificationHandler.cs:99-110`) is the teaching point: the dedup lookup in step 1 is a
-     check-then-act, so two concurrent retries of the same send both pass it and the loser only fails
-     here, on the insert, against the filtered unique index on `DedupKey`. The catch requeries by key
-     with `CancellationToken.None` (`SendPushNotificationHandler.cs:113`, so a cancelled save can still
-     be classified) and, if a winner now exists, returns it
-     (`SendPushNotificationHandler.cs:114-118`); anything else rethrows untouched
-     (`SendPushNotificationHandler.cs:121`) so a genuine persistence fault still reaches the exception
-     middleware. The broad catch is deliberate: Application has no EF Core dependency under the layer
-     rule, so `DbUpdateException` is not a type this file can name, and the requery is what narrows it.
-     Same shape as [EfInboxStore](group-04-events-outbox.md#efinboxstore)'s `MessageId` unique-index
-     handling.
-  5. **durable inbox** (`SendPushNotificationHandler.cs:124-132`): one
+  4. **first save, a lost dedup race propagates** (`SendPushNotificationHandler.cs:102-103`): a bare
+     `SaveChangesAsync` with no catch. The dedup lookup in step 1 is a check-then-act, so two concurrent
+     sends of one key can both pass it and the loser fails here, on the insert, against the filtered
+     unique index on `DedupKey`. The class doc's "Deduplication race" paragraph
+     (`SendPushNotificationHandler.cs:32-41`) states the contract: the failure propagates as the
+     persistence exception (a 409 through `DbUpdateExceptionHandler`), the transactional decorator rolls
+     the attempt back, and the client's retry is then answered by the dedup lookup with the winner's
+     notification. Recovering in place is not possible in this layer: the failed insert stays tracked
+     (nothing in the Application contract can detach it) so the commit would throw, and on PostgreSQL the
+     unique violation has already aborted the transaction a requery would run in. (An earlier
+     swallow-and-requery shape modelled on
+     [EfInboxStore](group-04-events-outbox.md#efinboxstore) no longer exists here.)
+  5. **durable inbox** (`SendPushNotificationHandler.cs:105-113`; second save `:113`): one
      `UserNotification.Create(recipientId, notification.Id)` row per recipient, added and saved. This is
      what lets a user retrieve a notification they missed while offline.
-  6. **best-effort SignalR delivery** (`SendPushNotificationHandler.cs:134-152`):
+  6. **best-effort SignalR delivery** (`SendPushNotificationHandler.cs:115-134`):
      `pushNotificationSender.SendToUsersAsync(...)` inside a `try/catch` with its own justified `CA1031`
-     suppression (`SendPushNotificationHandler.cs:146-148`). A delivery failure is **non-fatal**: success
-     calls `notification.MarkAsSent()` plus an info log (`SendPushNotificationHandler.cs:143-144`),
+     suppression (`SendPushNotificationHandler.cs:129-131`). The live leg now carries the scope key as
+     metadata, `LiveMetadata(notification.ScopeKey)` (`SendPushNotificationHandler.cs:122`), so a client
+     viewing another scope can leave the notification out of its toast and badge. `LiveMetadata`
+     (`SendPushNotificationHandler.cs:172-181`) returns a dictionary keyed by
+     [NotificationScopeKey](#notificationscopekey)`.MetadataKey` for a scoped send and `null` for an
+     unscoped one. A delivery failure is **non-fatal**: success
+     calls `notification.MarkAsSent()` plus an info log (`SendPushNotificationHandler.cs:126-127`),
      failure calls `notification.MarkAsFailed()` plus an error log
-     (`SendPushNotificationHandler.cs:150-151`); the failure becomes recorded *status*, not a thrown
+     (`SendPushNotificationHandler.cs:133-134`); the failure becomes recorded *status*, not a thrown
      exception.
-  7. **best-effort native push** (`SendPushNotificationHandler.cs:154-171`,
+  7. **best-effort native push** (`SendPushNotificationHandler.cs:137-154`,
      [ADR-044](https://ivanball.github.io/docs/adr/044-native-push-delivery.html)):
      `nativePushSender.SendToUsersAsync(...)` in a third `try/catch` with its own suppression
-     (`SendPushNotificationHandler.cs:166-168`). This is the OS-level channel that can reach devices
-     whose app is backgrounded or killed (comment `SendPushNotificationHandler.cs:154-157`). It is
+     (`SendPushNotificationHandler.cs:149-151`). This is the OS-level channel that can reach devices
+     whose app is backgrounded or killed (comment `SendPushNotificationHandler.cs:137-140`). It is
      **purely additive**: the SignalR leg above already decided the audit status, so a native-push
-     failure only logs a warning (`LogNativePushFailed`, `SendPushNotificationHandler.cs:170`) and never
+     failure only logs a warning (`LogNativePushFailed`, `SendPushNotificationHandler.cs:153`) and never
      touches `Status`. The default
      [NullNativePushSender](group-14-module-system-composition.md#nullnativepushsender) keeps this a no-op
      until a notification hub is configured.
-  8. **persist final status** (`SendPushNotificationHandler.cs:173`) and **return** the mapped DTO
-     (`SendPushNotificationHandler.cs:175`).
-  - `SenderScopedDedupKey` (`SendPushNotificationHandler.cs:185-187`) derives the stored key as
+  8. **persist final status** (`SendPushNotificationHandler.cs:156`) and **return** the mapped DTO
+     (`SendPushNotificationHandler.cs:158`).
+  - `SenderScopedDedupKey` (`SendPushNotificationHandler.cs:168-170`) derives the stored key as
     `Convert.ToHexString(SHA256.HashData(...))` over the invariant-culture string
     `{sentByUserId}:{clientKey}`, so the persisted value is always **64** hex characters (within the
-    column) whatever the client sent (doc comment `SendPushNotificationHandler.cs:178-184`). `[Rubric §11,
+    column) whatever the client sent (doc comment `SendPushNotificationHandler.cs:161-167`). `[Rubric §11,
     Security]`: the client key alone no longer identifies a notification across senders.
-  - `FindByDedupKeyAsync` (`SendPushNotificationHandler.cs:194-203`) resolves the read repository from
-    the unit of work (`unitOfWork.GetReadRepository<...>()`, `SendPushNotificationHandler.cs:196`), never
+  - `FindByDedupKeyAsync` (`SendPushNotificationHandler.cs:188-197`) resolves the read repository from
+    the unit of work (`unitOfWork.GetReadRepository<...>()`, `SendPushNotificationHandler.cs:190`), never
     an injected
     [IRepository<TEntity, TIdentifierType>](group-07-persistence-ef-core.md#irepositorytentity-tidentifiertype),
     so the lookup runs against the same data source as the write (its doc comment says exactly that,
-    `SendPushNotificationHandler.cs:189-193`).
-  - Five source-generated `[LoggerMessage]` methods close the file
-    (`SendPushNotificationHandler.cs:205-218`): sent (Information), delivery-failed (Error),
-    native-failed (Warning), dedup hit (Information), and dedup race requery (Information).
+    `SendPushNotificationHandler.cs:183-187`).
+  - Four source-generated `[LoggerMessage]` methods close the file
+    (`SendPushNotificationHandler.cs:199-209`): sent (Information), delivery-failed (Error),
+    native-failed (Warning), and dedup hit (Information).
     `[Rubric §13, Observability]`.
 - **Why it's built this way**: shipping the whole feature in the *framework* means both ADC and Store get
   push for free, with the audience and both transports as injected abstractions (`[Rubric §29,
@@ -2291,10 +2313,10 @@ without any of the four ever taking the others down, and without a retried reque
   ADC by the Notification DI facade); the real-time legs land on connected clients through
   [NotificationHub](#notificationhub) and, for native push, through the configured OS notification hub.
 - **Caveats / not-in-source**: the three `SaveChangesAsync` calls
-  (`SendPushNotificationHandler.cs:93`, `:132`, `:173`) are separate saves, not separate transactions:
+  (`SendPushNotificationHandler.cs:103`, `:113`, `:156`) are separate saves, not separate transactions:
   atomicity comes from the ambient transaction the Transactional decorator opens because the command
   implements `ITransactional`, so the decorator, not this file, is where the commit happens. A
-  consequence the class doc accepts explicitly (`SendPushNotificationHandler.cs:27-29`) is that both
+  consequence the class doc accepts explicitly (`SendPushNotificationHandler.cs:28-30`) is that both
   sender calls run inside that unit, so a transient fault on the final status save re-runs them under
   the execution strategy: delivery is **at-least-once** for the live channels (SignalR and native) and
   exactly-once for the inbox rows. There is still no automatic redelivery of a failed push: the
@@ -2352,7 +2374,7 @@ without any of the four ever taking the others down, and without a retried reque
 - **Why it's built this way (security posture)**: unlike
   [LiveChannelGrpcService](#livechannelgrpcservice), this endpoint **requires authorization**: it is
   mapped with `.RequireAuthorization()`
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:293`) and the class doc says why
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:301`) and the class doc says why
   (`UserNotificationExportGrpcService.cs:14-19`). `[Rubric §11, Security]`, `[Rubric §30, Compliance,
   Privacy & Data Governance]`: internal-only ingress is **not sufficient** here because the response
   carries personal data keyed by a raw `UserId`, so the calling service forwards the end user's JWT via
@@ -2361,7 +2383,7 @@ without any of the four ever taking the others down, and without a retried reque
   endpoint as the live-channel ingress
   ([ADR-012](https://ivanball.github.io/docs/adr/012-grpc-host-transport.html) mixed-endpoint profile,
   `UserNotificationExportGrpcService.cs:11-13`).
-- **Where it's used**: mapped by the Notification service's `Program.cs` (`Program.cs:293`); the wire is
+- **Where it's used**: mapped by the Notification service's `Program.cs` (`Program.cs:301`); the wire is
   dialed by its client half
   [UserNotificationExportServiceGrpcAdapter](#usernotificationexportservicegrpcadapter), which runs
   inside the Identity service's export aggregator and stitches this Notification slice into the full
@@ -2439,7 +2461,7 @@ without any of the four ever taking the others down, and without a retried reque
   `services.Replace(...)`
   (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Contracts/DependencyInjection.cs:84`); the one caller
   today is the Identity service's composition root
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:316`), whose
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:327`), whose
   [ExportUserDataHandler](group-24-identity-module.md#exportuserdatahandler) consumes the interface.
 
 ---
@@ -2505,14 +2527,14 @@ heading.)*
   best-effort per section, so if this peer stays unreachable after the resilience pipeline the Identity
   handler marks the Notifications section unavailable instead of failing the whole export.
 - **Where it's used**: `AddNotificationLiveChannelClient` is called by the Engagement service's
-  application pipeline (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:285`);
+  application pipeline (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:291`);
   `AddNotificationUserExportClient` by the Identity service's
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:316`). The matching AppHost references
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:327`). The matching AppHost references
   that inject the `services__notification__grpc__0` entry are
   `engagementService.WithReference(notificationService)`
-  (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:282`) and
-  `identityService.WithReference(notificationService)` (`Program.cs:293`), both deliberately without a
-  `WaitFor` so neither consumer blocks on Notification at startup (comments at `Program.cs:275-281` and
+  (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:277`) and
+  `identityService.WithReference(notificationService)` (`Program.cs:288`), both deliberately without a
+  `WaitFor` so neither consumer blocks on Notification at startup (comments at `Program.cs:270-276` and
   `:282-290`).
 
 ### NotificationModule

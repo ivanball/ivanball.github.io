@@ -2,7 +2,7 @@
 
 > **Chapter scope note.** The tier chapters (`tier-00` through the sweep) document every type
 > in the production codebase one by one. Test types are the logged exception: this chapter covers
-> the **2,774** types that live in test projects, grouped by project purpose and foundational
+> the **2,977** types that live in test projects, grouped by project purpose and foundational
 > infrastructure, not written as one section per `[Fact]`. Individual test methods are cited only
 > as worked examples. Cross-reference the tier chapters for the production types being tested.
 > The counts come from the Roslyn inventory (`00-inventory.md:25-135`), which scans
@@ -32,7 +32,7 @@ only, because their solutions are already fast enough not to need a CI subset:
 |---|---|
 | `MMCA.Common.slnx` | Full human solution, 16 source projects + 16 test projects (no `.slnf`) |
 | `MMCA.Helpdesk.slnx` | Full seed solution, three test projects, no database needed (no `.slnf`) |
-| `MMCA.ADC.slnx` | Full human solution, all source + all 30 in-solution test projects |
+| `MMCA.ADC.slnx` | Full human solution, all source + all 32 in-solution test projects (`MMCA.ADC/MMCA.ADC.slnx:67-129`) |
 | `MMCA.ADC.CI.slnf` | CI fast path, source + unit/architecture/UI/host tests only |
 | `MMCA.ADC.Integration.slnf` | SQL-gated per-service integration tests only |
 | `MMCA.Store.CI.slnf` / `MMCA.Store.Integration.slnf` | Store's pair, mirroring the ADC split |
@@ -55,10 +55,10 @@ the full Aspire stack running. None of that is available in the fast build job, 
 its own job with its own prerequisites.
 
 **Read the gating carefully, it is easy to state wrongly.** ADC's `integration-tests` job is
-**pull-request-only** (`MMCA.ADC/.github/workflows/deploy.yml:702`, with the reasoning at
-`deploy.yml:697-701`) and is **not** in the `deploy` job's `needs` list (`deploy.yml:1219`). Its
+**pull-request-only** (`MMCA.ADC/.github/workflows/deploy.yml:648`, with the reasoning at
+`deploy.yml:643-647`) and is **not** in the `deploy` job's `needs` list (`deploy.yml:1159`). Its
 sibling `build-and-test` is pull-request-only for the same stated reason (`deploy.yml:222-225`). The
-comment under the `needs` list spells it out (`deploy.yml:1146-1148`): with strict branch protection
+comment under the `needs` list spells it out (`deploy.yml:1160-1162`): with strict branch protection
 the PR validated the exact merge tree, so those jobs are required PR checks rather than push-time
 deploy gates, and they are not re-run on the merge push. The required contexts are exactly four,
 `build-and-test`, `supply-chain`, `integration-tests` and `coverage`, as the repo's own contributing
@@ -68,10 +68,10 @@ What actually blocks the deploy is `supply-chain`, `cost-guard`, the `freshness`
 steps (`dr-freshness`, `load-freshness`, `cross-service-freshness`, `cross-browser-freshness`),
 `foundation`, `build-images`, and two conditional gates: the chromium `e2e-gate` on a UI diff and
 `ai-eval-gate`, the paid live judge of the AI session scorer, on a scoring-code diff
-(`MMCA.ADC/.github/workflows/deploy.yml:1145`, condition at `deploy.yml:1172-1183`). A backend-only
+(`MMCA.ADC/.github/workflows/deploy.yml:1159`, condition at `deploy.yml:1183-1197`). A backend-only
 deploy runs no test job on the push, and that is safe by construction: the PR's `build-and-test` is the
 test gate, because branch protection enforces admins and requires an up-to-date branch, so the PR run
-covers the exact tree that merges and no post-merge job re-runs those tiers (`deploy.yml:1146-1148`,
+covers the exact tree that merges and no post-merge job re-runs those tiers (`deploy.yml:1160-1162`,
 and the `e2e-gate` comment at `deploy.yml:798-802`). The post-deploy smoke gate is the post-rollout
 backstop behind it.
 [Rubric §17, DevOps & Deployment]: §17 assesses how consistently CI/CD enforces quality gates; the
@@ -81,7 +81,7 @@ without test execution" survives both of those optimizations.
 
 **MMCA.Store has the same shape minus `ai-eval-gate`.** Its `deploy` job needs
 `[changes, supply-chain, cost-guard, freshness, e2e-gate, foundation, build-images]`
-(`MMCA.Store/.github/workflows/deploy.yml:1083`), and its PR `build-and-test` is the test gate under the
+(`MMCA.Store/.github/workflows/deploy.yml:1084`), and its PR `build-and-test` is the test gate under the
 same branch protection.
 
 `MMCA.ADC.Integration.slnf` (`MMCA.ADC/MMCA.ADC.Integration.slnf:5-8`) contains exactly four
@@ -102,14 +102,14 @@ lines 11-17), four Presentation (`.API`, `.Grpc`, `.UI`, `.UI.Web`, lines 20-23)
 (lines 38-59). The MAUI package, `MMCA.Common.UI.Maui`, sits **outside the
 `.slnx`** on purpose: its four MAUI target frameworks cannot build on the ubuntu runners the
 solution's CI uses, so it is built and packed by a dedicated windows job
-(`MMCA.Common/.github/workflows/ci.yml:177`, rationale at `ci.yml:171-176`, build step at
-`ci.yml:241`,
+(`MMCA.Common/.github/workflows/ci.yml:179`, rationale in the comment above the job,
+`ci.yml:175`,
 [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)). Eight test
 projects are **also intentionally absent from the `.slnx`**:
 
 - `Tests/Presentation/MMCA.Common.UI.Gallery`, a backend-less Blazor host that renders the real
   login and register pages, a UI-primitives showcase and the notification pages; it exists solely to
-  give Playwright something to hit (`ci.yml:243-245`).
+  give Playwright something to hit (`ci.yml:219-221`).
 - `Tests/Presentation/MMCA.Common.UI.E2E.Tests`, the axe-core + render-smoke suite that hits
   the Gallery.
 - `Tests/Core/MMCA.Common.Infrastructure.Redis.Tests`, which runs `DistributedCacheService` against a
@@ -117,26 +117,26 @@ projects are **also intentionally absent from the `.slnx`**:
 - `Tests/Performance/MMCA.Common.Benchmarks`, the BenchmarkDotNet suite behind the ADR-060
   performance gate (see section 7).
 - `Tests/Core/MMCA.Common.Infrastructure.PostgreSQL.Tests`, which runs the shipped
-  `PostgreSQLDbContext` against a real PostgreSQL via Testcontainers (`ci.yml:916`).
+  `PostgreSQLDbContext` against a real PostgreSQL via Testcontainers (`ci.yml:863`).
 - `Tests/Core/MMCA.Common.Infrastructure.SQLServer.Tests`, which runs the shipped
   `SQLServerDbContext` and `DbContextFactory` against a real SQL Server via Testcontainers
-  (`ci.yml:925-931`, run step at `ci.yml:956`).
+  (`ci.yml:865`, run step at `ci.yml:903`).
 - `Tests/Hosting/MMCA.Common.Testing.Aspire.AppHostTests`, which boots a sample AppHost through
   `Aspire.Hosting.Testing`; its two companion sample projects are out of the `.slnx` with it
-  (`ci.yml:1013-1015`).
+  (`ci.yml:948-950`).
 - `Tests/Performance/MMCA.Common.LoadTests`, the weekly load tier, which runs from its own workflow
   rather than from `ci.yml` (`MMCA.Common/.github/workflows/load-tests.yml:10-12`, section 7).
 
 The exclusions are not all for the same reason, and the comments say which is which. The gallery pair
 and the benchmark suite are out so `dotnet test --solution MMCA.Common.slnx` stays fast (no browser
-install, no benchmark wall clock: `ci.yml:246-247` and `ci.yml:354`); the Redis, PostgreSQL, SQL Server
+install, no benchmark wall clock: `ci.yml:221-222` and `ci.yml:309`); the Redis, PostgreSQL, SQL Server
 and AppHost projects are out because they need a **Docker daemon** or a real orchestrator that the
-fast unit loop must not require (`ci.yml:874-875`, `ci.yml:912-913`, `ci.yml:952-953`,
-`ci.yml:1013-1014`), and the load tier is out because a timing tier on shared runners is a trend
+fast unit loop must not require (`ci.yml:821`, `ci.yml:859`, `ci.yml:899`,
+`ci.yml:948`), and the load tier is out because a timing tier on shared runners is a trend
 signal rather than a merge gate (`load-tests.yml:10-12`). Each runs in its own CI job or workflow,
 built by csproj path, for example
 `dotnet test --project Tests/Presentation/MMCA.Common.UI.E2E.Tests/MMCA.Common.UI.E2E.Tests.csproj`
-(`ci.yml:324`) and the Redis tier at `ci.yml:879`.
+(`ci.yml:292`) and the Redis tier at `ci.yml:826`.
 [Rubric §28, Front-End Testing & Quality]: §28 assesses whether UI components have automated
 tests; the Gallery + E2E split is the mechanism that adds browser-level coverage without slowing
 the primary test loop.
@@ -162,17 +162,20 @@ consequences:
 1. **Exit code 8**, if a test project discovers zero tests MTP exits 8, not 0. Every CI
    `dotnet test` call passes `--minimum-expected-tests` with a floor sized to the tier it runs, so
    a discovery regression is a visible failure rather than a silent skip: `2000` for the whole
-   MMCA.Common solution (`MMCA.Common/.github/workflows/ci.yml:161`), `1` for the browser tier
-   (`ci.yml:324`), `1` for the AppHost tier (`ci.yml:1015`), `40` for the cross-repo Helpdesk canary
-   (`ci.yml:580`), the exact `[Fact]` count of each Testcontainers tier (`15` for Redis at
-   `ci.yml:876-879`, `7` for PostgreSQL at `ci.yml:914-916`, `3` for SQL Server at `ci.yml:954-956`),
-   and `1` for every ADC test invocation except one. The `ai-eval-gate` replay step's comment states the
-   reasoning in one line: a filter or discovery breakage that runs zero tests must fail here, not report
-   a vacuous pass (`MMCA.ADC/.github/workflows/deploy.yml:535-536`). The one invocation deliberately
-   without a floor is the paid live judge of `ai-eval-gate` (`deploy.yml:543-551`): without `AI_API_KEY`
-   (mapped from the `ANTHROPIC_API_KEY` repository secret, `deploy.yml:552-555`) every case skips itself
+   MMCA.Common solution (`MMCA.Common/.github/workflows/ci.yml:163`), `1` for the browser tier
+   (`ci.yml:292`), `1` for the AppHost tier (`ci.yml:950`), `40` for the cross-repo Helpdesk canary
+   (`ci.yml:527`), the exact `[Fact]` count of each Testcontainers tier (`15` for Redis at
+   `ci.yml:826`, `7` for PostgreSQL at `ci.yml:863`, `3` for SQL Server at `ci.yml:903`),
+   and on the ADC side a solution-wide `5000` for the `CI.slnf` pass
+   (`MMCA.ADC/.github/workflows/deploy.yml:366`: the measured total rounded down, so a few deleted
+   tests do not trip it while a breakage that drops a whole project does, `deploy.yml:356-360`), `450`
+   for the `Integration.slnf` pass (`deploy.yml:729`, reasoning at `deploy.yml:724-725`) and `1` for the
+   `ai-eval-gate` replay step, whose comment states the reasoning in one line: a filter or discovery
+   breakage that runs zero tests must fail here, not report a vacuous pass (`deploy.yml:548-549`). The one invocation deliberately
+   without a floor is the paid live judge of `ai-eval-gate` (`deploy.yml:556-564`): without `AI_API_KEY`
+   (mapped from the `ANTHROPIC_API_KEY` repository secret, `deploy.yml:565-568`) every case skips itself
    dynamically, and a zero-run there must not red a deploy on a repo whose secret is absent
-   (`deploy.yml:544-546`).
+   (`deploy.yml:557-559`).
 
 2. **Filter syntax differs.** You pass a `--` separator and then MTP's own filter flags:
    ```bash
@@ -205,16 +208,16 @@ The inventory below is drawn from `00-inventory.md:25-135` (test-assembly counts
 files above. Counts are distinct types per project as reported by the Roslyn inventory scan, not
 `[Fact]` counts.
 
-### MMCA.Common, 1,811 test types across 16 in-solution projects + 72 across 8 out-of-solution
+### MMCA.Common, 1,937 test types across 16 in-solution projects + 76 across 8 out-of-solution
 
 **Unit, Core layer**
 
 | Project | Types | Purpose |
 |---|---|---|
-| `MMCA.Common.Shared.Tests` | 60 | Unit tests for the Result pattern, `Error`, `ErrorType`, value objects, DTO contracts, supported cultures |
-| `MMCA.Common.Domain.Tests` | 64 | Unit tests for entity hierarchy, aggregate root, domain events, specifications, soft-delete, PII redaction |
-| `MMCA.Common.Application.Tests` | 401 | Unit tests for CQRS dispatcher, decorator pipeline, module loader, `IMessageBus`, validators, query pipeline, the exportable-user-data handler base, tenant-scoped cache keys and `ICacheService.GetOrCreate` |
-| `MMCA.Common.Infrastructure.Tests` | 514 | Unit/integration tests for EF base contexts, outbox processor, repository, caching, JWT generation, JWKS provider, data-source resolver, two-factor and email-confirmation token services, plus the `Scheduling/`, `Persistence/Tenancy/`, `Persistence/AuditTrail/`, `Persistence/InternalCommands/` and hybrid-cache subtrees |
+| `MMCA.Common.Shared.Tests` | 61 | Unit tests for the Result pattern, `Error`, `ErrorType`, value objects, DTO contracts, supported cultures |
+| `MMCA.Common.Domain.Tests` | 66 | Unit tests for entity hierarchy, aggregate root, domain events, specifications, soft-delete, PII redaction |
+| `MMCA.Common.Application.Tests` | 407 | Unit tests for CQRS dispatcher, decorator pipeline, module loader, `IMessageBus`, validators, query pipeline, the exportable-user-data handler base, tenant-scoped cache keys and `ICacheService.GetOrCreate` |
+| `MMCA.Common.Infrastructure.Tests` | 538 | Unit/integration tests for EF base contexts, outbox processor, repository, caching, JWT generation, JWKS provider, data-source resolver, two-factor and email-confirmation token services, plus the `Scheduling/`, `Persistence/Tenancy/`, `Persistence/AuditTrail/`, `Persistence/InternalCommands/` and hybrid-cache subtrees |
 | `MMCA.Common.Infrastructure.Tests.MigrationsFixture` | 1 | A single-type companion project that gives the infrastructure suite a real migrations assembly to point EF at |
 | `MMCA.Common.AI.Tests` | 37 | The `MMCA.Common.AI` package's decorator chain over `IChatClient`: `BoundedChatClientTests`, `GuardrailChatClientTests`, `PromptTaggingChatClientTests`, `UsageRecordingChatClientTests`, `PromptContractTests`, `AiSettingsTests`, `AiProviderSelectionTests` and `AiServiceCollectionExtensionsTests`, plus three subtrees: `Providers/` (`AdapterFactoryTests`, `ProviderTagTests`), `Guardrails/` (request redaction, content policy, tool policy, streamed guardrails and their registration) and `Evaluation/` (`ReplayChatClientTests`, `RecordedResponsesTests` and the reference golden-replay and prompt-contract suites), driven by a `StubChatClient`/`StubGuardrail` pair in `Fixtures/` (`MMCA.Common/MMCA.Common.slnx:35`) |
 
@@ -222,38 +225,38 @@ files above. Counts are distinct types per project as reported by the Roslyn inv
 
 | Project | Types | Purpose |
 |---|---|---|
-| `MMCA.Common.API.Tests` | 170 | Tests for `ApiControllerBase`, exception handlers, idempotency filter, the shared middleware pipeline, JWKS endpoint (also the consolidated home of the ADC/Store middleware coverage), session-cookie auth, CSV export and tenant resolution |
+| `MMCA.Common.API.Tests` | 195 | Tests for `ApiControllerBase`, exception handlers, idempotency filter, the shared middleware pipeline, JWKS endpoint (also the consolidated home of the ADC/Store middleware coverage), session-cookie auth, CSV export and tenant resolution |
 | `MMCA.Common.Grpc.Tests` | 18 | Tests for `GrpcResultExceptionInterceptor`, `JwtForwardingClientInterceptor`, Result to `RpcException` mapping |
-| `MMCA.Common.UI.Tests` | 170 | bUnit component tests for shared Blazor components (login/register forms, nav, theming, notification pages) |
-| `MMCA.Common.UI.Web.Tests` | 24 | The Blazor Web host layer: `ServerTokenStorageService`, `BlazorCspPolicyProvider`, `WebFormFactor`, the client-config endpoint (`ClientConfig/ClientConfigEndpointTests`), the trusted-caller header (`Security/TrustedCaller*Tests`) and the UI-host hardening kit (`Hardening/BoundedCircuitHandlerTests`, `Hardening/UiRateLimitingTests`) |
+| `MMCA.Common.UI.Tests` | 207 | bUnit component tests for shared Blazor components (login/register forms, nav, theming, notification pages) |
+| `MMCA.Common.UI.Web.Tests` | 31 | The Blazor Web host layer: `ServerTokenStorageService`, `BlazorCspPolicyProvider`, `WebFormFactor`, the client-config endpoint (`ClientConfig/ClientConfigEndpointTests`), the trusted-caller header (`Security/TrustedCaller*Tests`) and the UI-host hardening kit (`Hardening/BoundedCircuitHandlerTests`, `Hardening/UiRateLimitingTests`) |
 
 **Hosting**
 
 | Project | Types | Purpose |
 |---|---|---|
-| `MMCA.Common.Aspire.Tests` | 52 | Tests for `AddServiceDefaults`, health-check registration, `OutboxPollFilterProcessor` telemetry suppression, the warmup readiness gate, metrics/trace-ratio toggles, security headers, Key Vault configuration, data protection and the Kestrel endpoint extensions |
-| `MMCA.Common.Aspire.Hosting.Tests` | 4 | The AppHost-side resource builders the framework ships for consumer AppHosts |
+| `MMCA.Common.Aspire.Tests` | 58 | Tests for `AddServiceDefaults`, health-check registration, `OutboxPollFilterProcessor` telemetry suppression, the warmup readiness gate, metrics/trace-ratio toggles, security headers, Key Vault configuration, data protection and the Kestrel endpoint extensions |
+| `MMCA.Common.Aspire.Hosting.Tests` | 5 | The AppHost-side resource builders the framework ships for consumer AppHosts |
 | `MMCA.Common.Gateway.Tests` | 7 | The shared YARP gateway kit: the rate-limit partitioning, correlation and downstream-readiness behavior the two app gateways inherit |
-| `MMCA.Common.Testing.Tests` | 27 | The framework dogfooding its own shipped test bases and helpers: `DecoratorPipelineOrderTests` and `MiddlewarePipelineOrderTests`, `MmcaGatewayHardeningTestsBaseTests`, `HandlerTestBaseTests`, `CrossServiceFixtureBaseTests`, `ServiceBusEmulatorFixtureBaseTests`, `DependencyInjectionAssertTests`, `FeatureManagementTestExtensionsTests`, `JwtTokenGeneratorTests`, `RateLimiterTestExtensionsTests`, `RecordingHttpForwarderTests` and `TestPollingTests` |
+| `MMCA.Common.Testing.Tests` | 29 | The framework dogfooding its own shipped test bases and helpers: `DecoratorPipelineOrderTests` and `MiddlewarePipelineOrderTests`, `MmcaGatewayHardeningTestsBaseTests`, `HandlerTestBaseTests`, `CrossServiceFixtureBaseTests`, `ServiceBusEmulatorFixtureBaseTests`, `DependencyInjectionAssertTests`, `FeatureManagementTestExtensionsTests`, `JwtTokenGeneratorTests`, `RateLimiterTestExtensionsTests`, `RecordingHttpForwarderTests` and `TestPollingTests` |
 | `MMCA.Common.Testing.Aspire.Tests` | 8 | The unit tier over the shipped `MMCA.Common.Testing.Aspire` package: `AppHostReadinessBudgetTests`, the three precondition gates (`AppHostEnvironmentGateTests`, `DockerAvailabilityTests`, `DeveloperCertificateAvailabilityTests`), `EphemeralRsaKeyPairTests`, and `AppHostProbePathsTests` plus the two h2c probe suites (`MMCA.Common/MMCA.Common.slnx:52`) |
 
 **Architecture**
 
 | Project | Types | Purpose |
 |---|---|---|
-| `MMCA.Common.Architecture.Tests` | 254 | Thin subclasses of the shared bases plus the Common-only `*FitnessTests` family, alongside `CommonArchitectureMap` and the fake modules, drifted probes and fixtures the adversarial suites drive (see section 4) |
+| `MMCA.Common.Architecture.Tests` | 269 | Thin subclasses of the shared bases plus the Common-only `*FitnessTests` family, alongside `CommonArchitectureMap` and the fake modules, drifted probes and fixtures the adversarial suites drive (see section 4) |
 
 **Out-of-solution (each run by its own dedicated CI job or workflow)**
 
 | Project | Types | Purpose |
 |---|---|---|
 | `MMCA.Common.UI.Gallery` | 11 | Backend-less Blazor host; renders the real login/register pages, a primitives showcase and the notification pages for Playwright to hit |
-| `MMCA.Common.UI.E2E.Tests` | 21 | Playwright axe-core WCAG 2.1 AA scans, render smoke, dark mode, web vitals, pseudo-localization and mobile top row against the Gallery |
+| `MMCA.Common.UI.E2E.Tests` | 25 | Playwright axe-core WCAG 2.1 AA scans, render smoke, dark mode, web vitals, pseudo-localization and mobile top row against the Gallery |
 | `MMCA.Common.Infrastructure.Redis.Tests` | 2 | `DistributedCacheService` against a real Redis via Testcontainers (storage FORMAT fidelity: a mocked `IDistributedCache` cannot answer WRONGTYPE) |
 | `MMCA.Common.Benchmarks` | 6 | BenchmarkDotNet hot-path suite behind the ADR-060 performance gate (section 7) |
-| `MMCA.Common.Infrastructure.PostgreSQL.Tests` | 7 | `PostgreSQLPersistenceTests` drives the shipped `PostgreSQLDbContext` against a real PostgreSQL container, with its own `PgThing` fixture aggregate, events and a recording dispatcher (`MMCA.Common/.github/workflows/ci.yml:916`) |
-| `MMCA.Common.Testing.Aspire.AppHostTests` | 3 | `SampleAppHostFixture`, `SampleAppHostCollection` and `SampleAppHostTests`: a sample AppHost booted through the shipped `MMCA.Common.Testing.Aspire` fixtures (`ci.yml:1015`) |
-| `MMCA.Common.Infrastructure.SQLServer.Tests` | 8 | The shipped `SQLServerDbContext` and `DbContextFactory` against a real SQL Server container: session-scoped `SET IDENTITY_INSERT`, server-issued rowversions and the outbox row landing in the same `SaveChanges` as its aggregate (`ci.yml:925-929`) |
+| `MMCA.Common.Infrastructure.PostgreSQL.Tests` | 7 | `PostgreSQLPersistenceTests` drives the shipped `PostgreSQLDbContext` against a real PostgreSQL container, with its own `PgThing` fixture aggregate, events and a recording dispatcher (`MMCA.Common/.github/workflows/ci.yml:863`) |
+| `MMCA.Common.Testing.Aspire.AppHostTests` | 3 | `SampleAppHostFixture`, `SampleAppHostCollection` and `SampleAppHostTests`: a sample AppHost booted through the shipped `MMCA.Common.Testing.Aspire` fixtures (`ci.yml:950`) |
+| `MMCA.Common.Infrastructure.SQLServer.Tests` | 8 | The shipped `SQLServerDbContext` and `DbContextFactory` against a real SQL Server container: session-scoped `SET IDENTITY_INSERT`, server-issued rowversions and the outbox row landing in the same `SaveChanges` as its aggregate (`ci.yml:874-876`) |
 | `MMCA.Common.LoadTests` | 14 | The weekly load tier: `OutboxThroughputLoadTests`, `PagedQueryLoadTests` and the `Support/` stack (`LoadStack`, `PagedQueryFixture`, `LoadItem`, `CountingMessageBus`, `LoadResults`) over a temp-file SQLite database, run by `load-tests.yml` rather than `ci.yml` (section 7) |
 
 The current scan covers every row above, so the totals below cover all 24 MMCA.Common test projects.
@@ -263,41 +266,41 @@ deliberate: a tier that needs Docker, a trusted development certificate or a wal
 not be able to break or slow a plain `dotnet build` of the solution for an engineer who has none of
 those.
 
-### MMCA.ADC, 888 test types across 32 in-solution projects + 3 across 1 out-of-solution
+### MMCA.ADC, 964 test types across 32 in-solution projects
 
 **Unit, per-module, per-layer (Identity module)**
 
 | Project | Types | Purpose |
 |---|---|---|
-| `MMCA.ADC.Identity.Domain.Tests` | 4 | `User` aggregate factory methods, invariants, soft-delete |
-| `MMCA.ADC.Identity.Application.Tests` | 34 | Command/query handler tests for register, login, external OAuth, profile management, plus the GDPR export path and the per-module export sections |
-| `MMCA.ADC.Identity.Shared.Tests` | 3 | The module's permission grants (`IdentityPermissionGrantsTests`) and the disabled attendee-query service (`DisabledAttendeeQueryServiceTests`) |
+| `MMCA.ADC.Identity.Domain.Tests` | 6 | `User` aggregate factory methods, invariants, soft-delete |
+| `MMCA.ADC.Identity.Application.Tests` | 35 | Command/query handler tests for register, login, external OAuth, profile management, plus the GDPR export path and the per-module export sections |
+| `MMCA.ADC.Identity.Shared.Tests` | 2 | The module's permission grants (`IdentityPermissionGrantsTests`) and the disabled attendee-query service (`DisabledAttendeeQueryServiceTests`) |
 | `MMCA.ADC.Identity.API.Tests` | 11 | Controller helper tests, rate-limit bypass |
 | `MMCA.ADC.Identity.Infrastructure.Tests` | 9 | Token service, JWKS provider, EF configuration, the refresh-session store |
-| `MMCA.ADC.Identity.UI.Tests` | 11 | bUnit tests for `Profile`, login route authorization |
+| `MMCA.ADC.Identity.UI.Tests` | 15 | bUnit tests for `Profile`, login route authorization |
 
 **Unit, per-module, per-layer (Conference module)**
 
 | Project | Types | Purpose |
 |---|---|---|
-| `MMCA.ADC.Conference.Domain.Tests` | 34 | Event/Session/Speaker/Sponsor aggregate factories, invariants, domain events |
-| `MMCA.ADC.Conference.Application.Tests` | 196 | Handler tests for the Conference controllers' use cases (bulk), including the `Sponsors/` create, update, public-filter and mapper tests, the `Partners/` and `SessionAssets/` subtrees, and the batch event question-answer handler and validator |
+| `MMCA.ADC.Conference.Domain.Tests` | 35 | Event/Session/Speaker/Sponsor aggregate factories, invariants, domain events |
+| `MMCA.ADC.Conference.Application.Tests` | 197 | Handler tests for the Conference controllers' use cases (bulk), including the `Sponsors/` create, update, public-filter and mapper tests, the `Partners/` and `SessionAssets/` subtrees, and the batch event question-answer handler and validator |
 | `MMCA.ADC.Conference.Shared.Tests` | 9 | DTO tests (category, event, session, speaker), the current-event defaults and selector, the Sessionize code format and the disabled event-live validation service |
-| `MMCA.ADC.Conference.API.Tests` | 26 | Controller registration, route tests, `SponsorsControllerTests`, `PartnersControllerTests`, `SessionAssetsControllerTests`, the split event and speaker controllers (`EventLifecycleControllerTests`, `SpeakerLinksControllerTests`, `SpeakerSessionsControllerTests`), `ConferencePermissionGrantsTests` and `EntityExportAuthorizationTests` |
+| `MMCA.ADC.Conference.API.Tests` | 27 | Controller registration, route tests, `SponsorsControllerTests`, `PartnersControllerTests`, `SessionAssetsControllerTests`, the split event and speaker controllers (`EventLifecycleControllerTests`, `SpeakerLinksControllerTests`, `SpeakerSessionsControllerTests`), `ConferencePermissionGrantsTests` and `EntityExportAuthorizationTests` |
 | `MMCA.ADC.Conference.Infrastructure.Tests` | 11 | EF entity configuration, module seeding, the Sessionize import, the AI session-scoring services, the score-response guardrail and its registration (`SessionScoreResponseGuardrailTests`, `ConferenceAiGuardrailsRegistrationTests`) and the session-scores cache evictor |
-| `MMCA.ADC.Conference.Scoring.Evaluation.Tests` | 10 | The AI session scorer's behavioural suite: `GoldenReplayTests`, `PromptContractTests` and the opt-in `LiveJudgeTests` (`MMCA.ADC/MMCA.ADC.slnx:88`, in `CI.slnf:49`). Its 10 types are inside the 888 below (`00-inventory.md`, current scan); the gate that runs it is in section 7 |
-| `MMCA.ADC.Conference.UI.Tests` | 81 | bUnit tests for session/speaker components and dashboards, the sponsor create/detail pages and the public sponsor list |
+| `MMCA.ADC.Conference.Scoring.Evaluation.Tests` | 10 | The AI session scorer's behavioural suite: `GoldenReplayTests`, `PromptContractTests` and the opt-in `LiveJudgeTests` (`MMCA.ADC/MMCA.ADC.slnx:88`, in `CI.slnf:49`). Its 10 types are inside the 964 below (`00-inventory.md`, current scan); the gate that runs it is in section 7 |
+| `MMCA.ADC.Conference.UI.Tests` | 113 | bUnit tests for session/speaker components and dashboards, the sponsor create/detail pages and the public sponsor list |
 
 **Unit, per-module, per-layer (Engagement module)**
 
 | Project | Types | Purpose |
 |---|---|---|
 | `MMCA.ADC.Engagement.Domain.Tests` | 11 | Bookmark, LivePoll and SessionQuestion aggregates, plus `CheckIn`, `PointsEntry` and the leaderboard opt-in |
-| `MMCA.ADC.Engagement.Application.Tests` | 70 | Bookmark, feedback and live-layer handlers, plus the `CheckIns/` subtree (attendee, manual, room and sponsor-visit check-in, badge issue, attendance stats) and the `Points/` subtree (awarder, leaderboard, my-points, organizer overview, and the domain/integration-event points handlers) |
+| `MMCA.ADC.Engagement.Application.Tests` | 71 | Bookmark, feedback and live-layer handlers, plus the `CheckIns/` subtree (attendee, manual, room and sponsor-visit check-in, badge issue, attendance stats) and the `Points/` subtree (awarder, leaderboard, my-points, organizer overview, and the domain/integration-event points handlers) |
 | `MMCA.ADC.Engagement.Shared.Tests` | 6 | The badge payload, check-in scope names and settings, the points settings and subject keys, and the disabled bookmark-count service (`DisabledBookmarkCountServiceTests`) |
 | `MMCA.ADC.Engagement.API.Tests` | 11 | Controller surface (bookmarks, live polls and live-poll voting, session questions, check-ins, points) and the module's permission grants |
-| `MMCA.ADC.Engagement.Infrastructure.Tests` | 4 | EF config |
-| `MMCA.ADC.Engagement.UI.Tests` | 36 | bUnit tests for the conference-day live surfaces (Happening Now, session Live, presenter UI), the QR check-in pages, the points pages, and `CurrentEventNotificationScopeProviderTests` |
+| `MMCA.ADC.Engagement.Infrastructure.Tests` | 8 | EF config |
+| `MMCA.ADC.Engagement.UI.Tests` | 38 | bUnit tests for the conference-day live surfaces (Happening Now, session Live, presenter UI), the QR check-in pages, the points pages, and `CurrentEventNotificationScopeProviderTests` |
 
 **Unit, per-module (Notification module, API + Application only)**
 
@@ -310,24 +313,24 @@ those.
 
 | Project | Types | Purpose |
 |---|---|---|
-| `MMCA.ADC.Architecture.Tests` | 57 | Fitness-function classes plus `AdcArchitectureMap` and the `ServiceModels` fixture (see section 4) |
+| `MMCA.ADC.Architecture.Tests` | 68 | Fitness-function classes plus `AdcArchitectureMap` and the `ServiceModels` fixture (see section 4) |
 
 **Hosts and services**
 
 | Project | Types | Purpose |
 |---|---|---|
-| `MMCA.ADC.Gateway.Tests` | 9 | YARP route map, the ADR-058 conformance subclasses `SecurityHeadersTests`, `GracefulShutdownTests` and `GatewayHardeningTests` against a Production-pinned Gateway boot, plus `AppHostBicepParityTests`, which reads the AppHost and the production Bicep as text (see section 4) |
-| `MMCA.ADC.Services.Tests` | 17 | The gRPC export services and their adapters, with a `FakeServerCallContext` |
-| `MMCA.ADC.UI.Web.Tests` | 7 | The Blazor Web head itself: `SecurityHeadersTests` and `UiRateLimitingTests` against a `ConferenceUiHostApplicationFactory`, plus `BoundedCircuitHandlerTests`, `FallbackAuthorizationTests`, `ClientConfigEndpointTests` and `SerilogBootstrapTests` (`MMCA.ADC/MMCA.ADC.slnx:117`, in `CI.slnf:61`) |
+| `MMCA.ADC.Gateway.Tests` | 11 | YARP route map, the ADR-058 conformance subclasses `SecurityHeadersTests`, `GracefulShutdownTests` and `GatewayHardeningTests` against a Production-pinned Gateway boot, plus `AppHostBicepParityTests`, which reads the AppHost and the production Bicep as text (see section 4) |
+| `MMCA.ADC.Services.Tests` | 20 | The gRPC export services and their adapters, with a `FakeServerCallContext` |
+| `MMCA.ADC.UI.Web.Tests` | 8 | The Blazor Web head itself: `SecurityHeadersTests` and `UiRateLimitingTests` against a `ConferenceUiHostApplicationFactory`, plus `BoundedCircuitHandlerTests`, `FallbackAuthorizationTests`, `ClientConfigEndpointTests` and `SerilogBootstrapTests` (`MMCA.ADC/MMCA.ADC.slnx:117`, in `CI.slnf:61`) |
 
 **Integration (per-service WebApplicationFactory, in `MMCA.ADC.Integration.slnf` only)**
 
 | Project | Types | Purpose |
 |---|---|---|
-| `MMCA.ADC.Identity.IntegrationTests` | 36 | Full HTTP tests of the Identity service host against real SQL Server; auth flows, OAuth challenges, attendee/organizer access, outbox fidelity |
-| `MMCA.ADC.Conference.IntegrationTests` | 41 | Full HTTP tests of the Conference service host, plus its 409-conflict ProblemDetails extension and the versioning contract |
+| `MMCA.ADC.Identity.IntegrationTests` | 39 | Full HTTP tests of the Identity service host against real SQL Server; auth flows, OAuth challenges, attendee/organizer access, outbox fidelity |
+| `MMCA.ADC.Conference.IntegrationTests` | 47 | Full HTTP tests of the Conference service host, plus its 409-conflict ProblemDetails extension and the versioning contract |
 | `MMCA.ADC.Engagement.IntegrationTests` | 22 | Full HTTP tests of the Engagement service host, including the check-in authorization and scan, room-check-in and sponsor-visit round trips and the points award round trip |
-| `MMCA.ADC.Notification.IntegrationTests` | 9 | Full HTTP tests of the Notification service host, including its problem-details and OpenAPI contract subclasses |
+| `MMCA.ADC.Notification.IntegrationTests` | 10 | Full HTTP tests of the Notification service host, including its problem-details and OpenAPI contract subclasses |
 
 **Testcontainers tiers (in `MMCA.ADC.slnx` but in neither `.slnf`; need Docker)**
 
@@ -340,22 +343,24 @@ those.
 
 | Project | Types | Purpose |
 |---|---|---|
-| `MMCA.ADC.E2E.Tests` | 92 | Playwright browser-automation tests across login, register, password reset, conference browsing, organizer management, bookmark and live flows, plus the 45-scan `AccessibilityTests` suite (`MMCA.ADC/Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/AccessibilityTests.cs:29`, 45 `[Fact]` methods, each one `ScanAsync`/`ScanGridAsync` call); requires the Aspire stack running |
+| `MMCA.ADC.E2E.Tests` | 93 | Playwright browser-automation tests across login, register, password reset, conference browsing, organizer management, bookmark and live flows, plus the 45-scan `AccessibilityTests` suite (`MMCA.ADC/Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/AccessibilityTests.cs:29`, 45 `[Fact]` methods, each one `ScanAsync`/`ScanGridAsync` call); requires the Aspire stack running |
 
 ### Test-type totals
 
-- **MMCA.Common:** the 16 in-solution projects sum to 60 + 64 + 401 + 514 + 1 + 37 + 170 + 18 + 170 +
-  24 + 52 + 4 + 8 + 7 + 27 + 254 = **1,811**; the 8 out-of-solution projects add 11 + 21 + 2 + 6 + 7 +
-  3 + 8 + 14 = **72**, for **1,883**.
-- **MMCA.ADC:** 72 (Identity) + 367 (Conference, incl. the 10-type scoring evaluation suite) + 138 (Engagement) + 5 (Notification) + 57
-  (architecture) + 108 (four integration projects) + 16 (two Testcontainers tiers) + 9 (Gateway) + 17
-  (Services) + 7 (UI.Web) + 92 (E2E) = **888**.
-- **Combined test projects: 2,771.** Separately, the five shipped testing packages contribute
-  another **153** types (`MMCA.Common.Testing` 25, `.Testing.Architecture` 68, `.Testing.Aspire` 10,
+- **MMCA.Common:** the 16 in-solution projects sum to 61 + 66 + 407 + 538 + 1 + 37 + 195 + 18 + 207 +
+  31 + 58 + 5 + 8 + 7 + 29 + 269 = **1,937**; the 8 out-of-solution projects add 11 + 25 + 2 + 6 + 7 +
+  3 + 8 + 14 = **76**, for **2,013**.
+- **MMCA.ADC:** 78 (Identity) + 402 (Conference, incl. the 10-type scoring evaluation suite) + 145 (Engagement) + 5 (Notification) + 68
+  (architecture) + 118 (four integration projects) + 16 (two Testcontainers tiers) + 11 (Gateway) + 20
+  (Services) + 8 (UI.Web) + 93 (E2E) = **964**. MMCA.ADC has no out-of-solution test project: the
+  AppHost smoke project was deleted with the `apphost-smoke` job that ran it, since `e2e.yml` already
+  boots the real AppHost on every E2E run.
+- **Combined test projects: 2,977.** Separately, the five shipped testing packages contribute
+  another **161** types (`MMCA.Common.Testing` 27, `.Testing.Architecture` 74, `.Testing.Aspire` 10,
   `.Testing.E2E` 32, `.Testing.UI` 18): those are shipped product, not tests, which is why they are
   counted apart. The inventory also lists `MMCA.Common.AI.Testing` (5 types,
   `MMCA.Common/Source/Hosting/MMCA.Common.AI.Testing/`), which ships beside the AI package rather
-  than in this family and is not in the 153.
+  than in this family and is not in the 161.
 
 [Rubric §14, Testability & Test Strategy]: §14 assesses the breadth and meaningfulness of the
 test suite across all layers; the project layout above, unit per layer, arch per repo,
@@ -888,7 +893,7 @@ and typed assertions for the framework wiring contracts, health, liveness, JWKS,
 MMCA.Common consumes the package from both sides: `MMCA.Common.Testing.Aspire.Tests` (8 types,
 in-solution) unit-tests the preconditions and probes, and the out-of-solution
 `MMCA.Common.Testing.Aspire.AppHostTests` (3 types) boots a sample AppHost through the fixtures in its
-own CI job (`MMCA.Common/.github/workflows/ci.yml:958`, section 7).
+own CI job (`MMCA.Common/.github/workflows/ci.yml:905`, section 7).
 
 [Rubric §33, Developer Experience]: §33 assesses how much harness an engineer has to build before
 writing the test they actually wanted. Shipping the AppHost boot, the readiness wait and the
@@ -962,7 +967,7 @@ The walkthroughs below describe **what each rule enforces** (and the count of fa
 the rule *implementations* live in the shared package's `ArchitectureRules.*` + `*TestsBase` files,
 not in the per-repo test class.
 
-### MMCA.Common.Architecture.Tests, 254 types
+### MMCA.Common.Architecture.Tests, 269 types
 
 Located at `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/`, filed into the same
 per-area folders as the rule library (`Api/`, `Contracts/`, `Cqrs/`, `Domain/`, `Governance/`,
@@ -1129,7 +1134,7 @@ Supply-Chain]: §32 assesses whether dependency versions are tracked, pinned, an
 accidental bumps; this is the build-time gate for the most dangerous version upgrades in the codebase.
 (See the primer `00-primer.md#nuget-lock-files--pinned-audited-sources` for context.)
 
-### MMCA.ADC.Architecture.Tests, 57 types
+### MMCA.ADC.Architecture.Tests, 68 types
 
 Located at `MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/`: 54 fitness-function classes
 plus `AdcArchitectureMap` and the `ServiceModels` fixture (`Domain/DeleteBehaviorConventionTests.cs:70`). Like the Common project, most are thin subclasses of the shared
@@ -1316,14 +1321,14 @@ inventory and an unexamined one.
 The runtime rules above have a compile-time counterpart that ships inside the packages rather than in
 a test project. `MMCA.Common.Shared` carries a `buildTransitive` targets file that gives any consumer
 project named `{App}.{Module}.{Layer}` the layer rules at `ResolveProjectReferences`, with no opt-in
-(`MMCA.Common/.github/workflows/ci.yml:783-785`): `MMCA0001` for a forbidden project reference and
-`MMCA0002` for a forbidden package reference. The proof runs in `package-consumption` (`ci.yml:693`),
+(`MMCA.Common/.github/workflows/ci.yml:730-732`): `MMCA0001` for a forbidden project reference and
+`MMCA0002` for a forbidden package reference. The proof runs in `package-consumption` (`ci.yml:640`),
 the job that consumes the freshly packed local feed, in the step "Layer rules ship with the packages
-(compile-time probes)" (`ci.yml:781`). It builds one positive probe and two negative ones, and each
-negative probe must both fail and fail for its named code (`ci.yml:801`, `ci.yml:807`, `ci.yml:810`). The negatives
+(compile-time probes)" (`ci.yml:728`). It builds one positive probe and two negative ones, and each
+negative probe must both fail and fail for its named code (`ci.yml:748`, `ci.yml:754`, `ci.yml:757`). The negatives
 carry the weight: a passing probe on its own would also pass if the targets file were silently missing
 from the package, so only a build refused with the expected code proves the rules arrived
-(`ci.yml:786-787`).
+(`ci.yml:733-734`).
 
 ---
 
@@ -1398,20 +1403,20 @@ Docker daemon (`MMCA.ADC.slnx:99-102` records exactly that).
   Azure Service Bus emulator for broker parity.
 
 Neither is in `deploy.needs`, because the gating jobs have no Docker daemon. Both instead run on a
-weekday-nightly schedule (`cross-service-tests.yml:27`, jobs `cross-service` at
-line 78 and `servicebus-emulator-smoke` at line 159) and their **recency** gates the deploy through
-`cross-service-freshness` (`MMCA.ADC/.github/workflows/deploy.yml:936`): the deploy fails if the last
+weekday-nightly schedule (`cross-service-tests.yml:28`, jobs `cross-service` at
+line 79 and `servicebus-emulator-smoke` at line 142) and their **recency** gates the deploy through
+`cross-service-freshness` (`MMCA.ADC/.github/workflows/deploy.yml:884`): the deploy fails if the last
 successful nightly proving **both** tiers is stale, and it counts a run only when both required
-broker jobs actually succeeded rather than skipped (`deploy.yml:944-948`, through the shared `freshness-gate` action). The emulator smoke has been **authoritative** rather than advisory since
+broker jobs actually succeeded rather than skipped (`deploy.yml:899-902`, through the shared `freshness-gate` action). The emulator smoke has been **authoritative** rather than advisory since
 2026-08-31 (`cross-service-tests.yml:132-141`), and the same comment records the standing rule: if it
 goes red, fix it or dispatch a green run, do not re-add `continue-on-error` to unblock a deploy. The
 window was widened from 3 to 5 days when the nightly moved to weekdays plus skip-if-unchanged, so a
 legitimate weekend or holiday gap does not red the gate. Both jobs also sit
-behind a `should-run` guard (`cross-service-tests.yml:50`) that skips a night with no new commits.
+behind a `should-run` guard (`cross-service-tests.yml:51`) that skips a night with no new commits.
 That is the general pattern for a tier too expensive to run per-deploy: gate
 on the freshness of the evidence rather than on the run itself. MMCA.Store mirrors the arrangement
 with `MMCA.Store.CrossService.IntegrationTests` and `MMCA.Store.ServiceBusEmulator.IntegrationTests`
-behind its own `cross-service-freshness` gate (`MMCA.Store/.github/workflows/deploy.yml:716`).
+behind its own `cross-service-freshness` gate (`MMCA.Store/.github/workflows/deploy.yml:827`).
 
 The full Aspire composition is booted where it is exercised end to end: `e2e.yml` starts the consumer
 AppHost for every Playwright run (`MMCA.ADC/.github/workflows/e2e.yml:228`), and the framework's own
@@ -1432,27 +1437,27 @@ tested (outbox persistence, repository queries, soft-delete filters). Where the 
 is the thing under test, SQLite is not enough: `MMCA.Common.Infrastructure.Redis.Tests` exists
 precisely because a counter written as a string and read back as a hash round-trips fine against a
 mocked `IDistributedCache` and answers WRONGTYPE against a real server, so that one project runs Redis
-via Testcontainers, out of the slnx, in its own CI job (`MMCA.Common/.github/workflows/ci.yml:837,869`).
-The same argument now has a second instance: `postgresql-integration` (`ci.yml:881`) runs the shipped
+via Testcontainers, out of the slnx, in its own CI job (`MMCA.Common/.github/workflows/ci.yml:784-793,821`).
+The same argument now has a second instance: `postgresql-integration` (`ci.yml:828`) runs the shipped
 `PostgreSQLDbContext` against a real PostgreSQL container because the SQL the framework **emits** is
 what matters there, and a model assertion cannot express it (a partial-index predicate written the SQL
 Server way, a soft-delete predicate comparing a boolean to `0`, or a non-UTC `DateTime` Kind all build
-a valid EF model and are rejected by the server, `ci.yml:886-891`). A third, `sqlserver-integration`
-(`ci.yml:918`), runs the shipped `SQLServerDbContext` and `DbContextFactory` against a real SQL Server
+a valid EF model and are rejected by the server, `ci.yml:833-836`). A third, `sqlserver-integration`
+(`ci.yml:865`), runs the shipped `SQLServerDbContext` and `DbContextFactory` against a real SQL Server
 because there the **session** state and server-generated values matter, and neither a mock nor SQLite
 can express them: `SET IDENTITY_INSERT` holds only on the session that ran it, a rowversion is issued
 by the server on every write, and the outbox row must reach the database in the same `SaveChanges` as
-its aggregate (`ci.yml:925-929`). It is not a required check yet; promoting it is a branch-protection
-setting (`ci.yml:930-931`). A fourth, `apphost-testing` (`ci.yml:958`), boots a sample AppHost through `Aspire.Hosting.Testing` to execute the one layer
+its aggregate (`ci.yml:872-876`). It is not a required check yet; promoting it is a branch-protection
+setting (`ci.yml:877-878`). A fourth, `apphost-testing` (`ci.yml:905`), boots a sample AppHost through `Aspire.Hosting.Testing` to execute the one layer
 nothing else runs, the AppHost wiring itself: the solution build never runs an AppHost and every
 in-process tier boots hosts directly through `WebApplicationFactory`, so a renamed resource, an
-unresolvable reference or a `WaitFor` cycle is invisible everywhere else (`ci.yml:968-971`). It is
-**advisory** (`continue-on-error`, `ci.yml:976`) on purpose: it is the only tier that starts a real
-orchestrator, it is the slowest thing in the repo per assertion, and its shared-runner failure modes
-are not yet proven, so it reds the job for visibility without failing the run until it earns a green
-streak. Like the ADC smoke it trusts nothing about the runner: it trusts the development certificate
-itself (`ci.yml:992`) and gates on `MMCA_APPHOST_TESTS` with a `--minimum-expected-tests` floor so a
-silently skipped tier is visible rather than a green no-op (`ci.yml:1015`).
+unresolvable reference or a `WaitFor` cycle is invisible everywhere else (`ci.yml:913-916`). It is
+**blocking** (a red fails the run) but not a required merge check, since it is the only tier that
+starts a real orchestrator and the slowest thing in the repo per assertion (`ci.yml:910-911`). The
+sample AppHost declares two resources over one sample project, one with a SQLite file and one on the
+Http2-only h2c profile, so the job needs neither a container runtime nor a development certificate
+(`ci.yml:918-921`). It gates on `MMCA_APPHOST_TESTS` with a `--minimum-expected-tests` floor so a
+silently skipped tier is visible rather than a green no-op (`ci.yml:941-950`).
 
 ### E2E tests
 
@@ -1686,7 +1691,7 @@ A test tier only means something once you know what it blocks. This is the map.
 | Runtime conformance, HTTP suites | real SQL Server | ADC/Store `integration-tests` over `Integration.slnf` | Merge (PR-only required check), **not** the deploy |
 | Testcontainers cross-service / broker | Docker | Nightly `cross-service-tests.yml` | The deploy, indirectly, via `cross-service-freshness` |
 | Real-engine persistence (PostgreSQL) | Docker | Common `postgresql-integration` | Nothing until it is added to branch protection; the job is written to be promotable |
-| Real-engine persistence (SQL Server) | Docker | Common `sqlserver-integration` | Nothing until it is added to branch protection (`MMCA.Common/.github/workflows/ci.yml:930-931`) |
+| Real-engine persistence (SQL Server) | Docker | Common `sqlserver-integration` | Nothing until it is added to branch protection (`MMCA.Common/.github/workflows/ci.yml:877-878`) |
 | AppHost orchestration | `MMCA_APPHOST_TESTS` (no container runtime, no dev certificate) | Common `apphost-testing`, blocking (`MMCA.Common/.github/workflows/ci.yml:910-911`) | The CI run goes red; not a required merge check |
 | Browser (gallery) | Playwright, no backend | Common `ui-e2e`, three engines | Merge, all three engines |
 | Browser (full stack) | full Aspire stack | ADC/Store `e2e-gate`, chromium only | The deploy, when the change is ui-scoped |
@@ -1698,12 +1703,12 @@ A test tier only means something once you know what it blocks. This is the map.
 
 ### The accessibility gate (ADR-063)
 
-MMCA.Common's `ui-e2e` job (`MMCA.Common/.github/workflows/ci.yml:248`) builds the out-of-slnx
-gallery plus E2E project (`ci.yml:287`) and runs the axe scans across a `chromium, firefox, webkit`
-matrix (`ci.yml:256-257`), one engine per leg via `E2E_BROWSER` (`ci.yml:321`), with
-`fail-fast: false` (`ci.yml:255`) so each engine reports independently. **All three are required merge
+MMCA.Common's `ui-e2e` job (`MMCA.Common/.github/workflows/ci.yml:223`) builds the out-of-slnx
+gallery plus E2E project (`ci.yml:258-262`) and runs the axe scans across a `chromium, firefox, webkit`
+matrix (`ci.yml:231-232`), one engine per leg via `E2E_BROWSER` (`ci.yml:291`), with
+`fail-fast: false` (`ci.yml:230`) so each engine reports independently. **All three are required merge
 checks**, three of the eight enumerated in `MMCA.Common/CONTRIBUTING.md:60-71` (firefox was promoted
-2026-07-12 and webkit 2026-07-16 after 11 consecutive green main runs, `ci.yml:258-260` and
+2026-07-12 and webkit 2026-07-16 after 11 consecutive green main runs, `ci.yml:233-235` and
 `CONTRIBUTING.md:63-65`). No leg collects coverage: the `coverage` job reads only the unit tier
 (`ci.yml:357-358`). `CONTRIBUTING.md` also names the live ruleset as authoritative over its own copy
 (`CONTRIBUTING.md:75-77`), which is the right instinct for any list of gates.
@@ -1723,7 +1728,7 @@ green run shipped nothing (`deploy.yml:1164-1167`).
 On both apps the cost of that fix is bounded by branch protection rather than by a second deploy gate.
 Admins are enforced and an up-to-date branch is required, so the PR's `build-and-test` ran the unit,
 architecture and bUnit tiers against the exact tree that merges, and a skipped `e2e-gate` does not mean
-an untested deploy (`deploy.yml:798-802`, `deploy.yml:1146-1148`). What a backend-only deploy still
+an untested deploy (`deploy.yml:798-802`, `deploy.yml:1160-1162`). What a backend-only deploy still
 ships without is a **browser scan**: axe did not run on that commit, and the post-deploy smoke gate is
 the backstop for anything the unit tier cannot see.
 
@@ -1737,12 +1742,12 @@ Moving firefox and webkit off the deploy gate bought about 40 minutes per UI dep
 hole of the same shape the broker tier once had: the nightly `e2e.yml` matrix is `fail-fast: false`
 with `continue-on-error` on the non-chromium legs, so those legs could stay red for weeks without
 blocking a single deploy. The proof was produced and then discarded
-(`MMCA.ADC/.github/workflows/deploy.yml:966-970`). `cross-browser-freshness` (`deploy.yml:987`)
-closes it the way `cross-service-freshness` (`deploy.yml:936`) closes the broker one: it does not run
+(`MMCA.ADC/.github/workflows/deploy.yml:907-911`). `cross-browser-freshness` (`deploy.yml:923`)
+closes it the way `cross-service-freshness` (`deploy.yml:884`) closes the broker one: it does not run
 the engines, it refuses to deploy unless a recent run passed on **each** of them.
 
-- **Push-only** (`deploy.yml:990`), like every other freshness gate: a PR is not a rollout.
-- **A 10-day window** (`deploy.yml:1006`). The two engines alternate on separate weekly crons
+- **Push-only** (the `freshness` job condition, `deploy.yml:833`), like every other freshness gate: a PR is not a rollout.
+- **A 10-day window** (`deploy.yml:936`). The two engines alternate on separate weekly crons
   (Monday firefox, Thursday webkit), so the window is a 7-day cadence plus slack for a skipped
   night (the nightly's should-run guard skips a night with no new commits) and for a manual re-run
   landing late.
@@ -1752,8 +1757,8 @@ the engines, it refuses to deploy unless a recent run passed on **each** of them
   an engine's red need not red the run, another job's red can red a run in which this engine passed,
   and the should-run guard can conclude a run `success` with every leg skipped. Each engine is
   resolved independently, because their proofs normally come from two different runs, and the older
-  of the two decides the gate (the step at `deploy.yml:995-1000` hands this to MMCA.Common's shared `freshness-gate`
-  composite action, `deploy.yml:1001`, in its `per-job` mode,
+  of the two decides the gate (the step at `deploy.yml:923-944` hands this to MMCA.Common's shared `freshness-gate`
+  composite action, `deploy.yml:931`, in its `per-job` mode,
   `MMCA.Common/.github/actions/freshness-gate/action.yml:44-46`, which fails when either engine is
   missing or stale).
 - **Break-glass is loud, not silent.** A `workflow_dispatch` skip requires a justification; without
@@ -1772,12 +1777,14 @@ than a report nobody reads, without putting two more browser legs on the per-dep
 The AI session scorer is the one place in this repo where behavior can change with **no code
 change**: a prompt edit, a model deprecation or a provider-side contract change all move the numbers
 an organizer uses to accept or decline talks, and every unit test in `CI.slnf` stays green through
-all three (`MMCA.ADC/.github/workflows/deploy.yml:530-533`). `ai-eval-gate` (`deploy.yml:551`) is the
+all three (`MMCA.ADC/.github/workflows/deploy.yml:502-505`). `ai-eval-gate` (`deploy.yml:522`) is the
 behavioral check, and it is split into two tiers by cost.
 
-**Tier 1, golden replay plus prompt contract, always.** The step runs the evaluation project with
+**Tier 1, golden replay plus prompt contract, on every PR.** Its tests carry no trait, so
+`build-and-test` runs them in its `CI.slnf` pass against the exact tree that merges
+(`deploy.yml:512-513`); inside `ai-eval-gate` the replay step re-runs the evaluation project with
 `--filter-not-trait "Category=AiEval.Live"` and a `--minimum-expected-tests 1` floor
-(`deploy.yml:577-583`). No API key and no network: seven recorded proposals in
+(`deploy.yml:547-554`). No API key and no network: seven recorded proposals in
 `Tests/Modules/Conference/MMCA.ADC.Conference.Scoring.Evaluation.Tests/Golden/` are replayed through
 the **real** `SessionScoringService`. The harness is the framework's: `GoldenReplayTests`
 (`GoldenReplayTests.cs:35`) derives from `GoldenReplayTestsBase` and drives a `ReplayChatClient`,
@@ -1822,7 +1829,7 @@ hands the framework (its name, version, model and system prompt) to those same v
 calls to the configured provider for each golden proposal, asserting the overall lands in the case's
 band. It composes the same governed `AddMmcaChatClient` chain as the host and names no vendor type
 (`LiveJudgeTests.cs:26`, `LiveJudgeTests.cs:112`). The deploy
-runs it only when `needs.changes.outputs.scoring == 'true'` (`deploy.yml:586`), and that filter
+runs it only when `needs.changes.outputs.scoring == 'true'` (`deploy.yml:524`), and that filter
 is deliberately **narrow**: unlike `code` and `ui` it does not fail safe to true on an unrecognized
 path, because a false positive here spends money on every unrelated deploy while the key-free tier
 already runs unconditionally (`deploy.yml:162-166`, the three matched paths at `deploy.yml:168-170`).
@@ -1830,15 +1837,16 @@ The whole-diff fail-safe still applies one level up: when the push range cannot 
 classifier sets `scoring=true` along with everything else (`deploy.yml:99-104`, `deploy.yml:113-119`).
 Without `AI_API_KEY` (`LiveJudgeTests.cs:41`) each case calls `Assert.Skip`
 (`LiveJudgeTests.cs:69`), reported as skipped and never as passed, which is why that step alone
-carries no `--minimum-expected-tests` floor (`deploy.yml:587-589`). The variable name is
+carries no `--minimum-expected-tests` floor (`deploy.yml:557-559`). The variable name is
 provider-neutral to match the `Ai:ApiKey` configuration key, while the repository secret that feeds
-it keeps its `ANTHROPIC_API_KEY` name because it holds an Anthropic credential (`deploy.yml:596-598`).
+it keeps its `ANTHROPIC_API_KEY` name because it holds an Anthropic credential (`deploy.yml:566-568`).
 
-Two choices are worth naming. The gate runs on the same `code` condition as the `CI.slnf` tiers
-rather than the ui/backend split, because the replay tier is cheap and its whole point is catching
-what the other two gates cannot see (`deploy.yml:547-550`, condition at `deploy.yml:553`); and the
-live bands are wide on purpose, because a judge model is not deterministic and a flaky gate gets
-ignored (`deploy.yml:544-545`).
+Two choices are worth naming. The job itself runs only on a code deploy whose diff touches the
+scoring code, because it exists for the paid judge: the key-free replay already ran on the PR, and
+the job re-runs it first only as a cheap precondition for spending on the judge, so every other
+deploy skips it and the `deploy` job accepts `skipped` (`deploy.yml:518-524`, `deploy.yml:1197`); and
+the live bands are wide on purpose, because a judge model is not deterministic and a flaky gate gets
+ignored (`deploy.yml:515-516`).
 [Rubric §14, Testability & Test Strategy]: §14 assesses whether the suite meaningfully covers the
 system's real behavior; a deterministic replay of recorded provider responses is how a
 non-deterministic dependency becomes testable at all, and the corpus-shape fact is how the tier
@@ -1856,13 +1864,13 @@ noisy neighbour or loose enough never to fire
 ([ADR-060](https://ivanball.github.io/docs/adr/060-performance-regression-gate.html)). The answer
 splits the baseline by measurement stability.
 
-- **A dedicated job measures, then verifies.** `performance-smoke` (`MMCA.Common/.github/workflows/ci.yml:355`),
-  named "Performance gate (BenchmarkDotNet Short + baseline verify)" (`ci.yml:356`), runs the
-  suite with `--filter "*" --job Short --exporters json` (`ci.yml:388`) and then runs `build/perfgate`
-  over the exported artifacts (`ci.yml:397`). `--job Short` is 3 warmup plus 3 iterations, chosen to
+- **A dedicated job measures, then verifies.** `performance-smoke` (`MMCA.Common/.github/workflows/ci.yml:310`),
+  named "Performance gate (BenchmarkDotNet Short + baseline verify)" (`ci.yml:311`), runs the
+  suite with `--filter "*" --job Short --exporters json` (`ci.yml:343`) and then runs `build/perfgate`
+  over the exported artifacts (`ci.yml:352`). `--job Short` is 3 warmup plus 3 iterations, chosen to
   produce real measurements inside a bounded budget; `--filter "*"` is required because
-  BenchmarkDotNet otherwise prompts for a selection and would hang the runner (`ci.yml:384-387`).
-- **The baseline is a committed JSON file**, `Tests/Performance/perf-baseline.json` (`ci.yml:397`),
+  BenchmarkDotNet otherwise prompts for a selection and would hang the runner (`ci.yml:339-342`).
+- **The baseline is a committed JSON file**, `Tests/Performance/perf-baseline.json` (`ci.yml:352`),
   not a stored previous run. A gate comparing against the previous run ratchets silently: every PR is
   only slightly worse than the last, and the sum is invisible. A committed number is a line a reviewer
   questions in the same PR as the code that spends it.
@@ -1879,7 +1887,7 @@ splits the baseline by measurement stability.
   with an instruction to keep `[MemoryDiagnoser]` on the suite. Vacuity is the failure mode a
   benchmark gate actually has: a renamed method or a filter selecting nothing would leave a gate that
   passes while measuring nothing, which is worse than no gate because it reads as evidence
-  (the verifier invocation is `ci.yml:397`; the rules it enforces live in `MMCA.Common/build/perfgate`).
+  (the verifier invocation is `ci.yml:352`; the rules it enforces live in `MMCA.Common/build/perfgate`).
 
 The job is a **required merge gate**, not advisory: it is the eighth of the eight contexts listed in
 `MMCA.Common/CONTRIBUTING.md:68-71`, which also names raising a ceiling to silence a red gate as
@@ -1951,17 +1959,17 @@ Two gates run a *different repo's* code than the one being changed, and both exi
 build in one repo has repeatedly proved nothing about the other.
 
 **MMCA.Common's consumer canary** (`consumer-source-build`,
-`MMCA.Common/.github/workflows/ci.yml:475`, named "Consumer source build (Helpdesk)" at `ci.yml:476`)
-checks MMCA.Helpdesk out as a sibling (`ci.yml:526`) and builds it against **this PR's** framework
-source (`ci.yml:568`), so a breaking public-API change reds here rather than after a release plus a
+`MMCA.Common/.github/workflows/ci.yml:422`, named "Consumer source build (Helpdesk)" at `ci.yml:423`)
+checks MMCA.Helpdesk out as a sibling (`ci.yml:473`) and builds it against **this PR's** framework
+source (`ci.yml:515`), so a breaking public-API change reds here rather than after a release plus a
 lockstep sweep. Helpdesk is the right canary precisely because it is
 minimal: no database and no GitHub Packages token, and its committed `local.props` already swaps the
 `MMCA.Common.*` package references for project references into `../MMCA.Common/Source`. The job also
 proves the framework's **migration** path end to end, starting an ephemeral SQL Server
-(`ci.yml:558`), applying the consumer's real EF migrations to it (`ci.yml:635`) and then asserting the
-migrations were recorded and the schema exists (`ci.yml:654`), and it runs the seed's suite with a
-floor of `40` (`ci.yml:580`). The same-name-branch resolution step described below has its Common-side
-twin here (`ci.yml:509`).
+(`ci.yml:505`), applying the consumer's real EF migrations to it (`ci.yml:582`) and then asserting the
+migrations were recorded and the schema exists (`ci.yml:601`), and it runs the seed's suite with a
+floor of `40` (`ci.yml:527`). The same-name-branch resolution step described below has its Common-side
+twin here (`ci.yml:456`).
 
 **MMCA.Helpdesk's own `ci.yml`** is the other half of that pair, and it is deliberately small. It runs
 on pull requests and pushes to `main` (`MMCA.Helpdesk/.github/workflows/ci.yml:3-7`) with one
@@ -1999,15 +2007,15 @@ this workspace can ship, and this is the gate that catches it.
 Coverage is enforced as a floor, not reported as a number, and every floor is scoped so it measures
 the code it claims to measure.
 
-- **MMCA.Common:** the `coverage` job (`MMCA.Common/.github/workflows/ci.yml:402`) merges the tiers
-  with ReportGenerator (`ci.yml:422`) and fails if the **unit tier drops below 68.3% line coverage**
-  (`ci.yml:462`). It gates the
+- **MMCA.Common:** the `coverage` job (`MMCA.Common/.github/workflows/ci.yml:357`) merges the tiers
+  with ReportGenerator (`ci.yml:377`) and fails if the **unit tier drops below 68.3% line coverage**
+  (`ci.yml:409`). It gates the
   unit tier rather than the merged report because the gallery E2E tier dilutes it, and it excludes
   generated code (`*.generated.cs` / `*.g.cs`) because source generators emit large uncovered files
   that otherwise tank the number: 45.3% raw versus 61.9% hand-written on the run that prompted the
-  filter (`ci.yml:445-450`, assembly and file filters applied at `ci.yml:459`). It runs only when
+  filter (`ci.yml:392-397`, assembly and file filters applied at `ci.yml:406`). It runs only when
   `build-and-test` succeeded, so an upstream failure does
-  not add a confusing secondary coverage failure (`ci.yml:452-454`).
+  not add a confusing secondary coverage failure (`ci.yml:399-401`).
 - **MMCA.ADC:** two floors run inside `build-and-test`, both PR-only. The global unit-tier floor sits
   at **55.5%** (`MMCA.ADC/.github/workflows/deploy.yml:386`), measured over **ADC's own code only**.
   The comment above it is the part worth reading: the raw cobertura also

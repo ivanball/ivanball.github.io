@@ -185,8 +185,8 @@
   │               outputs: gatewayFqdn, uiFqdn, sqlServerFqdn, …
   │
   ├─ Phase 4 ─ (no migration step, each service self-applies its own
-  │               migrations at startup as the SOLE migrator; minReplicas:1
-  │               guarantees a single applier, see the CI/CD chapter)
+  │               migrations at startup as the SOLE migrator; EF Core&#39;s
+  │               sp_getapplock lock serializes replicas, see CI/CD)
   │
   ├─ Phase 5 ─ revision-activation gate + smoke-test probe + rollback on failure
   │
@@ -527,6 +527,12 @@ steps:
           <li><code>useManagedIdentitySql</code> is the one boolean: it is appended as a literal JSON <code>true</code> only when the
           <code>USE_MANAGED_IDENTITY_SQL</code> repository variable is exactly <code>&quot;true&quot;</code><span class="cite"><span> (<code>deploy.yml:1572-1575</code>)</span></span>, keeping
           the Bicep parameter typed.</li>
+          <li><code>conferenceMode</code> is the other boolean, and it is switched by a date rather than a flag<span class="cite"><span>
+          (<code>deploy.yml:1430-1445</code>)</span></span>: when the <code>CONFERENCE_MODE_UNTIL</code> repository variable (<code>yyyy-MM-dd</code>) is
+          set and today&#39;s UTC date is on or before it, <code>jq</code> writes <code>conferenceMode: true</code> into the parameters
+          file. The step runs on every deploy, so a push to <code>main</code> inside the window keeps the surge and the
+          first deploy after it reverts it, and a malformed date fails the deploy rather than silently
+          deploying the baseline.</li>
           </ul>
           <p>[Rubric §11, Security] is directly served: there is no checked-in parameters file to leak secrets from at
           all; the actual secret values flow from GitHub Actions secrets (encrypted at rest, masked in logs, visible
@@ -595,6 +601,11 @@ steps:
           declared <code>existing</code> and provisioned by runbook (see the Notification Hub section).</li>
           <li><code>grantAvatarStorageRole</code><span class="cite"><span> (<code>main.bicep:133</code>)</span></span>, default <code>false</code>, because the deploy identity
           deliberately lacks <code>Microsoft.Authorization/roleAssignments/write</code>.</li>
+          <li><code>conferenceMode</code><span class="cite"><span> (<code>main.bicep:156-157</code>)</span></span>, default <code>false</code>, is the one switch no operator sets by
+          hand. Its description says so<span class="cite"><span> (<code>main.bicep:156</code>)</span></span>: <code>deploy.yml</code> turns it on from the
+          <code>CONFERENCE_MODE_UNTIL</code> repository variable on every deploy inside the window, a push to <code>main</code>
+          included, the first deploy after the window turns it off again, and <code>cost-guard.yml</code> reads the
+          same variable. What it changes is described under Computed variables below.</li>
           </ul>
           <p><strong>FinOps and alerting controls</strong>:</p>
           <ul>
@@ -630,6 +641,28 @@ steps:
           <p>There is no <code>useRs256</code> flag any more. RS256 is unconditional because the RSA parameters are
           required, which is why Identity&#39;s <code>Jwt__SigningAlgorithm</code> is a literal <code>&#39;RS256&#39;</code><span class="cite"><span>
           (<code>main.bicep:1689</code>)</span></span> rather than a ternary.</p>
+          <p><strong>Conference-day sizing is computed, not parameterized per app</strong><span class="cite"><span> (<code>main.bicep:174-196</code>)</span></span>. Five
+          variables turn the single <code>conferenceMode</code> boolean into every capacity number the template varies:</p>
+          <ul>
+          <li><code>conferenceScaledResources</code><span class="cite"><span> (<code>main.bicep:182</code>)</span></span>: 0.5 vCPU / 1 Gi in conference mode, the 0.25 vCPU /
+          0.5 Gi baseline otherwise. Conference, Engagement, the Gateway and the UI use it.</li>
+          <li><code>conferenceIdentityResources</code><span class="cite"><span> (<code>main.bicep:186</code>)</span></span>: 1.0 vCPU / 2 Gi in conference mode. The comment
+          gives the reason<span class="cite"><span> (<code>main.bicep:183-185</code>)</span></span>: every sign-in is one PBKDF2-HMAC-SHA512 hash at 600,000
+          iterations, and the 2026-10-03 rehearsal pinned all four Identity replicas at a 0.5 vCPU limit at
+          about five sign-ins a second.</li>
+          <li><code>conferenceFrontDoorMinReplicas</code><span class="cite"><span> (<code>main.bicep:191</code>)</span></span>: 2 in conference mode, else 1. Only the two
+          database-free front-door apps (Gateway and UI) take it; the three database-owning services stay at
+          a minimum of one replica for cost alone<span class="cite"><span> (<code>main.bicep:187-190</code>)</span></span>.</li>
+          <li><code>conferenceScaledMaxReplicas</code><span class="cite"><span> (<code>main.bicep:192</code>)</span></span>: 4 in conference mode, else 2.</li>
+          <li><code>conferenceScaledDatabaseNames</code><span class="cite"><span> (<code>main.bicep:193-196</code>)</span></span>: <code>ADC_Conference</code> and <code>ADC_Engagement</code>, the
+          two databases on the attendee hot path, which move from Basic to S2 (see the SQL section).</li>
+          </ul>
+          <p>The comment block above them<span class="cite"><span> (<code>main.bicep:174-181</code>)</span></span> records the sizing evidence: the 2026 conference
+          peaked at about 67 concurrent users, the 2026-10-02 capacity review sized for about 400, and the
+          2026-10-03 rehearsal (400 attendees, passed) is why Engagement and the Gateway joined the scaled set.
+          Notification is deliberately left out, because its hub sat at 0.03 cores. Keeping the surge in the
+          template rather than in a portal change is what lets <code>cost-guard.yml</code> tell an intended surge from
+          drift (see the Cost budget section).</p>
           <p>Per-service SQL connection strings<span class="cite"><span> (<code>main.bicep:195-198</code>)</span></span> are composed from a shared base: the SQL
           server FQDN plus one of two auth segments selected by <code>useManagedIdentitySql</code><span class="cite"><span> (<code>main.bicep:191-193</code>)</span></span>.
           Each is a distinct string pointing at its own database (<code>ADC_Identity</code>, <code>ADC_Conference</code>,
@@ -866,19 +899,18 @@ steps:
           and the availability alert below are provisioned but ungated, and their triage deliberately sits
           under <code>####</code> headings so the parser does not read them as SLO runbook sections.</p>
           <h3 id="operational-and-availability-alerts-mainbicep445-703">Operational and availability alerts (<code>main.bicep:445-703</code>)</h3>
-          <p>Beyond the five SLOs, <code>main.bicep</code> provisions <strong>three</strong> more scheduled query rules from
-          <code>scheduledQueryAlertSpecs</code> (<span class="cite"><span><code>main.bicep:520</code></span></span>, materialized at <span class="cite"><span><code>:541</code></span></span>), all severity 2 on a
+          <p>Beyond the five SLOs, <code>main.bicep</code> provisions <strong>four</strong> more scheduled query rules from
+          <code>scheduledQueryAlertSpecs</code> (<span class="cite"><span><code>main.bicep:575</code></span></span>, materialized at <span class="cite"><span><code>:602</code></span></span>), all severity 2 on a
           15-minute evaluation over a 15-minute window:</p>
           <ul>
-          <li><code>outbox-dead-letter</code><span class="cite"><span> (<code>main.bicep:521-526</code>)</span></span> fires on <strong>any</strong> hit (<code>threshold: 0</code>) of an <code>AppTraces</code>
+          <li><code>outbox-dead-letter</code><span class="cite"><span> (<code>main.bicep:576-581</code>)</span></span> fires on <strong>any</strong> hit (<code>threshold: 0</code>) of an <code>AppTraces</code>
           row at Error or above whose message contains <code>dead-lettered</code>. An outbox message that exhausted its
           retries means an integration event was permanently lost. The row-age signal is DB-side and not
           queryable from Log Analytics, so this Error line <em>is</em> the backlog alarm.</li>
-          <li><code>sql-dependency-failures</code><span class="cite"><span> (<code>main.bicep:527-532</code>)</span></span> fires above 10 failed SQL dependency calls. Every
+          <li><code>sql-dependency-failures</code><span class="cite"><span> (<code>main.bicep:582-587</code>)</span></span> fires above 10 failed SQL dependency calls. Every
           service owns exactly one database, so a burst here means a service cannot reach its own DB, which
           also stalls its outbox drain.</li>
-          <li><code>revision-activation-failed</code><span class="cite"><span> (<code>main.bicep:533-538</code>)</span></span> is the newest of the three and the most
-          instructive, because it exists to catch a failure the rest of the alerting stack is blind to. It
+          <li><code>revision-activation-failed</code><span class="cite"><span> (<code>main.bicep:588-593</code>)</span></span> is the most instructive of the four, because it exists to catch a failure the rest of the alerting stack is blind to. It
           queries <code>ContainerAppSystemLogs_CL</code> for <code>Reason_s startswith &quot;Deployment Progress Deadline Exceeded&quot;</code> and fires on any hit. When a revision&#39;s readiness probe never goes green, Container
           Apps keeps the <strong>previous</strong> revision serving: nothing outside-in degrades, every SLO stays quiet,
           and the deploy looks fine while the newly built code never takes traffic. The comment names the
@@ -886,12 +918,22 @@ steps:
           where an untagged infrastructure health check failed <code>/health/ready</code> on every backend and the
           older revision kept 100% of the traffic for days. The rule works at all only because the
           environment&#39;s <code>appLogsConfiguration</code> sends platform system logs to the same workspace.</li>
+          <li><code>signalr-backplane-errors</code> (<span class="cite"><span><code>main.bicep:594-599</code></span></span>, comment at <span class="cite"><span><code>:567-574</code></span></span>) is the newest, added with
+          the conference-day multi-replica work. It fires on any <code>AppTraces</code> row at Warning or above
+          (<code>SeverityLevel &gt;= 2</code>) whose <code>Properties.CategoryName</code> starts with
+          <code>Microsoft.AspNetCore.SignalR.StackExchangeRedis</code>. The failure it catches is silent by design: when
+          the Notification backplane loses Redis, each replica keeps serving its own connections, so a push
+          issued on one replica stops reaching clients held by another, and readiness stays green on purpose,
+          because making Redis a readiness dependency would take the whole hub down during a blip. The
+          comment also states why the query can see the signal at all: <code>otelLogLevelEnv</code> exports Warning and
+          above, and Notification sets no category override below that.</li>
           </ul>
-          <p>The two older rules each have a <code>####</code> triage section in the runbook<span class="cite"><span> (<code>OPERATIONS.md:163</code>, <code>:206</code>)</span></span>;
-          <code>revision-activation-failed</code> does not have one, which the ungated coverage boundary above allows,
-          and the runbook names it, with the ingestion-cap rule below, as the gap the honour system leaves
-          open<span class="cite"><span> (<code>OPERATIONS.md:157-159</code>)</span></span>. Its <code>description</code> field<span class="cite"><span> (<code>main.bicep:535</code>)</span></span> carries the
-          first-response instructions instead.</p>
+          <p>Three of the four have a <code>####</code> triage section in the runbook<span class="cite"><span> (<code>OPERATIONS.md:163</code>, <code>:206</code>, <code>:232</code>)</span></span>,
+          and so does the ingestion-cap rule below<span class="cite"><span> (<code>OPERATIONS.md:262</code>)</span></span>. <code>signalr-backplane-errors</code> does not,
+          which the ungated coverage boundary above allows, and the runbook names it as the one gap the honour
+          system leaves open<span class="cite"><span> (<code>OPERATIONS.md:158-160</code>, <code>:393-395</code>)</span></span>. Its <code>description</code> field<span class="cite"><span> (<code>main.bicep:596</code>)</span></span>
+          carries the first-response instructions instead: check Azure Managed Redis health and the
+          notification app logs.</p>
           <p><strong>A fourth standalone rule watches the detector itself</strong> (<span class="cite"><span><code>main.bicep:593</code></span></span>, added 2026-09-07 as
           SEC-ADC-47). <code>logIngestionCapAlert</code> is named <code>${prefix}-alert-log-ingestion-cap-reached</code>, fires at
           severity 2 on any hit, and queries <code>_LogOperation</code> for an <code>Ingestion</code> / <code>Data collection Status</code>
@@ -933,10 +975,11 @@ steps:
           this probe because a backend is unhealthy. (The runbook&#39;s parenthetical still describes the probe as
           5-minute, <span class="cite"><span><code>OPERATIONS.md:236</code></span></span>; the template is the ground truth.)</p>
           <p>[Rubric §29, Resilience, Reliability &amp; Business Continuity] assesses whether the system can detect
-          degradation automatically and notify operators. The request, latency, dependency and circuit SLO rules, the three operational rules,
+          degradation automatically and notify operators. The request, latency, dependency and circuit SLO rules, the four operational rules,
           and the sev-1 availability alert all route to the same action group as the cost budget, giving the
           on-call operator an automated signal for error rate, latency, dependency failures, permanent event
-          loss, database reachability, a silently failed rollout, and total entry-point outage. The 2026-09-02
+          loss, database reachability, a silently failed rollout, a SignalR hub split into per-replica
+          islands, and total entry-point outage. The 2026-09-02
           cadence changes are the honest counterweight: this stack now trades roughly ten minutes of detection
           latency for a materially smaller monitoring bill, and the deploy-time gates carry the fast path.</p>
           <h3 id="ai-scoring-token-ceiling-alert-mainbicep383-432">AI-scoring token-ceiling alert (<code>main.bicep:383-432</code>)</h3>
@@ -1051,9 +1094,18 @@ enabled: hasAiApiKey</code></pre>
           tier and the Container App replica caps, and left running for weeks it would push the monthly bill
           well past $200 and trigger both thresholds long before the billing cycle closes. The
           <code>cost-guard.yml</code> workflow is the same guard from the other direction: it is one of <code>deploy</code>&#39;s
-          required gates (<span class="cite"><span><code>deploy.yml:1237</code></span></span>, job at <span class="cite"><span><code>:749</code></span></span>) and fails the deploy outright when a database is
-          off the Basic tier or an app&#39;s <code>maxReplicas</code> exceeds the <code>BASELINE_MAX_REPLICAS</code> of 2<span class="cite"><span>
-          (<code>cost-guard.yml:25</code>, <code>:61</code>, <code>:76</code>)</span></span>.</p>
+          required gates (<span class="cite"><span><code>deploy.yml:1192</code></span></span>, job at <span class="cite"><span><code>:783</code></span></span>, called with <code>deploy_gate: true</code> at <span class="cite"><span><code>:795</code></span></span>) and
+          flags a database off the Basic tier or an app whose <code>maxReplicas</code> exceeds the <code>BASELINE_MAX_REPLICAS</code>
+          of 2<span class="cite"><span> (<code>cost-guard.yml:32</code>, <code>:86</code>, <code>:101</code>)</span></span>. Since conference mode, a surge is not always drift, so the
+          verdict reads the same <code>CONFERENCE_MODE_UNTIL</code> variable that switches <code>conferenceMode</code><span class="cite"><span>
+          (<code>cost-guard.yml:33</code>, <code>:65-70</code>)</span></span> and has four outcomes<span class="cite"><span> (<code>cost-guard.yml:106-121</code>)</span></span>: a surged footprint
+          inside the window passes as expected; after the window it passes only when the caller is the deploy
+          gate, because that deploy is the one that applies the template at baseline and so reverts it; the
+          same state from a standalone run fails with the revert instructions; and a surge with no window at
+          all is out-of-band drift that blocks every deploy. The deploy side applies the identical date rule<span class="cite"><span>
+          (<code>deploy.yml:1430-1445</code>)</span></span>, and its comment asks for the two to be kept in step. The recovery move for
+          the last case routes the revert through an expired window<span class="cite"><span> (<code>OPERATIONS.md:377-385</code>)</span></span>, because a plain
+          re-run cannot clear a gate the deploy job itself needs.</p>
           <p><code>enableBudget: bool</code><span class="cite"><span> (<code>main.bicep:132</code>)</span></span> allows disabling the resource when the deploy identity
           lacks <code>Microsoft.Consumption/budgets/write</code> (as is the case in some sponsor subscriptions).
           <code>budgetStartDate</code><span class="cite"><span> (<code>main.bicep:154</code>)</span></span> is pinned at creation and must not change on an existing
@@ -1064,7 +1116,7 @@ enabled: hasAiApiKey</code></pre>
           workspace daily ingestion cap, the 25% trace sampling, the Warning log floor, the two
           metric-group disables, the 300-second metric export interval, the 30-second readiness probes, the
           15-minute alert and web-test cadences, the AI-scoring token ceiling on the one meter Azure cannot
-          see, the uniform 0.25 vCPU container sizing, the two-step daily
+          see, the 0.25 vCPU baseline container sizing (with its conference surge confined to a dated window), the two-step daily
           ACR purge task, the <code>commonTags</code> applied to every billable resource<span class="cite"><span> (<code>main.bicep:176-182</code>)</span></span>, and the per-service
           <code>service</code> tag on the six container apps and four databases<span class="cite"><span> (<code>main.bicep:173-175</code>)</span></span>
           together satisfy this category: tags enable cost attribution; the caps bound runaway spend at the
@@ -1153,25 +1205,26 @@ publicNetworkAccess: &#39;Enabled&#39;</code></pre>
           scoped to the categories that carry a security signal rather than to everything the platform can
           emit.</p>
           <p><strong>The legacy <code>AtlDevCon</code> database is gone, and its absence is documented in place</strong><span class="cite"><span>
-          (<code>main.bicep:871-883</code>)</span></span>. After the database-per-service cutover it served no application, its data
+          (<code>main.bicep:932-938</code>)</span></span>. After the database-per-service cutover it served no application, its data
           had already been copied into the four <code>ADC_*</code> databases, and it then sat at 32 MB and 0 DTU for a
-          whole summer while still billing as a Basic database. On 2026-09-02 it was exported to the bacpac
-          blob <code>sql-archive/AtlDevCon-20260902.bacpac</code> in storage account <code>adcprodstpys4way4uzb3g</code> and
-          dropped by hand. Two things about that sequence are the lesson:</p>
+          whole summer while still billing as a Basic database. On 2026-09-02 it was exported to a bacpac
+          blob and dropped by hand, and on 2026-10-03 the bacpac itself was deleted. Two things about that
+          sequence are the lesson:</p>
           <ul>
           <li><strong>Removing the resource from the template did not delete it.</strong> Incremental mode never deletes an
           absent resource, so the drop was a deliberate operator action taken <em>after</em> the template stopped
           declaring it. Deleting a line of Bicep is a decommission only when someone finishes the job.</li>
-          <li><strong>The bacpac, not LTR, is now the rollback source of record.</strong> The comment carries the restore
-          path (<code>az sql db import</code> of that blob, about ten minutes), and the full history and exact commands
-          live in <code>infra/POST-CUTOVER-atldevcon-downgrade.md</code>. <span class="cite"><span><code>DISASTER-RECOVERY.md:45</code></span></span> states the same
-          boundary from the recovery side: the archive is deliberately outside PITR and LTR.</li>
+          <li><strong>There is no rollback source any more.</strong> The archive was deliberately outside PITR and LTR, so
+          deleting the bacpac on 2026-10-03 ended the last restore path. The comment says so in as many
+          words (<span class="cite"><span><code>main.bicep:932-938</code></span></span>, repeated above the LTR policies at <span class="cite"><span><code>:982-983</code></span></span>), and
+          <code>infra/POST-CUTOVER-atldevcon-downgrade.md</code> keeps the history. The deletion also retired the last
+          Shared Key consumer on the storage account (see the Blob storage section).</li>
           </ul>
           <p>The comment also flags a trap for anyone scripting against this resource group<span class="cite"><span>
-          (<code>main.bicep:881-883</code>)</span></span>: a SQL server literally named <code>atldevcon</code> (westus2) also lives in <code>acc-rg</code>,
+          (<code>main.bicep:939</code>)</span></span>: a SQL server literally named <code>atldevcon</code> (westus2) also lives in <code>acc-rg</code>,
           predates MMCA entirely, and must never be referenced, scaled or deleted as if it belonged to this
           deployment.</p>
-          <p><strong>Per-service databases</strong><span class="cite"><span> (<code>main.bicep:892-917</code>)</span></span>, <code>[Rubric §8, Data Architecture]</code>:</p>
+          <p><strong>Per-service databases</strong><span class="cite"><span> (<code>main.bicep:945-971</code>)</span></span>, <code>[Rubric §8, Data Architecture]</code>:</p>
           <pre class="doc-pre" tabindex="0" data-lang="Bicep"><code class="language-bicep">var serviceDatabaseNames = [
   &#39;ADC_Identity&#39;
   &#39;ADC_Conference&#39;
@@ -1181,18 +1234,29 @@ publicNetworkAccess: &#39;Enabled&#39;</code></pre>
 
 resource serviceDatabases &#39;…/databases@…&#39; = [
   for dbName in serviceDatabaseNames: {
-    sku: { name: &#39;Basic&#39;, tier: &#39;Basic&#39;, capacity: 5 }
-    properties: { maxSizeBytes: 2147483648 }  // 2 GB Basic cap, must be exact
+    sku: conferenceMode &amp;&amp; contains(conferenceScaledDatabaseNames, dbName)
+      ? { name: &#39;S2&#39;, tier: &#39;Standard&#39; }
+      : { name: &#39;Basic&#39;, tier: &#39;Basic&#39;, capacity: 5 }
+    properties: { maxSizeBytes: 2147483648 }  // 2 GB Basic cap, must be exact; also valid on S2
   }
 ]</code></pre>
           <p>Since the archive was dropped, these four <strong>are</strong> the entire application data estate<span class="cite"><span>
-          (<code>main.bicep:887-890</code>)</span></span>. [Rubric §8, Data Architecture] assesses deliberate persistence strategy
+          (<code>main.bicep:945-947</code>)</span></span>. [Rubric §8, Data Architecture] assesses deliberate persistence strategy
           including transactions, isolation, migrations, and bounded ownership. The four separate databases
           implement <a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>: each
           service owns exactly its data; no cross-database foreign keys exist; each service&#39;s outbox
           (<code>OutboxMessages</code> table) lives in its own database so the outbox processor never races for another
           service&#39;s rows. See <a href="00-primer.html#2-architectural-styles-this-codebase-commits-to">primer §2</a> and
           <a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a> for the full rationale.</p>
+          <p><strong>The tier is conditional, and the migration reasoning beside it changed</strong><span class="cite"><span> (<code>main.bicep:945-950</code>,
+          <code>:967-971</code>)</span></span>. Outside conference mode all four run Basic (5 DTU). In conference mode <code>ADC_Conference</code>
+          and <code>ADC_Engagement</code>, the two the attendee hot path reads and writes, move to S2 (50 DTU), an online
+          tier change with no downtime<span class="cite"><span> (<code>main.bicep:180-181</code>)</span></span>; the 2 GB <code>maxSizeBytes</code> stays valid on S2, which
+          is why it needs no conditional of its own. <code>cost-guard.yml</code> treats any tier other than Basic outside
+          the conference window as un-reverted surge drift<span class="cite"><span> (<code>main.bicep:967-968</code>)</span></span>. The same comment block
+          corrects an older assumption about replicas: every replica of a service runs its own startup
+          migration, and EF Core serializes concurrent replicas with an <code>sp_getapplock</code> migrations lock, so
+          <code>minReplicas: 1</code> is a cost floor, not a race guard<span class="cite"><span> (<code>main.bicep:947-949</code>)</span></span>.</p>
           <p>Each database also carries a <code>service</code> tag derived from its name (<code>ADC_Conference</code> becomes
           <code>conference</code>, <span class="cite"><span><code>main.bicep:903-905</code></span></span>), the same dimension its owning container app carries, so one
           tag-grouped cost report covers compute and storage per service.</p>
@@ -1312,17 +1376,16 @@ minimumTlsVersion: &#39;1.2&#39;</code></pre>
           (<code>main.bicep:1239-1245</code>)</span></span>. Public read is deliberate: avatar URLs render in <code>&lt;img&gt;</code> tags on
           anonymous-visible surfaces with no SAS plumbing, and blob names carry a random suffix so they are
           not enumerable. The account sets <code>minimumTlsVersion: &#39;TLS1_2&#39;</code> and <code>supportsHttpsTrafficOnly: true</code>.</p>
-          <p>Two account-level switches sit beside them and both are hardening knobs with a stated reason for
-          <strong>not</strong> being flipped yet. <code>allowSharedKeyAccess</code> is bound to the <code>storageAllowSharedKeyAccess</code>
-          parameter, default <code>true</code> (<span class="cite"><span><code>main.bicep:1189</code></span></span>, parameter at <span class="cite"><span><code>:138-139</code></span></span>), and the comment explains why
-          the current behavior is kept<span class="cite"><span> (<code>main.bicep:1172-1188</code>)</span></span>: the application path is already key-free
-          (apps get <code>FileStorage__ServiceUri</code> and <code>DataProtection__BlobStorageUri</code> as URIs and authenticate
-          with the shared managed identity, and nothing in <code>infra/</code> or <code>.github/workflows/</code> calls <code>listKeys</code>
-          on this account), but the <strong>disaster-recovery</strong> path is not. <code>infra/POST-CUTOVER-atldevcon-downgrade.md</code>
-          documents <code>az sql db import --storage-key-type StorageAccessKey</code> against this account for the
-          <code>AtlDevCon</code> bacpac, which is the last-resort source of record for pre-cutover data, so turning Shared
-          Key off before that runbook is re-cut to a user-delegation SAS would break recovery rather than the
-          apps. <code>defaultToOAuthAuthentication: true</code><span class="cite"><span> (<code>main.bicep:1195</code>)</span></span> is set unconditionally because it is
+          <p>Two account-level switches sit beside them. <code>allowSharedKeyAccess</code> is bound to the
+          <code>storageAllowSharedKeyAccess</code> parameter, still default <code>true</code> (<span class="cite"><span><code>main.bicep:1264</code></span></span>, parameter at
+          <span class="cite"><span><code>:138-139</code></span></span>), and the comment now records that nothing blocks flipping it<span class="cite"><span> (<code>main.bicep:1260-1263</code>)</span></span>:
+          the application path is key-free (apps get <code>FileStorage__ServiceUri</code> and
+          <code>DataProtection__BlobStorageUri</code> as URIs and authenticate with the shared managed identity, and
+          nothing in <code>infra/</code> or <code>.github/workflows/</code> calls <code>listKeys</code> on this account), and the one former
+          Shared Key consumer, the <code>AtlDevCon</code> bacpac restore, went away when that bacpac was deleted on
+          2026-10-03. The parameter description names the cost of flipping it<span class="cite"><span> (<code>main.bicep:138</code>)</span></span>: operators
+          then need Storage Blob Data Reader for ad-hoc data-plane reads. The default is unchanged, so Shared
+          Key stays on until an operator sets the parameter. <code>defaultToOAuthAuthentication: true</code><span class="cite"><span> (<code>main.bicep:1195</code>)</span></span> is set unconditionally because it is
           portal-scoped only: it makes Entra the default when a data-plane request states no authorization
           method, without blocking explicit Shared Key callers and without touching anonymous reads of the
           public containers. A third option is documented as deliberately <strong>not</strong> taken<span class="cite"><span>
@@ -1367,13 +1430,13 @@ minimumTlsVersion: &#39;1.2&#39;</code></pre>
           two apps that mint cookies (Identity and UI), and its privacy is the whole point of declaring it
           separately rather than reusing <code>avatars</code>: a key ring readable anonymously would hand out the keys
           that protect every auth cookie and antiforgery token in the system. The comment above it<span class="cite"><span>
-          (<code>main.bicep:1263-1267</code>)</span></span> states the failure it prevents: both apps run at <code>maxReplicas: 2</code>, and the
-          default in-memory key ring is per replica, so a token minted by one replica is undecryptable by the
-          other. The per-app wiring is in the Identity and UI subsections below.</p>
-          <p>This same account also holds a third, <strong>undeclared</strong> container: <code>sql-archive</code>, where the
-          <code>AtlDevCon-20260902.bacpac</code> archive lives<span class="cite"><span> (<code>main.bicep:868</code>)</span></span>. It was created out of band by the
-          export command and the template does not manage it, which is worth knowing before assuming the two
-          declared containers are the whole account.</p>
+          (<code>main.bicep:1338-1341</code>)</span></span> states the failure it prevents: both apps scale out to
+          <code>conferenceScaledMaxReplicas</code> (2, or 4 in conference mode), and the default in-memory key ring is per
+          replica, so a token minted by one replica is undecryptable by another. The per-app wiring is in the Identity and UI subsections below.</p>
+          <p>The <code>AtlDevCon</code> bacpac export once wrote an <strong>undeclared</strong> <code>sql-archive</code> container into this account
+          out of band, and the bacpac was deleted on 2026-10-03<span class="cite"><span> (<code>main.bicep:1261-1263</code>)</span></span>. The template never
+          managed that container, so whether it still exists empty is not visible from source: do not assume
+          the declared containers are the whole account.</p>
           <p>The Identity service authenticates to it with <code>DefaultAzureCredential</code> resolving the shared apps
           identity, so there is no connection-string secret. Control-plane ownership of the account does not
           grant blob writes, though: the <code>Storage Blob Data Contributor</code> data-plane assignment<span class="cite"><span>
@@ -1400,12 +1463,15 @@ minimumTlsVersion: &#39;1.2&#39;</code></pre>
           (<code>main.bicep:1364-1392</code>)</span></span>. Volatile-only eviction is deliberate: cache entries and idempotency records
           carry TTLs, and a key without a TTL must never be silently evicted<span class="cite"><span> (<code>main.bicep:1386</code>)</span></span>.</p>
           <p>Every service gets <code>ConnectionStrings__redis</code> from the vault, and three consumers activate on that
-          key alone with no application change<span class="cite"><span> (<code>main.bicep:1336-1344</code>)</span></span>:</p>
+          key alone with no application change<span class="cite"><span> (<code>main.bicep:1406-1414</code>)</span></span>:</p>
           <ol>
-          <li><code>ICacheService</code> upgrades from a per-replica <code>MemoryCache</code> to <code>DistributedCacheService</code>, which
-          makes the <code>IdempotencyFilter</code>&#39;s 24h replay records cross-replica (with <code>maxReplicas: 2</code> a
-          duplicate POST routed to the other replica used to execute twice) and propagates
-          <code>CachingQueryDecorator</code> invalidation to every replica.</li>
+          <li><code>ICacheService</code> upgrades from a per-replica <code>MemoryCache</code> to <code>HybridCacheService</code>: each service
+          <code>Program.cs</code> calls <code>AddCommonHybridCacheWhenRedisConfigured</code>, which puts an in-process L1, capped
+          by <code>Cache:LocalCacheDuration</code> (30s default), in front of Redis as the shared L2. The
+          <code>IdempotencyFilter</code>&#39;s 24h replay records become cross-replica (with more than one replica a
+          duplicate POST routed to another replica used to execute twice). Invalidation reaches Redis at
+          once, but another replica&#39;s L1 may serve the old entry until its local expiry, which is the trade
+          the 30-second cap bounds; single-use records (OAuth codes, reset tokens) bypass the L1.</li>
           <li><code>AddRedisDistributedCache</code> in each service <code>Program.cs</code>, conditional on the same key.</li>
           <li>The Notification SignalR backplane auto-wires when the key appears, via
           <code>MMCA.Common.Infrastructure</code>&#39;s <code>AddPushNotifications</code>.</li>
@@ -1607,8 +1673,9 @@ var acrRegistry = {
           there is nothing there to adopt.</p>
           <h3 id="container-apps-the-six-deployables">Container Apps, the six deployables</h3>
           <p>Six <code>Microsoft.App/containerApps</code> resources are declared in <code>main.bicep</code>. They share structural
-          patterns but differ in ingress transport, probe port, and environment variables. As of 2026-09-02
-          they no longer differ in size: <strong>all six run at 0.25 vCPU / 0.5 Gi</strong>.</p>
+          patterns but differ in ingress transport, probe port, and environment variables. At baseline
+          <strong>all six run at 0.25 vCPU / 0.5 Gi</strong>; in conference mode five of them grow and Notification keeps
+          the baseline<span class="cite"><span> (<code>main.bicep:174-196</code>)</span></span>.</p>
           <h4 id="common-structural-patterns">Common structural patterns</h4>
           <p>All six apps<span class="cite"><span> (<code>main.bicep:1152-2027</code>)</span></span> share:</p>
           <ul>
@@ -1625,23 +1692,32 @@ var acrRegistry = {
           bill by deployable<span class="cite"><span> (<code>main.bicep:173-175</code>)</span></span>. <code>CostTagConventionTests</code><span class="cite"><span>
           (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Governance/CostTagConventionTests.cs:13</code>)</span></span>
           pins the tag on every container app and on the database loop.</li>
-          <li><code>resources: { cpu: json(&#39;0.25&#39;), memory: &#39;0.5Gi&#39; }</code> on <strong>all six</strong><span class="cite"><span> (<code>main.bicep:1647</code>, <code>:1874</code>,
-          <code>:2013</code>, <code>:2158</code>, <code>:2334</code>, <code>:2467</code>)</span></span>, the smallest Container Apps allocation. Conference and the
-          Gateway were the last two at 0.5 vCPU / 1 Gi and were right-sized on 2026-09-02 from measured
-          production utilization; the two comments carry the measurements and the revert instruction<span class="cite"><span>
-          (<code>main.bicep:1399-1405</code>, <code>:1824-1830</code>)</span></span>.</li>
-          <li><code>scale: { minReplicas: 1, maxReplicas: 2, rules: [{ name: &#39;http-scale&#39;, http: { metadata: { concurrentRequests: &#39;50&#39; } } }] }</code>
-          on <strong>all six</strong> apps<span class="cite"><span> (<code>main.bicep:1354</code>, <code>:1488</code>, <code>:1615</code>, <code>:1781</code>, <code>:1889-1902</code>, <code>:2011-2024</code>)</span></span>.
-          <code>minReplicas: 1</code> prevents scale-to-zero (which would destroy Blazor Server circuits and outbox
-          in-flight messages); HTTP scale-out at 50 concurrent requests gives the headroom needed for a
-          conference-day load (historically ~67 peak concurrent). Notification used to be capped at 1 and
-          no longer is: the comment above its scale block<span class="cite"><span> (<code>main.bicep:1770-1779</code>)</span></span> records why the cap was
-          lifted on 2026-08-31, and the condition attached to it. <code>TwoReplicaHubFanOutTests</code> in
-          <code>Tests/Integration/MMCA.ADC.CrossService.IntegrationTests</code> boots two Notification replicas
-          against one Redis container nightly and asserts a push issued on one replica reaches a SignalR
-          client held by the other. The cap was 1 precisely because that proof did not exist; the template
-          states that deleting or skipping the test puts the cap back to 1. Uniform caps also make
-          <code>cost-guard.yml</code>&#39;s single <code>BASELINE_MAX_REPLICAS</code> of 2 a meaningful whole-fleet assertion.</li>
+          <li>A 0.25 vCPU / 0.5 Gi baseline on <strong>all six</strong>, the smallest Container Apps allocation, expressed
+          through the conference variables: <code>conferenceIdentityResources</code> on Identity<span class="cite"><span> (<code>main.bicep:1719</code>)</span></span>,
+          <code>conferenceScaledResources</code> on Conference, Engagement, the Gateway and the UI<span class="cite"><span> (<code>main.bicep:1968</code>,
+          <code>:2111</code>, <code>:2450</code>, <code>:2601</code>)</span></span>, and a literal <code>{ cpu: json(&#39;0.25&#39;), memory: &#39;0.5Gi&#39; }</code> on Notification<span class="cite"><span>
+          (<code>main.bicep:2260</code>)</span></span>, the one app the surge leaves alone. Conference and the Gateway were the last
+          two at 0.5 vCPU / 1 Gi and were right-sized on 2026-09-02 from measured production utilization;
+          the two comments carry the measurements and the revert instruction.</li>
+          <li>An <code>http-scale</code> rule at 50 concurrent requests on <strong>all six</strong> apps, with replica bounds that depend
+          on the role. The three database-owning services use <code>minReplicas: 1</code> with
+          <code>maxReplicas: conferenceScaledMaxReplicas</code><span class="cite"><span> (<code>main.bicep:1916</code>, <code>:2069</code>, <code>:2204</code>)</span></span>; Notification keeps
+          a literal <code>maxReplicas: 2</code><span class="cite"><span> (<code>main.bicep:2390</code>)</span></span>; the Gateway uses <code>conferenceFrontDoorMinReplicas</code> and
+          <code>conferenceScaledMaxReplicas</code><span class="cite"><span> (<code>main.bicep:2542-2543</code>)</span></span>; and the UI raises its floor to the ceiling in
+          conference mode<span class="cite"><span> (<code>main.bicep:2693-2694</code>)</span></span>. At baseline that is 1 to 2 replicas everywhere, which is
+          what makes <code>cost-guard.yml</code>&#39;s single <code>BASELINE_MAX_REPLICAS</code> of 2 a meaningful whole-fleet
+          assertion. <code>minReplicas: 1</code> prevents scale-to-zero (which would destroy Blazor Server circuits and
+          outbox in-flight messages); HTTP scale-out at 50 concurrent requests gives the headroom needed for
+          a conference-day load (historically about 67 peak concurrent). The UI floor has its own reason<span class="cite"><span>
+          (<code>main.bicep:2689-2692</code>)</span></span>: a scale-in kills the Blazor Server circuits on the removed replica, so
+          for the conference window the UI never scales in mid-day. Notification used to be capped at 1 and
+          no longer is: the comment above its scale block<span class="cite"><span> (<code>main.bicep:2374-2389</code>)</span></span> records the two conditions
+          that make more than one replica safe (a WebSockets-only client that skips negotiate, so no sticky
+          session is needed, and <code>TwoReplicaHubFanOutTests</code> in
+          <code>Tests/Integration/MMCA.ADC.CrossService.IntegrationTests</code>, which boots two Notification replicas
+          against one Redis container nightly over that same transport), states that deleting or skipping the
+          test or going back to negotiate puts the cap back to 1, and explains why it stays off the conference
+          ceiling: the hub sat at 0.03 cores in the 2026-10-03 rehearsal.</li>
           <li><code>ASPNETCORE_ENVIRONMENT: &#39;Production&#39;</code>, switches ASP.NET Core to the production configuration,
           which among other things disables the OpenAPI endpoint (it is only mapped outside Production per
           the ADC CLAUDE.md).</li>
@@ -1649,10 +1725,20 @@ var acrRegistry = {
           (<code>main.bicep:1238</code>, <code>:1438</code>, <code>:1560</code>, <code>:1706</code>)</span></span>, each service auto-applies its own database&#39;s
           pending migrations at startup as the <strong>sole migrator</strong>. <code>deploy.yml</code> deliberately has <em>no</em>
           separate <code>sqlcmd</code> migration step (a backstop would race the container&#39;s startup <code>Migrate()</code>,
-          which is exactly what wedged MMCA.Store&#39;s first per-service deploy); with <code>minReplicas: 1</code>
-          exactly one replica migrates before the revision serves<span class="cite"><span> (<code>deploy.yml:1497-1507</code>)</span></span>. The build-time
+          which is exactly what wedged MMCA.Store&#39;s first per-service deploy). Every replica of a service
+          runs that migration at startup, and EF Core serializes concurrent replicas with an <code>sp_getapplock</code>
+          migrations lock, so a second replica is safe and <code>minReplicas: 1</code> is a cost floor rather than a
+          race guard<span class="cite"><span> (<code>main.bicep:947-949</code>)</span></span>. The build-time
           EF model-drift gate<span class="cite"><span> (<code>deploy.yml:375-389</code>)</span></span> still guarantees a migration exists for every model
           change, across all four migrations projects.</li>
+          <li><code>RateLimiting__Distributed: &#39;true&#39;</code> on the four back-end services<span class="cite"><span> (<code>main.bicep:1768</code>, <code>:2003</code>,
+          <code>:2140</code>, <code>:2294</code>)</span></span>. Once a service can run more than one replica, a per-replica fixed window
+          multiplies the effective budget by the replica count; this switch makes the global, per-user and
+          hub windows Redis-backed so one budget is shared. The comment on Identity<span class="cite"><span> (<code>main.bicep:1762-1767</code>)</span></span>
+          records the two deliberate exceptions, the <code>auth-ip</code> policy and the gateway limiters, which stay per
+          replica because a login throttle that fails open on a Redis outage is worse than a local one
+          (per-account lockout is already Redis-backed), and states the outage behavior: the shared windows
+          fail open, logged per partition.</li>
           <li><code>Outbox__PollingIntervalSeconds: &#39;300&#39;</code><span class="cite"><span> (<code>main.bicep:1664</code>, <code>:1885</code>, <code>:2023</code>, <code>:2175</code>)</span></span>, the outbox
           signal + smart wait in MMCA.Common ≥ 1.50.0 delivers real messages in ~5 seconds regardless of the
           poll interval; the 300-second poll only governs idle polling. This cuts App Insights SQL dependency
@@ -1859,9 +1945,9 @@ var acrRegistry = {
           <code>&lt;blob endpoint&gt;dataprotection-keys/keys.xml</code> in the private container described above, and
           <code>DataProtection__ApplicationName: &#39;MMCA.ADC&#39;</code> is the isolation name the ring is scoped by (the same
           value on the UI, which is what makes the two apps share one ring rather than two). The comment
-          above them<span class="cite"><span> (<code>main.bicep:1263-1265</code>)</span></span> states the failure mode: Identity does OAuth cookie
-          cryptography at <code>maxReplicas: 2</code> with no session affinity, so with the default per-replica
-          in-memory ring a login started on one replica fails on the other. <code>MMCA.Common</code>&#39;s
+          above them<span class="cite"><span> (<code>main.bicep:1800-1803</code>)</span></span> states the failure mode: Identity does OAuth cookie
+          cryptography across up to <code>conferenceScaledMaxReplicas</code> replicas with no session affinity, so with
+          the default per-replica in-memory ring a login started on one replica fails on another. <code>MMCA.Common</code>&#39;s
           <code>AddCommonDataProtection</code> reads both keys, and <code>DataProtection:BlobStorageUri</code> is the gate: absent,
           the method does nothing and the host keeps the in-memory default, which is what local development
           and the tests want<span class="cite"><span>
@@ -1883,14 +1969,23 @@ var acrRegistry = {
           <code>secretRef</code>, while Apple contributes four entries (services id, team id, key id, and the <code>.p8</code>
           private key as a <code>secretRef</code>). <code>OAuth__UIBaseUrl</code> follows at <span class="cite"><span><code>:1310</code></span></span> under <code>hasAnyOAuth</code>, because
           the post-login redirect target is provider-independent.</p>
-          <p>Identity is sized at 0.25 CPU / 0.5 Gi<span class="cite"><span> (<code>main.bicep:1198</code>)</span></span>. JWT operations are CPU-cheap once the
-          key is loaded; the bottleneck is typically network I/O to SQL.</p>
+          <p>Identity is sized at 0.25 CPU / 0.5 Gi at baseline and is the one app that goes to a full vCPU and
+          2 Gi in conference mode (<span class="cite"><span><code>main.bicep:1719</code></span></span>, variable at <span class="cite"><span><code>:186</code></span></span>). JWT operations are CPU-cheap once
+          the key is loaded; password hashing is not. Every sign-in and registration is one PBKDF2-HMAC-SHA512
+          hash at 600,000 iterations, and the 2026-10-03 rehearsal pinned four replicas at a 0.5 vCPU limit at
+          about five sign-ins a second<span class="cite"><span> (<code>main.bicep:183-185</code>)</span></span>.</p>
+          <p>Conference mode also raises Identity&#39;s own per-IP limits, because a venue Wi-Fi reaches the service
+          through one NAT address<span class="cite"><span> (<code>main.bicep:1862-1874</code>)</span></span>: the service-side <code>auth-ip</code> window goes from 30 to
+          300 a minute and the per-IP registration cap from 10 to 500 an hour, and both keys are absent outside
+          conference mode. The comment also pins the exact key name, <code>RateLimiting__AuthIpPermitLimit</code>,
+          because <code>Program.cs</code> binds the <code>RateLimiting</code> section onto <code>RateLimitingSettings.AuthIpPermitLimit</code>
+          and a key nested under an <code>AuthIp</code> section would be silently ignored.</p>
           <h4 id="conference-service-specifics-mainbicep1851-2001">Conference Service specifics (<code>main.bicep:1851-2001</code>)</h4>
           <p>Conference carries the heaviest surface of the four services: seventeen API controllers
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/</code>), an AI scoring path
           (Anthropic API), and the role of read-heavy entry point for the event/session catalog. It ran at
-          0.5 CPU / 1 Gi until 2026-09-02 and now runs at 0.25 CPU / 0.5 Gi like every peer<span class="cite"><span>
-          (<code>main.bicep:1407</code>)</span></span>. The comment above that line is the model for how a right-sizing decision should
+          0.5 CPU / 1 Gi until 2026-09-02 and now runs at 0.25 CPU / 0.5 Gi like every peer at baseline,
+          doubled in conference mode<span class="cite"><span> (<code>main.bicep:1968</code>)</span></span>. The comment above that line is the model for how a right-sizing decision should
           be recorded<span class="cite"><span> (<code>main.bicep:1399-1405</code>)</span></span>: CPU averaged 0.012 to 0.017 cores with p95 under 0.03 against
           the half-core it held, and the working set ran 320 to 380 MB. It also names itself as <strong>the app to
           watch</strong>, because a p95 working set of 376 MB is 73% of the new 512 MiB limit, and states the revert
@@ -1927,8 +2022,11 @@ hasAiApiKey ? [{ name: &#39;Ai__ApiKey&#39;, secretRef: &#39;anthropic-api-key&#
           Its readiness probe<span class="cite"><span> (<code>main.bicep:1758-1766</code>)</span></span> is what holds ACA ingress until the
           <code>WarmupHostedService</code> has fetched the JWKS document from Identity<span class="cite"><span> (<code>main.bicep:1737-1741</code>)</span></span>. Without
           it, SignalR connections made during warmup would fail because the JWT validator is not yet
-          initialized. Its replica cap is no longer the outlier it once was: see the shared scale discussion
-          above.</p>
+          initialized. It is now the outlier in the other direction: the only app that keeps a literal
+          0.25 vCPU / 0.5 Gi and <code>maxReplicas: 2</code> in conference mode<span class="cite"><span> (<code>main.bicep:2260</code>, <code>:2390</code>)</span></span>, for the
+          reason given in the shared scale discussion above. Its Redis backplane is watched by the
+          <code>signalr-backplane-errors</code> alert, because a broken Redis link would otherwise silently split the hub
+          into per-replica islands<span class="cite"><span> (<code>main.bicep:2385-2386</code>)</span></span>.</p>
           <h4 id="gateway-specifics-mainbicep2314-2465">Gateway specifics (<code>main.bicep:2314-2465</code>)</h4>
           <p>Gateway is the sole externally-reachable back-end entry point (<code>external: true</code>,
           <code>allowInsecure: false</code>, <span class="cite"><span><code>main.bicep:2328-2333</code></span></span>). It is a pure YARP reverse proxy: no DbContext, no
@@ -1936,7 +2034,9 @@ hasAiApiKey ? [{ name: &#39;Ai__ApiKey&#39;, secretRef: &#39;anthropic-api-key&#
           reference, and two optional rate-limiter keys:</p>
           <pre class="doc-pre" tabindex="0" data-lang="Bicep"><code class="language-bicep">{ name: &#39;Cors__AllowedOrigins__0&#39;, value: &#39;https://${prefix}-ui.${...defaultDomain}&#39; }</code></pre>
           <p>CORS is scoped to exactly the UI&#39;s FQDN<span class="cite"><span> (<code>main.bicep:2375</code>)</span></span>, not a wildcard. Gateway was right-sized
-          alongside Conference on 2026-09-02 and now runs at 0.25 CPU / 0.5 Gi<span class="cite"><span> (<code>main.bicep:2361</code>)</span></span>; its
+          alongside Conference on 2026-09-02 and now runs at 0.25 CPU / 0.5 Gi at baseline, doubled in
+          conference mode because the 2026-10-03 rehearsal ran four replicas at 0.23 of 0.25<span class="cite"><span>
+          (<code>main.bicep:2449-2450</code>)</span></span>; its
           comment records the easier half of that decision<span class="cite"><span> (<code>main.bicep:2354-2360</code>)</span></span>, a 190 to 235 MB working
           set comfortably inside the new limit because pure YARP forwarding holds no DbContext. Its readiness
           probe is the one exception to the fleet&#39;s <code>/health/ready</code> convention: it targets <code>/alive</code><span class="cite"><span>
@@ -1959,6 +2059,13 @@ hasAiApiKey ? [{ name: &#39;Ai__ApiKey&#39;, secretRef: &#39;anthropic-api-key&#
           all leave from one container address, which the per-IP window would otherwise collapse into a single
           partition and throttle for the whole site. Absent, each key&#39;s exemption is off and every request
           stays rate limited, which is the correct default for a public entry point.</p>
+          <p>Conference mode adds two more limiter keys<span class="cite"><span> (<code>main.bicep:2494-2503</code>)</span></span>: the edge window goes from 120 to
+          3000 a minute per replica and the <code>auth-tight</code> policy (login and register) from 30 to 300, because
+          the whole venue Wi-Fi reaches the gateway through one NAT address and windows sized for one person
+          per IP would return 429 to the crowd. Outside conference mode both keys are absent and the
+          <code>appsettings.json</code> values apply. The Gateway is also one of the two front-door apps whose minimum
+          replica count rises to 2 in conference mode<span class="cite"><span> (<code>main.bicep:2542</code>)</span></span>; it holds no database, so a second
+          always-on replica costs compute only.</p>
           <p>The template also records the transport contract the Gateway holds up<span class="cite"><span> (<code>main.bicep:2376-2379</code>)</span></span>:
           <code>ForwardHttp2</code> defaults to true in the gateway code and YARP uses <code>VersionPolicy=RequestVersionExact</code>,
           so it sends the HTTP/2 preface to the three h2c-prior-knowledge backends whose ACA ingress is
@@ -1966,8 +2073,8 @@ hasAiApiKey ? [{ name: &#39;Ai__ApiKey&#39;, secretRef: &#39;anthropic-api-key&#
           policy here cannot be changed independently.</p>
           <h4 id="ui-specifics-mainbicep2466-2604">UI specifics (<code>main.bicep:2466-2604</code>)</h4>
           <p>UI is the other externally-reachable app (<code>external: true</code>, <span class="cite"><span><code>main.bicep:1928</code></span></span>), the one app with
-          <code>secrets: []</code><span class="cite"><span> (<code>main.bicep:1938</code>)</span></span> and sized at 0.25 CPU / 0.5 Gi<span class="cite"><span> (<code>main.bicep:1945</code>)</span></span>. Three
-          non-obvious configuration points:</p>
+          <code>secrets: []</code><span class="cite"><span> (<code>main.bicep:1938</code>)</span></span> and sized at the 0.25 CPU / 0.5 Gi baseline, doubled in conference
+          mode<span class="cite"><span> (<code>main.bicep:2601</code>)</span></span>. Three non-obvious configuration points:</p>
           <p><strong>Sticky sessions</strong><span class="cite"><span> (<code>main.bicep:1932-1934</code>)</span></span>:</p>
           <pre class="doc-pre" tabindex="0" data-lang="Bicep"><code class="language-bicep">stickySessions: { affinity: &#39;sticky&#39; }</code></pre>
           <p>Blazor Server runs the component model as a stateful SignalR circuit on the server. If a request
@@ -1987,12 +2094,16 @@ hasAiApiKey ? [{ name: &#39;Ai__ApiKey&#39;, secretRef: &#39;anthropic-api-key&#
           pointed at the same <code>dataprotection-keys/keys.xml</code> blob. The reason is the one above with the
           consequence reversed: sticky sessions pin a <strong>circuit</strong> to a replica, but the UI also mints the SSR
           session cookie and antiforgery tokens, and those travel with the browser rather than with the
-          circuit, so at <code>maxReplicas: 2</code> a per-replica in-memory ring makes them undecryptable on the other
-          replica<span class="cite"><span> (<code>main.bicep:1959-1963</code>)</span></span>. <code>AZURE_CLIENT_ID</code><span class="cite"><span> (<code>main.bicep:1966</code>)</span></span> pins the identity that
+          circuit, so across up to <code>conferenceScaledMaxReplicas</code> replicas a per-replica in-memory ring makes
+          them undecryptable on another replica<span class="cite"><span> (<code>main.bicep:1959-1963</code>)</span></span>. <code>AZURE_CLIENT_ID</code><span class="cite"><span> (<code>main.bicep:1966</code>)</span></span> pins the identity that
           <code>DefaultAzureCredential</code> uses for both the blob write and the vault read.</p>
           <p>The UI receives only the OAuth <strong>client ids</strong> when a provider is configured, one per provider
           including Apple<span class="cite"><span> (<code>main.bicep:1971-1979</code>)</span></span>; every client secret stays on Identity, which is the app
           that completes the exchange.</p>
+          <p>In conference mode the UI host&#39;s own per-IP window, which counts page loads and the <code>/api</code> proxy and
+          so is shared by everyone behind the venue NAT, rises from 1200 to 12000 a minute per replica<span class="cite"><span>
+          (<code>main.bicep:2653-2656</code>)</span></span>, and its replica floor rises to the conference ceiling so no circuit is lost
+          to a mid-day scale-in (see the shared scale discussion above).</p>
           <h3 id="outputs-mainbicep2605-2610">Outputs (<code>main.bicep:2605-2610</code>)</h3>
           <pre class="doc-pre" tabindex="0" data-lang="Bicep"><code class="language-bicep">output acrLoginServer     string = acr.properties.loginServer
 output gatewayFqdn        string = gatewayApp.properties.configuration.ingress.fqdn
@@ -2072,7 +2183,7 @@ output appInsightsName    string = appInsights.name</code></pre>
           </tr>
           <tr>
           <td>§8 Data Architecture</td>
-          <td>Four per-service databases as the whole estate; LTR policies; the AtlDevCon bacpac archive as the rollback source of record; EF model-drift gate in deploy.yml (migrations applied by services at startup)</td>
+          <td>Four per-service databases as the whole estate; LTR policies; the AtlDevCon archive dropped and its bacpac deleted (no rollback source left); the conference-mode S2 tier on the two hot-path databases; EF model-drift gate in deploy.yml (migrations applied by services at startup)</td>
           </tr>
           <tr>
           <td>§11 Security</td>
@@ -2080,19 +2191,19 @@ output appInsightsName    string = appInsights.name</code></pre>
           </tr>
           <tr>
           <td>§13 Observability</td>
-          <td>Workspace-based App Insights; per-service <code>OTEL_SERVICE_NAME</code>; Application Map coverage; five SLO scheduled query rules (the AI-scoring token ceiling among them, enabled by <code>hasAiApiKey</code>) + workbook (<a href="https://ivanball.github.io/docs/adr/062-slo-alerting-as-code.html" target="_blank" rel="noopener">ADR-062</a>); outbox dead-letter, SQL dependency and revision-activation alerts over the same workspace; the 15-minute evaluation cadence and its stated detection-latency trade</td>
+          <td>Workspace-based App Insights; per-service <code>OTEL_SERVICE_NAME</code>; Application Map coverage; five SLO scheduled query rules (the AI-scoring token ceiling among them, enabled by <code>hasAiApiKey</code>) + workbook (<a href="https://ivanball.github.io/docs/adr/062-slo-alerting-as-code.html" target="_blank" rel="noopener">ADR-062</a>); outbox dead-letter, SQL dependency, revision-activation and SignalR backplane alerts over the same workspace; the 15-minute evaluation cadence and its stated detection-latency trade</td>
           </tr>
           <tr>
           <td>§17 DevOps &amp; Deployment</td>
-          <td>Two-phase Bicep split; Incremental mode (and the operator step a template deletion still needs); image sha-tagging + registry build cache; service-startup migration (sole migrator, minReplicas:1); the revision-activation gate followed by the smoke gate, then the post-deploy cache purge</td>
+          <td>Two-phase Bicep split; Incremental mode (and the operator step a template deletion still needs); image sha-tagging + registry build cache; service-startup migration (sole migrator, replicas serialized by EF Core&#39;s <code>sp_getapplock</code> lock); <code>conferenceMode</code> switched by a dated repository variable on every deploy; the revision-activation gate followed by the smoke gate, then the post-deploy cache purge</td>
           </tr>
           <tr>
           <td>§29 Resilience &amp; Business Continuity</td>
-          <td>LTR on per-service databases; SLO alerts; sev-1 Gateway availability web test with a window that tracks its probe cadence; the <code>revision-activation-failed</code> alert for a rollout that silently never took traffic; guarded rollback in the smoke gate; <code>minReplicas: 1</code>; readiness probes with a self-only liveness split</td>
+          <td>LTR on per-service databases; SLO alerts; sev-1 Gateway availability web test with a window that tracks its probe cadence; the <code>revision-activation-failed</code> alert for a rollout that silently never took traffic; guarded rollback in the smoke gate; <code>minReplicas: 1</code> (front-door floor 2, UI floor 4 in conference mode); Redis-shared rate-limit windows; readiness probes with a self-only liveness split</td>
           </tr>
           <tr>
           <td>§31 Cost Efficiency / FinOps</td>
-          <td><code>commonTags</code> on every resource plus a per-service <code>service</code> tag on the six apps and four databases; monthly budget with 80%/100% thresholds; <code>cost-guard.yml</code> surge-drift gate against a uniform <code>maxReplicas</code> 2 baseline; workspace <code>dailyQuotaGb: 1</code>; 25% trace sampling; Warning OTel log floor; the Gateway-only Warning floor on YARP&#39;s per-request logs; Basic-tier DB sizing plus the archived-and-dropped AtlDevCon database; 300s outbox and scheduler polls; the two disabled metric groups plus the 300s metric export interval; 30-second readiness probes; 15-minute SLO-rule and web-test cadences; the <code>aiScoringTokenCeiling</code> two-day AI provider token alert; the 50 GB monthly cap on on-upload malware scanning; uniform 0.25 vCPU / 0.5 Gi container sizing; the daily two-step ACR purge task plus its post-deploy re-run</td>
+          <td><code>commonTags</code> on every resource plus a per-service <code>service</code> tag on the six apps and four databases; monthly budget with 80%/100% thresholds; <code>cost-guard.yml</code> surge-drift gate against a <code>maxReplicas</code> 2 / SQL Basic baseline that honours the <code>CONFERENCE_MODE_UNTIL</code> window; workspace <code>dailyQuotaGb: 1</code>; 25% trace sampling; Warning OTel log floor; the Gateway-only Warning floor on YARP&#39;s per-request logs; Basic-tier DB sizing plus the archived-and-dropped AtlDevCon database; 300s outbox and scheduler polls; the two disabled metric groups plus the 300s metric export interval; 30-second readiness probes; 15-minute SLO-rule and web-test cadences; the <code>aiScoringTokenCeiling</code> two-day AI provider token alert; the 50 GB monthly cap on on-upload malware scanning; 0.25 vCPU / 0.5 Gi baseline container sizing with the conference surge confined to a dated window; the daily two-step ACR purge task plus its post-deploy re-run</td>
           </tr>
           </tbody></table></div>
           <hr>
@@ -2109,10 +2220,13 @@ output appInsightsName    string = appInsights.name</code></pre>
           <code>Docs/MobileReleaseRunbook.md</code> section 5, which is private to the ADC repo. With
           <code>deployNotificationHub</code> defaulting to true, a deploy into an environment where they do not exist
           fails at the <code>listKeys()</code> call rather than skipping the wiring.</li>
-          <li>Whether the <code>AtlDevCon</code> drop and the bacpac export actually completed in a given subscription is
-          likewise outside the template: <span class="cite"><span><code>main.bicep:704-716</code></span></span> records the intent and the restore path, and
-          <code>infra/POST-CUTOVER-atldevcon-downgrade.md</code> records the commands, but the resource group is the
-          only place that says what exists now.</li>
+          <li>Whether the <code>AtlDevCon</code> drop, the bacpac deletion and any leftover <code>sql-archive</code> container are
+          reflected in a given subscription is likewise outside the template: <span class="cite"><span><code>main.bicep:932-938</code></span></span> records
+          what was done and <code>infra/POST-CUTOVER-atldevcon-downgrade.md</code> keeps the history, but the resource
+          group is the only place that says what exists now.</li>
+          <li>Whether <code>CONFERENCE_MODE_UNTIL</code> is set right now, and therefore whether production is at baseline
+          or surged, is repository state, not source: only <span class="cite"><span><code>deploy.yml:1430-1445</code></span></span> and the <code>cost-guard.yml</code>
+          summary of a given run show it.</li>
           <li>The <code>USE_MANAGED_IDENTITY_SQL</code>, <code>SQL_AAD_ADMIN_LOGIN</code> and <code>SQL_AAD_ADMIN_OID</code> repository variables
           are <strong>not visible in the repository</strong>, because they are GitHub repo configuration rather than
           source: the template defaults are <code>false</code> and empty. <span class="cite"><span><code>infra/OPERATIONS.md:76-77</code></span></span> and <span class="cite"><span><code>:113-116</code></span></span>

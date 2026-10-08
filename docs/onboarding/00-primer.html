@@ -1029,6 +1029,11 @@ Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           <td>Same-origin API proxy (backend-for-frontend): an opt-in <code>AddCommonSameOriginApiProxy</code> plus <code>MapCommonSameOriginApiProxy</code> serves <code>/api/**</code> on the UI host&#39;s own origin and forwards to the gateway through YARP, attaching the bearer from the HttpOnly session cookie so no browser script ever holds an API token</td>
           <td><a href="group-15-common-ui-framework.html">g15</a>/<a href="group-08-auth.html">g08</a>/<a href="group-12-api-hosting-mapping.html">g12</a></td>
           </tr>
+          <tr>
+          <td>132</td>
+          <td>Build strictness: all four repos treat compiler and code-analysis warnings as errors, run the five analyzer packages from root props with every analyzer diagnostic defaulting to error severity through the shared <code>.editorconfig</code> baseline, and give each CI test run a <code>--minimum-expected-tests</code> floor so a silently skipped tier fails instead of passing empty</td>
+          <td><a href="devops-cicd.html">devops-cicd</a>/<a href="devops-testing.html">devops-testing</a></td>
+          </tr>
           </tbody></table></div>
           <p>The canonical index for the full set can be found at <a href="https://ivanball.github.io/docs/adr/" target="_blank" rel="noopener">https://ivanball.github.io/docs/adr/</a>.</p>
           <hr>

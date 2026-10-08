@@ -673,14 +673,22 @@ host calls its methods directly; there is no ADC-local copy that shadows or exte
 
 ### `AddServiceDefaults<TBuilder>`
 
-Common.Aspire/Extensions.cs:46-97. Called early in each service's `Program.cs`, it chains
-`ConfigureOpenTelemetry()` (Extensions.cs:48), `AddDefaultHealthChecks()`, which adds a `"self"` check
-tagged `"live"` (Extensions.cs:49, 276-282), `AddWarmupReadiness()` (Extensions.cs:50), and
-`Services.AddServiceDiscovery()` (Extensions.cs:51). It then applies a Polly resilience pipeline to every
-`HttpClient` (`ConfigureHttpClientDefaults`, Extensions.cs:55-94) with 30 s per-attempt / 60 s
-circuit-breaker sampling / 90 s total-request timeouts and **one** retry per hop (Extensions.cs:65-71),
-and a `SocketsHttpHandler` tuned explicitly for Azure Container Apps Consumption plan
-(Extensions.cs:85-93):
+`MMCA.Common.Aspire/Extensions.cs:30-90`. The `Extensions` class is partial: this file holds the
+service defaults and the warm-up registration, while the health half lives in `Extensions.Health.cs` and
+the telemetry half in `Extensions.Telemetry.cs`. Called early in each service's `Program.cs`,
+`AddServiceDefaults` chains `ConfigureOpenTelemetry()` (Extensions.cs:32), `AddDefaultHealthChecks()`,
+which adds a `"self"` check tagged `"live"` (Extensions.cs:33; `Extensions.Health.cs:25-28`),
+`AddWarmupReadiness()` (Extensions.cs:34), and `Services.AddServiceDiscovery()` (Extensions.cs:35). It
+then applies a Polly resilience pipeline to every `HttpClient` (`ConfigureHttpClientDefaults`,
+Extensions.cs:39-87) with 30 s per-attempt / 60 s circuit-breaker sampling / 90 s total-request timeouts
+and **one** retry per hop (Extensions.cs:49-54). That one retry is switched off for POST and PATCH
+(Extensions.cs:63): an attempt that timed out may still be running server-side, and most hops carry no
+idempotency key, since a server-to-server call never does and the UI's `"APIClient"` stamps one only on
+`EntityServiceBase` creates, whose replay the UI service base classes own (Extensions.cs:56-59). GET,
+PUT, DELETE and the other idempotent verbs keep their retry, which is why the code names the two verbs
+instead of calling `DisableForUnsafeHttpMethods`, a helper that would also switch the retry off for PUT
+and DELETE (Extensions.cs:60-62). Finally it installs a `SocketsHttpHandler` tuned explicitly for Azure
+Container Apps Consumption plan (Extensions.cs:78-86):
 
 - `PooledConnectionLifetime = 10 min`, forces connection recycling so DNS changes during ACA replica
   rollovers are picked up without an app restart.
@@ -720,7 +728,7 @@ added to `MapDefaultEndpoints` is automatically a probe route everywhere else
 
 ### Warmup infrastructure
 
-`AddWarmupReadiness<TBuilder>` (Common.Aspire/Extensions.cs:108-119) registers:
+`AddWarmupReadiness<TBuilder>` (Common.Aspire/Extensions.cs:101-112) registers:
 
 - `WarmupReadinessGate` (singleton), a boolean gate that opens when all warm-up tasks finish.
 - `WarmupHostedService`, runs all registered `IWarmupTask` implementations on startup, then opens the
@@ -729,25 +737,29 @@ added to `MapDefaultEndpoints` is automatically a probe route everywhere else
   (`TaskTimeoutSeconds`, WarmupHostedService.cs:42), a backstop rather than a latency budget: the built-in
   OIDC task is already bounded at 90 s by the resilience pipeline, so a task reaching this limit is one
   waiting on something that will never arrive (WarmupHostedService.cs:36-41).
-- `WarmupReadinessHealthCheck` tagged `"ready"` (Extensions.cs:115-116), reports unhealthy until the gate
+- `WarmupReadinessHealthCheck` tagged `"ready"` (Extensions.cs:108-109), reports unhealthy until the gate
   opens. Because it appears on `/health/ready` (the readiness probe) but not on `/alive`, ACA ingress
   holds back user traffic from a replica that is still warming up.
 - `OpenIdConnectMetadataWarmupTask`, pre-fetches `{authority}/.well-known/openid-configuration`, where
   `{authority}` is the `Authentication:JwtBearer:Authority` key `WithJwksDiscovery` sets; with that key
-  unset the task returns immediately (`Warmup/OpenIdConnectMetadataWarmupTask.cs:30-34`). This warms the
-  TCP/TLS connection to the JWKS endpoint before the first authenticated request arrives. The problem it
-  solves is documented in the class comment (OpenIdConnectMetadataWarmupTask.cs:6-20): on a
+  unset the task returns immediately (`Warmup/OpenIdConnectMetadataWarmupTask.cs:32-36`). The problem it
+  solves is documented in the class summary (OpenIdConnectMetadataWarmupTask.cs:6-13): on a
   CPU-throttled idle ACA replica, a lazy metadata fetch on the first request can stretch past the client
-  timeout, producing the "first request fails, second succeeds" pattern. The remarks are candid that the
-  JwtBearer `ConfigurationManager` still performs its own fetch; what the warm-up buys is that the fetch
-  now completes in single-digit milliseconds.
+  timeout, producing the "first request fails, second succeeds" pattern. What it warms is narrower than
+  "the connection", and the remarks say so (OpenIdConnectMetadataWarmupTask.cs:14-22): the authority's own
+  discovery-document cache and the host-level DNS path, plus one connection in the task's own
+  `IHttpClientFactory` client pool (the fetch is at OpenIdConnectMetadataWarmupTask.cs:47-48). The
+  JwtBearer `ConfigurationManager` caches discovery state separately and fetches through its own default
+  backchannel `HttpClient`, because no `Backchannel` or `BackchannelHttpHandler` is configured, so the
+  first authenticated request still performs its own fetch over a connection of its own. What the
+  warm-up buys is a warmed authority, not a shared warm connection.
 
-Hosts can contribute their own tasks with `services.AddWarmupTask<TTask>()` (Extensions.cs:390-395), and
+Hosts can contribute their own tasks with `services.AddWarmupTask<TTask>()` (Extensions.cs:124), and
 three ADC services do. Identity (Program.cs:169), Engagement (Program.cs:157) and Conference
 (Program.cs:257) each register a subclass of the framework's `SelfHttpWarmupTaskBase`
 (`Warmup/SelfHttpWarmupTaskBase.cs:28-33`), which replays a short list of hot read paths against the
-host's **own** Kestrel endpoint once the server is listening. The OIDC task warms one outbound
-connection; this warms the full inbound path (Kestrel, output cache, routing, authentication,
+host's **own** Kestrel endpoint once the server is listening. The OIDC task warms the authority side
+of one outbound call; this warms the full inbound path (Kestrel, output cache, routing, authentication,
 controller, EF Core, SQL), which is where an idle CPU-throttled replica's cold-start cost actually sits
 (SelfHttpWarmupTaskBase.cs:11-15). Two details are load-bearing. The request version defaults to HTTP/2
 with `RequestVersionExact` (SelfHttpWarmupTaskBase.cs:70, 77), because these hosts serve h2c only and
@@ -765,12 +777,17 @@ consumer inherits the fix.
 
 ### `ConfigureOpenTelemetry<TBuilder>`
 
-Common.Aspire/Extensions.cs:128-268. Configures OTel logging (`IncludeFormattedMessage` + `IncludeScopes`),
-metrics (ASP.NET Core, HttpClient, .NET runtime), and tracing (the application's own source plus
-`"MMCA.Common.Outbox"`, with ASP.NET Core and HttpClient instrumentation). Three MMCA.Common-specific
-additions stand out:
+`MMCA.Common.Aspire/Extensions.Telemetry.cs:71-145`. Configures OTel logging (`IncludeFormattedMessage` +
+`IncludeScopes`, Extensions.Telemetry.cs:73-77), metrics (`ConfigureMetrics`, Extensions.Telemetry.cs:244-342:
+ASP.NET Core, HttpClient, .NET runtime), and tracing (the application's own source plus
+`"MMCA.Common.Outbox"`, `"MMCA.Common.InternalCommands"` and the optional AI package's `"MMCA.Common.AI"`,
+Extensions.Telemetry.cs:83-86 and 44, with ASP.NET Core and HttpClient instrumentation). Four
+MMCA.Common-specific additions stand out:
 
-1. **MMCA.Common meters, seven of them** (Common.Aspire/Extensions.cs:199-205): `"MMCA.Common.Outbox"`
+1. **MMCA.Common meters, nine of them** (Extensions.Telemetry.cs:308-316). Seven are the operational
+   meters below; the other two are `"MMCA.Common.InternalCommands"` (the internal-command queue's meter)
+   and `"MMCA.Common.AI"` (the optional AI package's token spend plus call duration, inert until a host
+   adds that package and enables `Ai:Enabled`, Extensions.Telemetry.cs:305-307). `"MMCA.Common.Outbox"`
    (outbox counters and dispatch lag), `"MMCA.Common.Cqrs"` (RED histograms for command/query handlers
    plus query cache hit/miss), `"MMCA.Common.Idempotency"` (the idempotency filter's replay, conflict
    and degraded counters), `"MMCA.Common.Scheduler"` (the recurring runner's run outcomes, duration and
@@ -779,15 +796,22 @@ additions stand out:
    `"MMCA.Common.OutputCache"` (the eviction consumer's failed tag evictions) and
    `"MMCA.Common.BestEffort"` (swallowed failures of best-effort side effects). They are registered by
    literal name because the Aspire package has no project reference to the assemblies that define them
-   (Extensions.cs:190-198).
+   (Extensions.Telemetry.cs:297-307).
 
-2. **`OutboxPollFilterProcessor`** is added to the tracing pipeline (Common.Aspire/Extensions.cs:246)
-   before the exporters, so its `OnEnd` runs first (comment at Extensions.cs:241-245).
+2. **Polly's own meter** (Extensions.Telemetry.cs:323, `PollyMeterName = "Polly"` at 31). The standard
+   resilience handler runs on every `HttpClient` and every gRPC typed client, so it is the component that
+   decides whether an inter-service call is retried, timed out or refused by an open circuit; until this
+   meter was subscribed none of that left the process, and a brownout looked from the outside exactly
+   like latency (Extensions.Telemetry.cs:318-322, citing ADR-009).
 
-3. **Five cost knobs** ([Rubric §31, Cost and FinOps]), four off by default and one on.
-   `Telemetry:DisableHttpClientMetrics` (Extensions.cs:148-169) and `Telemetry:DisableRuntimeMetrics`
-   (Extensions.cs:175-188) each drop a metric family. Both branches are more than "skip the
-   instrumentation call", and the comments explain why (Extensions.cs:150-159 and 177-179): a deployed
+3. **`OutboxPollFilterProcessor`** is added to the tracing pipeline (Extensions.Telemetry.cs:122)
+   before the exporters, so its `OnEnd` runs first (comment at Extensions.Telemetry.cs:117-121).
+
+4. **Six cost knobs** ([Rubric §31, Cost and FinOps]): four that change nothing until a host sets
+   them, and two whose saving is the default.
+   `Telemetry:DisableHttpClientMetrics` (Extensions.Telemetry.cs:248-276) and `Telemetry:DisableRuntimeMetrics`
+   (Extensions.Telemetry.cs:278-295) each drop a metric family. Both branches are more than "skip the
+   instrumentation call", and the comments explain why (Extensions.Telemetry.cs:257-266 and 284-286): a deployed
    host also calls `UseAzureMonitor()`, and the Azure Monitor distro adds the `System.Net.Http` and
    `System.Runtime` meters itself, so skipping `AddHttpClientInstrumentation` left
    `http.client.open_connections` as the single largest AppMetrics stream in both production workspaces
@@ -796,85 +820,112 @@ additions stand out:
    authoritative instead of advisory (`System.Net.NameResolution` rides along because DNS-lookup metrics
    carry no signal without the rest of the family). The third knob,
    `Telemetry:TracesSampleRatio`, installs a `ParentBasedSampler` over a `TraceIdRatioBasedSampler` for
-   head-based trace sampling (Extensions.cs:261-262). A value outside the open interval (0,1), or one
+   head-based trace sampling (Extensions.Telemetry.cs:138-139). Traces are the largest observability
+   line item while unsampled; once sampled, metrics can outweigh them (Extensions.Telemetry.cs:132-137,
+   pointing at ADR-041). A value outside the open interval (0,1), or one
    that fails to parse, falls back to "sample everything" rather than silently blinding the host
-   (`TryGetTraceSampleRatio`, Extensions.cs:448-461; the same defensive shape in
-   `IsInstrumentationDisabled`, Extensions.cs:471-472). The fourth,
-   `Telemetry:FilterProbeTelemetry`, is the one that defaults **on** and is covered on its own below
-   (`IsProbeTelemetryFilterEnabled`, Extensions.cs:483-484). A fifth,
+   (`TryGetTraceSampleRatio`, Extensions.Telemetry.cs:186-199; the same defensive shape in
+   `IsInstrumentationDisabled`, Extensions.Telemetry.cs:209-210). The fourth,
+   `Telemetry:FilterProbeTelemetry`, is the first of the two that default **on** and is covered on its
+   own below (`IsProbeTelemetryFilterEnabled`, Extensions.Telemetry.cs:234-235). A fifth,
    `Telemetry:DisableAspNetCoreMetrics`, drops the ASP.NET Core meter family (`http.server.*`,
    `kestrel.*`, `aspnetcore.*`, `signalr.server.*`) with the same whole-provider `Drop` View, matched on
    the `Microsoft.AspNetCore.` meter-name prefix, for the same reason: the distro adds those meters on its
-   own (`ConfigureAspNetCoreMetrics`, `MMCA.Common.Aspire/Extensions.Telemetry.cs:344-370`). ADC's
-   production Bicep sets four of the five explicitly: `Telemetry__TracesSampleRatio=0.25`
-   (`MMCA.ADC/infra/main.bicep:252-255`), `Telemetry__DisableHttpClientMetrics=true` (main.bicep:284-287)
-   and `Telemetry__DisableRuntimeMetrics=true` (main.bicep:288-291), those two measured at roughly 65% of
-   AppMetrics ingestion, about 290 MB of a 500 MB daily stream (main.bicep:278-283), and
-   `Telemetry__DisableAspNetCoreMetrics=true` (main.bicep:297-300), whose family was 73% of workspace
+   own (`ConfigureAspNetCoreMetrics`, `MMCA.Common.Aspire/Extensions.Telemetry.cs:353-369`). The sixth,
+   `Telemetry:EnablePollyDurationMetrics` (Extensions.Telemetry.cs:25), is the second default-on saving:
+   unless a host sets it to `true` (while debugging a retry storm, say), a `Drop` View removes Polly's two
+   duration histograms, `resilience.polly.strategy.attempt.duration` and
+   `resilience.polly.pipeline.duration` (Extensions.Telemetry.cs:333-341). They are per-bucket streams on
+   a pipeline that runs on every outbound call and re-measure what `http.client.request.duration` and the
+   dependency traces already report, while the `resilience.polly.strategy.events` counter (retries,
+   circuit opens and closes, timeouts) is never dropped, because it is the signal the meter exists for
+   (Extensions.Telemetry.cs:325-332). ADC's production Bicep sets four of the first five explicitly:
+   `Telemetry__TracesSampleRatio=0.25` (`MMCA.ADC/infra/main.bicep:279-282`, rationale at 275-278),
+   `Telemetry__DisableHttpClientMetrics=true` (main.bicep:312-315)
+   and `Telemetry__DisableRuntimeMetrics=true` (main.bicep:316-319), those two measured at roughly 65% of
+   AppMetrics ingestion, about 290 MB of a 500 MB daily stream (main.bicep:305-311), and
+   `Telemetry__DisableAspNetCoreMetrics=true` (main.bicep:325-328), whose family was 73% of workspace
    ingestion over 2026-09-22..28 with no alert reading it, since request latency and failures alert off
-   `AppRequests` (main.bicep:293-296). Alongside them it sets the distro's own
-   `AzureMonitor__EnableLiveMetrics=false` (main.bicep:307-310): Live Metrics is on by default and keeps
+   `AppRequests` (main.bicep:321-324). Alongside them it sets the distro's own
+   `AzureMonitor__EnableLiveMetrics=false` (main.bicep:335-338): Live Metrics is on by default and keeps
    every replica talking to the Live Metrics service with nobody watching, which held every app just
    above the Container Apps idle line so that 64% of vCPU-seconds billed at the active rate
-   (main.bicep:302-306). All six container apps carry both entries (for example main.bicep:1675-1676
-   on Identity and 2371-2372 on the gateway). It also stretches the OTel export cadence with the
-   standard `OTEL_METRIC_EXPORT_INTERVAL=300000` (main.bicep:318-321): the exporter ships cumulative
+   (main.bicep:330-334). All six container apps carry that entry (for example main.bicep:1729 on
+   Identity and 2461 on the gateway). It also stretches the OTel export cadence with the
+   standard `OTEL_METRIC_EXPORT_INTERVAL=300000` (main.bicep:346-349): the exporter ships cumulative
    aggregates, so a 5x longer interval drops roughly 80% of the remaining datapoints while five-minute
-   alert windows keep the same signal (main.bicep:312-317). An unset host keeps every metric family,
-   samples every trace and exports on the SDK's 60 second default.
+   alert windows keep the same signal (main.bicep:340-345). The Bicep sets no
+   `Telemetry__EnablePollyDurationMetrics`, so production keeps the Polly histograms dropped. An unset
+   host keeps every other metric family, samples every trace and exports on the SDK's 60 second default.
 
 ### `MapDefaultEndpoints`
 
-Common.Aspire/Extensions.cs:411-439. Maps three endpoints, each at its `HealthEndpointPaths` constant
-rather than a literal:
+`MMCA.Common.Aspire/Extensions.Health.cs:123-159`. Maps three endpoints, each at its `HealthEndpointPaths`
+constant rather than a literal, and each declared anonymous explicitly: a host that adopts the framework's
+fallback authorization policy would otherwise 401 its own liveness and readiness probes, and a probe that
+cannot answer takes the replica out of rotation (Extensions.Health.cs:125-127).
 
-- `/health` (Extensions.cs:413), all checks must pass; used by humans and dashboards.
-- `/alive` (Extensions.cs:417-420), liveness probe: `"live"`-tagged checks only, so a transient
+- `/health` (Extensions.Health.cs:134), all checks must pass; used by humans and dashboards.
+- `/alive` (Extensions.Health.cs:138-141), liveness probe: `"live"`-tagged checks only, so a transient
   dependency outage (SQL Server down, say) does not mark the process dead and get it killed.
-- `/health/ready` (Extensions.cs:433-436), readiness: everything except `"live"`-only **and
+- `/health/ready` (Extensions.Health.cs:154-156), readiness: everything except `"live"`-only **and
   `"optional"`** checks. This includes the warmup check (tagged `"ready"`) and any untagged dependency
   checks, so a replica still in cold-start or with a failing dependency is removed from ACA ingress
   without being killed. The `"optional"` exclusion is deliberate and the comment above it
-  (Extensions.cs:427-432) restates the rule from `HealthCheckTags`: a dependency the app degrades
+  (Extensions.Health.cs:148-153) restates the rule from `HealthCheckTags`: a dependency the app degrades
   gracefully without must not gate readiness, or a partial degradation takes every replica unready at
   once and becomes a total outage. Those checks still surface on `/health`, so the degradation is
   visible without being self-inflicted.
 
+`/health` and `/health/ready` are served by `MapCachedHealthChecks` (Extensions.Health.cs:170-192), not by
+plain `MapHealthChecks`: a GET/HEAD endpoint that asks `CachedHealthReportProvider` for the report,
+answers 503 only when the status is `Unhealthy` (200 otherwise, so `Degraded` still passes) and writes the
+status as `text/plain`. The provider is a short-TTL, single-flight report cache that
+`AddDefaultHealthChecks` registers next to the `"self"` check, with `HealthReportCacheOptions` bound from
+configuration and validated at startup (Extensions.Health.cs:30-38). The reason is SEC-Common-71 /
+SEC-ADC-17: both paths sit on a rate-limit bypass (see the gateway pipeline below), and that bypass cannot
+bound the amplification of an anonymous flood in which every request runs a full round of dependency
+probes. The cache can: one probe round per window instead of one per request
+(Extensions.Health.cs:129-133). `/alive` is deliberately left uncached; it runs only the `"self"` check,
+which answers `Healthy` without touching a dependency (Extensions.Health.cs:28, 136-141).
+
 The checks that carry that `"optional"` tag come from `AddInfrastructureHealthChecks(bool requireDatabase)`
-(Common.Aspire/Extensions.cs:308-346), which a host calls separately from `AddServiceDefaults`; all four
+(Extensions.Health.cs:69-107), which a host calls separately from `AddServiceDefaults`; all four
 ADC services pass `requireDatabase: true` (for example Notification Program.cs:128). It registers:
 
-- **Relational checks, one per distinct database** (`AddDatabaseHealthChecks`, Extensions.cs:498-522).
-  Both engines are read, SQL Server and SQLite, because a host picks its engine from configuration, and
-  both the top-level `ConnectionStrings` section and every named `DataSources` entry are scanned
-  (`RelationalSources`, Extensions.cs:541-573). Deduplication is by connection string, so the entries that
-  collapse onto one physical database contribute one check rather than one per logical name, and the
-  first database keeps the historical `sqlserver` / `sqlite` check name (Extensions.cs:534-540, applied
-  at 568). Neither is tagged optional, so both gate readiness.
-- **Redis**, via the framework's own `RedisPingHealthCheck` (Extensions.cs:314-331), tagged `"optional"`.
-  The comment at Extensions.cs:317-322 is the postmortem: the `AspNetCore.HealthChecks.Redis` check this
+- **Relational checks, one per distinct database** (`AddDatabaseHealthChecks`, Extensions.Health.cs:208-239).
+  Three engines are read, SQL Server, PostgreSQL and SQLite (Extensions.Health.cs:213-215, registered at
+  225-238), because a host picks its engine from configuration, and both the top-level
+  `ConnectionStrings` section and every named `DataSources` entry are scanned (`RelationalSources`,
+  Extensions.Health.cs:258-295). Deduplication is by connection string, so the entries that collapse onto
+  one physical database contribute one check rather than one per logical name; the first database of each
+  engine keeps the bare `sqlserver` / `postgresql` / `sqlite` check name and later ones are named
+  `{engine}:{entry}` (Extensions.Health.cs:260-265, 280, 284-292). None is tagged optional, so every one
+  gates readiness.
+- **Redis**, via the framework's own `RedisPingHealthCheck` (Extensions.Health.cs:75-92), tagged `"optional"`.
+  The comment at Extensions.Health.cs:78-83 is the postmortem: the `AspNetCore.HealthChecks.Redis` check this
   replaced issued `CLUSTER INFO` against any server it detected as clustered, which is how
   StackExchange.Redis 3.x sees Azure Managed Redis (Enterprise tier), and the server refuses that command
   outside admin mode, so every probe threw against a healthy cache. The replacement issues PING only and
   is registered as a singleton so the fallback multiplexer is built once rather than per probe. See
   [`RedisPingHealthCheck`](group-16-aspire-orchestration.md#redispinghealthcheck).
-- **RabbitMQ** (Extensions.cs:333-343), also tagged `"optional"`, when a `rabbitmq` or `messaging`
+- **RabbitMQ** (Extensions.Health.cs:94-104), also tagged `"optional"`, when a `rabbitmq` or `messaging`
   connection string parses as an absolute URI.
 
 The asymmetry is intentional: Redis and RabbitMQ are optional per host, but a host that cannot resolve
 any relational database at all is misconfigured, so `requireDatabase: true` throws at startup instead of
-quietly registering no check and reporting healthy (Extensions.cs:294-301, throw at 506-511).
+quietly registering no check and reporting healthy (throw at Extensions.Health.cs:217-223).
 
 ### Dual telemetry export
 
-`AddOpenTelemetryExporters` (Common.Aspire/Extensions.cs:361-378) activates two exporters, each
+`AddOpenTelemetryExporters` (`MMCA.Common.Aspire/Extensions.Telemetry.cs:160-177`) activates two exporters, each
 conditional:
 
-- **OTLP** when `OTEL_EXPORTER_OTLP_ENDPOINT` is present (Extensions.cs:363-369), the Aspire dashboard
+- **OTLP** when `OTEL_EXPORTER_OTLP_ENDPOINT` is present (Extensions.Telemetry.cs:162-168), the Aspire dashboard
   sets this automatically; standalone deployments must supply it.
-- **Azure Monitor** when `APPLICATIONINSIGHTS_CONNECTION_STRING` is present (Extensions.cs:371-377),
+- **Azure Monitor** when `APPLICATIONINSIGHTS_CONNECTION_STRING` is present (Extensions.Telemetry.cs:170-176),
   injected by the Bicep deployment so logs, metrics, and traces flow to the workspace-based Application
-  Insights resource (main.bicep:228-237).
+  Insights resource (main.bicep:250-265, env entry at 270-273).
 
 Both can be active simultaneously; each exports an independent copy.
 
@@ -888,36 +939,38 @@ path changes.
 
 `MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Telemetry/OutboxPollFilterProcessor.cs`
 
-This OpenTelemetry `BaseProcessor<Activity>` (OutboxPollFilterProcessor.cs:15) drops recurring outbox
+This OpenTelemetry `BaseProcessor<Activity>` (OutboxPollFilterProcessor.cs:17) drops recurring background
 poll spans from export. The `OutboxProcessor` background service polls every relational outbox table on a
 recurring cycle (2 s framework default,
 `Core/MMCA.Common.Infrastructure/Settings/OutboxSettings.cs:31`; deployed environments set 300 s).
 Without filtering, those idle polls would dominate Application Insights ingestion, both by span count
 and by spawning `SqlClient` dependency spans when the Azure Monitor distro's auto-instrumentation is
-active (OutboxPollFilterProcessor.cs:6-14).
+active (OutboxPollFilterProcessor.cs:6-16). The `InternalCommandProcessor` polls every internal-command
+queue table the same way, so its idle polls are dropped by the same processor for the same reason
+(OutboxPollFilterProcessor.cs:9-12).
 
-The processor walks the in-process parent chain in `OnEnd` (OutboxPollFilterProcessor.cs:37-48),
-matching spans whose source is `"MMCA.Common.Outbox"` and whose operation name is `"OutboxPoll"`.
-Matching on both avoids suppressing an unrelated consumer span that happens to be called `OutboxPoll`
-(OutboxPollFilterProcessor.cs:35-36). When a match is found it clears the `ActivityTraceFlags.Recorded`
-flag (line 45), which tells the batch export processors to skip the span. It is registered before the
-exporters (Common.Aspire/Extensions.cs:246) so its `OnEnd` runs before the batch processors check the
-flag. A null activity returns early rather than throwing, because a telemetry callback must never throw
-(OutboxPollFilterProcessor.cs:29-33).
+The processor walks the in-process parent chain in `OnEnd` (OutboxPollFilterProcessor.cs:32-53),
+matching spans on source and operation name together: `"MMCA.Common.Outbox"` with `"OutboxPoll"`, or
+`"MMCA.Common.InternalCommands"` with `"InternalCommandPoll"` (OutboxPollFilterProcessor.cs:26-29).
+Matching on both avoids suppressing an unrelated consumer span that happens to share a poll's name
+(OutboxPollFilterProcessor.cs:40-41). When a match is found it clears the `ActivityTraceFlags.Recorded`
+flag (line 49), which tells the batch export processors to skip the span. It is registered before the
+exporters (`MMCA.Common.Aspire/Extensions.Telemetry.cs:122`) so its `OnEnd` runs before the batch
+processors check the flag. A null activity returns early rather than throwing, because a telemetry
+callback must never throw (OutboxPollFilterProcessor.cs:34-38).
 
-Real outbox-work spans are unaffected: per-message `OutboxProcess` spans restore explicit parent
-contexts from the stored trace IDs and are never descendants of the poll span
-(OutboxPollFilterProcessor.cs:11-13).
+Real work is unaffected: per-message `OutboxProcess` and per-command `InternalCommandExecute` spans
+restore explicit parent contexts from the stored trace IDs and are never descendants of a poll span
+(OutboxPollFilterProcessor.cs:12-15).
 
-The constant names `OutboxActivitySourceName = "MMCA.Common.Outbox"` and
-`PollActivityName = "OutboxPoll"` (OutboxPollFilterProcessor.cs:23-24) are deliberately duplicated from
+The four name constants (OutboxPollFilterProcessor.cs:26-29) are deliberately duplicated from
 `MMCA.Common.Infrastructure`; the comment explains that the Aspire package's only `ProjectReference` is
 `MMCA.Common.Shared` (for `HttpResilienceDefaults`), so `AddServiceDefaults` stays usable from a host
-that does not take the persistence stack (OutboxPollFilterProcessor.cs:17-22).
+that does not take the persistence stack (OutboxPollFilterProcessor.cs:19-25).
 
 [Rubric §31, Cost and FinOps] assesses whether observability costs are controlled. Suppressing poll
 spans on a 300 s polling interval in production (`Outbox__PollingIntervalSeconds=300` on all four ADC
-container apps, `MMCA.ADC/infra/main.bicep:1693, 1916, 2056, 2210`) eliminates the majority of
+container apps, `MMCA.ADC/infra/main.bicep:1746, 1989, 2131, 2287`) eliminates the majority of
 idle-process telemetry ingestion. The framework makes this the default for every consumer; individual
 services do not need to configure it.
 
@@ -932,22 +985,22 @@ workspaces, and their children (the health check's SQL `SELECT 1`, the Redis PIN
 HttpClient call to each backend's `/alive`) for most of the `AppDependencies` rows
 (ProbeTelemetryFilter.cs:6-11, ProbeTelemetryFilterProcessor.cs:6-12). None of it carries end-user
 signal, and none of it is touched by `Telemetry:TracesSampleRatio`, because proportional sampling keeps
-a proportion of exactly the traffic you did not want (Common.Aspire/Extensions.cs:212-219).
+a proportion of exactly the traffic you did not want (`MMCA.Common.Aspire/Extensions.Telemetry.cs:88-99`).
 
 The knob is `Telemetry:FilterProbeTelemetry` and it is the one that defaults to **on**: absent, blank or
 unparseable all mean "filter", and only an explicit `false` turns it off, for a host debugging its own
-probes (`IsProbeTelemetryFilterEnabled`, Extensions.cs:483-484, rationale at 474-479). Enabled, it
+probes (`IsProbeTelemetryFilterEnabled`, Extensions.Telemetry.cs:234-235, rationale at 96-97). Enabled, it
 installs two halves:
 
-- **Instrumentation predicates** (Extensions.cs:224-234). `ShouldCollectRequest` refuses an inbound
+- **Instrumentation predicates** (Extensions.Telemetry.cs:100-115). `ShouldCollectRequest` refuses an inbound
   request whose path `HealthEndpointPaths.IsProbePath` matches (ProbeTelemetryFilter.cs:40-55) and
   `ShouldCollectOutgoing` refuses an outbound call to a probe path (ProbeTelemetryFilter.cs:62-63).
   Both configure the DEFAULT-named instrumentation options, which is why they are authoritative without
-  a View, unlike the two metrics toggles (Extensions.cs:227-229). The outbound half exists because the
+  a View, unlike the metric toggles (Extensions.Telemetry.cs:103-105). The outbound half exists because the
   gateway's `DownstreamServiceHealthCheck` calls and YARP's active checks are driven by background
   timers and are nobody's descendants, so a processor would never see them
   (ProbeTelemetryFilter.cs:20-25).
-- **`ProbeTelemetryFilterProcessor`** (Extensions.cs:253), registered under the same condition and,
+- **`ProbeTelemetryFilterProcessor`** (Extensions.Telemetry.cs:129), registered under the same condition and,
   like the outbox processor, before the exporters. It walks the in-process parent chain and unrecords
   any span sitting under a probe request (ProbeTelemetryFilterProcessor.cs:42-64), because the probe's
   children are sampled independently of the request the predicate just refused.
@@ -973,7 +1026,7 @@ trace rows stop being billed (ProbeTelemetryFilterProcessor.cs:15-17).
 [Rubric §13, Observability and Operability] assesses whether the signal a system emits is usable.
 Filtering here is not "less telemetry", it is a better ratio: the rows that remain in `AppRequests` are
 now requests a user made. [Rubric §31, Cost and FinOps] gets the other half, and note the default
-direction: the two metrics knobs are opt-in because dropping a metric family is a judgement call, while
+direction: the three metric-family knobs are opt-in because dropping a metric family is a judgement call, while
 this one is opt-out because probe chatter is ingestion no host wants billed.
 
 ### Security headers
@@ -1292,7 +1345,7 @@ table below cross-references the local resource with its Azure equivalent:
 | h2c health probe from the AppHost (`WithH2cHealthCheck`) | Dedicated HTTP/1.1 probe listener via `HealthProbe__Port`, 8081 on the three h2c services (main.bicep:1682, 1909, 2049) and 8082 on Notification (main.bicep:2201), because the ACA platform probes speak HTTP/1.1 |
 | `WaitFor` gates on `/alive`; only the UI gates on `/health/ready` | The ACA probe block splits the same two paths by job: startup and liveness on `/alive`, readiness on `/health/ready`, all three against the probe port (main.bicep:1815-1839). Readiness polls every 30 s rather than 10 s, because the DB-aware check issues a `SELECT 1` per probe and neither the probe request nor its dependency row is sampled (main.bicep:1809-1814) |
 | Outbox poll interval: framework default 2 s | `Outbox__PollingIntervalSeconds=300` on every service (main.bicep:1693, 1916, 2056, 2210); Identity, Conference and Engagement, the three hosts that call `AddScheduledJobs`, also slow the runner's idle wake to `Scheduler__PollingIntervalSeconds=300` (main.bicep:1704, 1924, 2059). Internal commands (ADR-114) deliberately poll faster at `InternalCommands__PollingIntervalSeconds=60` (main.bicep:1699), because only a row enrolled in a transaction cannot be signalled |
-| Telemetry knobs at their defaults (sample everything, all metric families on, probe traces filtered) | `Telemetry__TracesSampleRatio=0.25`, `Telemetry__DisableHttpClientMetrics=true`, `Telemetry__DisableRuntimeMetrics=true`, `Telemetry__DisableAspNetCoreMetrics=true`, `OTEL_METRIC_EXPORT_INTERVAL=300000`, plus the distro switch `AzureMonitor__EnableLiveMetrics=false` (main.bicep:252-255, 284-291, 297-300, 307-310, 318-321). `Telemetry__FilterProbeTelemetry` is set nowhere, because its default is already the production behavior |
+| Telemetry knobs at their defaults (sample everything, all metric families on, probe traces filtered) | `Telemetry__TracesSampleRatio=0.25`, `Telemetry__DisableHttpClientMetrics=true`, `Telemetry__DisableRuntimeMetrics=true`, `Telemetry__DisableAspNetCoreMetrics=true`, `OTEL_METRIC_EXPORT_INTERVAL=300000`, plus the distro switch `AzureMonitor__EnableLiveMetrics=false` (main.bicep:279-282, 312-319, 325-328, 335-338, 346-349). `Telemetry__FilterProbeTelemetry` is set nowhere, because its default is already the production behavior |
 | Gateway: YARP request-routing lines at `Information` (Gateway/appsettings.json:6) | `Logging__LogLevel__Yarp=Warning` on the gateway container and no other (main.bicep:267-276, 2368), because YARP's two lines per proxied request duplicated `AppRequests` and `AppDependencies` in the console-log stream; `Warning` keeps the forwarder's error lines |
 
 The transport switch (`RabbitMq` to `AzureServiceBus`) is entirely environment-driven. No code path
@@ -1375,15 +1428,18 @@ under `/Auth` (refresh, logout, forgot/reset password, the OAuth callbacks) stay
 limiter alone (appsettings.json:102-103).
 
 **Every route states `"AuthorizationPolicy": "anonymous"`.** A proxied route carries no authorization
-metadata of its own, so the anonymous posture of the whole table used to be an absence rather than a
-statement, with nothing for a reviewer or a fitness test to read (SEC-Common-16, appsettings.json:72-77,
-Gateway/Program.cs:98-106). Declaring it per route is what makes a route added without a policy fail
-closed at the edge. `builder.Services.AddAuthorization()` (Program.cs:112) plus `app.UseAuthorization()`
-(Program.cs:218) evaluate it, with no `UseAuthentication` above them on purpose: the gateway
-authenticates no one and the bearer travels untouched to the service that does (Program.cs:215-217). The
-framework's fallback policy is deliberately **not** adopted here, because it ships in `MMCA.Common.API`
-and referencing that package would pull the whole MVC and controller stack into a pure-YARP host and
-into the edge container image (Program.cs:108-111).
+metadata of its own, so without the declaration the anonymous posture of the whole table would be an
+absence rather than a statement, with nothing for a reviewer or a fitness test to read (SEC-Common-16,
+appsettings.json:72-76, Gateway/Program.cs:100-109). The declaration makes the posture readable; it does
+not make a new route fail closed. The framework's fallback policy is deliberately **not** registered in
+this host, so a route added without a policy still inherits the anonymous default rather than failing
+closed at the edge (appsettings.json:76-79). `builder.Services.AddAuthorization()` (Program.cs:114) plus
+`app.UseAuthorization()` (Program.cs:231) evaluate the declared policy, with no `UseAuthentication`
+above them on purpose: the gateway authenticates no one and the bearer travels untouched to the service
+that does (Program.cs:228-230). The fallback is not adopted because it ships in `MMCA.Common.API`, and
+referencing that package would pull the whole MVC and controller stack into a pure-YARP host and into
+the edge container image; the four services and the UI head, which already reference it, do adopt it
+(Program.cs:110-113).
 
 ### Three forwarder profiles, on two axes
 
@@ -1622,9 +1678,9 @@ composition is proven by the suite that has to boot it anyway.
 |---|---|
 | §7 Microservices Architecture | `WithReference` declared only for real call edges, so the gRPC topology reads as code (AppHost Program.cs:268-292); the gateway as the only component that knows the service topology on behalf of clients; identical extraction boundaries (gRPC contracts, broker interfaces, JWKS discovery) locally and in Azure |
 | §11 Security | The GitHub Packages token as a BuildKit secret in all six Dockerfiles (Gateway.Dockerfile:12-14, 30-32), and the non-root `USER $APP_UID` final stage (Gateway.Dockerfile:72); JWKS discovery with no shared symmetric secret, routed through the gateway and issuer-pinned from the same resource (Program.cs:364-375); `AddCommonKeyVaultConfiguration` and `AddCommonDataProtection` as single framework calls gated on configuration keys absent locally; the hardened default CSP baseline (SecurityHeaders.cs:53-55) |
-| §12 Performance & Scalability | The ACA-tuned `SocketsHttpHandler` (Extensions.cs:85-93) and the OIDC metadata warm-up task, both aimed at Consumption-plan cold starts and idle-replica penalties; ReadyToRun publish on the five non-UI images |
-| §13 Observability & Operability | Dual OTLP / Azure Monitor export from one binary (Extensions.cs:361-378); seven MMCA.Common meters registered by literal name (Extensions.cs:199-205); probe-trace filtering that raises the signal ratio of `AppRequests` rather than only cutting volume |
-| §14 Testability & Test Strategy | `AdcAppHostFixture` plus `AdcAppHostSmokeTests`, one shared stack and one narrow claim per wiring contract against the one failure surface no compiler covers (AdcAppHostSmokeTests.cs:75-136), kept `continue-on-error` in the nightly per [ADR-098](https://ivanball.github.io/docs/adr/098-aspire-orchestration-not-testing-or-dashboards.html) |
+| §12 Performance & Scalability | The ACA-tuned `SocketsHttpHandler` (`MMCA.Common.Aspire/Extensions.cs:78-86`) and the OIDC metadata warm-up task, both aimed at Consumption-plan cold starts and idle-replica penalties; ReadyToRun publish on the five non-UI images |
+| §13 Observability & Operability | Dual OTLP / Azure Monitor export from one binary (Extensions.Telemetry.cs:160-177); nine MMCA.Common meters registered by literal name (Extensions.Telemetry.cs:308-316); probe-trace filtering that raises the signal ratio of `AppRequests` rather than only cutting volume |
+| §14 Testability & Test Strategy | `AppHostBicepParityTests` reads the AppHost `Program.cs` and `infra/main.bicep` as text, without booting the stack, and fails when a `WithReference` edge has no matching `services__` entry in Bicep or a Bicep entry has no matching edge (AppHostBicepParityTests.cs:53, AppHostBicepParityTests.cs:73), which pins the one failure surface no compiler covers; the booted composition is exercised by `e2e.yml`, and ADC carries no AppHost test project of its own |
 | §17 DevOps & Deployment | Persistent container lifetimes shared by the inner loop and the Aspire-driven E2E CI run; one Dockerfile per deployable behind the six-way `build-images` matrix with per-image dirty gating (`deploy.yml:1095-1116`); the parity table's environment-driven local-to-cloud mapping |
 | §29 Resilience & Business Continuity | The liveness-versus-readiness split on every startup gate (Program.cs:324-343), including the gateway's `/alive` gate that avoids the readiness-aggregate wedge; `WithReference` without `WaitFor` on the four cycle-closing edges, absorbed by the gRPC resilience pipeline; `"optional"`-tagged dependency checks that keep a degradation partial |
 | §31 Cost / FinOps | The five telemetry knobs, the Live Metrics switch (main.bicep:307-310) and the metric export interval; `OutboxPollFilterProcessor` and `ProbeTelemetryFilterProcessor` suppressing the two highest-volume classes of span nobody asked for; the gateway's probe-log trim (Gateway/appsettings.json:2-16) and its production-only YARP log floor (main.bicep:267-276, 2368); the 30 s readiness cadence in the ACA probe block (main.bicep:1809-1814); the gateway's YARP active probe switched off (Gateway/appsettings.json:52-60) and its readiness probe on `/alive` rather than the downstream fan-out (main.bicep:2423-2432) |

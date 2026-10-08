@@ -222,10 +222,10 @@
           <code>ValidatingQueryDecorator.cs:86</code>)</span></span>, so a downstream consumer can see which command or query produced
           the failures, and the failing property name travels as the error&#39;s <code>target</code>. <code>ErrorType.Validation</code>
           is what the edge maps to HTTP 400: the client-side reader carries the inverse mapping explicitly<span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Http/ProblemDetailsResultReader.cs:105</code>)</span></span>, and the
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Http/ProblemDetailsResultReader.cs:106</code>)</span></span>, and the
           severity table ranks <code>Validation</code> at the caller-can-fix-it end so a multi-error failure is never
           downgraded from a 403 or 500 to a 400<span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/ErrorTypeSeverity.cs:46</code>)</span></span>. Nothing in the
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/ErrorTypeSeverity.cs:48</code>)</span></span>. Nothing in the
           domain references FluentValidation, and FluentValidation never sees an <code>Error</code>: neither library knows
           the other exists, which is <code>[Rubric §3, Clean Architecture]</code> (dependencies point inward, the external
           library stays at the Application boundary) and <code>[Rubric §9, API and Contract Design]</code> (one uniform
@@ -286,11 +286,11 @@
           anything constructs a <code>Uri</code> from it<span class="cite"><span> (<code>CommonInvariants.cs:289-292</code>)</span></span>. Null or empty passes, since the
           fields are optional<span class="cite"><span> (<code>CommonInvariants.cs:295</code>)</span></span>. ADC applies it to every stored external link:
           sponsor logo, website, and LinkedIn URLs<span class="cite"><span>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sponsors/Validation/SponsorValidationRules.cs:34</code>,
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sponsors/Validation/SponsorValidationRules.cs:35</code>,
           <code>:64</code>, <code>:82</code>)</span></span>, speaker LinkedIn and GitHub URLs<span class="cite"><span>
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/Validation/SpeakerValidationRules.cs:65</code>,
           <code>:84</code>)</span></span>, and the event sponsorship-packet and ticketing URLs<span class="cite"><span>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/Validation/EventValidationRules.cs:87</code>,
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/Validation/EventValidationRules.cs:143</code>,
           <code>:105</code>)</span></span>. <code>[Rubric §11, Security]</code> assesses whether untrusted input is constrained at the boundary
           before it reaches a rendering surface; this rule is where that happens for URLs.</p>
           <p><strong>The address family, a worked example of composition.</strong> The six rules in
@@ -552,7 +552,7 @@
           what &quot;no id was supplied&quot; looks like on the wire for both shapes. Its message interpolates the
           field phrase verbatim into &quot;You must specify {fieldName}&quot;, so the caller supplies the article and
           any qualifier, for example <code>&quot;an Event for the Sponsor&quot;</code><span class="cite"><span>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sponsors/Validation/SponsorValidationRules.cs:119</code>)</span></span>.</li>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sponsors/Validation/SponsorValidationRules.cs:120</code>)</span></span>.</li>
           <li><code>OptionalPositiveIdRules&lt;T, TId&gt;</code><span class="cite"><span> (<code>:161-166</code>)</span></span> is constrained
           <code>where TId : struct, IComparable&lt;TId&gt;, IComparable</code><span class="cite"><span> (<code>:162</code>)</span></span>, takes a nullable
           <code>Expression&lt;Func&lt;T, TId?&gt;&gt;</code> selector and applies <code>GreaterThan(default(TId))</code>. The remarks<span class="cite"><span>
@@ -588,7 +588,7 @@
           constant and error code once: <code>SpeakerFirstNameRules&lt;T&gt; : RequiredStringRules&lt;T&gt;</code><span class="cite"><span>
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/Validation/SpeakerValidationRules.cs:12-17</code>)</span></span>,
           <code>SponsorEventIdRules&lt;T&gt; : RequiredIdRules&lt;T, EventIdentifierType&gt;</code><span class="cite"><span>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sponsors/Validation/SponsorValidationRules.cs:115-120</code>)</span></span>,
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sponsors/Validation/SponsorValidationRules.cs:116-121</code>)</span></span>,
           <code>ProductCategoryIdRules&lt;T&gt; : OptionalPositiveIdRules&lt;T, CategoryIdentifierType&gt;</code><span class="cite"><span>
           (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Products/Validation/ProductValidationRules.cs:46-51</code>)</span></span>,
           and <code>CustomerEmailRules&lt;T&gt; : EmailRules&lt;T&gt;</code><span class="cite"><span>
@@ -603,7 +603,7 @@
           before the handler runs. Behavior is pinned by <code>CommonValidationRulesTests</code> in
           <a href="group-28-testing-infrastructure.html#per-project-test-rollup">group-27</a>, which exercises both the
           message and the optional-code path for each fragment<span class="cite"><span>
-          (<code>MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Validation/CommonValidationRulesTests.cs:440-538</code>)</span></span>.</p>
+          (<code>MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Validation/CommonValidationRulesTests.cs:468-566</code>)</span></span>.</p>
           </li>
           </ul>
           <h3 id="commandrequestvalidatortcommand-trequest">CommandRequestValidator&lt;TCommand, TRequest&gt;</h3>
@@ -1007,7 +1007,7 @@
           <li><strong>Where it&#39;s used</strong>: the ADC Conference module wraps it once per URL-bearing field, always inside a
           <code>When(x =&gt; !string.IsNullOrWhiteSpace(accessor(x)), ...)</code> guard so a blank optional field reports
           nothing: <a href="group-18-conference-application.html#sponsorlogourlrulest"><code>SponsorLogoUrlRules&lt;T&gt;</code></a><span class="cite"><span>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sponsors/Validation/SponsorValidationRules.cs:34</code>)</span></span>,
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sponsors/Validation/SponsorValidationRules.cs:35</code>)</span></span>,
           <a href="group-18-conference-application.html#sponsorwebsiteurlrulest"><code>SponsorWebsiteUrlRules&lt;T&gt;</code></a><span class="cite"><span> (<code>:64</code>)</span></span>,
           the sponsor LinkedIn rule<span class="cite"><span> (<code>:82</code>)</span></span>,
           <a href="group-18-conference-application.html#speakerlinkedinurlrulest"><code>SpeakerLinkedInUrlRules&lt;T&gt;</code></a><span class="cite"><span>
@@ -1017,10 +1017,10 @@
           <a href="group-18-conference-application.html#activityvenueurlrulest"><code>ActivityVenueUrlRules&lt;T&gt;</code></a><span class="cite"><span>
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Activities/Validation/ActivityValidationRules.cs:71</code>)</span></span>,
           and <a href="group-18-conference-application.html#eventsponsorshippacketurlrulest"><code>EventSponsorshipPacketUrlRules&lt;T&gt;</code></a><span class="cite"><span>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/Validation/EventValidationRules.cs:87</code>)</span></span>.
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/Validation/EventValidationRules.cs:143</code>)</span></span>.
           Each wrapper supplies its own module max-length constant. Direct coverage lives in
           <a href="group-28-testing-infrastructure.html#per-project-test-rollup"><code>CommonValidationRulesTests</code></a>
-          (<span class="cite"><span><code>MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Validation/CommonValidationRulesTests.cs:565</code></span></span>
+          (<span class="cite"><span><code>MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Validation/CommonValidationRulesTests.cs:593</code></span></span>
           for the passing shapes, <span class="cite"><span><code>:580</code></span></span> for rejected schemes, <span class="cite"><span><code>:592</code></span></span> for the length bound, and <span class="cite"><span><code>:604</code></span></span> for the
           supplied-error-code path).</li>
           <li><strong>Caveats / not-in-source</strong>: the rule constrains the scheme only. It does not check that the host
@@ -1090,7 +1090,7 @@
           every broken rule in one response instead of one per round trip. The remaining three call sites are in
           <a href="group-08-auth.html#authenticationservicebasetuser"><code>AuthenticationServiceBase&lt;TUser&gt;</code></a>, which validates
           its request before touching the user store and passes the method name as <code>source</code>:
-          <code>nameof(LoginAsync)</code><span class="cite"><span> (<code>MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:114</code>)</span></span>,
+          <code>nameof(LoginAsync)</code><span class="cite"><span> (<code>MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:132</code>)</span></span>,
           <code>nameof(RegisterAsync)</code><span class="cite"><span> (<code>:193</code>)</span></span>, and <code>nameof(RefreshTokenAsync)</code><span class="cite"><span> (<code>:273</code>)</span></span>, each wrapping the result in
           <code>Result.Failure&lt;AuthenticationResponse&gt;(...)</code>. Covered by
           <a href="group-28-testing-infrastructure.html#per-project-test-rollup"><code>ValidationFailureExtensionsTests</code></a>.</p>
@@ -1101,7 +1101,7 @@
           by an unrelated extension in the gRPC layer,
           <a href="group-13-grpc-contracts.html#resultgrpcextensions"><code>ResultGrpcExtensions</code></a> declares an
           <code>extension(Metadata? trailers)</code> block with its own <code>ToErrors()</code><span class="cite"><span>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.Grpc/ResultGrpcExtensions.cs:151</code> and <code>:165</code>)</span></span> that decodes
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.Grpc/ResultGrpcExtensions.cs:153</code> and <code>:165</code>)</span></span> that decodes
           errors out of gRPC trailers. Different receiver, different assembly, no relationship to this one.</p>
           </li>
           </ul>

@@ -79,10 +79,10 @@ use-case type name as the `source` (`ValidatingCommandDecorator.cs:83`,
 `ValidatingQueryDecorator.cs:86`), so a downstream consumer can see which command or query produced
 the failures, and the failing property name travels as the error's `target`. `ErrorType.Validation`
 is what the edge maps to HTTP 400: the client-side reader carries the inverse mapping explicitly
-(`MMCA.Common/Source/Core/MMCA.Common.Shared/Http/ProblemDetailsResultReader.cs:105`), and the
+(`MMCA.Common/Source/Core/MMCA.Common.Shared/Http/ProblemDetailsResultReader.cs:106`), and the
 severity table ranks `Validation` at the caller-can-fix-it end so a multi-error failure is never
 downgraded from a 403 or 500 to a 400
-(`MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/ErrorTypeSeverity.cs:46`). Nothing in the
+(`MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/ErrorTypeSeverity.cs:48`). Nothing in the
 domain references FluentValidation, and FluentValidation never sees an `Error`: neither library knows
 the other exists, which is `[Rubric §3, Clean Architecture]` (dependencies point inward, the external
 library stays at the Application boundary) and `[Rubric §9, API and Contract Design]` (one uniform
@@ -146,11 +146,11 @@ and the invariant's own suppression note says the check must run on the untruste
 anything constructs a `Uri` from it (`CommonInvariants.cs:289-292`). Null or empty passes, since the
 fields are optional (`CommonInvariants.cs:295`). ADC applies it to every stored external link:
 sponsor logo, website, and LinkedIn URLs
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sponsors/Validation/SponsorValidationRules.cs:34`,
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sponsors/Validation/SponsorValidationRules.cs:35`,
 `:64`, `:82`), speaker LinkedIn and GitHub URLs
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/Validation/SpeakerValidationRules.cs:65`,
 `:84`), and the event sponsorship-packet and ticketing URLs
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/Validation/EventValidationRules.cs:87`,
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/Validation/EventValidationRules.cs:143`,
 `:105`). `[Rubric §11, Security]` assesses whether untrusted input is constrained at the boundary
 before it reaches a rendering surface; this rule is where that happens for URLs.
 
@@ -368,7 +368,7 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
     what "no id was supplied" looks like on the wire for both shapes. Its message interpolates the
     field phrase verbatim into "You must specify {fieldName}", so the caller supplies the article and
     any qualifier, for example `"an Event for the Sponsor"`
-    (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sponsors/Validation/SponsorValidationRules.cs:119`).
+    (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sponsors/Validation/SponsorValidationRules.cs:120`).
   - `OptionalPositiveIdRules<T, TId>` (`:161-166`) is constrained
     `where TId : struct, IComparable<TId>, IComparable` (`:162`), takes a nullable
     `Expression<Func<T, TId?>>` selector and applies `GreaterThan(default(TId))`. The remarks
@@ -403,7 +403,7 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   constant and error code once: `SpeakerFirstNameRules<T> : RequiredStringRules<T>`
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/Validation/SpeakerValidationRules.cs:12-17`),
   `SponsorEventIdRules<T> : RequiredIdRules<T, EventIdentifierType>`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sponsors/Validation/SponsorValidationRules.cs:115-120`),
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sponsors/Validation/SponsorValidationRules.cs:116-121`),
   `ProductCategoryIdRules<T> : OptionalPositiveIdRules<T, CategoryIdentifierType>`
   (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Products/Validation/ProductValidationRules.cs:46-51`),
   and `CustomerEmailRules<T> : EmailRules<T>`
@@ -418,7 +418,7 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   before the handler runs. Behavior is pinned by `CommonValidationRulesTests` in
   [group-27](group-28-testing-infrastructure.md#per-project-test-rollup), which exercises both the
   message and the optional-code path for each fragment
-  (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Validation/CommonValidationRulesTests.cs:440-538`).
+  (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Validation/CommonValidationRulesTests.cs:468-566`).
 
 ### CommandRequestValidator<TCommand, TRequest>
 
@@ -779,7 +779,7 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
 - **Where it's used**: the ADC Conference module wraps it once per URL-bearing field, always inside a
   `When(x => !string.IsNullOrWhiteSpace(accessor(x)), ...)` guard so a blank optional field reports
   nothing: [`SponsorLogoUrlRules<T>`](group-18-conference-application.md#sponsorlogourlrulest)
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sponsors/Validation/SponsorValidationRules.cs:34`),
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sponsors/Validation/SponsorValidationRules.cs:35`),
   [`SponsorWebsiteUrlRules<T>`](group-18-conference-application.md#sponsorwebsiteurlrulest) (`:64`),
   the sponsor LinkedIn rule (`:82`),
   [`SpeakerLinkedInUrlRules<T>`](group-18-conference-application.md#speakerlinkedinurlrulest)
@@ -789,10 +789,10 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   [`ActivityVenueUrlRules<T>`](group-18-conference-application.md#activityvenueurlrulest)
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Activities/Validation/ActivityValidationRules.cs:71`),
   and [`EventSponsorshipPacketUrlRules<T>`](group-18-conference-application.md#eventsponsorshippacketurlrulest)
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/Validation/EventValidationRules.cs:87`).
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/Validation/EventValidationRules.cs:143`).
   Each wrapper supplies its own module max-length constant. Direct coverage lives in
   [`CommonValidationRulesTests`](group-28-testing-infrastructure.md#per-project-test-rollup)
-  (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Validation/CommonValidationRulesTests.cs:565`
+  (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Validation/CommonValidationRulesTests.cs:593`
   for the passing shapes, `:580` for rejected schemes, `:592` for the length bound, and `:604` for the
   supplied-error-code path).
 - **Caveats / not-in-source**: the rule constrains the scheme only. It does not check that the host
@@ -861,7 +861,7 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   every broken rule in one response instead of one per round trip. The remaining three call sites are in
   [`AuthenticationServiceBase<TUser>`](group-08-auth.md#authenticationservicebasetuser), which validates
   its request before touching the user store and passes the method name as `source`:
-  `nameof(LoginAsync)` (`MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:114`),
+  `nameof(LoginAsync)` (`MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:132`),
   `nameof(RegisterAsync)` (`:193`), and `nameof(RefreshTokenAsync)` (`:273`), each wrapping the result in
   `Result.Failure<AuthenticationResponse>(...)`. Covered by
   [`ValidationFailureExtensionsTests`](group-28-testing-infrastructure.md#per-project-test-rollup).
@@ -872,7 +872,7 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   by an unrelated extension in the gRPC layer,
   [`ResultGrpcExtensions`](group-13-grpc-contracts.md#resultgrpcextensions) declares an
   `extension(Metadata? trailers)` block with its own `ToErrors()`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/ResultGrpcExtensions.cs:151` and `:165`) that decodes
+  (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/ResultGrpcExtensions.cs:153` and `:165`) that decodes
   errors out of gRPC trailers. Different receiver, different assembly, no relationship to this one.
 
 ### CurrentUserServiceExtensions

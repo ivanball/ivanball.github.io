@@ -171,10 +171,11 @@
           operator the other application&#39;s recovery procedure.</p>
           </blockquote>
           <blockquote>
-          <p><strong>What <code>scripts/</code> actually contains today.</strong> Four files: <code>azure-setup.sh</code>,
-          <code>dr-restore-drill.ps1</code>, <code>play-store-capture.ps1</code> and <code>play-store-compose.ps1</code>. The one-time
-          cutover scripts and their workflow were deleted once the cutover completed (see the cutover
-          section below), so do not go looking for them.</p>
+          <p><strong>What <code>scripts/</code> actually contains today.</strong> Five files: <code>azure-setup.sh</code>,
+          <code>dr-restore-drill.ps1</code>, <code>play-store-capture.ps1</code>, <code>play-store-compose.ps1</code> and
+          <code>set-local-jwt-secrets.ps1</code>. The last is a local-development helper rather than an operational
+          runbook and is not walked here. The one-time cutover scripts and their workflow were deleted once
+          the cutover completed (see the cutover section below), so do not go looking for them.</p>
           </blockquote>
           <hr>
           <h2 id="azure-setupsh-one-time-azure-bootstrap">azure-setup.sh, One-time Azure bootstrap</h2>
@@ -323,7 +324,7 @@
           template, so removing the resource and dropping the database were two separate, deliberate acts.</p>
           <hr>
           <h2 id="infradisaster-recoverymd-dr-runbook">infra/DISASTER-RECOVERY.md, DR runbook</h2>
-          <p><strong>File:</strong> <code>MMCA.ADC/infra/DISASTER-RECOVERY.md</code> (234 lines; not the Store file of the same name)</p>
+          <p><strong>File:</strong> <code>MMCA.ADC/infra/DISASTER-RECOVERY.md</code> (221 lines; not the Store file of the same name)</p>
           <p><strong>What it is.</strong> The authoritative disaster-recovery runbook for the ADC production environment.
           Mandated by <a href="https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html" target="_blank" rel="noopener">ADR-009</a>: every consuming app must declare RTO/RPO per failure scenario, document the
           backup/restore mechanism, accept single-region risk in writing, and record restore drills in a
@@ -338,71 +339,79 @@
           <p>[Rubric §29, Resilience &amp; Business Continuity] assesses whether the system has documented RTO/RPO
           targets and a drilled restore procedure. The DR file addresses both: the objectives table<span class="cite"><span>
           (<code>DISASTER-RECOVERY.md:10-14</code>)</span></span> and a maintained drill ledger of six rows<span class="cite"><span>
-          (<code>DISASTER-RECOVERY.md:210-217</code>)</span></span>, whose newest entry is a PITR restore of <code>ADC_Conference</code> on
+          (<code>DISASTER-RECOVERY.md:197-204</code>)</span></span>, whose newest entry is a PITR restore of <code>ADC_Conference</code> on
           2026-08-10 that completed in 2.1 min against the 2 h RTO and came back Online. The status block<span class="cite"><span>
-          (<code>DISASTER-RECOVERY.md:219-224</code>)</span></span> reads that ledger as a rotation rather than as a single success:
+          (<code>DISASTER-RECOVERY.md:206-211</code>)</span></span> reads that ledger as a rotation rather than as a single success:
           every <code>ADC_*</code> database now carries a recovery proof, and the number it quotes is the <strong>slowest</strong>
           measured restore in the rotation (4.4 min), not the fastest. A second status paragraph is retained
-          for the record<span class="cite"><span> (<code>DISASTER-RECOVERY.md:226-234</code>)</span></span>; it closes TD-10 on the strength of the original
+          for the record<span class="cite"><span> (<code>DISASTER-RECOVERY.md:213-221</code>)</span></span>; it closes TD-10 on the strength of the original
           2026-06-20 drill plus the Polly fault-injection tests in MMCA.Common and the Azure Monitor SLO
-          workbook (<span class="cite"><span><code>main.bicep:542-547</code></span></span>, the <code>sloWorkbook</code> resource embedding
-          <code>infra/workbooks/adc-slo-workbook.json</code>).</p>
+          workbook (<span class="cite"><span><code>main.bicep:772</code></span></span>, the <code>sloWorkbook</code> resource embedding
+          <code>infra/workbooks/adc-slo-workbook.json</code>). The ledger is filled by hand from the drill&#39;s job summary<span class="cite"><span>
+          (<code>DISASTER-RECOVERY.md:171-174</code>)</span></span>, so its newest row can trail the workflow&#39;s run history; the deploy
+          gate reads the run history, not the ledger.</p>
           <p>[Rubric §11, Security] assesses credential hardening. The managed-identity section<span class="cite"><span>
-          (<code>DISASTER-RECOVERY.md:63-90</code>)</span></span> documents the out-of-band bootstrap for the <code>adc-prod-apps-identity</code>
+          (<code>DISASTER-RECOVERY.md:65-92</code>)</span></span> documents the out-of-band bootstrap for the <code>adc-prod-apps-identity</code>
           UAMI, the Key Vault (<code>adckv&lt;resourceToken&gt;</code>, RBAC-authorized) and both role grants (Secrets User for
           the apps, Secrets Officer for the deploy identity). The ACR admin user is disabled; runtime secrets
           reach the container apps as <code>keyVaultUrl</code> references, so no plaintext secrets exist in Container App
           environment variables. What lives in that vault is worth reading in full<span class="cite"><span>
-          (<code>DISASTER-RECOVERY.md:79-83</code>)</span></span>: the SQL and Service Bus connection strings, the RSA/JWT keys, the
+          (<code>DISASTER-RECOVERY.md:81-85</code>)</span></span>: the SQL and Service Bus connection strings, the RSA/JWT keys, the
           SMTP, OAuth and Anthropic secrets, and the gateway synthetic-traffic key that lets the k6 load test
           bypass rate limiting. The bootstrap is out-of-band for the same least-privilege reason the avatar
           grant is: the deploy identity has Contributor but not role-assignment write, so <code>main.bicep</code>
-          references the identity as <code>existing</code> rather than creating it<span class="cite"><span> (<code>DISASTER-RECOVERY.md:68-70</code>)</span></span>.</p>
+          references the identity as <code>existing</code> rather than creating it<span class="cite"><span> (<code>DISASTER-RECOVERY.md:70-72</code>)</span></span>.</p>
           <h3 id="three-passages-that-have-drifted-from-the-template">Three passages that have drifted from the template</h3>
           <p>Read these with the bicep open, because the runbook prose is behind the code in three specific
           spots. Nothing here makes the runbook unusable, but each one would mislead a first responder.</p>
-          <p><strong>Alert resource type and cadence<span class="cite"><span> (<code>DISASTER-RECOVERY.md:49-51</code>)</span></span>.</strong> The prose says &quot;three SLO
-          <strong>metric</strong> alerts scoped to the App Insights component ... evaluated every 5 min over a 15-min
-          window&quot;. Two things moved. The live rules are KQL log-search alerts: <code>sloAlertSpecs</code><span class="cite"><span>
-          (<code>main.bicep:302-330</code>)</span></span> materialized as <code>scheduledQueryRules</code> named <code>adc-prod-alert-&lt;key&gt;-v2</code><span class="cite"><span>
-          (<code>main.bicep:332-378</code>)</span></span> and scoped to the Log Analytics workspace, not to the App Insights component.
-          And the cadence is now 15 minutes, not 5: <code>evaluationFrequency: &#39;PT15M&#39;</code> beside the unchanged
-          <code>windowSize: &#39;PT15M&#39;</code><span class="cite"><span> (<code>main.bicep:350-351</code>)</span></span>. The thresholds in the table<span class="cite"><span>
-          (<code>DISASTER-RECOVERY.md:53-57</code>)</span></span> are still correct.</p>
+          <p><strong>Alert resource type, count and cadence<span class="cite"><span> (<code>DISASTER-RECOVERY.md:51-53</code>)</span></span>.</strong> The prose says &quot;three
+          SLO <strong>metric</strong> alerts scoped to the App Insights component ... evaluated every 5 min over a 15-min
+          window&quot;. Three things moved. The live rules are KQL log-search alerts: <code>sloAlertSpecs</code><span class="cite"><span>
+          (<code>main.bicep:390-480</code>)</span></span> materialized as <code>scheduledQueryRules</code> named <code>adc-prod-alert-&lt;key&gt;-v2</code><span class="cite"><span>
+          (<code>main.bicep:482-486</code>)</span></span> and scoped to the Log Analytics workspace<span class="cite"><span> (<code>main.bicep:501</code>)</span></span>, not to the App
+          Insights component. There are five of them, not three: the runbook&#39;s three request-path rules plus
+          <code>resilience-circuit-open</code><span class="cite"><span> (<code>main.bicep:422-428</code>)</span></span> and <code>ai-scoring-token-ceiling</code><span class="cite"><span>
+          (<code>main.bicep:468-476</code>)</span></span>. And the default cadence is 15 minutes, not 5: <code>evaluationFrequency</code> and
+          <code>windowSize</code> both fall back to <code>PT15M</code><span class="cite"><span> (<code>main.bicep:513</code>, <code>:515</code>)</span></span>. The thresholds in the table<span class="cite"><span>
+          (<code>DISASTER-RECOVERY.md:55-59</code>)</span></span> are still correct for the three rules it lists.</p>
           <p>The cadence change is a deliberate FinOps trade and the template shows its arithmetic<span class="cite"><span>
-          (<code>main.bicep:345-349</code>)</span></span>: a scheduled-query rule is billed per evaluation, and the 5-minute tier costs
-          about $1.47/month per rule against about $0.50 at 15 minutes, across three rules. Because
-          <code>windowSize</code> was already <code>PT15M</code>, each evaluation still looks at the same 15 minutes of data, so no
-          threshold changed; what disappeared is the overlap between consecutive evaluations. The one metric
-          alert that remains is the Sev 1 gateway-availability rule<span class="cite"><span> (<code>main.bicep:503-532</code>)</span></span>, kept deliberately
-          because availability has no status-code confound and never produced a false page<span class="cite"><span>
-          (<code>main.bicep:380-381</code>)</span></span>.</p>
-          <p>[Rubric §13, Observability] assesses alerting and monitoring. The three SLO signals, their
-          thresholds and their severities are: failed requests count above 10 (sev 2, <span class="cite"><span><code>main.bicep:303-311</code></span></span>),
-          average server response time above 3000 ms (sev 3, <span class="cite"><span><code>main.bicep:312-320</code></span></span>), and dependency failures
-          count above 10 (sev 2, <span class="cite"><span><code>main.bicep:321-329</code></span></span>). The queries carry tuning a metric alert could not
-          express: 401 and 499 responses are excluded from the failure counts, and SignalR hub connections are
-          excluded from the average-duration rule because a hub reports its connection lifetime as request
-          duration<span class="cite"><span> (<code>main.bicep:288-301</code>)</span></span>. The template names the exact incidents that forced each exclusion,
-          which is the right level of evidence for a change that loosens an alert. Per-alert triage lives in
-          <code>infra/OPERATIONS.md</code> below.</p>
-          <p><strong><code>ALERT_EMAIL</code> is no longer optional<span class="cite"><span> (<code>DISASTER-RECOVERY.md:59-61</code>)</span></span>.</strong> The runbook says the rules
+          (<code>main.bicep:502-506</code>)</span></span>: a scheduled-query rule is billed per evaluation, and the 5-minute tier costs
+          about $1.47/month per rule against about $0.50 at 15 minutes. Because <code>windowSize</code> was already
+          <code>PT15M</code>, each evaluation still looks at the same 15 minutes of data, so no threshold changed; what
+          disappeared is the overlap between consecutive evaluations. The cadence fields are overridable per
+          entry because one rule genuinely needs a different shape: the AI token ceiling evaluates a two-day
+          window twice a day, both values pinned by ARM-side limits<span class="cite"><span> (<code>main.bicep:454-476</code>, <code>:508-511</code>)</span></span>. The
+          one metric alert that remains is the Sev 1 gateway-availability rule<span class="cite"><span> (<code>main.bicep:733-754</code>)</span></span>, kept
+          deliberately because availability has no status-code confound and never produced a false page<span class="cite"><span>
+          (<code>main.bicep:545-546</code>)</span></span>.</p>
+          <p>[Rubric §13, Observability] assesses alerting and monitoring. The five SLO signals and their
+          severities are: failed requests (sev 2, <span class="cite"><span><code>main.bicep:392-398</code></span></span>), average server response time (sev 3,
+          <span class="cite"><span><code>main.bicep:401-407</code></span></span>), dependency failures (sev 2, <span class="cite"><span><code>main.bicep:410-416</code></span></span>), a resilience circuit
+          breaker opening (sev 2, <span class="cite"><span><code>main.bicep:422-428</code></span></span>) and the AI scoring token ceiling (sev 3,
+          <span class="cite"><span><code>main.bicep:468-474</code></span></span>). The request-path queries carry tuning a metric alert could not express: 401
+          and 499 responses are excluded from the failure counts, SignalR hub connections are excluded from
+          the average-duration rule because a hub reports its connection lifetime as request duration, and
+          the two crawler etiquette paths (<code>/robots.txt</code>, <code>/sitemap.xml</code>) are excluded too, while a real 400,
+          404 or 500 burst still pages at the same threshold<span class="cite"><span> (<code>main.bicep:373-389</code>)</span></span>. The template names the
+          exact incidents that forced each exclusion, which is the right level of evidence for a change that
+          loosens an alert. Per-alert triage lives in <code>infra/OPERATIONS.md</code> below.</p>
+          <p><strong><code>ALERT_EMAIL</code> is no longer optional<span class="cite"><span> (<code>DISASTER-RECOVERY.md:61-63</code>)</span></span>.</strong> The runbook says the rules
           are created and visible in Azure Monitor even without the variable, &quot;they just don&#39;t email&quot;. That
           state is no longer reachable: <code>alertEmailAddress</code> is a required parameter with <code>@minLength(3)</code> and
-          no default<span class="cite"><span> (<code>main.bicep:115-117</code>)</span></span>, the action group&#39;s email receiver is unconditional<span class="cite"><span>
-          (<code>main.bicep:269-286</code>)</span></span>, and <span class="cite"><span><code>deploy.yml:1321-1324</code></span></span> fails the deploy before bicep validation when
-          <code>vars.ALERT_EMAIL</code> is unset. An alert that notifies nobody is now impossible in a deployed
-          environment by construction, which is the stronger version of what the runbook was aiming at.</p>
-          <p><strong>Deploy rollback description<span class="cite"><span> (<code>DISASTER-RECOVERY.md:165-167</code>)</span></span>.</strong> The runbook describes the
+          no default<span class="cite"><span> (<code>main.bicep:122-124</code>)</span></span>, it feeds the action group<span class="cite"><span> (<code>main.bicep:357</code>)</span></span>, and
+          <span class="cite"><span><code>deploy.yml:1253-1254</code></span></span> fails the deploy when <code>vars.ALERT_EMAIL</code> is unset. An alert that notifies
+          nobody is now impossible in a deployed environment by construction, which is the stronger version
+          of what the runbook was aiming at.</p>
+          <p><strong>Deploy rollback description<span class="cite"><span> (<code>DISASTER-RECOVERY.md:152-154</code>)</span></span>.</strong> The runbook describes the
           post-deploy smoke gate as Gateway <code>/health</code> plus <code>/.well-known/jwks.json</code> plus the UI root. The live
           gate is broader in both dimensions: a revision-activation gate that requires the newest revision of
           every app to report Healthy, Running and 100% traffic weight, followed by six probes that reach
-          every service through the Gateway (<span class="cite"><span><code>deploy.yml:1520-1541</code></span></span> for the reasoning,
-          <span class="cite"><span><code>deploy.yml:1620-1630</code></span></span> for the probes). The activation gate exists because the HTTP probes alone
+          every service through the Gateway (<span class="cite"><span><code>deploy.yml:1470-1481</code></span></span> for the reasoning,
+          <span class="cite"><span><code>deploy.yml:1570-1580</code></span></span> for the probes). The activation gate exists because the HTTP probes alone
           cannot prove the new code is serving: a healthy Gateway keeps answering from the previous backend
           revision when the new one never goes ready, which is exactly how a readiness regression stayed
-          hidden for four days<span class="cite"><span> (<code>deploy.yml:1529-1532</code>)</span></span>. The rollback mechanism the runbook names,
-          <code>az containerapp revision copy</code>, is still what runs<span class="cite"><span> (<code>deploy.yml:1674</code>)</span></span>.</p>
+          hidden for four days<span class="cite"><span> (<code>deploy.yml:1479</code>)</span></span>. The rollback mechanism the runbook names,
+          <code>az containerapp revision copy</code>, is still what runs<span class="cite"><span> (<code>deploy.yml:1624</code>)</span></span>.</p>
           <h3 id="recovery-objectives">Recovery objectives</h3>
           <p>The DR file targets three failure scenarios<span class="cite"><span> (<code>DISASTER-RECOVERY.md:10-14</code>)</span></span>:</p>
           <div class="table-wrap"><table>
@@ -432,66 +441,80 @@
           <p>These are deliberately modest: ADC is a regional, non-24x7 conference app. Sub-hour multi-region
           failover is explicitly not a goal<span class="cite"><span> (<code>DISASTER-RECOVERY.md:16-17</code>)</span></span>.</p>
           <h3 id="accepted-single-region-risks">Accepted single-region risks</h3>
-          <p><span class="cite"><span><code>DISASTER-RECOVERY.md:19-34</code></span></span> lists three knowingly-accepted single points of failure. Note the
+          <p><span class="cite"><span><code>DISASTER-RECOVERY.md:19-36</code></span></span> lists three knowingly-accepted single points of failure. Note the
           topology it records<span class="cite"><span> (<code>DISASTER-RECOVERY.md:21-23</code>)</span></span>: one resource group (<code>acc-rg</code>), apps in the RG&#39;s
           region, and the SQL server in <code>sqlLocation</code> (westus2) because the QiMata Sponsorship subscription
-          blocks new SQL servers in eastus2. That split is a bicep parameter, not an accident<span class="cite"><span>
-          (<code>main.bicep:12-14</code>)</span></span>.</p>
+          blocks new SQL servers in eastus2. That split is a bicep parameter, not an accident.</p>
           <ul>
           <li>One Azure SQL server, <code>publicNetworkAccess: Enabled</code> with the Azure-services firewall rule<span class="cite"><span>
-          (<code>main.bicep:596-616</code>)</span></span>, mitigated by geo-redundant PITR and LTR. This is also where the runbook
-          records the archive change: the <code>AtlDevCon</code> database that used to be the standing rollback copy is
-          now a bacpac blob instead, restorable with <code>az sql db import</code> in about ten minutes<span class="cite"><span>
-          (<code>DISASTER-RECOVERY.md:25-30</code>)</span></span>.</li>
-          <li>One Container Apps environment, all apps <code>minReplicas: 1</code>. A zonal outage drops the app until
-          Azure reschedules. Conference-day scale-up is the documented mitigation and is applied only when
-          warranted (the 2026 ADC load of about 67 peak concurrent did not warrant it).</li>
-          <li>One Service Bus namespace (Standard) and one ACR.</li>
+          (<code>main.bicep:826-835</code>)</span></span>, mitigated by geo-redundant PITR and LTR. This is also where the runbook
+          records the end of the archive: the <code>AtlDevCon</code> database was exported to a bacpac and dropped on
+          2026-09-02, and that bacpac was itself deleted permanently on 2026-10-03, so no pre-cutover
+          rollback copy exists<span class="cite"><span> (<code>DISASTER-RECOVERY.md:25-29</code>)</span></span>.</li>
+          <li>One Container Apps environment, all apps <code>minReplicas: 1</code> <strong>outside conference mode</strong>. A zonal
+          outage drops the app until Azure reschedules. The mitigation is no longer a judgment call made on
+          the day: conference mode (<code>conferenceMode</code>, switched by the <code>CONFERENCE_MODE_UNTIL</code> repository
+          variable on every deploy) keeps a second Gateway replica always on and holds the UI at its scaled
+          maximum, so the two database-free front-door apps survive a single replica loss during the event;
+          the first deploy after the window reverts it, and <code>cost-guard.yml</code> fails while an expired surge is
+          still live<span class="cite"><span> (<code>DISASTER-RECOVERY.md:30-35</code>)</span></span>. The procedure is the &quot;Conference day&quot; section of
+          <code>OPERATIONS.md</code>, walked below.</li>
+          <li>One Service Bus namespace (Standard) and one ACR<span class="cite"><span> (<code>DISASTER-RECOVERY.md:36</code>)</span></span>.</li>
           </ul>
           <h3 id="backup-posture">Backup posture</h3>
-          <p>Two tiers<span class="cite"><span> (<code>DISASTER-RECOVERY.md:36-45</code>)</span></span>, plus the archive blob that now sits outside both:</p>
+          <p>Two tiers<span class="cite"><span> (<code>DISASTER-RECOVERY.md:38-47</code>)</span></span>, and nothing outside them any more:</p>
           <ul>
           <li><strong>PITR</strong>: the Basic tier&#39;s 7 days of point-in-time restore on geo-redundant storage (the Azure
           default). Covers the &quot;undo the last bad change&quot; case with an RPO of minutes.</li>
           <li><strong>LTR</strong>: long-term retention on all four live per-service databases, weekly P4W, monthly P12M and
-          yearly P1Y at week 1, declared as the <code>serviceDatabaseLtr</code> resource<span class="cite"><span> (<code>main.bicep:686-697</code>)</span></span>.</li>
-          <li><strong>The archive bacpac</strong>: <code>sql-archive/AtlDevCon-20260902.bacpac</code>. Because the archive is a blob and
-          not a database, it is outside PITR and LTR by design, and both the runbook and the template say so<span class="cite"><span>
-          (<code>DISASTER-RECOVERY.md:43-45</code>, <code>main.bicep:681-685</code>)</span></span>. Its durability is now blob-storage
-          durability, and recovering it is an import into a new database name, not a point-in-time restore.</li>
+          yearly P1Y at week 1, declared as the <code>serviceDatabaseLtr</code> resource<span class="cite"><span> (<code>main.bicep:984</code>)</span></span>.</li>
           </ul>
+          <p>The <code>AtlDevCon</code> bacpac that used to sit beside both tiers was deleted on 2026-10-03<span class="cite"><span>
+          (<code>POST-CUTOVER-atldevcon-downgrade.md:103-110</code>)</span></span>. One sentence in the runbook has not caught up:
+          <span class="cite"><span><code>DISASTER-RECOVERY.md:45-47</code></span></span> still says the retired archive &quot;lives in blob storage as a bacpac&quot;.
+          Read the status banner of the post-cutover runbook as current.</p>
           <h3 id="recovery-procedures">Recovery procedures</h3>
-          <p><strong>Single database PITR restore<span class="cite"><span> (<code>DISASTER-RECOVERY.md:122-127</code>)</span></span>.</strong> Restore to a new name, validate,
+          <p><strong>Single database PITR restore<span class="cite"><span> (<code>DISASTER-RECOVERY.md:124-129</code>)</span></span>.</strong> Restore to a new name, validate,
           then rename or repoint via a redeploy. The worked example uses <code>ADC_Conference</code>.</p>
-          <p><strong>LTR restore<span class="cite"><span> (<code>DISASTER-RECOVERY.md:129-134</code>)</span></span>.</strong> List available backups with
+          <p><strong>LTR restore<span class="cite"><span> (<code>DISASTER-RECOVERY.md:131-136</code>)</span></span>.</strong> List available backups with
           <code>az sql db ltr-backup list</code>, then restore with <code>az sql db ltr-backup restore</code>.</p>
-          <p><strong>Full region loss<span class="cite"><span> (<code>DISASTER-RECOVERY.md:136-139</code>)</span></span>.</strong> The deploy pipeline is region-parameterized
+          <p><strong>Full region loss<span class="cite"><span> (<code>DISASTER-RECOVERY.md:138-141</code>)</span></span>.</strong> The deploy pipeline is region-parameterized
           (<code>sqlLocation</code> plus the RG location), so recovery is: create a new RG in a healthy region,
-          geo-restore each <code>ADC_*</code> database there, then re-run <code>deploy.yml</code> pointed at the new RG. The
-          <code>AtlDevCon</code> bacpac is the last-resort source of record for pre-cutover data, and the runbook is
-          explicit that it must be imported into a <strong>new</strong> database name so a restore can never collide with a
-          live <code>ADC_*</code> database.</p>
+          geo-restore each <code>ADC_*</code> database there, then re-run <code>deploy.yml</code> pointed at the new RG. There is no
+          longer a last-resort source for pre-cutover data: the runbook records that the bacpac was deleted on
+          2026-10-03 and that no pre-cutover restore path exists. The live <code>ADC_*</code> databases already hold that
+          data, copied in at cutover<span class="cite"><span> (<code>POST-CUTOVER-atldevcon-downgrade.md:105-110</code>)</span></span>.</p>
+          <p><strong>Storage account Shared Key<span class="cite"><span> (<code>DISASTER-RECOVERY.md:143-150</code>)</span></span>.</strong> The only consumer of the storage
+          account key was the bacpac import (<code>az sql db import --storage-key-type StorageAccessKey</code>), so
+          deleting the bacpac unblocked a hardening step: the apps reach blob storage as
+          <code>adc-prod-apps-identity</code> over OAuth (<code>FileStorage__ServiceUri</code>, <code>DataProtection__BlobStorageUri</code>)
+          and no workflow calls <code>listKeys</code>. The runbook records setting <code>storageAllowSharedKeyAccess=false</code>
+          as a separate infra change still to be made, and warns that operators doing ad-hoc data-plane reads
+          will need <strong>Storage Blob Data Reader</strong> once Shared Key is off.</p>
+          <p>[Rubric §11, Security] assesses credential hardening. An account key is a bearer credential to the
+          whole account; recording which single procedure kept it alive is what turns &quot;disable Shared Key&quot;
+          from a risky guess into a change with a known blast radius.</p>
           <h3 id="restore-drill">Restore drill</h3>
-          <p><span class="cite"><span><code>DISASTER-RECOVERY.md:174-196</code></span></span> defines the drill: PITR-restore a throwaway copy, confirm it comes
+          <p><span class="cite"><span><code>DISASTER-RECOVERY.md:161-183</code></span></span> defines the drill: PITR-restore a throwaway copy, confirm it comes
           back Online, record the measured restore time, then delete the copy. Only a copy is ever created, so
           the live databases are never touched. The file documents three ways to run it<span class="cite"><span>
-          (<code>DISASTER-RECOVERY.md:180-188</code>)</span></span> and names the scheduled one as the enforcing path:</p>
+          (<code>DISASTER-RECOVERY.md:167-175</code>)</span></span> and names the scheduled one as the enforcing path:</p>
           <ul>
-          <li><strong>Scheduled</strong><span class="cite"><span> (<code>DISASTER-RECOVERY.md:180-183</code>)</span></span>, the weekly cron, which rotates across the four
+          <li><strong>Scheduled</strong><span class="cite"><span> (<code>DISASTER-RECOVERY.md:167-170</code>)</span></span>, the weekly cron, which rotates across the four
           live per-service databases by ISO week number so each earns a recovery proof roughly monthly. The
           retired <code>AtlDevCon</code> archive was never in the rotation and no longer exists as a database at all.</li>
-          <li><strong>One-click</strong><span class="cite"><span> (<code>DISASTER-RECOVERY.md:184-187</code>)</span></span>, the <code>dr-drill.yml</code> workflow&#39;s manual
+          <li><strong>One-click</strong><span class="cite"><span> (<code>DISASTER-RECOVERY.md:171-174</code>)</span></span>, the <code>dr-drill.yml</code> workflow&#39;s manual
           <code>workflow_dispatch</code>, for a chosen database (the four live <code>ADC_*</code> databases, defaulting to
           <code>ADC_Identity</code>) and a chosen point in time. It prints the drill-result row in the job summary,
           ready to paste into the ledger.</li>
-          <li><strong>Local / CLI</strong><span class="cite"><span> (<code>DISASTER-RECOVERY.md:188</code>)</span></span>, <code>pwsh ./scripts/dr-restore-drill.ps1 -SourceDatabase ADC_Conference</code> after <code>az login</code>.</li>
+          <li><strong>Local / CLI</strong><span class="cite"><span> (<code>DISASTER-RECOVERY.md:175</code>)</span></span>, <code>pwsh ./scripts/dr-restore-drill.ps1 -SourceDatabase ADC_Conference</code> after <code>az login</code>.</li>
           </ul>
           <p>All three wrap the same <code>az sql db restore</code>, verify, <code>az sql db delete</code> sequence<span class="cite"><span>
-          (<code>DISASTER-RECOVERY.md:190-196</code>)</span></span>; there is no <code>sqlcmd</code> anywhere in the drill path.</p>
+          (<code>DISASTER-RECOVERY.md:177-183</code>)</span></span>; there is no <code>sqlcmd</code> anywhere in the drill path.</p>
           <p>The stated SLO is at least one successful drill per release train and after any backup or retention
           change, with the restore completing inside the 2 h RTO; a missed or failed drill is called a
-          release-blocking regression for §29<span class="cite"><span> (<code>DISASTER-RECOVERY.md:198-200</code>)</span></span>. The drill-result table<span class="cite"><span>
-          (<code>DISASTER-RECOVERY.md:210-217</code>)</span></span> is where that claim is cashed, and it carries six rows:</p>
+          release-blocking regression for §29<span class="cite"><span> (<code>DISASTER-RECOVERY.md:185-187</code>)</span></span>. The drill-result table<span class="cite"><span>
+          (<code>DISASTER-RECOVERY.md:197-204</code>)</span></span> is where that claim is cashed, and it carries six rows:</p>
           <div class="table-wrap"><table>
           <thead>
           <tr>
@@ -534,21 +557,21 @@
           <p>Read the shape of that table, not just the last row. The first entry is the pre-rotation drill in
           which one database stood in for all four; everything from 2026-07-20 onward is the weekly rotation,
           and those rows are the first recovery proofs <code>ADC_Identity</code>, <code>ADC_Engagement</code> and <code>ADC_Notification</code>
-          ever had<span class="cite"><span> (<code>DISASTER-RECOVERY.md:202-208</code>)</span></span>. Each row also carries its <code>dr-drill.yml</code> run id, so every
+          ever had<span class="cite"><span> (<code>DISASTER-RECOVERY.md:189-195</code>)</span></span>. Each row also carries its <code>dr-drill.yml</code> run id, so every
           claim in the ledger is traceable to an Actions run instead of resting on the author&#39;s word. The
           spread is the other lesson: the same <code>ADC_Identity</code> database restored in 1.8 min in July and 4.4 min
           in August, which is why the status block quotes the slowest number against the 2 h RTO<span class="cite"><span>
-          (<code>DISASTER-RECOVERY.md:219-224</code>)</span></span>. A ledger that keeps growing is what makes a claim like &quot;restores
+          (<code>DISASTER-RECOVERY.md:206-211</code>)</span></span>. A ledger that keeps growing is what makes a claim like &quot;restores
           take about two minutes&quot; falsifiable; a single row cannot show variance at all. The same note<span class="cite"><span>
-          (<code>DISASTER-RECOVERY.md:206-208</code>)</span></span> records that rows naming <code>AtlDevCon</code> are kept as history now that
+          (<code>DISASTER-RECOVERY.md:193-195</code>)</span></span> records that rows naming <code>AtlDevCon</code> are kept as history now that
           the archive is gone, rather than being edited out.</p>
           <p>The ledger stays honest because it is gated, not remembered: <code>dr-freshness</code> fails a deploy when the
-          newest successful <code>dr-drill.yml</code> run is older than 8 days<span class="cite"><span> (<code>deploy.yml:899</code>,
-          <code>DISASTER-RECOVERY.md:222-224</code>)</span></span>. The rotation itself is prose here but arithmetic in the workflow,
+          newest successful <code>dr-drill.yml</code> run is older than 8 days<span class="cite"><span> (<code>deploy.yml:853</code>,
+          <code>DISASTER-RECOVERY.md:209-211</code>)</span></span>. The rotation itself is prose here but arithmetic in the workflow,
           which is the source of truth. The next section walks it.</p>
           <hr>
           <h2 id="dr-drillyml-and-dr-restore-drillps1-the-adr-009-restore-drill">dr-drill.yml and dr-restore-drill.ps1, the ADR-009 restore drill</h2>
-          <p><strong>Files:</strong> <code>MMCA.ADC/.github/workflows/dr-drill.yml</code> (120 lines),
+          <p><strong>Files:</strong> <code>MMCA.ADC/.github/workflows/dr-drill.yml</code> (119 lines),
           <code>MMCA.ADC/scripts/dr-restore-drill.ps1</code> (101 lines)</p>
           <p><strong>What it is.</strong> The automation behind the drill requirement above: the workflow picks a target
           database and logs in to Azure via OIDC, the PowerShell script does the restore, the timing, the
@@ -557,27 +580,27 @@
           <p><strong>When it runs.</strong> Both on a schedule and on demand, and the scheduled half is the one that carries
           the §29 weight:</p>
           <ul>
-          <li><strong>Weekly cron</strong>, Mondays 06:00 UTC<span class="cite"><span> (<code>dr-drill.yml:31-33</code>)</span></span>. This is the enforcing path: a
+          <li><strong>Weekly cron</strong>, Mondays 06:00 UTC<span class="cite"><span> (<code>dr-drill.yml:30-32</code>)</span></span>. This is the enforcing path: a
           throwaway-copy restore is cheap and is deleted immediately after, so recovery is proven
           continuously rather than whenever somebody remembers<span class="cite"><span> (<code>dr-drill.yml:7-8</code>)</span></span>.</li>
-          <li><strong><code>workflow_dispatch</code></strong><span class="cite"><span> (<code>dr-drill.yml:15-30</code>)</span></span> for an ad-hoc drill against a specific database and
+          <li><strong><code>workflow_dispatch</code></strong><span class="cite"><span> (<code>dr-drill.yml:14-29</code>)</span></span> for an ad-hoc drill against a specific database and
           restore point. The dispatch default is <code>ADC_Identity</code> with a 10-minutes-ago restore point.</li>
           </ul>
-          <p>The job holds <code>id-token: write</code> plus <code>contents: read</code> and nothing else<span class="cite"><span> (<code>dr-drill.yml:35-37</code>)</span></span>, which
+          <p>The job holds <code>id-token: write</code> plus <code>contents: read</code> and nothing else<span class="cite"><span> (<code>dr-drill.yml:34-36</code>)</span></span>, which
           is the least privilege an OIDC login needs, and it logs in with the same three <code>AZURE_*</code> secrets
-          <code>azure-setup.sh</code> printed<span class="cite"><span> (<code>dr-drill.yml:61-66</code>)</span></span>. Both third-party actions it uses are pinned to a
+          <code>azure-setup.sh</code> printed<span class="cite"><span> (<code>dr-drill.yml:60-65</code>)</span></span>. Both third-party actions it uses are pinned to a
           full commit SHA with the human-readable version parked in a trailing comment:
-          <code>actions/checkout@3d3c42e5...</code><span class="cite"><span> (<code>dr-drill.yml:59</code>)</span></span> and <code>azure/login@a641126d...</code><span class="cite"><span>
-          (<code>dr-drill.yml:62</code>)</span></span>.</p>
+          <code>actions/checkout@3d3c42e5...</code><span class="cite"><span> (<code>dr-drill.yml:58</code>)</span></span> and <code>azure/login@a641126d...</code><span class="cite"><span>
+          (<code>dr-drill.yml:61</code>)</span></span>.</p>
           <p>[Rubric §32, Dependency &amp; Supply-Chain] assesses whether third-party dependencies are pinned,
           scanned, and cannot change underfoot. A Git tag is mutable, so <code>@v3</code> in a job that mints an Azure
           OIDC token means a repointed tag could run new code with production credentials; the SHA pin removes
           that path, and the <code># v7.0.1</code> / <code># v3.1.0</code> comments keep the pin readable and updatable.</p>
           <p><strong>Why the drill shares the deploy&#39;s concurrency group.</strong> The workflow joins the <code>prod-azure</code> group
-          with <code>cancel-in-progress: false</code><span class="cite"><span> (<code>dr-drill.yml:43-45</code>)</span></span>. Its comment gives the reason<span class="cite"><span>
-          (<code>dr-drill.yml:39-42</code>)</span></span>: the drill creates and deletes a database on the production SQL server, and
+          with <code>cancel-in-progress: false</code><span class="cite"><span> (<code>dr-drill.yml:42-44</code>)</span></span>. Its comment gives the reason<span class="cite"><span>
+          (<code>dr-drill.yml:38-41</code>)</span></span>: the drill creates and deletes a database on the production SQL server, and
           <code>deploy.yml</code> declares that every workflow mutating production Azure state joins that same group<span class="cite"><span>
-          (<code>deploy.yml:39-47</code>)</span></span>, so a drill and a deploy (which migrates those very databases) never run at the
+          (<code>deploy.yml:39-45</code>)</span></span>, so a drill and a deploy (which migrates those very databases) never run at the
           same time. Never cancelling an in-flight drill matches the deploy side, for the reason the cleanup
           sweep below exists: a drill killed mid-restore never reaches the script&#39;s own cleanup. The cost is
           queueing. A push to <code>main</code> that lands during a drill waits behind it, for at most the drill&#39;s
@@ -589,31 +612,31 @@
           every production-mutating workflow on one group turns &quot;do not drill during a migration&quot; from an
           operator habit into a property of the pipeline.</p>
           <p>Scheduled runs <strong>rotate</strong> across the four live per-service databases by ISO week number modulo 4
-          (<span class="cite"><span><code>dr-drill.yml:68-87</code></span></span>, the arithmetic at <span class="cite"><span><code>dr-drill.yml:80-83</code></span></span>), so each live database gets a recovery
+          (<span class="cite"><span><code>dr-drill.yml:67-86</code></span></span>, the arithmetic at <span class="cite"><span><code>dr-drill.yml:79-82</code></span></span>), so each live database gets a recovery
           proof roughly monthly. Which branch runs is decided purely by whether the dispatch input is present<span class="cite"><span>
-          (<code>dr-drill.yml:74</code>)</span></span>, which is what lets one job serve both triggers. The chosen database is echoed
-          into the step summary before the drill starts<span class="cite"><span> (<code>dr-drill.yml:87</code>)</span></span>, so a reader of a failed run knows
+          (<code>dr-drill.yml:73</code>)</span></span>, which is what lets one job serve both triggers. The chosen database is echoed
+          into the step summary before the drill starts<span class="cite"><span> (<code>dr-drill.yml:86</code>)</span></span>, so a reader of a failed run knows
           immediately which database was under test. Note how the input is read: the step declares
           <code>DISPATCH_DATABASE: ${{ inputs.source_database }}</code> as an environment variable<span class="cite"><span>
-          (<code>dr-drill.yml:70-71</code>)</span></span> and the shell tests <code>&quot;${DISPATCH_DATABASE:-}&quot;</code><span class="cite"><span> (<code>dr-drill.yml:74</code>)</span></span> instead of
+          (<code>dr-drill.yml:69-70</code>)</span></span> and the shell tests <code>&quot;${DISPATCH_DATABASE:-}&quot;</code><span class="cite"><span> (<code>dr-drill.yml:73</code>)</span></span> instead of
           expanding the <code>${{ }}</code> expression inline, and the whole script runs under <code>set -euo pipefail</code><span class="cite"><span>
-          (<code>dr-drill.yml:73</code>)</span></span> so an unset variable or a failed <code>az</code> call stops the step rather than silently
+          (<code>dr-drill.yml:72</code>)</span></span> so an unset variable or a failed <code>az</code> call stops the step rather than silently
           rotating to the wrong database.</p>
           <p><strong>How the inputs reach the PowerShell script.</strong> The drill step sets three variables in its own <code>env</code>
           block, <code>DRILL_RESOURCE_GROUP</code> from <code>vars.AZURE_RESOURCE_GROUP</code>, <code>DRILL_SOURCE_DATABASE</code> from the
           rotation step&#39;s output, and <code>DRILL_RESTORE_POINT_MINUTES_AGO</code> from the dispatch input with a literal
-          <code>&#39;10&#39;</code> fallback for scheduled runs<span class="cite"><span> (<code>dr-drill.yml:93-96</code>)</span></span>, then passes those variables to the script<span class="cite"><span>
-          (<code>dr-drill.yml:97-102</code>)</span></span>. The workflow&#39;s own comment states the reason<span class="cite"><span> (<code>dr-drill.yml:91-92</code>)</span></span>: values
+          <code>&#39;10&#39;</code> fallback for scheduled runs<span class="cite"><span> (<code>dr-drill.yml:92-95</code>)</span></span>, then passes those variables to the script<span class="cite"><span>
+          (<code>dr-drill.yml:96-101</code>)</span></span>. The workflow&#39;s own comment states the reason<span class="cite"><span> (<code>dr-drill.yml:90-91</code>)</span></span>: values
           reach the script through the environment rather than being interpolated into the command line, so a
           dispatch input cannot inject extra PowerShell arguments. This matters more here than in most jobs,
           because the step runs with an Azure session that holds Contributor on the production resource group.</p>
           <p>[Rubric §11, Security] assesses credential handling and injection resistance. Workflow expression
           interpolation is textual substitution into the shell command before the shell ever sees it, so a
           hostile input value becomes code; routing every input through <code>env</code> and quoting it turns the same
-          value back into data. The <code>type: choice</code> input<span class="cite"><span> (<code>dr-drill.yml:20-26</code>)</span></span> already constrains the database
+          value back into data. The <code>type: choice</code> input<span class="cite"><span> (<code>dr-drill.yml:19-25</code>)</span></span> already constrains the database
           name to four options, so this is defence in depth rather than the only control.</p>
-          <p><strong>Why the job gets 60 minutes.</strong> The job carries a 60-minute <code>timeout-minutes</code><span class="cite"><span> (<code>dr-drill.yml:57</code>)</span></span>,
-          and the comment above it records why it is not 30<span class="cite"><span> (<code>dr-drill.yml:50-56</code>)</span></span>: the 2026-09-14 scheduled
+          <p><strong>Why the job gets 60 minutes.</strong> The job carries a 60-minute <code>timeout-minutes</code><span class="cite"><span> (<code>dr-drill.yml:56</code>)</span></span>,
+          and the comment above it records why it is not 30<span class="cite"><span> (<code>dr-drill.yml:49-55</code>)</span></span>: the 2026-09-14 scheduled
           run (run 34838047421) was killed at the old 30-minute limit and recorded no freshness proof. A
           measured PITR restore of an <code>ADC_*</code> database takes minutes, but Azure SQL queues the restore on the
           platform side and its duration varies from run to run, so 60 leaves headroom for a slow one (MMCA.Store
@@ -623,38 +646,40 @@
           walked below).</p>
           <p><strong>The sweep that runs even when the drill does not finish.</strong> A job cancelled at its
           <code>timeout-minutes</code> is killed mid-step, so the script&#39;s own <code>finally</code> cleanup never runs. The workflow
-          comment records the incident that exposed this<span class="cite"><span> (<code>dr-drill.yml:104-108</code>)</span></span>: the same 2026-09-14
+          comment records the incident that exposed this<span class="cite"><span> (<code>dr-drill.yml:103-107</code>)</span></span>: the same 2026-09-14
           scheduled run was cancelled mid-restore and left
           <code>ADC_Engagement-drill</code> behind, and the weekly rotation meant the next run targeted a different
           database, so the script&#39;s name-specific stale-copy check would not have removed it either; the copy
           sat at Basic-tier cost for five days. The last step, <code>Remove leftover drill copies</code>, therefore runs
-          under <code>if: always()</code><span class="cite"><span> (<code>dr-drill.yml:109-110</code>)</span></span>, which fires on success, failure and cancellation alike.
+          under <code>if: always()</code><span class="cite"><span> (<code>dr-drill.yml:108-109</code>)</span></span>, which fires on success, failure and cancellation alike.
           It resolves the server by the same <code>adc-prod-sql-</code> name prefix the script uses, exits 0 with a
-          workflow warning when no server matches<span class="cite"><span> (<code>dr-drill.yml:115-116</code>)</span></span>, and deletes every database whose
-          name ends in <code>-drill</code><span class="cite"><span> (<code>dr-drill.yml:117-120</code>)</span></span>, not just the copy this run created. The suffix
+          workflow warning when no server matches<span class="cite"><span> (<code>dr-drill.yml:114-115</code>)</span></span>, and deletes every database whose
+          name ends in <code>-drill</code><span class="cite"><span> (<code>dr-drill.yml:116-119</code>)</span></span>, not just the copy this run created. The suffix
           filter is what keeps the sweep safe on a production server: the live <code>ADC_*</code> databases never end in
           <code>-drill</code>, so the only names it can match are throwaway copies. One consequence for a local run: a
           copy kept with the script&#39;s <code>-KeepCopy</code> switch for a manual row-count check (<span class="cite"><span><code>dr-restore-drill.ps1:83-88</code></span></span>
           honors it) is deleted by the next workflow run, so finish that check before Monday 06:00 UTC. It
           reads the resource group through
-          <code>env</code> like the drill step<span class="cite"><span> (<code>dr-drill.yml:111-112</code>)</span></span> and runs under <code>set -euo pipefail</code><span class="cite"><span>
-          (<code>dr-drill.yml:114</code>)</span></span>.</p>
-          <p><strong><code>AtlDevCon</code> is gone from both ends of this pair.</strong> The dispatch <code>choice</code> input now offers only the
-          four live databases<span class="cite"><span> (<code>dr-drill.yml:22-26</code>)</span></span>, and the script&#39;s own <code>-SourceDatabase</code> default moved from
+          <code>env</code> like the drill step<span class="cite"><span> (<code>dr-drill.yml:110-111</code>)</span></span> and runs under <code>set -euo pipefail</code><span class="cite"><span>
+          (<code>dr-drill.yml:113</code>)</span></span>.</p>
+          <p><strong><code>AtlDevCon</code> is gone from both ends of this pair.</strong> The dispatch <code>choice</code> input offers only the
+          four live databases<span class="cite"><span> (<code>dr-drill.yml:21-25</code>)</span></span>, and the script&#39;s own <code>-SourceDatabase</code> default moved from
           <code>AtlDevCon</code> to <code>ADC_Identity</code><span class="cite"><span> (<code>dr-restore-drill.ps1:26</code>)</span></span>. Both files record why: the archive was
-          exported to a bacpac and dropped on 2026-09-02, so its recovery path is <code>az sql db import</code> from that
-          blob, not PITR<span class="cite"><span> (<code>dr-drill.yml:10-13</code>, <code>dr-restore-drill.ps1:10-12</code>)</span></span>. Leaving it selectable would have
-          offered an operator a drill that fails for a reason unrelated to recoverability, and that failure
-          would then have blocked the next production deploy through <code>dr-freshness</code>. The older argument still
-          holds too: proving a retired archive restores proves nothing about the databases that take writes.</p>
+          exported to a bacpac and dropped on 2026-09-02, so it can no longer be PITR-restored<span class="cite"><span>
+          (<code>dr-restore-drill.ps1:10-12</code>)</span></span>, and the workflow header adds that the bacpac itself was deleted on
+          2026-10-03<span class="cite"><span> (<code>dr-drill.yml:10-12</code>)</span></span>, so there is no recovery path to drill at all. Leaving it
+          selectable would have offered an operator a drill that fails for a reason unrelated to
+          recoverability, and that failure would then have blocked the next production deploy through
+          <code>dr-freshness</code>. The older argument still holds too: proving a retired archive restores proves
+          nothing about the databases that take writes.</p>
           <p>[Rubric §29, Resilience &amp; Business Continuity] is what this workflow serves: it converts the DR
           runbook from a document into a measurement.</p>
           <h3 id="walkthrough-of-the-script">Walkthrough of the script</h3>
           <p><strong>Parameters<span class="cite"><span> (<code>dr-restore-drill.ps1:23-30</code>)</span></span>.</strong> <code>-ResourceGroup</code> (default <code>acc-rg</code>),
           <code>-SourceDatabase</code> (default <code>ADC_Identity</code>), <code>-RestorePointMinutesAgo</code> (default 10), <code>-KeepCopy</code>, and
-          <code>-SummaryPath</code> (the workflow passes <code>$env:GITHUB_STEP_SUMMARY</code>, <span class="cite"><span><code>dr-drill.yml:89-102</code></span></span>). The workflow
+          <code>-SummaryPath</code> (the workflow passes <code>$env:GITHUB_STEP_SUMMARY</code>, <span class="cite"><span><code>dr-drill.yml:88-101</code></span></span>). The workflow
           never leans on a default: it passes an explicit <code>-SourceDatabase</code> from the rotation step and an
-          explicit <code>-ResourceGroup</code> from <code>vars.AZURE_RESOURCE_GROUP</code><span class="cite"><span> (<code>dr-drill.yml:94-95</code>, <code>:99-100</code>)</span></span>, so the script&#39;s
+          explicit <code>-ResourceGroup</code> from <code>vars.AZURE_RESOURCE_GROUP</code><span class="cite"><span> (<code>dr-drill.yml:93-94</code>, <code>:98-99</code>)</span></span>, so the script&#39;s
           own defaults only matter to a local CLI run.</p>
           <p><strong>Server discovery<span class="cite"><span> (<code>dr-restore-drill.ps1:40-44</code>)</span></span>.</strong> Queries by name prefix (<code>adc-prod-sql-*</code>) rather
           than hard-coding the resource-token suffix, and throws a clear &quot;Did you run &#39;az login&#39;?&quot; error when
@@ -665,7 +690,7 @@
           drill on a name collision, and the freshness gate would then start blocking deploys for a reason
           that has nothing to do with recoverability. The check only covers the database being drilled this
           run, which under the weekly rotation is usually a different one, so the workflow&#39;s <code>always()</code> sweep<span class="cite"><span>
-          (<code>dr-drill.yml:109-120</code>)</span></span> is what catches a copy left by an earlier run against another database.</p>
+          (<code>dr-drill.yml:108-119</code>)</span></span> is what catches a copy left by an earlier run against another database.</p>
           <p><strong>Restore and timing<span class="cite"><span> (<code>dr-restore-drill.ps1:59-66</code>)</span></span>.</strong> A stopwatch brackets <code>az sql db restore</code>, and
           <code>$LASTEXITCODE</code> is checked explicitly<span class="cite"><span> (<code>dr-restore-drill.ps1:65</code>)</span></span> because a failing <code>az</code> call does
           not by itself throw in PowerShell. That elapsed time IS the measured RTO reported in the drill row;
@@ -676,7 +701,7 @@
           <p><strong>Cleanup<span class="cite"><span> (<code>dr-restore-drill.ps1:83-88</code>)</span></span>.</strong> The delete sits in a <code>finally</code> block, so the throwaway
           copy is removed even when the restore or the verification threw. A <code>finally</code> block cannot run in
           a process that GitHub Actions kills at <code>timeout-minutes</code>, though, which is why the workflow backs it
-          with the <code>always()</code> sweep described above<span class="cite"><span> (<code>dr-drill.yml:104-120</code>)</span></span>: between them, a weekly drill
+          with the <code>always()</code> sweep described above<span class="cite"><span> (<code>dr-drill.yml:103-119</code>)</span></span>: between them, a weekly drill
           does not accrete paid databases.</p>
           <p><strong>Result row and exit code<span class="cite"><span> (<code>dr-restore-drill.ps1:90-101</code>)</span></span>.</strong> Prints the markdown table row (date,
           source, PASS/FAIL, minutes, note) to both the console and the job summary through the <code>Write-Line</code>
@@ -685,185 +710,252 @@
           recovery proof.</p>
           <h3 id="what-it-does-not-do-and-the-gate-that-makes-it-matter">What it does not do, and the gate that makes it matter</h3>
           <p>The drill never touches a live database and it does not gate production directly. The link to
-          production is the age of its newest successful run: <code>deploy.yml</code>&#39;s <code>dr-freshness</code> job<span class="cite"><span>
-          (<code>deploy.yml:883-902</code>)</span></span> is a single step that calls the shared MMCA.Common composite action
-          <code>ivanball/MMCA.Common/.github/actions/freshness-gate@main</code><span class="cite"><span> (<code>deploy.yml:895</code>)</span></span> with
-          <code>workflow: dr-drill.yml</code> and <code>window-days: &#39;8&#39;</code><span class="cite"><span> (<code>deploy.yml:898-899</code>)</span></span>. The job names no
-          <code>required-jobs</code>, so the action runs in its success mode: it reads the newest <code>dr-drill.yml</code> run with
-          <code>status=success</code><span class="cite"><span> (<code>MMCA.Common/.github/actions/freshness-gate/action.yml:184-187</code>)</span></span>, fails the deploy
-          when there is none<span class="cite"><span> (<code>action.yml:188-191</code>)</span></span>, and otherwise fails it when that run&#39;s age in whole days
-          is greater than the window<span class="cite"><span> (<code>action.yml:133-143</code>)</span></span>. The comment at <span class="cite"><span><code>deploy.yml:892-894</code></span></span> records why
-          the gate can trust that run at face value: <code>dr-drill.yml</code> has no skip-if-unchanged guard, so every
-          successful run really performed a PITR restore. The job itself asks for only <code>actions: read</code> plus
-          <code>contents: read</code><span class="cite"><span> (<code>deploy.yml:887-889</code>)</span></span> and runs on a 5-minute timeout<span class="cite"><span> (<code>deploy.yml:885</code>)</span></span>, because
-          it is one API read and no restore cost per deploy.</p>
-          <p>Why a shared action rather than inline bash: the DR, load, cross-service and cross-browser gates all
-          call the same action<span class="cite"><span> (<code>deploy.yml:895</code>, <code>:920</code>, <code>:949</code>, <code>:1001</code>)</span></span>, and so does MMCA.Store&#39;s deploy<span class="cite"><span>
-          (<code>action.yml:6-8</code>)</span></span>, so the staleness arithmetic and the break-glass rules live in one place and a fix
+          production is the age of its newest successful run, checked by the <code>dr-freshness</code> step of
+          <code>deploy.yml</code>&#39;s single <code>freshness</code> job<span class="cite"><span> (<code>deploy.yml:826-856</code>)</span></span>. That job holds the four recency gates
+          as four steps whose <code>name</code> and <code>id</code> are the gate names, and every step after the first runs unless
+          the job was cancelled, so one stale proof never hides the state of the others<span class="cite"><span>
+          (<code>deploy.yml:826-830</code>)</span></span>. The <code>dr-freshness</code> step calls the shared MMCA.Common composite action
+          <code>ivanball/MMCA.Common/.github/actions/freshness-gate@main</code><span class="cite"><span> (<code>deploy.yml:849</code>)</span></span> with
+          <code>workflow: dr-drill.yml</code> and <code>window-days: &#39;8&#39;</code><span class="cite"><span> (<code>deploy.yml:852-853</code>)</span></span>. It names no
+          <code>required-jobs</code>, so the action runs in its success mode: the newest run that completed with
+          <code>success</code>, failing the deploy when that run is older than the window<span class="cite"><span>
+          (<code>MMCA.Common/.github/actions/freshness-gate/action.yml:16-26</code>)</span></span>. The comment at
+          <span class="cite"><span><code>deploy.yml:846-848</code></span></span> records why the gate can trust that run at face value: <code>dr-drill.yml</code> has no
+          skip-if-unchanged guard, so every successful run really performed a PITR restore. The job itself
+          asks for only <code>actions: read</code> plus <code>contents: read</code><span class="cite"><span> (<code>deploy.yml:836-838</code>)</span></span> and runs on a 5-minute
+          timeout<span class="cite"><span> (<code>deploy.yml:835</code>)</span></span>, because it is a handful of API reads and no restore cost per deploy.</p>
+          <p>Why a shared action rather than inline bash: the DR, load, cross-service and cross-browser steps all
+          call the same action<span class="cite"><span> (<code>deploy.yml:849</code>, <code>:868</code>, <code>:891</code>, <code>:931</code>)</span></span>, and so does MMCA.Store&#39;s deploy<span class="cite"><span>
+          (<code>action.yml:8-9</code>)</span></span>, so the staleness arithmetic and the break-glass rules live in one place and a fix
           lands for every gate at once instead of in several drifting copies. The reference is the MMCA.Common
           <code>main</code> branch rather than a SHA pin like the drill&#39;s third-party actions: it is first-party code,
           and that branch only moves through a PR.</p>
-          <p><code>dr-freshness</code> sits in <code>deploy.needs</code> alongside <code>load-freshness</code>, <code>cross-service-freshness</code> and
-          <code>cross-browser-freshness</code><span class="cite"><span> (<code>deploy.yml:1219</code>)</span></span>, and the deploy&#39;s condition requires all four to have
-          concluded <code>success</code><span class="cite"><span> (<code>deploy.yml:1258-1261</code>)</span></span>. Break-glass exists but is deliberately expensive to
-          use: the job forwards the <code>skip_freshness_gates</code> and <code>skip_justification</code> dispatch inputs<span class="cite"><span>
-          (<code>deploy.yml:13-18</code>)</span></span> to the action<span class="cite"><span> (<code>deploy.yml:901-902</code>)</span></span>, which refuses to skip without a non-empty
-          justification<span class="cite"><span> (<code>action.yml:94-97</code>)</span></span> and, when it does skip, writes the justification into the step
-          summary and raises a workflow warning<span class="cite"><span> (<code>action.yml:98-106</code>)</span></span>.</p>
+          <p><code>freshness</code> sits in <code>deploy.needs</code><span class="cite"><span> (<code>deploy.yml:1159</code>)</span></span>, and the deploy&#39;s condition requires it to
+          have concluded <code>success</code><span class="cite"><span> (<code>deploy.yml:1193</code>)</span></span>, which means all four steps passed. Break-glass exists
+          but is deliberately expensive to use: the step forwards the <code>skip_freshness_gates</code> and
+          <code>skip_justification</code> dispatch inputs<span class="cite"><span> (<code>deploy.yml:13</code>, <code>:17</code>)</span></span> to the action<span class="cite"><span>
+          (<code>deploy.yml:855-856</code>)</span></span>, which skips only with a non-empty justification and writes that
+          justification loudly to the step summary and as a workflow warning<span class="cite"><span> (<code>action.yml:6-8</code>, <code>:99</code>)</span></span>.</p>
           <p>The operational consequence for an on-call reader: <strong>a red or skipped weekly drill blocks the next
           production deploy.</strong> If a deploy fails on <code>dr-freshness</code>, the fix is to re-run <code>dr-drill.yml</code> (and
           fix it first if it genuinely failed), not to bypass it. The gate&#39;s full mechanics, the break-glass
-          input and the two sibling gates are documented in the <a href="devops-cicd.html">CI/CD chapter</a>; the decision
+          input and the sibling gates are documented in the <a href="devops-cicd.html">CI/CD chapter</a>; the decision
           is <a href="https://ivanball.github.io/docs/adr/064-deploy-recency-gates.html" target="_blank" rel="noopener">ADR-064</a>.</p>
           <hr>
           <h2 id="infraoperationsmd-day-2-alert-triage-runbook">infra/OPERATIONS.md, day-2 alert triage runbook</h2>
-          <p><strong>File:</strong> <code>MMCA.ADC/infra/OPERATIONS.md</code> (207 lines)</p>
+          <p><strong>File:</strong> <code>MMCA.ADC/infra/OPERATIONS.md</code> (431 lines)</p>
           <p><strong>What it is.</strong> The alert-to-action companion to the provisioned observability: what to do when each
-          alert fires, how to read the SLO workbook, the standard recovery moves, and why production has no
-          Aspire dashboard. It explicitly defers restore procedure, RTO/RPO and accepted SPOFs to
-          <code>DISASTER-RECOVERY.md</code> and covers day-2 triage only<span class="cite"><span> (<code>OPERATIONS.md:3-6</code>)</span></span>.</p>
+          alert fires, how to read the SLO workbook, how to run conference day, the standard recovery moves,
+          and why production has no Aspire dashboard. It explicitly defers restore procedure, RTO/RPO and
+          accepted SPOFs to <code>DISASTER-RECOVERY.md</code> and covers day-2 triage only<span class="cite"><span> (<code>OPERATIONS.md:3-6</code>)</span></span>.</p>
           <p><strong>When to consult.</strong> When an alert email arrives from the <code>adc-prod-alerts-*</code> action group<span class="cite"><span>
-          (<code>main.bicep:272-286</code>)</span></span>, whose only receiver is the address in the <code>ALERT_EMAIL</code> repository variable<span class="cite"><span>
-          (<code>OPERATIONS.md:8-11</code>)</span></span>.</p>
+          (<code>main.bicep:357</code>)</span></span>, whose only receiver is the address in the <code>ALERT_EMAIL</code> repository variable<span class="cite"><span>
+          (<code>OPERATIONS.md:11-12</code>)</span></span>, and about a week before a conference<span class="cite"><span> (<code>OPERATIONS.md:320-361</code>)</span></span>.</p>
           <p>[Rubric §13, Observability &amp; Operability] assesses whether alerts lead anywhere. A threshold with no
           runbook is a page nobody knows how to answer, which is exactly what this file, and the build gate
           below, exist to prevent.</p>
           <h3 id="the-pairing-rule-enforced-at-build-time">The pairing rule, enforced at build time</h3>
           <p><code>ObservabilityConventionTestsBase</code> (in the <code>MMCA.Common.Testing.Architecture</code> package) pairs the
           alerts declared in the consumer&#39;s bicep against the runbook sections in its <code>OPERATIONS.md</code>. ADC
-          subclasses it with nothing but an identity<span class="cite"><span>
-          (<code>Tests/Architecture/MMCA.ADC.Architecture.Tests/ObservabilityConventionTests.cs:7</code>)</span></span>, and wires it by
-          embedding both files as manifest resources named <code>infra.main.bicep</code> and <code>infra.OPERATIONS.md</code><span class="cite"><span>
+          subclasses it in <code>MMCA.ADC.Architecture.Tests</code> and wires it by embedding both files as manifest
+          resources named <code>infra.main.bicep</code> and <code>infra.OPERATIONS.md</code><span class="cite"><span>
           (<code>MMCA.ADC.Architecture.Tests.csproj:17-22</code>)</span></span>. The base resolves those resources from the <em>derived</em>
-          type&#39;s assembly<span class="cite"><span> (<code>ObservabilityConventionTestsBase.cs:51</code>)</span></span>, which is the detail that lets one shared
+          type&#39;s assembly<span class="cite"><span> (<code>ObservabilityConventionTestsBase.cs:159</code>)</span></span>, which is the detail that lets one shared
           rule body serve every consumer repo. Three facts run:</p>
           <ol>
-          <li><strong>Non-vacuous floor</strong><span class="cite"><span> (<code>ObservabilityConventionTestsBase.cs:53-61</code>)</span></span>: at least
+          <li><strong>Non-vacuous floor</strong><span class="cite"><span> (<code>ObservabilityConventionTestsBase.cs:85-86</code>)</span></span>: at least
           <code>MinimumAlertSpecs</code> alerts must parse out of the bicep, defaulting to 3<span class="cite"><span>
-          (<code>ObservabilityConventionTestsBase.cs:39</code>)</span></span>. If the parse anchors drift, the gate fails loudly
-          instead of passing with zero discovered alerts.</li>
-          <li><strong>Forward direction</strong><span class="cite"><span> (<code>ObservabilityConventionTestsBase.cs:63-89</code>)</span></span>: every discovered alert key
-          must have a <code>### ...-alert-&lt;key&gt;</code> heading in <code>OPERATIONS.md</code>, and that heading must carry the
-          alert&#39;s current severity as the literal text <code>(sev N)</code><span class="cite"><span>
-          (<code>ObservabilityConventionTestsBase.cs:80-84</code>)</span></span>. Re-tiering an alert in bicep without touching its
-          runbook heading fails the build.</li>
-          <li><strong>Reverse direction</strong><span class="cite"><span> (<code>ObservabilityConventionTestsBase.cs:91-103</code>)</span></span>: a runbook section for an
+          (<code>ObservabilityConventionTestsBase.cs:39</code>)</span></span>. ADC overrides it to five, the number of specs it
+          declares, so a parse drift that discovered fewer would fail rather than pass vacuously<span class="cite"><span>
+          (<code>OPERATIONS.md:389-393</code>)</span></span>.</li>
+          <li><strong>Forward direction</strong>: every discovered alert key must have a <code>### ...-alert-&lt;key&gt;</code> heading in
+          <code>OPERATIONS.md</code>, and that heading must carry the alert&#39;s current severity as the literal text
+          <code>(sev N)</code><span class="cite"><span> (<code>ObservabilityConventionTestsBase.cs:106</code>)</span></span>. Re-tiering an alert in bicep without
+          touching its runbook heading fails the build.</li>
+          <li><strong>Reverse direction</strong><span class="cite"><span> (<code>ObservabilityConventionTestsBase.cs:123-127</code>)</span></span>: a runbook section for an
           alert bicep no longer provisions is an orphan and also fails the build.</li>
           </ol>
           <p>The parse window is the text between <code>var sloAlertSpecs</code> and <code>resource sloAlerts</code><span class="cite"><span>
-          (<code>ObservabilityConventionTestsBase.cs:109-114</code>)</span></span>, which in ADC&#39;s bicep is <span class="cite"><span><code>main.bicep:302</code></span></span> through
-          <span class="cite"><span><code>main.bicep:332</code></span></span>. That window is clean: it holds exactly the three live keys and their three
-          severities and nothing else, so the gate discovers three specs. The base also asserts that the key
-          count and the severity count match<span class="cite"><span> (<code>ObservabilityConventionTestsBase.cs:117</code>)</span></span>, which is what catches
-          a change to the spec <em>shape</em> rather than to the specs.</p>
-          <p>ADC&#39;s three <code>###</code> sections are <code>adc-prod-alert-failed-requests-v2</code> (sev 2, <span class="cite"><span><code>OPERATIONS.md:15</code></span></span>),
-          <code>adc-prod-alert-server-response-time-v2</code> (sev 3, <span class="cite"><span><code>OPERATIONS.md:29</code></span></span>) and
-          <code>adc-prod-alert-dependency-failures-v2</code> (sev 2, <span class="cite"><span><code>OPERATIONS.md:42</code></span></span>). The headings carry the same
-          <code>-v2</code> suffix the provisioned rules use<span class="cite"><span> (<code>main.bicep:336</code>)</span></span>, and that suffix is itself load-bearing:
-          <span class="cite"><span><code>main.bicep:334-335</code></span></span> warns that <code>-v2</code> is part of the rule&#39;s identity in Azure, so renaming it would
-          create a second rule beside the live one instead of updating it. The gate matches on the
-          <code>-alert-&lt;key&gt;</code> infix<span class="cite"><span> (<code>ObservabilityConventionTestsBase.cs:32</code>, <code>:73</code>)</span></span>, so the suffix does not affect
+          (<code>ObservabilityConventionTestsBase.cs:135-136</code>)</span></span>, which in ADC&#39;s bicep is <span class="cite"><span><code>main.bicep:390</code></span></span> through
+          <span class="cite"><span><code>main.bicep:482</code></span></span>. It holds five keys and five severities, so the gate discovers five specs.</p>
+          <p>ADC&#39;s five <code>###</code> sections are <code>adc-prod-alert-failed-requests-v2</code> (sev 2, <span class="cite"><span><code>OPERATIONS.md:17</code></span></span>),
+          <code>adc-prod-alert-server-response-time-v2</code> (sev 3, <span class="cite"><span><code>OPERATIONS.md:31</code></span></span>),
+          <code>adc-prod-alert-dependency-failures-v2</code> (sev 2, <span class="cite"><span><code>OPERATIONS.md:50</code></span></span>),
+          <code>adc-prod-alert-resilience-circuit-open-v2</code> (sev 2, <span class="cite"><span><code>OPERATIONS.md:63</code></span></span>) and
+          <code>adc-prod-alert-ai-scoring-token-ceiling-v2</code> (sev 3, <span class="cite"><span><code>OPERATIONS.md:111</code></span></span>). The headings carry the
+          same <code>-v2</code> suffix the provisioned rules use<span class="cite"><span> (<code>main.bicep:486</code>)</span></span>, and that suffix is itself
+          load-bearing: <span class="cite"><span><code>main.bicep:484-485</code></span></span> warns that <code>-v2</code> is part of the rule&#39;s identity in Azure, so
+          renaming it would create a second rule beside the live one instead of updating it. The gate matches
+          on the <code>-alert-&lt;key&gt;</code> infix<span class="cite"><span> (<code>ObservabilityConventionTestsBase.cs:32</code>)</span></span>, so the suffix does not affect
           the pairing either way.</p>
+          <p>Two of the five need a sentence each, because their remedy is not &quot;fix the service&quot;. The circuit-open
+          alert fires on the first breaker opening, and the breaker closes itself once a probe call succeeds,
+          so the alert can auto-mitigate while the dependency is still sick: the runbook says to treat it as
+          &quot;a dependency is down&quot;, not as &quot;something needs restarting&quot;<span class="cite"><span> (<code>OPERATIONS.md:65-70</code>)</span></span>. The AI token
+          ceiling sums the <code>MMCA.Common.AI</code> meter&#39;s input and output tokens over a rolling two-day window
+          against <code>aiScoringTokenCeiling</code> (2,000,000 by default), and it is the only cost alert in the
+          deployment<span class="cite"><span> (<code>OPERATIONS.md:113-116</code>)</span></span>. It used to sit outside the gated block; it moved into
+          <code>sloAlertSpecs</code>, so its runbook moved up into the gated section with it<span class="cite"><span> (<code>OPERATIONS.md:160-161</code>)</span></span>.</p>
+          <p>[Rubric §31, Cost / FinOps] assesses whether cost is actively managed. Putting a token budget behind
+          the same pairing gate as the availability SLOs means an AI spend alert cannot ship without a written
+          answer for who reacts to it.</p>
           <h3 id="the-operational-alerts-and-why-their-headings-use-four-hashes">The operational alerts, and why their headings use four hashes</h3>
-          <p>Three further alerts are provisioned outside the gated window, and all three have triage sections<span class="cite"><span>
-          (<code>OPERATIONS.md:55-148</code>)</span></span>. The section preamble<span class="cite"><span> (<code>OPERATIONS.md:57-63</code>)</span></span> explains the heading depth,
-          and it is worth understanding rather than copying: the gate&#39;s heading regex is <code>^###\s+.*$</code><span class="cite"><span>
-          (<code>ObservabilityConventionTestsBase.cs:145</code>)</span></span>, so a <code>####</code> heading does not match it at all. That makes
-          these sections invisible to both directions of the gate. Promoting one to <code>###</code> would break the build
-          immediately, because the reverse-direction fact would see a runbook section for an alert
-          <code>sloAlertSpecs</code> does not provision and call it an orphan.</p>
+          <p>Six further alerts are provisioned outside the gated window<span class="cite"><span> (<code>OPERATIONS.md:149-161</code>)</span></span>: the four
+          entries of <code>scheduledQueryAlertSpecs</code><span class="cite"><span> (<code>main.bicep:575-600</code>)</span></span>, materialized at severity 2 with a
+          15-minute evaluation over a 15-minute window<span class="cite"><span> (<code>main.bicep:602-613</code>)</span></span>; one standalone scheduled query
+          rule for the log-ingestion cap<span class="cite"><span> (<code>main.bicep:654</code>)</span></span>; and the Sev 1 gateway-availability metric alert<span class="cite"><span>
+          (<code>main.bicep:733</code>)</span></span>. The section preamble explains the heading depth, and it is worth understanding
+          rather than copying: the gate&#39;s heading regex<span class="cite"><span> (<code>ObservabilityConventionTestsBase.cs:171</code>)</span></span> matches
+          only a line that starts with exactly three hashes followed by whitespace, so a <code>####</code> heading does
+          not match it at all. That makes these sections invisible to both directions of the gate. Promoting
+          one to <code>###</code> would break the build immediately, because the reverse-direction fact would see a
+          runbook section for an alert <code>sloAlertSpecs</code> does not provision and call it an orphan.</p>
           <ul>
-          <li><strong><code>adc-prod-alert-outbox-dead-letter</code></strong> (sev 2, <span class="cite"><span><code>OPERATIONS.md:65-98</code></span></span>) fires on any <code>AppTraces</code> row
-          matching <code>dead-lettered</code> (<span class="cite"><span><code>main.bicep:403-408</code></span></span>, materialized at <span class="cite"><span><code>main.bicep:423-455</code></span></span>). The
-          threshold is 0, meaning first hit rather than a rate, because every hit is an integration event
-          permanently lost from a service&#39;s outbox. The runbook makes the reason explicit<span class="cite"><span>
-          (<code>OPERATIONS.md:67-70</code>)</span></span>: the true &quot;stuck outbox&quot; signal is row age, which is DB-side and not
-          queryable from Log Analytics, so this Error line has to serve as the backlog alarm as well as the
-          loss alarm. The triage walks type-resolution failures (with the seven live <code>[EventName]</code> contracts
-          listed at <span class="cite"><span><code>OPERATIONS.md:79-82</code></span></span>), broker rejection, and consumer-side handler failure, then warns
-          that replay is manual and that production&#39;s 300-second outbox poll<span class="cite"><span> (<code>main.bicep:1083</code>,
-          <code>OPERATIONS.md:94-97</code>)</span></span> means waiting five minutes before concluding a reset did not take.</li>
-          <li><strong><code>adc-prod-alert-sql-dependency-failures</code></strong> (sev 2, <span class="cite"><span><code>OPERATIONS.md:100-124</code></span></span>), threshold 10 failed
-          SQL dependency calls over 15 minutes<span class="cite"><span> (<code>main.bicep:409-414</code>)</span></span>. Its value over the general
+          <li><strong><code>adc-prod-alert-outbox-dead-letter</code></strong> (sev 2, <span class="cite"><span><code>OPERATIONS.md:163-205</code></span></span>) fires on any <code>AppTraces</code>
+          row at Error or above matching <code>dead-lettered</code><span class="cite"><span> (<code>main.bicep:577-579</code>)</span></span>. The threshold is 0, meaning
+          first hit rather than a rate, because every hit is an integration event permanently lost from a
+          service&#39;s outbox. The runbook makes the reason explicit<span class="cite"><span> (<code>OPERATIONS.md:165-168</code>)</span></span>: the true &quot;stuck
+          outbox&quot; signal is row age, which is DB-side and not queryable from Log Analytics, so this Error
+          line has to serve as the backlog alarm as well as the loss alarm. The triage walks type-resolution
+          failures, broker rejection and consumer-side handler failure, and warns that replay is manual;
+          production&#39;s 300-second outbox poll<span class="cite"><span> (<code>main.bicep:1746</code>)</span></span> means waiting five minutes before
+          concluding a reset did not take.</li>
+          <li><strong><code>adc-prod-alert-sql-dependency-failures</code></strong> (sev 2, <span class="cite"><span><code>OPERATIONS.md:206-231</code></span></span>), threshold 10 failed
+          SQL dependency calls over 15 minutes<span class="cite"><span> (<code>main.bicep:583</code>)</span></span>. Its value over the general
           dependency-failures SLO is attribution: every service owns exactly one database, so a burst names a
-          service and a database instead of &quot;some dependency&quot;<span class="cite"><span> (<code>OPERATIONS.md:102-104</code>)</span></span>. The last step<span class="cite"><span>
-          (<code>OPERATIONS.md:122-124</code>)</span></span> is the one that saves an incident: do not restart the service, because
+          service and a database instead of &quot;some dependency&quot;<span class="cite"><span> (<code>OPERATIONS.md:208-210</code>)</span></span>. The last step<span class="cite"><span>
+          (<code>OPERATIONS.md:228-230</code>)</span></span> is the one that saves an incident: do not restart the service, because
           production sets <code>DatabaseInitStrategy=Migrate</code> and each service is the sole migrator of its own
           database, so a restart re-runs startup migrations against the same unreachable server and turns a
           read outage into a failed revision.</li>
-          <li><strong><code>adc-prod-alert-gateway-availability</code></strong> (sev 1, <span class="cite"><span><code>main.bicep:503-532</code></span></span>, <span class="cite"><span><code>OPERATIONS.md:126-148</code></span></span>) is
-          driven by the standard web test that pings the public Gateway <code>/health</code> from three Azure locations
-          with a 2-of-3 failed-location threshold<span class="cite"><span> (<code>main.bicep:470-501</code>)</span></span>. It is the only outside-in signal in
-          the deployment, which is exactly why it is Sev 1: every other alert is reported by the app and
-          therefore goes quiet when the app is down<span class="cite"><span> (<code>OPERATIONS.md:128-131</code>)</span></span>. The triage carries two facts a
-          first responder will otherwise get wrong: <code>/health</code> is the Gateway&#39;s readiness endpoint and
-          aggregates one <code>downstream-{name}</code> check per service, so a healthy Gateway can still fail the probe
-          because a backend is unhealthy; and Identity, Conference and Engagement serve HTTP/2 cleartext
-          only, so probing them without <code>--http2-prior-knowledge</code> reports a failure that is not there<span class="cite"><span>
-          (<code>OPERATIONS.md:140-146</code>)</span></span>.</li>
+          <li><strong><code>adc-prod-alert-revision-activation-failed</code></strong> (sev 2, <span class="cite"><span><code>OPERATIONS.md:232-261</code></span></span>) fires on the first
+          <code>ContainerAppSystemLogs_CL</code> row whose <code>Reason_s</code> starts with &quot;Deployment Progress Deadline
+          Exceeded&quot;<span class="cite"><span> (<code>main.bicep:589-592</code>)</span></span>, the platform&#39;s report that a revision&#39;s readiness probe never
+          went green. It exists because that failure mode is silent from outside: the platform keeps the
+          previous revision serving, so the Gateway availability probe stays green while production runs
+          older code, which is how the 2026-08-29 Redis readiness regression ran unnoticed<span class="cite"><span>
+          (<code>OPERATIONS.md:234-241</code>, <code>main.bicep:563-568</code>)</span></span>. Its deploy-side twin is the activation gate in
+          <span class="cite"><span><code>deploy.yml:1470-1481</code></span></span>, described in the <a href="devops-cicd.html">CI/CD chapter</a>.</li>
+          <li><strong><code>adc-prod-alert-log-ingestion-cap-reached</code></strong> (sev 2, <span class="cite"><span><code>OPERATIONS.md:262-295</code></span></span>) is the alert that
+          keeps the rest honest. The workspace carries a daily ingestion cap (5 GB/day against a ~0.4 GB/day
+          baseline), and when the cap is reached Log Analytics stops ingesting every table until the next UTC
+          midnight, so every other log-based alert silently evaluates empty data<span class="cite"><span> (<code>OPERATIONS.md:264-268</code>)</span></span>.
+          The template records why that is a security concern and not just an outage: tripping the cap is a
+          viable first move for an attacker (drive an error loop, then act unobserved)<span class="cite"><span>
+          (<code>main.bicep:640-644</code>)</span></span>. The rule queries <code>_LogOperation</code> because that table is cap-exempt and keeps
+          recording after ingestion stops<span class="cite"><span> (<code>main.bicep:646-649</code>)</span></span>, and it uses a 1-hour window against a
+          15-minute cadence so ingestion-latency skew cannot drop the once-written cap record between two
+          buckets<span class="cite"><span> (<code>main.bicep:651-653</code>, <code>:664-665</code>)</span></span>.</li>
+          <li><strong><code>adc-prod-alert-gateway-availability</code></strong> (sev 1, <span class="cite"><span><code>main.bicep:733-754</code></span></span>, <span class="cite"><span><code>OPERATIONS.md:296-318</code></span></span>) is
+          driven by the standard web test that pings the public Gateway <code>/health</code> from three Azure locations<span class="cite"><span>
+          (<code>main.bicep:700-712</code>)</span></span> with a 2-of-3 failed-location threshold<span class="cite"><span> (<code>main.bicep:754</code>)</span></span>. It is the only
+          outside-in signal in the deployment, which is exactly why it is Sev 1: every other alert is
+          reported by the app and therefore goes quiet when the app is down<span class="cite"><span> (<code>OPERATIONS.md:298-299</code>)</span></span>. The
+          triage carries two facts a first responder will otherwise get wrong: <code>/health</code> is the Gateway&#39;s
+          readiness endpoint and aggregates one downstream check per service, so a healthy Gateway can still
+          fail the probe because a backend is unhealthy; and Identity, Conference and Engagement serve
+          HTTP/2 cleartext only, so probing them without <code>--http2-prior-knowledge</code> reports a failure that is
+          not there<span class="cite"><span> (<code>OPERATIONS.md:310-316</code>)</span></span>.</li>
           </ul>
-          <p><strong>One number in that last section has drifted.</strong> <span class="cite"><span><code>OPERATIONS.md:130</code></span></span> still describes the synthetic
+          <p><strong>One number in that last section has drifted.</strong> <span class="cite"><span><code>OPERATIONS.md:300</code></span></span> still describes the synthetic
           probe as running at a &quot;5-minute frequency&quot;. The web test is declared with <code>Frequency: 900</code><span class="cite"><span>
-          (<code>main.bicep:482</code>)</span></span>, so each location probes every 15 minutes, and the alert&#39;s window was widened to
-          <code>PT15M</code> to match<span class="cite"><span> (<code>main.bicep:517-518</code>)</span></span>. The template explains both halves separately. The cadence
-          change is FinOps: standard web tests are billed per location-execution, and three locations every 5
-          minutes came to $13.39/month on this subscription<span class="cite"><span> (<code>main.bicep:464-469</code>)</span></span>. The window change is
-          correctness, not cost: at <code>Frequency: 900</code> a <code>PT5M</code> window would usually be empty, so the rule would
-          evaluate nothing at all, while <code>PT15M</code> restores exactly one result per location per window, which is
-          what <code>failedLocationCount: 2</code> counts<span class="cite"><span> (<code>main.bicep:512-516</code>)</span></span>. The locations and the 2-of-3 threshold
-          are unchanged; what moved is detection latency, from about 5 minutes to about 15. Read the runbook&#39;s
-          &quot;5-minute&quot; as the old cadence and the bicep as current.</p>
-          <p>[Rubric §31, Cost / FinOps] assesses whether cost is actively managed. Both 2026-09-02 cadence
-          changes (SLO rules from 5 to 15 minutes, web test from 300s to 900s) are §31 decisions taken with the
-          billing model written down beside them, and neither moved a threshold or a location. That is the
-          distinction that keeps a cost change from quietly becoming an alerting change, and it is why the
-          comments spend as many lines on what stayed the same as on what changed.</p>
+          (<code>main.bicep:712</code>)</span></span>, so each location probes every 15 minutes, and the alert&#39;s window is <code>PT15M</code> to
+          match<span class="cite"><span> (<code>main.bicep:747-748</code>)</span></span>. The template explains the window separately from the cadence, and the
+          window change is correctness, not cost: at <code>Frequency: 900</code> a <code>PT5M</code> window would usually be empty,
+          so the rule would evaluate nothing at all, while <code>PT15M</code> restores exactly one result per location
+          per window, which is what <code>failedLocationCount</code> counts<span class="cite"><span> (<code>main.bicep:742-746</code>)</span></span>. The locations and the
+          2-of-3 threshold are unchanged; what moved is detection latency, from about 5 minutes to about 15.
+          Read the runbook&#39;s &quot;5-minute&quot; as the old cadence and the bicep as current.</p>
+          <p>[Rubric §31, Cost / FinOps] assesses whether cost is actively managed. The cadence changes on the SLO
+          rules (dated 2026-09-02 at <span class="cite"><span><code>main.bicep:502-506</code></span></span>) and on the web test are cost decisions taken with
+          the billing model written down beside them, and neither moved a threshold or a location. That is the
+          distinction that keeps a cost change from quietly becoming an alerting change.</p>
           <h3 id="the-one-gap-the-gate-cannot-see">The one gap the gate cannot see</h3>
-          <p><code>scheduledQueryAlertSpecs</code> declares <strong>three</strong> rules, not two: <code>outbox-dead-letter</code>,
-          <code>sql-dependency-failures</code> and <code>revision-activation-failed</code><span class="cite"><span> (<code>main.bicep:402-421</code>)</span></span>. The third fires on
-          <code>ContainerAppSystemLogs_CL</code> rows whose <code>Reason_s</code> starts with &quot;Deployment Progress Deadline Exceeded&quot;<span class="cite"><span>
-          (<code>main.bicep:415-420</code>)</span></span>, the platform&#39;s report that a revision&#39;s readiness probe never went green. It
-          exists because that failure mode is silent from outside: the platform keeps the previous revision
-          serving, so nothing degrades and the deploy looks fine while the new code never takes traffic
-          (<span class="cite"><span><code>main.bicep:396-401</code></span></span>, the 2026-08-29 Redis readiness regression).</p>
-          <p>It has no runbook section anywhere in <code>OPERATIONS.md</code>, and the file&#39;s own preamble still says &quot;the
-          <strong>two</strong> scheduled query rules declared in <code>main.bicep</code>&#39;s <code>scheduledQueryAlertSpecs</code> block&quot;<span class="cite"><span>
-          (<code>OPERATIONS.md:57-59</code>)</span></span>. Because the rule lives outside the gated window, nothing failed when it was
-          added. That is the honest boundary of the pairing gate: it covers the three SLO specs, not the alert
-          surface as a whole, and the governance note at <span class="cite"><span><code>OPERATIONS.md:165-171</code></span></span> says so, calling the non-SLO
-          alerts &quot;the honour system&quot;. A reader paged by <code>adc-prod-alert-revision-activation-failed</code> today has
-          two things to lean on: the alert&#39;s own description, which names the first triage step (check
-          <code>/health/ready</code> on the named app, an untagged infrastructure health check gating readiness being the
-          usual cause, <span class="cite"><span><code>main.bicep:417</code></span></span>), and the deploy-side story, the activation gate and rollback at
-          <span class="cite"><span><code>deploy.yml:1520-1541</code></span></span>, described in the <a href="devops-cicd.html">CI/CD chapter</a>.</p>
+          <p><code>signalr-backplane-errors</code> is the fourth <code>scheduledQueryAlertSpecs</code> entry<span class="cite"><span> (<code>main.bicep:595-599</code>)</span></span>: any
+          Warning-or-above <code>AppTraces</code> line whose logger category starts with
+          <code>Microsoft.AspNetCore.SignalR.StackExchangeRedis</code>, threshold 0. It exists because a backplane
+          failure is silent by design. When the backplane loses Redis, each Notification replica keeps serving
+          its own connections, so a push issued on one replica silently stops reaching clients held by the
+          other, and readiness stays green on purpose, because making Redis a readiness dependency would take
+          the whole hub down during a blip<span class="cite"><span> (<code>main.bicep:567-574</code>)</span></span>.</p>
+          <p>It has no runbook section, and the file says so twice<span class="cite"><span> (<code>OPERATIONS.md:158-160</code>, <code>:394-395</code>)</span></span>: the
+          alert&#39;s own description in <span class="cite"><span><code>main.bicep:596</code></span></span> is the only triage pointer. Because the rule lives
+          outside the gated window, nothing failed when it was added. That is the honest boundary of the
+          pairing gate: it covers the five SLO specs, not the alert surface as a whole, and the governance note<span class="cite"><span>
+          (<code>OPERATIONS.md:387-395</code>)</span></span> says so, calling the non-SLO alerts &quot;the honour system&quot;. The previous
+          occupant of this gap, <code>revision-activation-failed</code>, now has its section<span class="cite"><span> (<code>OPERATIONS.md:232-261</code>)</span></span>,
+          which is the honour system working, but only by hand.</p>
+          <h3 id="conference-day">Conference day</h3>
+          <p><span class="cite"><span><code>OPERATIONS.md:320-361</code></span></span> turns the conference-day surge from a set of <code>az</code> commands into one switch.
+          The surge is declared in <code>main.bicep</code> as <code>conferenceMode</code> (<span class="cite"><span><code>main.bicep:157</code></span></span>, default <code>false</code>) and
+          driven by ONE repository variable, <code>CONFERENCE_MODE_UNTIL</code> (<code>yyyy-MM-dd</code>, UTC)<span class="cite"><span>
+          (<code>OPERATIONS.md:322-325</code>)</span></span>. The deploy reads it on every run: it rejects a malformed value<span class="cite"><span>
+          (<code>deploy.yml:1435-1437</code>)</span></span> and turns the mode on while today&#39;s UTC date is not past the variable<span class="cite"><span>
+          (<code>deploy.yml:1440-1442</code>)</span></span>, so the first deploy after the date reverts the surge with no one
+          remembering to. The runbook forbids scaling by hand with <code>az</code>, because <code>cost-guard.yml</code> treats an
+          out-of-band surge as drift and blocks deploys<span class="cite"><span> (<code>OPERATIONS.md:325</code>)</span></span>; <code>cost-guard</code> is a deploy
+          prerequisite<span class="cite"><span> (<code>deploy.yml:783-793</code>, <code>:1192</code>)</span></span>.</p>
+          <p>What the mode changes, sized by the 2026-10-02 capacity review for about 400 concurrent attendees
+          against a 2026 peak of about 67<span class="cite"><span> (<code>OPERATIONS.md:327-341</code>)</span></span>:</p>
+          <ul>
+          <li><strong>Per-client-IP limits</strong>, because a whole venue Wi-Fi is one NAT address: the gateway edge window,
+          the gateway <code>auth-tight</code> policy, Identity&#39;s <code>auth-ip</code> limit, registrations per IP per hour and the
+          UI host window all rise by an order of magnitude or more<span class="cite"><span> (<code>OPERATIONS.md:330-334</code>)</span></span>.</li>
+          <li><strong>Compute</strong>: Identity at 1 vCPU / 2 GiB, because every sign-in is a 600,000-iteration
+          PBKDF2-SHA512 hash and the 2026-10-03 rehearsal saturated four 0.5 vCPU replicas at about five
+          sign-ins a second; the other attendee-facing apps at 0.5 vCPU / 1 GiB, all five scaling to four
+          replicas. Identity, Conference and Engagement keep a minimum of 1 because each is the sole startup
+          migrator and seeder of its database<span class="cite"><span> (<code>OPERATIONS.md:335-340</code>)</span></span>.</li>
+          <li><strong>Databases</strong>: <code>ADC_Conference</code> and <code>ADC_Engagement</code> move online from Basic (5 DTU) to S2 (50 DTU)<span class="cite"><span>
+          (<code>OPERATIONS.md:341</code>)</span></span>.</li>
+          </ul>
+          <p>The steps<span class="cite"><span> (<code>OPERATIONS.md:345-361</code>)</span></span>: set the variable about a week before and run the deploy; run
+          the dress rehearsal, <code>conference-day-load-test.yml</code> (manual only, and it writes to production),
+          first in <code>mode=seed</code> to register 400 synthetic accounts on the reserved <code>loadtest.adc.invalid</code>
+          domain (no confirmation email, never broadcast recipients), then in <code>mode=attendees</code>, which must
+          pass including <code>signed_in &gt; 99%</code>; and after the conference, deploy once more to revert and delete
+          the variable. Until that reverting deploy runs, the Monday <code>cost-guard.yml</code> fails as the reminder.
+          The rehearsal with the mode OFF is expected to fail on 429s; that is the baseline it proves.</p>
+          <p>[Rubric §31, Cost / FinOps] assesses whether capacity tracks need. A date-bounded switch makes the
+          expensive footprint expire by construction instead of by memory, and the scheduled cost guard
+          catches the one case the date cannot. [Rubric §29, Resilience &amp; Business Continuity] is served by
+          the same switch: it is what keeps a second front-door replica alive during the one week a replica
+          loss would matter.</p>
           <h3 id="recovery-moves">Recovery moves</h3>
-          <p><span class="cite"><span><code>OPERATIONS.md:150-163</code></span></span> is the fast reference: roll a bad revision back with <code>az containerapp revision list</code> and <code>revision copy</code>, follow <code>DISASTER-RECOVERY.md</code> for a database restore, re-run the
-          referenced workflow when a freshness gate blocks a deploy, and revert a conference-day surge when
-          <code>cost-guard.yml</code> fails. Its freshness quick-reference<span class="cite"><span> (<code>OPERATIONS.md:158-161</code>)</span></span> names all three
-          windows, and each one matches the workflow that enforces it: <code>dr-freshness</code> 8 days<span class="cite"><span>
-          (<code>deploy.yml:899</code>)</span></span>, <code>load-freshness</code> 35 days<span class="cite"><span> (<code>deploy.yml:924</code>)</span></span>, <code>cross-service-freshness</code> 5 days<span class="cite"><span>
-          (<code>deploy.yml:955</code>)</span></span>. Those numbers live in two places, so treat the workflow as the source of truth
-          and re-check the runbook line whenever a window moves: <code>deploy.yml</code> now enforces a fourth window the
-          runbook&#39;s quick reference does not name, <code>cross-browser-freshness</code> at 10 days<span class="cite"><span> (<code>deploy.yml:1006</code>)</span></span>,
-          which is the drift this pairing produces whenever a gate is added and the prose is updated
-          separately.</p>
+          <p><span class="cite"><span><code>OPERATIONS.md:363-385</code></span></span> is the fast reference: roll a bad revision back with <code>az containerapp revision list</code> and <code>revision copy</code>, follow <code>DISASTER-RECOVERY.md</code> for a database restore, re-run the
+          referenced workflow when a freshness gate blocks a deploy, and revert a surge. Its freshness
+          quick-reference<span class="cite"><span> (<code>OPERATIONS.md:370-373</code>)</span></span> names three windows, and each one matches the step that
+          enforces it: <code>dr-freshness</code> 8 days<span class="cite"><span> (<code>deploy.yml:853</code>)</span></span>, <code>load-freshness</code> 35 days<span class="cite"><span>
+          (<code>deploy.yml:872</code>)</span></span>, <code>cross-service-freshness</code> 5 days<span class="cite"><span> (<code>deploy.yml:897</code>)</span></span>. Those numbers live in two
+          places, so treat the workflow as the source of truth and re-check the runbook line whenever a window
+          moves: <code>deploy.yml</code> enforces a fourth window the quick reference does not name,
+          <code>cross-browser-freshness</code> at 10 days<span class="cite"><span> (<code>deploy.yml:936</code>)</span></span>, which is the drift this pairing produces
+          whenever a gate is added and the prose is updated separately.</p>
+          <p>The two surge entries are new and worth reading as a pair. The routine revert is the conference-day
+          step: deploy once <code>CONFERENCE_MODE_UNTIL</code> has passed, then delete the variable<span class="cite"><span>
+          (<code>OPERATIONS.md:374-375</code>)</span></span>. The other is a deadlock breaker<span class="cite"><span> (<code>OPERATIONS.md:376-385</code>)</span></span>: if someone
+          surged by hand with <code>az</code> and the variable is unset, <code>cost-guard</code> blocks every deploy and a plain
+          re-run cannot clear it, because the deploy job needs <code>cost-guard</code> to pass. The way out is to set the
+          variable to yesterday, because an expired window is the one state in which the gate lets a surged
+          footprint through, and the deploy it allows applies <code>main.bicep</code> at baseline; then delete the
+          variable and re-run <code>cost-guard.yml</code> to confirm.</p>
           <h3 id="why-there-is-no-aspire-dashboard-in-production">Why there is no Aspire dashboard in production</h3>
-          <p><span class="cite"><span><code>OPERATIONS.md:176-207</code></span></span> closes the file by answering the question every new operator asks. The
+          <p><span class="cite"><span><code>OPERATIONS.md:400-431</code></span></span> closes the file by answering the question every new operator asks. The
           absence is a decision (<a href="https://ivanball.github.io/docs/adr/098-aspire-orchestration-not-testing-or-dashboards.html" target="_blank" rel="noopener">ADR-098</a>), not an omission, and it rests on three facts.</p>
           <p>The production telemetry stream is deliberately thinned, so a full-fidelity dashboard would have
-          nothing extra to show: <span class="cite"><span><code>main.bicep:220-264</code></span></span> sets <code>Telemetry__TracesSampleRatio=0.25</code><span class="cite"><span>
-          (<code>main.bicep:224-227</code>)</span></span>, an OpenTelemetry log floor of <code>Warning</code> so Information still reaches
-          container stdout without billing against the workspace<span class="cite"><span> (<code>main.bicep:235-238</code>)</span></span>,
-          <code>Telemetry__DisableHttpClientMetrics</code> and <code>Telemetry__DisableRuntimeMetrics</code> (<span class="cite"><span><code>main.bicep:246-253</code></span></span>,
-          together about 65% of AppMetrics ingestion as measured over 2026-08-03 to 08-09), and
-          <code>OTEL_METRIC_EXPORT_INTERVAL=300000</code> against a 60-second default<span class="cite"><span> (<code>main.bicep:261-264</code>)</span></span>. The
-          dashboard&#39;s value is live, unsampled, per-request detail, which is exactly the data production does
-          not carry.</p>
-          <p>The durable operational surface is the workspace, not a dashboard<span class="cite"><span> (<code>OPERATIONS.md:192-196</code>)</span></span>: the
+          nothing extra to show: <code>main.bicep</code> sets <code>Telemetry__TracesSampleRatio=0.25</code><span class="cite"><span> (<code>main.bicep:280</code>)</span></span>, an
+          OpenTelemetry log floor of <code>Warning</code> so Information still reaches container stdout without billing
+          against the workspace, <code>Telemetry__DisableHttpClientMetrics</code> and <code>Telemetry__DisableRuntimeMetrics</code>
+          (<span class="cite"><span><code>main.bicep:317</code></span></span>; together about 65% of AppMetrics ingestion per <span class="cite"><span><code>OPERATIONS.md:410-411</code></span></span>), and
+          <code>OTEL_METRIC_EXPORT_INTERVAL=300000</code> against a 60-second default<span class="cite"><span> (<code>main.bicep:347</code>)</span></span>. The runbook&#39;s
+          own pointer, <span class="cite"><span><code>infra/main.bicep:223-263</code></span></span><span class="cite"><span> (<code>OPERATIONS.md:407</code>)</span></span>, predates later template growth; the
+          settings now sit around <span class="cite"><span><code>main.bicep:280-347</code></span></span>. The dashboard&#39;s value is live, unsampled, per-request
+          detail, which is exactly the data production does not carry.</p>
+          <p>The durable operational surface is the workspace, not a dashboard<span class="cite"><span> (<code>OPERATIONS.md:416-420</code>)</span></span>: the
           alert rules and their action group, the SLO workbook, and KQL over <code>ContainerAppConsoleLogs_CL</code>,
           <code>AppRequests</code> and <code>AppDependencies</code> all survive a revision restart and stay queryable weeks later.
           And the ACA dashboard component is ephemeral and full-fidelity, which is the wrong pair for
-          production<span class="cite"><span> (<code>OPERATIONS.md:198-202</code>)</span></span>: it holds its data in the running container&#39;s memory, so a
+          production<span class="cite"><span> (<code>OPERATIONS.md:422-426</code>)</span></span>: it holds its data in the running container&#39;s memory, so a
           restart discards it, while ingesting at exactly the fidelity the settings above were tuned to avoid.</p>
           <p>[Rubric §31, Cost / FinOps] meets §13 here: the observability posture is shaped by ingestion cost,
           and the runbook records that trade-off where an operator will actually hit it rather than leaving it
@@ -925,29 +1017,36 @@
           so network reachability no longer implies credential exposure.</p>
           <hr>
           <h2 id="infrapost-cutover-atldevcon-downgrademd-archive-downgrade-and-drop-runbook">infra/POST-CUTOVER-atldevcon-downgrade.md, archive downgrade and drop runbook</h2>
-          <p><strong>File:</strong> <code>MMCA.ADC/infra/POST-CUTOVER-atldevcon-downgrade.md</code> (128 lines)</p>
+          <p><strong>File:</strong> <code>MMCA.ADC/infra/POST-CUTOVER-atldevcon-downgrade.md</code> (117 lines)</p>
           <p><strong>What it is.</strong> The record of what happened to the legacy <code>AtlDevCon</code> database after the
-          database-per-service cutover, in two acts. The first act is the S0 to Basic downgrade that was the
-          third and final commit of the rollout. The second act, added 2026-09-02, is the archive-and-drop that
-          retired the database entirely. The file opens with a status banner<span class="cite"><span>
-          (<code>POST-CUTOVER-atldevcon-downgrade.md:3-9</code>)</span></span> that tells you which act is current: <code>AtlDevCon</code> no
-          longer exists, the bacpac blob is the rollback source of record, and everything above the &quot;Final
-          state&quot; section is history whose &quot;never delete this resource&quot; instruction has been superseded.</p>
-          <p><strong>When to consult.</strong> When you need the pre-cutover data, when you are rebuilding the environment
-          after a disaster and want to know what the archive is and is not, or when you meet the &quot;NEVER delete&quot;
-          comment quoted in an older document and need to know it was retired deliberately. Nothing in this
-          runbook is a step on the normal deploy path any more.</p>
+          database-per-service cutover, in three acts. The first act is the S0 to Basic downgrade that was the
+          third and final commit of the rollout. The second, on 2026-09-02, is the archive-and-drop that
+          retired the database entirely. The third, on 2026-10-03, is the deletion of the archive itself. The
+          file opens with a status banner<span class="cite"><span> (<code>POST-CUTOVER-atldevcon-downgrade.md:3-9</code>)</span></span> that tells you which act
+          is current: <code>AtlDevCon</code> no longer exists, the bacpac it was exported to was itself deleted on
+          2026-10-03, and everything above the &quot;Final state&quot; section is history whose &quot;never delete this
+          resource&quot; instruction has been superseded.</p>
+          <p><strong>When to consult.</strong> When someone asks for the pre-cutover data (the answer is that it no longer
+          exists outside the live databases), when you are rebuilding the environment after a disaster and
+          want to know what the archive was and why there is none, or when you meet the &quot;NEVER delete&quot; comment
+          quoted in an older document and need to know it was retired deliberately. Nothing in this runbook is
+          a step on the normal deploy path any more.</p>
           <p>[Rubric §31, Cost/FinOps] assesses whether cost is actively managed and right-sized. This file is
           that principle applied twice, with a measurement between the two applications. The first pass
           downgraded an idle database from S0 to Basic. The second pass retired it altogether once the numbers
           were in: 32 MB of data and <strong>0 DTU for the whole summer</strong> while still billing as a Basic database<span class="cite"><span>
           (<code>POST-CUTOVER-atldevcon-downgrade.md:81-83</code>)</span></span>. The reasoning fits in one sentence: a &quot;data must never
-          be lost&quot; constraint is satisfied just as well by a bacpac in blob storage, at a small fraction of the
-          cost.</p>
-          <p>[Rubric §8, Data Architecture] assesses data lifecycle and migration hygiene. The interesting part is
-          that retiring the data estate&#39;s last legacy member did not mean losing it: an export was verified
-          present and non-empty before the drop, and the import command that reverses it is recorded verbatim
-          in the same file.</p>
+          be lost&quot; constraint was satisfied just as well by a bacpac in blob storage, at a small fraction of
+          the cost.</p>
+          <p>[Rubric §8, Data Architecture] assesses data lifecycle and migration hygiene. Retiring the data
+          estate&#39;s last legacy member happened in deliberate, recorded steps: an export was verified present
+          and non-empty before the drop, and the later deletion of that export is recorded with its date, its
+          reason and its consequence rather than performed silently<span class="cite"><span> (<code>POST-CUTOVER-atldevcon-downgrade.md:103-110</code>)</span></span>.</p>
+          <p>[Rubric §30, Compliance &amp; Privacy] assesses whether personal data is kept only as long as it has a
+          purpose. The archive was deleted as personal data with no remaining purpose, by the owner&#39;s
+          decision, and the runbook states plainly that blob soft delete and versioning were off, so no copy
+          remains<span class="cite"><span> (<code>POST-CUTOVER-atldevcon-downgrade.md:105-108</code>)</span></span>. Writing down that the deletion is
+          irreversible is what makes it auditable.</p>
           <h3 id="walkthrough-1">Walkthrough</h3>
           <p><strong>Act one, the downgrade<span class="cite"><span> (<code>POST-CUTOVER-atldevcon-downgrade.md:11-77</code>)</span></span>.</strong> Kept as history, and still
           worth reading for the shape of a safe SKU change:</p>
@@ -969,7 +1068,7 @@
           reads <code>Basic</code> and the cap is 2147483648, and revert the commit to return to S0 if needed. Rolling
           back the SKU was always independent of rolling back the app flip.</li>
           </ol>
-          <p><strong>Act two, archive and drop<span class="cite"><span> (<code>POST-CUTOVER-atldevcon-downgrade.md:79-121</code>)</span></span>.</strong> Three steps, in this
+          <p><strong>Act two, archive and drop<span class="cite"><span> (<code>POST-CUTOVER-atldevcon-downgrade.md:79-101</code>)</span></span>.</strong> Three steps, in this
           order, and the order is the whole design<span class="cite"><span> (<code>:85-101</code>)</span></span>:</p>
           <ol>
           <li><code>infra/main.bicep</code> stopped declaring the <code>sqlDatabase</code> resource, and that change deployed. The
@@ -980,15 +1079,16 @@
           <li>The export was verified present and non-empty in the blob container, and only then was the
           database dropped <strong>by hand</strong> with <code>az sql db delete</code>.</li>
           </ol>
-          <p><strong>The rollback source of record<span class="cite"><span> (<code>:103-121</code>)</span></span>.</strong> The blob is now the only copy of the pre-cutover
-          data. The runbook gives the <code>az sql db import</code> command that restores it in about ten minutes, into a
-          <strong>new</strong> database name so a restore can never collide with a live <code>ADC_*</code> database. The four live
-          per-service databases are unaffected by any of this and keep their own PITR plus LTR.</p>
-          <p><strong>&quot;Not ours&quot;: the <code>atldevcon</code> SQL server<span class="cite"><span> (<code>:123-128</code>)</span></span>.</strong> A SQL server named <code>atldevcon</code> in westus2
+          <p><strong>Act three, archive deleted<span class="cite"><span> (<code>:103-110</code>)</span></span>.</strong> The bacpac was deleted permanently on 2026-10-03. There
+          is no longer any rollback path to the pre-cutover <code>AtlDevCon</code> data; its contents had already been
+          copied into the live per-service databases at cutover, and the four live <code>ADC_*</code> databases keep
+          their own PITR plus LTR. The empty <code>sql-archive</code> container remains. The <code>az sql db import</code> restore
+          this section used to carry is gone with it, which is also what unblocked turning off storage
+          Shared Key access (see the DR section above).</p>
+          <p><strong>&quot;Not ours&quot;: the <code>atldevcon</code> SQL server<span class="cite"><span> (<code>:112-117</code>)</span></span>.</strong> A SQL server named <code>atldevcon</code> in westus2
           lives in the same shared resource group. It predates MMCA, belongs to something else, and has never
-          hosted an ADC database. The same warning is mirrored in the template<span class="cite"><span> (<code>main.bicep:645-647</code>)</span></span>. In a
-          shared resource group, a name collision like this is a real operational hazard, and writing it down
-          in both places is the mitigation.</p>
+          hosted an ADC database. In a shared resource group, a name collision like this is a real
+          operational hazard, and writing it down is the mitigation.</p>
           <hr>
           <h2 id="play-store-captureps1-android-screenshot-capture">play-store-capture.ps1, Android screenshot capture</h2>
           <p><strong>File:</strong> <code>MMCA.ADC/scripts/play-store-capture.ps1</code> (147 lines)</p>
@@ -1190,7 +1290,7 @@
           (<code>main.bicep:635-647</code>, <code>POST-CUTOVER-atldevcon-downgrade.md:79-121</code>)</span></span>. Three practical consequences
           follow for an operator. The four live <code>ADC_*</code> databases are the entire estate covered by PITR and LTR<span class="cite"><span>
           (<code>main.bicep:681-685</code>)</span></span>. The weekly drill rotates over exactly those four and cannot target anything
-          else<span class="cite"><span> (<code>dr-drill.yml:22-26</code>, <code>:80-83</code>)</span></span>. And recovering pre-cutover data is an <code>az sql db import</code> into
+          else<span class="cite"><span> (<code>dr-drill.yml:21-25</code>, <code>:79-82</code>)</span></span>. And recovering pre-cutover data is an <code>az sql db import</code> into
           a new database name, not a point-in-time restore.</p>
           <p>Cross-links:</p>
           <ul>

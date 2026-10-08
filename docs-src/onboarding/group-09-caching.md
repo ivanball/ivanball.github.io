@@ -23,29 +23,35 @@ Architecture port/adapter split (see [primer §1](00-primer.md#1-the-big-picture
 in `MMCA.Common.Application`, all three implementations live in `MMCA.Common.Infrastructure`, and
 application code compiles against the interface alone. It declares eight members. Four are abstract:
 `GetAsync<T>` returning `T?` with `null` for a miss (`ICacheService.cs:17`), `SetAsync<T>` with an
-optional `TimeSpan?` TTL (`ICacheService.cs:72`), `RemoveAsync` for one key (`ICacheService.cs:82`),
-and `RemoveByPrefixAsync` for bulk eviction by key prefix (`ICacheService.cs:88`). Four are **default
+optional `TimeSpan?` TTL (`ICacheService.cs:75`), `RemoveAsync` for one key (`ICacheService.cs:85`),
+and `RemoveByPrefixAsync` for bulk eviction by key prefix (`ICacheService.cs:91`). Four are **default
 interface members** with working bodies, so each one shipped without breaking an implementer.
 `TryGetAsync<T>` (`ICacheService.cs:34`) reports presence separately from the value, because for a
 value-type `T` a `GetAsync` miss answers `default(T)` and cannot be told apart from a cached `0` or
 `false` (`ICacheService.cs:19-23`); the default infers presence from a non-null value
 (`ICacheService.cs:36-37`), and the shipped stores that can do better override it.
-`GetFromSharedStoreAsync<T>` (`ICacheService.cs:62`) reads past any process-local copy, for
-single-use records (an OAuth exchange code, a password-reset or email-confirmation token, a
-second-factor time step) whose consumption on one replica must be visible on every other one at once
-(`ICacheService.cs:40-61`); its default simply calls `GetAsync`, which is exact for a store with no
-local tier. `IncrementAsync` (`ICacheService.cs:105`) is a read-modify-write counter
-(`ICacheService.cs:107-110`) that gives the
+`GetFromSharedStoreAsync<T>` (`ICacheService.cs:65`) reads past any process-local copy, for
+values whose change on one replica must be visible on every other one at once: single-use records (an
+OAuth exchange code, a password-reset or email-confirmation token, a second-factor time step) and the
+counters `IncrementAsync` maintains, since a store with a local tier increments in the shared store
+and a local copy would pin the first count it saw (`ICacheService.cs:40-57`). Everything read many
+times stays on `GetAsync` and loses only the local hit rate by coming here (`ICacheService.cs:56-57`);
+the default simply calls `GetAsync`, which is exact for a store with no local tier
+(`ICacheService.cs:60-62`). `IncrementAsync` (`ICacheService.cs:112`) is a read-modify-write counter
+(`ICacheService.cs:114-117`) that gives the
 [ADR-029](https://ivanball.github.io/docs/adr/029-authentication-brute-force-protection.html)
-brute-force and rate-limit counters one entry point instead of scattered get-then-set pairs, and
-`GetOrCreateAsync<T>` (`ICacheService.cs:145`) folds read, per-key stripe, double-check, factory and
-write into one call (`ICacheService.cs:150-171`), taking presence from `TryGetAsync` on both checks so
-a cached `default(T)` counts as a hit (`ICacheService.cs:153-165`), using the process-wide
-`CacheKeyLocks` table (`ICacheService.cs:189-193`), cross-referenced in
+brute-force and rate-limit counters one entry point instead of scattered get-then-set pairs; its doc
+states plainly that it is not atomic in any shipped implementation (the default,
+`DistributedCacheService` and `HybridCacheService` all read then write, so concurrent increments can
+undercount) and that none overrides it with Redis `INCR` (`ICacheService.cs:93-111`), and
+`GetOrCreateAsync<T>` (`ICacheService.cs:152`) folds read, per-key stripe, double-check, factory and
+write into one call (`ICacheService.cs:157-178`), taking presence from `TryGetAsync` on both checks so
+a cached `default(T)` counts as a hit (`ICacheService.cs:160-172`), using the process-wide
+`CacheKeyLocks` table (`ICacheService.cs:196-200`), cross-referenced in
 [Group 5](group-05-cqrs-pipeline.md#cachekeylocks). Its XML doc is explicit about two limits that
 matter: it caches whatever the factory returned, failed [`Result`](group-01-result-error-handling.md#result)
 included, which is exactly why the caching decorators do not route through it, and its stampede
-protection is per process (`ICacheService.cs:126-143`). `RemoveByPrefixAsync` is the load-bearing member:
+protection is per process (`ICacheService.cs:133-150`). `RemoveByPrefixAsync` is the load-bearing member:
 it is what lets a single write evict every cached read it could have staled, and it is why the backends
 had to be built rather than used off the shelf (`IMemoryCache` has no key enumeration, `IDistributedCache`
 has no prefix delete). [Rubric §3, Clean Architecture] assesses whether dependencies point inward and
@@ -77,7 +83,7 @@ cache settings (`DependencyInjection.Caching.cs:77-79`). The same method registe
 with the cache, the API idempotency filter and password-reset token redemption
 (`DependencyInjection.Caching.cs:82-85`), [Redis-backed](group-14-module-system-composition.md#redisdistributedlock) when a
 multiplexer is present and [process-local](group-14-module-system-composition.md#inprocessdistributedlock)
-otherwise (`DependencyInjection.Caching.cs:86-100`). A single-process monolith therefore caches in-process for
+otherwise (`DependencyInjection.Caching.cs:88-102`). A single-process monolith therefore caches in-process for
 free, and the identical application code uses Redis the moment a distributed cache is present: no flag,
 no per-environment branch in a handler. This is the same "abstraction in Application, transport chosen
 at the edge" pattern the message bus and gRPC clients use, which is what [Rubric §7, Microservices
@@ -86,29 +92,29 @@ Readiness] looks for (can a module move to its own process without a code change
 without touching business code).
 
 **A third substrate, opt in and explicit.** `AddCommonHybridCache(Action<HybridCacheOptions>?)`
-(`DependencyInjection.Caching.cs:139`) calls `AddHybridCache()` (`DependencyInjection.Caching.cs:141`) and then
+(`DependencyInjection.Caching.cs:141`) calls `AddHybridCache()` (`DependencyInjection.Caching.cs:143`) and then
 configures `HybridCacheOptions` through the options pipeline rather than through the
-`AddHybridCache` callback (`DependencyInjection.Caching.cs:147-161`), because the TTL policy now comes from
+`AddHybridCache` callback (`DependencyInjection.Caching.cs:149-163`), because the TTL policy now comes from
 the bound [`CacheSettings`](#cachesettings) and the callback has no service provider to read it
 from; the framework sets `Expiration` from `DefaultDuration` and
 `LocalCacheExpiration` from `LocalCacheDuration` (falling back to
-`HybridCacheService.LocalCacheDefault`) at `DependencyInjection.Caching.cs:154-158`, and the host's own hook
-runs last so it can override anything (`DependencyInjection.Caching.cs:160`). The swap of the cache
+`HybridCacheService.LocalCacheDefault`) at `DependencyInjection.Caching.cs:156-160`, and the host's own hook
+runs last so it can override anything (`DependencyInjection.Caching.cs:162`). The swap of the cache
 implementation is deliberately `RemoveAll<ICacheService>()` followed by `AddSingleton`
-(`DependencyInjection.Caching.cs:165-179`) rather than `TryAdd`, so the call wins whether it runs before or
+(`DependencyInjection.Caching.cs:167-181`) rather than `TryAdd`, so the call wins whether it runs before or
 after `AddInfrastructure`; the source is equally explicit that this also removes a host's own bespoke
 `ICacheService`, so calling it is a statement that the two-level cache is the cache
-(`DependencyInjection.Caching.cs:128-131`). `AddCommonHybridCache` has no guard of its own, so the
+(`DependencyInjection.Caching.cs:130-133`). `AddCommonHybridCache` has no guard of its own, so the
 framework also ships the guarded form, `AddCommonHybridCacheWhenRedisConfigured(IConfiguration, string)`
-(`DependencyInjection.Caching.cs:200`), which calls it only when the `redis` connection string (the
-default `connectionName`) is non-empty (`DependencyInjection.Caching.cs:206-209`) and otherwise leaves
+(`DependencyInjection.Caching.cs:202`), which calls it only when the `redis` connection string (the
+default `connectionName`) is non-empty (`DependencyInjection.Caching.cs:208-211`) and otherwise leaves
 the registration untouched. All seven deployed service hosts call that guarded form unconditionally,
 right after `AddRedisCaching()`: ADC Conference at
-`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:203` and Store Catalog at
+`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:204` and Store Catalog at
 `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:108`, with ADC Engagement, Identity
 and Notification and Store Sales and Identity alongside them. Without Redis the guard declines and
 the host keeps the auto-selected substrate, which is the point: an L1 in front of an in-process L2 buys
-nothing (`DependencyInjection.Caching.cs:189-191`,
+nothing (`DependencyInjection.Caching.cs:191-193`,
 [ADR-077](https://ivanball.github.io/docs/adr/077-hybridcache-substrate.html)).
 
 **The in-process adapter.** [`MemoryCacheService`](#memorycacheservice)
@@ -179,47 +185,54 @@ The delete itself is a caller-supplied callback and the log messages stay with t
 removing keys differently.
 
 **The two-level cache.** [`HybridCacheService`](#hybridcacheservice)
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:44`) puts an
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:48`) puts an
 in-process L1 in front of the registered distributed L2 and lets the platform's `HybridCache` supply
 serialization, L1 promotion and stampede protection. Its structural decision is the **disjoint
-keyspace**: every key is written as `{prefix}hc:{key}` (`HybridCacheService.cs:55`,
-`HybridCacheService.cs:307`), so the payload layout `HybridCache` writes can never meet the UTF-8 JSON
+keyspace**: every key is written as `{prefix}hc:{key}` (`HybridCacheService.cs:59`,
+`HybridCacheService.cs:318`), so the payload layout `HybridCache` writes can never meet the UTF-8 JSON
 [`DistributedCacheService`](#distributedcacheservice) writes at one key. That is the `WRONGTYPE`
 lesson from `IncrementAsync` generalized: an entry in the other format is simply a clean miss, including
 while a rolling deploy runs both builds (`HybridCacheService.cs:18-28`). `RemoveByPrefixAsync`
 consequently runs the scanner over that one keyspace, `{namespace}hc:{prefix}*`, and deletes each match
 through `HybridCache.RemoveAsync` rather than by raw key, so this process's L1 copy goes with the L2
-entry (`HybridCacheService.cs:220-226`); a missing multiplexer warns once exactly as it does on the
-single-level adapter (`HybridCacheService.cs:210-218`). Reads are fail-soft: a fault is logged,
+entry (`HybridCacheService.cs:231-237`); a missing multiplexer warns once exactly as it does on the
+single-level adapter (`HybridCacheService.cs:221-229`). Reads are fail-soft: a fault is logged,
 answered as a miss, and the offending entry is dropped best-effort so the next write repopulates it
-(`HybridCacheService.cs:114-133`, `HybridCacheService.cs:337-347`). Two members bypass L1 entirely,
+(`HybridCacheService.cs:118-137`, `HybridCacheService.cs:348-358`). Two members bypass L1 entirely,
 and both share one options instance that disables the L1 read and the L1 write
-(`SharedStoreReadOptions`, `HybridCacheService.cs:82-87`), because both are values whose correctness
+(`SharedStoreReadOptions`, `HybridCacheService.cs:86-91`), because both are values whose correctness
 depends on every replica seeing the same thing; the reasoning is a [Rubric §11, Security] point rather
 than a performance one. `GetFromSharedStoreAsync` overrides the interface default so a single-use
 record (an OAuth exchange code, a password-reset or email-confirmation token, the last accepted
 second-factor time step) consumed on one replica is a miss on every other replica at once rather than
-usable a second time for up to the local expiration (`HybridCacheService.cs:35-42`,
-`HybridCacheService.cs:150-169`); it stays fail-soft like `GetAsync`, and for such a record a miss is a
-refusal, the safe direction. Its callers are
+usable a second time for up to the local expiration (`HybridCacheService.cs:35-40`,
+`HybridCacheService.cs:154-173`); it stays fail-soft like `GetAsync`, and for such a record a miss is a
+refusal, the safe direction. The same path serves a counter read without an increment and the reads
+whose correctness depends on seeing a removal at once, the login lockout flag and the
+soft-deleted-user marker (`HybridCacheService.cs:40-45`). Its single-use callers are
 [`OAuthControllerBase`](group-12-api-hosting-mapping.md#oauthcontrollerbase)
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/OAuthControllerBase.cs:196`),
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/OAuthControllerBase.cs:273`),
 [`PasswordResetTokenService`](group-08-auth.md#passwordresettokenservice)
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordResetTokenService.cs:128`),
 [`EmailConfirmationTokenService`](group-08-auth.md#emailconfirmationtokenservice)
 (`.../Auth/EmailConfirmationTokenService.cs:90`) and
 [`TwoFactorAuthenticator`](group-08-auth.md#twofactorauthenticator)
-(`.../Auth/TwoFactor/TwoFactorAuthenticator.cs:105`). `IncrementAsync` bypasses L1 on **both** legs
-(`HybridCacheService.cs:253-274`): a counter cached per replica would let one process read its own
+(`.../Auth/TwoFactor/TwoFactorAuthenticator.cs:105`); the others are
+[`LoginProtectionService`](group-08-auth.md#loginprotectionservice) for the lockout flag and the
+registration count (`.../Auth/LoginProtectionService.cs:59`, `LoginProtectionService.cs:141`) and
+[`SoftDeletedUserMiddleware`](group-12-api-hosting-mapping.md#softdeletedusermiddleware)
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/SoftDeletedUserMiddleware.cs:92`).
+`IncrementAsync` bypasses L1 on **both** legs
+(`HybridCacheService.cs:264-285`): a counter cached per replica would let one process read its own
 stale count and write it back, so a brute-force limiter could be held near its starting value
 indefinitely by a steady stream of attempts against a single replica. Its faults are deliberately not
 swallowed, unlike the reads, since a counter that silently reads zero resets the limit it exists to
-enforce (`HybridCacheService.cs:248-251`). The class does not override `TryGetAsync`, so presence there
+enforce (`HybridCacheService.cs:259-262`). The class does not override `TryGetAsync`, so presence there
 is the interface default inferred from a non-null value. `GetOrCreateAsync` overrides
-the interface default with `HybridCache`'s own implementation (`HybridCacheService.cs:285-302`).
+the interface default with `HybridCache`'s own implementation (`HybridCacheService.cs:296-313`).
 Replica L1 staleness after an invalidation is bounded by the local expiration, the shorter of the
 entry's TTL and `Cache:LocalCacheDuration` (30 seconds by default,
-`HybridCacheService.cs:62`, `HybridCacheService.cs:316-327`), not by the eviction, and the source names
+`HybridCacheService.cs:66`, `HybridCacheService.cs:327-338`), not by the eviction, and the source names
 that as the accepted cost of the L1 hit rate.
 
 **The key namespace and the TTL policy.** [`CacheKeyPrefixOptions`](#cachekeyprefixoptions)
@@ -243,7 +256,7 @@ application name, and falls back again to the literal `app`
 keys at `ApplicationNamespace.cs:31` and `ApplicationNamespace.cs:34`), so the resolved prefix is never
 empty and isolation is automatic rather than opt-in (`ApplicationNamespace.cs:45-48`). `Qualify`
 (`CacheKeyPrefix.cs:91-92`) prepends it. The same namespace instance is handed to the Redis distributed
-lock registered beside the cache (`DependencyInjection.Caching.cs:93-94`), so one application's cache entries
+lock registered beside the cache (`DependencyInjection.Caching.cs:95-96`), so one application's cache entries
 and its lock keys carry one prefix. Both Redis-capable adapters honor it and apply it
 *inside* the adapter rather than through `RedisCacheOptions.InstanceName`; the rationale in the source
 (`CacheKeyPrefix.cs:16-25`) is precise, since `InstanceName` is prepended below this abstraction where
@@ -329,7 +342,7 @@ and evict it across replicas through the
 [`OutputCacheEvictionRequested`](group-04-events-outbox.md#outputcacheevictionrequested) integration
 event and its [`OutputCacheEvictionHandler`](group-12-api-hosting-mapping.md#outputcacheevictionhandler).
 Both adopters back that edge with Redis when Redis is configured
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:195`;
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:196`;
 `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:100`), so the two tiers ride the same
 Redis instance from opposite ends: Tier 1 through `IDistributedCache` or `HybridCache`, Tier 2 through
 the output-cache store. ADR-026 also records an optional **third tier on the client**,
@@ -346,21 +359,23 @@ through [`RedisCachingExtensions`](group-16-aspire-orchestration.md#rediscaching
 (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:185`;
 `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:89`), and the hybrid substrate is
 registered through the framework's connection-string guard
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:203`). Write-side adoption is
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:204`). Write-side adoption is
 broad: about forty types across ADC's Conference, Engagement and Identity modules implement
 [`ICacheInvalidating`](group-05-cqrs-pipeline.md#icacheinvalidating), for example
 `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Categories/UseCases/UpdateCategoryItem/UpdateCategoryItemCommand.cs:18`
-with its aggregate-scoped `CachePrefix` at `:21`. Read-side adoption is not: ADC's
-[`GetNowNextQuery`](group-18-conference-application.md#getnownextquery)
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/NowNext/GetNowNextQuery.cs:23`,
-key at `:26-35`, a 30-second `CacheDuration` at `:38`) is the only
-[`IQueryCacheable`](group-05-cqrs-pipeline.md#iquerycacheable) implementation in ADC, so most
-invalidation traffic currently evicts entries no query wrote. The substrate's other production
+with its aggregate-scoped `CachePrefix` at `:21`. Read-side adoption is not: no ADC query implements
+[`IQueryCacheable`](group-05-cqrs-pipeline.md#iquerycacheable). Its one hot public read,
+[`GetNowNextQuery`](group-18-conference-application.md#getnownextquery), opts out on purpose and
+relies on a Redis-backed output-cache policy instead
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/NowNext/GetNowNextQuery.cs:10-12`), so
+the write-side query-cache invalidation currently evicts entries no ADC query wrote. The substrate's other production
 consumers are not decorators at all:
 [`LoginProtectionService`](group-08-auth.md#loginprotectionservice)
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:19`) injects
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:28`) injects
 [`ICacheService`](#icacheservice) for its brute-force and rate-limit counters
-(`LoginProtectionService.cs:64`, `LoginProtectionService.cs:119`), covered in
+(`LoginProtectionService.cs:89`, `LoginProtectionService.cs:170`), reading the lockout flag and the
+registration count back through `GetFromSharedStoreAsync` (`LoginProtectionService.cs:59`,
+`LoginProtectionService.cs:141`), covered in
 [Group 8, Authentication and Authorization](group-08-auth.md), the password-reset and
 email-confirmation token services, which count requests through `IncrementAsync`
 (`PasswordResetTokenService.cs:68`, `EmailConfirmationTokenService.cs:53`) and redeem their single-use
@@ -458,8 +473,8 @@ are catalogued in [Group 27, Testing and Quality Infrastructure](group-28-testin
   not. The bound options are no longer read directly at the call sites; instead
   [CacheKeyNamespace](#cachekeynamespace)`.From(IServiceProvider)` resolves them (and the
   per-application fallback) once per registration, at three sites: the distributed cache factory
-  (`DependencyInjection.Caching.cs:67`), the Redis lock factory (`DependencyInjection.Caching.cs:93`) and
-  the opt-in hybrid factory (`DependencyInjection.Caching.cs:171`).
+  (`DependencyInjection.Caching.cs:67`), the Redis lock factory (`DependencyInjection.Caching.cs:95`) and
+  the opt-in hybrid factory (`DependencyInjection.Caching.cs:173`).
 - **Caveats / not-in-source**: [MemoryCacheService](#memorycacheservice) never sees the prefix, because
   a per-process keyspace is private by construction and a prefix would add nothing
   (`CacheKeyPrefix.cs:26-29`). The prior caveat here, that no checked-in `appsettings*.json` sets
@@ -592,7 +607,7 @@ are catalogued in [Group 27, Testing and Quality Infrastructure](group-28-testin
   [DistributedCacheService](#distributedcacheservice)`.RemoveByPrefixAsync`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/DistributedCacheService.cs:124-130`) and
   [HybridCacheService](#hybridcacheservice)`.RemoveByPrefixAsync`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:220-226`).
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:231-237`).
   Exercised against a real Redis by
   [DistributedCacheServiceRedisTests](group-28-testing-infrastructure.md#per-project-test-rollup)
   and [HybridCacheServiceRedisTests](group-28-testing-infrastructure.md#per-project-test-rollup),
@@ -667,10 +682,10 @@ are catalogued in [Group 27, Testing and Quality Infrastructure](group-28-testin
   constructor argument: to [DistributedCacheService](#distributedcacheservice)
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:67`), to
   [RedisDistributedLock](group-14-module-system-composition.md#redisdistributedlock)
-  (`DependencyInjection.Caching.cs:93`), and to [HybridCacheService](#hybridcacheservice) in the opt-in
-  hybrid path (`DependencyInjection.Caching.cs:171`). Inside each adapter it lands in a `_keys` field
+  (`DependencyInjection.Caching.cs:95`), and to [HybridCacheService](#hybridcacheservice) in the opt-in
+  hybrid path (`DependencyInjection.Caching.cs:173`). Inside each adapter it lands in a `_keys` field
   with a `?? CacheKeyNamespace.None` fallback (`DistributedCacheService.cs:30`,
-  `HybridCacheService.cs:93`). The in-process branch of `AddCaching()` constructs
+  `HybridCacheService.cs:97`). The in-process branch of `AddCaching()` constructs
   [MemoryCacheService](#memorycacheservice) with no namespace at all
   (`DependencyInjection.Caching.cs:76-77`), and the comment above it says why: the keyspace is private
   to the process, so neither the explicit prefix nor the per-application fallback is needed there.
@@ -721,12 +736,12 @@ are catalogued in [Group 27, Testing and Quality Infrastructure](group-28-testin
 - **Walkthrough**: one static field and three `init` properties.
   - `SectionName = "Cache"` (`CacheSettings.cs:25`).
   - `DefaultDuration` (`:32`), the absolute TTL applied when a caller supplies no expiration.
-    [HybridCacheService](#hybridcacheservice) uses it as the fallback TTL (`HybridCacheService.cs:318`)
+    [HybridCacheService](#hybridcacheservice) uses it as the fallback TTL (`HybridCacheService.cs:329`)
     and [DistributedCacheService](#distributedcacheservice) does the same
     (`DistributedCacheService.cs:72`).
   - `LocalCacheDuration` (`:42`), nullable, the ceiling on the L1 copy of a two-level entry so a
     replica that never sees an invalidation still re-reads L2 within the window. Null keeps the
-    built-in 30-second ceiling (`HybridCacheService.cs:62`), and the effective L1 lifetime is the
+    built-in 30-second ceiling (`HybridCacheService.cs:66`), and the effective L1 lifetime is the
     shorter of the ceiling and the entry's own TTL (`:271-272`). The single-level cache services have
     no L1 and ignore it.
   - `PopulateLockTimeout` (`:57`), defaulting to `Timeout.InfiniteTimeSpan`: waiters block until the
@@ -734,7 +749,7 @@ are catalogued in [Group 27, Testing and Quality Infrastructure](group-28-testin
     waiter proceed uncached, and the remarks note that zero or a negative value means no bound, exactly
     like the default (`:50-56`).
   - Both cache services take the options as an OPTIONAL constructor parameter and fall back to a fresh
-    instance (`HybridCacheService.cs:49`, `:89`; `DistributedCacheService.cs:24`, `:37`), so a service
+    instance (`HybridCacheService.cs:53`, `:89`; `DistributedCacheService.cs:24`, `:37`), so a service
     constructed outside the container still gets the framework defaults.
 - **Why it's built this way**: registration guarantees `IOptions<CacheSettings>` always resolves. When
   configuration is available the section is bound and validated
@@ -746,7 +761,7 @@ are catalogued in [Group 27, Testing and Quality Infrastructure](group-28-testin
   The same values are then projected into `HybridCache`'s own option type through the options pipeline rather than the
   `AddHybridCache` callback, because the callback has no service provider to read the bound section
   from, and the host's own hook still runs last so it can override anything the framework set
-  (`DependencyInjection.Caching.cs:147-161`,
+  (`DependencyInjection.Caching.cs:149-163`,
   [ADR-077](https://ivanball.github.io/docs/adr/077-hybridcache-substrate.html)).
 - **Where it's used**: [DistributedCacheService](#distributedcacheservice) and
   [HybridCacheService](#hybridcacheservice) receive it through `IOptions<CacheSettings>`
@@ -766,7 +781,7 @@ are catalogued in [Group 27, Testing and Quality Infrastructure](group-28-testin
   tuples) plus [KeyedSemaphoreStripe](group-08-auth.md#keyedsemaphorestripe) from
   `MMCA.Common.Shared.Concurrency`, which the default `GetOrCreateAsync` body uses through the
   [CacheKeyLocks](group-05-cqrs-pipeline.md#cachekeylocks) holder (`ICacheService.cs:1`,
-  `ICacheService.cs:188-192`). Implemented by [MemoryCacheService](#memorycacheservice),
+  `ICacheService.cs:195-199`). Implemented by [MemoryCacheService](#memorycacheservice),
   [DistributedCacheService](#distributedcacheservice) and [HybridCacheService](#hybridcacheservice).
 - **Concept introduced, dependency inversion for infrastructure.** `[Rubric §3, Clean Architecture]`
   assesses whether business code depends on abstractions while concrete technology sits at the edges.
@@ -776,15 +791,15 @@ are catalogued in [Group 27, Testing and Quality Infrastructure](group-28-testin
   concept, the default interface member as a non-breaking extension point.** `[Rubric §15,
   Best Practices & Code Quality]` assesses whether the codebase can absorb change without a ripple. Four
   members here ship with bodies: `TryGetAsync` (`ICacheService.cs:34`), `GetFromSharedStoreAsync`
-  (`ICacheService.cs:62`), `IncrementAsync` (`ICacheService.cs:105`) and `GetOrCreateAsync`
-  (`ICacheService.cs:145`). Every existing implementer keeps compiling and inherits working behavior,
+  (`ICacheService.cs:65`), `IncrementAsync` (`ICacheService.cs:112`) and `GetOrCreateAsync`
+  (`ICacheService.cs:152`). Every existing implementer keeps compiling and inherits working behavior,
   while a store with a better primitive overrides. That is how the
   [ADR-029](https://ivanball.github.io/docs/adr/029-authentication-brute-force-protection.html)
   counters, the whole
   [ADR-077](https://ivanball.github.io/docs/adr/077-hybridcache-substrate.html) two-level substrate,
   and later the shared-store read for single-use records were added to a *published package contract*
   without a breaking change. `[Rubric §12, Performance & Scalability]`: `RemoveByPrefixAsync`
-  (`ICacheService.cs:88`) is the member that makes *scoped* invalidation possible, so one mutation
+  (`ICacheService.cs:91`) is the member that makes *scoped* invalidation possible, so one mutation
   evicts a whole family of cached query results without enumerating individual keys.
 - **Walkthrough**: members in declaration order.
   - `Task<T?> GetAsync<T>(string key, CancellationToken)` (`ICacheService.cs:17`), returns `default` /
@@ -796,49 +811,55 @@ are catalogued in [Group 27, Testing and Quality Infrastructure](group-28-testin
     non-null `GetAsync` result (`ICacheService.cs:36-37`), which is exact for reference and nullable
     types; [MemoryCacheService](#memorycacheservice) and
     [DistributedCacheService](#distributedcacheservice) override it with a real presence check.
-  - `Task<T?> GetFromSharedStoreAsync<T>(string key, CancellationToken)` (`ICacheService.cs:62-63`),
+  - `Task<T?> GetFromSharedStoreAsync<T>(string key, CancellationToken)` (`ICacheService.cs:65-66`),
     a **default implementation** that simply calls `GetAsync`. It reads from the shared backing store,
-    bypassing any process-local copy, and is meant for single-use records (an OAuth exchange code, a
-    password-reset or email-confirmation token, a second-factor time step) whose consumption on one
-    replica must be visible to every other replica at once (`ICacheService.cs:40-43`). The remarks give
-    the usage rule: read the record through this member, then remove it; everything read many times
-    stays on `GetAsync` (`ICacheService.cs:50-54`). The default is exact for a store with no
+    bypassing any process-local copy, and is meant for values whose change on one replica must be
+    visible to every other replica at once: single-use records (an OAuth exchange code, a
+    password-reset or email-confirmation token, a second-factor time step) and counters maintained by
+    `IncrementAsync`, such as a registration rate-limit count (`ICacheService.cs:40-44`). The remarks
+    give the usage rule: read the record through this member, then remove it; read a counter through it
+    too, because a store with a process-local tier increments in the shared store and a local copy would
+    pin the first count it saw; everything read many times stays on `GetAsync`
+    (`ICacheService.cs:51-59`). The default is exact for a store with no
     process-local tier; [HybridCacheService](#hybridcacheservice) overrides it
-    (`ICacheService.cs:56-59`).
+    (`ICacheService.cs:59-62`).
   - `Task SetAsync<T>(string key, T value, TimeSpan? expiration = null, CancellationToken)`
-    (`ICacheService.cs:72-76`). A null `expiration` means "use the implementation's default TTL",
+    (`ICacheService.cs:75-79`). A null `expiration` means "use the implementation's default TTL",
     resolved from [CacheSettings](group-09-caching.md#cachesettings) on all three shipped stores
     (whose own default is [CacheOptions](#cacheoptions)`.DefaultDuration`).
-  - `Task RemoveAsync(string key, CancellationToken)` (`ICacheService.cs:82`), single-key eviction.
-  - `Task RemoveByPrefixAsync(string prefix, CancellationToken)` (`ICacheService.cs:88`), bulk eviction
+  - `Task RemoveAsync(string key, CancellationToken)` (`ICacheService.cs:85`), single-key eviction.
+  - `Task RemoveByPrefixAsync(string prefix, CancellationToken)` (`ICacheService.cs:91`), bulk eviction
     of every key starting with `prefix`. This is what
     [CachingCommandDecorator<TCommand, TResult>](group-05-cqrs-pipeline.md#cachingcommanddecoratortcommand-tresult)
     invokes after a successful mutation.
   - `async Task<long> IncrementAsync(string key, TimeSpan expiration, CancellationToken)`
-    (`ICacheService.cs:105-111`), a **default implementation**: read the current value as `long?` (0 on a
+    (`ICacheService.cs:112-118`), a **default implementation**: read the current value as `long?` (0 on a
     miss), add one, write it back with `expiration`, return the new value. The doc
-    (`ICacheService.cs:90-104`) is explicit about why it exists: rate-limit and brute-force counters
+    (`ICacheService.cs:93-111`) is explicit that it serves rate-limit and brute-force counters
     ([ADR-029](https://ivanball.github.io/docs/adr/029-authentication-brute-force-protection.html))
-    built from a raw `GetAsync` + `SetAsync` pair let concurrent requests overwrite each other's
-    increments and undercount, so the read-modify-write is at least centralised in one auditable place,
-    and a store with a native counter primitive can override.
+    and that it is **not atomic in any shipped implementation**: the default member,
+    `DistributedCacheService` and `HybridCacheService` are all a `GetAsync` + `SetAsync`
+    read-modify-write, so concurrent requests can overwrite each other's increments and undercount
+    (`ICacheService.cs:93-100`). The remarks add that no shipped store overrides it with Redis `INCR`,
+    because the distributed cache stores entries as Redis hashes and an `INCR` string at the same key
+    would fail the next read with `WRONGTYPE` (`ICacheService.cs:105-110`).
   - `async Task<T> GetOrCreateAsync<T>(string key, Func<CancellationToken, Task<T>> factory, TimeSpan?
-    expiration = null, CancellationToken)` (`ICacheService.cs:145-171`), the last default
-    implementation and the most interesting one. It null-guards the factory (`ICacheService.cs:151`),
-    takes a **lock-free fast path on a hit** (`ICacheService.cs:155-157`), and only on a miss acquires
+    expiration = null, CancellationToken)` (`ICacheService.cs:152-178`), the last default
+    implementation and the most interesting one. It null-guards the factory (`ICacheService.cs:158`),
+    takes a **lock-free fast path on a hit** (`ICacheService.cs:162-164`), and only on a miss acquires
     the key's stripe from [CacheKeyLocks](group-05-cqrs-pipeline.md#cachekeylocks)
-    (`ICacheService.cs:159`), re-reads under the lock (`ICacheService.cs:163-165`, the double-check that
+    (`ICacheService.cs:166`), re-reads under the lock (`ICacheService.cs:170-172`, the double-check that
     lets waiters see the value the winner just wrote), then runs the factory and stores its result
-    (`ICacheService.cs:167-168`). Both reads go through `TryGetAsync`, not a null test, so a cached
+    (`ICacheService.cs:174-175`). Both reads go through `TryGetAsync`, not a null test, so a cached
     `default(T)` of a value type counts as a hit and a miss still runs the factory
-    (`ICacheService.cs:153-154`). That is the same read-through-with-stampede-protection shape
+    (`ICacheService.cs:160-161`). That is the same read-through-with-stampede-protection shape
     [CachingQueryDecorator<TQuery, TResult>](group-05-cqrs-pipeline.md#cachingquerydecoratortquery-tresult)
     applies to cacheable queries, made available to any caller.
-  - [CacheKeyLocks](group-05-cqrs-pipeline.md#cachekeylocks) (`ICacheService.cs:188-192`), the
+  - [CacheKeyLocks](group-05-cqrs-pipeline.md#cachekeylocks) (`ICacheService.cs:195-199`), the
     non-generic holder for the fixed-width
     [KeyedSemaphoreStripe](group-08-auth.md#keyedsemaphorestripe) that the default `GetOrCreateAsync`
     uses. It is deliberately a **separate** table from the query decorator's `QueryCacheKeyLocks`
-    (`ICacheService.cs:184-186`): different call sites over different keys, and sharing stripes would
+    (`ICacheService.cs:191-193`): different call sites over different keys, and sharing stripes would
     only widen the unrelated-key collisions striping already tolerates.
 - **Why it's built this way**: keeping the port in `MMCA.Common.Application` rather than Infrastructure
   is what lets the CQRS decorators, which also live in Application, depend on caching without dragging
@@ -848,7 +869,7 @@ are catalogued in [Group 27, Testing and Quality Infrastructure](group-28-testin
   default interface member is how this package grows a capability that no consumer has to react to.
   `GetFromSharedStoreAsync` makes the single-use-record rule a named member rather than a convention, so
   a caller states "this read must not be answered from a replica's own memory" at the call site.
-  Note the honest boundary the `GetOrCreateAsync` remarks draw (`ICacheService.cs:126-144`): caching is
+  Note the honest boundary the `GetOrCreateAsync` remarks draw (`ICacheService.cs:133-151`): caching is
   **unconditional** there, so a failed [Result](group-01-result-error-handling.md#result) would be
   cached, which is exactly why the caching decorators do NOT route through this member and keep their
   own read/execute/write sequence.
@@ -857,7 +878,9 @@ are catalogued in [Group 27, Testing and Quality Infrastructure](group-28-testin
   `.../CachingCommandDecorator.cs:35`). Outside the pipeline,
   [LoginProtectionService](group-08-auth.md#loginprotectionservice) calls `IncrementAsync` for failed
   logins and per-IP registrations
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:64` and `:119`);
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:89` and `:170`),
+  and reads the lockout flag and the registration counter through `GetFromSharedStoreAsync`
+  (`LoginProtectionService.cs:59` and `:141`);
   [PasswordResetTokenService](group-08-auth.md#passwordresettokenservice) uses it for the per-email
   request counter, the token write and the token read, the last through `GetFromSharedStoreAsync`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordResetTokenService.cs:68`, `:90`,
@@ -868,27 +891,28 @@ are catalogued in [Group 27, Testing and Quality Infrastructure](group-28-testin
   time step through `GetFromSharedStoreAsync` and writes the new one with `SetAsync`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TwoFactor/TwoFactorAuthenticator.cs:105`
   and `:113`); [SoftDeletedUserCache](group-08-auth.md#softdeletedusercache) writes the soft-deleted
-  marker with `SetAsync` (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/SoftDeletedUserCache.cs:60`),
-  read back by [SoftDeletedUserMiddleware](group-12-api-hosting-mapping.md#softdeletedusermiddleware)
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/SoftDeletedUserMiddleware.cs:91`);
+  marker with `SetAsync` (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/SoftDeletedUserCache.cs:63`),
+  read back through `GetFromSharedStoreAsync` by
+  [SoftDeletedUserMiddleware](group-12-api-hosting-mapping.md#softdeletedusermiddleware)
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/SoftDeletedUserMiddleware.cs:92`);
   [IdempotencyFilter](group-12-api-hosting-mapping.md#idempotencyfilter) resolves it per request
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyFilter.cs:141`) to store and
   replay the cached response record (`IdempotencyFilter.cs:361` and `:450`, default expiration 24 hours
   at `:81`); and [OAuthControllerBase](group-12-api-hosting-mapping.md#oauthcontrollerbase) takes it as
   a constructor dependency
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/OAuthControllerBase.cs:37`), writing the
-  exchange-code entry with `SetAsync` (`OAuthControllerBase.cs:142`) and redeeming it through
-  `GetFromSharedStoreAsync` (`OAuthControllerBase.cs:196`). Exactly one implementation is live per
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/OAuthControllerBase.cs:52`), writing the
+  exchange-code entry with `SetAsync` (`OAuthControllerBase.cs:190`) and redeeming it through
+  `GetFromSharedStoreAsync` (`OAuthControllerBase.cs:273`). Exactly one implementation is live per
   host: `AddCaching()` registers one via `TryAddSingleton`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:59`), and
-  `AddCommonHybridCache()` replaces it (`DependencyInjection.Caching.cs:165-166`). The default
+  `AddCommonHybridCache()` replaces it (`DependencyInjection.Caching.cs:167-168`). The default
   `GetOrCreateAsync` body is covered by
   [CacheServiceGetOrCreateTests](group-28-testing-infrastructure.md#per-project-test-rollup).
 - **Caveats / not-in-source**: `IncrementAsync` is **not atomic** on any shipped implementation. The
   default body is a read-modify-write, and both distributed adapters override it with the same shape
   rather than Redis `INCR`, for the storage-format reason spelled out in the
   [DistributedCacheService](#distributedcacheservice) section. Stampede protection in
-  `GetOrCreateAsync` is likewise **per process** (`ICacheService.cs:134-136`): with several replicas over
+  `GetOrCreateAsync` is likewise **per process** (`ICacheService.cs:141-143`): with several replicas over
   one shared cache the factory can still run once per replica, and a cluster-wide guarantee would need
   a distributed lock, which is deliberately not attempted here. `GetOrCreateAsync` has no first-party
   caller outside tests today: it is a published extension point plus the member
@@ -1016,8 +1040,8 @@ are catalogued in [Group 27, Testing and Quality Infrastructure](group-28-testin
 - **Caveats / not-in-source**: all seven deployed service hosts call
   `AddCommonHybridCacheWhenRedisConfigured`, which registers the two-level cache only when the `redis`
   connection string is present
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:199-211`; for
-  example `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:203`,
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:201-213`; for
+  example `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:204`,
   `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:108`), so this adapter is not the
   one the container hands out in those hosts when Redis is configured: it is the default for any host
   that registers a real distributed cache and does *not* opt in. `IncrementAsync` here is not atomic
@@ -1026,7 +1050,7 @@ are catalogued in [Group 27, Testing and Quality Infrastructure](group-28-testin
   undercount as accepted rather than outstanding.
 
 ### HybridCacheService
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Caching` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:44` · Level 4 · class (internal sealed partial)
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Caching` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:48` · Level 4 · class (internal sealed partial)
 
 - **What it is**: the two-level implementation of [ICacheService](#icacheservice), backed by
   `Microsoft.Extensions.Caching.Hybrid.HybridCache`: an in-process L1 in front of the host's registered
@@ -1061,95 +1085,104 @@ are catalogued in [Group 27, Testing and Quality Infrastructure](group-28-testin
   concept, knowing which reads must skip the fast tier.** `[Rubric §11, Security]`: an L1 copy is only
   safe for a value that tolerates being stale on one replica for the local expiration. A counter and a
   single-use record (an OAuth exchange code, a password-reset or email-confirmation token, the last
-  accepted second-factor time step) do not, so both read from L2 alone (`HybridCacheService.cs:35-42`).
-- **Walkthrough**: primary constructor (`HybridCacheService.cs:44-49`), the same shape as the
+  accepted second-factor time step) do not, so both read from L2 alone (`HybridCacheService.cs:35-46`).
+  A counter is incremented through `IncrementAsync`, which reads and writes L2 only, and a caller that
+  reads a counter without incrementing it (the registration rate-limit check in
+  [LoginProtectionService](group-08-auth.md#loginprotectionservice)) reads it through
+  `GetFromSharedStoreAsync` too, as do the reads that must see a removal at once (the login lockout flag
+  and the soft-deleted-user marker) (`HybridCacheService.cs:40-46`).
+- **Walkthrough**: primary constructor (`HybridCacheService.cs:48-53`), the same shape as the
   distributed adapter but over `HybridCache hybrid`.
-  - `KeyspaceSegment` (`HybridCacheService.cs:55`), `internal const string` = `"hc:"`, applied *inside*
+  - `KeyspaceSegment` (`HybridCacheService.cs:59`), `internal const string` = `"hc:"`, applied *inside*
     the configured namespace.
-  - `LocalCacheDefault` (`HybridCacheService.cs:62`), `internal static readonly TimeSpan` = 30 seconds.
+  - `LocalCacheDefault` (`HybridCacheService.cs:66`), `internal static readonly TimeSpan` = 30 seconds.
     It is both the default L1 lifetime and the **ceiling** applied to every entry, and
     `AddCommonHybridCache` seeds `HybridCacheOptions` from the same field when the host configured no
     `Cache:LocalCacheDuration`
-    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:157`).
-  - `ReadOnlyOptions` (`HybridCacheService.cs:70-73`) and `SharedStoreReadOptions`
-    (`HybridCacheService.cs:82-87`), two static option objects. The first sets
+    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:159`).
+  - `ReadOnlyOptions` (`HybridCacheService.cs:74-77`) and `SharedStoreReadOptions`
+    (`HybridCacheService.cs:86-91`), two static option objects. The first sets
     `HybridCacheEntryFlags.DisableUnderlyingData`, which tells `HybridCache` not to invoke the factory
     and not to write anything, so a miss stays a miss while an L2 hit is still promoted into L1. The
     second adds `DisableLocalCacheRead | DisableLocalCacheWrite`, a read answered by L2 alone with no
     L1 promotion, shared by the two reads whose correctness depends on every replica seeing the same
     value: the counter read in `IncrementAsync` and `GetFromSharedStoreAsync`
-    (`HybridCacheService.cs:75-81`).
-  - `_keys` (`HybridCacheService.cs:93`), `_settings` (`HybridCacheService.cs:100`) and
-    `_noMultiplexerWarned` (`HybridCacheService.cs:103`), identical in role to their counterparts on
+    (`HybridCacheService.cs:79-85`).
+  - `_keys` (`HybridCacheService.cs:97`), `_settings` (`HybridCacheService.cs:104`) and
+    `_noMultiplexerWarned` (`HybridCacheService.cs:107`), identical in role to their counterparts on
     [DistributedCacheService](#distributedcacheservice).
-  - `GetAsync<T>` (`HybridCacheService.cs:114-133`), calls `hybrid.GetOrCreateAsync` with a `static`
-    no-op factory and `ReadOnlyOptions` (`HybridCacheService.cs:120-125`), which is how you perform a
+  - `GetAsync<T>` (`HybridCacheService.cs:118-137`), calls `hybrid.GetOrCreateAsync` with a `static`
+    no-op factory and `ReadOnlyOptions` (`HybridCacheService.cs:124-129`), which is how you perform a
     plain read through an API whose primary shape is get-or-create. It is **fail-soft**
-    (`HybridCacheService.cs:106-113`): any exception that is not `OperationCanceledException` is logged
-    at warning and answered as a miss (`HybridCacheService.cs:127-132`), and the offending entry is
+    (`HybridCacheService.cs:110-117`): any exception that is not `OperationCanceledException` is logged
+    at warning and answered as a miss (`HybridCacheService.cs:131-136`), and the offending entry is
     dropped best-effort through `SelfHealAsync` so the next write repopulates it instead of the process
     failing the same read forever.
-  - `GetFromSharedStoreAsync<T>` (`HybridCacheService.cs:150-169`), an **override** of the
+  - `GetFromSharedStoreAsync<T>` (`HybridCacheService.cs:154-173`), an **override** of the
     [ICacheService](#icacheservice) default. It is the same no-op-factory read as `GetAsync`, but with
-    `SharedStoreReadOptions` (`HybridCacheService.cs:159`), so the answer always comes from L2 and
+    `SharedStoreReadOptions` (`HybridCacheService.cs:163`), so the answer always comes from L2 and
     nothing is promoted into this replica's memory: a removal on another replica is seen immediately,
-    which is what keeps a single-use record single-use (`HybridCacheService.cs:136-141`). It is
-    fail-soft exactly like `GetAsync` (`HybridCacheService.cs:163-168`); for a single-use record a miss
-    is a refusal, which is the safe direction (`HybridCacheService.cs:143-147`).
-  - `SetAsync<T>` (`HybridCacheService.cs:179-184`), one call to `hybrid.SetAsync` with the options
+    which is what keeps a single-use record single-use (`HybridCacheService.cs:140-145`). It is
+    fail-soft exactly like `GetAsync` (`HybridCacheService.cs:167-172`); for a single-use record a miss
+    is a refusal, which is the safe direction (`HybridCacheService.cs:147-151`).
+  - `SetAsync<T>` (`HybridCacheService.cs:183-188`), one call to `hybrid.SetAsync` with the options
     `WriteOptions(expiration)` builds.
-  - `RemoveAsync` (`HybridCacheService.cs:188-189`), `hybrid.RemoveAsync`, which clears this process's
-    L1 copy along with the L2 entry.
-  - `RemoveByPrefixAsync` (`HybridCacheService.cs:208-227`). After the same warn-once no-multiplexer
-    guard (`HybridCacheService.cs:210-218`) it runs [RedisPrefixScanner](#redisprefixscanner) once,
-    over this service's own pattern `$"{HybridKey(prefix)}*"` (`HybridCacheService.cs:222`), which is
+  - `RemoveAsync` (`HybridCacheService.cs:197-198`), `hybrid.RemoveAsync`, which clears this process's
+    L1 copy along with the L2 entry. Other replicas' L1 copies are not reached and keep serving the
+    removed value until they expire, up to `Cache:LocalCacheDuration` (30 seconds by default); a read that
+    must see the removal everywhere goes through `GetFromSharedStoreAsync`.
+  - `RemoveByPrefixAsync` (`HybridCacheService.cs:219-238`). After the same warn-once no-multiplexer
+    guard (`HybridCacheService.cs:221-229`) it runs [RedisPrefixScanner](#redisprefixscanner) once,
+    over this service's own pattern `$"{HybridKey(prefix)}*"` (`HybridCacheService.cs:233`), which is
     the one keyspace this service writes and therefore the one it evicts. The per-key delete routes
     back through `hybrid.RemoveAsync` rather than a raw `KeyDeleteAsync`
-    (`HybridCacheService.cs:223`): a raw delete would clear L2 and leave this process's own L1 copy
-    serving the value it just invalidated (`HybridCacheService.cs:199-201`).
-  - `IncrementAsync` (`HybridCacheService.cs:253-274`), a read-modify-write like the distributed
+    (`HybridCacheService.cs:234`): a raw delete would clear L2 and leave this process's own L1 copy
+    serving the value it just invalidated (`HybridCacheService.cs:199-201`). The same remarks note that
+    other replicas' L1 copies of the matched keys are not reached and persist until they expire, up to
+    `Cache:LocalCacheDuration` (30 seconds by default).
+  - `IncrementAsync` (`HybridCacheService.cs:264-285`), a read-modify-write like the distributed
     adapter's, and deliberately **not** routed through this class's own `GetAsync` / `SetAsync` because
-    both legs must bypass L1 (`HybridCacheService.cs:257-262` reads with `SharedStoreReadOptions`,
+    both legs must bypass L1 (`HybridCacheService.cs:268-273` reads with `SharedStoreReadOptions`,
     `:266-271` writes with the two disable flags). The reason
-    (`HybridCacheService.cs:240-247`) is the sharpest argument in this group: a counter is the one
+    (`HybridCacheService.cs:251-258`) is the sharpest argument in this group: a counter is the one
     value whose correctness depends on every replica seeing the same number, so an L1 copy would let a
     process read its own stale count and write it back, and a brute-force counter could then be held
     near its starting value indefinitely by a steady stream of attempts against one replica. That is a
     security control silently weakened by a cache optimization, so `[Rubric §11, Security]` is the
     category that decided this member, not §12. Faults are also **not** swallowed here, unlike
-    `GetAsync` (`HybridCacheService.cs:249-250`): a counter that silently reads as zero would reset the
+    `GetAsync` (`HybridCacheService.cs:260-261`): a counter that silently reads as zero would reset the
     limit it exists to enforce.
-  - `GetOrCreateAsync<T>` (`HybridCacheService.cs:285-302`), an override of the interface default that
+  - `GetOrCreateAsync<T>` (`HybridCacheService.cs:296-313`), an override of the interface default that
     hands the work to `HybridCache`'s own primitive, which folds the double-check and the stampede
     protection into one call and additionally deduplicates concurrent callers before they reach L2. The
-    factory is passed as **state** rather than captured (`HybridCacheService.cs:293-301`), so the
+    factory is passed as **state** rather than captured (`HybridCacheService.cs:304-312`), so the
     delegate stays `static` and no closure is allocated per call.
-  - `HybridKey` (`HybridCacheService.cs:307`), `WriteOptions` (`HybridCacheService.cs:316-327`) and
-    `SelfHealAsync` (`HybridCacheService.cs:337-347`), the private helpers. `WriteOptions` is where
+  - `HybridKey` (`HybridCacheService.cs:318`), `WriteOptions` (`HybridCacheService.cs:327-338`) and
+    `SelfHealAsync` (`HybridCacheService.cs:348-358`), the private helpers. `WriteOptions` is where
     both dials meet: `ttl = expiration ?? _settings.DefaultDuration`
-    (`HybridCacheService.cs:318`), `localCeiling = _settings.LocalCacheDuration ?? LocalCacheDefault`
-    (`HybridCacheService.cs:319`), and `LocalCacheExpiration = ttl < localCeiling ? ttl : localCeiling`
-    (`HybridCacheService.cs:324`), so a long-lived entry does not sit in another replica's memory for
+    (`HybridCacheService.cs:329`), `localCeiling = _settings.LocalCacheDuration ?? LocalCacheDefault`
+    (`HybridCacheService.cs:330`), and `LocalCacheExpiration = ttl < localCeiling ? ttl : localCeiling`
+    (`HybridCacheService.cs:335`), so a long-lived entry does not sit in another replica's memory for
     its whole TTL after an invalidation that process never saw.
 - **Why it's built this way**:
   [ADR-077](https://ivanball.github.io/docs/adr/077-hybridcache-substrate.html) is the record. Opt-in
   rather than default keeps the release non-breaking: a host that never calls `AddCommonHybridCache`
   gets a byte-identical registration to before, and a memory-only host would gain nothing from an L1 in
   front of an L1 anyway
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:112-118`). The
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:114-120`). The
   registration deliberately uses `RemoveAll` + `Add` rather than `TryAdd` so it wins in either call
-  order (`DependencyInjection.Caching.cs:163-166`), with the honest warning that `RemoveAll` does not
+  order (`DependencyInjection.Caching.cs:165-168`), with the honest warning that `RemoveAll` does not
   distinguish the framework's registration from a host's own custom
-  [ICacheService](#icacheservice) (`DependencyInjection.Caching.cs:127-132`). `[Rubric §29, Resilience]`
+  [ICacheService](#icacheservice) (`DependencyInjection.Caching.cs:129-134`). `[Rubric §29, Resilience]`
   shows up in the fail-soft read: the cache is an optimization, never the system of record, so an
   unreadable entry costs a database round trip rather than a failed request.
 - **Where it's used**: registered only by `AddCommonHybridCache`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:139-182`), which all
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:141-184`), which all
   seven deployed service hosts reach through `AddCommonHybridCacheWhenRedisConfigured`, the guard that
   calls it only when the `redis` connection string is configured
-  (`DependencyInjection.Caching.cs:199-211`): `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:203`,
-  `MMCA.ADC.Engagement.Service/Program.cs:113`, `MMCA.ADC.Identity.Service/Program.cs:134`,
-  `MMCA.ADC.Notification.Service/Program.cs:116`,
+  (`DependencyInjection.Caching.cs:201-213`): `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:204`,
+  `MMCA.ADC.Engagement.Service/Program.cs:116`, `MMCA.ADC.Identity.Service/Program.cs:138`,
+  `MMCA.ADC.Notification.Service/Program.cs:119`,
   `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:108`,
   `MMCA.Store.Sales.Service/Program.cs:113`, `MMCA.Store.Identity.Service/Program.cs:102`. Everything
   downstream still talks to [ICacheService](#icacheservice) and is unaware. Covered by
@@ -1165,8 +1198,9 @@ are catalogued in [Group 27, Testing and Quality Infrastructure](group-28-testin
   [CachingCommandDecorator<TCommand, TResult>](group-05-cqrs-pipeline.md#cachingcommanddecoratortcommand-tresult)
   already performs
   (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/CachingCommandDecorator.cs:45`
-  and `:81`). It does not apply to counters or to reads made through `GetFromSharedStoreAsync`, which
-  never touch L1; a caller that reads a single-use record through plain `GetAsync` instead still gets
+  and `:81`). It does not apply to counters or to reads made through `GetFromSharedStoreAsync`
+  (single-use records, the registration counter read, the lockout flag and the soft-deleted-user
+  marker), which never touch L1; a caller that reads a single-use record through plain `GetAsync` instead still gets
   the L1 window, so the protection depends on the call site choosing the right member. `TryGetAsync`
   is not overridden here, so it uses the [ICacheService](#icacheservice) null-inference default.
   Because the keyspaces are disjoint, a host that switches substrate starts cold: entries
