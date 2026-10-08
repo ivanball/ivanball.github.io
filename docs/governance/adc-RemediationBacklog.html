@@ -165,7 +165,7 @@
           <td>UI Architecture &amp; Components</td>
           <td>4 / 8</td>
           <td>Implementation</td>
-          <td>TD-16: extract from <code>SessionFeedback.razor.cs</code> (388 of 400) next, then make extraction systematic</td>
+          <td>TD-16: make extraction systematic; <code>ADCHome.razor.cs</code> (370 of 400) is the high-water file</td>
           </tr>
           <tr>
           <td>3</td>
@@ -229,7 +229,7 @@
           <td>Navigation &amp; Information Arch</td>
           <td>4 / 8</td>
           <td>Implementation</td>
-          <td>Type the 13 bare <code>{Id}</code> routes and guard the speaker dashboard form</td>
+          <td>Add a nav-item-to-page-guard fitness test</td>
           </tr>
           <tr>
           <td>2</td>
@@ -289,7 +289,7 @@
           </ul>
           <h3 id="18--ui-architecture--components--m4--i8-weight-3-implpriority-3">[ ] #18 · UI Architecture &amp; Components · M4 / I8 (weight 3; implPriority 3)</h3>
           <ul>
-          <li><input disabled="" type="checkbox"> <strong>TD-16 (the §18 impl 8→9 lever, effort S).</strong> The enforced cap is <code>MaxCodeBehindLines =&gt; 400</code> (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Ui/UIArchitectureConventionTestsBase.cs:22</code>, unoverridden in <code>Ui/UIArchitectureConventionTests.cs:10-13</code>). <code>PublicSessionList.razor.cs</code> is extracted: its event catalog lives in <code>PublicSessionEventCatalog.cs</code> and the page is at 328 (ADC #264). Measured with <code>File.ReadAllLines</code> (as the cap counts, <code>UIArchitectureConventionTestsBase.cs:52</code>), the high-water code-behind is now <code>Engagement.UI/Pages/Feedback/SessionFeedback.razor.cs</code> at <strong>388</strong> (12 lines of headroom), then ADCHome 370, EventFeedback 358, EventDetail 355, SessionAssetsPanel 349, SessionLive 347, SpeakerDetail 343, PublicSessionDetail 334. Extract from <code>SessionFeedback</code> next. §18 holds at 8 because extraction is applied file by file rather than systematically, and the component-lifetime (render hooks) and render-fragment/slot criteria are thinly met. <strong>Blocker:</strong> none. <strong>Resolution path:</strong> presentational sub-component extraction per the TD-13 pattern, markup moved verbatim so the rendered DOM and the E2E selectors are unchanged.</li>
+          <li><input disabled="" type="checkbox"> <strong>TD-16 (the §18 impl 8→9 lever, effort S).</strong> The enforced cap is <code>MaxCodeBehindLines =&gt; 400</code> (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Ui/UIArchitectureConventionTestsBase.cs:22</code>, unoverridden in <code>Ui/UIArchitectureConventionTests.cs:10-13</code>). Two pages are extracted: <code>PublicSessionList.razor.cs</code> (its event catalog in <code>PublicSessionEventCatalog.cs</code>, page at 328, ADC #264) and <code>SessionFeedback.razor.cs</code> (its answer state in <code>Engagement.UI/Pages/Feedback/SessionFeedbackAnswers.cs</code>, page at 299, ADC #265). Measured with <code>File.ReadAllLines</code> (as the cap counts, <code>UIArchitectureConventionTestsBase.cs:52</code>), the high-water code-behind is now <code>Conference.UI/Pages/Home/ADCHome.razor.cs</code> at <strong>370</strong> (30 lines of headroom), then EventDetail 354, EventFeedback 351, SessionAssetsPanel 349, SessionLive 347, SpeakerDashboard 340, SpeakerDetail 339, PublicSessionDetail 334. Extract from <code>ADCHome</code> next. §18 holds at 8 because extraction is applied file by file rather than systematically, and the component-lifetime (render hooks) and render-fragment/slot criteria are thinly met. <strong>Blocker:</strong> none. <strong>Resolution path:</strong> presentational sub-component extraction per the TD-13 pattern, markup moved verbatim so the rendered DOM and the E2E selectors are unchanged.</li>
           </ul>
           <h3 id="9--api--contract-design--m4--i8-weight-2-implpriority-2">[ ] #9 · API &amp; Contract Design · M4 / I8 (weight 2; implPriority 2)</h3>
           <ul>
@@ -306,10 +306,11 @@
           <h3 id="25--navigation--information-architecture--m4--i8-weight-2-implpriority-2">[ ] #25 · Navigation &amp; Information Architecture · M4 / I8 (weight 2; implPriority 2)</h3>
           <ul>
           <li><input checked="" disabled="" type="checkbox"> <strong>ADC-side navigation-contract test.</strong> <code>Tests/Architecture/MMCA.ADC.Architecture.Tests/Api/NavigationContractTests.cs</code> compares every <code>@page</code> route and its guard with the Route Contract table in <code>adc-NavigationFlow.md:639</code> (set equality <code>:63-76</code>, access <code>:79-104</code>, missing doc fails <code>:246</code>); <code>build-and-test</code> downloads the published doc (<code>deploy.yml:338-348</code>). A route or guard change now needs its Website doc PR merged first.</li>
-          <li><input disabled="" type="checkbox"> <strong>Type the bare <code>{Id}</code> routes (effort S-M).</strong> 13 parameterized routes bind a string <code>{Id}</code> coerced by <code>Parse&lt;T&gt;</code> (<code>EventDetail.razor.cs:28</code>, <code>SessionDetail.razor.cs:38</code>; Common <code>DomainHelper.cs:22-26</code>) while <code>/live</code> types the same aggregate <code>{Id:int}</code> (<code>SessionLive.razor.cs:40</code>); rubric criterion <code>ArchitectureEvaluationCriteria.md:687</code>. The Route Contract rows change in the same pair of PRs.</li>
-          <li><input disabled="" type="checkbox"> <strong>Guard the speaker self-edit form (effort S).</strong> <code>SpeakerDashboard.razor:41</code> has no <code>UnsavedChangesGuard</code> (confirmed by <code>SpeakerDashboardPage.cs:42</code>); rubric criterion <code>:691</code>.</li>
-          <li><input disabled="" type="checkbox"> <strong><code>/profile/sessions</code> hidden but routable.</strong> The nav entry is Organizer-only (<code>MMCA.ADC.UI.Web/appsettings.json:36</code>, Common <code>NavMenu.razor:82-86</code>) while the page serves any signed-in account its own sessions: gate the page or record it under Deliberate and accepted (rubric red flag <code>:694</code>).</li>
-          <li><input disabled="" type="checkbox"> <strong>URL-projected list state (polish).</strong> Filter, sort and page state live in per-tab sessionStorage; the only query parameter is <code>?mine</code> (<code>PublicSessionList.razor.cs:64</code>), and Common&#39;s <code>ListPageStateService.cs:44</code> claims &quot;shareable links&quot; (a Common doc fix either way).</li>
+          <li><input checked="" disabled="" type="checkbox"> <strong>Type the bare <code>{Id}</code> routes.</strong> All 13 are typed: <code>:int</code> for the integer-keyed aggregates and <code>:guid</code> for the two speaker routes, with typed parameters in place of the <code>Parse&lt;T&gt;</code> coercion (<code>EventDetail.razor:1</code> with <code>EventDetail.razor.cs:27</code>, <code>SpeakerDetail.razor.cs:34</code>, <code>PublicSpeakerDetail.razor.cs:31</code>, <code>SessionFeedback.razor.cs:24</code>), so a malformed id answers with the router&#39;s not-found page. <code>/roles/{Role}</code> stays untyped (a role name). The Route Contract rows match (<code>adc-NavigationFlow.md:639</code>), enforced by <code>NavigationContractTests</code>.</li>
+          <li><input checked="" disabled="" type="checkbox"> <strong>Guard the speaker self-edit form.</strong> <code>SpeakerDashboard.razor:11</code> carries <code>UnsavedChangesGuard</code>, dirty only while an edited field differs from the loaded profile (<code>SpeakerDashboard.razor.cs:69</code>); pinned by <code>SpeakerDashboardTests.cs:287</code>.</li>
+          <li><input checked="" disabled="" type="checkbox"> <strong><code>/profile/sessions</code> hidden but routable:</strong> decided, recorded under Deliberate and accepted.</li>
+          <li><input disabled="" type="checkbox"> <strong>Nav-item-to-page-guard fitness test (effort S).</strong> Each module&#39;s <code>IUIModule.NavItems</code> declares a <code>RequiredRole</code> / <code>RequiredClaim</code> / <code>RequiredPermission</code> (<code>EngagementUIModule.cs:25-28</code>), but no test pairs it with the guard of the page it opens; <code>NavigationContractTests.cs:44-104</code> covers routes and page guards only. A test that resolves each nav item&#39;s route to its <code>@page</code> and asserts the menu requirement is no looser than the page guard closes the review-enforced half of the role-based-flows criterion.</li>
+          <li><input checked="" disabled="" type="checkbox"> <strong>URL-projected list state:</strong> already shipped, so this residual was a misread. Every list page on <code>DataGridListPageBase</code> mirrors page, page size, sort and its named filters into the query string on each change (Common <code>DataGridListPageBase.cs:978-981</code> through <code>ListPageQueryStateService.ReplaceState</code>, <code>ListPageQueryStateService.cs:203-216</code>) and reads the URL first on load (<code>DataGridListPageBase.cs:217-228</code>), so the public session, event and speaker lists carry shareable state; <code>?mine</code> is an additional named parameter, not the only one. The activity and sponsor lists have no adjustable state.</li>
           </ul>
           <h3 id="31--cost-efficiency--finops--m4--i8-weight-2-implpriority-2">[~] #31 · Cost Efficiency / FinOps · M4 / I8 (weight 2; implPriority 2)</h3>
           <ul>
@@ -377,7 +378,7 @@
           <td>UI Architecture &amp; Components</td>
           <td>3</td>
           <td>8</td>
-          <td><strong>TD-16</strong>: the high-water code-behind is <code>SessionFeedback.razor.cs</code> at 388 of the 400 cap (<code>PublicSessionList</code> extracted, ADC #264); systematic presentational sub-component extraction. Effort S</td>
+          <td><strong>TD-16</strong>: the high-water code-behind is <code>ADCHome.razor.cs</code> at 370 of the 400 cap (<code>PublicSessionList</code> and <code>SessionFeedback</code> extracted, ADC #264 and #265); systematic presentational sub-component extraction. Effort S</td>
           </tr>
           <tr>
           <td>3</td>
@@ -433,7 +434,7 @@
           <td>Navigation &amp; Information Arch</td>
           <td>2</td>
           <td>8</td>
-          <td>The contract test ships (<code>Api/NavigationContractTests.cs</code>); the residuals hold 8: type the 13 bare <code>{Id}</code> routes (<code>EventDetail.razor.cs:28</code>), guard <code>SpeakerDashboard.razor:41</code>, gate or accept <code>/profile/sessions</code>. Effort S-M</td>
+          <td>The contract test ships (<code>Api/NavigationContractTests.cs</code>) and the four recorded residuals are closed (typed routes, the speaker form guard, <code>/profile/sessions</code> accepted, URL list state confirmed); 8 holds because nav-item requirements are not tested against page guards (<code>EngagementUIModule.cs:25-28</code>) and the flow diagrams sit outside the contract. Effort S</td>
           </tr>
           <tr>
           <td>2</td>
@@ -502,6 +503,7 @@
           <h2 id="deliberate-and-accepted">Deliberate and accepted</h2>
           <p>Recorded decisions, not scheduled work.</p>
           <ul>
+          <li><strong><code>/profile/sessions</code> reachable by URL, menu link Organizer-only (§25):</strong> the framework&#39;s Signed-in devices page lists the caller&#39;s own sign-ins and revokes them per device, so it stays open to every signed-in account (<code>[Authorize]</code>, Common <code>Sessions.razor:1</code>); <code>Layout:SessionsNavRequiredRole</code> keeps its menu link to Organizers so the attendee menu holds to the conference surfaces (<code>MMCA.ADC.UI.Web/appsettings.json:36</code>, ADC commit <code>48691548</code>). Documented at <code>adc-NavigationFlow.md:726</code>.</li>
           <li><strong>Single-region deployment</strong> (no multi-region failover): accepted in <code>infra/DISASTER-RECOVERY.md</code>, with the single SQL server and single Container Apps environment as accepted single points of failure; the measured load does not justify the cost.</li>
           <li><strong>No interactive OpenAPI UI (Scalar/Swagger):</strong> the h2c-only REST services are not browser-reachable directly; a Gateway-routed UI is a small follow-up if wanted.</li>
           <li><strong>Integration events published post-commit carrying DB-generated IDs:</strong> intentional, since the event must carry the persisted identity.</li>
