@@ -165,7 +165,7 @@
           <td>UI Architecture &amp; Components</td>
           <td>4 / 8</td>
           <td>Implementation</td>
-          <td>TD-16: systematic presentational sub-component extraction</td>
+          <td>TD-16: extract from <code>SessionFeedback.razor.cs</code> (388 of 400) next, then make extraction systematic</td>
           </tr>
           <tr>
           <td>3</td>
@@ -229,7 +229,7 @@
           <td>Navigation &amp; Information Arch</td>
           <td>4 / 8</td>
           <td>Implementation</td>
-          <td>Add an ADC navigation-contract test</td>
+          <td>Type the 13 bare <code>{Id}</code> routes and guard the speaker dashboard form</td>
           </tr>
           <tr>
           <td>2</td>
@@ -289,7 +289,7 @@
           </ul>
           <h3 id="18--ui-architecture--components--m4--i8-weight-3-implpriority-3">[ ] #18 · UI Architecture &amp; Components · M4 / I8 (weight 3; implPriority 3)</h3>
           <ul>
-          <li><input disabled="" type="checkbox"> <strong>TD-16 (the §18 impl 8→9 lever, effort S).</strong> The enforced cap is <code>MaxCodeBehindLines =&gt; 400</code> (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Ui/UIArchitectureConventionTestsBase.cs:22</code>, unoverridden in <code>Ui/UIArchitectureConventionTests.cs:10-13</code>). The high-water code-behind is <code>Pages/Public/Sessions/PublicSessionList.razor.cs</code> at <strong>398</strong> (2 lines of headroom, so its next edit is likely to fail the CI architecture tier; the cap counts <code>File.ReadAllLines</code>, <code>UIArchitectureConventionTestsBase.cs:52</code>), then ADCHome 370 (both re-measured at this re-score); the remaining figures (SessionFeedback 354, SessionAssetsPanel 344, SpeakerDetail 337, SessionLive 333, EventFeedback 324, SessionDetail 318, SessionLiveModerationPanel 316, SpeakerDashboard 311) are carried from the last measurement. Extract from <code>PublicSessionList</code> first. §18 holds at 8 because extraction is applied file by file rather than systematically, and the component-lifetime (render hooks) and render-fragment/slot criteria are thinly met. <strong>Blocker:</strong> none. <strong>Resolution path:</strong> presentational sub-component extraction per the TD-13 pattern, markup moved verbatim so the rendered DOM and the E2E selectors are unchanged.</li>
+          <li><input disabled="" type="checkbox"> <strong>TD-16 (the §18 impl 8→9 lever, effort S).</strong> The enforced cap is <code>MaxCodeBehindLines =&gt; 400</code> (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Ui/UIArchitectureConventionTestsBase.cs:22</code>, unoverridden in <code>Ui/UIArchitectureConventionTests.cs:10-13</code>). <code>PublicSessionList.razor.cs</code> is extracted: its event catalog lives in <code>PublicSessionEventCatalog.cs</code> and the page is at 328 (ADC #264). Measured with <code>File.ReadAllLines</code> (as the cap counts, <code>UIArchitectureConventionTestsBase.cs:52</code>), the high-water code-behind is now <code>Engagement.UI/Pages/Feedback/SessionFeedback.razor.cs</code> at <strong>388</strong> (12 lines of headroom), then ADCHome 370, EventFeedback 358, EventDetail 355, SessionAssetsPanel 349, SessionLive 347, SpeakerDetail 343, PublicSessionDetail 334. Extract from <code>SessionFeedback</code> next. §18 holds at 8 because extraction is applied file by file rather than systematically, and the component-lifetime (render hooks) and render-fragment/slot criteria are thinly met. <strong>Blocker:</strong> none. <strong>Resolution path:</strong> presentational sub-component extraction per the TD-13 pattern, markup moved verbatim so the rendered DOM and the E2E selectors are unchanged.</li>
           </ul>
           <h3 id="9--api--contract-design--m4--i8-weight-2-implpriority-2">[ ] #9 · API &amp; Contract Design · M4 / I8 (weight 2; implPriority 2)</h3>
           <ul>
@@ -305,7 +305,11 @@
           </ul>
           <h3 id="25--navigation--information-architecture--m4--i8-weight-2-implpriority-2">[ ] #25 · Navigation &amp; Information Architecture · M4 / I8 (weight 2; implPriority 2)</h3>
           <ul>
-          <li><input disabled="" type="checkbox"> <strong>ADC-side navigation-contract test (effort M)</strong> modeled on Common&#39;s <code>NavigationContractTests</code> (a sealed test over Common&#39;s own doc, not a shared base, <code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Ui/NavigationContractTests.cs:19</code>), so a new route or a changed guard cannot land undocumented (zero NavigationFlow/NavigationContract references in ADC <code>.cs</code>). Without it the doc follows the code by review only: SpeakerDetail went Organizer-only in code and in <code>ManagementRouteAuthorizationTests.cs:43</code> while <code>adc-NavigationFlow.md</code> still listed it as plain <code>[Authorize]</code> (corrected at <code>:650</code>).</li>
+          <li><input checked="" disabled="" type="checkbox"> <strong>ADC-side navigation-contract test.</strong> <code>Tests/Architecture/MMCA.ADC.Architecture.Tests/Api/NavigationContractTests.cs</code> compares every <code>@page</code> route and its guard with the Route Contract table in <code>adc-NavigationFlow.md:639</code> (set equality <code>:63-76</code>, access <code>:79-104</code>, missing doc fails <code>:246</code>); <code>build-and-test</code> downloads the published doc (<code>deploy.yml:338-348</code>). A route or guard change now needs its Website doc PR merged first.</li>
+          <li><input disabled="" type="checkbox"> <strong>Type the bare <code>{Id}</code> routes (effort S-M).</strong> 13 parameterized routes bind a string <code>{Id}</code> coerced by <code>Parse&lt;T&gt;</code> (<code>EventDetail.razor.cs:28</code>, <code>SessionDetail.razor.cs:38</code>; Common <code>DomainHelper.cs:22-26</code>) while <code>/live</code> types the same aggregate <code>{Id:int}</code> (<code>SessionLive.razor.cs:40</code>); rubric criterion <code>ArchitectureEvaluationCriteria.md:687</code>. The Route Contract rows change in the same pair of PRs.</li>
+          <li><input disabled="" type="checkbox"> <strong>Guard the speaker self-edit form (effort S).</strong> <code>SpeakerDashboard.razor:41</code> has no <code>UnsavedChangesGuard</code> (confirmed by <code>SpeakerDashboardPage.cs:42</code>); rubric criterion <code>:691</code>.</li>
+          <li><input disabled="" type="checkbox"> <strong><code>/profile/sessions</code> hidden but routable.</strong> The nav entry is Organizer-only (<code>MMCA.ADC.UI.Web/appsettings.json:36</code>, Common <code>NavMenu.razor:82-86</code>) while the page serves any signed-in account its own sessions: gate the page or record it under Deliberate and accepted (rubric red flag <code>:694</code>).</li>
+          <li><input disabled="" type="checkbox"> <strong>URL-projected list state (polish).</strong> Filter, sort and page state live in per-tab sessionStorage; the only query parameter is <code>?mine</code> (<code>PublicSessionList.razor.cs:64</code>), and Common&#39;s <code>ListPageStateService.cs:44</code> claims &quot;shareable links&quot; (a Common doc fix either way).</li>
           </ul>
           <h3 id="31--cost-efficiency--finops--m4--i8-weight-2-implpriority-2">[~] #31 · Cost Efficiency / FinOps · M4 / I8 (weight 2; implPriority 2)</h3>
           <ul>
@@ -373,7 +377,7 @@
           <td>UI Architecture &amp; Components</td>
           <td>3</td>
           <td>8</td>
-          <td><strong>TD-16</strong>: the high-water code-behind is <code>PublicSessionList.razor.cs</code> at 398 of the 400 cap; systematic presentational sub-component extraction. Effort S</td>
+          <td><strong>TD-16</strong>: the high-water code-behind is <code>SessionFeedback.razor.cs</code> at 388 of the 400 cap (<code>PublicSessionList</code> extracted, ADC #264); systematic presentational sub-component extraction. Effort S</td>
           </tr>
           <tr>
           <td>3</td>
@@ -429,7 +433,7 @@
           <td>Navigation &amp; Information Arch</td>
           <td>2</td>
           <td>8</td>
-          <td>An ADC-side navigation-contract test modeled on Common&#39;s <code>NavigationContractTests</code> (effort M), so the doc cannot drift from the route guards again (the SpeakerDetail guard drifted and is corrected at <code>adc-NavigationFlow.md:650</code>)</td>
+          <td>The contract test ships (<code>Api/NavigationContractTests.cs</code>); the residuals hold 8: type the 13 bare <code>{Id}</code> routes (<code>EventDetail.razor.cs:28</code>), guard <code>SpeakerDashboard.razor:41</code>, gate or accept <code>/profile/sessions</code>. Effort S-M</td>
           </tr>
           <tr>
           <td>2</td>
@@ -687,7 +691,7 @@
           <td>§25</td>
           <td>Navigation &amp; Information Arch (maturity)</td>
           <td>4 / 8</td>
-          <td>Route-authorization gates (<code>ManagementRouteAuthorizationTests.cs:19</code>, <code>IdentityRouteAuthorizationTests.cs:16</code>); activity, QR, speaker-QR and role-administration routes documented (<code>adc-NavigationFlow.md:576,:629,:633</code>)</td>
+          <td>Navigation contract gate (<code>Api/NavigationContractTests.cs:63-76,:79-104</code> against <code>adc-NavigationFlow.md:639</code>); route-authorization gates (<code>ManagementRouteAuthorizationTests.cs:19</code>, <code>IdentityRouteAuthorizationTests.cs:16</code>)</td>
           </tr>
           <tr>
           <td>§26</td>
