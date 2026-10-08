@@ -632,6 +632,72 @@ flowchart TD
 
 ---
 
+## Route Contract
+
+This table lists every routable page ADC itself ships, one row per route, with the access it requires. A CI architecture test in MMCA.ADC compares it with the `@page` routes and their authorization attributes, so a route or guard change lands together with its row here. Framework-owned routes are listed in the Framework-Owned Routes section instead.
+
+| Route | Page | Access |
+|---|---|---|
+| `/activities` | ActivityList | Organizer |
+| `/activities/create` | ActivityCreate | Organizer |
+| `/activities/{Id:int}` | ActivityDetail | Organizer |
+| `/check-in` | - | Organizer |
+| `/conference/activities` | - | Anonymous |
+| `/conference/events` | - | Anonymous |
+| `/conference/events/{Id}` | - | Anonymous |
+| `/conference/sessions` | PublicSessionList | Anonymous |
+| `/conference/sessions/{Id}` | - | Anonymous |
+| `/conference/sessions/{Id:int}/live` | - | Authenticated |
+| `/conference/sessions/{Id:int}/present` | - | Authenticated |
+| `/conference/speakers` | - | Anonymous |
+| `/conference/speakers/{Id}` | - | Anonymous |
+| `/conference/sponsors` | - | Anonymous |
+| `/conferencecategories` | - | Organizer |
+| `/conferencecategories/create` | - | Organizer |
+| `/conferencecategories/{Id}` | - | Organizer |
+| `/engage/rooms/{RoomId:int}` | - | Authenticated |
+| `/engage/sponsors/{SponsorId:int}` | - | Authenticated |
+| `/events` | EventList | Organizer |
+| `/events/create` | - | Organizer |
+| `/events/{EventId}/feedback` | - | Organizer |
+| `/events/{Id}` | - | Organizer |
+| `/feedback/event/{EventId}` | - | Authenticated |
+| `/feedback/session/{SessionId}` | - | Authenticated |
+| `/happening-now` | - | Authenticated |
+| `/my-badge` | - | Authenticated |
+| `/organizer/attendance` | - | Organizer |
+| `/organizer/points` | - | Organizer |
+| `/partners` | PartnerList | Organizer |
+| `/partners/create` | PartnerCreate | Organizer |
+| `/partners/{Id:int}` | PartnerDetail | Organizer |
+| `/points` | - | Authenticated |
+| `/profile` | - | Authenticated |
+| `/profile/claims` | - | Authenticated |
+| `/questions` | - | Organizer |
+| `/questions/create` | - | Organizer |
+| `/questions/{Id}` | - | Organizer |
+| `/roles` | RoleList | Organizer |
+| `/roles/{Role}` | RoleEdit | Organizer |
+| `/rooms` | - | Organizer |
+| `/rooms/create` | - | Organizer |
+| `/rooms/{Id}` | - | Organizer |
+| `/sessions` | - | Organizer |
+| `/sessions/create` | - | Organizer |
+| `/sessions/selection-dashboard` | - | Organizer |
+| `/sessions/{Id}` | - | Organizer |
+| `/sessions/{SessionId}/feedback` | - | Organizer |
+| `/settings/device` | DeviceSettings | Anonymous |
+| `/speaker/dashboard` | - | Authenticated |
+| `/speaker/qr` | - | Authenticated |
+| `/speakers` | - | Organizer |
+| `/speakers/create` | - | Organizer |
+| `/speakers/{Id}` | SpeakerDetail | Organizer |
+| `/sponsors` | - | Organizer |
+| `/sponsors/create` | - | Organizer |
+| `/sponsors/{Id:int}` | - | Organizer |
+| `/users` | UserList | Organizer |
+| `/users/{Id:int}` | UserDetail | Organizer |
+
 ## Navigation Patterns
 
 ### Authentication Redirects
@@ -656,6 +722,7 @@ flowchart TD
 
 ### Framework-Owned Routes
 Some routes come from the `MMCA.Common.UI` package rather than from an ADC module; the web head routes that assembly alongside its own (`MMCA.ADC.UI.Web/Program.cs:290`, `:301`). The two password-reset pages are covered above; the others:
+- **`/` (home):** the framework page (`MMCA.Common.UI/Pages/Home.razor:1`). No ADC page declares `@page "/"`, so the Route Contract table leaves it out.
 - **`/profile/sessions` (active refresh sessions):** the framework page (`MMCA.Common.UI/Pages/Auth/Sessions.razor:1`) gets its nav link from the framework `NavMenu` (`MMCA.Common.UI/Layout/NavMenu.razor:83-86`), shown only to the role named in `Layout:SessionsNavRequiredRole` (read at `NavMenu.razor:214-215`). ADC sets that to `Organizer` in all three UI hosts (`MMCA.ADC.UI.Web/appsettings.json:36`, `MMCA.ADC.UI.Web.Client/wwwroot/appsettings.json:11`, `MMCA.ADC.UI/appsettings.json:17`), so Attendees, Speakers and ContentEditors see no Sessions link. The setting gates the menu entry only: the page stays reachable by URL for any signed-in account (`NavMenu.razor:81-82`).
 - **`/confirm-email` (email confirmation landing):** an anonymous framework page (`MMCA.Common.UI/Pages/Auth/ConfirmEmail.razor:1`, `[AllowAnonymous]` at `:3`, MMCA.Common commit `7d99f9a`), the same page MMCA.Store serves. ADC serves it instead of a copy of its own (ADC commit `379bedba`), and the local AppHost points the confirmation link at it (`MMCA.ADC.AppHost/Program.cs:476-478`). It has no nav item: a visitor reaches it only from the link in the confirmation email.
 - **`/users/{Id:int}` (user detail):** an ADC page rather than a framework one (`UserDetail.razor:1`, `[Authorize(Roles = "Organizer")]` at `:2`), listed here because the Organizer diagram shows only `/users`, whose roster comes from the framework's shared `UserAdminList` (`UserList.razor:8`). The detail route is typed `{Id:int}` and is reached by a row click on `/users`.
