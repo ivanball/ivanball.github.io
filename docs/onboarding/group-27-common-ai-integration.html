@@ -320,7 +320,7 @@
           <a href="#toolauthorization">ToolAuthorization</a><code>.Allowed</code><span class="cite"><span> (<code>:251</code>)</span></span>, so policies compose by intersection and a
           new concern can only ever remove tools<span class="cite"><span>
           (<code>MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/IChatToolPolicy.cs:17-21</code>)</span></span>. With no policy
-          registered every tool is stripped<span class="cite"><span> (<code>BoundedChatClient.cs:241-244</code>)</span></span>, and <code>ToolAuthorization.Denied</code> is
+          registered every tool is stripped<span class="cite"><span> (<code>BoundedChatClient.cs:251-254</code>)</span></span>, and <code>ToolAuthorization.Denied</code> is
           the enum&#39;s zero value so an unassigned answer refuses<span class="cite"><span> (<code>ToolAuthorization.cs:7-8</code>)</span></span>: the layer fails
           closed, and a missing policy costs a capability rather than granting one. On top of the policies, a
           tool marked consequential must also be confirmed by the caller for this request<span class="cite"><span> (<code>:259-262</code>)</span></span>, and the
@@ -333,7 +333,7 @@
           or deletes is a decision a human makes per request<span class="cite"><span> (<code>:17-21</code>)</span></span>. <code>[Rubric section 11, Security]</code> and
           <code>[Rubric section 16]</code>.</p>
           <p>The input-size bound is the one with a caveat baked into its own doc comment.
-          <code>EnforceInputBudget</code><span class="cite"><span> (<code>BoundedChatClient.cs:277-292</code>)</span></span> runs only when <code>PerCallInputTokenBudget</code> is set,
+          <code>EnforceInputBudget</code><span class="cite"><span> (<code>BoundedChatClient.cs:287-302</code>)</span></span> runs only when <code>PerCallInputTokenBudget</code> is set,
           estimates the request, and throws an <code>InvalidOperationException</code> naming the setting when the estimate
           exceeds it<span class="cite"><span> (<code>:290-291</code>)</span></span>, which fails the call locally instead of paying for it remotely. The estimate
           comes from the public static <code>EstimateInputTokens</code><span class="cite"><span> (<code>:155-179</code>)</span></span>, which concatenates the options&#39;
@@ -342,7 +342,7 @@
           <a href="#iaitokenestimator">IAiTokenEstimator</a><span class="cite"><span>
           (<code>MMCA.Common/Source/Core/MMCA.Common.AI/Chat/IAiTokenEstimator.cs:14</code>)</span></span> is optional and is resolved
           <em>through the client pipeline</em> rather than from DI, via <code>this.GetService&lt;IAiTokenEstimator&gt;()</code><span class="cite"><span>
-          (<code>BoundedChatClient.cs:284</code>)</span></span>, so any inner client that knows its provider&#39;s tokenizer can offer one.
+          (<code>BoundedChatClient.cs:294</code>)</span></span>, so any inner client that knows its provider&#39;s tokenizer can offer one.
           The package declines to take a tokenizer dependency for this on purpose<span class="cite"><span> (<code>IAiTokenEstimator.cs:8-12</code>)</span></span>,
           and the source is blunt that the number is a guardrail and not a billing figure: images, tool schemas,
           provider-side system additions and non-Latin scripts are all under-counted<span class="cite"><span>
@@ -412,7 +412,7 @@
           catches this one type<span class="cite"><span> (<code>ChatGuardrailException.cs:7-11</code>)</span></span>.</p>
           <h2 id="the-two-content-policies-the-framework-does-ship">The two content policies the framework does ship</h2>
           <p><a href="#piiredactionguardrail">PiiRedactionGuardrail</a><span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/PiiRedactionGuardrail.cs:39</code>)</span></span> is the stated
+          (<code>MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/PiiRedactionGuardrail.cs:40</code>)</span></span> is the stated
           exception to &quot;extension points and no policy&quot;: an email address or a phone number is never evidence
           for anything a model is asked, so sending one is pure exposure and the judgement does not vary between
           applications or jurisdictions<span class="cite"><span> (<code>:11-16</code>)</span></span>. It implements both contracts. As a redactor it rewrites
@@ -547,7 +547,7 @@
           (<code>:95-96</code>)</span></span>, with the module&#39;s own response guardrail<span class="cite"><span> (<code>:99</code>)</span></span>, so in the deployed workspace the
           guardrail layer is present on every call. On the module side,
           <a href="group-19-conference-infrastructure.html#sessionscoringservice">SessionScoringService</a><span class="cite"><span>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/SessionScoringService.cs:46</code>)</span></span>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/SessionScoringService.cs:47</code>)</span></span>
           consumes the injected <code>IChatClient</code> and <code>PromptContract</code>, and Conference&#39;s Infrastructure registration
           resolves the client with <code>GetService</code> rather than <code>GetRequiredService</code> precisely because the disabled
           host registers none<span class="cite"><span>
@@ -705,7 +705,7 @@
           <li><strong>Concept introduced, a pluggable estimator behind a cheap built-in default.</strong>
           <code>[Rubric §1, SOLID]</code> (assesses whether a dependency is inverted behind an abstraction rather than
           hard-coded): <a href="#boundedchatclient"><code>BoundedChatClient</code></a> resolves this interface from DI
-          (<code>this.GetService&lt;IAiTokenEstimator&gt;()</code>, <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.AI/Chat/BoundedChatClient.cs:288</code></span></span>)
+          (<code>this.GetService&lt;IAiTokenEstimator&gt;()</code>, <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.AI/Chat/BoundedChatClient.cs:298</code></span></span>)
           and falls back to a built-in heuristic when nothing is registered
           (<code>BoundedChatClient.EstimateInputTokens</code>, <span class="cite"><span><code>BoundedChatClient.cs:179</code></span></span>), so a host that wants
           provider-accurate tokenization can register a real tokenizer without changing the bounding logic.</li>
@@ -717,7 +717,7 @@
           heuristic when no estimator is registered, an under-count that only ever lets a call through, never
           blocks one that would have fit<span class="cite"><span> (<code>BoundedChatClient.cs:176-179</code>)</span></span>.</li>
           <li><strong>Where it&#39;s used</strong>: <a href="#boundedchatclient"><code>BoundedChatClient.EnforceInputBudget</code></a><span class="cite"><span>
-          (<code>BoundedChatClient.cs:277-292</code>)</span></span> is the only production call site; the test fixture
+          (<code>BoundedChatClient.cs:287-302</code>)</span></span> is the only production call site; the test fixture
           <code>MMCA.Common/Tests/Core/MMCA.Common.AI.Tests/Fixtures/StubChatClient.cs</code> supplies a stub implementation
           for unit tests.</li>
           <li><strong>Caveats / not-in-source</strong>: no built-in implementation ships in <code>MMCA.Common.AI</code>; every consumer today
@@ -900,7 +900,7 @@
           latency): every bound applied here (output tokens, timeout, input budget) exists to keep one call from
           exceeding what the host budgeted for it. <code>[Rubric §29, Resilience &amp; Business Continuity]</code> (assesses
           whether an external dependency is time-bounded): the linked <code>CancellationTokenSource</code>
-          (<code>CreateLinkedTimeout</code>, <span class="cite"><span><code>BoundedChatClient.cs:270-276</code></span></span>) guarantees the provider call cannot hang past
+          (<code>CreateLinkedTimeout</code>, <span class="cite"><span><code>BoundedChatClient.cs:280-285</code></span></span>) guarantees the provider call cannot hang past
           <code>AiSettings.Timeout</code> regardless of what the caller&#39;s own token does. This is the first client wrapped
           in <a href="#aiservicecollectionextensions"><code>AiServiceCollectionExtensions</code></a>&#39;s pipeline, matching the
           outermost-first ordering the type&#39;s own remarks describe.</li>
@@ -919,20 +919,23 @@
           per-call budget exists to bound. The static
           <code>EstimateInputTokens</code><span class="cite"><span> (<code>BoundedChatClient.cs:155-179</code>)</span></span> concatenates <code>options.Instructions</code> plus every
           message&#39;s text and either runs the resolved <code>IAiTokenEstimator</code> or falls back to a four-characters-
-          per-token heuristic. <code>Bound</code><span class="cite"><span> (<code>BoundedChatClient.cs:181-229</code>)</span></span> clones
+          per-token heuristic. <code>Bound</code><span class="cite"><span> (<code>BoundedChatClient.cs:193-233</code>)</span></span> clones
           the incoming <code>ChatOptions</code>, clamps <code>MaxOutputTokens</code> to the smaller of the request&#39;s own value and
           <code>_settings.MaxOutputTokens</code>, and when <code>AllowTools</code> is false nulls out <code>Tools</code>/<code>ToolMode</code> entirely: a
           model that cannot be handed a tool cannot be talked into using one. When <code>AllowTools</code> is true it instead
-          narrows the offered tools through <code>FilterTools</code><span class="cite"><span> (<code>BoundedChatClient.cs:231-269</code>)</span></span>, which requires every
+          narrows the offered tools through <code>FilterTools</code><span class="cite"><span> (<code>BoundedChatClient.cs:241-278</code>)</span></span>, which requires every
           registered <code>IChatToolPolicy</code> to authorize a tool (no policy registered means no tool survives, since an
           unanswered capability question is answered by withholding it) and, for a tool <code>ChatToolPolicy</code> marks
           consequential, additionally requires the request to carry a matching <code>mmca.tool.confirmed</code> stamp read
-          by <code>ChatToolPolicy.ReadConfirmedTools</code>; a <code>ToolMode</code> with no surviving tools is cleared too, since a
-          mode the provider cannot honor would otherwise be an error rather than a plain answer. <code>Bound</code> also
+          by <code>ChatToolPolicy.ReadConfirmedTools</code>. A <code>ToolMode</code> the provider cannot honor is then cleared back to
+          auto by <code>CanHonorToolMode</code><span class="cite"><span> (<code>BoundedChatClient.cs:181-191</code>)</span></span>: that covers a mode with no surviving tools
+          (<code>RequireAny</code> would otherwise be an error rather than a plain answer) and a <code>RequireSpecific</code> mode
+          naming a tool the filter stripped, since the provider rejects a <code>tool_choice</code> for a tool the request
+          does not offer. <code>Bound</code> also
           enforces <code>AiSettings.Model</code> as a pin: a request naming a different <code>ModelId</code> throws
           <code>InvalidOperationException</code> naming the conflict, and when the request names none the pinned model is
           stamped explicitly so every adapter is asked for it by name and a failed call&#39;s model tag is never
-          blank. <code>EnforceInputBudget</code><span class="cite"><span> (<code>BoundedChatClient.cs:277-292</code>)</span></span> is a no-op when
+          blank. <code>EnforceInputBudget</code><span class="cite"><span> (<code>BoundedChatClient.cs:287-302</code>)</span></span> is a no-op when
           <code>PerCallInputTokenBudget</code> is unset, otherwise it estimates and throws <code>InvalidOperationException</code> with
           the estimated count, the configured budget, and a reminder that the estimate is approximate when the
           estimate exceeds the budget.</li>
@@ -1506,7 +1509,7 @@
           <hr>
           <h3 id="piiredactionguardrail">PiiRedactionGuardrail</h3>
           <blockquote>
-          <p>MMCA.Common.AI.Guardrails · <code>MMCA.Common.AI.Guardrails</code> · <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/PiiRedactionGuardrail.cs:39</code></span></span> · Level 3 · class</p>
+          <p>MMCA.Common.AI.Guardrails · <code>MMCA.Common.AI.Guardrails</code> · <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/PiiRedactionGuardrail.cs:40</code></span></span> · Level 3 · class</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the sealed partial class implementing
@@ -1518,24 +1521,32 @@
           <li><strong>Concept introduced, configuration-free, unconditional redaction.</strong> Contrasts with
           <a href="#contentpolicyguardrail"><code>ContentPolicyGuardrail</code></a>: <code>PiiRedactionGuardrail</code> has no configurable
           options and applies to every outgoing message unconditionally.</li>
-          <li><strong>Walkthrough</strong>: <code>EmailPattern</code>/<code>PhonePattern</code><span class="cite"><span> (<code>PiiRedactionGuardrail.cs:70-80</code>)</span></span> are
+          <li><strong>Walkthrough</strong>: <code>EmailPattern</code>/<code>PhonePattern</code><span class="cite"><span> (<code>PiiRedactionGuardrail.cs:71-81</code>)</span></span> are
           <code>[GeneratedRegex]</code> source-generated matchers with a 1-second timeout (email: a standard
           local-part@domain shape; phone: an optional leading country code plus a 10-digit US-shaped number,
           guarded by negative lookaround so it does not clip a longer digit run). <code>Redact</code><span class="cite"><span>
-          (<code>PiiRedactionGuardrail.cs:45-56</code>)</span></span> rewrites EVERY message, not only <code>ChatRole.User</code> (unlike
+          (<code>PiiRedactionGuardrail.cs:46-57</code>)</span></span> rewrites EVERY message, not only <code>ChatRole.User</code> (unlike
           <code>ContentPolicyGuardrail</code>), via the private <code>RedactMessage</code><span class="cite"><span>
-          (<code>PiiRedactionGuardrail.cs:82-98</code>)</span></span>, which rebuilds each message (keeping role, <code>AuthorName</code>,
+          (<code>PiiRedactionGuardrail.cs:83-99</code>)</span></span>, which rebuilds each message (keeping role, <code>AuthorName</code>,
           <code>MessageId</code> and <code>AdditionalProperties</code>) and hands every content item to <code>RedactContent</code><span class="cite"><span>
-          (<code>PiiRedactionGuardrail.cs:105-123</code>)</span></span>. That switch rewrites non-empty <code>TextContent</code> and
-          <code>TextReasoningContent</code>, a <code>FunctionResultContent</code> whose result is a <code>string</code>, and the <code>string</code>
-          argument values of a <code>FunctionCallContent</code> (other argument values kept as-is), because a tool&#39;s
-          output is exactly where contact details turn up (a customer lookup, a directory search). Each
-          rewrite goes through <code>RedactText</code><span class="cite"><span> (<code>PiiRedactionGuardrail.cs:125-126</code>)</span></span>, which replaces email
-          matches then phone matches. Binary and other non-text content (images, non-string tool results,
+          (<code>PiiRedactionGuardrail.cs:108-127</code>)</span></span>. That switch rewrites non-empty <code>TextContent</code> and
+          <code>TextReasoningContent</code>, a <code>FunctionResultContent</code> whose result is a <code>JsonElement</code> or a <code>string</code>,
+          and the argument values of a <code>FunctionCallContent</code> that are a <code>string</code> or a <code>JsonElement</code> (routed
+          through <code>RedactArgument</code>, <span class="cite"><span><code>PiiRedactionGuardrail.cs:129-134</code></span></span>; other argument values kept as-is).
+          Both shapes matter because Microsoft.Extensions.AI&#39;s function-invoking client marshals a tool&#39;s
+          return value and the model&#39;s arguments into <code>JsonElement</code>, and a tool&#39;s output is exactly where
+          contact details turn up (a customer lookup, a directory search). Plain text goes through
+          <code>RedactText</code><span class="cite"><span> (<code>PiiRedactionGuardrail.cs:136-137</code>)</span></span>, which replaces email matches then phone
+          matches. A <code>JsonElement</code> goes through <code>RedactJson</code><span class="cite"><span> (<code>PiiRedactionGuardrail.cs:144-154</code>)</span></span> and the
+          recursive <code>WriteRedacted</code><span class="cite"><span> (<code>PiiRedactionGuardrail.cs:156-188</code>)</span></span>, which rebuilds the document with
+          a <code>Utf8JsonWriter</code>, redacting only string VALUES and copying property names, numbers, booleans and
+          nulls verbatim: running the patterns over the raw JSON text would turn a bare 10-digit number (a
+          Unix timestamp) into a phone placeholder and break the document. Binary and other non-text
+          content (images, results and arguments that are neither a string nor a <code>JsonElement</code>,
           provider-specific items) passes through untouched for the same reason <code>ContentPolicyGuardrail</code> gives
           (a guardrail that silently dropped content it does not understand would be worse than leaving it
           alone). <code>InspectRequestAsync</code>/<code>InspectResponseAsync</code><span class="cite"><span>
-          (<code>PiiRedactionGuardrail.cs:59-68</code>)</span></span> both unconditionally return <code>GuardrailVerdict.Allow</code>.</li>
+          (<code>PiiRedactionGuardrail.cs:60-69</code>)</span></span> both unconditionally return <code>GuardrailVerdict.Allow</code>.</li>
           <li><strong>Why it&#39;s built this way</strong>: unconditional redaction with zero configuration lets the guardrail
           satisfy <code>AiSettings.RequireGuardrail</code> with no setup. See
           <a href="https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html" target="_blank" rel="noopener"><code>ADR-120</code></a> and

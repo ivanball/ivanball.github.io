@@ -120,9 +120,9 @@ documented in `MMCA.Common/CLAUDE.md` ("CI runs on Ubuntu, file paths are case-s
 The job is bounded at `timeout-minutes: 15` (`ci.yml:92`), about twice the slowest of four recent code PR
 runs per the comment (`ci.yml:90-91`), so a hung restore or test host fails the job instead of holding a
 runner for GitHub's 6-hour default. The `coverage` job gets the same treatment at 5 minutes
-(`ci.yml:405-408`).
+(`ci.yml:361-363`).
 
-**Step 1, Checkout with full history** (`ci.yml:91-94`):
+**Step 1, Checkout with full history** (`ci.yml:94-97`):
 
 ```yaml
 - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -135,7 +135,7 @@ runner for GitHub's 6-hour default. The `coverage` job gets the same treatment a
 tool) cannot walk back to find the nearest `vX.Y.Z` tag and would produce an unstable pre-release version
 string. Shallow clones (the GitHub default of depth 1) silently break reproducible versioning.
 
-**Step 2, .NET 10 setup** (`ci.yml:96-110`): `actions/setup-dotnet@v6` pinned to `10.0.x` ensures the
+**Step 2, .NET 10 setup** (`ci.yml:99-113`): `actions/setup-dotnet@v6` pinned to `10.0.x` ensures the
 runner matches the `<TargetFramework>net10.0</TargetFramework>` in every project. It also caches
 `~/.nuget/packages`, keyed on the committed lock files **plus** `Directory.Packages.props`, because
 `build/facts` and `build/perfgate` have no lock file and the repo does not pass `--locked-mode`, so the
@@ -144,7 +144,7 @@ props file is what actually pins their versions. The cache itself is gated on th
 setup-dotnet's cache-save step would otherwise fail the whole job with "Cache folder path does not exist
 on disk".
 
-**Step 3, Verify FACTS.md is current** (`ci.yml:115-118`):
+**Step 3, Verify FACTS.md is current** (`ci.yml:115-121`):
 
 ```bash
 dotnet run --project build/facts -- . --check
@@ -153,10 +153,10 @@ dotnet run --project build/facts -- . --check
 A fast, dependency-free drift gate. `build/facts` recomputes the framework-wide facts from source (version
 from the git tag, package count, fitness-method and base-class counts) and fails if the committed
 `FACTS.md` disagrees. Regenerate with `dotnet run --project build/facts -- .`. The ADR count and range are
-deliberately not in that list: the comment (`ci.yml:112-113`) records that the Website ADR index owns
+deliberately not in that list: the comment (`ci.yml:116`) records that the Website ADR index owns
 them, so the one number the framework repo cannot see is not checked against a stale copy.
 
-This is the one step **not** guarded on the `code` flag, and the comment (`ci.yml:116-117`) explains why:
+This is the one step **not** guarded on the `code` flag, and the comment (`ci.yml:119-120`) explains why:
 `FACTS.md` is itself markdown, so a docs-only PR is exactly the kind of change that can make it drift.
 The gate has to run precisely when everything else is skipped.
 
@@ -164,7 +164,7 @@ The gate has to run precisely when everything else is skipped.
 with time: the numbers other documents are told to link rather than restate are themselves machine-checked
 against the code.
 
-**Step 4, Restore** (`ci.yml:120-122`):
+**Step 4, Restore** (`ci.yml:123-132`):
 
 ```bash
 dotnet restore MMCA.Common.slnx --locked-mode
@@ -174,7 +174,7 @@ MMCA.Common uses NuGet lock files (`RestorePackagesWithLockFile`) and pins `pack
 nuget.org only, no `GITHUB_TOKEN` is needed to restore. This is explicitly documented in
 `MMCA.Common/CLAUDE.md` ("building/testing Common needs NO GitHub token"). The lock file makes the
 restore reproducible: the exact dependency graph is committed and any unexpected transitive upgrade fails
-the restore. `--locked-mode` (`ci.yml:120-130`) is what makes that binding rather than advisory: the
+the restore. `--locked-mode` (`ci.yml:125-132`) is what makes that binding rather than advisory: the
 restore either reproduces the committed `packages.lock.json` graph or fails, so CI cannot build, audit and
 pack a graph nobody reviewed. A deliberate dependency change regenerates the lock files locally with
 `dotnet restore --force-evaluate` and commits them in the same pull request. Every project in
@@ -186,7 +186,7 @@ Benchmarks project) sit outside the solution and are unaffected.
 supply-chain risks are visible. The pinned source mapping plus committed lock files are the §32
 implementation: a compromised or mutated transitive package cannot silently enter the build.
 
-**Step 5, Build in Release mode** (`ci.yml:131-133`):
+**Step 5, Build in Release mode** (`ci.yml:134-136`):
 
 ```bash
 dotnet build MMCA.Common.slnx -c Release --no-restore
@@ -201,7 +201,7 @@ from Step 4.
 [Rubric §15, Best Practices & Code Quality] (quality enforcement via analyzers at error severity) is
 realized here: the build *is* the static-analysis gate.
 
-**Step 6, Vulnerability audit** (`ci.yml:135-143`):
+**Step 6, Vulnerability audit** (`ci.yml:138-148`):
 
 ```yaml
 - name: Audit dependencies (fail on known vulnerabilities)
@@ -212,7 +212,7 @@ realized here: the build *is* the static-analysis gate.
 ```
 
 The step is a call into a composite action in the same repository,
-`.github/actions/nuget-vulnerability-audit/action.yml`, and the comment (`ci.yml:136-139`) says why the
+`.github/actions/nuget-vulnerability-audit/action.yml`, and the comment (`ci.yml:140-143`) says why the
 logic moved there: ADC and Store `deploy.yml` run the very same action by ref
 (`ivanball/MMCA.Common/.github/actions/...@main`), so the framework and its consumers share ONE
 implementation instead of a per-repository copy that drifts
@@ -246,7 +246,7 @@ workflow runs (and before the package is published) is cheaper than retracting a
 (assesses whether secrets, auth, and dependency security are properly managed) is also touched: the
 vulnerability audit ensures the framework's own dependencies do not carry known CVEs.
 
-**Steps 7 and 8, Test with coverage and the discovery-regression floor** (`ci.yml:145-158`):
+**Steps 7 and 8, Test with coverage and the discovery-regression floor** (`ci.yml:150-163`):
 
 ```bash
 dotnet tool install --global dotnet-coverage
@@ -260,7 +260,7 @@ coverage itself is report-only (the `coverage` job below consumes it).
 
 `--minimum-expected-tests 2000` is the load-bearing number. It is a Microsoft Testing Platform (MTP) flag
 that fails the run when fewer than N tests are discovered, and the floor sits just under the real suite
-size of roughly 2,254 (`ci.yml:155-156`). A floor of 1 would only catch a project that discovered nothing
+size of roughly 2,254 (`ci.yml:160-161`). A floor of 1 would only catch a project that discovered nothing
 at all; a floor near the true count catches the far more common and far more dangerous failure, a
 discovery or filter regression that silently drops thousands of tests and reports green with a handful
 run. The solution test suite covers the per-layer projects (`Shared.Tests`, `Domain.Tests`,
@@ -274,7 +274,7 @@ run. The solution test suite covers the per-layer projects (`Shared.Tests`, `Dom
 `--minimum-expected-tests` floor is a mechanical enforcement of §14: you cannot merge a change that
 quietly stops running the suite.
 
-The unit-tier cobertura report is uploaded as the `coverage-unit` artifact (`ci.yml:160-166`) for the
+The unit-tier cobertura report is uploaded as the `coverage-unit` artifact (`ci.yml:165-171`) for the
 `coverage` job to merge and gate on, under `if: always()` so a failing run still yields its partial
 coverage data.
 
@@ -282,11 +282,11 @@ coverage data.
 
 `MMCA.Common.UI.Maui` multi-targets net10.0-android/ios/maccatalyst/windows, which needs the MAUI
 workloads, which Ubuntu runners do not have. So it stays **out of `MMCA.Common.slnx`** and builds in its
-own `windows-latest` job (`ci.yml:174-238`), the same mechanism that keeps the gallery and UI E2E projects
+own `windows-latest` job (`ci.yml:179-216`), the same mechanism that keeps the gallery and UI E2E projects
 out of the fast unit run ([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)).
 It is a required merge gate alongside `build-and-test`.
 
-There are no tests here, and the comment says why (`ci.yml:172-173`): the capability contracts and their
+There are no tests here, and the comment says why (`ci.yml:177-178`): the capability contracts and their
 browser fallbacks are covered in `MMCA.Common.UI.Tests` on ubuntu, while the MAUI implementations are thin
 Essentials wrappers exercised on-device. A test that only proves a wrapper forwards a call is not worth a
 windows runner.
@@ -301,13 +301,13 @@ cheaper than recomputing; for a payload this size on a windows runner, it is not
 
 ### Job: `ui-e2e`, accessibility and render-smoke gate
 
-This job (`ci.yml:245-342`) runs in parallel with `build-and-test`, on its own `ubuntu-latest` runner,
-with a 20-minute timeout (`ci.yml:249`). It is a **cross-browser matrix** over `chromium`, `firefox`, and
-`webkit` (`ci.yml:250-254`) with `fail-fast: false`, so one engine's failure does not cancel the others.
+This job (`ci.yml:223-300`) runs in parallel with `build-and-test`, on its own `ubuntu-latest` runner,
+with a 20-minute timeout (`ci.yml:227`). It is a **cross-browser matrix** over `chromium`, `firefox`, and
+`webkit` (`ci.yml:228-232`) with `fail-fast: false`, so one engine's failure does not cancel the others.
 
 **All three engines are required merge gates.** The matrix was introduced with the non-chromium legs
 non-blocking, then promoted as each proved itself: firefox on 2026-07-12 after a clean observed streak,
-webkit on 2026-07-16 after 11 consecutive green runs since its last flake (`ci.yml:255-257`). There is no
+webkit on 2026-07-16 after 11 consecutive green runs since its last flake (`ci.yml:233-235`). There is no
 `continue-on-error` in this job today. A webkit red blocks the merge like any other check.
 
 Its purpose is to catch two failure classes the unit-test job cannot: WCAG 2.1 AA accessibility violations
@@ -316,17 +316,17 @@ render).
 
 **Why a separate job?** The gallery host (`Tests/Presentation/MMCA.Common.UI.Gallery`) and the E2E test
 project (`Tests/Presentation/MMCA.Common.UI.E2E.Tests`) are **intentionally excluded from
-`MMCA.Common.slnx`** (`ci.yml:240-244` comment). Playwright requires a full browser install (several
+`MMCA.Common.slnx`** (`ci.yml:218-222` comment). Playwright requires a full browser install (several
 hundred megabytes) and a browser-capable runner config. Including these in `dotnet test --solution` would
 slow every CI run for every code change, most of which do not touch the UI. Keeping the E2E gate separate
 means the unit/arch job stays fast while accessibility remains enforced.
 
 **Step-by-step:**
 
-1. **Checkout** (`ci.yml:259-262`): `fetch-depth: 0` (the comment notes "MinVer needs full history"), same
+1. **Checkout** (`ci.yml:237-240`): `fetch-depth: 0` (the comment notes "MinVer needs full history"), same
    as `build-and-test`.
 
-2. **Build the E2E project directly** (`ci.yml:280-284`):
+2. **Build the E2E project directly** (`ci.yml:258-262`):
    ```bash
    dotnet build Tests/Presentation/MMCA.Common.UI.E2E.Tests/MMCA.Common.UI.E2E.Tests.csproj -c Release
    ```
@@ -334,7 +334,7 @@ means the unit/arch job stays fast while accessibility remains enforced.
    included). The E2E project references MMCA.Common source projects directly (via project references, not
    NuGet packages), so no `GITHUB_TOKEN` is needed.
 
-3. **Cache and install Playwright for the matrix browser** (`ci.yml:289-307`):
+3. **Cache and install Playwright for the matrix browser** (`ci.yml:267-285`):
    ```bash
    script=$(find Tests/Presentation/MMCA.Common.UI.E2E.Tests/bin/Release -name playwright.ps1 | head -1)
    if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
@@ -344,7 +344,7 @@ means the unit/arch job stays fast while accessibility remains enforced.
    fi
    ```
    Browser binaries run 100 to 300 MB per engine and were re-downloaded on all three legs of every run,
-   which is what the workflow-level `PLAYWRIGHT_BROWSERS_PATH` and this cache step (`ci.yml:289-295`)
+   which is what the workflow-level `PLAYWRIGHT_BROWSERS_PATH` and this cache step (`ci.yml:267-273`)
    exist to stop. The cache key includes the engine, since each leg installs only its own.
 
    The install branches on the cache hit, and the distinction is the useful part: OS-level shared
@@ -353,9 +353,9 @@ means the unit/arch job stays fast while accessibility remains enforced.
    launch. The `playwright.ps1` script is emitted into the build output by the Playwright MSBuild
    integration; `find` locates it dynamically so the step does not hard-code a .NET version suffix.
 
-4. **Run the E2E suite** (`ci.yml:309-326`): the chromium leg installs `dotnet-coverage`
-   (`ci.yml:309-311`) and wraps the run in `dotnet-coverage collect`; the firefox and webkit legs run the
-   same command plain (`eval "$CMD"`). The inner command is:
+4. **Run the E2E suite** (`ci.yml:287-292`): every leg runs the same plain `dotnet test` command, code-guarded
+   like the other heavy steps, with no coverage collection (E2E coverage is not part of the merged report).
+   The step is:
    ```yaml
    env:
      E2E_HEADLESS: "true"
@@ -376,9 +376,7 @@ means the unit/arch job stays fast while accessibility remains enforced.
    whether browser-level tests catch rendering and functional regressions) is also embodied: the render
    smoke confirms that the real component tree renders without exceptions in a real browser context.
 
-5. **Upload coverage and Playwright traces**, the chromium leg uploads its E2E cobertura report as the
-   `coverage-e2e` artifact (`ci.yml:328-334`), and on failure each leg uploads its traces
-   (`ci.yml:336-342`):
+5. **Upload Playwright traces on failure**: each leg uploads its traces (`ci.yml:294-300`):
    ```yaml
    if: failure()
    uses: actions/upload-artifact@v7
@@ -399,12 +397,12 @@ means the unit/arch job stays fast while accessibility remains enforced.
 
 ### Job: `performance-smoke`, benchmarks plus a committed baseline
 
-This job (`ci.yml:352-394`) runs the BenchmarkDotNet harness and then compares the results against a
+This job (`ci.yml:310-352`) runs the BenchmarkDotNet harness and then compares the results against a
 committed baseline, which makes it two gates in one. Its context, `Performance gate (BenchmarkDotNet
 Short + baseline verify)`, is one of the eight required merge gates on `main`
 (`MMCA.Common/CONTRIBUTING.md:60-71`).
 
-The run itself (`ci.yml:379-385`) uses `--filter "*"` and `--job Short`:
+The run itself (`ci.yml:337-343`) uses `--filter "*"` and `--job Short`:
 
 ```bash
 dotnet run -c Release --project Tests/Performance/MMCA.Common.Benchmarks --no-launch-profile -- --filter "*" --job Short --exporters json
@@ -415,7 +413,7 @@ selection and hangs in CI. `--job Short` (3 warmup + 3 iterations) produces real
 minute instead of a full multi-iteration timing run. `--no-launch-profile` keeps it deterministic on
 hosted runners.
 
-Then `build/perfgate` (`ci.yml:387-394`) compares the exported results against
+Then `build/perfgate` (`ci.yml:345-352`) compares the exported results against
 `Tests/Performance/perf-baseline.json` and fails on any violation. The baseline holds two kinds of
 assertion, and the difference matters: deterministic **allocation ceilings** (byte counts, which are
 stable across machines) and machine-independent **ratio floors**, such as the compiled-expression
@@ -453,61 +451,61 @@ backstop on top of the `--minimum-expected-tests` guard.
 The remaining jobs all exist for the same reason: **a green solution build does not prove the framework
 works for anyone who is not the framework.**
 
-**`consumer-source-build`** (`ci.yml:475-691`) is a cross-repo pre-merge canary, and it now proves two
-different things. It checks out MMCA.Helpdesk as a sibling directory (`ci.yml:486-525`) and builds and
+**`consumer-source-build`** (`ci.yml:422-628`) is a cross-repo pre-merge canary, and it now proves two
+different things. It checks out MMCA.Helpdesk as a sibling directory (`ci.yml:444-483`) and builds and
 tests it against *this PR's* framework source, so a breaking public-API change fails here rather than
 surfacing after a release and a lockstep sweep. Helpdesk is the ideal canary precisely because it is
 minimal: a single-module app that needs no database and no GitHub Packages token to compile, shipping a
 committed `local.props` that swaps the `MMCA.Common.*` `PackageReference`s for `ProjectReference`s into
 `../MMCA.Common/Source`. The sibling checkout layout is what makes that relative path resolve to the PR's
-own checkout. Its test step (`ci.yml:564-569`) carries the same discovery floor idea as `build-and-test`,
-set to 40 against a suite of about 91 (`ci.yml:567-568`). Promoted to a required gate on 2026-07-16 after
-9 consecutive green runs (`ci.yml:464-465`).
+own checkout. Its test step (`ci.yml:522-527`) carries the same discovery floor idea as `build-and-test`,
+set to 40 against a suite of about 91 (`ci.yml:525-526`). Promoted to a required gate on 2026-07-16 after
+9 consecutive green runs (`ci.yml:417-418`).
 
 Two additions are worth reading closely. First, the job resolves which Helpdesk ref to build
-(`ci.yml:498-513`): if a branch with the **same name** as this PR's head branch exists on
+(`ci.yml:456-471`): if a branch with the **same name** as this PR's head branch exists on
 `ivanball/MMCA.Helpdesk`, the canary builds that pair together; otherwise it builds Helpdesk `main`. That
 convention is what makes a deliberate breaking framework change landable at all. Helpdesk's own CI builds
 against MMCA.Common `main`, so neither repo can adapt first while the canary pins the other's `main`: a
-mutual deadlock, resolved by letting one PR name its counterpart branch (`ci.yml:493-497`).
+mutual deadlock, resolved by letting one PR name its counterpart branch (`ci.yml:451-455`).
 
 Second, the job runs the consumer's **real EF migrations against a real SQL Server**. An ephemeral
 SQL Server container starts *before* the build so it warms up while the solution compiles
-(`ci.yml:557-566`). Its image is the job-level `SQLSERVER_IMAGE`, pinned to one cumulative update,
-`mcr.microsoft.com/mssql/server:2022-CU27-ubuntu-22.04`, rather than `2022-latest` (`ci.yml:490-495`):
+(`ci.yml:501-513`). Its image is the job-level `SQLSERVER_IMAGE`, pinned to one cumulative update,
+`mcr.microsoft.com/mssql/server:2022-CU27-ubuntu-22.04`, rather than `2022-latest` (`ci.yml:438-442`):
 this is a required gate, so a new CU must not change what it runs without a reviewed diff, and the
 comment ties the tag to the `sqlserver-integration` tier, which pins the same one ("bump both").
 `go-sqlcmd` is installed as a single static binary rather than the mssql-tools deb, and is itself pinned
-(`ci.yml:582-601`): a fixed `SQLCMD_VERSION` (`v1.10.0`) is downloaded to `$RUNNER_TEMP` and checked
+(`ci.yml:529-548`): a fixed `SQLCMD_VERSION` (`v1.10.0`) is downloaded to `$RUNNER_TEMP` and checked
 against `SQLCMD_SHA256` with `sha256sum -c` before `sudo tar` extracts it, because piping
 `releases/latest` straight into a root `tar` ran whatever the newest upload was, unchecked. Version and
 digest are bumped together. A 30 x 5s poll waits on a real `SELECT 1` rather than on Docker's
-notion of "running" (`ci.yml:581-594`), and `dotnet ef database update` applies the Tickets migrations
-with the same `dotnet-ef 10.0.8` the consumers deploy with (`ci.yml:598-623`). The reason is stated in
-the comment (`ci.yml:602-610`): `migrations add` and the model-drift gate never open a connection, so
+notion of "running" (`ci.yml:550-565`), and `dotnet ef database update` applies the Tickets migrations
+with the same `dotnet-ef 10.0.8` the consumers deploy with (`ci.yml:567-594`). The reason is stated in
+the comment (`ci.yml:573-577`): `migrations add` and the model-drift gate never open a connection, so
 neither notices a framework change that breaks the generated DDL, the history table, or the design-time
 context wiring. `database update` does.
 
-The step after it is the one that makes the apply falsifiable (`ci.yml:630-657`). `dotnet ef database
+The step after it is the one that makes the apply falsifiable (`ci.yml:596-628`). `dotnet ef database
 update` exits 0 on a no-op, so a wiring mistake that applied nothing would pass silently. The assertion
 step therefore reads `__EFMigrationsHistory` for at least one row and checks that both a module table
 (`Tickets.Ticket`) and a **framework** table (`dbo.OutboxMessages`) exist. The framework table is the
 half that belongs to MMCA.Common, so a change that stops the framework's own tables reaching a consumer's
 schema fails right here rather than at a consumer's deploy. The job's timeout was raised to 30 minutes to
-pay for the container, the poll and the apply (`ci.yml:479-481`), and the throwaway SA password is inline
-rather than a secret so the gate still runs from a fork (`ci.yml:483-486`).
+pay for the container, the poll and the apply (`ci.yml:426-428`), and the throwaway SA password is inline
+rather than a secret so the gate still runs from a fork (`ci.yml:430-433`).
 
 [Rubric §8, Data Architecture] is served in a way no build-only canary can reach: the framework's
 migration path is exercised end to end, on a real engine, by a real consumer.
 
-**`package-consumption`** (`ci.yml:669-755`) closes the gap that the previous job cannot: source-mode
+**`package-consumption`** (`ci.yml:640-758`) closes the gap that the previous job cannot: source-mode
 builds bind `ProjectReference`s, so pack breaks (NU5xxx) and package-mode-only restore, analyzer, and
 reference failures stay invisible to them. The comment records that this failure mode shipped **twice**
-before the job existed (`ci.yml:659-668`). So this job packs every slnx package into a local folder feed
-under a CI-only version (`PACK_VERSION` at `ci.yml:674-675`, packed at `ci.yml:698-700`, with
+before the job existed (`ci.yml:630-639`). So this job packs every slnx package into a local folder feed
+under a CI-only version (`PACK_VERSION` at `ci.yml:645-646`, packed at `ci.yml:669-671`, with
 `MinVerSkip=true` so the consumer can pin the packed version exactly), then scaffolds a throwaway
-consumer (`ci.yml:702-750`) whose `nuget.config` maps `MMCA.Common.*` to that feed and everything else to
-nuget.org, and builds it (`ci.yml:752-755`).
+consumer (`ci.yml:673-721`) whose `nuget.config` maps `MMCA.Common.*` to that feed and everything else to
+nuget.org, and builds it (`ci.yml:723-726`).
 
 The throwaway consumer lives in `RUNNER_TEMP`, **outside the repo checkout**, and that placement is the
 whole point: inside the checkout it would inherit `Directory.Build.props` and `Directory.Packages.props`
@@ -515,18 +513,18 @@ and stop resembling a real downstream app. It references the meta set (`API` + `
 `Testing.Architecture`) to pull the full package graph transitively, and compiles one smoke type against
 `Result` to prove the references actually bind rather than merely resolve.
 
-The job's last step, **Layer rules ship with the packages** (`ci.yml:757-787`), proves something a
+The job's last step, **Layer rules ship with the packages** (`ci.yml:728-758`), proves something a
 successful consumer build cannot. `MMCA.Common.Shared` carries a `buildTransitive` targets file
 (`Source/Build/MMCA.Common.Shared.targets`) that gives any consumer project named
 `{App}.{Module}.{Layer}` compile-time layer rules with no opt-in: `MMCA0001` for a forbidden project
-reference, `MMCA0002` for a forbidden package reference (the comment at `ci.yml:759-763` ties it to
+reference, `MMCA0002` for a forbidden package reference (the comment at `ci.yml:730-734` ties it to
 [ADR-015](https://ivanball.github.io/docs/adr/015-architecture-fitness-functions.html) and
 [ADR-058](https://ivanball.github.io/docs/adr/058-runtime-conformance-suites-as-a-package.html)). The step
 writes three kinds of probe project next to the throwaway consumer: one positive probe
-(`Probe.Sample.Application` referencing `Probe.Sample.Domain`, which must build, `ci.yml:779-781`) and two
+(`Probe.Sample.Application` referencing `Probe.Sample.Domain`, which must build, `ci.yml:750-752`) and two
 negative ones (`Probe.BadPackage.Domain` pulling `MMCA.Common.Infrastructure`, which must fail with
 `MMCA0002`, and `Probe.BadProject.Domain` referencing an Application project, which must fail with
-`MMCA0001`, `ci.yml:782-786`). The helper `expect_error` (`ci.yml:773-778`) fails the step both when a
+`MMCA0001`, `ci.yml:753-757`). The helper `expect_error` (`ci.yml:744-749`) fails the step both when a
 negative probe builds and when it fails for a reason other than the expected code.
 
 Why the negatives are the point: a passing positive probe on its own would also pass if the targets file
@@ -536,7 +534,7 @@ architectural rules are enforced mechanically rather than by review; here the ru
 package and CI proves they arrive, which is the consumer-side twin of the
 [doubled fitness functions](00-primer.md#architecture-enforcement-is-doubled-fitness-functions-rubric-34-3).
 
-**`sample-deployment-validate`** (`ci.yml:795-811`) type-checks the `samples/deployment` Bicep templates
+**`sample-deployment-validate`** (`ci.yml:766-782`) type-checks the `samples/deployment` Bicep templates
 with `az bicep build`, no cloud credentials required. A library cannot deploy itself, so this IaC/OIDC
 reference is documentation that would otherwise rot unobserved; compiling it on every PR keeps it honest.
 A real what-if or deploy stays a consumer-side concern, since ADC's and Store's `deploy.yml` are the
@@ -544,51 +542,51 @@ production-proven versions.
 
 ### Job: `redis-integration`
 
-`redis-integration` (`ci.yml:837-879`) runs `MMCA.Common.Infrastructure.Redis.Tests` against a real Redis via
+`redis-integration` (`ci.yml:784-826`) runs `MMCA.Common.Infrastructure.Redis.Tests` against a real Redis via
 Testcontainers, which Ubuntu runners support with no extra setup since they ship a Docker daemon. Like the
 E2E and benchmark projects it lives outside `MMCA.Common.slnx` so the fast solution-wide unit loop never
 requires Docker, and is therefore built and run by path.
 
-The comment (`ci.yml:842-846`) states the falsifiability argument better than a summary can:
+The comment (`ci.yml:789-793`) states the falsifiability argument better than a summary can:
 [`DistributedCacheService`](group-09-caching.md#distributedcacheservice) is the one place where the **storage format** matters, and a
 `Mock<IDistributedCache>` cannot express it. Redis keys are typed, so a counter written as a string and
 read back as a hash round-trips perfectly against a mock and answers `WRONGTYPE` against a server. A test
 that cannot fail against a mock is not a test of the thing you care about.
 
-Its heavy step is code-guarded like every other job (`ci.yml:869-879`) so a docs-only PR does not pull a
+Its heavy step is code-guarded like every other job (`ci.yml:816-826`) so a docs-only PR does not pull a
 Redis image, while the job itself still runs and posts its context green, keeping it safe to add to branch
-protection. The test step carries `--minimum-expected-tests 15` (`ci.yml:874-879`), and the comment says
+protection. The test step carries `--minimum-expected-tests 15` (`ci.yml:823-826`), and the comment says
 why the number is exactly 15: it is the `[Fact]` count in the project (5 `DistributedCacheService` plus 10
 `HybridCacheService`), so a tier that silently discovers fewer tests fails, and adding a test means raising
 the floor in the same PR. The same exact-count floor applies to the two database tiers below.
 
 ### Jobs: `postgresql-integration`, `sqlserver-integration` and `apphost-testing`
 
-`postgresql-integration` (`ci.yml:881-916`) is the Redis argument applied to the second database engine.
+`postgresql-integration` (`ci.yml:828-863`) is the Redis argument applied to the second database engine.
 The PostgreSQL provider is the one place where the SQL the framework *emits* matters, and a model
-assertion cannot express it: the comment is specific about the failure class (`ci.yml:886-891`), a
+assertion cannot express it: the comment is specific about the failure class (`ci.yml:833-838`), a
 partial-index predicate written the SQL Server way (`[ProcessedOn] IS NULL`), a soft-delete predicate
 comparing a boolean to `0`, and a `DateTime` whose `Kind` is not UTC all build a perfectly valid EF model
 and are rejected by the server. The job runs `MMCA.Common.Infrastructure.PostgreSQL.Tests` against a real
-PostgreSQL over Testcontainers (`ci.yml:907-916`), built and run by path for the same reason the Redis
+PostgreSQL over Testcontainers (`ci.yml:854-863`), built and run by path for the same reason the Redis
 tier is: the project sits outside `MMCA.Common.slnx` so the fast unit loop never requires Docker. Its floor
-is `--minimum-expected-tests 7`, the `[Fact]` count in `PostgreSQLPersistenceTests.cs` (`ci.yml:913-916`).
+is `--minimum-expected-tests 7`, the `[Fact]` count in `PostgreSQLPersistenceTests.cs` (`ci.yml:861-863`).
 
-`sqlserver-integration` (`ci.yml:918-956`) completes the set for the default engine. The comment
-(`ci.yml:925-932`) names what neither a mock nor SQLite can express on SQL Server, which is **session
+`sqlserver-integration` (`ci.yml:865-903`) completes the set for the default engine. The comment
+(`ci.yml:872-878`) names what neither a mock nor SQLite can express on SQL Server, which is **session
 state and server-generated values**: `SET IDENTITY_INSERT` holds only on the session that ran it, a
 `rowversion` is issued by the server on every write, and the outbox row must reach the database in the
 same `SaveChanges` as its aggregate. The job runs the shipped
 [`SQLServerDbContext`](group-07-persistence-ef-core.md#sqlserverdbcontext) and
 [`DbContextFactory`](group-07-persistence-ef-core.md#dbcontextfactory) against a real SQL Server over
 Testcontainers. Its timeout is 20 minutes, the PostgreSQL tier's 15 plus headroom for the larger image pull
-and slower engine start (`ci.yml:921-924`), and the image tag is the same pinned `2022-CU27-ubuntu-22.04`
+and slower engine start (`ci.yml:869-871`), and the image tag is the same pinned `2022-CU27-ubuntu-22.04`
 the `consumer-source-build` canary uses, which is why the canary's comment says to bump both
-(`ci.yml:490-495`). The heavy step is code-guarded with the job still posting green (`ci.yml:948-951`),
+(`ci.yml:438-442`). The heavy step is code-guarded with the job still posting green (`ci.yml:894-898`),
 the project is outside `MMCA.Common.slnx` and run by path, and the floor is
-`--minimum-expected-tests 3`, the `[Fact]` count in `SQLServerPersistenceTests.cs` (`ci.yml:952-956`).
+`--minimum-expected-tests 3`, the `[Fact]` count in `SQLServerPersistenceTests.cs` (`ci.yml:899-903`).
 It is **not a required check yet**: the comment records that promoting it is a branch-protection setting,
-not a workflow change (`ci.yml:931-932`).
+not a workflow change (`ci.yml:877-878`).
 
 `apphost-testing` (`ci.yml:905-950`) is the only tier that starts a real orchestrator. It boots the sample
 AppHost through `Aspire.Hosting.Testing` and closes the one layer nothing else executes, the AppHost
@@ -694,9 +692,10 @@ and waits on that environment's protection rules (a required reviewer, and a dep
 `v*` tags) before it runs at all. The first step after checkout then refuses to publish a tag that is not
 reachable from `origin/main` (`release.yml:35-46`): it fetches the branch tip and fails unless
 `git merge-base --is-ancestor` places the tagged commit on merged `main`. The job is bounded at
-`timeout-minutes: 15` (`release.yml:12-14`), about twice the slowest recent tag run, so a hung restore,
+`timeout-minutes: 15` (`release.yml:15`), about twice the slowest recent tag run, so a hung restore,
 test or push fails instead of holding a runner for six hours. `publish-maui` deliberately keeps 40
-minutes (`release.yml:146-149`): it publishes after the main package set is already on nuget.org, so a
+minutes (`release.yml:147-153`): it declares no `needs:` on `publish` and runs in parallel with it, so the main
+package set is usually already on nuget.org by the time it pushes (nothing enforces that order), and a
 timeout there would leave a half-published release. A `v*` tag is the one ref pushed
 directly, outside the branch-protection pull-request flow, and this workflow re-runs only restore, build,
 test and SBOM, so the ancestry check is what makes the checks that ran on the merged pull request (the
@@ -780,7 +779,7 @@ Two supply-chain artifacts follow the pack. **Build provenance** (`release.yml:7
 `actions/attest-build-provenance` writes a signed SLSA attestation binding each `.nupkg` to this workflow,
 this commit and this repository. GitHub stores it, and anyone holding a downloaded package can check it with
 `gh attestation verify <file>.nupkg --owner ivanball`. It needs the `attestations: write` permission the job
-declares (`release.yml:21`; `publish-maui` declares its own at `release.yml:140` and attests its package at
+declares (`release.yml:21`; `publish-maui` declares its own at `release.yml:156` and attests its package at
 `release.yml:195-198`). It answers the question an SBOM cannot: not what is inside the package, but whether
 this exact file was built by this pipeline from this commit ([ADR-038](https://ivanball.github.io/docs/adr/038-supply-chain-provenance.html)).
 
@@ -842,7 +841,8 @@ property, since there is no secret to steal even momentarily.
 
 ### Job: `publish-maui`
 
-A second job on `windows-latest` (`release.yml:130-236`) packs the one out-of-solution package,
+A second job on `windows-latest` (`release.yml:146-257`), with no `needs:` on `publish` so the two run in
+parallel (`release.yml:149-150`), packs the one out-of-solution package,
 `MMCA.Common.UI.Maui`, which multi-targets net10.0-android/ios/maccatalyst/windows and therefore cannot
 build on the ubuntu runner at all (ADR-042). It installs the MAUI workload (`release.yml:178-179`),
 derives the version from the same tag (`release.yml:181-184`), builds and packs by csproj path into
@@ -873,23 +873,23 @@ dispatch) it deploys to Azure; on a pull request it runs the validation jobs onl
 
 It is **thirteen jobs**, and the shape of the split is the interesting fact. A `changes` classifier
 (`deploy.yml:65`) that everything keys off; four pull-request-only validation jobs, `build-and-test`
-(`:220`), `wasm-payload-budget` (`:463`), `integration-tests` (`:628`) and `coverage` (`:730`); a
-`supply-chain` job (`:564`) that runs on every PR and on a code push and gates the deploy; four proof
-gates that run only on the deploy path, `ai-eval-gate` (`:509`), `cost-guard` (`:770`), `e2e-gate`
-(`:792`) and `freshness` (`:817`, one job whose four steps carry the gate names `dr-freshness`,
+(`:220`), `wasm-payload-budget` (`:476`), `integration-tests` (`:641`) and `coverage` (`:743`); a
+`supply-chain` job (`:577`) that runs on every PR and on a code push and gates the deploy; four proof
+gates that run only on the deploy path, `ai-eval-gate` (`:522`), `cost-guard` (`:783`), `e2e-gate`
+(`:806`) and `freshness` (`:831`, one job whose four steps carry the gate names `dr-freshness`,
 `load-freshness`, `cross-service-freshness` and `cross-browser-freshness`); and three deploy-path jobs,
-`foundation` (`:940`), `build-images` (`:998`) and `deploy` (`:1142`).
+`foundation` (`:954`), `build-images` (`:1012`) and `deploy` (`:1156`).
 
 Three structural decisions explain most of that. Validation is PR-only because branch protection
 enforces admins and requires branches to be up to date, so the PR's `build-and-test` already tested the
-exact tree that merges and is the test gate for the deploy (`deploy.yml:1146-1148`). Phase 1 and Phase 2
+exact tree that merges and is the test gate for the deploy (`deploy.yml:1160-1162`). Phase 1 and Phase 2
 (foundation Bicep, then the image builds) live in their own jobs so they run **concurrently with** the
-roughly 20-minute `e2e-gate` instead of behind it (`deploy.yml:932-939`, `:1160-1162`); `deploy` itself
+roughly 20-minute `e2e-gate` instead of behind it (`deploy.yml:946-953`, `:1174-1176`); `deploy` itself
 is Phase 3 onward and consumes the prebuilt image tags. And the gates that remain on the deploy path
 cover what the PR run cannot see: `e2e-gate` the full stack in a browser on a UI diff, `ai-eval-gate`
 the paid live judge of the one component whose behavior can change with no code change at all
-(`:488-508`), and `freshness` the age of the scheduled proofs, including the firefox and webkit coverage
-that stays off the per-deploy critical path (`:809-816`).
+(`:501-521`), and `freshness` the age of the scheduled proofs, including the firefox and webkit coverage
+that stays off the per-deploy critical path (`:823-830`).
 
 ### Triggers and concurrency
 
@@ -948,7 +948,7 @@ it. A `permissions:` block is a ceiling for every workflow it calls, not just fo
 
 [Rubric §11, Security] is embodied: OIDC federated identity eliminates the secret-rotation burden and
 the credential-leak surface area of a static client secret. The federated credential is scoped to the
-`production` environment (`deploy.yml:1125-1130`), so only jobs that declare `environment: production` can
+`production` environment (`deploy.yml:1139-1144`), so only jobs that declare `environment: production` can
 obtain the Azure token.
 
 ### Job: `changes`, the docs-only short-circuit and the per-image dirty map
@@ -1013,9 +1013,9 @@ require-branches-up-to-date protection the PR validates the exact tree that merg
 CI on the post-merge push is redundant. Every heavy step below additionally carries `if:
 needs.changes.outputs.code == 'true'`, so a docs-only PR still posts this job's required status green.
 No post-merge job re-runs these tiers on the push: branch protection enforces admins as well as strict
-up-to-date checks, so this PR run is the test gate for the deploy (`deploy.yml:1146-1148`).
+up-to-date checks, so this PR run is the test gate for the deploy (`deploy.yml:1160-1162`).
 
-**Step 1, Setup and restore** (`deploy.yml:276-291`):
+**Step 1, Setup and restore** (`deploy.yml:284-297`):
 ```yaml
 - name: Restore dependencies
   run: dotnet restore MMCA.ADC.CI.slnf --locked-mode
@@ -1029,24 +1029,43 @@ requiring workloads beyond the standard .NET SDK. `GITHUB_TOKEN` is passed as an
 credential provider can authenticate to GitHub Packages and pull the MMCA.Common packages.
 
 `--locked-mode` is what makes the NuGet cache above it trustworthy. The setup step keys
-`~/.nuget/packages` on `**/packages.lock.json` (`deploy.yml:284-285`), and the comment records the
-reasoning (`deploy.yml:281-283`): the committed lock files make the key exact, and locked mode means a
+`~/.nuget/packages` on `**/packages.lock.json` (`deploy.yml:293`), and the comment records the
+reasoning (`deploy.yml:289-292`): the committed lock files make the key exact, and locked mode means a
 cache hit is authoritative because the restore cannot resolve anything the key did not account for.
 
-**Step 2, Build** (`deploy.yml:293-295`): `dotnet build MMCA.ADC.CI.slnf --no-restore -c Release`, same
+**Step 2, Build** (`deploy.yml:301-303`): `dotnet build MMCA.ADC.CI.slnf --no-restore -c Release`, same
 TreatWarningsAsErrors + five-analyzer enforcement as Common.
 
-**Step 3, Unit and architecture tests with coverage** (`deploy.yml:301-309`):
+**Navigation contract fetch** (`deploy.yml:338-348`). Before the tests run, the job downloads the published
+`adc-NavigationFlow.md` from the Website repository's `main` branch and exports its path as
+`ADC_NAVIGATION_DOC` (`deploy.yml:344-348`). `NavigationContractTests` compares ADC's `@page` routes and
+their access attributes with that document's Route Contract table (`deploy.yml:340-342`). Because the
+contract lives in another repository, the comment states the ordering rule outright: a route or guard
+change needs its Website doc PR merged first, or this run fails on the drift (`deploy.yml:342-343`). The
+step runs under `set -euo pipefail` with `curl -fsSL` (`deploy.yml:345-346`), so an HTTP error fails the
+step instead of handing the test a missing file.
+
+[Rubric §14, Testability & Test Strategy] (assesses whether the important behavior is pinned by automated
+tests) is served: the route and guard map a reader relies on in the navigation guide is checked against
+the code on every PR, so the document cannot silently drift from the `@page` attributes it describes.
+
+**Step 3, Unit and architecture tests with coverage** (`deploy.yml:350-366`):
 ```bash
 dotnet tool install --global dotnet-coverage
 dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
-  "dotnet test --solution MMCA.ADC.CI.slnf --no-build -c Release --minimum-expected-tests 1"
+  "dotnet test --solution MMCA.ADC.CI.slnf --no-build -c Release --minimum-expected-tests 5000"
 ```
 As in Common's CI, the run is wrapped in `dotnet-coverage collect` (it returns the inner exit code so a
-failure still gates) and uploaded as the `coverage-unit` artifact (`deploy.yml:311-319`, retention trimmed
-to 14 days) for the report-only `coverage` job. Same `--minimum-expected-tests 1` guard. Every global tool this workflow installs is pinned to an exact
+failure still gates) and uploaded as the `coverage-unit` artifact (`deploy.yml:368-376`, retention trimmed
+to 14 days) for the report-only `coverage` job. Coverage is not checked in this step: the two floor steps below fail the build (`deploy.yml:352-355`). The
+`--minimum-expected-tests 5000` floor is solution-wide (`dotnet test` aggregates it across every test app):
+5000 is the `MMCA.ADC.CI.slnf` total of 5032 measured on one PR run, rounded down to the nearest 50 so a few
+deleted tests do not trip it while a discovery or filter breakage that silently drops a whole project does
+(`deploy.yml:356-360`). The same comment records why this step is the production test gate: branch
+protection enforces admins and requires an up-to-date branch, so this run covers the exact tree that merges
+and no post-merge job repeats it (`deploy.yml:360-362`). Every global tool this workflow installs is pinned to an exact
 version (`dotnet-coverage` 18.11.0 and `dotnet-reportgenerator-globaltool` 5.5.11, at `deploy.yml:336`
-and `:388`; the CycloneDX tool is installed inside the shared SBOM action), so a tool release cannot
+and `:401`; the CycloneDX tool is installed inside the shared SBOM action), so a tool release cannot
 change what a gate measures between two runs of the same commit.
  Covers unit tests
 for all module layers plus `Architecture.Tests` (NetArchTest fitness functions, layer flow, domain purity,
@@ -1056,11 +1075,11 @@ module isolation).
 structure is not accidentally violated by a new project reference (e.g. `Domain` referencing
 `Infrastructure`).
 
-**Step 4, Unit-tier coverage floor** (`deploy.yml:321-346`). Unlike Common, ADC enforces its floor **here**
-rather than in the `coverage` job, and the comment says why (`deploy.yml:323-324`): `build-and-test` is a
+**Step 4, Unit-tier coverage floor** (`deploy.yml:378-408`). Unlike Common, ADC enforces its floor **here**
+rather than in the `coverage` job, and the comment says why (`deploy.yml:380-381`): `build-and-test` is a
 required PR check, while `coverage` is report-only and absent from `deploy`'s `needs`, so a floor living
-there would gate nothing. The floor is **55.5%** line coverage (`deploy.yml:344`), measured with
-ReportGenerator over `+MMCA.ADC.*;-*.Tests;-MMCA.ADC.*.Service;-MMCA.ADC.*.Contracts` (`deploy.yml:342`).
+there would gate nothing. The floor is **55.5%** line coverage (`deploy.yml:406`), measured with
+ReportGenerator over `+MMCA.ADC.*;-*.Tests;-MMCA.ADC.*.Service;-MMCA.ADC.*.Contracts` (`deploy.yml:404`).
 
 Every term in that filter is a correction of a measurement that lied. `+MMCA.ADC.*` excludes the consumed
 MMCA.Common assemblies, which are tested in their own repo and instrument at near zero here, deflating the
@@ -1068,26 +1087,26 @@ figure to about 26.8%. The `*.Service` and `*.Contracts` exclusions were added o
 `MMCA.ADC.Services.Tests` first pulled the service hosts and the gRPC contracts into the unit cobertura:
 hosts are integration-tier subjects (`Program.cs`, Kestrel config, warm-up) and contracts are dominated by
 protobuf-generated plumbing, so both deflate the unit number without measuring unit code, 52.8% raw versus
-62.5% filtered on the same run (`deploy.yml:330-335`). A coverage floor is only a regression backstop if
+62.5% filtered on the same run (`deploy.yml:387-392`). A coverage floor is only a regression backstop if
 the number it watches moves for the reason you think it does.
 
-**Step 5, Application-layer branch coverage floor** (`deploy.yml:348-378`). A second, narrower gate reads
+**Step 5, Application-layer branch coverage floor** (`deploy.yml:410-444`). A second, narrower gate reads
 the same cobertura file, and the reason it exists is the sharpest coverage argument in the repository
-(`deploy.yml:350-361`). The repo-wide floor above is a blunt average dominated by UI, Infrastructure and
+(`deploy.yml:412-418`). The repo-wide floor above is a blunt average dominated by UI, Infrastructure and
 generated code, so a command handler can lose every branch it had and the global number barely moves. The
 Application layer is where the business decisions live (guards, authorization short-circuits, retry and
 conflict paths), and those are **branches**, not lines: a handler can be fully line-covered by one happy
 path while every failure branch goes unexercised. So this gate measures branch coverage
-(`deploy.yml:374`) over the four `Source/Modules/*/*.Application` assemblies only
-(`-assemblyfilters:'+MMCA.ADC.*.Application;-*.Tests'`, `deploy.yml:366-367`), with a floor of **77.5%**
-(`deploy.yml:376`), about two points under the 79.7% measured on 2026-08-26 across the full unit tier.
+(`deploy.yml:440`) over the four `Source/Modules/*/*.Application` assemblies only
+(`-assemblyfilters:'+MMCA.ADC.*.Application;-*.Tests'`, `deploy.yml:432-433`), with a floor of **77.5%**
+(`deploy.yml:442`), about two points under the 79.7% measured on 2026-08-26 across the full unit tier.
 
-The step's most transferable line is the guard *before* the measurement (`deploy.yml:369-373`): if the
+The step's most transferable line is the guard *before* the measurement (`deploy.yml:434-439`): if the
 report covers fewer than four assemblies it fails outright, because a filter that matched nothing would
 otherwise let the floor pass vacuously. That is the same instinct as the `--minimum-expected-tests` floors
 throughout this chapter: a gate whose input went missing must be indistinguishable from a gate that failed.
 
-**Step 6, EF migrations model-drift gate** (`deploy.yml:384-398`):
+**Step 6, EF migrations model-drift gate** (`deploy.yml:450-465`):
 ```bash
 for module in Identity Conference Engagement Notification; do
   project="Source/Hosting/MMCA.ADC.Migrations.SqlServer.$module"
@@ -1099,8 +1118,8 @@ done
 `dotnet ef migrations has-pending-model-changes` compares the EF design-time model to the committed
 migration snapshot **without connecting to a database**. If a developer changes an entity configuration
 (adds a column, renames a property) but forgets to author a new migration, this step fails the build. The
-comment on `deploy.yml:386-389` states the rationale: "a drift here means the deploy's idempotent
-migration script would not capture the schema change."
+comment at `deploy.yml:453` names the comparison:
+the design-time model against the committed migration snapshot.
 
 This is one of the most important gates in the pipeline. An entity model that diverges from the migration
 history means the production schema diverges from the application's EF model, a runtime crash on first
@@ -1109,7 +1128,7 @@ is doubly important now that `deploy.yml` has *no* sqlcmd migration step: this b
 guarantee that the services' startup `Migrate()` always has a migration to apply for every model change.
 
 The `--no-build` flag reuses the Release build from Step 2, so there is no rebuild overhead. `dotnet-ef`
-is installed globally (version `10.0.8`) in the step before this one (`deploy.yml:380-382`), the same pin
+is installed globally (version `10.0.8`) in the step before this one (`deploy.yml:446-448`), the same pin
 MMCA.Common's Helpdesk canary uses so the two exercise the same tool.
 
 [Rubric §8, Data Architecture] (assesses whether schema management is automated, versioned, and safe)
@@ -1191,39 +1210,39 @@ flag like the rest of the job.
 
 ### Job: `ai-eval-gate`, the behavior that changes without a code change
 
-`ai-eval-gate` (`deploy.yml:488-555`) exists for the one component in this repository whose behavior can
+`ai-eval-gate` (`deploy.yml:501-568`) exists for the one component in this repository whose behavior can
 move while every unit test stays green: the AI session scorer that ranks submitted talks for organizers.
-The comment states the case (`deploy.yml:489-491`): a prompt edit, a model deprecation, or a
+The comment states the case (`deploy.yml:502-504`): a prompt edit, a model deprecation, or a
 provider-side contract change each moves the numbers an organizer uses to accept or decline a talk.
 
 **The evaluation has two tiers split by cost, and the split decides where each one runs**
-(`deploy.yml:495-508`):
+(`deploy.yml:508-521`):
 
 1. **Golden replay plus prompt contract.** No API key and no network: recorded proposals are replayed
    through the real scoring service, and the rendered prompt is hashed against the hash recorded for the
    current `PromptVersion`. This is the tier that catches a prompt edit that forgot to bump the version,
    a delimiter that stopped being emitted, and a change to the weighting math. These tests carry no
    trait, so they run on every pull request in `build-and-test`'s `MMCA.ADC.CI.slnf` pass, against the
-   exact tree that merges (`deploy.yml:499-500`).
+   exact tree that merges (`deploy.yml:512-513`).
 2. **Live judge.** Real paid calls to the configured AI provider's API for each golden proposal,
    asserting the overall score lands in the case's band. The bands are deliberately wide: a judge model
-   is not deterministic, and a flaky gate gets ignored (`deploy.yml:501-503`).
+   is not deterministic, and a flaky gate gets ignored (`deploy.yml:514-516`).
 
 The job exists for the second tier, so it runs only on a code deploy whose diff touches the scoring code,
 `if: github.event_name != 'pull_request' && needs.changes.outputs.code == 'true' &&
-needs.changes.outputs.scoring == 'true'` (`deploy.yml:511`), precisely because it costs money; every
-other deploy skips it, and `deploy` accepts `skipped` (`deploy.yml:505-508`). It restores and builds one
+needs.changes.outputs.scoring == 'true'` (`deploy.yml:524`), precisely because it costs money; every
+other deploy skips it, and `deploy` accepts `skipped` (`deploy.yml:518-521`). It restores and builds one
 project by path, `Tests/Modules/Conference/MMCA.ADC.Conference.Scoring.Evaluation.Tests`, with
-`--locked-mode` (`deploy.yml:526-532`), so it never pays for the full solution, and it re-runs the replay
+`--locked-mode` (`deploy.yml:539-545`), so it never pays for the full solution, and it re-runs the replay
 tier first as a cheap precondition for spending on the judge, with `--filter-not-trait
-"Category=AiEval.Live" --minimum-expected-tests 1` (`deploy.yml:534-541`): a filter breakage that runs
+"Category=AiEval.Live" --minimum-expected-tests 1` (`deploy.yml:547-554`): a filter breakage that runs
 zero tests must red the gate rather than report a vacuous pass.
 
 Two details in the live step are worth reading. It sets **no** `--minimum-expected-tests` floor, and the
-comment says why (`deploy.yml:544-546`): without `AI_API_KEY` every case skips itself dynamically,
+comment says why (`deploy.yml:557-559`): without `AI_API_KEY` every case skips itself dynamically,
 reported as skipped and never as passed, so a zero-run must not red the deploy on a repository whose
 secret is absent. And the key arrives as a step-scoped `env` from `secrets.ANTHROPIC_API_KEY` mapped to
-the provider-neutral variable `AI_API_KEY` (`deploy.yml:552-555`; the secret keeps its name because it
+the provider-neutral variable `AI_API_KEY` (`deploy.yml:565-568`; the secret keeps its name because it
 holds an Anthropic credential, and only the variable the test reads is neutral), never as a build
 argument or a workflow input.
 
@@ -1239,49 +1258,49 @@ tier split itself: the gate that costs money runs only for the diffs that can ch
 
 ### Job: `supply-chain`
 
-This job (`deploy.yml:564`) runs on every pull request and on every code push, `if: github.event_name ==
-'pull_request' || needs.changes.outputs.code == 'true'` (`deploy.yml:566`), so a docs-only push skips it
+This job (`deploy.yml:577`) runs on every pull request and on every code push, `if: github.event_name ==
+'pull_request' || needs.changes.outputs.code == 'true'` (`deploy.yml:579`), so a docs-only push skips it
 along with the deploy. Unlike the other validation jobs it is **not** PR-only: it is in `deploy`'s `needs`
-list (`deploy.yml:1145`) and its result must be `success` for the deploy to proceed (`deploy.yml:1177`).
+list (`deploy.yml:1159`) and its result must be `success` for the deploy to proceed (`deploy.yml:1191`).
 Both of its steps that matter are gates, and the comment above the job splits them by event
-(`deploy.yml:557-563`): the vulnerability audit runs on both events, the SBOM on the pull request only.
+(`deploy.yml:570-576`): the vulnerability audit runs on both events, the SBOM on the pull request only.
 
 **The two gates:**
 
-- **Vulnerability audit** (`deploy.yml:586-599`) fails on any vulnerable-package row except advisories
+- **Vulnerability audit** (`deploy.yml:599-612`) fails on any vulnerable-package row except advisories
   accepted via `NuGetAuditSuppress` in `Directory.Build.props`. It is no longer a copy of Common's gate: it
   calls the shared composite action `ivanball/MMCA.Common/.github/actions/nuget-vulnerability-audit@main`
-  (`deploy.yml:595-599`), the implementation Common's `ci.yml` runs by path, so the fail-closed exit-code and
+  (`deploy.yml:608-612`), the implementation Common's `ci.yml` runs by path, so the fail-closed exit-code and
   report-header checks and the narrow `<NuGetAuditSuppress ... Include="GHSA-..."` accept-list reading
-  described in the Common section above apply here unchanged. The comment (`deploy.yml:588-594`) gives the
+  described in the Common section above apply here unchanged. The comment (`deploy.yml:601-607`) gives the
   reason: one implementation for the framework and its consumers instead of a copy per repository that
   drifts ([ADR-038](https://ivanball.github.io/docs/adr/038-supply-chain-provenance.html)). ADC passes `report-path: supply-chain/vulnerable.txt`, so the raw report still
   lands in the artifact uploaded on the pull request. NuGetAudit at restore already gates the build; this makes the job a
   deploy-gating belt-and-suspenders check.
 
-- **CycloneDX SBOM** (`deploy.yml:601-615`) must exist **and contain components**, and it is generated on
-  the pull request only (`deploy.yml:602`). It calls the shared `cyclonedx-sbom@main` action
-  (`deploy.yml:610-615`) with `name: MMCA.ADC.CI` and `filename: adc-sbom.json`; the action fails unless
+- **CycloneDX SBOM** (`deploy.yml:614-628`) must exist **and contain components**, and it is generated on
+  the pull request only (`deploy.yml:615`). It calls the shared `cyclonedx-sbom@main` action
+  (`deploy.yml:623-628`) with `name: MMCA.ADC.CI` and `filename: adc-sbom.json`; the action fails unless
   the file exists and `jq '.components | length'` is greater than zero
   (`MMCA.Common/.github/actions/cyclonedx-sbom/action.yml:68-71`), because a zero-component skeleton
   passes a plain file-size check, which is exactly how an empty SBOM once went unnoticed. The comment
-  (`deploy.yml:603-609`) records three further choices: the action normalises the `.slnf` itself; the
+  (`deploy.yml:616-622`) records three further choices: the action normalises the `.slnf` itself; the
   first-party action is referenced by branch rather than by SHA on purpose, since MMCA.Common `main` is
   PR-protected and a ref is what keeps the consumer gate from drifting away from the framework's; and the
   step is PR-only because branch protection requires an up-to-date branch, so the PR's SBOM describes
   the exact lock files that merge. On a push the job adds only what can be new, the restore and the
-  audit, which catch an advisory published after the PR ran (`deploy.yml:560-562`).
+  audit, which catch an advisory published after the PR ran (`deploy.yml:573-575`).
 
 The vulnerability report and the SBOM upload as the `supply-chain-reports` artifact with a 14-day
-retention, on the pull request only (`deploy.yml:617-626`).
+retention, on the pull request only (`deploy.yml:630-639`).
 
 A `.slnf` records Windows-style project paths, and on the Linux runner a backslash is an ordinary
 filename character, so a tool that opens those paths directly resolves **zero** projects. `dotnet list`
 is unaffected because MSBuild normalizes separators, but CycloneDX once emitted an empty SBOM this way.
-That is why the job passes the **original** `MMCA.ADC.CI.slnf` to the SBOM action (`deploy.yml:612`) and
+That is why the job passes the **original** `MMCA.ADC.CI.slnf` to the SBOM action (`deploy.yml:625`) and
 leaves the forward-slash normalization to the action itself
 (`MMCA.Common/.github/actions/cyclonedx-sbom/action.yml:58-61`), and why `--set-name MMCA.ADC.CI` lives
-inside that action too, driven by the `name: MMCA.ADC.CI` input (`deploy.yml:613`, applied at
+inside that action too, driven by the `name: MMCA.ADC.CI` input (`deploy.yml:626`, applied at
 `action.yml:65`): it pins the BOM metadata component to a stable name.
 
 One scope limit is worth naming here, because a separate workflow exists to cover it: this job audits
@@ -1298,7 +1317,7 @@ merged tree carries a machine-readable inventory of what it ships.
 
 ### Job: `integration-tests`
 
-This job is **pull-request-only** (`deploy.yml:640,544`), and `deploy` does not list it:
+This job is **pull-request-only** (`deploy.yml:653,544`), and `deploy` does not list it:
 ```yaml
 needs: changes
 if: github.event_name == 'pull_request'
@@ -1309,14 +1328,14 @@ Conference, Engagement and Notification (`MMCA.ADC.Integration.slnf:5-8`).
 
 How it protects production is worth being precise about, because the mechanism is not the one you
 would guess. This job never runs on the push to `main`, and it is absent from `deploy`'s `needs`
-list (`deploy.yml:1145`); the only job that consumes it is `coverage` (`deploy.yml:731`). The protection
+list (`deploy.yml:1159`); the only job that consumes it is `coverage` (`deploy.yml:744`). The protection
 comes from branch protection instead: admins are enforced and `main` requires branches to be up to date,
-so the PR check runs against the exact merge tree that will land (`deploy.yml:1146-1148`). The practical
+so the PR check runs against the exact merge tree that will land (`deploy.yml:1160-1162`). The practical
 consequence is that a `workflow_dispatch` run of `deploy.yml` does not re-run the integration tier at
 all, and that no deploy-path job re-runs the PR's test tiers: the PR checks are the test gate, with
 `e2e-gate` adding the browser tier on a UI diff.
 
-**SQL Server as a guarded step, not a `services:` block** (`deploy.yml:654-662`):
+**SQL Server as a guarded step, not a `services:` block** (`deploy.yml:667-675`):
 ```yaml
 - name: Start SQL Server
   if: needs.changes.outputs.code == 'true'
@@ -1332,23 +1351,23 @@ An ephemeral SQL Server Developer Edition container is started by an explicit `d
 placement is the design detail: a job-level `services:` block starts before the first step and cannot be
 conditioned, so a docs-only PR would pay to pull and boot SQL Server for nothing. As a guarded step it is
 skipped with everything else while the job still runs and posts its required status green
-(`deploy.yml:641-645`). MMCA.Common's Helpdesk canary now uses the identical pattern for its migration
+(`deploy.yml:654-658`). MMCA.Common's Helpdesk canary now uses the identical pattern for its migration
 apply (`MMCA.Common/.github/workflows/ci.yml:543-546`).
 
-The password lives in the job's `env:` (`deploy.yml:649-650`) because it is a throwaway SA credential for
+The password lives in the job's `env:` (`deploy.yml:662-663`) because it is a throwaway SA credential for
 an ephemeral container, not a production secret, and not stored in GitHub Secrets. The comment states it
-explicitly (`deploy.yml:644-645`): "Throwaway SA password, not a secret."
+explicitly (`deploy.yml:657-658`): "Throwaway SA password, not a secret."
 
-**Wait-for-SQL-Server gate** (`deploy.yml:678-690`): a 30-iteration poll loop (5-second sleep each) using
-`sqlcmd` (installed by the step at `deploy.yml:672-676`) to execute `SELECT 1`. SQL Server takes 10 to 20
+**Wait-for-SQL-Server gate** (`deploy.yml:691-703`): a 30-iteration poll loop (5-second sleep each) using
+`sqlcmd` (installed by the step at `deploy.yml:685-689`) to execute `SELECT 1`. SQL Server takes 10 to 20
 seconds to initialize in a fresh container; proceeding immediately would fail the restore or build with a
 connection error. The loop exits early on success rather than running the full 150-second maximum, and
 exits 1 if the server never answers, so a container that failed to boot is a job failure rather than a
 confusing downstream test error.
 
-**Integration test run** (`deploy.yml:706-713`): like the unit tier, the test command is wrapped in
+**Integration test run** (`deploy.yml:719-726`): like the unit tier, the test command is wrapped in
 `dotnet-coverage collect` (emitting the `coverage.integration.cobertura.xml` artifact at
-`deploy.yml:715-723`):
+`deploy.yml:728-736`):
 ```yaml
 env:
   ADC_TEST_SQL_BASE: "Server=localhost,1433;User Id=sa;Password=${{ env.MSSQL_SA_PASSWORD }};TrustServerCertificate=True;Encrypt=False;"
@@ -1357,7 +1376,7 @@ run: dotnet test --solution MMCA.ADC.Integration.slnf --no-build -c Release --mi
 The `ADC_TEST_SQL_BASE` connection string is consumed by `IntegrationTestBase` to provision per-test
 databases (each test gets a fresh database, reset between tests). `MMCA.ADC.Integration.slnf` is a
 separate solution filter that includes only the four integration test projects; the restore and build
-steps immediately before (`deploy.yml:692-700`) target the same filter, restore in `--locked-mode` like
+steps immediately before (`deploy.yml:705-713`) target the same filter, restore in `--locked-mode` like
 `build-and-test`.
 
 [Rubric §14, Testability & Test Strategy] is served at a higher tier than the unit tests: these tests
@@ -1367,16 +1386,16 @@ column type mismatch) is caught here before it reaches production.
 
 ### Job: `coverage`, report-only by design
 
-This job (`deploy.yml:727-771`) downloads both `coverage-*` artifacts, merges the unit/architecture/bUnit
+This job (`deploy.yml:740-784`) downloads both `coverage-*` artifacts, merges the unit/architecture/bUnit
 and integration cobertura tiers with ReportGenerator over `+MMCA.*;-*.Tests`, writes the summary to the
-run's Step Summary, and uploads the HTML report (`deploy.yml:749-771`).
+run's Step Summary, and uploads the HTML report (`deploy.yml:762-784`).
 
 Two conditions are worth reading together. `needs: [changes, build-and-test, integration-tests]` with `if:
-always() && github.event_name == 'pull_request'` (`deploy.yml:728-729`) means it runs after both test
+always() && github.event_name == 'pull_request'` (`deploy.yml:741-742`) means it runs after both test
 jobs regardless of their outcome, so a failing run still yields its partial coverage picture. And it is
-**not** in `deploy`'s `needs` (`deploy.yml:1305`), which is the deliberate part: this job never blocks
+**not** in `deploy`'s `needs` (`deploy.yml:1319`), which is the deliberate part: this job never blocks
 anything. That is precisely why ADC's coverage **floors** live in `build-and-test` instead
-(`deploy.yml:321-378`, above). Splitting them this way keeps the enforcement on a required check and the
+(`deploy.yml:321-391`, above). Splitting them this way keeps the enforcement on a required check and the
 merged report where it is useful, on the pull request.
 
 [Rubric §14, Testability & Test Strategy] is served in two tiers here: the floors are the gate, the merged
@@ -1385,7 +1404,7 @@ report is the visibility.
 ### Job: `cost-guard`, a scheduled check promoted to a deploy gate
 
 ```yaml
-# deploy.yml:776-779
+# deploy.yml:789-792
 cost-guard:
   if: github.event_name != 'pull_request'
   uses: ./.github/workflows/cost-guard.yml
@@ -1394,8 +1413,8 @@ cost-guard:
 
 The FinOps surge-drift check gets its own section further down as a standalone workflow. What matters
 here is the four-line job that makes it a gate: `deploy.yml` calls `cost-guard.yml` as a **reusable
-workflow** and lists it in `deploy`'s `needs` (`deploy.yml:1305`, required `success` at `:1342`), so a
-production deploy cannot proceed while a conference-day scale-up is still un-reverted (`deploy.yml:773-775`).
+workflow** and lists it in `deploy`'s `needs` (`deploy.yml:1319`, required `success` at `:1356`), so a
+production deploy cannot proceed while a conference-day scale-up is still un-reverted (`deploy.yml:786-788`).
 
 It is skipped on pull requests because there is no production OIDC there, and `deploy` is PR-skipped
 anyway. The cost of the gate is under a minute of read-only `az` queries, which is what makes reusing the
@@ -1407,7 +1426,7 @@ does not merely raise an alert, it stops the next deploy until someone reverts i
 ### Job: `e2e-gate`, one chromium leg against the full Aspire stack
 
 ```yaml
-# deploy.yml:792-807
+# deploy.yml:806-821
 e2e-gate:
   needs: changes
   if: github.event_name != 'pull_request' && needs.changes.outputs.ui == 'true'
@@ -1418,7 +1437,7 @@ e2e-gate:
 ```
 
 The same reusable-workflow shape as `cost-guard`, pointed at `e2e.yml`. This is the §28 merge-gate
-promotion of 2026-07-02 (`deploy.yml:785-791`): the Playwright suite runs against the full Aspire stack
+promotion of 2026-07-02 (`deploy.yml:798-805`): the Playwright suite runs against the full Aspire stack
 (SQL Server, Redis, RabbitMQ, four services, Gateway, UI) before a deploy is allowed to roll.
 
 Three scoping decisions carry it, and each is a cost or a correctness trade made explicit:
@@ -1427,20 +1446,20 @@ Three scoping decisions carry it, and each is a cost or a correctness trade made
   cross-browser coverage stays on `e2e.yml`'s own schedule. One engine still catches the regression class
   that matters on the deploy path; three paid triple for information that changes on the scale of a
   release.
-- **Gated on `ui`, not `code`** (`deploy.yml:794-796`). At roughly 20 minutes this is the most expensive
+- **Gated on `ui`, not `code`** (`deploy.yml:808-810`). At roughly 20 minutes this is the most expensive
   gate in the pipeline, and an infra-only, script-only or backend-only deploy cannot change what the
-  browser sees. The comment says why the deploy that skips it is not untested (`deploy.yml:798-802`):
+  browser sees. The comment says why the deploy that skips it is not untested (`deploy.yml:812-816`):
   the PR's `build-and-test` (the `CI.slnf` unit, architecture and bUnit tiers) is the test gate, because
   branch protection enforces admins and requires an up-to-date branch, so that run covers the exact tree
   that merges; and the post-deploy smoke gate probes Conference, Engagement and Notification through the
   Gateway and auto-rolls-back behind it. It also names the revert, change `ui` back to `code`, which is
   the right thing for a cost optimization to document.
 - **`success` or `skipped`.** In `deploy`'s condition the unconditional gates must all be `success`, but
-  `e2e-gate` may also be `skipped` (`deploy.yml:1182`). That exception is the whole reason `deploy` uses
+  `e2e-gate` may also be `skipped` (`deploy.yml:1196`). That exception is the whole reason `deploy` uses
   `always()` plus explicit per-need results instead of default `success()` semantics, covered under the
   `deploy` job below.
 
-The advice in the comment is worth keeping (`deploy.yml:790-791`): if a genuine contention flake blocks a
+The advice in the comment is worth keeping (`deploy.yml:804-805`): if a genuine contention flake blocks a
 deploy, re-run the job and read its trace artifact before demoting the gate over a single red.
 
 [Rubric §28, Front-End Testing & Quality] is served: a browser-level regression in a UI-affecting change
@@ -1452,27 +1471,27 @@ One job, four near-identical steps, one idea: **a deploy blocks on the age of ou
 not only on the tests that are green in this run**. Each step asks the Actions API for the newest
 qualifying run of one scheduled workflow and fails when that proof is older than its window, or when
 there is no qualifying run at all. Each step's `name` and `id` is the gate's name, so a red step reads
-exactly as the gate it is (`deploy.yml:809-816`).
+exactly as the gate it is (`deploy.yml:823-830`).
 
 | Step | Proof it demands | Producing workflow | Window |
 |---|---|---|---|
-| `dr-freshness` (`deploy.yml:830`) | a real PITR restore drill with its RTO timing | `dr-drill.yml` | 8 days (`deploy.yml:839`) |
-| `load-freshness` (`deploy.yml:849`) | the k6 capacity run at the observed peak | `load-test.yml` | 35 days (`deploy.yml:858`) |
-| `cross-service-freshness` (`deploy.yml:870`) | the Testcontainers outbox to broker to consumer round-trip **and** the Service Bus emulator parity smoke | `cross-service-tests.yml` | 5 days (`deploy.yml:883`) |
-| `cross-browser-freshness` (`deploy.yml:909`) | a successful firefox **and** webkit leg of the Playwright suite | `e2e.yml` | 10 days (`deploy.yml:922`) |
+| `dr-freshness` (`deploy.yml:844`) | a real PITR restore drill with its RTO timing | `dr-drill.yml` | 8 days (`deploy.yml:853`) |
+| `load-freshness` (`deploy.yml:863`) | the k6 capacity run at the observed peak | `load-test.yml` | 35 days (`deploy.yml:872`) |
+| `cross-service-freshness` (`deploy.yml:884`) | the Testcontainers outbox to broker to consumer round-trip **and** the Service Bus emulator parity smoke | `cross-service-tests.yml` | 5 days (`deploy.yml:897`) |
+| `cross-browser-freshness` (`deploy.yml:923`) | a successful firefox **and** webkit leg of the Playwright suite | `e2e.yml` | 10 days (`deploy.yml:936`) |
 
 Every step calls the shared composite action `ivanball/MMCA.Common/.github/actions/freshness-gate@main`
-(`deploy.yml:835`, `:854`, `:877`, `:917`), one implementation for every consumer
+(`deploy.yml:849`, `:868`, `:891`, `:931`), one implementation for every consumer
 ([ADR-038](https://ivanball.github.io/docs/adr/038-supply-chain-provenance.html)). The action lists a
 workflow's runs unfiltered and filters them client-side, paging as needed, because the server-side
 `status=completed` and `status=success` listings have served stale pages that hid the newest runs
 (`MMCA.Common/.github/actions/freshness-gate/action.yml:13-14`, request at `:166`). The job runs only on a
 code push or dispatch, `if: github.event_name != 'pull_request' && needs.changes.outputs.code == 'true'`
-(`deploy.yml:819`), with a five-minute timeout and only two read privileges, `actions: read` plus
-`contents: read` (`deploy.yml:821-824`): it reads run history and runs nothing, no restore, no k6, no
-Docker daemon. Steps two to four carry `if: ${{ !cancelled() }}` (`deploy.yml:851`, `:872`, `:911`), so
+(`deploy.yml:833`), with a five-minute timeout and only two read privileges, `actions: read` plus
+`contents: read` (`deploy.yml:835-838`): it reads run history and runs nothing, no restore, no k6, no
+Docker daemon. Steps two to four carry `if: ${{ !cancelled() }}` (`deploy.yml:865`, `:886`, `:925`), so
 one stale proof never hides the state of the others, and the job fails when any step fails. And
-`freshness` sits in `deploy`'s `needs` list (`deploy.yml:1145`), which is the entire point: a stale proof
+`freshness` sits in `deploy`'s `needs` list (`deploy.yml:1159`), which is the entire point: a stale proof
 blocks the production deploy.
 
 That `needs` edge is what separates a gate from a report. A scheduled workflow nobody watches can sit
@@ -1485,21 +1504,21 @@ so an on-schedule producer never trips the gate.
 `cross-browser-freshness` closes a hole the cost reduction opened. The deploy-gating `e2e-gate` runs
 **chromium only**, so firefox and webkit coverage lives on `e2e.yml`'s alternating weekly crons; this
 step makes that coverage mandatory again without putting either engine back on the roughly 20-minute
-per-deploy critical path, which is exactly how the step's own comment states it (`deploy.yml:893-897`).
+per-deploy critical path, which is exactly how the step's own comment states it (`deploy.yml:907-911`).
 
 Like `cross-service-freshness`, it refuses to trust a run's conclusion, and here it resolves each engine
-**separately** (`required-jobs-mode: per-job`, `deploy.yml:924-928`): it walks the last 40 completed
+**separately** (`required-jobs-mode: per-job`, `deploy.yml:938-942`): it walks the last 40 completed
 `e2e.yml` runs and, for each engine, takes the newest run in which the job named `E2E (<engine>)` itself
 concluded `success`, so the two proofs normally come from two different runs and either one missing or
-stale fails the step (`deploy.yml:912-916`). The comment gives the reason the run conclusion is a lying
-proxy (`deploy.yml:904-908`): the matrix is `fail-fast: false` with the non-chromium legs
+stale fails the step (`deploy.yml:926-930`). The comment gives the reason the run conclusion is a lying
+proxy (`deploy.yml:918-922`): the matrix is `fail-fast: false` with the non-chromium legs
 `continue-on-error` on the schedule, so a run's conclusion says nothing about whether a given engine
 actually passed; and `e2e.yml`'s own should-run guard can make a run conclude `success` with every leg
 **skipped**. Asking the jobs API which leg passed is the only question whose answer means what the gate
 needs it to mean.
 
 The 10-day window is the per-engine weekly cadence (Monday firefox, Thursday webkit) plus slack for a
-skipped or re-run night (`deploy.yml:899-902`, `:921-922`), and the break-glass is the same as for the
+skipped or re-run night (`deploy.yml:913-916`, `:935-936`), and the break-glass is the same as for the
 other three steps, described below.
 
 [Rubric §28, Front-End Testing & Quality] assesses whether browser-level tests catch rendering and
@@ -1512,14 +1531,14 @@ conclusion, and because what it demands was widened on 2026-08-31 (TD-17). It wa
 *completed* runs of `cross-service-tests.yml` (any conclusion) and counts a run only when **both** the
 `cross-service` job (the Testcontainers RabbitMQ outbox to broker to consumer round-trip) and the
 `servicebus-emulator-smoke` job (Azure Service Bus emulator topology plus AMQP round-trip) concluded
-`success` in that same run (`required-jobs-mode: same-run`, `deploy.yml:885-889`).
+`success` in that same run (`required-jobs-mode: same-run`, `deploy.yml:899-903`).
 
 That second job used to be advisory (`continue-on-error`), which meant broker parity against the
 transport production actually runs was measured nightly and then thrown away, since a red there blocked
 nothing (`cross-service-tests.yml:116-122`). Making it authoritative is what turns "the outbox reaches
 *a* broker" into "the outbox reaches *both* the test broker and the production transport's emulator".
 
-The run conclusion is not a usable proxy, and the step's comment says why (`deploy.yml:873-876`): the
+The run conclusion is not a usable proxy, and the step's comment says why (`deploy.yml:887-890`): the
 skip-if-unchanged guard can make a run conclude `success` with the test jobs **skipped**, so no
 round-trip executed, and keying off the run would accept a proof that never happened. Counting any
 *completed* run works in the other direction too: a run cancelled after both broker jobs passed still
@@ -1529,22 +1548,22 @@ counterpart rule for whoever finds this red (`cross-service-tests.yml:124-126`):
 green run, do not re-add `continue-on-error` to unblock a deploy. The sanctioned escape hatch is the
 break-glass below, which forces a written justification into the run summary.
 
-Its window was widened from 3 to 5 days on 2026-07-18 (`deploy.yml:881-883`) when `cross-service-tests.yml`
+Its window was widened from 3 to 5 days on 2026-07-18 (`deploy.yml:895-897`) when `cross-service-tests.yml`
 moved to weekdays plus the skip-if-unchanged guard: the last successful nightly can legitimately be about
 four days old across a weekend or a holiday. A window narrower than the producing cadence is a gate that
 fails for calendar reasons, and a gate that fails for calendar reasons trains people to reach for the
 break-glass.
 
 **Break-glass** is two `workflow_dispatch` inputs, `skip_freshness_gates` and `skip_justification`
-(`deploy.yml:13-18`), passed to every step as `skip` and `skip-justification` (`deploy.yml:841-842`,
-`:860-861`, `:890-891`, `:929-930`). Inside the action the skip takes effect only together with a
+(`deploy.yml:13-18`), passed to every step as `skip` and `skip-justification` (`deploy.yml:855-856`,
+`:874-875`, `:904-905`, `:943-944`). Inside the action the skip takes effect only together with a
 non-empty justification, which is recorded in the step summary and as a warning
 (`MMCA.Common/.github/actions/freshness-gate/action.yml:60-65`), and a justified skip exits `success`
-(`deploy.yml:1166-1167`). Three properties make it a sound escape hatch rather than a hole: it is
+(`deploy.yml:1180-1181`). Three properties make it a sound escape hatch rather than a hole: it is
 unreachable on a push (the inputs exist only on a dispatch), one flag covers all four steps so an
 operator in a hurry does not disable them one at a time, and its cost is a permanent attributable record
 in the run summary instead of a quiet edit to a `needs:` list. Note the interaction with `deploy`'s
-condition (`deploy.yml:1179`): a broken-glass step still reports `success`, which is what lets the
+condition (`deploy.yml:1193`): a broken-glass step still reports `success`, which is what lets the
 deploy condition demand `success` from `freshness` without special-casing.
 
 MMCA.Store runs the same single job with the same four steps
@@ -1565,7 +1584,7 @@ emulator that mirrors the production transport.
 ### Job: `foundation`, Phase 1
 
 ```yaml
-# deploy.yml:1120-1135
+# deploy.yml:1134-1149
 foundation:
   needs: changes
   if: github.event_name != 'pull_request' && needs.changes.outputs.code == 'true'
@@ -1576,13 +1595,13 @@ foundation:
     logAnalyticsName: ${{ steps.foundation.outputs.logAnalyticsName }}
 ```
 
-`infra/foundation.bicep` (`deploy.yml:1146-1152`) provisions the durable resources that must exist
+`infra/foundation.bicep` (`deploy.yml:1160-1166`) provisions the durable resources that must exist
 before a container image can be pushed at all: the Log Analytics workspace
 (`infra/foundation.bicep:28-29`) and the Basic-tier Azure Container Registry
 (`infra/foundation.bicep:50-56`), whose admin user is disabled because both the apps (AcrPull) and the
 deploy (AcrPush) authenticate as managed identities (`infra/foundation.bicep:58-60`). It was split out
 of `deploy` on 2026-07-21 so image builds can run **concurrently with** the roughly 20-minute
-`e2e-gate` instead of serially after it (`deploy.yml:1112-1119`).
+`e2e-gate` instead of serially after it (`deploy.yml:1126-1133`).
 
 A third resource rides along, and it is the reason the registry does not grow without bound: a
 scheduled ACR task named `purge-old-images` (`infra/foundation.bicep:99-101`) that runs daily at
@@ -1609,11 +1628,11 @@ resource, so applying it early cannot affect the live app, and it is an idempote
 is a no-op on every run after the first. "Runs before the gates" is only acceptable because "cannot
 change what users see" is a property of the template, not a hope.
 
-Its three outputs are promoted to **job** outputs (`deploy.yml:1131-1135`) for a concrete reason: `acrName`
+Its three outputs are promoted to **job** outputs (`deploy.yml:1145-1149`) for a concrete reason: `acrName`
 is derived inside Bicep from `uniqueString(resourceGroup().id, environmentName)` and therefore cannot be
 recomputed by a later job. A downstream job either receives it or guesses wrong.
 
-**`environment: production` is load-bearing here, and not for approvals** (`deploy.yml:1125-1130`). The
+**`environment: production` is load-bearing here, and not for approvals** (`deploy.yml:1139-1144`). The
 federated identity credential's subject is `repo:ivanball/ADC:environment:production`. A job without an
 `environment:` presents `repo:ivanball/ADC:ref:refs/heads/main` instead, and `azure/login` fails with
 AADSTS700213, "No matching federated identity record". Every job that runs `azure/login` needs the
@@ -1622,26 +1641,26 @@ transferable OIDC gotcha in the repository.
 
 ### Job: `build-images`, Phase 2
 
-Six images are built and pushed, one per matrix leg (`deploy.yml:1181-1202`): `mmca-adc-gateway`,
+Six images are built and pushed, one per matrix leg (`deploy.yml:1195-1216`): `mmca-adc-gateway`,
 `mmca-adc-ui`, `mmca-adc-conference`, `mmca-adc-identity`, `mmca-adc-engagement`,
 `mmca-adc-notification`. The Gateway and UI Dockerfiles live under `Source/Hosts/`
-(`Source/Hosts/MMCA.ADC.Gateway/Dockerfile` at `deploy.yml:1186`,
-`Source/Hosts/UI/MMCA.ADC.UI.Web/Dockerfile` at `:1189`); the four back-end services live under
-`Source/Services/` (`:1191-1202`). `fail-fast: false` (`deploy.yml:1182`) so one image's failure does not
+(`Source/Hosts/MMCA.ADC.Gateway/Dockerfile` at `deploy.yml:1200`,
+`Source/Hosts/UI/MMCA.ADC.UI.Web/Dockerfile` at `:1203`); the four back-end services live under
+`Source/Services/` (`:1205-1216`). `fail-fast: false` (`deploy.yml:1196`) so one image's failure does not
 cancel the other five.
 
 These were previously six sequential `docker build` steps inside `deploy`, measured at 928 seconds on one
-run (`deploy.yml:1155-1156`). One matrix leg per image makes the phase cost roughly the **slowest** image
+run (`deploy.yml:1169-1170`). One matrix leg per image makes the phase cost roughly the **slowest** image
 (about 4 minutes) rather than their sum, and because the job no longer sits behind `e2e-gate` the whole
 phase hides underneath that gate and leaves the critical path entirely.
 
 **Each leg is now individually gated on whether its image is dirty.** The matrix carries a `changed`
-column fed from the `changes` job's `img_*` map (`deploy.yml:1185-1202`), and the build-and-push step only
-runs when it is `'true'` (`deploy.yml:1222-1223`). A clean leg takes the other branch and re-tags instead
-(`deploy.yml:1256-1269`):
+column fed from the `changes` job's `img_*` map (`deploy.yml:1199-1216`), and the build-and-push step only
+runs when it is `'true'` (`deploy.yml:1236-1237`). A clean leg takes the other branch and re-tags instead
+(`deploy.yml:1270-1283`):
 
 The re-tag branch does one more thing, and it is a cost-control interaction worth knowing
-(`deploy.yml:1270-1300`). After minting the sha tag it re-imports that same sha back onto `:latest`. The
+(`deploy.yml:1284-1314`). After minting the sha tag it re-imports that same sha back onto `:latest`. The
 daily `purge-old-images` ACR task keeps only the three most recently updated tags per repository and
 deletes anything older than three days, and importing a new sha tag does not touch `:latest`, so after a
 few deploys that leave an image clean the very tag this branch reads from would age out, get purged, and
@@ -1663,16 +1682,16 @@ Two things make that safe, and both are worth internalizing. `main.bicep` addres
 registry-side manifest copy, so no layer is pulled or pushed, and `--force` makes a re-run of the same
 sha idempotent. And the leg **still concludes `success`** rather than skipping, which is the load-bearing
 part: `deploy` gates on the job-level equality `needs.build-images.result == 'success'`
-(`deploy.yml:1349`), so gating with a job-level `if` (or letting a leg skip) would turn the whole job
-`skipped` and silently cancel the deploy (`deploy.yml:1169-1173`).
+(`deploy.yml:1363`), so gating with a job-level `if` (or letting a leg skip) would turn the whole job
+`skipped` and silently cancel the deploy (`deploy.yml:1183-1187`).
 
-Nothing is rolled out here (`deploy.yml:1159-1162`). Images are tagged with both `${{ github.sha }}` (the
-exact commit, immutable and traceable) and `latest`, and pushed to ACR (`deploy.yml:1230-1232`), but
+Nothing is rolled out here (`deploy.yml:1173-1176`). Images are tagged with both `${{ github.sha }}` (the
+exact commit, immutable and traceable) and `latest`, and pushed to ACR (`deploy.yml:1244-1246`), but
 `deploy` still waits on every gate before `main.bicep` points any container app at them. A red gate
 therefore leaves an unreferenced image in ACR, which the scheduled purge task in `foundation.bicep`
 reaps. Building speculatively is only safe when publishing and *referencing* are separate acts.
 
-**The token is a BuildKit secret, not a build arg** (`deploy.yml:1238-1239`, comment `:1164-1167`):
+**The token is a BuildKit secret, not a build arg** (`deploy.yml:1252-1253`, comment `:1178-1181`):
 
 ```yaml
 secrets: |
@@ -1682,19 +1701,19 @@ secrets: |
 `--build-arg` bakes a value into the image layer where `docker history` can read it back; a BuildKit
 secret is mounted only for the `RUN` steps that need it (restore and publish) and never enters a layer.
 `DOCKER_BUILDKIT=1` is set explicitly so the requirement fails loudly rather than silently degrading. The
-comment adds a detail worth keeping (`deploy.yml:1233-1237`): secret *content* is not part of the cache
+comment adds a detail worth keeping (`deploy.yml:1247-1251`): secret *content* is not part of the cache
 key (only the instruction text is), so rotating the token does not needlessly bust the restore layer,
 which is safe because the package set is pinned by the committed lock files and a
 `Directory.Packages.props` change lands in the same `COPY` layer and busts it anyway.
 
-**The layer cache is in ACR, not `type=gha`** (`deploy.yml:1246-1247`), and the comment
-(`deploy.yml:1240-1245`) is a small masterclass in cache sizing. The GitHub Actions cache has a hard 10 GB
+**The layer cache is in ACR, not `type=gha`** (`deploy.yml:1260-1261`), and the comment
+(`deploy.yml:1254-1259`) is a small masterclass in cache sizing. The GitHub Actions cache has a hard 10 GB
 per-repo quota with LRU eviction; six images exporting `mode=max` multi-stage SDK layers plus a large
 NuGet layer each would thrash it into a near-zero hit rate while still paying the export cost. The
 registry the job already authenticates to has no quota and costs pennies. `mode=max` rather than `min` is
 required because `min` caches only the final stage, which is exactly the one that is cheap: the expensive
 layers are restore and publish, inside the build stage. Buildx with the `docker-container` driver
-(`deploy.yml:1216-1220`) is what makes an external cache possible at all, since the default driver cannot
+(`deploy.yml:1230-1234`) is what makes an external cache possible at all, since the default driver cannot
 import or export one.
 
 [Rubric §17, DevOps & Deployment] is served: each image is uniquely identified by the commit SHA,
@@ -1704,7 +1723,7 @@ BuildKit-secret handling: no credential is recoverable from a published layer.
 ### Job: `deploy`
 
 Runs only on push to `main` or `workflow_dispatch`, never on pull requests, and only when every gate
-above has reported. Its `needs` list is the pipeline in one line (`deploy.yml:1145`):
+above has reported. Its `needs` list is the pipeline in one line (`deploy.yml:1159`):
 
 ```yaml
 needs: [changes, supply-chain, cost-guard, freshness, e2e-gate, ai-eval-gate, foundation, build-images]
@@ -1713,38 +1732,38 @@ needs: [changes, supply-chain, cost-guard, freshness, e2e-gate, ai-eval-gate, fo
 Note what is *not* there: `build-and-test`, `integration-tests` and `coverage`. Those are the required PR
 checks, and they are the test gate: branch protection enforces admins and requires an up-to-date branch,
 so the PR run covers the exact tree that merges and no post-merge job re-runs those tiers
-(`deploy.yml:1146-1148`). A docs-only push skips `supply-chain`, `cost-guard` and `freshness` along
-with the deploy itself (`deploy.yml:1157-1158`).
+(`deploy.yml:1160-1162`). A docs-only push skips `supply-chain`, `cost-guard` and `freshness` along
+with the deploy itself (`deploy.yml:1171-1172`).
 
-The condition itself (`deploy.yml:1172-1183`) is `always()` plus an explicit result check per dependency
+The condition itself (`deploy.yml:1186-1197`) is `always()` plus an explicit result check per dependency
 rather than the default `success()` semantics, and the comment records the incident that forced it
-(`deploy.yml:1164-1167`). Because `e2e-gate` is `ui`-scoped, it legitimately **skips** on a backend-only
+(`deploy.yml:1178-1181`). Because `e2e-gate` is `ui`-scoped, it legitimately **skips** on a backend-only
 merge, and under `success()` a skipped dependency cascades into a skipped `deploy`: a run went fully green
 and shipped nothing. So every unconditional gate must be `success` (none of them skips on a code deploy,
 since the freshness break-glass exits success inside each step), while the **two conditional** gates may
-be `success` **or** `skipped`: `e2e-gate` (`deploy.yml:1182`), which runs on a UI diff, and
-`ai-eval-gate` (`deploy.yml:1183`), which runs on a scoring-code diff (`deploy.yml:1169-1171`). The
+be `success` **or** `skipped`: `e2e-gate` (`deploy.yml:1196`), which runs on a UI diff, and
+`ai-eval-gate` (`deploy.yml:1197`), which runs on a scoring-code diff (`deploy.yml:1183-1185`). The
 post-deploy smoke gate is the post-rollout backstop behind both.
 
 That is the general lesson: `needs` expresses ordering, but "did this dependency actually pass" and "did
 this dependency run" are different questions, and default `success()` semantics answer them together.
 
-The job declares `environment: production` (`deploy.yml:1353`) and opens with a checkout and its own
-`azure/login@v3` (`deploy.yml:1355-1362`), for the federated-credential reason described under
+The job declares `environment: production` (`deploy.yml:1367`) and opens with a checkout and its own
+`azure/login@v3` (`deploy.yml:1369-1376`), for the federated-credential reason described under
 `foundation`. Everything below is Phase 3 onward.
 
-**Phase 3, Deployment parameters file** (`deploy.yml:1367-1568`):
+**Phase 3, Deployment parameters file** (`deploy.yml:1381-1585`):
 
 Rather than passing `key=value` pairs inline to `arm-deploy`, the step builds a JSON parameters file
 from scratch using `jq` (there is no committed parameters template, see the IaC chapter's note that
 `infra/main.parameters.json` does not exist). The `jq --arg` flag properly JSON-escapes multiline values (critical for the RSA PEM keys,
-which contain newlines). The base parameter set is always present (`deploy.yml:1424-1452`), including the
+which contain newlines). The base parameter set is always present (`deploy.yml:1438-1469`), including the
 six SHA-tagged image references read from `needs.foundation.outputs.acrLoginServer`. Optional parameters
 (OAuth credentials, the AI provider key (`AI_API_KEY`, fed to the Bicep `aiApiKey` parameter), SMTP config, the synthetic-traffic key, managed-identity SQL
 settings) are conditionally appended only if their env vars are non-empty:
 
 ```bash
-# deploy.yml:1462-1465
+# deploy.yml:1479-1482
 if [ -n "$OAUTH_GITHUB_CLIENT_ID" ]; then
   jq --arg k "$OAUTH_GITHUB_CLIENT_ID" '.parameters.githubOAuthClientId = {"value": $k}' ...
 fi
@@ -1754,20 +1773,20 @@ This pattern means the deployment is not blocked if an optional secret has not b
 simply omits that parameter, and the Bicep template's `@secure()` `param` falls back to its default
 (typically an empty string, which disables the feature). Sign in with Apple is the clearest example: all
 four pieces (`client id`, `team id`, `key id`, private key PEM) are appended independently
-(`deploy.yml:1481-1497`), and the provider only activates when the template receives the full set.
+(`deploy.yml:1498-1514`), and the provider only activates when the template receives the full set.
 
 **Two parameters are deliberately not optional, and both are fail-fast.** The step's first action is a
-check on an unset `ALERT_EMAIL` repo variable (`deploy.yml:1398-1404`), whose error message states the
+check on an unset `ALERT_EMAIL` repo variable (`deploy.yml:1412-1418`), whose error message states the
 reasoning: alerts that notify nobody are silent failures, so `infra/main.bicep` *requires*
 `alertEmailAddress` and the deploy refuses to proceed rather than shipping SLO, outbox and availability
-alerts into the void. The second is the RSA key pair (`deploy.yml:1406-1412`): Identity signs RS256 and
+alerts into the void. The second is the RSA key pair (`deploy.yml:1420-1426`): Identity signs RS256 and
 publishes `/.well-known/jwks.json` from those keys, there is no other signing path, and `main.bicep`
 declares both parameters without a default, so an unset `JWT_RSA_PRIVATE_KEY_PEM` or
 `JWT_RSA_PUBLIC_KEY_PEM` fails here rather than producing an Identity service that cannot mint a token.
-The keys are then appended unconditionally (`deploy.yml:1454-1459`). Catching both here turns an opaque
+The keys are then appended unconditionally (`deploy.yml:1471-1476`). Catching both here turns an opaque
 Bicep validation error into an actionable one naming the variable or secret to set.
 
-The **synthetic-traffic key** (`deploy.yml:1527-1533`) is a small but instructive optional parameter. It
+The **synthetic-traffic key** (`deploy.yml:1544-1550`) is a small but instructive optional parameter. It
 carries the shared secret the Gateway's edge rate limiter accepts as a bypass, and `load-test.yml` sends
 the same value as an `X-Synthetic-Traffic-Key` header, so the monthly k6 capacity proof measures backend
 capacity rather than the per-IP rate-limit window
@@ -1775,21 +1794,21 @@ capacity rather than the per-IP rate-limit window
 leaves the bypass off, which is the correct default: a rate-limit bypass that exists by default is not a
 rate limiter.
 
-The managed-identity SQL parameters (`deploy.yml:1550-1568`) are the opposite case, optional and
+The managed-identity SQL parameters (`deploy.yml:1567-1585`) are the opposite case, optional and
 default-off by design: without the `SQL_AAD_ADMIN_LOGIN`, `SQL_AAD_ADMIN_OID` and
 `USE_MANAGED_IDENTITY_SQL` repo variables, `main.bicep` keeps its defaults (no Entra admin, password
 auth) and the deploy is unchanged. The comment stages the rollout and warns that flipping
 `USE_MANAGED_IDENTITY_SQL=true` before the per-database grants exist costs the apps their SQL
-connectivity (`deploy.yml:1562-1564`).
+connectivity (`deploy.yml:1579-1581`).
 
-There is an important SQL location note in the Bicep parameters step (`deploy.yml:1416-1421`): Azure SQL
+There is an important SQL location note in the Bicep parameters step (`deploy.yml:1430-1435`): Azure SQL
 is region-gated on the QiMata Sponsorship subscription, `eastus2` (where `acc-rg` lives) does not
 allow `Microsoft.Sql`, so SQL Server and databases are deployed to `westus2` while Container Apps remain
-in the RG's location. The `SQL_LOCATION="${SQL_LOCATION_OVERRIDE:-westus2}"` line (`deploy.yml:1421`)
+in the RG's location. The `SQL_LOCATION="${SQL_LOCATION_OVERRIDE:-westus2}"` line (`deploy.yml:1435`)
 defaults to `westus2` but honors the `AZURE_SQL_LOCATION` repo variable (passed in as
-`SQL_LOCATION_OVERRIDE` at `deploy.yml:1370`) so a different subscription or region can override it.
+`SQL_LOCATION_OVERRIDE` at `deploy.yml:1384`) so a different subscription or region can override it.
 
-**Phase 3 (continued), Application infrastructure** (`deploy.yml:1580-1586`):
+**Phase 3 (continued), Application infrastructure** (`deploy.yml:1597-1603`):
 
 ```yaml
 - name: Deploy application infrastructure
@@ -1806,12 +1825,14 @@ and four per-service databases, App Insights, SLO alerts, and the monthly cost b
 chapter for the full resource inventory, note Redis is *not* provisioned by `main.bicep`.) The
 `environmentName=prod` parameter selects the environment-specific naming convention.
 
-**Phase 4, Database migrations: there is no sqlcmd backstop** (`deploy.yml:1588-1598`):
+**Phase 4, Database migrations: there is no sqlcmd backstop** (`deploy.yml:1455-1468`):
 
 Phase 4 is a comment block, not a step. The deploy **deliberately does not run an external `sqlcmd`
 migration step**. Each service self-applies its own migrations at startup
-(`ApplicationSettings__DatabaseInitStrategy=Migrate`) as the **sole migrator**, and `minReplicas: 1`
-guarantees exactly one replica migrates before the revision serves. The comment (`deploy.yml:1589-1598`)
+(`ApplicationSettings__DatabaseInitStrategy=Migrate`) as the **sole migrator** of its database.
+Every replica of a service migrates before it serves, and concurrent replicas are safe because EF Core
+serializes `MigrateAsync` with an `sp_getapplock` migrations lock, so `minReplicas: 1` is a cost floor, not
+a race guard (`deploy.yml:1463-1466`). The comment (`deploy.yml:1456-1463`)
 records *why* the previous backstop was removed: a `sqlcmd` step here would race the container's startup
 `Migrate()` on a fresh per-service DB, both applying the same `InitialCreate` concurrently and
 non-atomically, leaving a table created **without** its `__EFMigrationsHistory` row (Msg 2714 "object
@@ -1824,19 +1845,19 @@ single-applier, idempotent-by-construction migration is the data-architecture di
 without a racing dual-applier.
 
 **Phase 5, Revision-activation gate plus post-deploy smoke gate with automatic rollback**
-(`deploy.yml:1600-1771`):
+(`deploy.yml:1617-1788`):
 
 Phase 5 is **two gates in one step**, in a deliberate order, because they answer different questions
-(`deploy.yml:1600-1621`).
+(`deploy.yml:1617-1638`).
 
-**5a, the revision-activation gate** (`deploy.yml:1646-1693`) is the newer half, and it exists because of
+**5a, the revision-activation gate** (`deploy.yml:1663-1710`) is the newer half, and it exists because of
 a four-day production incident. For every app, the **newest** revision by `createdTime` must report
 `healthState` `Healthy`, `runningState` `Running` or `RunningAtMaxScale`, and `trafficWeight` 100. The
-predicate is factored into its own helper so the rollback below can reuse it (`deploy.yml:1660-1664`),
-and the poll is thirty attempts at twenty seconds, ten minutes per app (`deploy.yml:1666-1687`):
+predicate is factored into its own helper so the rollback below can reuse it (`deploy.yml:1677-1681`),
+and the poll is thirty attempts at twenty seconds, ten minutes per app (`deploy.yml:1683-1704`):
 
 ```bash
-# deploy.yml:1651-1657
+# deploy.yml:1668-1674
 revision_status() {
   local app="$1" json
   json=$(az containerapp revision list -g "$RG" -n "$app" \
@@ -1847,7 +1868,7 @@ revision_status() {
 ```
 
 That proves the code just built is the code now serving, and the HTTP probes below **cannot** prove it.
-The comment names the incident that made the gap concrete (`deploy.yml:1603-1612`): every probe enters
+The comment names the incident that made the gap concrete (`deploy.yml:1620-1629`): every probe enters
 through the Gateway, and a healthy Gateway keeps serving from the *previous* backend revision when the new
 one never goes ready. So an untagged Aspire Redis health check running `CLUSTER INFO` against Azure
 Managed Redis made `/health/ready` throw on every probe, every backend revision reported
@@ -1855,7 +1876,7 @@ Managed Redis made `/health/ready` throw on every probe, every backend revision 
 old code, and this step reported success on each deploy for four days (2026-08-29 to 2026-09-02).
 
 The `-o json` plus `jq` shape is itself a fix, and the comment states the trap plainly
-(`deploy.yml:1646-1650`): a **top-level** JMESPath multiselect list rendered with `-o tsv` prints one
+(`deploy.yml:1663-1667`): a **top-level** JMESPath multiselect list rendered with `-o tsv` prints one
 element **per line**, not one tab-separated row. The positional `read` therefore captured the revision
 name and left health, running state and traffic weight empty, and the gate failed every app on a
 perfectly healthy fleet. Fetching JSON and letting `jq` join it (with nulls mapped to empty strings so
@@ -1863,7 +1884,7 @@ the field count never collapses) is what makes the positional read honest. The t
 the one the outage taught: a smoke test that reaches your system through a load balancer verifies
 *something is serving*, not *your new code is serving*, and only the control plane can tell you which.
 
-**5b, the reachability probes** (`deploy.yml:1699-1710`) are the older half, six endpoints covering every
+**5b, the reachability probes** (`deploy.yml:1716-1727`) are the older half, six endpoints covering every
 deployable:
 ```bash
 probe "https://${GATEWAY_FQDN}/health"
@@ -1874,30 +1895,30 @@ probe "https://${GATEWAY_FQDN}/Notifications/inbox" 401
 probe "https://${UI_FQDN}/"
 ```
 
-Each probe polls up to 12 times (10-second intervals, 15-second curl timeout, `deploy.yml:1635-1644`),
+Each probe polls up to 12 times (10-second intervals, 15-second curl timeout, `deploy.yml:1652-1661`),
 two minutes total per endpoint. Together they exercise Container Apps routing (Gateway `/health`),
 Identity (JWKS, which must have reached its database and loaded its RSA keys), Conference (anonymous
 `GET /Events`), Engagement (`/Bookmarks`), Notification (`/Notifications/inbox`), and the Blazor UI host.
-The comment (`deploy.yml:1614-1618`) notes the probe set mirrors `e2e.yml`'s warm-up URLs, which is what
+The comment (`deploy.yml:1631-1635`) notes the probe set mirrors `e2e.yml`'s warm-up URLs, which is what
 makes it the post-rollout backstop behind the PR's `build-and-test` and, on a UI diff, `e2e-gate`.
 
 **The two `401` expectations are the interesting part.** `probe` takes an expected status defaulting to
 200, and for the auth-gated Engagement and Notification endpoints the asserted status is *exactly* 401
-(`deploy.yml:1632-1634`, `:1705-1708`). A 401 from the service is the healthy signal: it proves the
+(`deploy.yml:1649-1651`, `:1722-1725`). A 401 from the service is the healthy signal: it proves the
 request traversed Gateway to service to auth pipeline. A 5xx, a 404, or a `000` connection failure does
 not. Accepting "any non-2xx" would have made those two probes unfalsifiable, which is the failure mode a
 smoke test can least afford.
 
-If **either** gate fails, the rollback path (`deploy.yml:1726-1771`) activates, and it now carries two
+If **either** gate fails, the rollback path (`deploy.yml:1743-1788`) activates, and it now carries two
 guards that the original loop did not.
 
-**Guard 1 re-reads the app before rolling it back** (`deploy.yml:1732-1739`). The rollback loop runs
+**Guard 1 re-reads the app before rolling it back** (`deploy.yml:1749-1756`). The rollback loop runs
 once for the whole fleet, but the smoke gate can fail for a reason that has nothing to do with a given
 app, so each iteration re-checks that app's newest revision through the same `revision_serving`
 predicate and skips it when it is already healthy, running and taking 100% of the traffic. Without that
 check, one failed probe would take five healthy apps down with it.
 
-**Guard 2 is in the query that picks the target revision** (`deploy.yml:1740-1751`):
+**Guard 2 is in the query that picks the target revision** (`deploy.yml:1757-1768`):
 ```bash
 prev=$(az containerapp revision list -g "$RG" -n "$app" \
   --query "reverse(sort_by([?properties.provisioningState=='Provisioned' && properties.healthState=='Healthy' && properties.active==\`true\`], &properties.createdTime))[?name!='${newest}'] | [0].name" ...)
@@ -1913,13 +1934,13 @@ being copied back; the incident this gate was written for had the old revision s
 alongside the failed new one, which is why the earlier query looked correct.
 
 The loop attempts every app before reporting, so one app's rollback failure does not abandon the other
-five (`deploy.yml:1727-1729`), but a partial rollback is then reported loudly: the names of the apps that
+five (`deploy.yml:1744-1746`), but a partial rollback is then reported loudly: the names of the apps that
 failed to roll back are written to the Step Summary under "Smoke gate failed AND rollback incomplete"
-(`deploy.yml:1762-1767`). The comment states the principle directly, a fleet split across revisions needs
+(`deploy.yml:1779-1784`). The comment states the principle directly, a fleet split across revisions needs
 immediate manual attention and must never look like a clean auto-revert. Either way the job exits 1
-(`deploy.yml:1771`).
+(`deploy.yml:1788`).
 
-There is also an informational security-headers check (`deploy.yml:1712-1719`, labeled TD-09) that
+There is also an informational security-headers check (`deploy.yml:1729-1736`, labeled TD-09) that
 confirms the Gateway emits `X-Content-Type-Options: nosniff`. This check is explicitly non-gating (it
 cannot trip the rollback) because a missing header is a hardening gap, not a "revision not serving"
 condition.
@@ -1928,10 +1949,10 @@ condition.
 gates with automatic rollback mean a broken deploy is both detected and partially self-corrected within
 minutes. [Rubric §13, Observability & Operability] (assesses whether failures surface actionable signals)
 is served: the activation loop prints each app's newest revision with its health, running state and
-traffic weight on every attempt (`deploy.yml:1681`), the workflow fails loudly with the specific failing
+traffic weight on every attempt (`deploy.yml:1698`), the workflow fails loudly with the specific failing
 endpoint printed, and the rollback log names each app and its rollback revision.
 
-**Post-deploy, reclaiming BuildKit cache storage** (`deploy.yml:1773-1791`):
+**Post-deploy, reclaiming BuildKit cache storage** (`deploy.yml:1790-1808`):
 
 The last step in the job is housekeeping, not a gate:
 
@@ -1943,15 +1964,15 @@ az acr run \
 ```
 
 It runs the same `buildcache` purge the scheduled ACR task in `foundation.bicep` runs daily, but right
-after the deploy that created the garbage. The comment gives the reason (`deploy.yml:1773-1778`): every
+after the deploy that created the garbage. The comment gives the reason (`deploy.yml:1790-1795`): every
 `cache-to=...,mode=max` push orphans the previous deploy's untagged cache manifests, and reclaiming them
 within minutes rather than within a day is what keeps a Basic-tier registry under its 10 GB included
 storage instead of paying overage on a day's worth of them.
 
-Two details are deliberate. It is `continue-on-error: true` (`deploy.yml:1785`) because it runs *after*
+Two details are deliberate. It is `continue-on-error: true` (`deploy.yml:1802`) because it runs *after*
 the rollout and the smoke gate, so a throttled ACR task or a transient auth failure must never fail a
 deploy that has already shipped successfully. And the `/dev/null` argument is the build context, which
-`az acr run` requires positionally and this command does not use (`deploy.yml:1782-1783`).
+`az acr run` requires positionally and this command does not use (`deploy.yml:1799-1800`).
 
 [Rubric §31, Cost Efficiency / FinOps] is served by the pairing rather than by either half: the
 scheduled task is the floor that catches everything, and this step is the fast path for the garbage the
@@ -2216,7 +2237,7 @@ production deploy gate.
 
 [Rubric §31, Cost Efficiency / FinOps] (assesses whether cloud resource costs are governed and
 optimized, with visibility into spend) is the primary category this workflow serves. The workflow
-header comment (`cost-guard.yml:3-8`) states its purpose precisely: "a scheduled, READ-ONLY check that
+header comment (`cost-guard.yml:3-10`) states its purpose precisely: "a scheduled, READ-ONLY check that
 the production footprint is still at its cost baseline... It complements the cost budget in main.bicep
 (which alerts on $ spend) by flagging the *configuration* drift directly."
 
@@ -2226,11 +2247,11 @@ The conference-day surge is declared in IaC: `conferenceMode` in `main.bicep` mo
 hot-path databases from Basic to S2 and raises the scaled Container Apps' replica cap from 2 to 4
 (`MMCA.ADC/infra/main.bicep:181`, `:192`). One repository variable, `CONFERENCE_MODE_UNTIL`,
 switches it: every deploy on or before that date applies the surge and the first deploy after it
-reverts it (`MMCA.ADC/infra/OPERATIONS.md:319-324`). The cost-guard reads the same variable
-(`MMCA.ADC/.github/workflows/cost-guard.yml:58-61`): inside the window a surged footprint is
+reverts it (`MMCA.ADC/infra/OPERATIONS.md:320-325`). The cost-guard reads the same variable
+(`MMCA.ADC/.github/workflows/cost-guard.yml:60-63`): inside the window a surged footprint is
 expected; after it, a surge still live fails the Monday run as the reminder but passes as the deploy
 gate, because that deploy IS the revert; with the variable unset, any surge is an out-of-band scale-up
-and blocks every production deploy until it is reset (`MMCA.ADC/infra/OPERATIONS.md:376`).
+and blocks every production deploy until it is reset (`MMCA.ADC/infra/OPERATIONS.md:377`).
 
 The cost-guard exists because a forgotten surge is not cheap: each surged database runs at S2
 (50 DTU) instead of Basic (5 DTU) (`MMCA.ADC/infra/main.bicep:181`), around the clock until reverted.
@@ -2238,7 +2259,7 @@ The cost-guard exists because a forgotten surge is not cheap: each surged databa
 ### Triggers
 
 ```yaml
-# cost-guard.yml:10-17
+# cost-guard.yml:12-19
 on:
   schedule:
     - cron: "0 7 * * 1" # Mondays 07:00 UTC
@@ -2248,21 +2269,21 @@ on:
 
 Weekly on Monday mornings (UTC), early in the work week so a drift is noticed promptly, with time to
 investigate before the next week. `workflow_dispatch` allows a manual run at any time (e.g. to verify
-that a revert applied correctly). The bare `workflow_call` (`cost-guard.yml:14-17`) is what promotes the
+that a revert applied correctly). The bare `workflow_call` (`cost-guard.yml:16-19`) is what promotes the
 check to a deploy gate: it takes no inputs, so the deploy pays only the invocation, and the comment notes
 that being read-only is what makes it safe to run on the deploy path.
 
 ### Job: `surge-drift`
 
-**Environment: `production`** (`cost-guard.yml:32`): this scopes the OIDC token to the same federated
+**Environment: `production`** (`cost-guard.yml:34`): this scopes the OIDC token to the same federated
 credential as `deploy.yml`, giving the read-only Azure CLI calls access to the production resource group
 without a separate credential. As with `deploy.yml`'s own jobs, the declaration is required for the token
 subject to match, not merely for an approval gate.
 
-**Step, Check replica caps and SQL tiers** (`cost-guard.yml:41-86`):
+**Step, Check replica caps and SQL tiers** (`cost-guard.yml:43-88`):
 
 ```bash
-BASELINE_MAX_REPLICAS: "2"   # cost-guard.yml:25
+BASELINE_MAX_REPLICAS: "2"   # cost-guard.yml:27
 
 for app in $(az containerapp list -g "$rg" --query "[?starts_with(name, 'adc-')].name" -o tsv); do
   max=$(az containerapp show ... --query "properties.template.scale.maxReplicas" -o tsv)
@@ -2292,7 +2313,7 @@ results are written to the GitHub Step Summary as a Markdown table, so the check
 GitHub Actions UI without opening the logs.
 
 The workflow **never mutates anything**, it is read-only. On drift it fails and prints instructions
-(`cost-guard.yml:82-85`), but it does not attempt to downscale automatically. The operator must choose how
+(`cost-guard.yml:84-87`), but it does not attempt to downscale automatically. The operator must choose how
 to revert (typically by re-running `deploy.yml`, which re-applies the Bicep baseline). Since the same run
 is what `deploy.yml`'s `cost-guard` job invokes, an un-reverted surge now also blocks the next production
 deploy until it is reset.
@@ -2327,7 +2348,7 @@ The header carries a second paragraph that is the most instructive thing in the 
 reason is a measurement problem, not a policy one: a k6 run sends every request from one runner, so one
 IP, and without the bypass the number the test reports is the per-IP rate-limit window rather than
 backend capacity. The same secret is passed into `main.bicep` by `deploy.yml`
-(`deploy.yml:1527-1533`), so the bypass exists in production only when it has been configured
+(`deploy.yml:1544-1550`), so the bypass exists in production only when it has been configured
 deliberately. The bypass changes nothing else: the test stays read-only and never mutates.
 
 ### Why only the Conference read endpoints?
