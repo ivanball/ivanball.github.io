@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>MMCA.Common: Architecture Remediation Backlog · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Derived from the scorecard: Maturity 96.6% (317/328) and Implementation 86.0% (705/820), framework v1.218.0, evidence as of 2026-10-01. Tasks are…">
+  <meta name="description" content="Derived from the scorecard: Maturity 96.6% (317/328) and Implementation 86.0% (705/820), framework v1.233.0, evidence as of 2026-10-07. Tasks are…">
   <link rel="canonical" href="https://ivanball.github.io/docs/governance/common-RemediationBacklog.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="MMCA.Common: Architecture Remediation Backlog">
-  <meta property="og:description" content="Derived from the scorecard: Maturity 96.6% (317/328) and Implementation 86.0% (705/820), framework v1.218.0, evidence as of 2026-10-01. Tasks are…">
+  <meta property="og:description" content="Derived from the scorecard: Maturity 96.6% (317/328) and Implementation 86.0% (705/820), framework v1.233.0, evidence as of 2026-10-07. Tasks are…">
   <meta property="og:url" content="https://ivanball.github.io/docs/governance/common-RemediationBacklog.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="MMCA.Common: Architecture Remediation Backlog">
-  <meta name="twitter:description" content="Derived from the scorecard: Maturity 96.6% (317/328) and Implementation 86.0% (705/820), framework v1.218.0, evidence as of 2026-10-01. Tasks are…">
+  <meta name="twitter:description" content="Derived from the scorecard: Maturity 96.6% (317/328) and Implementation 86.0% (705/820), framework v1.233.0, evidence as of 2026-10-07. Tasks are…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Governance","item":"https://ivanball.github.io/docs/governance/index.html"},{"@type":"ListItem","position":4,"name":"Common · MMCA.Common: Architecture Remediation Backlog","item":"https://ivanball.github.io/docs/governance/common-RemediationBacklog.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
@@ -114,7 +114,7 @@
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Architecture governance</p>
           <h1 id="mmcacommon-architecture-remediation-backlog">MMCA.Common: Architecture Remediation Backlog</h1>
-          <p>Derived from the <a href="common-ArchitectureScorecard.html">scorecard</a>: Maturity <strong>96.6%</strong> (317/328) and Implementation <strong>86.0%</strong> (705/820), framework v1.218.0, evidence as of 2026-10-01. Tasks are ranked on both scorecard axes, one band per axis. The <strong>maturity band</strong> holds every category with maturity &lt; 4, ranked by <strong>priority = (4 − maturity) × weight</strong>; the <strong>implementation band</strong> holds every category with implementation &lt;= 8, ranked by **implPriority = max(0, 9 − implementation) × weight** (target 9: a 10 is awardable at re-score time, but it is recognition, not scheduled work). Ties break by weight descending, then category number. A category reaches the Resolved table only at maturity 4 AND implementation &gt;= 9. The maturity band holds <strong>4 categories, 11 gap points</strong>; the implementation band holds <strong>15 categories, 33 gap points</strong>. Levers are cited only where this ledger or the scorecard records one; an unnamed lever is named at the next re-score, never invented here.</p>
+          <p>Derived from the <a href="common-ArchitectureScorecard.html">scorecard</a>: Maturity <strong>96.6%</strong> (317/328) and Implementation <strong>86.0%</strong> (705/820), framework v1.233.0, evidence as of 2026-10-07. Tasks are ranked on both scorecard axes, one band per axis. The <strong>maturity band</strong> holds every category with maturity &lt; 4, ranked by <strong>priority = (4 − maturity) × weight</strong>; the <strong>implementation band</strong> holds every category with implementation &lt;= 8, ranked by **implPriority = max(0, 9 − implementation) × weight** (target 9: a 10 is awardable at re-score time, but it is recognition, not scheduled work). Ties break by weight descending, then category number. A category reaches the Resolved table only at maturity 4 AND implementation &gt;= 9. The maturity band holds <strong>4 categories, 11 gap points</strong>; the implementation band holds <strong>15 categories, 33 gap points</strong>. Levers are cited only where this ledger or the scorecard records one; an unnamed lever is named at the next re-score, never invented here.</p>
           <h2 id="open-work-at-a-glance">Open work at a glance</h2>
           <div class="table-wrap"><table>
           <thead>
@@ -157,7 +157,7 @@
           <td>Security</td>
           <td>4 / 8</td>
           <td>Implementation</td>
-          <td>Lever not yet named; the written threat model is an accepted, unscheduled gap</td>
+          <td>Authenticate the broker origin headers, give in-cluster gRPC a service identity, default tenant resolution to claim-only; the written threat model stays an accepted, unscheduled gap</td>
           </tr>
           <tr>
           <td>3 (I)</td>
@@ -213,7 +213,7 @@
           <td>Design System &amp; UI Consistency</td>
           <td>4 / 8</td>
           <td>Implementation</td>
-          <td>Source the brand hex from one token and add a Common inline-style guard</td>
+          <td>Source the brand hex from one token</td>
           </tr>
           <tr>
           <td>2 (I)</td>
@@ -221,7 +221,7 @@
           <td>Front-End Performance</td>
           <td>4 / 8</td>
           <td>Implementation</td>
-          <td>Merge the consumers&#39; adoption of the shipped <code>wasm-payload-budget</code> action (in progress)</td>
+          <td>Make the consumers&#39; <code>wasm-payload-budget</code> job a required check, and run it in Common&#39;s <code>ci.yml</code></td>
           </tr>
           <tr>
           <td>2 (I)</td>
@@ -245,15 +245,7 @@
           <td>Internationalization (i18n)</td>
           <td>4 / 8</td>
           <td>Implementation</td>
-          <td>Time-zone rendering, error-code coverage for <code>es</code>, localized default emails</td>
-          </tr>
-          <tr>
-          <td>outside bands</td>
-          <td>#26</td>
-          <td>Front-End Security</td>
-          <td>4 / 9</td>
-          <td>none (in progress)</td>
-          <td>TD-08: merge consumer adoption of the shipped same-origin data-call proxy</td>
+          <td>Error-code coverage for <code>es</code>, localized default emails</td>
           </tr>
           </tbody></table></div>
           <h2 id="open-items">Open items</h2>
@@ -272,7 +264,13 @@
           <h3 id="11--security">[ ] #11 · Security</h3>
           <ul>
           <li><em>Gap:</em> authorization is RBAC with capability indirection plus the opt-in, claim-trusting <code>OwnerOrAdminFilter</code> (<code>Source/Presentation/MMCA.Common.API/DependencyInjection.cs:85</code>) rather than a resource/attribute policy engine; the ADR-037 <code>EncryptedStringConverter</code> is unadopted in Source; and the written threat model the rubric requires is absent repo-wide (an unmet criterion that counts against the score, recorded as not scheduled work under <em>Deliberate and accepted</em>).</li>
-          <li><em>Lever:</em> not yet identified; a future re-score must not mint a sub-item for the threat model.</li>
+          <li><input disabled="" type="checkbox"> <strong>Close three internal trust gaps.</strong><ul>
+          <li>(a) the broker consumer restores user id, roles and tenant from unsigned <code>MMCA-*</code> headers (<code>Source/Core/MMCA.Common.Infrastructure/Messaging/Consumers/ConsumerOriginRestore.cs:50</code>; roles as plain text at <code>Source/Core/MMCA.Common.Shared/Messaging/MessageHeaders.cs:31</code>), so any party able to publish to the broker can assert roles: sign or otherwise authenticate the origin headers;</li>
+          <li>(b) in-cluster gRPC forwards the user JWT over deliberate cleartext h2c (<code>Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:55,95</code>) with no transport-level service identity: add one;</li>
+          <li>(c) the default tenant resolution order is <code>[Claim, Header]</code> (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettings.cs:56</code>), so <code>X-Tenant-Id</code> (<code>Source/Presentation/MMCA.Common.API/Middleware/TenantResolutionMiddleware.cs:112</code>) picks the tenant when a token has no tenant claim: default to claim-only, and add a tenant fitness base to <code>MMCA.Common.Testing.Architecture</code>.</li>
+          </ul>
+          </li>
+          <li><em>Lever:</em> the three trust gaps above; a future re-score must not mint a sub-item for the threat model.</li>
           </ul>
           <h3 id="29--resilience--business-continuity">[ ] #29 · Resilience &amp; Business Continuity</h3>
           <ul>
@@ -281,7 +279,7 @@
           </ul>
           <h3 id="17--devops--deployment">[ ] #17 · DevOps &amp; Deployment</h3>
           <ul>
-          <li><em>Gap (both bands):</em> the <code>sample-deployment-validate</code> job is a compile check (<code>az bicep build</code> at <code>ci.yml:831</code> and <code>:835</code>, job at <code>ci.yml:819</code>) and is not among the 8 required contexts, and a library cannot deploy itself, so real CD-to-Azure lives in consumers.</li>
+          <li><em>Gap (both bands):</em> the <code>sample-deployment-validate</code> job is a compile check (<code>az bicep build</code> at <code>ci.yml:778</code> and <code>:782</code>, job at <code>ci.yml:766</code>) and is not among the 8 required contexts, and a library cannot deploy itself, so real CD-to-Azure lives in consumers.</li>
           <li><em>Lever:</em> a smoke-deploy of the <code>samples/deployment</code> sample, which moves the category from referenced toward proven.</li>
           </ul>
           <h3 id="30--compliance-privacy--governance">[ ] #30 · Compliance, Privacy &amp; Governance</h3>
@@ -306,19 +304,19 @@
           </ul>
           <h3 id="20--design-system--ui-consistency">[ ] #20 · Design System &amp; UI Consistency</h3>
           <ul>
-          <li><input disabled="" type="checkbox"> <strong>Source the brand hex from one token, and add a Common inline-style guard.</strong> <code>#1565C0</code> is defined in both <code>Source/Presentation/MMCA.Common.UI/Theme/BrandColors.cs:13</code> and <code>wwwroot/app.css:63</code>, and restated raw at <code>Layout/ReconnectModal.razor.css:99</code>, outside the token drift guard. The inline-style half is closed: Common&#39;s razor files carry 0 inline style declarations, enforced by Common&#39;s own <code>InlineStyleTests</code> (<code>Tests/Architecture/MMCA.Common.Architecture.Tests/Ui/ComponentConventions/InlineStyleTests.cs:12</code>, file floor <code>:18</code>) over the shared <code>InlineStyleTestsBase</code> (<code>Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Ui/InlineStyleTestsBase.cs</code>), which ADC now subclasses too (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Ui/InlineStyleTests.cs:10</code>).</li>
-          <li><em>Gap beyond the lever:</em> the shared layout scoped CSS carries 41 <code>!important</code> overrides with raw nav colors (<code>Layout/NavMenu.razor.css:163-198</code>) and a badge override block duplicated between <code>Layout/MainLayout.razor.css:71</code> and <code>NavMenu.razor.css:276-286</code>.</li>
+          <li><input disabled="" type="checkbox"> <strong>Source the brand hex from one token.</strong> <code>#1565C0</code> is defined in both <code>Source/Presentation/MMCA.Common.UI/Theme/BrandColors.cs:13</code> and <code>wwwroot/app.css:63</code>, and restated raw at <code>Layout/ReconnectModal.razor.css:99</code>, outside the token drift guard. Common&#39;s razor files carry 0 inline style declarations, enforced by <code>InlineStyleTests</code> (<code>Tests/Architecture/MMCA.Common.Architecture.Tests/Ui/ComponentConventions/InlineStyleTests.cs:12</code>) over the shared <code>InlineStyleTestsBase</code> (<code>Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Ui/InlineStyleTestsBase.cs</code>).</li>
+          <li><em>Gap beyond the lever:</em> the shared layout scoped CSS carries 42 <code>!important</code> overrides (28 in <code>Layout/NavMenu.razor.css:160-311</code>, 14 in <code>Layout/MainLayout.razor.css</code>) with raw nav colors, and a badge override block duplicated between <code>Layout/MainLayout.razor.css:76</code> and <code>NavMenu.razor.css:274-292</code>.</li>
           </ul>
-          <h3 id="23--front-end-performance">[~] #23 · Front-End Performance</h3>
+          <h3 id="23--front-end-performance">[ ] #23 · Front-End Performance</h3>
           <ul>
-          <li>[~] <strong>Run the shipped WASM payload budget in the consumers&#39; CI.</strong> The composite action ships in Common (<code>.github/actions/wasm-payload-budget/action.yml</code>), Common&#39;s <code>ci.yml</code> does not run it, and the ADC and Store adoption sits on unmerged branches, in <code>deploy.yml</code> (post-merge rather than a merge gate), so no <code>main</code> workflow enforces a payload budget. The web-vitals budgets sit at the good-band values (LCP 2500, FCP 1800, TTFB 800, CLS 0.1, INP 200; <code>Tests/Presentation/MMCA.Common.UI.E2E.Tests/WebVitals/WebVitalsE2ETests.cs:19-23</code>) on all three required engines.<ul>
-          <li><em>Evaluated and not adopted: route-level WASM lazy loading.</em> It needs a framework lazy-module registry, an <code>OnNavigateAsync</code> hook in Common&#39;s <code>Routes.razor</code> and deferred DI registration, and in ADC the landing module (Conference) and a layout-rendered module (Engagement) must load eagerly anyway, so little would be deferred. The payload-budget action (<code>.github/actions/wasm-payload-budget/action.yml</code>, shipped in Common and not yet run by ADC or Store <code>main</code>) is the #23 lever instead. Revisit when a consumer gains a large module that is neither the landing route nor rendered by the layout.</li>
+          <li><input disabled="" type="checkbox"> <strong>Make the WASM payload budget a merge gate.</strong> The composite action ships in Common (<code>.github/actions/wasm-payload-budget/action.yml</code>) and both consumers run it on pull requests (<code>MMCA.ADC/.github/workflows/deploy.yml:464-485</code>, budget 5,900 KB; <code>MMCA.Store/.github/workflows/deploy.yml:493-514</code>, budget 5,700 KB), but in neither is it a required check (the required contexts are build-and-test, supply-chain, integration-tests and coverage), and Common&#39;s own <code>ci.yml</code> does not run it. The web-vitals budgets sit at the good-band values (LCP 2500, FCP 1800, TTFB 800, CLS 0.1, INP 200; <code>Tests/Presentation/MMCA.Common.UI.E2E.Tests/WebVitals/WebVitalsE2ETests.cs:19-23</code>) on all three required engines.<ul>
+          <li><em>Evaluated and not adopted: route-level WASM lazy loading.</em> It needs a framework lazy-module registry, an <code>OnNavigateAsync</code> hook in Common&#39;s <code>Routes.razor</code> and deferred DI registration, and in ADC the landing module (Conference) and a layout-rendered module (Engagement) must load eagerly anyway, so little would be deferred. The payload-budget action is the #23 lever instead. Revisit when a consumer gains a large module that is neither the landing route nor rendered by the layout.</li>
           </ul>
           </li>
           </ul>
           <h3 id="33--developer-experience--inner-loop">[ ] #33 · Developer Experience &amp; Inner Loop</h3>
           <ul>
-          <li><em>Gap:</em> the criteria are met with several small, documented gaps: source mode binds a consumer to Common&#39;s last-built Debug reference assembly and needs a manual rebuild (<code>MMCA.Common/CONTRIBUTING.md:150</code>), contributors are told to expect CI-only analyzer and restore round-trips (<code>CONTRIBUTING.md:167</code>), the AppHost stalls when launched headless and its test tier is advisory (<code>.github/workflows/ci.yml:976</code>), and the agent guardrail hooks live in the workspace harness rather than in Common (Common&#39;s <code>.claude/settings.local.json</code> configures no hooks).</li>
+          <li><em>Gap:</em> the criteria are met with several small, documented gaps: source mode binds a consumer to Common&#39;s last-built Debug reference assembly and needs a manual rebuild (<code>MMCA.Common/CONTRIBUTING.md:150</code>), contributors are told to expect CI-only analyzer and restore round-trips (<code>CONTRIBUTING.md:167</code>), the AppHost stalls when launched headless and its test tier is advisory (<code>.github/workflows/ci.yml:905</code>), and the agent guardrail hooks live in the workspace harness rather than in Common (Common&#39;s <code>.claude/settings.local.json</code> configures no hooks).</li>
           <li><em>Lever:</em> not yet identified.</li>
           </ul>
           <h3 id="34--architecture-governance--documentation">[ ] #34 · Architecture Governance &amp; Documentation</h3>
@@ -328,16 +326,12 @@
           </ul>
           <h3 id="27--internationalization-i18n">[ ] #27 · Internationalization (i18n)</h3>
           <ul>
-          <li><input disabled="" type="checkbox"> <strong>Close the three localization gaps:</strong><ul>
-          <li>(a) render UTC instants in the user&#39;s time zone: <code>Source/Presentation/MMCA.Common.UI/Pages/Notifications/NotificationInbox.razor:57</code> and <code>NotificationList.razor:69</code> format raw UTC with <code>ToString(&quot;g&quot;)</code>, and <code>Pages/Auth/Sessions.razor.cs:234</code> calls <code>ToLocalTime()</code>, which is the server zone under Server/SSR render;</li>
-          <li>(b) cover the framework&#39;s emitted error codes for <code>es</code>: <code>ErrorResources.resx</code> holds 15 codes, so <code>Auth.InvalidCredentials</code> (<code>Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:140</code>) falls back to English in <code>Source/Presentation/MMCA.Common.API/Localization/ErrorLocalizer.cs:32</code> and reaches Spanish users through <code>Login.razor:246</code>, and no test checks code coverage;</li>
-          <li>(c) localize the default transactional emails, which are English-only with a fixed plural (&quot;{minutes} minutes&quot;) at <code>Source/Core/MMCA.Common.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandlerBase.cs:133</code> and <code>Users/UseCases/EmailConfirmation/SendEmailConfirmationHandlerBase.cs:134</code>.</li>
+          <li><input disabled="" type="checkbox"> <strong>Close the remaining localization gaps:</strong><ul>
+          <li><input checked="" disabled="" type="checkbox"> (a) UTC instants render in the viewer&#39;s time zone through <code>ViewerTimeZone</code> (<code>Source/Presentation/MMCA.Common.UI/Services/Culture/ViewerTimeZone.cs:18</code>, <code>Format</code> at <code>:113</code>, registered at <code>MMCA.Common.UI/DependencyInjection.cs:190</code>), used at <code>Pages/Notifications/NotificationInbox.razor:58</code>, <code>NotificationList.razor:80</code> and <code>Pages/Auth/Sessions.razor.cs:255</code>;</li>
+          <li><input disabled="" type="checkbox"> (b) cover the framework&#39;s emitted error codes for <code>es</code>: <code>ErrorResources.resx</code> and <code>ErrorResources.es.resx</code> hold 15 codes each, so <code>Auth.InvalidCredentials</code> (<code>Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:158,165</code>) falls back to English in <code>Source/Presentation/MMCA.Common.API/Localization/ErrorLocalizer.cs:32</code> and reaches Spanish users through <code>Login.razor:246</code>; <code>LocalizationResourceTests</code> checks key parity, not emitted-code coverage;</li>
+          <li><input disabled="" type="checkbox"> (c) localize the default transactional emails, which are English-only with a fixed plural (&quot;{minutes} minutes&quot;) at <code>Source/Core/MMCA.Common.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandlerBase.cs:133</code> and <code>Users/UseCases/EmailConfirmation/SendEmailConfirmationHandlerBase.cs:153</code> (English subject at <code>:134</code>).</li>
           </ul>
           </li>
-          </ul>
-          <h3 id="26--front-end-security-m4i9-outside-both-bands">#26 · Front-End Security (M4/I9, outside both bands)</h3>
-          <ul>
-          <li>[~] <strong>TD-08 (#26) - Same-origin data-call proxy</strong> (effort L). The framework owns this lever; ADC and Store consume it. The auth-path BFF is live: the refresh token lives only in the HttpOnly cookie and is exchanged server-side at the same-origin <code>/auth/session/token</code> endpoint (<code>ICookieSessionRefresher</code>, <code>Source/Presentation/MMCA.Common.API/SessionCookies/CookieSessionRefresher.cs:30</code>, implementation <code>:52</code>; the <code>UseCookieSessionRefresh()</code> pipeline step, <code>CookieSessionRefreshMiddleware.cs:43</code>), and the access token is held in memory, hydrated through <code>SameOriginProxyTokenRefresher</code> (<code>Source/Presentation/MMCA.Common.UI/Services/Auth/Tokens/SameOriginProxyTokenRefresher.cs:11</code>), which calls that endpoint through JS <code>fetch</code> with same-origin credentials so the refresh token never reaches JS (<code>:6-9</code>). The item is a full same-origin data-call proxy (the access token also out of JS) plus proxied login, register and OAuth flows, which closes the window in which the refresh token transits JS during the login round-trip. Its framework half ships opt-in in v1.218.0 (<code>Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxyEndpoint.cs:29</code>, registration <code>SameOriginApiProxyServiceExtensions.cs:37</code>, CSRF header <code>Source/Presentation/MMCA.Common.UI/Services/Auth/SameOriginProxyHeaders.cs:14</code>). Open: consumer adoption. ADC and Store <code>main</code> pin <code>MMCA.Common.API</code> 1.217.0 and their <code>Program.cs</code> maps no <code>SameOriginApiProxy</code>; the ADC adoption sits on an unmerged branch and needs interactive verification on its Aspire stack before it merges. Design notes: <code>MMCA.ADC/TokenStorageDesignNote.md</code>.</li>
           </ul>
           <h2 id="implementation-band">Implementation band</h2>
           <p>Every category at implementation &lt;= 8, ranked by implPriority = max(0, 9 − implementation) × weight. Four of these categories (#1, #17, #30, #31) also sit in the maturity band; this band records only their implementation half.</p>
@@ -374,7 +368,7 @@
           <td>Security</td>
           <td>3</td>
           <td>8</td>
-          <td>not yet identified (the written threat model is absent repo-wide and recorded as not scheduled work; ownership is opt-in claim-trusting <code>OwnerOrAdminFilter</code>, <code>Source/Presentation/MMCA.Common.API/DependencyInjection.cs:85</code>, rather than ABAC; the ADR-037 <code>EncryptedStringConverter</code> is unadopted in Source)</td>
+          <td>close three internal trust gaps (see <em>Open items</em>): unsigned broker origin headers (<code>Source/Core/MMCA.Common.Infrastructure/Messaging/Consumers/ConsumerOriginRestore.cs:50</code>), no service identity on in-cluster h2c gRPC (<code>Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:95</code>), header-fallback tenant resolution by default (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettings.cs:56</code>); the written threat model is absent repo-wide and recorded as not scheduled work, ownership is opt-in claim-trusting <code>OwnerOrAdminFilter</code> (<code>Source/Presentation/MMCA.Common.API/DependencyInjection.cs:85</code>) rather than ABAC, and the ADR-037 <code>EncryptedStringConverter</code> is unadopted in Source</td>
           </tr>
           <tr>
           <td>3</td>
@@ -414,7 +408,7 @@
           <td>DevOps &amp; Deployment</td>
           <td>2</td>
           <td>8</td>
-          <td>the Bicep job is a compile check and is not among the required contexts (the validate job at <code>ci.yml:819</code>, <code>az bicep build</code> at <code>:831</code> and <code>:835</code>); a smoke-deploy of the sample is the lever</td>
+          <td>the Bicep job is a compile check and is not among the required contexts (the validate job at <code>ci.yml:766</code>, <code>az bicep build</code> at <code>:778</code> and <code>:782</code>); a smoke-deploy of the sample is the lever</td>
           </tr>
           <tr>
           <td>2</td>
@@ -422,7 +416,7 @@
           <td>Design System &amp; UI Consistency</td>
           <td>2</td>
           <td>8</td>
-          <td>source the brand hex from one token (<code>Theme/BrandColors.cs:13</code> vs <code>wwwroot/app.css:63</code>, raw <code>#1565C0</code> at <code>Layout/ReconnectModal.razor.css:99</code>), and a Common inline-style guard</td>
+          <td>source the brand hex from one token (<code>Theme/BrandColors.cs:13</code> vs <code>wwwroot/app.css:63</code>, raw <code>#1565C0</code> at <code>Layout/ReconnectModal.razor.css:99</code>)</td>
           </tr>
           <tr>
           <td>2</td>
@@ -430,7 +424,7 @@
           <td>Front-End Performance</td>
           <td>2</td>
           <td>8</td>
-          <td>run the shipped <code>.github/actions/wasm-payload-budget/action.yml</code> in the consumers&#39; CI (adoption in progress, not on ADC or Store <code>main</code>); route-level lazy loading is evaluated and not adopted</td>
+          <td>make the consumers&#39; <code>wasm-payload-budget</code> job a required check (PR-only today, <code>MMCA.ADC/.github/workflows/deploy.yml:464</code>, <code>MMCA.Store/.github/workflows/deploy.yml:493</code>) and run it in Common&#39;s <code>ci.yml</code>; route-level lazy loading is evaluated and not adopted</td>
           </tr>
           <tr>
           <td>2</td>
@@ -446,7 +440,7 @@
           <td>Cost Efficiency / FinOps</td>
           <td>2</td>
           <td>8</td>
-          <td><strong>documented accepted cap, not scheduled work</strong> (see <em>Deliberate and accepted</em>); the default-ON probe-telemetry filter and its span processor ship in-repo (<code>Aspire/Extensions.Telemetry.cs:19,129,233</code>: config key, <code>ProbeTelemetryFilterProcessor</code> registration and default-ON read), and the category ranks first on the maturity band</td>
+          <td><strong>documented accepted cap, not scheduled work</strong> (see <em>Deliberate and accepted</em>); the default-ON probe-telemetry filter and its span processor ship in-repo (<code>Aspire/Extensions.Telemetry.cs:19,129,234</code>: config key, <code>ProbeTelemetryFilterProcessor</code> registration and default-ON read), and the category ranks first on the maturity band</td>
           </tr>
           <tr>
           <td>2</td>
@@ -470,7 +464,7 @@
           <td>Internationalization (i18n)</td>
           <td>1</td>
           <td>8</td>
-          <td>three gaps (see <em>Open items</em>): UTC times rendered without time-zone handling (<code>Pages/Notifications/NotificationInbox.razor:57</code>, <code>NotificationList.razor:69</code>, server-zone <code>ToLocalTime()</code> at <code>Pages/Auth/Sessions.razor.cs:234</code>); <code>ErrorResources.resx</code> covers 15 codes, so <code>Auth.InvalidCredentials</code> (<code>AuthenticationServiceBase.cs:140</code>) reaches Spanish users in English; default emails are English-only with a fixed plural (<code>ForgotPasswordHandlerBase.cs:133</code>)</td>
+          <td>two gaps (see <em>Open items</em>): <code>ErrorResources.resx</code> covers 15 codes, so <code>Auth.InvalidCredentials</code> (<code>AuthenticationServiceBase.cs:158,165</code>) reaches Spanish users in English; default emails are English-only with a fixed plural (<code>ForgotPasswordHandlerBase.cs:133</code>)</td>
           </tr>
           </tbody></table></div>
           <p><strong>Σ implPriority = 33</strong> across the 15 live rows (3 + 3 + 3 + 3 + 2 + 2 + 2 + 2 + 2 + 2 + 2 + 2 + 2 + 2 + 1).</p>
@@ -715,7 +709,7 @@
           <td>#11 (item)</td>
           <td>Secure-by-default <code>RequireHttpsMetadata</code></td>
           <td>4 / 8</td>
-          <td>Single <code>AddForwardedJwtBearer</code> definition at <code>API/Startup/WebApplicationBuilderExtensions.cs:444</code></td>
+          <td>Single <code>AddForwardedJwtBearer</code> definition at <code>API/Startup/WebApplicationBuilderExtensions.Authentication.cs:52</code></td>
           </tr>
           <tr>
           <td>#11 (item)</td>
@@ -763,19 +757,37 @@
           <td>#23 (item)</td>
           <td>Packaged-asset hygiene and grid virtualization</td>
           <td>4 / 8</td>
-          <td><code>wwwroot</code> about 398 KB with a <code>Content Remove</code> for <code>.map</code> files; opt-in virtualization <code>DataGridListPageBase.cs:140,606</code></td>
+          <td><code>wwwroot</code> about 398 KB with a <code>Content Remove</code> for <code>.map</code> files; opt-in virtualization <code>DataGridListPageBase.cs:154,642</code></td>
           </tr>
           <tr>
           <td>#23 (item)</td>
           <td>Good-band web-vitals budgets on three engines</td>
           <td>4 / 8</td>
-          <td><code>WebVitals/WebVitalsE2ETests.cs:19-23</code> (2500/1800/800/0.1/200), required <code>ui-e2e</code> at <code>ci.yml:324</code></td>
+          <td><code>WebVitals/WebVitalsE2ETests.cs:19-23</code> (2500/1800/800/0.1/200), required <code>ui-e2e</code> at <code>ci.yml:232</code></td>
+          </tr>
+          <tr>
+          <td>#23 (item)</td>
+          <td>Consumers run the shipped WASM payload budget</td>
+          <td>4 / 8</td>
+          <td><code>MMCA.ADC/.github/workflows/deploy.yml:464,482</code> (5,900 KB at <code>:485</code>); <code>MMCA.Store/.github/workflows/deploy.yml:493,511</code></td>
           </tr>
           <tr>
           <td>#24 (item)</td>
           <td>Password length cap and guard wiring</td>
           <td>4 / 9</td>
           <td><code>ResetPasswordModel.cs:20-21</code> matches <code>CommonValidationRules.cs:194</code>; guard at <code>RoleAdminEdit.razor:7</code> and <code>NotificationSend.razor:12</code></td>
+          </tr>
+          <tr>
+          <td>#26 (TD-08)</td>
+          <td>Same-origin data-call proxy adopted by ADC and Store</td>
+          <td>4 / 9</td>
+          <td>Framework half <code>Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxyEndpoint.cs:29</code>; <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:161,284</code>, <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:153,262</code>, both pinning 1.233.0</td>
+          </tr>
+          <tr>
+          <td>#27 (item)</td>
+          <td>UTC instants rendered in the viewer&#39;s time zone</td>
+          <td>4 / 8</td>
+          <td><code>Source/Presentation/MMCA.Common.UI/Services/Culture/ViewerTimeZone.cs:18</code>, used at <code>NotificationInbox.razor:58</code>, <code>NotificationList.razor:80</code>, <code>Sessions.razor.cs:255</code></td>
           </tr>
           <tr>
           <td>#27 (item)</td>
