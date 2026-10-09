@@ -1,6 +1,6 @@
 # Getting Started: Build a New App on MMCA.Common
 
-_As of: 2026-10-01 (MMCA.Templates 1.12.0, framework v1.218.0)._
+_As of: 2026-10-09 (MMCA.Templates 1.13.0, framework v1.235.0)._
 
 MMCA.Common is a .NET 10 framework for DDD, Clean Architecture, and CQRS, shipped as a set of
 lockstep-versioned NuGet packages (the authoritative list and count live in
