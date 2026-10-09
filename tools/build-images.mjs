@@ -6,9 +6,11 @@
    Writing page renders them in cards roughly 380 CSS px wide, so shipping the
    originals meant downloading about 37 MB to fill thumbnails.
 
-   This script emits an 800px-wide WebP beside each PNG. 800px covers a 2x
-   display at card size and the single-column mobile layout alike, so one
-   derivative serves every breakpoint and no srcset is needed.
+   This script emits two WebPs beside each PNG: `article-NN.webp` at 800px,
+   which covers a 2x display at card size and the single-column mobile layout,
+   and `article-NN-1600.webp` at the full source width, for the article page
+   hero on a high-DPI screen. The generator offers both as a srcset, so the
+   browser picks per placement.
 
    The PNG originals STAY in the repo and are deliberately not referenced by
    any page: they are the source heroes uploaded to Medium at publish time, and
@@ -28,6 +30,7 @@ const WEBSITE_ROOT = path.resolve(TOOLS_DIR, "..");
 const ARTICLE_IMG_DIR = path.join(WEBSITE_ROOT, "assets", "img", "articles");
 
 const TARGET_WIDTH = 800;
+const FULL_WIDTH = 1600;
 const QUALITY = 80;
 
 const sources = readdirSync(ARTICLE_IMG_DIR)
@@ -43,16 +46,20 @@ let converted = 0;
 let skipped = 0;
 let srcBytes = 0;
 let outBytes = 0;
+let fullBytes = 0;
 
 for (const file of sources) {
   const src = path.join(ARTICLE_IMG_DIR, file);
   const dst = src.replace(/\.png$/i, ".webp");
+  const dstFull = src.replace(/\.png$/i, `-${FULL_WIDTH}.webp`);
   srcBytes += statSync(src).size;
 
-  /* Incremental: only re-encode when the source is newer than the derivative,
+  /* Incremental: only re-encode when the source is newer than a derivative,
      so a rebuild after editing one hero does not churn the other 49. */
-  if (existsSync(dst) && statSync(dst).mtimeMs >= statSync(src).mtimeMs) {
+  const current = (f) => existsSync(f) && statSync(f).mtimeMs >= statSync(src).mtimeMs;
+  if (current(dst) && current(dstFull)) {
     outBytes += statSync(dst).size;
+    fullBytes += statSync(dstFull).size;
     skipped++;
     continue;
   }
@@ -61,8 +68,13 @@ for (const file of sources) {
     .resize({ width: TARGET_WIDTH, withoutEnlargement: true })
     .webp({ quality: QUALITY })
     .toFile(dst);
+  await sharp(src)
+    .resize({ width: FULL_WIDTH, withoutEnlargement: true })
+    .webp({ quality: QUALITY })
+    .toFile(dstFull);
 
   outBytes += statSync(dst).size;
+  fullBytes += statSync(dstFull).size;
   converted++;
 }
 
@@ -74,6 +86,7 @@ console.log(
 console.log(
   `PNG sources ${mb(srcBytes)} MB -> WebP ${mb(outBytes)} MB at ${TARGET_WIDTH}px wide, quality ${QUALITY} (${pct}% smaller).`
 );
+console.log(`Full-resolution WebP ${mb(fullBytes)} MB at ${FULL_WIDTH}px wide (srcset for high-DPI screens).`);
 
 /* ----- profile photo -----
    The hero avatar renders at 168px (120px under 760px), so 400px covers a 2x
