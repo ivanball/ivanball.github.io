@@ -140,17 +140,34 @@ const { ADR_CARDS = {} } = loadWindowData("assets/data/adr-cards.js");
 const { PLATFORM_FACTS = {} } = loadWindowData("assets/data/platform-facts.js");
 
 /* articles.js points `hero` at the 1600x840 PNG, the full-size source (and the file
-   uploaded as a Medium story's hero). Pages serve the 800px WebP that `npm run images`
-   derives from it (about 97% smaller across the heroes). Keeping the swap here means the
+   uploaded as a Medium story's hero). Pages serve the two WebPs that `npm run images`
+   derives from it: 800px (`article-NN.webp`) and full-resolution 1600px
+   (`article-NN-1600.webp`), offered as a srcset so a card thumbnail stays light while an
+   article page on a high-DPI screen gets the sharp one. Keeping the swap here means the
    data file keeps naming the real source and no page references a 35 MB asset. If a WebP
    is missing, fall back to the PNG rather than emit a broken src. */
 const HERO_W = 800;
 const HERO_H = 420;
+const HERO_FULL_W = 1600;
+/* `sizes` per placement: the article page hero spans the content column (up to ~900
+   CSS px), the Writing and home cards render at roughly 400 CSS px, full width on mobile. */
+const HERO_SIZES_PAGE = "(max-width: 900px) 100vw, 900px";
+const HERO_SIZES_CARD = "(max-width: 760px) 100vw, 400px";
 const catLabels = new Map(ARTICLE_CATEGORIES.map((c) => [c.key, c.label]));
 
 function webHero(hero) {
   const webp = hero.replace(/\.png$/i, ".webp");
   return existsSync(path.join(WEBSITE_ROOT, webp)) ? webp : hero;
+}
+
+/* The `src` / `srcset` / `sizes` / dimension attributes for a hero <img>. */
+function heroImgAttrs(hero, prefix, sizes) {
+  const src = webHero(hero);
+  const full = hero.replace(/\.png$/i, `-${HERO_FULL_W}.webp`);
+  const srcset = src !== hero && existsSync(path.join(WEBSITE_ROOT, full))
+    ? ` srcset="${prefix}${escapeAttr(src)} ${HERO_W}w, ${prefix}${escapeAttr(full)} ${HERO_FULL_W}w" sizes="${sizes}"`
+    : "";
+  return `src="${prefix}${escapeAttr(src)}"${srcset} alt="" width="${HERO_W}" height="${HERO_H}"`;
 }
 
 const stat = (num, label) =>
@@ -919,7 +936,7 @@ function articleHeadHtml(a, prefix) {
   bits.push("Ivan Ball-llovera");
   if (a.url) bits.push(`<a href="${escapeAttr(a.url)}" target="_blank" rel="noopener">Also on Medium ↗</a>`);
   const hero = a.hero
-    ? `\n<figure class="article-hero"><img src="${prefix}${escapeAttr(webHero(a.hero))}" alt="" width="${HERO_W}" height="${HERO_H}" decoding="async"></figure>`
+    ? `\n<figure class="article-hero"><img ${heroImgAttrs(a.hero, prefix, HERO_SIZES_PAGE)} decoding="async"></figure>`
     : "";
   return `<p class="article-meta">${bits.join(' <span aria-hidden="true">·</span> ')}</p>${hero}\n`;
 }
@@ -1366,7 +1383,7 @@ function adrHref(num, prefix = "") {
    these nodes instead of replacing them. */
 function articleCardHtml(a) {
   const thumb = a.hero
-    ? `<img src="${escapeAttr(webHero(a.hero))}" alt="" width="${HERO_W}" height="${HERO_H}" loading="lazy" decoding="async">`
+    ? `<img ${heroImgAttrs(a.hero, "", HERO_SIZES_CARD)} loading="lazy" decoding="async">`
     : `<span class="thumb-num" aria-hidden="true">${a.n}</span>`;
   const tags = adrNumbers(a.adr).map((n) => {
     const href = adrHref(n);
@@ -1455,7 +1472,7 @@ ${tags ? `              <ul class="tags" style="margin-bottom:0.85rem">${tags}</
   html = replaceRegion(html, "featured-articles",
     featured.map((a) =>
 `          <a class="card card--link article-card" href="${escapeAttr(articleHref(a))}">
-            <div class="thumb"><img src="${escapeAttr(webHero(a.hero))}" alt="" width="${HERO_W}" height="${HERO_H}" loading="lazy" decoding="async"></div>
+            <div class="thumb"><img ${heroImgAttrs(a.hero, "", HERO_SIZES_CARD)} loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">${escapeHtml(catLabels.get(a.cat) || "Article")} · No. ${a.n}</span>
               <h3>${escapeHtml(a.title)}</h3>
