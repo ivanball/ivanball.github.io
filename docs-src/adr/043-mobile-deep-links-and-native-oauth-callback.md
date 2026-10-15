@@ -31,7 +31,7 @@ Android's `AutoVerify` https App Links intent filter is in place too, declared a
 (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/Android/MainActivity.cs:29-35`, with the public web
 host constant at `:44` and the verified link reduced to path plus query at `:83`, shape-checked at
 `:97-100` and published to `IDeepLinkDispatcher` at `:102`). The filter claims only the deep-linkable
-path prefixes (`/conference/`, `/happening-now`, `/feedback/`, `/auth/oauth-complete`, at `:34`),
+path prefixes (`/conference/`, `/engage/`, `/happening-now`, `/feedback/`, `/auth/oauth-complete`, at `:34`),
 the same set the iOS `applinks` components declare, so any other page on the host stays in the
 browser. The checked-in
 `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/Android/AndroidManifest.xml` carries nine
@@ -61,6 +61,8 @@ completion page checks before exchanging the code, and the Android App Links fil
 deep-linkable path prefixes; see Revision below. Revised 2026-10-07: anchors refreshed after the v1.233.0
 release, and the hostname trade-off no longer calls the `MainActivity` cutover comment a two-spot
 note, since it now names the same three binary spots.
+Revised 2026-10-15: both platform link sets now also claim `/engage/`, the self-service sponsor-visit
+and room check-in QR landing pages, so those printed codes open in the app; see Revision below.
 ## Context
 Three mobile flows all need a URL to leave the web world and land inside the MAUI app:
 
@@ -457,3 +459,20 @@ described as stale has been corrected in the code.
    `AutoVerify` `:35`, `PublicWebHost` `:44`, `OnCreate` publish `:50`, `OnNewIntent` publish `:67`,
    `PublishDeepLink` `:70-103`, route reduction `:83`, shape check `:97-100`, publish `:102`. Every
    live citation above is updated; the dated entries keep the values they recorded.
+
+## Revision (2026-10-15)
+The Engagement module's printed QR codes now open in the native app the way the Conference module's
+codes do. Sponsor booth and room check-in codes encode `/engage/sponsors/{id}` and
+`/engage/rooms/{id}` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/ConferenceRoutePaths.cs:64-65`),
+a prefix neither link set claimed, so a camera scan opened the browser instead of the app.
+
+1. **Android:** `DataPathPrefixes` now lists `/conference/`, `/engage/`, `/happening-now`,
+   `/feedback/` and `/auth/oauth-complete`
+   (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/Android/MainActivity.cs:34`).
+2. **iOS:** `AppleAppLinkComponents` adds `/engage/*` in the same position
+   (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:305`), so the served
+   `apple-app-site-association` file and the Android filter still declare the same set.
+
+Both platforms pick the change up only from a build that carries it (MAUI 1.9.8, build 98); iOS also
+needs the host to serve the updated association file, which ships with the same web deploy. The
+decision, the allowlist behavior and every other anchor are unchanged.
