@@ -270,7 +270,7 @@
           (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/Android/MainActivity.cs:29-35</code>, with the public web
           host constant at <code>:44</code> and the verified link reduced to path plus query at <code>:83</code>, shape-checked at
           <code>:97-100</code> and published to <code>IDeepLinkDispatcher</code> at <code>:102</code>). The filter claims only the deep-linkable
-          path prefixes (<code>/conference/</code>, <code>/happening-now</code>, <code>/feedback/</code>, <code>/auth/oauth-complete</code>, at <code>:34</code>),
+          path prefixes (<code>/conference/</code>, <code>/engage/</code>, <code>/happening-now</code>, <code>/feedback/</code>, <code>/auth/oauth-complete</code>, at <code>:34</code>),
           the same set the iOS <code>applinks</code> components declare, so any other page on the host stays in the
           browser. The checked-in
           <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/Android/AndroidManifest.xml</code> carries nine
@@ -299,7 +299,9 @@
           completion page checks before exchanging the code, and the Android App Links filter claims only the
           deep-linkable path prefixes; see Revision below. Revised 2026-10-07: anchors refreshed after the v1.233.0
           release, and the hostname trade-off no longer calls the <code>MainActivity</code> cutover comment a two-spot
-          note, since it now names the same three binary spots.</p>
+          note, since it now names the same three binary spots.
+          Revised 2026-10-15: both platform link sets now also claim <code>/engage/</code>, the self-service sponsor-visit
+          and room check-in QR landing pages, so those printed codes open in the app; see Revision below.</p>
           <h2 id="context">Context</h2>
           <p>Three mobile flows all need a URL to leave the web world and land inside the MAUI app:</p>
           <ol>
@@ -693,6 +695,22 @@
           <code>PublishDeepLink</code> <code>:70-103</code>, route reduction <code>:83</code>, shape check <code>:97-100</code>, publish <code>:102</code>. Every
           live citation above is updated; the dated entries keep the values they recorded.</li>
           </ol>
+          <h2 id="revision-2026-10-15">Revision (2026-10-15)</h2>
+          <p>The Engagement module&#39;s printed QR codes now open in the native app the way the Conference module&#39;s
+          codes do. Sponsor booth and room check-in codes encode <code>/engage/sponsors/{id}</code> and
+          <code>/engage/rooms/{id}</code> (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/ConferenceRoutePaths.cs:64-65</code>),
+          a prefix neither link set claimed, so a camera scan opened the browser instead of the app.</p>
+          <ol>
+          <li><strong>Android:</strong> <code>DataPathPrefixes</code> now lists <code>/conference/</code>, <code>/engage/</code>, <code>/happening-now</code>,
+          <code>/feedback/</code> and <code>/auth/oauth-complete</code>
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/Android/MainActivity.cs:34</code>).</li>
+          <li><strong>iOS:</strong> <code>AppleAppLinkComponents</code> adds <code>/engage/*</code> in the same position
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:305</code>), so the served
+          <code>apple-app-site-association</code> file and the Android filter still declare the same set.</li>
+          </ol>
+          <p>Both platforms pick the change up only from a build that carries it (MAUI 1.9.8, build 98); iOS also
+          needs the host to serve the updated association file, which ships with the same web deploy. The
+          decision, the allowlist behavior and every other anchor are unchanged.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -718,6 +736,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
+            <li><a href="#revision-2026-10-15">Revision (2026-10-15)</a></li>
             </ul>
           </nav>
         </aside>
