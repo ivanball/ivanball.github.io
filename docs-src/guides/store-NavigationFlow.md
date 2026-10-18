@@ -1,6 +1,6 @@
 # Navigation Flow
 
-_As of: 2026-09-25._
+_As of: 2026-10-18._
 
 This document maps the site navigation flow for each actor in the MMCA.Store application. Each mermaid diagram shows the pages accessible to that actor and the directional navigation links between them. (Companion to MMCA.ADC's `NavigationFlow.md`; same per-actor format.)
 
@@ -12,7 +12,7 @@ This document maps the site navigation flow for each actor in the MMCA.Store app
 | **Customer** | Anonymous + profile, cart/checkout, own orders | Authenticated, default `Customer` role (`customer_id` claim) |
 | **Admin** | Full access: Catalog/Sales/Identity admin CRUD | Authenticated, `Admin` role |
 
-> **Roles and enforcement:** `Admin` is the only elevated role (registration creates a `Customer`). The 19 admin pages carry page-level `[Authorize(Roles = "Admin")]`. The three per-module `*RouteAuthorizationTests` (`MMCA.Store.CI.slnf:40,46,52`) regression-gate 17 of them in CI; the `/users` pair sits outside the governed namespaces of the Identity test, which names only `.Pages.Customers` and `.Pages.Roles` (`IdentityRouteAuthorizationTests.cs:26`). Customer-facing data is additionally row-scoped server-side (see **Authorization Model** at the end), so the page gate is defense-in-depth, never the boundary.
+> **Roles and enforcement:** `Admin` is the only elevated role (registration creates a `Customer`). The 19 admin pages carry page-level `[Authorize(Roles = "Admin")]`. The three per-module `*RouteAuthorizationTests` (`MMCA.Store.CI.slnf:40,46,52`) regression-gate all 19 in CI; the Identity test governs `.Pages.Customers`, `.Pages.Roles` and the two user-administration namespaces `.Pages.Users.UserList` and `.Pages.Users.UserDetail` (`IdentityRouteAuthorizationTests.cs:26-32`). Customer-facing data is additionally row-scoped server-side (see **Authorization Model** at the end), so the page gate is defense-in-depth, never the boundary.
 
 ---
 
@@ -57,13 +57,13 @@ flowchart TD
 
 > The product detail page carries a reviews section at the anchor `#reviews`, and the browse cards show a star rating. Both are readable anonymously: the published-reviews endpoint is `AllowAnonymous` and output-cached. Only the review editor inside that section is behind an `AuthorizeView`.
 
-> `/forgot-password` and `/reset-password` are shipped by the framework UI package and carry no `[Authorize]` attribute. The dashed edge is the reset email: the link carries the email and the token in the query string, and both fields stay editable so a recipient can paste the token by hand.
+> `/forgot-password` and `/reset-password` are shipped by the framework UI package and carry `[AllowAnonymous]` (`ForgotPassword.razor:8`, `ResetPassword.razor:12`). The dashed edge is the reset email: the link carries the email and the token in the URL fragment, which the browser never sends to a server, and the page reads and scrubs it from JS (`ResetPassword.razor:125-129`; the query-string form still works for older links). Both fields stay editable so a recipient can paste the token by hand.
 
 ---
 
 ## 2. Customer (Authenticated User)
 
-Inherits all anonymous pages. Gains the profile page, the cart drawer (a layout component, not a route), checkout, and their own orders. Unauthenticated visitors deep-linking to these pages are redirected to login (SSR session-cookie auth keeps `[Authorize]` enforced on fresh GETs and F5, ADR-022).
+Inherits all anonymous pages. Gains the profile page, the cart drawer (a layout component, not a route), checkout, and their own orders. Unauthenticated visitors deep-linking to `/profile` or `/orders` are redirected to login (SSR session-cookie auth keeps `[Authorize]` enforced on fresh GETs and F5, ADR-022). `/orders/{Id}` is the deliberate exception: the page is `[AllowAnonymous]` (`OrderDetail.razor:11`) because the Stripe `?payment=success` return is a full-page load that server-side rendering cannot authenticate, so a page gate would bounce a paying customer to `/login` mid-payment. The protection is API-side: an anonymous read of the order is refused and the page renders only an alert (`OrderDetail.razor:6-10`).
 
 ```mermaid
 flowchart TD
@@ -181,7 +181,40 @@ flowchart TD
 
 > `/reviews` is the moderation grid: every review whatever its status, with hide and unhide. The page carries the Admin route guard, and the endpoints behind it carry the finer-grained `catalog:reviews:moderate` permission, which today only the Admin role holds.
 
-> `/users`, `/users/{Id}`, `/roles` and `/roles/{Role}` are Store pages in the Identity UI module whose roster, operator actions and permission editor come from the framework's shared administration components (`UserAdminList` at `UserList.razor:12`, `RoleAdminList` at `RoleList.razor:10`, `RoleAdminEdit` at `RoleEdit.razor:10`; ADR-116). Each carries `[Authorize(Roles = "Admin")]` (`:2` on the two role pages, `:5` on the two user pages). The Users nav item is gated on the Admin role (`IdentityUIModule.cs:23`); the Roles item is gated on the `roles:manage` capability rather than on a role (`IdentityUIModule.cs:29-35`), because the screen exists to change the role-to-capability map. Store types the detail route as `/users/{Id}` with no `:int` constraint (`UserDetail.razor:1`).
+> `/users`, `/users/{Id}`, `/roles` and `/roles/{Role}` are Store pages in the Identity UI module whose roster, operator actions and permission editor come from the framework's shared administration components (`UserAdminList` at `UserList.razor:12`, `RoleAdminList` at `RoleList.razor:10`, `RoleAdminEdit` at `RoleEdit.razor:10`; ADR-116). Each carries `[Authorize(Roles = "Admin")]` (`:2` on the two role pages, `:5` on the two user pages). The Users nav item is gated on the Admin role (`IdentityUIModule.cs:23`); the Roles item is gated on the `roles:manage` capability rather than on a role (`IdentityUIModule.cs:29-35`), because the screen exists to change the role-to-capability map. The two gates differ: a non-Admin role granted `roles:manage` would see the Roles item but be answered Forbidden by the page's Admin role guard. Store types the detail route as `/users/{Id}` with no `:int` constraint (`UserDetail.razor:1`).
+
+---
+
+## Route Contract
+
+This table lists every routable page Store itself ships, one row per route, with the access it requires, so a Store architecture test can compare it with the `@page` routes and their authorization attributes and a route or guard change lands together with its row here. Every Store page lives in a module UI project (Catalog, Sales, Identity); the web and MAUI heads declare no `@page` of their own. Framework-owned routes are listed under **Framework-owned routes** in the Authorization Model section instead. The Access column uses exactly three labels, each mapped from the page's `@attribute` line: **Anonymous** is `[Microsoft.AspNetCore.Authorization.AllowAnonymous]`, **Authenticated** is a bare `[Microsoft.AspNetCore.Authorization.Authorize]`, and **Admin** is `[Microsoft.AspNetCore.Authorization.Authorize(Roles = RoleNames.Admin)]`. No Store page uses a policy-based guard or places its guard on the partial class in the `.razor.cs`. Route parameters are written exactly as the `@page` directive declares them; Store's are untyped (`{Id}`, and `{Role}`, a role name), so the table carries no `:int` constraint.
+
+| Route | Page | Access |
+|---|---|---|
+| `/catalog` | CatalogBrowse | Anonymous |
+| `/catalog/{Id}` | CatalogProductDetail | Anonymous |
+| `/categories` | CategoryList | Admin |
+| `/categories/create` | CategoryCreate | Admin |
+| `/categories/{Id}` | CategoryDetail | Admin |
+| `/customers` | CustomerList | Admin |
+| `/customers/create` | CustomerCreate | Admin |
+| `/customers/{Id}` | CustomerDetail | Admin |
+| `/inventory` | InventoryItemList | Admin |
+| `/inventory/create` | InventoryItemCreate | Admin |
+| `/inventory/{Id}` | InventoryItemDetail | Admin |
+| `/orders` | OrderList | Authenticated |
+| `/orders/{Id}` | OrderDetail | Anonymous |
+| `/products` | ProductList | Admin |
+| `/products/create` | ProductCreate | Admin |
+| `/products/{Id}` | ProductDetail | Admin |
+| `/profile` | Profile | Authenticated |
+| `/reviews` | ReviewList | Admin |
+| `/roles` | RoleList | Admin |
+| `/roles/{Role}` | RoleEdit | Admin |
+| `/shoppingcarts` | ShoppingCartList | Admin |
+| `/shoppingcarts/{Id}` | ShoppingCartDetail | Admin |
+| `/users` | UserList | Admin |
+| `/users/{Id}` | UserDetail | Admin |
 
 ---
 
@@ -189,14 +222,15 @@ flowchart TD
 
 Three cooperating layers; the API is always the boundary:
 
-1. **Page-level route guards.** The 19 admin pages carry `[Authorize(Roles = "Admin")]` and `/profile` / `/orders` carry `[Authorize]`. SSR session-cookie auth (ADR-022, `mmca_auth_access` HttpOnly cookie) lets these attributes pass on fresh GETs, F5, and new tabs, so deep links never render a protected shell to the wrong actor. Regression-gated by `Catalog/Sales/IdentityRouteAuthorizationTests` in CI (commit `c4adff2`) for every admin page except the `/users` pair, which the Identity test's namespace list does not name (`IdentityRouteAuthorizationTests.cs:26`).
+1. **Page-level route guards.** The 19 admin pages carry `[Authorize(Roles = "Admin")]`, `/profile` and `/orders` carry `[Authorize]`, and `/orders/{Id}` is deliberately `[AllowAnonymous]` (see the customer section; the order API is its gate). SSR session-cookie auth (ADR-022, `mmca_auth_access` HttpOnly cookie) lets these attributes pass on fresh GETs, F5, and new tabs, so deep links never render a protected shell to the wrong actor. Regression-gated by `Catalog/Sales/IdentityRouteAuthorizationTests` in CI (commit `c4adff2`) for all 19 admin pages, the `/users` pair included (`IdentityRouteAuthorizationTests.cs:26-32`); `SharedOrderPages_AreNotAdminGated` keeps the shared order pages off the Admin role (`SalesRouteAuthorizationTests.cs:34-47`). The full route-by-route list is the **Route Contract** section above.
 2. **API resource ownership (ADR-033).** `OwnerOrAdminFilter` 403s requests whose `customer_id` claim mismatches the owner parameter, and `OwnershipHelper.GetOwnershipSpecification()` row-scopes collection queries so customers only ever receive their own carts/orders. Per-mutation checks on orders return 404-not-403 to avoid leaking existence.
 3. **In-page conditionals.** `AuthorizeView` hides customer-only affordances (add-to-cart) from anonymous visitors and admin-only affordances from customers; these are UX sugar on top of layers 1-2, never the enforcement.
 
 Menu items are rendered per role (the Roles item per capability), so each actor's nav menu contains only the routes shown in their diagram above, plus the framework-owned routes below, which the shared `MMCA.Common.UI` shell contributes to every host.
 
-**Framework-owned routes.** These routes come from the `MMCA.Common.UI` package rather than from a Store module; the UI host routes that assembly alongside its own (`UI.Web/Program.cs:266-267`):
+**Framework-owned routes.** These routes come from the `MMCA.Common.UI` package rather than from a Store module; the UI host routes that assembly alongside its own (`UI.Web/Program.cs:279-281`). None of them has a row in the Route Contract table:
 
-- `/profile/sessions` (active refresh sessions) is rendered in the nav for every signed-in user, Customer and Admin alike, by the framework `NavMenu` (`MMCA.Common.UI/Layout/NavMenu.razor:83-86`); a host can restrict the link to one role with `Layout:SessionsNavRequiredRole` (read at `NavMenu.razor:214-215`), which Store deliberately leaves unset so customers can review and revoke their own sessions.
+- `/` (home) is the framework page (`MMCA.Common.UI/Pages/Home.razor:1`, `[AllowAnonymous]` at `:6`), filled with Store's own content through `IHomePageContent`; no Store page declares `@page "/"`. `/login`, `/register`, `/forgot-password` and `/reset-password` are framework pages too, each `[AllowAnonymous]` (`Pages/Auth/Login.razor:23`, `Register.razor:19`, `ForgotPassword.razor:8`, `ResetPassword.razor:12`), as are the shell's `/not-found` and `/forbidden` pages and `/auth/oauth-complete`, which Store never links to because it configures no external sign-in provider.
+- `/profile/sessions` (active refresh sessions) is rendered in the nav for every signed-in user, Customer and Admin alike, by the framework `NavMenu` (`MMCA.Common.UI/Layout/NavMenu.razor:87-90`); a host can restrict the link to one role with `Layout:SessionsNavRequiredRole` (read at `NavMenu.razor:252-253`), which Store deliberately leaves unset so customers can review and revoke their own sessions.
 - `/confirm-email` is the anonymous email-confirmation landing page (`MMCA.Common.UI/Pages/Auth/ConfirmEmail.razor:1`, `[AllowAnonymous]` at `:3`). Store serves the framework page rather than a copy of its own (Store commit `65b53f5a`), and the Identity service points the confirmation link at it (`ConfirmationUrl`, `Identity.Service/appsettings.json:116`). It has no nav item: a visitor reaches it only from the link in the confirmation email.
-- `/notifications`, `/notifications/inbox` (with `/notifications/inbox/{Id:int}`) and `/notifications/send` ship in the same package, each behind a bare `[Authorize]` (`NotificationList.razor:5`, `NotificationInbox.razor:5`, `NotificationSend.razor:6`), so they are routable by URL for any signed-in user, but Store registers no notification services, so they have no nav item and are not a supported Store surface; hiding them needs a framework-side feature gate, tracked as a [C->A] item.
+- `/notifications`, `/notifications/inbox` (with `/notifications/inbox/{Id:int}`) and `/notifications/send` ship in the same package behind the framework's notification-page policies (`NotificationList.razor:9`, `NotificationInbox.razor:7`, `NotificationSend.razor:10`). Store registers no notification services, so both web heads opt in to `Layout:HideNotificationPagesWhenUnregistered` (`UI.Web/appsettings.json:16-18`, `UI.Web.Client/wwwroot/appsettings.json:16`) and the router answers all four routes with the not-found page and a 404 status (`MMCA.Common.UI/Routes.razor:16-26`, `Notifications/NotificationPageGate.cs:29-31`). They have no nav item and are not a Store surface. The MAUI head does not set the flag (its `appsettings.json` carries only `Modules` and `Api`), so there the pages remain routable by URL behind those policies.
