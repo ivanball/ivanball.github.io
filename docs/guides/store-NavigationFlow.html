@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>Navigation Flow · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="As of: 2026-10-18.">
+  <meta name="description" content="As of: 2026-10-19 (detail routes typed {Id:int}, Store 214).">
   <link rel="canonical" href="https://ivanball.github.io/docs/guides/store-NavigationFlow.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="Navigation Flow">
-  <meta property="og:description" content="As of: 2026-10-18.">
+  <meta property="og:description" content="As of: 2026-10-19 (detail routes typed {Id:int}, Store 214).">
   <meta property="og:url" content="https://ivanball.github.io/docs/guides/store-NavigationFlow.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Principal Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Navigation Flow">
-  <meta name="twitter:description" content="As of: 2026-10-18.">
+  <meta name="twitter:description" content="As of: 2026-10-19 (detail routes typed {Id:int}, Store 214).">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Guides & Specifications","item":"https://ivanball.github.io/docs/guides/index.html"},{"@type":"ListItem","position":4,"name":"Store · Navigation Flow","item":"https://ivanball.github.io/docs/guides/store-NavigationFlow.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
@@ -126,7 +126,7 @@
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Guides &amp; specifications</p>
           <h1 id="navigation-flow">Navigation Flow</h1>
-          <p><em>As of: 2026-10-18.</em></p>
+          <p><em>As of: 2026-10-19 (detail routes typed <code>{Id:int}</code>, Store #214).</em></p>
           <p>This document maps the site navigation flow for each actor in the MMCA.Store application. Each mermaid diagram shows the pages accessible to that actor and the directional navigation links between them. (Companion to MMCA.ADC&#39;s <code>NavigationFlow.md</code>; same per-actor format.)</p>
           <h2 id="actors">Actors</h2>
           <div class="table-wrap"><table>
@@ -200,7 +200,7 @@
           </blockquote>
           <hr>
           <h2 id="2-customer-authenticated-user">2. Customer (Authenticated User)</h2>
-          <p>Inherits all anonymous pages. Gains the profile page, the cart drawer (a layout component, not a route), checkout, and their own orders. Unauthenticated visitors deep-linking to <code>/profile</code> or <code>/orders</code> are redirected to login (SSR session-cookie auth keeps <code>[Authorize]</code> enforced on fresh GETs and F5, ADR-022). <code>/orders/{Id}</code> is the deliberate exception: the page is <code>[AllowAnonymous]</code> (<code>OrderDetail.razor:11</code>) because the Stripe <code>?payment=success</code> return is a full-page load that server-side rendering cannot authenticate, so a page gate would bounce a paying customer to <code>/login</code> mid-payment. The protection is API-side: an anonymous read of the order is refused and the page renders only an alert (<code>OrderDetail.razor:6-10</code>).</p>
+          <p>Inherits all anonymous pages. Gains the profile page, the cart drawer (a layout component, not a route), checkout, and their own orders. Unauthenticated visitors deep-linking to <code>/profile</code> or <code>/orders</code> are redirected to login (SSR session-cookie auth keeps <code>[Authorize]</code> enforced on fresh GETs and F5, ADR-022). <code>/orders/{Id:int}</code> is the deliberate exception: the page is <code>[AllowAnonymous]</code> (<code>OrderDetail.razor:11</code>) because the Stripe <code>?payment=success</code> return is a full-page load that server-side rendering cannot authenticate, so a page gate would bounce a paying customer to <code>/login</code> mid-payment. The protection is API-side: an anonymous read of the order is refused and the page renders only an alert (<code>OrderDetail.razor:6-10</code>).</p>
           <pre class="mermaid">flowchart TD
     subgraph Auth[&quot;Authentication&quot;]
         Login[&quot;/login&lt;br/&gt;Login&quot;]
@@ -313,11 +313,11 @@
           <p><code>/reviews</code> is the moderation grid: every review whatever its status, with hide and unhide. The page carries the Admin route guard, and the endpoints behind it carry the finer-grained <code>catalog:reviews:moderate</code> permission, which today only the Admin role holds.</p>
           </blockquote>
           <blockquote>
-          <p><code>/users</code>, <code>/users/{Id}</code>, <code>/roles</code> and <code>/roles/{Role}</code> are Store pages in the Identity UI module whose roster, operator actions and permission editor come from the framework&#39;s shared administration components (<code>UserAdminList</code> at <code>UserList.razor:12</code>, <code>RoleAdminList</code> at <code>RoleList.razor:10</code>, <code>RoleAdminEdit</code> at <code>RoleEdit.razor:10</code>; ADR-116). Each carries <code>[Authorize(Roles = &quot;Admin&quot;)]</code> (<code>:2</code> on the two role pages, <code>:5</code> on the two user pages). The Users nav item is gated on the Admin role (<code>IdentityUIModule.cs:23</code>); the Roles item is gated on the <code>roles:manage</code> capability rather than on a role (<code>IdentityUIModule.cs:29-35</code>), because the screen exists to change the role-to-capability map. The two gates differ: a non-Admin role granted <code>roles:manage</code> would see the Roles item but be answered Forbidden by the page&#39;s Admin role guard. Store types the detail route as <code>/users/{Id}</code> with no <code>:int</code> constraint (<code>UserDetail.razor:1</code>).</p>
+          <p><code>/users</code>, <code>/users/{Id:int}</code>, <code>/roles</code> and <code>/roles/{Role}</code> are Store pages in the Identity UI module whose roster, operator actions and permission editor come from the framework&#39;s shared administration components (<code>UserAdminList</code> at <code>UserList.razor:12</code>, <code>RoleAdminList</code> at <code>RoleList.razor:10</code>, <code>RoleAdminEdit</code> at <code>RoleEdit.razor:10</code>; ADR-116). Each carries <code>[Authorize(Roles = &quot;Admin&quot;)]</code> (<code>:2</code> on the two role pages, <code>:5</code> on the two user pages). The Users nav item is gated on the Admin role (<code>IdentityUIModule.cs:23</code>); the Roles item is gated on the <code>roles:manage</code> capability rather than on a role (<code>IdentityUIModule.cs:29-35</code>), because the screen exists to change the role-to-capability map. The two gates differ: a non-Admin role granted <code>roles:manage</code> would see the Roles item but be answered Forbidden by the page&#39;s Admin role guard. Store types the detail route as <code>/users/{Id:int}</code> with no <code>:int</code> constraint (<code>UserDetail.razor:1</code>).</p>
           </blockquote>
           <hr>
           <h2 id="route-contract">Route Contract</h2>
-          <p>This table lists every routable page Store itself ships, one row per route, with the access it requires, so a Store architecture test can compare it with the <code>@page</code> routes and their authorization attributes and a route or guard change lands together with its row here. Every Store page lives in a module UI project (Catalog, Sales, Identity); the web and MAUI heads declare no <code>@page</code> of their own. Framework-owned routes are listed under <strong>Framework-owned routes</strong> in the Authorization Model section instead. The Access column uses exactly three labels, each mapped from the page&#39;s <code>@attribute</code> line: <strong>Anonymous</strong> is <code>[Microsoft.AspNetCore.Authorization.AllowAnonymous]</code>, <strong>Authenticated</strong> is a bare <code>[Microsoft.AspNetCore.Authorization.Authorize]</code>, and <strong>Admin</strong> is <code>[Microsoft.AspNetCore.Authorization.Authorize(Roles = RoleNames.Admin)]</code>. No Store page uses a policy-based guard or places its guard on the partial class in the <code>.razor.cs</code>. Route parameters are written exactly as the <code>@page</code> directive declares them; Store&#39;s are untyped (<code>{Id}</code>, and <code>{Role}</code>, a role name), so the table carries no <code>:int</code> constraint.</p>
+          <p>This table lists every routable page Store itself ships, one row per route, with the access it requires, so a Store architecture test can compare it with the <code>@page</code> routes and their authorization attributes and a route or guard change lands together with its row here. Every Store page lives in a module UI project (Catalog, Sales, Identity); the web and MAUI heads declare no <code>@page</code> of their own. Framework-owned routes are listed under <strong>Framework-owned routes</strong> in the Authorization Model section instead. The Access column uses exactly three labels, each mapped from the page&#39;s <code>@attribute</code> line: <strong>Anonymous</strong> is <code>[Microsoft.AspNetCore.Authorization.AllowAnonymous]</code>, <strong>Authenticated</strong> is a bare <code>[Microsoft.AspNetCore.Authorization.Authorize]</code>, and <strong>Admin</strong> is <code>[Microsoft.AspNetCore.Authorization.Authorize(Roles = RoleNames.Admin)]</code>. No Store page uses a policy-based guard or places its guard on the partial class in the <code>.razor.cs</code>. Route parameters are written exactly as the <code>@page</code> directive declares them; Store&#39;s eight detail routes are typed <code>{Id:int}</code> (Store #214) and <code>{Role}</code> stays an untyped role name, so the table carries the <code>:int</code> constraint wherever the directive does.</p>
           <div class="table-wrap"><table>
           <thead>
           <tr>
@@ -332,7 +332,7 @@
           <td>Anonymous</td>
           </tr>
           <tr>
-          <td><code>/catalog/{Id}</code></td>
+          <td><code>/catalog/{Id:int}</code></td>
           <td>CatalogProductDetail</td>
           <td>Anonymous</td>
           </tr>
@@ -347,7 +347,7 @@
           <td>Admin</td>
           </tr>
           <tr>
-          <td><code>/categories/{Id}</code></td>
+          <td><code>/categories/{Id:int}</code></td>
           <td>CategoryDetail</td>
           <td>Admin</td>
           </tr>
@@ -362,7 +362,7 @@
           <td>Admin</td>
           </tr>
           <tr>
-          <td><code>/customers/{Id}</code></td>
+          <td><code>/customers/{Id:int}</code></td>
           <td>CustomerDetail</td>
           <td>Admin</td>
           </tr>
@@ -377,7 +377,7 @@
           <td>Admin</td>
           </tr>
           <tr>
-          <td><code>/inventory/{Id}</code></td>
+          <td><code>/inventory/{Id:int}</code></td>
           <td>InventoryItemDetail</td>
           <td>Admin</td>
           </tr>
@@ -387,7 +387,7 @@
           <td>Authenticated</td>
           </tr>
           <tr>
-          <td><code>/orders/{Id}</code></td>
+          <td><code>/orders/{Id:int}</code></td>
           <td>OrderDetail</td>
           <td>Anonymous</td>
           </tr>
@@ -402,7 +402,7 @@
           <td>Admin</td>
           </tr>
           <tr>
-          <td><code>/products/{Id}</code></td>
+          <td><code>/products/{Id:int}</code></td>
           <td>ProductDetail</td>
           <td>Admin</td>
           </tr>
@@ -432,7 +432,7 @@
           <td>Admin</td>
           </tr>
           <tr>
-          <td><code>/shoppingcarts/{Id}</code></td>
+          <td><code>/shoppingcarts/{Id:int}</code></td>
           <td>ShoppingCartDetail</td>
           <td>Admin</td>
           </tr>
@@ -442,7 +442,7 @@
           <td>Admin</td>
           </tr>
           <tr>
-          <td><code>/users/{Id}</code></td>
+          <td><code>/users/{Id:int}</code></td>
           <td>UserDetail</td>
           <td>Admin</td>
           </tr>
@@ -451,7 +451,7 @@
           <h2 id="authorization-model">Authorization Model</h2>
           <p>Three cooperating layers; the API is always the boundary:</p>
           <ol>
-          <li><strong>Page-level route guards.</strong> The 19 admin pages carry <code>[Authorize(Roles = &quot;Admin&quot;)]</code>, <code>/profile</code> and <code>/orders</code> carry <code>[Authorize]</code>, and <code>/orders/{Id}</code> is deliberately <code>[AllowAnonymous]</code> (see the customer section; the order API is its gate). SSR session-cookie auth (ADR-022, <code>mmca_auth_access</code> HttpOnly cookie) lets these attributes pass on fresh GETs, F5, and new tabs, so deep links never render a protected shell to the wrong actor. Regression-gated by <code>Catalog/Sales/IdentityRouteAuthorizationTests</code> in CI (commit <code>c4adff2</code>) for all 19 admin pages, the <code>/users</code> pair included (<code>IdentityRouteAuthorizationTests.cs:26-32</code>); <code>SharedOrderPages_AreNotAdminGated</code> keeps the shared order pages off the Admin role (<code>SalesRouteAuthorizationTests.cs:34-47</code>). The full route-by-route list is the <strong>Route Contract</strong> section above.</li>
+          <li><strong>Page-level route guards.</strong> The 19 admin pages carry <code>[Authorize(Roles = &quot;Admin&quot;)]</code>, <code>/profile</code> and <code>/orders</code> carry <code>[Authorize]</code>, and <code>/orders/{Id:int}</code> is deliberately <code>[AllowAnonymous]</code> (see the customer section; the order API is its gate). SSR session-cookie auth (ADR-022, <code>mmca_auth_access</code> HttpOnly cookie) lets these attributes pass on fresh GETs, F5, and new tabs, so deep links never render a protected shell to the wrong actor. Regression-gated by <code>Catalog/Sales/IdentityRouteAuthorizationTests</code> in CI (commit <code>c4adff2</code>) for all 19 admin pages, the <code>/users</code> pair included (<code>IdentityRouteAuthorizationTests.cs:26-32</code>); <code>SharedOrderPages_AreNotAdminGated</code> keeps the shared order pages off the Admin role (<code>SalesRouteAuthorizationTests.cs:34-47</code>). The full route-by-route list is the <strong>Route Contract</strong> section above.</li>
           <li><strong>API resource ownership (ADR-033).</strong> <code>OwnerOrAdminFilter</code> 403s requests whose <code>customer_id</code> claim mismatches the owner parameter, and <code>OwnershipHelper.GetOwnershipSpecification()</code> row-scopes collection queries so customers only ever receive their own carts/orders. Per-mutation checks on orders return 404-not-403 to avoid leaking existence.</li>
           <li><strong>In-page conditionals.</strong> <code>AuthorizeView</code> hides customer-only affordances (add-to-cart) from anonymous visitors and admin-only affordances from customers; these are UX sugar on top of layers 1-2, never the enforcement.</li>
           </ol>

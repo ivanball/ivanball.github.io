@@ -8,6 +8,7 @@ Updated 2026-09-07 (a pseudonymous key kept through anonymization must not appea
 anonymous surface; Store's public review list is served through a contract that declares none).
 Updated 2026-10-01 (corrected the `DeleteChildren` composition description; citations refreshed).
 Revised 2026-10-06: Store's public review contract carries no reviewer name either, and the interceptor and controller anchors were refreshed.
+Revised 2026-10-19: the framework guard runs in both directions (a reverse rule and a sample-coverage fact in `PiiConventionTestsBase`, v1.246.0), and ADC and Store both adopt it.
 ## Context
 The framework's default deletion model is **soft-delete**: `AuditableBaseEntity.Delete()` sets `IsDeleted = true` and EF Core global query filters exclude the row from normal queries. The row (including any personal data it holds) stays in the database indefinitely, which is exactly what audit, referential integrity, and "undelete" (BR-135) require.
 
@@ -24,7 +25,7 @@ Separate the two concerns and provide an extension point for each, rather than o
    - **A hard delete is a reviewable exception, enforced by a fitness rule.** `ArchitectureRules.HardDeletesOnlyInAllowedTypes` (`.../Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Domain/ArchitectureRules.SoftDelete.cs:62`, surfaced through `.../Bases/Domain/SoftDeleteEnforcementTestsBase.cs:17,29-31`, whose `AllowedHardDeleteTypes` is empty by default and therefore bans hard deletes outright until a repo names its exceptions, `:27`) fails the build when EF Core's erasing members (`DbSet.Remove`/`RemoveRange`, `DbContext.Remove`/`RemoveRange`, `ExecuteDelete`/`ExecuteDeleteAsync`: `ArchitectureRules.SoftDelete.cs:10-11`, scoped to the entity-set declaring types at `:18-24`) are called from a type outside the repo's allowlist, which is the short list of places where erasing a row IS the requirement: retention purge jobs, outbox and audit-trail cleanup, and the erasure handlers below (`:26-34`, `SoftDeleteEnforcementTestsBase.cs:21-26`). Neither NetArchTest nor reflection can see a call inside a method body, so the rule reads IL through the Mono.Cecil that NetArchTest already carries and matches callees by full name, which keeps the testing package's zero-reference stance toward EF Core (`ArchitectureRules.SoftDelete.cs:36-43`, the callee test at `:124`). It sees only direct calls: a hard delete reached through a repo-owned interface is caught at the implementing type, so that implementation goes on the allowlist and the abstraction stays usable (`:51-56`).
 2. **Erasure is an explicit, additive capability.** Aggregates that store personal data implement `IAnonymizable` (`MMCA.Common.Domain.Interfaces`). An application-layer erasure handler loads the aggregate, calls `Anonymize()` (idempotent, returns `Result`), and saves: overwriting personal fields in place so foreign keys and the audit trail survive. Fields that must remain retrievable are persisted through the AES-256-GCM `EncryptedStringConverter`.
 3. **Outbox retention is bounded.** `OutboxCleanupService` purges processed outbox rows older than `Outbox:RetentionDays` (default 7; set `0` to disable) across every relational data source, so event payloads are not retained indefinitely.
-4. **A build-time guard backs the per-entity opt-in.** Domain properties holding data-subject personal data are marked `[Pii]` (`MMCA.Common.Domain.Attributes.PiiAttribute`, property-targeted). A fitness function (`ArchitectureRules.EntitiesWithPiiImplementAnonymizable`, surfaced through `PiiConventionTestsBase`) **fails the build** if any Domain entity declaring a `[Pii]` property does not implement `IAnonymizable`, so "this aggregate holds personal data but has no erasure path" is caught by tooling, not by review. The companion `PiiRedactor` (`MMCA.Common.Domain.Privacy`) masks the same `[Pii]`-marked members when an entity is written to a log or telemetry attribute, so personal data does not leak through diagnostics.
+4. **A build-time guard backs the per-entity opt-in.** Domain properties holding data-subject personal data are marked `[Pii]` (`MMCA.Common.Domain.Attributes.PiiAttribute`, property-targeted). A fitness function (`ArchitectureRules.EntitiesWithPiiImplementAnonymizable`, surfaced through `PiiConventionTestsBase`) **fails the build** if any Domain entity declaring a `[Pii]` property does not implement `IAnonymizable`, so "this aggregate holds personal data but has no erasure path" is caught by tooling, not by review. The companion `PiiRedactor` (`MMCA.Common.Domain.Privacy`) masks the same `[Pii]`-marked members when an entity is written to a log or telemetry attribute, so personal data does not leak through diagnostics. The same base also runs the guard in reverse: whatever `Anonymize()` overwrites must carry `[Pii]` (Revision 2026-10-19).
 
 The framework provides the **extension points** (`IAnonymizable`, `OutboxCleanupService`, `PiiRedactor`) and a **build-time guard** (the `[Pii]` → `IAnonymizable` fitness rule); each consumer app owns the **policy**: which properties are `[Pii]`, the erasure orchestration/endpoint (data-subject request handling), and any data-subject access/export endpoint, because the personal-data model lives in the consumer (e.g. ADC's `User`).
 
@@ -93,3 +94,35 @@ Anchors were re-verified against current source. The interceptor anchors in Deci
 (`AuditSaveChangesInterceptor.cs:125-144`, `:87`, `:96`, `:121-123`, `:126-128`, `:91-92`; `:15-19`
 unchanged), which supersedes the interceptor list recorded in the 2026-10-01 Revision; the
 `AuditableBaseEntity.cs` and `AuditableAggregateRootEntity.cs` anchors are unchanged.
+
+## Revision (2026-10-19)
+No decision changed. The build-time guard in Decision 4 now runs in **both directions**, from the
+framework rather than from one consumer (MMCA.Common v1.246.0):
+- **Forward** (unchanged): `EntitiesWithPiiProperties_ShouldImplement_IAnonymizable`
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/PiiConventionTestsBase.cs:34`).
+- **Reverse**: `PropertiesOverwrittenByAnonymize_MustCarryPii` (`PiiConventionTestsBase.cs:43-44`,
+  implemented by `ArchitectureRules.PropertiesOverwrittenByAnonymizeCarryPii` at
+  `.../Rules/Governance/ArchitectureRules.Anonymization.cs:49`) builds each sample, runs
+  `Anonymize()`, and fails on every string or reference property whose value moved without a `[Pii]`
+  marker, because an unmarked overwritten field keeps its pre-erasure value in clear as an audit-trail
+  `OldValue` (ADR-075). Value types and collections are out of scope (`:40-46`).
+- **Coverage**: `EveryAnonymizableDomainEntity_IsCoveredBySample` (`PiiConventionTestsBase.cs:37-40`,
+  `ArchitectureRules.Anonymization.cs:12`) fails when a concrete `IAnonymizable` type in a module
+  Domain assembly has no sample, so a new erasable entity cannot escape the reverse rule. Samples come
+  from the overridable `AnonymizableSamples` table, empty by default (`PiiConventionTestsBase.cs:31`),
+  so a repo with no anonymizable module entity passes unchanged.
+
+Both apps adopt it. Store moved its hand-written reverse rule into the base and keeps only its four
+samples (`ProductReview`, `Customer`, `User`, `Order`) plus a non-vacuity guard
+(`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Privacy/PiiConventionTests.cs:33-48`,
+`:55-61`). ADC supplies a `User` sample built as an external account with every device field filled
+(`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Privacy/PiiConventionTests.cs:17-28`). The
+reverse rule found six fields ADC's `Anonymize()` overwrote without a marker; `DeviceFormFactor`,
+`DevicePlatform`, `DeviceModel`, `DeviceManufacturer`, `DeviceType` and `LoginProvider` now carry
+`[Pii]` (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:85`, `:89`, `:93`,
+`:97`, `:105`, `:109`), and a data-only migration redacts their existing audit-trail rows
+(`MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Identity/Migrations/20261019200206_RedactAuditTrailDeviceAndProviderValues.cs:26-29`).
+
+The Trade-offs residual narrows accordingly: a field that `Anonymize()` overwrites can no longer go
+unmarked. A personal-data field that the erasure never touches is still invisible to both directions,
+so marking discipline remains the consumer's for those.

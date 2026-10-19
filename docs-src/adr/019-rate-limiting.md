@@ -30,6 +30,8 @@ Revised 2026-10-06: every ADC service binds the `RateLimiting` section, and the 
 Revised 2026-10-07: the distributed limiter's Redis partition key is qualified by the application
 namespace (MMCA.Common v1.232.0), so by default two MMCA applications sharing one Redis no longer
 share counters.
+Revised 2026-10-19: Store's three services bind the `RateLimiting` section too, so both apps call the
+configuration overload in every service.
 ## Context
 Every service exposes read and write endpoints to the public internet through the gateway (ADR-008).
 Abusive or runaway clients (scrapers, credential stuffing, retry storms, a buggy SPA stuck in a loop)
@@ -388,6 +390,19 @@ distributed limiter moved, and the anchors that drifted since the 2026-10-06 aud
    (value `'300'` inside the `conferenceMode` block, rationale at `:1863-1865`), and the ADC
    `GatewayRateLimiting__TrustedCallerSecret` injections are at `:2491` and `:2650` (Store
    `MMCA.Store/infra/main.bicep:1959` and `:2084` unchanged).
+
+## Revision (2026-10-19)
+
+**Store's services bind the `RateLimiting` section as well.** Catalog, Sales and Identity now call
+`AddCommonRateLimiting(builder.Configuration)`
+(`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:141`,
+`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:149`,
+`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:136`) in place of the
+parameterless int overload, matching ADC's four services (Conference `:221`, Engagement `:151`,
+Identity `:165`, Notification `:144`). Store declares no `RateLimiting` section in its service
+configuration today, so the bound settings fall back to their defaults and its limits are
+unchanged; what changes is that per-environment tuning and the distributed Redis limiter
+(Revision 2026-08-18) are reachable in Store by configuration alone.
 
 ## Related
 ADR-004 (the JWKS/discovery traffic the limiter exempts, and the authenticated principal it keys on),

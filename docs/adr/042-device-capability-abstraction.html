@@ -250,7 +250,8 @@
           Revised 2026-10-01: null fallbacks sit beside their contracts in concern sub-folders, not a
           <code>Fallbacks/</code> folder.
           Revised 2026-10-06: the concern sub-folder list gains <code>Navigation/</code> (nine, not eight), and the
-          lifecycle no-op is cited at the extension rather than the ADC call site.</p>
+          lifecycle no-op is cited at the extension rather than the ADC call site.
+          Revised 2026-10-19: the ADC <code>MauiProgram.cs</code> anchors are re-pointed (<code>:161</code> and <code>:171</code>); no decision changed.</p>
           <h2 id="context">Context</h2>
           <p>The consumer apps ship the same Blazor component set through three heads: MAUI Blazor Hybrid
           (Android/iOS/MacCatalyst/Windows), Blazor Server SSR, and WebAssembly. Native device capabilities
@@ -263,7 +264,7 @@
           <p>Two constraints shape the packaging. First, per-head service selection already has a working
           precedent: <code>ITokenStorageService</code> resolves to a per-head implementation registered after
           <code>AddUIShared</code> (<code>builder.Services.AddCommonMauiTokenStorage()</code>,
-          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:165</code>). Second, MMCA.Common&#39;s CI and release
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:171</code>). Second, MMCA.Common&#39;s CI and release
           pipelines run on ubuntu-latest, which cannot build MAUI target frameworks at all, while the
           framework&#39;s packages release in lockstep (ADR-016).</p>
           <h2 id="decision">Decision</h2>
@@ -298,7 +299,7 @@
           <code>AddMauiDeviceCapabilities</code> registers only the <code>IPushRegistrationService</code> half of the push pair
           (<code>:73</code>); and <code>IBarcodeScannerService</code> ships behind the opt-in <code>UseCommonBarcodeScanner</code>
           (<code>Source/Presentation/MMCA.Common.UI.Maui/HostingDependencyInjection.cs:104</code>, called by ADC at
-          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:155</code>), so a head that never scans ships
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:161</code>), so a head that never scans ships
           neither the ZXing handler nor a camera permission declaration. Each capability has an independent
           fallback story, and per-capability contracts let heads adopt incrementally.</p>
           </li>
@@ -421,6 +422,13 @@
           code had shifted (<code>AddMauiDeviceCapabilities</code> 44-84, push provider 124-132, push registration
           <code>:73</code>, biometrics/speech/broker <code>:63</code>/<code>:64</code>/<code>:82</code>, ADC <code>MauiProgram.cs</code> <code>:155</code>/<code>:165</code>).</li>
           </ul>
+          <h2 id="revision-2026-10-19">Revision (2026-10-19)</h2>
+          <p>No decision or rationale changed. Comment growth above the registrations in ADC&#39;s head moved the two
+          <code>MauiProgram.cs</code> anchors: <code>UseCommonBarcodeScanner</code> is now called at
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:161</code> (was <code>:155</code>) and
+          <code>AddCommonMauiTokenStorage</code> at <code>:171</code> (was <code>:165</code>), still after <code>AddUIShared</code>, so last-registration-wins
+          holds for both. The framework definition (<code>HostingDependencyInjection.cs:104</code>) is unchanged. The
+          2026-10-06 list above keeps its <code>:155</code>/<code>:165</code> as the values verified that day.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -438,6 +446,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-19">Revision (2026-10-19)</a></li>
             </ul>
           </nav>
         </aside>

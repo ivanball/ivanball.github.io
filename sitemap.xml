@@ -62,7 +62,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html</loc>
-    <lastmod>2026-10-07</lastmod>
+    <lastmod>2026-10-19</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -132,7 +132,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/019-rate-limiting.html</loc>
-    <lastmod>2026-10-07</lastmod>
+    <lastmod>2026-10-19</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -177,7 +177,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/028-dark-theme-mode.html</loc>
-    <lastmod>2026-10-07</lastmod>
+    <lastmod>2026-10-19</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -247,7 +247,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html</loc>
-    <lastmod>2026-10-07</lastmod>
+    <lastmod>2026-10-19</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -332,7 +332,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/059-module-contract-and-composition.html</loc>
-    <lastmod>2026-10-07</lastmod>
+    <lastmod>2026-10-19</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -342,12 +342,12 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/061-runtime-secret-management.html</loc>
-    <lastmod>2026-10-07</lastmod>
+    <lastmod>2026-10-19</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/062-slo-alerting-as-code.html</loc>
-    <lastmod>2026-10-11</lastmod>
+    <lastmod>2026-10-19</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -377,7 +377,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/068-value-objects-as-validated-primitives.html</loc>
-    <lastmod>2026-10-07</lastmod>
+    <lastmod>2026-10-19</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -442,7 +442,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/081-cost-baseline-deploy-gate.html</loc>
-    <lastmod>2026-10-07</lastmod>
+    <lastmod>2026-10-19</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -502,12 +502,12 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/093-container-image-posture.html</loc>
-    <lastmod>2026-10-07</lastmod>
+    <lastmod>2026-10-19</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/094-client-entity-data-access.html</loc>
-    <lastmod>2026-10-07</lastmod>
+    <lastmod>2026-10-19</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -577,7 +577,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/108-distributed-lock-primitive.html</loc>
-    <lastmod>2026-10-07</lastmod>
+    <lastmod>2026-10-19</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -1032,7 +1032,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/guides/store-NavigationFlow.html</loc>
-    <lastmod>2026-10-18</lastmod>
+    <lastmod>2026-10-19</lastmod>
     <priority>0.6</priority>
   </url>
   <url>

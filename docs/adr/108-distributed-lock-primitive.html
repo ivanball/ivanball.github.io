@@ -252,7 +252,8 @@
           application namespace; see Revision below). Revised 2026-10-06: ADC&#39;s service ceiling is now
           2 replicas by default and 4 in conference mode, and the Redis lock suite has seven cases, not six.
           Revised 2026-10-07: adoption is five call sites, the fifth being the framework&#39;s OAuth exchange-code
-          redemption in <code>OAuthControllerBase</code>, which ADC&#39;s OAuth controller wires with the lock.</p>
+          redemption in <code>OAuthControllerBase</code>, which ADC&#39;s OAuth controller wires with the lock.
+          Revised 2026-10-19: adoption is six call sites, the sixth being Store&#39;s Stripe webhook registration, whose check-then-act on Stripe&#39;s endpoint list now runs under the lock; point 12 no longer says Store takes none.</p>
           <h2 id="context">Context</h2>
           <p>Both deployed apps run more than one replica of every service. ADC&#39;s Conference container app
           (<code>MMCA.ADC/infra/main.bicep:1922</code>) scales with <code>minReplicas: 1</code> and
@@ -380,7 +381,7 @@
           over rows it does not own. Inventing a row purely to hold a lease is not the answer for those, and
           neither is holding a database transaction open across the work.</p>
           </li>
-          <li><p><strong>Adoption is exactly these five call sites.</strong> The third is ADC&#39;s question submit cap:
+          <li><p><strong>Adoption is exactly these six call sites.</strong> The third is ADC&#39;s question submit cap:
           <code>SubmitQuestionHandler</code> takes the lock as a constructor dependency
           (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs:34</code>)
           and serializes the per-(session, user) open-question cap, whose count-then-insert is not one
@@ -402,14 +403,28 @@
           as an invalid code (<code>:256-259</code>), and with no lock the read-then-burn runs unlocked, single-use per
           replica only (<code>:245-248</code>). ADC&#39;s <code>OAuthController</code> passes the lock through
           (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Controllers/OAuthController.cs:25</code>).
-          No other MMCA.Common component, and nothing in MMCA.Store or MMCA.Helpdesk, takes a lock today.
-          The primitive is shipped and registered in every host that calls <code>AddInfrastructure</code>, and used in
-          five places. That an application takes no lock
+          The sixth is Store&#39;s Stripe webhook registration: <code>StripeWebhookRegistrationService</code> runs as a
+          background service on every Sales replica, and its list-then-delete-or-create reconcile is
+          check-then-act on Stripe&#39;s endpoint list, not on a row it could conditionally update, so two
+          replicas booting together could each mint an endpoint and hold different signing secrets. It takes
+          the lock as a constructor dependency
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Stripe/StripeWebhookRegistrationService.cs:52</code>)
+          and runs the reconcile under <code>stripe:webhook-registration:{expectedUrl}</code> (<code>:248</code>, taken at
+          <code>:143-145</code>) with a 2 minute TTL (<code>:69</code>) and a 30 second wait (<code>:76</code>); it re-reads the shared secret
+          once the lock is held (<code>:160</code>), so a replica that waited adopts the first one&#39;s mint instead of
+          minting again, and a replica that cannot take the lock reads the shared secret once more and leaves
+          Stripe alone (<code>:147-155</code>). Two tests pin both branches
+          (<code>MMCA.Store/Tests/Modules/Sales/MMCA.Store.Sales.Infrastructure.Tests/Services/StripeWebhookRegistrationServiceTests.cs:221</code>,
+          <code>:260</code>).
+          No other MMCA.Common component, nothing else in MMCA.Store, and nothing in MMCA.Helpdesk takes a
+          lock today. The primitive is shipped and registered in every host that calls <code>AddInfrastructure</code>,
+          and used in six places. That an application takes no lock
           of its own is the rule applied, not a gap to close: a lock is reached for only when there is
           duplicate work to collapse that persistence cannot guard (point 2), and work that owns a durable
-          row takes the claim-lease instead (point 11). An adoption difference between the two apps is
-          therefore sanctioned by points 2 and 11, and this point only records where the rule currently
-          lands.</p>
+          row takes the claim-lease instead (point 11). Store&#39;s other multi-replica work is guarded by
+          persistence, which is why the Stripe registration is its one lock: it is the one section whose
+          state lives outside a row. An adoption difference between the two apps is therefore sanctioned
+          by points 2 and 11, and this point only records where the rule currently lands.</p>
           </li>
           </ol>
           <h2 id="rationale">Rationale</h2>
@@ -467,7 +482,7 @@
           still in flight with a conflict rather than a longer wait (<code>IdempotencyFilter.cs:262-271</code>), so the
           client has to retry. That is deliberate, but it is behavior the TTL and wait pairing tunes rather
           than removes.</li>
-          <li><strong>Five consumers is a thin evidence base.</strong> The contract&#39;s edges (TTL loss, wait expiry, idempotent
+          <li><strong>Six consumers is a thin evidence base.</strong> The contract&#39;s edges (TTL loss, wait expiry, idempotent
           disposal) are exercised by unit tests against a mocked <code>IDatabase</code>
           (<code>Infrastructure.Tests/Concurrency/RedisDistributedLockTests.cs:60-202</code>, seven cases) and by the
           in-process tests, not against a live Redis under failover. The behavior most likely to matter in
@@ -526,6 +541,20 @@
           instead of propagating (<code>RedisDistributedLock.cs:87-88</code>, <code>:124-129</code>), so a failed release never
           fails work that already committed; the key still expires on its TTL.</li>
           </ol>
+          <h2 id="revision-2026-10-19">Revision (2026-10-19)</h2>
+          <p>The primitive, its contract, the registration and the choose-between rule are unchanged. One premise of
+          point 12 no longer held: it recorded that nothing in MMCA.Store takes a lock and called that the rule
+          applied, but Stores <code>StripeWebhookRegistrationService</code> is exactly the kind of section point 11 assigns
+          to the lock (check-then-act on external Stripe state across every Sales replica, not a row). It now
+          takes <code>IDistributedLock</code>
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Stripe/StripeWebhookRegistrationService.cs:52</code>),
+          wraps the reconcile in <code>TryAcquireAsync</code> on <code>stripe:webhook-registration:{expectedUrl}</code> (<code>:143-145</code>,
+          <code>:248</code>; 2 minute TTL at <code>:69</code>, 30 second wait at <code>:76</code>), re-reads the shared secret after acquiring
+          (<code>:160</code>) and, without the lock, adopts whatever a sibling published and makes no Stripe call
+          (<code>:147-155</code>; tests at
+          <code>MMCA.Store/Tests/Modules/Sales/MMCA.Store.Sales.Infrastructure.Tests/Services/StripeWebhookRegistrationServiceTests.cs:221</code>,
+          <code>:260</code>). Point 12 and the Trade-offs consumer count now name six call sites; MMCA.Helpdesk still takes
+          none.</p>
           <h2 id="related">Related</h2>
           <p><a href="017-request-idempotency.html">ADR-017</a> (the HTTP idempotency filter, the first consumer, whose
           409-on-lock-miss this record explains), <a href="026-caching-strategy.html">ADR-026</a> (the cache registration
@@ -554,6 +583,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
+            <li><a href="#revision-2026-10-19">Revision (2026-10-19)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

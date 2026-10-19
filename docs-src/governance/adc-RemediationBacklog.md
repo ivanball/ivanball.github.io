@@ -166,7 +166,7 @@ Recorded decisions, not scheduled work.
 | # | Category | M / I | Evidence |
 |---|---|---|---|
 | §1 | SOLID Principles | 4 / 9 | Constructor ceilings gate CI (`Tests/Architecture/MMCA.ADC.Architecture.Tests/Cqrs/ConstructorDependencyCountTests.cs:28,:56,:65`); four oversized controllers split by sub-resource with no URL, verb or authorization change (`Conference.API/Controllers/Events/EventLifecycleController.cs:32`, `Speakers/SpeakerLinksController.cs:33`, `Sessions/SessionCalendarController.cs:26`, `Engagement.API/Controllers/LivePollVotingController.cs:35`); LSP guard against `NotSupportedException`/`NotImplementedException` overrides (`Governance/SubstitutabilityTests.cs:9`) |
-| §2 | Design Patterns | 4 / 9 | Result-returning factories and per-entity sync strategies (`Identity.Domain/Users/User.cs:199`; five `*SyncStrategy.cs`) |
+| §2 | Design Patterns | 4 / 9 | Result-returning factories and per-entity sync strategies (`Identity.Domain/Users/User.cs:226`; five `*SyncStrategy.cs`) |
 | §3 | Clean Architecture | 4 / 9 | Layer, purity and transport-at-edge rules in the CI arch gate (`MMCA.ADC.CI.slnf:58`); `MicroserviceExtractionTests` enforce ADR-007 |
 | §4 | Domain-Driven Design | 4 / 9 | `Email` value object inside `Event` (`Event.cs:59`, invariant at `:189`, `:265`); no public setters in Conference.Domain; `EntityConventionTests.cs:3` |
 | §5 | Vertical Slice Architecture (maturity) | 4 / 8 | Slice cohesion is a CI merge gate (`SliceCohesionTests.cs:8`); TD-19: the enforced map covers all four modules (`AdcArchitectureMap.cs:51-54`) |

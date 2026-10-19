@@ -14,6 +14,7 @@ application namespace; see Revision below). Revised 2026-10-06: ADC's service ce
 2 replicas by default and 4 in conference mode, and the Redis lock suite has seven cases, not six.
 Revised 2026-10-07: adoption is five call sites, the fifth being the framework's OAuth exchange-code
 redemption in `OAuthControllerBase`, which ADC's OAuth controller wires with the lock.
+Revised 2026-10-19: adoption is six call sites, the sixth being Store's Stripe webhook registration, whose check-then-act on Stripe's endpoint list now runs under the lock; point 12 no longer says Store takes none.
 
 ## Context
 Both deployed apps run more than one replica of every service. ADC's Conference container app
@@ -146,7 +147,7 @@ persistence can enforce.**
     over rows it does not own. Inventing a row purely to hold a lease is not the answer for those, and
     neither is holding a database transaction open across the work.
 
-12. **Adoption is exactly these five call sites.** The third is ADC's question submit cap:
+12. **Adoption is exactly these six call sites.** The third is ADC's question submit cap:
     `SubmitQuestionHandler` takes the lock as a constructor dependency
     (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs:34`)
     and serializes the per-(session, user) open-question cap, whose count-then-insert is not one
@@ -168,14 +169,28 @@ persistence can enforce.**
     as an invalid code (`:256-259`), and with no lock the read-then-burn runs unlocked, single-use per
     replica only (`:245-248`). ADC's `OAuthController` passes the lock through
     (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Controllers/OAuthController.cs:25`).
-    No other MMCA.Common component, and nothing in MMCA.Store or MMCA.Helpdesk, takes a lock today.
-    The primitive is shipped and registered in every host that calls `AddInfrastructure`, and used in
-    five places. That an application takes no lock
+    The sixth is Store's Stripe webhook registration: `StripeWebhookRegistrationService` runs as a
+    background service on every Sales replica, and its list-then-delete-or-create reconcile is
+    check-then-act on Stripe's endpoint list, not on a row it could conditionally update, so two
+    replicas booting together could each mint an endpoint and hold different signing secrets. It takes
+    the lock as a constructor dependency
+    (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Stripe/StripeWebhookRegistrationService.cs:52`)
+    and runs the reconcile under `stripe:webhook-registration:{expectedUrl}` (`:248`, taken at
+    `:143-145`) with a 2 minute TTL (`:69`) and a 30 second wait (`:76`); it re-reads the shared secret
+    once the lock is held (`:160`), so a replica that waited adopts the first one's mint instead of
+    minting again, and a replica that cannot take the lock reads the shared secret once more and leaves
+    Stripe alone (`:147-155`). Two tests pin both branches
+    (`MMCA.Store/Tests/Modules/Sales/MMCA.Store.Sales.Infrastructure.Tests/Services/StripeWebhookRegistrationServiceTests.cs:221`,
+    `:260`).
+    No other MMCA.Common component, nothing else in MMCA.Store, and nothing in MMCA.Helpdesk takes a
+    lock today. The primitive is shipped and registered in every host that calls `AddInfrastructure`,
+    and used in six places. That an application takes no lock
     of its own is the rule applied, not a gap to close: a lock is reached for only when there is
     duplicate work to collapse that persistence cannot guard (point 2), and work that owns a durable
-    row takes the claim-lease instead (point 11). An adoption difference between the two apps is
-    therefore sanctioned by points 2 and 11, and this point only records where the rule currently
-    lands.
+    row takes the claim-lease instead (point 11). Store's other multi-replica work is guarded by
+    persistence, which is why the Stripe registration is its one lock: it is the one section whose
+    state lives outside a row. An adoption difference between the two apps is therefore sanctioned
+    by points 2 and 11, and this point only records where the rule currently lands.
 
 ## Rationale
 - **The degraded mode had to be visible, not silent.** Registering nothing when Redis is absent would
@@ -230,7 +245,7 @@ persistence can enforce.**
   still in flight with a conflict rather than a longer wait (`IdempotencyFilter.cs:262-271`), so the
   client has to retry. That is deliberate, but it is behavior the TTL and wait pairing tunes rather
   than removes.
-- **Five consumers is a thin evidence base.** The contract's edges (TTL loss, wait expiry, idempotent
+- **Six consumers is a thin evidence base.** The contract's edges (TTL loss, wait expiry, idempotent
   disposal) are exercised by unit tests against a mocked `IDatabase`
   (`Infrastructure.Tests/Concurrency/RedisDistributedLockTests.cs:60-202`, seven cases) and by the
   in-process tests, not against a live Redis under failover. The behavior most likely to matter in
@@ -287,6 +302,21 @@ and the Redis release now absorbs its own faults.
 3. Point 6 now records that a fault during the Redis release is caught and logged as a warning
    instead of propagating (`RedisDistributedLock.cs:87-88`, `:124-129`), so a failed release never
    fails work that already committed; the key still expires on its TTL.
+
+## Revision (2026-10-19)
+The primitive, its contract, the registration and the choose-between rule are unchanged. One premise of
+point 12 no longer held: it recorded that nothing in MMCA.Store takes a lock and called that the rule
+applied, but Stores `StripeWebhookRegistrationService` is exactly the kind of section point 11 assigns
+to the lock (check-then-act on external Stripe state across every Sales replica, not a row). It now
+takes `IDistributedLock`
+(`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Stripe/StripeWebhookRegistrationService.cs:52`),
+wraps the reconcile in `TryAcquireAsync` on `stripe:webhook-registration:{expectedUrl}` (`:143-145`,
+`:248`; 2 minute TTL at `:69`, 30 second wait at `:76`), re-reads the shared secret after acquiring
+(`:160`) and, without the lock, adopts whatever a sibling published and makes no Stripe call
+(`:147-155`; tests at
+`MMCA.Store/Tests/Modules/Sales/MMCA.Store.Sales.Infrastructure.Tests/Services/StripeWebhookRegistrationServiceTests.cs:221`,
+`:260`). Point 12 and the Trade-offs consumer count now name six call sites; MMCA.Helpdesk still takes
+none.
 
 ## Related
 [ADR-017](017-request-idempotency.md) (the HTTP idempotency filter, the first consumer, whose

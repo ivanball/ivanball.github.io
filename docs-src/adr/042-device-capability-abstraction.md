@@ -12,6 +12,7 @@ Revised 2026-10-01: null fallbacks sit beside their contracts in concern sub-fol
 `Fallbacks/` folder.
 Revised 2026-10-06: the concern sub-folder list gains `Navigation/` (nine, not eight), and the
 lifecycle no-op is cited at the extension rather than the ADC call site.
+Revised 2026-10-19: the ADC `MauiProgram.cs` anchors are re-pointed (`:161` and `:171`); no decision changed.
 
 ## Context
 The consumer apps ship the same Blazor component set through three heads: MAUI Blazor Hybrid
@@ -26,7 +27,7 @@ in it would break the web heads at compile time.
 Two constraints shape the packaging. First, per-head service selection already has a working
 precedent: `ITokenStorageService` resolves to a per-head implementation registered after
 `AddUIShared` (`builder.Services.AddCommonMauiTokenStorage()`,
-`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:165`). Second, MMCA.Common's CI and release
+`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:171`). Second, MMCA.Common's CI and release
 pipelines run on ubuntu-latest, which cannot build MAUI target frameworks at all, while the
 framework's packages release in lockstep (ADR-016).
 
@@ -62,7 +63,7 @@ Add a per-capability contract layer to `MMCA.Common.UI` and a dedicated package,
   `AddMauiDeviceCapabilities` registers only the `IPushRegistrationService` half of the push pair
   (`:73`); and `IBarcodeScannerService` ships behind the opt-in `UseCommonBarcodeScanner`
   (`Source/Presentation/MMCA.Common.UI.Maui/HostingDependencyInjection.cs:104`, called by ADC at
-  `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:155`), so a head that never scans ships
+  `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:161`), so a head that never scans ships
   neither the ZXing handler nor a camera permission declaration. Each capability has an independent
   fallback story, and per-capability contracts let heads adopt incrementally.
 
@@ -181,3 +182,11 @@ No decision or rationale changed.
 - Line anchors in the live sections were re-verified against current source and moved where the
   code had shifted (`AddMauiDeviceCapabilities` 44-84, push provider 124-132, push registration
   `:73`, biometrics/speech/broker `:63`/`:64`/`:82`, ADC `MauiProgram.cs` `:155`/`:165`).
+
+## Revision (2026-10-19)
+No decision or rationale changed. Comment growth above the registrations in ADC's head moved the two
+`MauiProgram.cs` anchors: `UseCommonBarcodeScanner` is now called at
+`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:161` (was `:155`) and
+`AddCommonMauiTokenStorage` at `:171` (was `:165`), still after `AddUIShared`, so last-registration-wins
+holds for both. The framework definition (`HostingDependencyInjection.cs:104`) is unchanged. The
+2026-10-06 list above keeps its `:155`/`:165` as the values verified that day.
