@@ -246,7 +246,8 @@
           Updated 2026-09-07 (a pseudonymous key kept through anonymization must not appear on an
           anonymous surface; Store&#39;s public review list is served through a contract that declares none).
           Updated 2026-10-01 (corrected the <code>DeleteChildren</code> composition description; citations refreshed).
-          Revised 2026-10-06: Store&#39;s public review contract carries no reviewer name either, and the interceptor and controller anchors were refreshed.</p>
+          Revised 2026-10-06: Store&#39;s public review contract carries no reviewer name either, and the interceptor and controller anchors were refreshed.
+          Revised 2026-10-19: the framework guard runs in both directions (a reverse rule and a sample-coverage fact in <code>PiiConventionTestsBase</code>, v1.246.0), and ADC and Store both adopt it.</p>
           <h2 id="context">Context</h2>
           <p>The framework&#39;s default deletion model is <strong>soft-delete</strong>: <code>AuditableBaseEntity.Delete()</code> sets <code>IsDeleted = true</code> and EF Core global query filters exclude the row from normal queries. The row (including any personal data it holds) stays in the database indefinitely, which is exactly what audit, referential integrity, and &quot;undelete&quot; (BR-135) require.</p>
           <p>This conflicts with data-subject <strong>erasure</strong> rights (GDPR Art. 17 right-to-be-forgotten, CCPA deletion): when a person requests deletion, their personal data must actually be removed or anonymized, not merely hidden. Soft-delete alone is therefore non-compliant for personal data, and a consumer app&#39;s published privacy policy (e.g. a &quot;we delete your data within 30 days&quot; promise) cannot be honored by soft-delete.</p>
@@ -262,7 +263,7 @@
           </li>
           <li><strong>Erasure is an explicit, additive capability.</strong> Aggregates that store personal data implement <code>IAnonymizable</code> (<code>MMCA.Common.Domain.Interfaces</code>). An application-layer erasure handler loads the aggregate, calls <code>Anonymize()</code> (idempotent, returns <code>Result</code>), and saves: overwriting personal fields in place so foreign keys and the audit trail survive. Fields that must remain retrievable are persisted through the AES-256-GCM <code>EncryptedStringConverter</code>.</li>
           <li><strong>Outbox retention is bounded.</strong> <code>OutboxCleanupService</code> purges processed outbox rows older than <code>Outbox:RetentionDays</code> (default 7; set <code>0</code> to disable) across every relational data source, so event payloads are not retained indefinitely.</li>
-          <li><strong>A build-time guard backs the per-entity opt-in.</strong> Domain properties holding data-subject personal data are marked <code>[Pii]</code> (<code>MMCA.Common.Domain.Attributes.PiiAttribute</code>, property-targeted). A fitness function (<code>ArchitectureRules.EntitiesWithPiiImplementAnonymizable</code>, surfaced through <code>PiiConventionTestsBase</code>) <strong>fails the build</strong> if any Domain entity declaring a <code>[Pii]</code> property does not implement <code>IAnonymizable</code>, so &quot;this aggregate holds personal data but has no erasure path&quot; is caught by tooling, not by review. The companion <code>PiiRedactor</code> (<code>MMCA.Common.Domain.Privacy</code>) masks the same <code>[Pii]</code>-marked members when an entity is written to a log or telemetry attribute, so personal data does not leak through diagnostics.</li>
+          <li><strong>A build-time guard backs the per-entity opt-in.</strong> Domain properties holding data-subject personal data are marked <code>[Pii]</code> (<code>MMCA.Common.Domain.Attributes.PiiAttribute</code>, property-targeted). A fitness function (<code>ArchitectureRules.EntitiesWithPiiImplementAnonymizable</code>, surfaced through <code>PiiConventionTestsBase</code>) <strong>fails the build</strong> if any Domain entity declaring a <code>[Pii]</code> property does not implement <code>IAnonymizable</code>, so &quot;this aggregate holds personal data but has no erasure path&quot; is caught by tooling, not by review. The companion <code>PiiRedactor</code> (<code>MMCA.Common.Domain.Privacy</code>) masks the same <code>[Pii]</code>-marked members when an entity is written to a log or telemetry attribute, so personal data does not leak through diagnostics. The same base also runs the guard in reverse: whatever <code>Anonymize()</code> overwrites must carry <code>[Pii]</code> (Revision 2026-10-19).</li>
           </ol>
           <p>The framework provides the <strong>extension points</strong> (<code>IAnonymizable</code>, <code>OutboxCleanupService</code>, <code>PiiRedactor</code>) and a <strong>build-time guard</strong> (the <code>[Pii]</code> → <code>IAnonymizable</code> fitness rule); each consumer app owns the <strong>policy</strong>: which properties are <code>[Pii]</code>, the erasure orchestration/endpoint (data-subject request handling), and any data-subject access/export endpoint, because the personal-data model lives in the consumer (e.g. ADC&#39;s <code>User</code>).</p>
           <h2 id="rationale">Rationale</h2>
@@ -329,6 +330,37 @@
           (<code>AuditSaveChangesInterceptor.cs:125-144</code>, <code>:87</code>, <code>:96</code>, <code>:121-123</code>, <code>:126-128</code>, <code>:91-92</code>; <code>:15-19</code>
           unchanged), which supersedes the interceptor list recorded in the 2026-10-01 Revision; the
           <code>AuditableBaseEntity.cs</code> and <code>AuditableAggregateRootEntity.cs</code> anchors are unchanged.</p>
+          <h2 id="revision-2026-10-19">Revision (2026-10-19)</h2>
+          <p>No decision changed. The build-time guard in Decision 4 now runs in <strong>both directions</strong>, from the
+          framework rather than from one consumer (MMCA.Common v1.246.0):</p>
+          <ul>
+          <li><strong>Forward</strong> (unchanged): <code>EntitiesWithPiiProperties_ShouldImplement_IAnonymizable</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/PiiConventionTestsBase.cs:34</code>).</li>
+          <li><strong>Reverse</strong>: <code>PropertiesOverwrittenByAnonymize_MustCarryPii</code> (<code>PiiConventionTestsBase.cs:43-44</code>,
+          implemented by <code>ArchitectureRules.PropertiesOverwrittenByAnonymizeCarryPii</code> at
+          <code>.../Rules/Governance/ArchitectureRules.Anonymization.cs:49</code>) builds each sample, runs
+          <code>Anonymize()</code>, and fails on every string or reference property whose value moved without a <code>[Pii]</code>
+          marker, because an unmarked overwritten field keeps its pre-erasure value in clear as an audit-trail
+          <code>OldValue</code> (ADR-075). Value types and collections are out of scope (<code>:40-46</code>).</li>
+          <li><strong>Coverage</strong>: <code>EveryAnonymizableDomainEntity_IsCoveredBySample</code> (<code>PiiConventionTestsBase.cs:37-40</code>,
+          <code>ArchitectureRules.Anonymization.cs:12</code>) fails when a concrete <code>IAnonymizable</code> type in a module
+          Domain assembly has no sample, so a new erasable entity cannot escape the reverse rule. Samples come
+          from the overridable <code>AnonymizableSamples</code> table, empty by default (<code>PiiConventionTestsBase.cs:31</code>),
+          so a repo with no anonymizable module entity passes unchanged.</li>
+          </ul>
+          <p>Both apps adopt it. Store moved its hand-written reverse rule into the base and keeps only its four
+          samples (<code>ProductReview</code>, <code>Customer</code>, <code>User</code>, <code>Order</code>) plus a non-vacuity guard
+          (<code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Privacy/PiiConventionTests.cs:33-48</code>,
+          <code>:55-61</code>). ADC supplies a <code>User</code> sample built as an external account with every device field filled
+          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Privacy/PiiConventionTests.cs:17-28</code>). The
+          reverse rule found six fields ADC&#39;s <code>Anonymize()</code> overwrote without a marker; <code>DeviceFormFactor</code>,
+          <code>DevicePlatform</code>, <code>DeviceModel</code>, <code>DeviceManufacturer</code>, <code>DeviceType</code> and <code>LoginProvider</code> now carry
+          <code>[Pii]</code> (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:85</code>, <code>:89</code>, <code>:93</code>,
+          <code>:97</code>, <code>:105</code>, <code>:109</code>), and a data-only migration redacts their existing audit-trail rows
+          (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Identity/Migrations/20261019200206_RedactAuditTrailDeviceAndProviderValues.cs:26-29</code>).</p>
+          <p>The Trade-offs residual narrows accordingly: a field that <code>Anonymize()</code> overwrites can no longer go
+          unmarked. A personal-data field that the erasure never touches is still invisible to both directions,
+          so marking discipline remains the consumer&#39;s for those.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -347,6 +379,7 @@
             <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-19">Revision (2026-10-19)</a></li>
             </ul>
           </nav>
         </aside>

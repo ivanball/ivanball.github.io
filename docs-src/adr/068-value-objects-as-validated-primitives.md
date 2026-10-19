@@ -12,6 +12,7 @@ maps through it; the Store, ADC and `EntityTypeBuilderExtensions` anchors refres
 2026-10-01 Store follows that call with a second `OwnsOne` block that overrides the helper's unicode
 facet, and the `with`-expression path around the `Money` sugar is named (see Revision below).
 Revised 2026-10-06: a serialized `Money.Zero()` now JSON round-trips, because both currency converters read the empty code back as the sentinel and `Money`'s JSON read refuses that sentinel beside a non-zero amount, so the 2026-10-01 round-trip flag is resolved; anchors refreshed. Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
+Revised 2026-10-19: the primitive Start/End exception names Store's discount window beside ADC's pairs, and the order rule is named per entity (Session uses its own strict-after rule).
 
 ## Context
 A domain model has two kinds of small type: the **identity** of a thing, and a **value** the thing
@@ -182,9 +183,15 @@ Model a domain value that carries an invariant as an **immutable record value ob
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/Events/EventConfiguration.cs:49-50`),
   so the structured `Address` would impose a shape the data does not have. ADC's Start/End pairs stay
   primitive too (`Events/Event.cs:33-36`, `Activities/Activity.cs:33-36`, `Sessions/Session.cs:31-34`):
-  their only rule is order, enforced by `CommonInvariants.EnsureEndIsNotBeforeStart`
-  (`Events/EventInvariants.cs:135`, `Activities/ActivityInvariants.cs:80`), and `DateRange` has no EF
-  converter to map them with.
+  their only rule is order, enforced for Event and Activity by
+  `CommonInvariants.EnsureEndIsNotBeforeStart` (`Events/EventInvariants.cs:135`,
+  `Activities/ActivityInvariants.cs:80`) and for Session by its own strict-after rule,
+  `SessionInvariants.EnsureEndsAtIsAfterStartsAt` (`Sessions/SessionInvariants.cs:149`, called at
+  `Sessions/Session.cs:216` and `:284`), and `DateRange` has no EF converter to map them with. The
+  same holds in Store, so the Start/End half of this exception is not ADC-only: Store's
+  `VariantDiscount` keeps its activation window as two primitive `DateTimeOffset?` properties
+  (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Products/VariantDiscount.cs:84`,
+  `:87`), ordered by a private rule of its own (`EnsureWindowIsOrdered`, `:248-251`).
 
 ## Rationale
 - **The invariant belongs to the type, not to every caller.** A `string` email can be validated in one
@@ -226,8 +233,9 @@ Model a domain value that carries an invariant as an **immutable record value ob
 - **Three of the seven have no consumer.** `PhoneNumber` ships with invariants, tests and converters,
   and `DateRange` and `DateTimeRange` with tests only (no `*Invariants` class, no converter), but none
   of the three has production usage, so their behavior is exercised only by the framework's own tests.
-  Candidates exist: ADC's Start/End pairs could be `DateRange` or `DateTimeRange`, and stay primitive
-  by the documented exception at the end of "Adoption is real but partial".
+  Candidates exist: ADC's Start/End pairs and Store's `VariantDiscount` window could be `DateRange` or
+  `DateTimeRange`, and stay primitive by the documented exception at the end of "Adoption is real but
+  partial".
 - **Nothing gates that a domain value uses a value object.** The `Create`-returns-`Result` rule is
   fitness-enforced, but no rule says a new email field must be `Email` rather than `string`. MMCA.Helpdesk
   is the visible consequence: the reference app models everything on primitives.
@@ -283,6 +291,16 @@ JSON-read refusal bullet sits at `MMCA.Common/CHANGELOG.md:55` (inside `[1.232.0
 `OwnsAddress` bullet at `MMCA.Common/CHANGELOG.md:1464` (inside `[1.192.0]`), the ADC
 `OrganizerContactEmail` conversion at `EventConfiguration.cs:64-66` and the ADC `VenueAddress`
 length at `EventConfiguration.cs:49-50`.
+
+## Revision (2026-10-19)
+No decision changed; the classification of every repo holds. Two statements in the documented
+exception were narrower or broader than the code: (1) the primitive Start/End half is not ADC-only, since
+Stores `VariantDiscount` keeps `StartsOn`/`EndsOn` as primitives
+(`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Products/VariantDiscount.cs:84`, `:87`),
+so the exception and the Trade-offs candidate list now name it; (2) `CommonInvariants.EnsureEndIsNotBeforeStart`
+guards Event and Activity only, while Session uses the strict-after
+`SessionInvariants.EnsureEndsAtIsAfterStartsAt`
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/SessionInvariants.cs:149`).
 
 ## Related
 ADR-048 (the deliberate opposite call for identifiers: primitives behind aliases, wrapper structs

@@ -241,7 +241,8 @@
           <h1 id="adr-028-daydark-theme-mode">ADR-028: Day/Dark Theme Mode</h1>
           <h2 id="status">Status</h2>
           <p>Accepted (2026-06-27; revised 2026-07-15; revised 2026-08-31; revised 2026-10-01).
-          Revised 2026-10-06: the first-paint flash is scoped to web heads and the MAUI first-frame mode source is recorded.</p>
+          Revised 2026-10-06: the first-paint flash is scoped to web heads and the MAUI first-frame mode source is recorded.
+          Revised 2026-10-19: the MAUI host pre-paint script ships from MMCA.Common.UI (<code>theme-prepaint.js</code>, v1.246.0) and both MAUI heads load it.</p>
           <h2 id="context">Context</h2>
           <p><code>MMCATheme</code> (<code>MMCA.Common.UI/Theme/MMCATheme.cs</code>) has always defined a complete, brand-tuned <code>PaletteDark</code>
           alongside <code>PaletteLight</code>, but <code>MudThemeProvider</code> was hard-wired to light: no <code>@ref</code>, no <code>IsDarkMode</code>
@@ -283,11 +284,19 @@
           wait for JS: <code>MMCA.Common.UI.Maui</code> registers <code>IInitialThemeModeSource</code> as
           <code>MauiInitialThemeModeSource</code> (<code>MMCA.Common.UI.Maui/DependencyInjection.cs:68</code>), and
           <code>MmcaThemeProviders.OnInitialized</code> seeds <code>_isDarkMode</code> from it before subscribing
-          (<code>MmcaThemeProviders.razor:47</code>), so the first frame paints in the stored mode. Web heads register
-          no source and keep the post-render JS path. Store&#39;s MAUI head also carries a host-local pre-paint
-          inline script that sets <code>data-mmca-theme</code> from the <code>mmca_theme</code> cookie or localStorage
-          (<code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/wwwroot/index.html:16-43</code>), consumed by its <code>app.css</code>
-          (<code>app.css:34-44</code>) so the host page background starts in the right mode.</p>
+          (<code>MmcaThemeProviders.razor:50</code>), so the first frame paints in the stored mode. Web heads register
+          no source and keep the post-render JS path. Before Blazor renders at all, the host page itself is
+          seeded by a framework-shipped pre-paint script: <code>MMCA.Common.UI/wwwroot/theme-prepaint.js</code>, a
+          classic synchronous script that stamps <code>&lt;html data-mmca-theme=&quot;dark|light&quot;&gt;</code> from the <code>mmca_theme</code>
+          cookie, then localStorage, then the OS scheme (<code>theme-prepaint.js:14-43</code>). The matching rules in
+          Common&#39;s <code>app.css</code> (<code>MMCA.Common.UI/wwwroot/app.css:100-126</code>) paint the host surface in that mode
+          until <code>MmcaThemeProviders</code> marks the page interactive (<code>data-mmca-interactive</code>,
+          <code>MmcaThemeProviders.razor:77-99</code>); every selector requires <code>data-mmca-theme</code>, so web heads, which
+          do not load the script, are untouched. Both MAUI heads load it as the first script in <code>&lt;head&gt;</code>
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/wwwroot/index.html:8</code>,
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/wwwroot/index.html:15</code>). Store keeps one inline script
+          of its own beside it, the Android status-bar height fallback (<code>index.html:16-23</code>), which is not a
+          theme concern.</p>
           </li>
           <li><p><strong>The toggle ships in the shared <code>MainLayout</code></strong>, next to the i18n culture switcher, in the app-bar
           <code>appbar-icon-actions</code> slot, so every consumer gets both controls without per-host wiring.</p>
@@ -352,6 +361,16 @@
           <code>:39</code> recorded on 2026-10-01. Helpdesk anchors (<code>:8-9</code>, <code>:10</code>, <code>:27-28</code>) and <code>ThemeToggle.razor:16</code>
           unchanged.</li>
           </ul>
+          <h2 id="revision-2026-10-19">Revision (2026-10-19)</h2>
+          <ul>
+          <li>Decision 3 now describes the MAUI host pre-paint as framework machinery. Store&#39;s host-local inline
+          theme script and its <code>app.css</code> rules moved into MMCA.Common.UI v1.246.0 as <code>theme-prepaint.js</code> plus
+          the <code>data-mmca-theme</code> rules in the shared <code>app.css</code> (<code>:100-126</code>), and ADC&#39;s MAUI head, which had no
+          pre-paint seed, adopts the same script (<code>MMCA.ADC.UI/wwwroot/index.html:8</code>), so a dark-mode cold
+          launch no longer flashes white on either head. Store keeps only its status-bar fallback inline.</li>
+          <li>The <code>MmcaThemeProviders</code> read of <code>IInitialThemeModeSource</code> is re-cited at <code>MmcaThemeProviders.razor:50</code>
+          (was <code>:47</code>); the registration at <code>MMCA.Common.UI.Maui/DependencyInjection.cs:68</code> is unchanged.</li>
+          </ul>
           <h2 id="related">Related</h2>
           <p><a href="027-multi-locale-i18n.html">ADR-027</a> (shares the cookie source-of-truth and the <code>User</code> preference migration,
           and is the model for the theme no-flash SSR bootstrap that is not yet wired),
@@ -375,6 +394,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-19">Revision (2026-10-19)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

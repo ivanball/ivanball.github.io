@@ -265,7 +265,8 @@
           Revision (2026-10-06).
           Revised 2026-10-07: ADC&#39;s unchanged-leg re-tag also refreshes <code>latest</code> against the ACR purge, the
           SBOM step is recorded as pull-request-only, the publish-property citation is corrected, and every
-          <code>deploy.yml</code> and <code>main.bicep</code> anchor is refreshed after both workflow prunes.</p>
+          <code>deploy.yml</code> and <code>main.bicep</code> anchor is refreshed after both workflow prunes.
+          Revised 2026-10-19: Store&#39;s unchanged-leg re-tag also refreshes <code>latest</code> against the ACR purge, so the open gap recorded on 2026-10-07 is closed and both consumers re-tag the same way.</p>
           <h2 id="context">Context</h2>
           <p>Eleven Dockerfiles produce every deployable container in the two Azure-hosted applications: six in
           MMCA.ADC (four services, the Gateway, the Blazor web host) and five in MMCA.Store (three services,
@@ -289,26 +290,25 @@
           that a later hardening pass started from a stated position rather than from a discovery. That pass
           ran on 2026-09-07 and closed both.</p>
           <p>The images are built in CI, not by hand: a fan-out <code>build-images</code> matrix job with one leg per image
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:998,1013-1032</code> for the six ADC legs,
-          <code>MMCA.Store/.github/workflows/deploy.yml:940,955-971</code> for the five Store legs). A leg whose image
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:1013,1028-1047</code> for the six ADC legs,
+          <code>MMCA.Store/.github/workflows/deploy.yml:942,957-973</code> for the five Store legs). A leg whose image
           changed runs <code>docker/build-push-action@v7</code> over a buildx builder
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:1049-1050,1054</code>), pushes the image to ACR under both the
-          commit sha and <code>latest</code> (<code>:1060-1062</code>), and caches layers in that same registry with <code>mode=max</code>
-          (<code>:1076-1077</code>). The build step is gated per image on <code>matrix.changed</code> (ADC <code>:1053</code>, Store
-          <code>MMCA.Store/.github/workflows/deploy.yml:997</code>); a leg whose image is unchanged skips the build and
-          instead re-tags the last <code>latest</code> to the commit sha with <code>az acr import</code> (ADC <code>:1086-1099</code>, Store
-          <code>MMCA.Store/.github/workflows/deploy.yml:1024-1049</code>), so the leg still succeeds and every image
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:1065,1069</code>), pushes the image to ACR under both the
+          commit sha and <code>latest</code> (<code>:1075-1077</code>), and caches layers in that same registry with <code>mode=max</code>
+          (<code>:1091-1092</code>). The build step is gated per image on <code>matrix.changed</code> (ADC <code>:1068</code>, Store
+          <code>MMCA.Store/.github/workflows/deploy.yml:999</code>); a leg whose image is unchanged skips the build and
+          instead re-tags the last <code>latest</code> to the commit sha with <code>az acr import</code> (ADC <code>:1101-1114</code>, Store
+          <code>MMCA.Store/.github/workflows/deploy.yml:1026-1051</code>), so the leg still succeeds and every image
           exists under the sha the deployment addresses (rationale
-          <code>MMCA.ADC/.github/workflows/deploy.yml:993-997</code>). ADC&#39;s re-tag step then runs a second
-          <code>az acr import</code> that copies the new sha tag back onto <code>latest</code> (<code>:1108-1112</code>, rationale
-          <code>:1100-1107</code>): the digest is the same, only the tag&#39;s update time moves, so the daily ACR purge does
-          not age out the tag an unchanged leg reads from. Store&#39;s re-tag step performs only the first import
-          (<code>MMCA.Store/.github/workflows/deploy.yml:1045-1049</code>), although Store&#39;s registry runs the same daily
-          purge (<code>acr purge --filter &#39;.*:.*&#39; --ago 3d --keep 3</code>, <code>MMCA.Store/infra/foundation.bicep:103</code>) and
-          only a rebuilt leg pushes <code>latest</code> (<code>MMCA.Store/.github/workflows/deploy.yml:1006</code>). A Store image
-          left unchanged across enough deploys is therefore exposed to the failure ADC&#39;s second import
-          prevents (a purged <code>latest</code> fails the next unchanged leg and blocks the deploy). No source records
-          this as a deliberate choice; it is an open gap.
+          <code>MMCA.ADC/.github/workflows/deploy.yml:1008-1012</code>). Both re-tag steps then run a second
+          <code>az acr import</code> that copies the new sha tag back onto <code>latest</code> (ADC <code>:1123-1127</code>, rationale
+          <code>:1115-1122</code>; Store <code>MMCA.Store/.github/workflows/deploy.yml:1060-1064</code>, rationale <code>:1052-1059</code>):
+          the digest is the same, only the tag&#39;s update time moves, so the daily ACR purge
+          (<code>acr purge --filter &#39;.*:.*&#39; --ago 3d --keep 3</code>, <code>MMCA.ADC/infra/foundation.bicep:132</code>,
+          <code>MMCA.Store/infra/foundation.bicep:103</code>) does not age out the tag an unchanged leg reads from. Without
+          it, an image left unchanged across enough deploys would lose <code>latest</code>, because only a rebuilt leg
+          pushes it (<code>MMCA.Store/.github/workflows/deploy.yml:1008</code>), and the next unchanged leg would fail and
+          block the deploy.
           The job runs concurrently with the e2e gate and rolls nothing out; that separation is ADR-080&#39;s
           subject, not this one&#39;s.</p>
           <h2 id="decision">Decision</h2>
@@ -716,6 +716,19 @@
           <code>:1938,1941,1980</code>, Engagement <code>:2091,2094,2122</code>, Notification <code>:2226,2228,2230-2238,2276</code>, and the
           conference and gateway right-sizing comments <code>:1959-1965</code> and <code>:2440-2447</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-19">Revision (2026-10-19)</h2>
+          <p>No decision, runtime posture or rationale changed. The open gap recorded in Context and in item 1 of
+          Revision (2026-10-07) is closed: Store&#39;s &quot;Re-tag unchanged ... image to this commit sha&quot; step now runs
+          the same second <code>az acr import</code> ADC runs, copying the commit-sha tag back onto <code>latest</code> with <code>--force</code>
+          (<code>MMCA.Store/.github/workflows/deploy.yml:1060-1064</code>, rationale copied from ADC at <code>:1052-1059</code>, the
+          first import at <code>:1047-1051</code>). Store&#39;s registry runs the same daily purge
+          (<code>MMCA.Store/infra/foundation.bicep:103</code>), so an image left unchanged across many deploys keeps a fresh
+          <code>latest</code> and the next unchanged leg can still read it. Context now describes both consumers&#39; re-tag
+          steps together, and the build and re-tag anchors in that paragraph are re-pointed (ADC job <code>:1013</code>,
+          matrix <code>:1028-1047</code>, buildx <code>:1065</code>, build-push <code>:1069</code>, <code>matrix.changed</code> <code>:1068</code>, tags <code>:1075-1077</code>,
+          cache <code>:1091-1092</code>, re-tag step <code>:1101-1127</code>, rationale <code>:1008-1012</code>; Store job <code>:942</code>, matrix
+          <code>:957-973</code>, <code>matrix.changed</code> <code>:999</code>, <code>latest</code> push <code>:1008</code>, re-tag step <code>:1026-1064</code>). Workflow and
+          Bicep anchors outside that paragraph were not re-verified in this revision.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -739,6 +752,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
+            <li><a href="#revision-2026-10-19">Revision (2026-10-19)</a></li>
             </ul>
           </nav>
         </aside>

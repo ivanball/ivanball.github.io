@@ -15,6 +15,7 @@ invalidation as skipping only a pre-write rejection, and the direct-root count a
 Revision below). Revised 2026-10-07: the opt-in same-origin proxy base address and handler, the
 shared Aspire handler's refusal to retry POST and PATCH, and the `IdempotentReadRetry` GET path for
 read services outside the hierarchy are recorded, and the `IsNotFound` anchor is corrected.
+Revised 2026-10-19: Store's two Sales lookup services now run their GETs through `IdempotentReadRetry`, so the helper has eleven call sites across both apps.
 
 ## Context
 ADR-034 decided the **server** half of entity data access: a generic controller base with a dynamic
@@ -168,14 +169,18 @@ Client-side entity data access goes through one hand-written base hierarchy in `
   (`.../MMCA.Common.UI/Services/Auth/AuthDelegatingHandler.cs:34-40`), so these calls carry it
   whenever a user is signed in. Without the helper such a GET would get only the shared handler's
   single retry on a host that calls `AddServiceDefaults` (see Trade-offs), and one attempt on a head
-  that does not. Seven call sites across six ADC files use it: four lookup services
+  that does not. Eleven call sites across eight files in the two apps use it. In ADC, seven across six
+  files: four lookup services
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Services/Speakers/SpeakerLookupService.cs:96`,
   `.../Services/Events/EventLookupService.cs:102`,
   `.../Services/Categories/CategoryItemLookupService.cs:54`, and
   `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Services/Lookups/SessionLookupService.cs:30,53`)
-  plus `.../Services/SessionLive/LiveEventService.cs:29` and
-  `.../Services/HappeningNow/NowNextService.cs:26`. Store, Helpdesk and the rest of Common do not
-  call it.
+  plus `.../Services/SessionLive/LiveEventService.cs:57` and
+  `.../Services/HappeningNow/NowNextService.cs:26`. In Store, four across its two Sales lookup
+  services
+  (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Services/Lookups/CustomerLookupService.cs:32,84`
+  and `.../Services/Lookups/ProductVariantLookupService.cs:48,103`), which enrich the admin grids.
+  Helpdesk and the rest of Common do not call it.
   Writes are deliberately not offered: a write that needs retries goes through `EntityServiceBase`,
   whose creates carry an `Idempotency-Key`.
 - **UI state is per circuit, never process-wide.** Blazor Server runs every user's circuit in one
@@ -404,6 +409,16 @@ recorded, and one anchor was wrong.
    `ResultUiExtensions.cs:340` (`:328` is `HasErrorType`), the `"APIClient"` registration spans
    `DependencyInjection.cs:124-155` with the timeout pin still at `:142`, and the Aspire retry-count
    pin (`Extensions.cs:54`) and its `ConfigureHttpClientDefaults` block (`:39-85`) hold.
+
+## Revision (2026-10-19)
+No decision changed. Store adopts `IdempotentReadRetry`: its two Sales lookup services, which create the
+named `"APIClient"` themselves, now run every GET through the helper
+(`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Services/Lookups/CustomerLookupService.cs:32`, `:84`;
+`.../Services/Lookups/ProductVariantLookupService.cs:48`, `:103`), so a transient 5xx, 408 or 429 on
+those admin-grid enrichment reads gets the same policy the hierarchy uses rather than only the shared
+handlers single retry. The Decision bullet no longer says Store does not call it, and the count moves
+from seven call sites across six ADC files to eleven across eight files (ADC seven in six, Store four
+in two). ADCs `LiveEventService` call is re-cited at `:57` (was `:29`).
 
 ## Related
 [ADR-034](034-generic-entity-query-layer.md) (the server surface this contract calls, and the filter

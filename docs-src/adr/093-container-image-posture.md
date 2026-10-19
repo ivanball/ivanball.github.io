@@ -27,6 +27,7 @@ Revision (2026-10-06).
 Revised 2026-10-07: ADC's unchanged-leg re-tag also refreshes `latest` against the ACR purge, the
 SBOM step is recorded as pull-request-only, the publish-property citation is corrected, and every
 `deploy.yml` and `main.bicep` anchor is refreshed after both workflow prunes.
+Revised 2026-10-19: Store's unchanged-leg re-tag also refreshes `latest` against the ACR purge, so the open gap recorded on 2026-10-07 is closed and both consumers re-tag the same way.
 ## Context
 Eleven Dockerfiles produce every deployable container in the two Azure-hosted applications: six in
 MMCA.ADC (four services, the Gateway, the Blazor web host) and five in MMCA.Store (three services,
@@ -52,26 +53,25 @@ that a later hardening pass started from a stated position rather than from a di
 ran on 2026-09-07 and closed both.
 
 The images are built in CI, not by hand: a fan-out `build-images` matrix job with one leg per image
-(`MMCA.ADC/.github/workflows/deploy.yml:998,1013-1032` for the six ADC legs,
-`MMCA.Store/.github/workflows/deploy.yml:940,955-971` for the five Store legs). A leg whose image
+(`MMCA.ADC/.github/workflows/deploy.yml:1013,1028-1047` for the six ADC legs,
+`MMCA.Store/.github/workflows/deploy.yml:942,957-973` for the five Store legs). A leg whose image
 changed runs `docker/build-push-action@v7` over a buildx builder
-(`MMCA.ADC/.github/workflows/deploy.yml:1049-1050,1054`), pushes the image to ACR under both the
-commit sha and `latest` (`:1060-1062`), and caches layers in that same registry with `mode=max`
-(`:1076-1077`). The build step is gated per image on `matrix.changed` (ADC `:1053`, Store
-`MMCA.Store/.github/workflows/deploy.yml:997`); a leg whose image is unchanged skips the build and
-instead re-tags the last `latest` to the commit sha with `az acr import` (ADC `:1086-1099`, Store
-`MMCA.Store/.github/workflows/deploy.yml:1024-1049`), so the leg still succeeds and every image
+(`MMCA.ADC/.github/workflows/deploy.yml:1065,1069`), pushes the image to ACR under both the
+commit sha and `latest` (`:1075-1077`), and caches layers in that same registry with `mode=max`
+(`:1091-1092`). The build step is gated per image on `matrix.changed` (ADC `:1068`, Store
+`MMCA.Store/.github/workflows/deploy.yml:999`); a leg whose image is unchanged skips the build and
+instead re-tags the last `latest` to the commit sha with `az acr import` (ADC `:1101-1114`, Store
+`MMCA.Store/.github/workflows/deploy.yml:1026-1051`), so the leg still succeeds and every image
 exists under the sha the deployment addresses (rationale
-`MMCA.ADC/.github/workflows/deploy.yml:993-997`). ADC's re-tag step then runs a second
-`az acr import` that copies the new sha tag back onto `latest` (`:1108-1112`, rationale
-`:1100-1107`): the digest is the same, only the tag's update time moves, so the daily ACR purge does
-not age out the tag an unchanged leg reads from. Store's re-tag step performs only the first import
-(`MMCA.Store/.github/workflows/deploy.yml:1045-1049`), although Store's registry runs the same daily
-purge (`acr purge --filter '.*:.*' --ago 3d --keep 3`, `MMCA.Store/infra/foundation.bicep:103`) and
-only a rebuilt leg pushes `latest` (`MMCA.Store/.github/workflows/deploy.yml:1006`). A Store image
-left unchanged across enough deploys is therefore exposed to the failure ADC's second import
-prevents (a purged `latest` fails the next unchanged leg and blocks the deploy). No source records
-this as a deliberate choice; it is an open gap.
+`MMCA.ADC/.github/workflows/deploy.yml:1008-1012`). Both re-tag steps then run a second
+`az acr import` that copies the new sha tag back onto `latest` (ADC `:1123-1127`, rationale
+`:1115-1122`; Store `MMCA.Store/.github/workflows/deploy.yml:1060-1064`, rationale `:1052-1059`):
+the digest is the same, only the tag's update time moves, so the daily ACR purge
+(`acr purge --filter '.*:.*' --ago 3d --keep 3`, `MMCA.ADC/infra/foundation.bicep:132`,
+`MMCA.Store/infra/foundation.bicep:103`) does not age out the tag an unchanged leg reads from. Without
+it, an image left unchanged across enough deploys would lose `latest`, because only a rebuilt leg
+pushes it (`MMCA.Store/.github/workflows/deploy.yml:1008`), and the next unchanged leg would fail and
+block the deploy.
 The job runs concurrently with the e2e gate and rolls nothing out; that separation is ADR-080's
 subject, not this one's.
 
@@ -439,3 +439,18 @@ holds. That revision keeps the anchors it recorded on its date.
    gateway `:2448`, ui `:2599`, identity `:1717`, Identity ports `:1691,1694,1733`, Conference
    `:1938,1941,1980`, Engagement `:2091,2094,2122`, Notification `:2226,2228,2230-2238,2276`, and the
    conference and gateway right-sizing comments `:1959-1965` and `:2440-2447`.
+
+## Revision (2026-10-19)
+
+No decision, runtime posture or rationale changed. The open gap recorded in Context and in item 1 of
+Revision (2026-10-07) is closed: Store's "Re-tag unchanged ... image to this commit sha" step now runs
+the same second `az acr import` ADC runs, copying the commit-sha tag back onto `latest` with `--force`
+(`MMCA.Store/.github/workflows/deploy.yml:1060-1064`, rationale copied from ADC at `:1052-1059`, the
+first import at `:1047-1051`). Store's registry runs the same daily purge
+(`MMCA.Store/infra/foundation.bicep:103`), so an image left unchanged across many deploys keeps a fresh
+`latest` and the next unchanged leg can still read it. Context now describes both consumers' re-tag
+steps together, and the build and re-tag anchors in that paragraph are re-pointed (ADC job `:1013`,
+matrix `:1028-1047`, buildx `:1065`, build-push `:1069`, `matrix.changed` `:1068`, tags `:1075-1077`,
+cache `:1091-1092`, re-tag step `:1101-1127`, rationale `:1008-1012`; Store job `:942`, matrix
+`:957-973`, `matrix.changed` `:999`, `latest` push `:1008`, re-tag step `:1026-1064`). Workflow and
+Bicep anchors outside that paragraph were not re-verified in this revision.

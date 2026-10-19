@@ -2,6 +2,7 @@
 
 ## Status
 Accepted (2026-07-28; revised 2026-08-14). Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
+Revised 2026-10-19: ADC Conference and Engagement gain module conformance tests, so seven of the eight modules are checked (only Helpdesk Tickets is not).
 
 ## Context
 The framework's headline claim is that an application is built as a modular monolith and later
@@ -246,10 +247,12 @@ Engagement's `IBookmarkCountService` as a gRPC client
   `RequiresDependencies` (read through the `IModule` interface, so a leaf module is checked against
   the framework defaults too) and what `RegisterDisabledStubs` puts in the container
   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Layering/ModuleConformanceTestsBase.cs:21-64`).
-  That turns a silent edit of a declaration into a red test, but it is opt-in per module and five of
-  the eight subclass it today (Store Catalog, Identity and Sales; ADC Identity and Notification);
-  ADC Conference, ADC Engagement and Helpdesk Tickets have no subclass, so for those three the
-  declaration is still unchecked.
+  That turns a silent edit of a declaration into a red test, but it is opt-in per module and seven of
+  the eight subclass it today: every Store module (Catalog, Identity and Sales) and every ADC module
+  (Conference, Engagement, Identity and Notification,
+  `MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.API.Tests/ConferenceModuleTests.cs:9`,
+  `MMCA.ADC/Tests/Modules/Engagement/MMCA.ADC.Engagement.API.Tests/EngagementModuleTests.cs:9`).
+  Only Helpdesk Tickets has no subclass, so its declaration alone is still unchecked.
 - **The one guard against a forgotten cross-process rewire is unadopted.** `ValidateRemoteDependencies`
   was written for exactly the "typo'd or forgotten `AddTypedGrpcClient`" failure
   (`ModuleLoader.cs:198-211`, the text at `:203`), and no host calls it, so that failure still shows
@@ -326,6 +329,18 @@ declaring Engagement in `Dependencies`. Only line numbers moved.
    line 124 is now the pending-migrations check, so the 2026-10-06 `:124` seeding anchor is stale), and
    `AddModuleHealthChecks` (`MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:212-234`,
    the Degraded branch at `:224-231`).
+
+## Revision (2026-10-19)
+No decision changed. The Trade-offs count of declaration-checked modules moves from five of eight to
+seven of eight: ADC adds `ConferenceModuleTests`, which pins `Conference` with no dependencies and
+`RequiresDependencies` false
+(`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.API.Tests/ConferenceModuleTests.cs:9`, `:11`,
+`:15`, `:17`), and `EngagementModuleTests`, which pins `Engagement` depending on `Conference` with
+`RequiresDependencies` true
+(`MMCA.ADC/Tests/Modules/Engagement/MMCA.ADC.Engagement.API.Tests/EngagementModuleTests.cs:9`, `:11`,
+`:13`, `:15`). Helpdesk Tickets is the one module still unchecked. The undeclared Conference-to-Engagement
+gRPC edge recorded in the 2026-10-07 revision is unchanged, and the new test pins that declaration as it
+stands rather than resolving it.
 
 ## Related
 ADR-008 (the extraction topology that consumes this model: "a service is the monolith with one module

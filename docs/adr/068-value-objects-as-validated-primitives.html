@@ -250,7 +250,8 @@
           maps through it; the Store, ADC and <code>EntityTypeBuilderExtensions</code> anchors refreshed). As of
           2026-10-01 Store follows that call with a second <code>OwnsOne</code> block that overrides the helper&#39;s unicode
           facet, and the <code>with</code>-expression path around the <code>Money</code> sugar is named (see Revision below).
-          Revised 2026-10-06: a serialized <code>Money.Zero()</code> now JSON round-trips, because both currency converters read the empty code back as the sentinel and <code>Money</code>&#39;s JSON read refuses that sentinel beside a non-zero amount, so the 2026-10-01 round-trip flag is resolved; anchors refreshed. Revised 2026-10-07: anchors refreshed after the v1.233.0 release.</p>
+          Revised 2026-10-06: a serialized <code>Money.Zero()</code> now JSON round-trips, because both currency converters read the empty code back as the sentinel and <code>Money</code>&#39;s JSON read refuses that sentinel beside a non-zero amount, so the 2026-10-01 round-trip flag is resolved; anchors refreshed. Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
+          Revised 2026-10-19: the primitive Start/End exception names Store&#39;s discount window beside ADC&#39;s pairs, and the order rule is named per entity (Session uses its own strict-after rule).</p>
           <h2 id="context">Context</h2>
           <p>A domain model has two kinds of small type: the <strong>identity</strong> of a thing, and a <strong>value</strong> the thing
           carries. ADR-048 recorded the identity half: identifiers stay primitives named through a global-using
@@ -417,9 +418,15 @@
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/Events/EventConfiguration.cs:49-50</code>),
           so the structured <code>Address</code> would impose a shape the data does not have. ADC&#39;s Start/End pairs stay
           primitive too (<code>Events/Event.cs:33-36</code>, <code>Activities/Activity.cs:33-36</code>, <code>Sessions/Session.cs:31-34</code>):
-          their only rule is order, enforced by <code>CommonInvariants.EnsureEndIsNotBeforeStart</code>
-          (<code>Events/EventInvariants.cs:135</code>, <code>Activities/ActivityInvariants.cs:80</code>), and <code>DateRange</code> has no EF
-          converter to map them with.</li>
+          their only rule is order, enforced for Event and Activity by
+          <code>CommonInvariants.EnsureEndIsNotBeforeStart</code> (<code>Events/EventInvariants.cs:135</code>,
+          <code>Activities/ActivityInvariants.cs:80</code>) and for Session by its own strict-after rule,
+          <code>SessionInvariants.EnsureEndsAtIsAfterStartsAt</code> (<code>Sessions/SessionInvariants.cs:149</code>, called at
+          <code>Sessions/Session.cs:216</code> and <code>:284</code>), and <code>DateRange</code> has no EF converter to map them with. The
+          same holds in Store, so the Start/End half of this exception is not ADC-only: Store&#39;s
+          <code>VariantDiscount</code> keeps its activation window as two primitive <code>DateTimeOffset?</code> properties
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Products/VariantDiscount.cs:84</code>,
+          <code>:87</code>), ordered by a private rule of its own (<code>EnsureWindowIsOrdered</code>, <code>:248-251</code>).</li>
           </ul>
           <h2 id="rationale">Rationale</h2>
           <ul>
@@ -463,8 +470,9 @@
           <li><strong>Three of the seven have no consumer.</strong> <code>PhoneNumber</code> ships with invariants, tests and converters,
           and <code>DateRange</code> and <code>DateTimeRange</code> with tests only (no <code>*Invariants</code> class, no converter), but none
           of the three has production usage, so their behavior is exercised only by the framework&#39;s own tests.
-          Candidates exist: ADC&#39;s Start/End pairs could be <code>DateRange</code> or <code>DateTimeRange</code>, and stay primitive
-          by the documented exception at the end of &quot;Adoption is real but partial&quot;.</li>
+          Candidates exist: ADC&#39;s Start/End pairs and Store&#39;s <code>VariantDiscount</code> window could be <code>DateRange</code> or
+          <code>DateTimeRange</code>, and stay primitive by the documented exception at the end of &quot;Adoption is real but
+          partial&quot;.</li>
           <li><strong>Nothing gates that a domain value uses a value object.</strong> The <code>Create</code>-returns-<code>Result</code> rule is
           fitness-enforced, but no rule says a new email field must be <code>Email</code> rather than <code>string</code>. MMCA.Helpdesk
           is the visible consequence: the reference app models everything on primitives.</li>
@@ -518,6 +526,15 @@
           <code>OwnsAddress</code> bullet at <code>MMCA.Common/CHANGELOG.md:1464</code> (inside <code>[1.192.0]</code>), the ADC
           <code>OrganizerContactEmail</code> conversion at <code>EventConfiguration.cs:64-66</code> and the ADC <code>VenueAddress</code>
           length at <code>EventConfiguration.cs:49-50</code>.</p>
+          <h2 id="revision-2026-10-19">Revision (2026-10-19)</h2>
+          <p>No decision changed; the classification of every repo holds. Two statements in the documented
+          exception were narrower or broader than the code: (1) the primitive Start/End half is not ADC-only, since
+          Stores <code>VariantDiscount</code> keeps <code>StartsOn</code>/<code>EndsOn</code> as primitives
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Products/VariantDiscount.cs:84</code>, <code>:87</code>),
+          so the exception and the Trade-offs candidate list now name it; (2) <code>CommonInvariants.EnsureEndIsNotBeforeStart</code>
+          guards Event and Activity only, while Session uses the strict-after
+          <code>SessionInvariants.EnsureEndsAtIsAfterStartsAt</code>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/SessionInvariants.cs:149</code>).</p>
           <h2 id="related">Related</h2>
           <p>ADR-048 (the deliberate opposite call for identifiers: primitives behind aliases, wrapper structs
           rejected, because identifiers cross process boundaries constantly and carry no invariant), ADR-115
@@ -542,6 +559,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
+            <li><a href="#revision-2026-10-19">Revision (2026-10-19)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

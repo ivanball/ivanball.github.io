@@ -268,7 +268,9 @@
           <code>auth-ip</code> decoration is recorded as owned by the framework base rather than by each app.
           Revised 2026-10-07: the distributed limiter&#39;s Redis partition key is qualified by the application
           namespace (MMCA.Common v1.232.0), so by default two MMCA applications sharing one Redis no longer
-          share counters.</p>
+          share counters.
+          Revised 2026-10-19: Store&#39;s three services bind the <code>RateLimiting</code> section too, so both apps call the
+          configuration overload in every service.</p>
           <h2 id="context">Context</h2>
           <p>Every service exposes read and write endpoints to the public internet through the gateway (ADR-008).
           Abusive or runaway clients (scrapers, credential stuffing, retry storms, a buggy SPA stuck in a loop)
@@ -625,6 +627,17 @@
           <code>GatewayRateLimiting__TrustedCallerSecret</code> injections are at <code>:2491</code> and <code>:2650</code> (Store
           <code>MMCA.Store/infra/main.bicep:1959</code> and <code>:2084</code> unchanged).</li>
           </ol>
+          <h2 id="revision-2026-10-19">Revision (2026-10-19)</h2>
+          <p><strong>Store&#39;s services bind the <code>RateLimiting</code> section as well.</strong> Catalog, Sales and Identity now call
+          <code>AddCommonRateLimiting(builder.Configuration)</code>
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:141</code>,
+          <code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:149</code>,
+          <code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:136</code>) in place of the
+          parameterless int overload, matching ADC&#39;s four services (Conference <code>:221</code>, Engagement <code>:151</code>,
+          Identity <code>:165</code>, Notification <code>:144</code>). Store declares no <code>RateLimiting</code> section in its service
+          configuration today, so the bound settings fall back to their defaults and its limits are
+          unchanged; what changes is that per-environment tuning and the distributed Redis limiter
+          (Revision 2026-08-18) are reachable in Store by configuration alone.</p>
           <h2 id="related">Related</h2>
           <p>ADR-004 (the JWKS/discovery traffic the limiter exempts, and the authenticated principal it keys on),
           ADR-008 (the gateway edge this protects), ADR-017 (request idempotency, the other inbound-edge
@@ -657,6 +670,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
+            <li><a href="#revision-2026-10-19">Revision (2026-10-19)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>
