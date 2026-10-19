@@ -113,7 +113,7 @@ const html = `<!DOCTYPE html>
         <span class="og-domain">IVANBALL.GITHUB.IO</span>
       </div>
       <h1>Ivan Ball-llovera</h1>
-      <p class="og-role">Senior Software Architect</p>
+      <p class="og-role">Principal Software Architect</p>
       <p class="og-lede">Cloud-native enterprise architecture on the Microsoft stack.</p>
       <ul class="og-pills">
 ${PILLS.map((p) => `        <li>${p}</li>`).join("\n")}
