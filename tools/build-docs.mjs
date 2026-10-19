@@ -702,7 +702,7 @@ function footerHtml(prefix, tagline = "Reference docs generated from source.") {
   return `  <footer class="site-footer">
     <div class="container">
       <div class="footer-grid">
-        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Principal Software Architect · Douglasville, GA</p>
         <ul class="footer-links">
 ${links}
           <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
@@ -792,7 +792,7 @@ function page({ outRel, title, description, contentHtml, hasMermaid, jsonLd, nav
   const canonical = `${SITE}/${outRel}`;
   const fullTitle = `${title} · MMCA · Ivan Ball-llovera`;
   const image = ogImage || `${SITE}/assets/img/og-image.png`;
-  const imageAlt = ogImage ? title : "Ivan Ball-llovera, Senior Software Architect";
+  const imageAlt = ogImage ? title : "Ivan Ball-llovera, Principal Software Architect";
   const ld = (Array.isArray(jsonLd) ? jsonLd : jsonLd ? [jsonLd] : [])
     .map((o) => `\n  <script type="application/ld+json">${JSON.stringify(o)}</script>`)
     .join("");

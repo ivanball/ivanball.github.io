@@ -1,6 +1,6 @@
 # ivanball.github.io
 
-Personal website for Ivan Ball-llovera, Senior Software Architect, and the canonical
+Personal website for Ivan Ball-llovera, Principal Software Architect, and the canonical
 documentation library for the MMCA workspace. A fast, accessible static site: plain HTML,
 CSS, and vanilla JS, with no build step for the site pages.
 
