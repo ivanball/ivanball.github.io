@@ -543,7 +543,7 @@ optimistically and the server is the real authority on who may moderate (BR-236)
 
 ```mermaid
 flowchart TD
-    Home["/<br/>Home"] -->|nav menu, Happening Now| HN["/happening-now<br/>Happening Now"]
+    Home["/<br/>Home"] -->|nav menu, My Account, Happening Now| HN["/happening-now<br/>Happening Now"]
 
     HN --> NowNext["Tab: Now and Next, live and upcoming sessions"]
     HN --> Polls["Tab: Polls, open event-wide polls with live tallies"]

@@ -321,6 +321,28 @@ the publish rationale to distributed hosts and adds one trade-off.
    (comment `:118-126`, `IsTransportFault` `:127-128`), not `:122`, which also supersedes the `:122`
    recorded in the 2026-10-06 Revision.
 
+## Revision (2026-10-19)
+The error queue now has an operating procedure in both consumer applications. No framework decision
+changed: the fault consumer still observes and stops there, and nothing replays automatically. What
+moved is the Trade-off that read "no alert is wired to it in this record, no runbook section exists
+for it": each application now alerts on the fault log line and documents how to act on it.
+
+1. **Alert-as-code.** Each application declares a scheduled-query alert beside its outbox dead-letter
+   rule that matches the static part of the `FaultIntegrationEventConsumer` Error log line, "moved to
+   the error queue" (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Consumers/FaultIntegrationEventConsumer.cs:57`),
+   at severity 2 over a 15-minute window with a zero threshold: MMCA.ADC `infra/main.bicep:634`
+   (`adc-prod-alert-broker-error-queue`) and MMCA.Store `infra/main.bicep:494` and `:510`
+   (`store-alert-broker-error-queue`). The match is on the log line rather than on
+   `broker.fault.count`, so it rides the same log-alert family as the outbox dead-letter rule
+   ([ADR-062](062-slo-alerting-as-code.md)).
+2. **Runbook.** Each `infra/OPERATIONS.md` carries an error-queue section (MMCA.ADC `:232`, MMCA.Store
+   `:175`) with the application's `_error` queue names, derived from its MassTransit endpoint names,
+   and three actions: inspect the faulted message, replay it to its source queue, or discard it, with
+   when to choose each. Replay is manual, a human decision with the log line in hand, which is the
+   posture the Rationale already took.
+3. **Still open.** `broker.fault.count` itself drives no alert, and the RabbitMQ default-off redelivery
+   Trade-off is unchanged.
+
 ## Related
 [ADR-003](003-outbox-dual-dispatch.md) (the outbox publish leg this breaker wraps, and the retry,
 jittered backoff and dead-lettering that `BrokenCircuitException` reuses unchanged),

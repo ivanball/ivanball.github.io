@@ -546,6 +546,28 @@
           (comment <code>:118-126</code>, <code>IsTransportFault</code> <code>:127-128</code>), not <code>:122</code>, which also supersedes the <code>:122</code>
           recorded in the 2026-10-06 Revision.</li>
           </ol>
+          <h2 id="revision-2026-10-19">Revision (2026-10-19)</h2>
+          <p>The error queue now has an operating procedure in both consumer applications. No framework decision
+          changed: the fault consumer still observes and stops there, and nothing replays automatically. What
+          moved is the Trade-off that read &quot;no alert is wired to it in this record, no runbook section exists
+          for it&quot;: each application now alerts on the fault log line and documents how to act on it.</p>
+          <ol>
+          <li><strong>Alert-as-code.</strong> Each application declares a scheduled-query alert beside its outbox dead-letter
+          rule that matches the static part of the <code>FaultIntegrationEventConsumer</code> Error log line, &quot;moved to
+          the error queue&quot; (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Consumers/FaultIntegrationEventConsumer.cs:57</code>),
+          at severity 2 over a 15-minute window with a zero threshold: MMCA.ADC <code>infra/main.bicep:634</code>
+          (<code>adc-prod-alert-broker-error-queue</code>) and MMCA.Store <code>infra/main.bicep:494</code> and <code>:510</code>
+          (<code>store-alert-broker-error-queue</code>). The match is on the log line rather than on
+          <code>broker.fault.count</code>, so it rides the same log-alert family as the outbox dead-letter rule
+          (<a href="062-slo-alerting-as-code.html">ADR-062</a>).</li>
+          <li><strong>Runbook.</strong> Each <code>infra/OPERATIONS.md</code> carries an error-queue section (MMCA.ADC <code>:232</code>, MMCA.Store
+          <code>:175</code>) with the application&#39;s <code>_error</code> queue names, derived from its MassTransit endpoint names,
+          and three actions: inspect the faulted message, replay it to its source queue, or discard it, with
+          when to choose each. Replay is manual, a human decision with the log line in hand, which is the
+          posture the Rationale already took.</li>
+          <li><strong>Still open.</strong> <code>broker.fault.count</code> itself drives no alert, and the RabbitMQ default-off redelivery
+          Trade-off is unchanged.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="003-outbox-dual-dispatch.html">ADR-003</a> (the outbox publish leg this breaker wraps, and the retry,
           jittered backoff and dead-lettering that <code>BrokenCircuitException</code> reuses unchanged),
@@ -581,6 +603,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
+            <li><a href="#revision-2026-10-19">Revision (2026-10-19)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>
