@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>MMCA.Store: Architecture Remediation Backlog · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Derived from ArchitectureScorecard.md: Maturity 97.5% (308/316) / Implementation 83.2% (657/790), evidence as of 2026-10-07 at MMCA.Common. v1.233.0…">
+  <meta name="description" content="Derived from ArchitectureScorecard.md: Maturity 97.5% (308/316) / Implementation 83.2% (657/790), evidence as of 2026-10-18 at MMCA.Common. v1.244.0…">
   <link rel="canonical" href="https://ivanball.github.io/docs/governance/store-RemediationBacklog.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="MMCA.Store: Architecture Remediation Backlog">
-  <meta property="og:description" content="Derived from ArchitectureScorecard.md: Maturity 97.5% (308/316) / Implementation 83.2% (657/790), evidence as of 2026-10-07 at MMCA.Common. v1.233.0…">
+  <meta property="og:description" content="Derived from ArchitectureScorecard.md: Maturity 97.5% (308/316) / Implementation 83.2% (657/790), evidence as of 2026-10-18 at MMCA.Common. v1.244.0…">
   <meta property="og:url" content="https://ivanball.github.io/docs/governance/store-RemediationBacklog.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="MMCA.Store: Architecture Remediation Backlog">
-  <meta name="twitter:description" content="Derived from ArchitectureScorecard.md: Maturity 97.5% (308/316) / Implementation 83.2% (657/790), evidence as of 2026-10-07 at MMCA.Common. v1.233.0…">
+  <meta name="twitter:description" content="Derived from ArchitectureScorecard.md: Maturity 97.5% (308/316) / Implementation 83.2% (657/790), evidence as of 2026-10-18 at MMCA.Common. v1.244.0…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Governance","item":"https://ivanball.github.io/docs/governance/index.html"},{"@type":"ListItem","position":4,"name":"Store · MMCA.Store: Architecture Remediation Backlog","item":"https://ivanball.github.io/docs/governance/store-RemediationBacklog.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
@@ -114,7 +114,7 @@
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Architecture governance</p>
           <h1 id="mmcastore-architecture-remediation-backlog">MMCA.Store: Architecture Remediation Backlog</h1>
-          <p>Derived from <a href="store-ArchitectureScorecard.html"><code>ArchitectureScorecard.md</code></a>: <strong>Maturity 97.5% (308/316) / Implementation 83.2% (657/790)</strong>, evidence as of 2026-10-07 at MMCA.Common.* v1.233.0 (lockstep, HEAD <code>d50926ed</code>, clean tree). Items are ranked on both scorecard axes, one band per axis. The <strong>maturity band</strong> holds categories scoring <strong>maturity &lt; 4</strong>, ranked by <strong>priority = (4 − maturity) × weight</strong>. The <strong>implementation band</strong> holds categories scoring <strong>implementation &lt;= 8**, ranked by **implPriority = max(0, 9 − implementation) × weight**; the scheduling target is **9, not 10**, because a 10 is recognition earned at re-score time rather than scheduled work, and ranking against 10 would put nearly every strong category in the band and drown the real gaps. Ties break by weight descending, then category number. A category leaves each band independently and reaches the protect list only at **maturity 4 AND implementation &gt;= 9</strong>; the indices keep their <code>× 4</code> and <code>× 10</code> denominators, and the 9-target governs scheduling only.</p>
+          <p>Derived from <a href="store-ArchitectureScorecard.html"><code>ArchitectureScorecard.md</code></a>: <strong>Maturity 97.5% (308/316) / Implementation 83.2% (657/790)</strong>, evidence as of 2026-10-18 at MMCA.Common.* v1.244.0 (lockstep, HEAD <code>b40baf14</code>, clean tree). Items are ranked on both scorecard axes, one band per axis. The <strong>maturity band</strong> holds categories scoring <strong>maturity &lt; 4</strong>, ranked by <strong>priority = (4 − maturity) × weight</strong>. The <strong>implementation band</strong> holds categories scoring <strong>implementation &lt;= 8**, ranked by **implPriority = max(0, 9 − implementation) × weight**; the scheduling target is **9, not 10**, because a 10 is recognition earned at re-score time rather than scheduled work, and ranking against 10 would put nearly every strong category in the band and drown the real gaps. Ties break by weight descending, then category number. A category leaves each band independently and reaches the protect list only at **maturity 4 AND implementation &gt;= 9</strong>; the indices keep their <code>× 4</code> and <code>× 10</code> denominators, and the 9-target governs scheduling only.</p>
           <p>The scorecard is the source of truth for scores, <a href="https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md" target="_blank" rel="noopener"><code>../MMCA.Common/FACTS.md</code></a> for framework-wide facts, and the workspace-internal <code>Docs/Architecture/ArchitectureRemediation.md</code> (not published) for the cross-repo <code>[C→A]</code> roll-up. Tactical deferrals are recorded here as <code>TD</code> sub-items under their category (the single-ledger model). Status: <code>[ ]</code> open, <code>[~]</code> under way, <code>[x]</code> resolved.</p>
           <h2 id="open-work-at-a-glance">Open work at a glance</h2>
           <div class="table-wrap"><table>
@@ -134,7 +134,7 @@
           <td>Security</td>
           <td>M4 / I7</td>
           <td>Implementation</td>
-          <td>Narrow the shared SQL identity and the Service Bus SAS rights, and stop caching the Stripe signing secret in plaintext</td>
+          <td>Stop caching the Stripe signing secret in plaintext, and correct the stale SQL-login comment in <code>main.bicep</code></td>
           </tr>
           <tr>
           <td>6</td>
@@ -143,14 +143,6 @@
           <td>M4 / I7</td>
           <td>Implementation</td>
           <td>Rotate or remove the identity accounts seeded before the <code>Seeding:IncludeSampleUsers</code> gate (operational)</td>
-          </tr>
-          <tr>
-          <td>3</td>
-          <td>#7</td>
-          <td>Microservices Readiness</td>
-          <td>M4 / I8</td>
-          <td>Implementation</td>
-          <td>Split the container-app image parameters per service, or record the lockstep deploy as accepted</td>
           </tr>
           <tr>
           <td>3</td>
@@ -165,16 +157,8 @@
           <td>#21</td>
           <td>Accessibility (a11y)</td>
           <td>M3 / I8</td>
-          <td>Maturity</td>
+          <td>Maturity + Implementation</td>
           <td>Record a dated manual NVDA/VoiceOver pass in the screen-reader runbook (needs a human)</td>
-          </tr>
-          <tr>
-          <td>2</td>
-          <td>#12</td>
-          <td>Performance &amp; Scalability</td>
-          <td>M3 / I8</td>
-          <td>Maturity</td>
-          <td>Add a latency-regression check to the merge path, or record the monthly k6 cadence as accepted</td>
           </tr>
           <tr>
           <td>2</td>
@@ -210,19 +194,11 @@
           </tr>
           <tr>
           <td>2</td>
-          <td>#24</td>
-          <td>Forms, Validation &amp; UX Safety</td>
-          <td>M4 / I8</td>
-          <td>Implementation</td>
-          <td>Reach client rule-engine parity with the server FluentValidation rules</td>
-          </tr>
-          <tr>
-          <td>2</td>
           <td>#25</td>
           <td>Navigation &amp; Information Arch</td>
           <td>M4 / I8</td>
           <td>Implementation</td>
-          <td>Reconcile <code>store-NavigationFlow.md</code> to the shell and add a Store <code>NavigationContractTests</code> against it</td>
+          <td>Add a Store <code>NavigationContractTests</code> against the <code>store-NavigationFlow.md</code> Route Contract (<code>:188</code>)</td>
           </tr>
           <tr>
           <td>1</td>
@@ -231,22 +207,6 @@
           <td>M4 / I8</td>
           <td>Implementation</td>
           <td>Pluralize the remaining single-form count keys and retire the <code>(s)</code> keys</td>
-          </tr>
-          <tr>
-          <td>-</td>
-          <td>#11</td>
-          <td>Security</td>
-          <td>M4 / I7</td>
-          <td>TD</td>
-          <td>Require authorization on Identity&#39;s customer gRPC edge once Common ships a service-to-service credential</td>
-          </tr>
-          <tr>
-          <td>-</td>
-          <td>#21</td>
-          <td>Accessibility (a11y)</td>
-          <td>M3 / I8</td>
-          <td>TD</td>
-          <td>Make the deploy browser gate unconditional, or record its UI-scoping as accepted</td>
           </tr>
           <tr>
           <td>-</td>
@@ -259,21 +219,16 @@
           </tbody></table></div>
           <h2 id="open-items">Open items</h2>
           <ul>
-          <li><input disabled="" type="checkbox"> <strong>#11 Security, implementation 7: internal trust and secret handling.</strong> Four red flags hold the row at 7. The Identity customer gRPC edge is anonymous and returns email and full name (<code>Identity.Service/Program.cs:369</code>), tracked as the <code>[C→A]</code> TD below because its fix needs Common. One shared identity is <code>db_owner</code> in all three databases, and the doc states it does not reduce blast radius (<code>infra/SQL-MANAGED-IDENTITY.md:78</code>). Every per-app Service Bus SAS rule carries Manage rights (<code>infra/main.bicep:1042</code>), kept because MassTransit creates the topology at runtime (<code>:1025-1034</code>). The Stripe webhook signing secret is cached in plaintext in the shared Redis for 365 days (<code>SharedCacheStripeWebhookSecretStore.cs:79</code>); the registration service never prints it (<code>StripeWebhookRegistrationService.cs:200-202</code>). A stale comment also says every service still connects with the SQL admin login although <code>USE_MANAGED_IDENTITY_SQL=true</code> (<code>infra/main.bicep:842</code>). <em>Next:</em> pre-create the Service Bus topics and subscriptions in Bicep (names read off the live namespace, not guessed) so the SAS rules drop to Send/Listen, give each service its own database identity (infra, M), and protect the cached signing secret. The gRPC edge is the TD.</li>
-          <li><input disabled="" type="checkbox"> <strong>#10 Messaging, maturity 3 / implementation 8: the broker error queue has no operating procedure.</strong> The rubric requires a dead-letter path with an operational procedure: alert, inspect, replay or discard (<code>ArchitectureEvaluationCriteria.md:336</code>). The only messaging alert matches the outbox text &quot;dead-lettered&quot; (<code>infra/main.bicep:435</code>), while a consumer that exhausts its retries logs &quot;moved to the error queue&quot; (Common <code>FaultIntegrationEventConsumer.cs:57</code>), which no Store alert matches. <code>infra/OPERATIONS.md</code> has an outbox-row replay (<code>:142</code>) and no error-queue section, and ADR-087 records no alert, runbook or replay path for that queue (<code>087-broker-poison-message-handling.md:202</code>). Nothing requires <code>[EventName]</code> on every event: Common keys the contract by type name when the attribute is absent (<code>ArchitectureRules.Events.cs:42</code>), and all four Store events carry it by convention only. The same gap holds ADC&#39;s §10 at M3. Store-specific residuals: the dead-letter runbook names one live consumer flow where five run (<code>OPERATIONS.md:140</code>; the consumers are at <code>Sales.Service/Program.cs:261</code> and <code>Catalog.Service/Program.cs:274</code>), <code>CustomerErased</code> and <code>ProductInfoChanged</code> have no real-broker round-trip test, and <code>ProductVariantChanged</code> declares no ordering expectation (<code>IntegrationEventContractTests.cs:12</code>), so a late redelivery could overwrite newer labels. <em>Next:</em> an alert-as-code on the error-queue log line or the broker metric, an <code>OPERATIONS.md</code> runbook with a replay-or-discard procedure, and a fitness rule requiring <code>[EventName]</code> (that rule is Common-side). <em>Effort:</em> S-M.</li>
-          <li><input disabled="" type="checkbox"> <strong>#7 Microservices Readiness, implementation 8 → 9: services deploy in lockstep.</strong> The BUILD half of independent deployability is per-image incremental (per-image dirty flags in the <code>changes</code> job <code>deploy.yml:77-215</code>, matrix <code>:956</code>), but the DEPLOY half is one <code>azure/arm-deploy</code> of the whole <code>main.bicep</code> (<code>deploy.yml:1303</code>) with all five images pinned to one <code>IMAGE_SHA</code> (<code>:1145</code>) and a whole-fleet rollback block (<code>:1467-1513</code>, app list <code>:1349</code>), the rubric&#39;s &quot;services that must deploy together&quot; red flag. <em>Next:</em> split the image parameters per service so an unchanged app keeps its revision and the rollback iterates only the apps the deploy touched, or record the lockstep as accepted for a five-app fleet (all per-service DBs on one physical server is already an accepted cap).</li>
-          <li><input disabled="" type="checkbox"> <strong>#11 Security: rotate or remove the identity seed accounts created before the environment gate.</strong> The framework leaves the choice to the app: <code>IdentityModuleDbSeederBase.ShouldSeed</code> defaults to <code>true</code> (<code>IdentityModuleDbSeederBase.cs:57</code>), directly under a security notice saying the seed credentials are deliberately weak plaintext values and that deployed environments must disable seeding (<code>:31-35</code>). Store overrides it on <code>Seeding:IncludeSampleUsers</code>, default false (<code>IdentityModuleSeeder.cs:28-30</code>; the AppHost opts in at <code>AppHost/Program.cs:193-194</code>, the integration fixture at <code>IdentityIntegrationTestFixture.cs:58</code>, <code>infra/main.bicep</code> sets nothing, <code>IdentityModuleSeederTests</code> pins it), the same shape as ADC (<code>MMCA.ADC.Identity.API/IdentityModuleSeeder.cs:22-30</code>). The seeded set is an admin account plus a customer account with weak plaintext passwords, one of them a real personal address (<code>MMCA.Store.Identity.Infrastructure/.../IdentityModuleDbSeeder.cs:23,37-38</code>), and the per-account <code>EmailExistsAsync</code> probe (<code>:45-52</code>) skips an account that already exists. <em>Next:</em> check the deployed Store Identity database for accounts seeded by builds that predate the gate (Store PR #124) and rotate or remove them (user-side; not provable from the repo).</li>
-          <li>[~] <strong>#21 Accessibility, maturity 3 → 4: record a dated manual screen-reader pass.</strong> The axe + Playwright suite gates the deploy (<code>e2e-gate</code>, chromium, <code>workflow_call</code> into <code>e2e.yml</code>, in <code>deploy.yml</code>&#39;s <code>needs</code>; UI-scoped and skippable, see the TD below) with 32 axe scans over the public, shopper, and Catalog/Sales/Identity admin surfaces (<code>AccessibilityTests.cs</code>, dark-palette home scan at <code>:495</code>), which earns Implementation 8. The rubric pairs axe-in-CI with a recorded manual screen-reader pass: the <code>store-ACCESSIBILITY-SCREENREADER-PASS.md</code> runbook (Website <code>docs-src/guides/</code>) exists, but its results log holds only the placeholder row (<code>:70</code>, header <code>:68-69</code>). <em>Next:</em> a dated NVDA/VoiceOver pass against the running Aspire app (needs a human; cannot be done headless).</li>
-          <li>[~] <strong>#12 Performance &amp; Scalability, maturity 3 → 4: no latency check on the merge path.</strong> Two deploy preconditions exist: a <code>load-freshness</code> job in <code>deploy.yml</code>&#39;s <code>needs</code> fails the deploy when the latest successful monthly <code>load-test.yml</code> run is older than 35 days (the <code>dr-freshness</code> pattern on the shared freshness-gate action; job <code>deploy.yml:807</code>, push-only at <code>:779</code>, window at <code>:816</code>), and the Web Vitals budgets sit in the Core Web Vitals &quot;good&quot; band (LCP 2500 / FCP 1800 / TTFB 800 / CLS 0.1 / INP 500), calibrated against measured CI maxima (LCP 172ms, 10-30x headroom) and asserted inside the deploy-gating chromium <code>e2e-gate</code>. The k6 run itself is a monthly cron plus dispatch (<code>load-test.yml:21</code>, <code>workflow_dispatch</code> at <code>:12</code>), so it is capacity-planning evidence rather than a merge gate: <code>deploy.needs</code> (<code>deploy.yml:1084</code>) contains no perf job, no latency fitness test exists in <code>Tests/Architecture</code> (the one section 12 architecture test, <code>Governance/MessageBusBackpressureTests.cs:10</code>, pins broker prefetch and consumer concurrency, not latency), <code>load-freshness</code> keys on the latest SUCCESSFUL k6 run (success mode, <code>:810-811</code>) so a threshold failure blocks nothing, and it carries a break-glass skip (<code>:818-819</code>). <em>Next:</em> add a latency-regression check to the merge path, or record the monthly k6 cadence as the accepted posture (ADC has not accepted it either: its in-band k6 item is still open, <code>adc-RemediationBacklog.md:39</code>). The full-size image blobs are the other efficiency gap (the product-image TD under Deliberate and accepted).</li>
+          <li><input disabled="" type="checkbox"> <strong>#11 Security, implementation 7: secret handling.</strong> Three red flags hold the row at 7. The Stripe webhook signing secret is cached in plaintext in the shared Redis with a 365-day lifetime (<code>SharedCacheStripeWebhookSecretStore.cs:79</code>, lifetime at <code>:54</code>); the registration service never prints it (<code>StripeWebhookRegistrationService.cs:200-202</code>). One shared identity is <code>db_owner</code> in all three databases (<code>infra/SQL-MANAGED-IDENTITY.md:80</code>), and every per-app Service Bus SAS rule carries Manage rights (<code>infra/main.bicep:1069,1081,1093</code>), kept because MassTransit creates the topology at runtime (<code>:1052-1057</code>); both are accepted at this scale (Deliberate and accepted below), so the signing-secret cache is the one red flag with scheduled work. A stale comment also says every service still connects with the SQL server administrator login although <code>USE_MANAGED_IDENTITY_SQL=true</code> (<code>infra/main.bicep:869-870</code>). The internal Customers gRPC edge requires a user or service token (Resolved below). <em>Next:</em> protect the cached signing secret, and correct the stale comment. <em>Effort:</em> S.</li>
+          <li><input disabled="" type="checkbox"> <strong>#10 Messaging, maturity 3 / implementation 8: the broker error queue has no operating procedure.</strong> The rubric requires a dead-letter path with an operational procedure: alert, inspect, replay or discard (<code>ArchitectureEvaluationCriteria.md:336</code>). The only messaging alert matches the outbox text &quot;dead-lettered&quot; (<code>infra/main.bicep:462</code>), while a consumer that exhausts its retries logs &quot;moved to the error queue&quot; (Common <code>FaultIntegrationEventConsumer.cs:57</code>), which no Store alert matches and no <code>infra/*.bicep</code> alert covers. <code>infra/OPERATIONS.md</code> has an outbox-row replay (<code>:166</code>) and no error-queue section, and ADR-087 records no alert, runbook or replay path for that queue (<code>087-broker-poison-message-handling.md:202</code>). Nothing requires <code>[EventName]</code> on every event: Common keys the contract by type name when the attribute is absent (<code>ArchitectureRules.Events.cs:42</code>), and all four Store events carry it by convention only. The same gap holds ADC&#39;s §10 at M3. Store-specific residuals: the dead-letter runbook names one live consumer flow where five run (<code>OPERATIONS.md:164</code>; the consumers are at <code>Sales.Service/Program.cs:261</code> and <code>Catalog.Service/Program.cs:274</code>), <code>CustomerErased</code> and <code>ProductInfoChanged</code> have no real-broker round-trip test, and <code>ProductVariantChanged</code> declares no ordering expectation (<code>IntegrationEventContractTests.cs:12</code>), so a late redelivery could overwrite newer labels. <em>Next:</em> an alert-as-code on the error-queue log line or the broker metric, an <code>OPERATIONS.md</code> runbook with a replay-or-discard procedure, and a fitness rule requiring <code>[EventName]</code> (that rule is Common-side). <em>Effort:</em> S-M.</li>
+          <li><input disabled="" type="checkbox"> <strong>#11 Security: rotate or remove the identity seed accounts created before the environment gate.</strong> The framework leaves the choice to the app: <code>IdentityModuleDbSeederBase.ShouldSeed</code> defaults to <code>true</code> (<code>IdentityModuleDbSeederBase.cs:57</code>), directly under a security notice saying the seed credentials are deliberately weak plaintext values and that deployed environments must disable seeding (<code>:31-35</code>). Store overrides it on <code>Seeding:IncludeSampleUsers</code>, default false (<code>IdentityModuleSeeder.cs:28-30</code>; the AppHost opts in at <code>AppHost/Program.cs:194-195</code>, the integration fixture at <code>IdentityIntegrationTestFixture.cs:61,69</code>, <code>infra/main.bicep</code> sets nothing, <code>IdentityModuleSeederTests</code> pins it), the same shape as ADC (<code>MMCA.ADC.Identity.API/IdentityModuleSeeder.cs:22-30</code>). The seeded set is an admin account plus a customer account with weak plaintext passwords, one of them a real personal address (<code>MMCA.Store.Identity.Infrastructure/.../IdentityModuleDbSeeder.cs:23,37-38</code>), and the per-account <code>EmailExistsAsync</code> probe (<code>:45-52</code>) skips an account that already exists. <em>Next:</em> check the deployed Store Identity database for accounts seeded by builds that predate the gate (Store PR #124) and rotate or remove them (user-side; not provable from the repo).</li>
+          <li>[~] <strong>#21 Accessibility, maturity 3 → 4: record a dated manual screen-reader pass.</strong> The axe + Playwright suite gates the deploy (<code>e2e-gate</code>, chromium, <code>workflow_call</code> into <code>e2e.yml</code>, in <code>deploy.yml</code>&#39;s <code>needs</code>; UI-scoped and skippable, an accepted trade-off under Deliberate and accepted) with 32 axe scans over the public, shopper, and Catalog/Sales/Identity admin surfaces (<code>AccessibilityTests.cs</code>, dark-palette home scan at <code>:495</code>) plus the cart-drawer keyboard test (<code>CartDrawerKeyboardTests.cs:21</code>, on the shared <code>KeyboardOperabilityTestsBase</code>), which earns Implementation 8. The rubric pairs axe-in-CI with a recorded manual screen-reader pass: the <code>store-ACCESSIBILITY-SCREENREADER-PASS.md</code> runbook (Website <code>docs-src/guides/</code>) exists, but its results log holds only the placeholder row (<code>:70</code>, header <code>:68-69</code>). <em>Next:</em> a dated NVDA/VoiceOver pass against the running Aspire app (needs a human; cannot be done headless).</li>
           <li><input disabled="" type="checkbox"> <strong>#15 Best Practices &amp; Code Quality, implementation 8 → 9: the MAUI head is outside CI analyzer enforcement.</strong> The MAUI head is in neither <code>.slnf</code> (<code>MMCA.Store.CI.slnf:24-25</code> lists only <code>UI.Web</code> and <code>UI.Web.Client</code>; <code>maui-audit.yml:17</code> and <code>.editorconfig:841</code> say so), so its analyzers and TWAE run only in a full local solution build. Its vulnerability audit is covered by the weekly <code>maui-audit.yml</code> (<code>:111-163</code>). <em>Next:</em> put the MAUI head&#39;s analyzers and TWAE under a CI check.</li>
-          <li><input disabled="" type="checkbox"> <strong>#17 DevOps &amp; Deployment, implementation 8 → 9: the rollback covers only a failed activation.</strong> The smoke step (<code>deploy.yml:1341</code>) skips every app whose newest revision is live (<code>:1483</code>), so a failure caught only by the tier-2 HTTP probes rolls nothing back, and the step still prints &quot;All apps rolled back&quot; (<code>:1511</code>); its comment says a healthy newest revision steps back one revision (<code>:1473-1474</code>), and under <code>activeRevisionsMode: &#39;Single&#39;</code> (<code>infra/main.bicep:1433</code>) the predecessor is already inactive, so the active-revision filter (<code>deploy.yml:1490</code>) finds no candidate. ADR-080 keeps the skip-live guard and accepts single-revision mode; no rollback rehearsal is recorded. The other residuals: no Bicep build, lint or what-if before <code>azure/arm-deploy</code> (<code>:1301-1303</code>), a prod-only environment (<code>:41</code>), and SQL dual-auth with public network access (<code>infra/main.bicep:804-808</code>, <code>deploy.yml:1146</code>). <em>Next:</em> make the rollback summary report what it did and align the comment (Store-local, S); then decide whether a probe-only failure should roll back, and add a Bicep what-if step before merge. <em>Effort:</em> S-M.</li>
+          <li><input disabled="" type="checkbox"> <strong>#17 DevOps &amp; Deployment, implementation 8 → 9: the rollback covers only a failed activation.</strong> The smoke step (<code>deploy.yml:1355</code>) skips every app whose newest revision is live (<code>:1497</code>), so a failure caught only by the tier-2 HTTP probes rolls nothing back, and the step still prints &quot;All apps rolled back&quot; (<code>:1525</code>); its comment says a healthy newest revision steps back one revision (<code>:1487-1488</code>), and under <code>activeRevisionsMode: &#39;Single&#39;</code> (<code>infra/main.bicep:1469</code>) the predecessor is already inactive, so the active-revision filter (<code>deploy.yml:1504</code>) finds no candidate. ADR-080 keeps the skip-live guard and accepts single-revision mode; no rollback rehearsal is recorded. The other residuals: no Bicep build, lint or what-if before <code>azure/arm-deploy</code> (<code>:1315-1317</code>), a prod-only environment (<code>:41</code>), and SQL dual-auth with public network access (<code>infra/main.bicep:831-835</code>, <code>deploy.yml:1146</code>). <em>Next:</em> make the rollback summary report what it did and align the comment (Store-local, S); then decide whether a probe-only failure should roll back, and add a Bicep what-if step before merge. <em>Effort:</em> S-M.</li>
           <li><input disabled="" type="checkbox"> <strong>#20 Design System, implementation 8 → 9: the StoreHome palette.</strong> The StoreHome landing stylesheet hard-codes a hex palette behind <code>!important</code> with only <code>--mmca-primary</code> tokenized (<code>Catalog.UI/Pages/Home/StoreHome.razor.css:218,289</code>; one stylesheet in Catalog.UI serves both hosts). <em>Next:</em> tokenize the palette onto the theme variables in that shared stylesheet, drop the <code>!important</code> overrides, and extend <code>BrandColorTokenTests</code> to the full literal set.</li>
           <li><input disabled="" type="checkbox"> <strong>#22 Responsive &amp; Cross-Browser, implementation 8 → 9: density and touch.</strong> Density is hard-coded <code>Dense=&quot;true&quot;</code> with no comfortable/compact option (<code>ProductList.razor:61</code>, <code>ReviewList.razor:57</code>), and there is no coarse-pointer/touch-target CSS and no mobile-viewport E2E coverage (zero <code>SetViewportSize</code> hits under <code>Tests/E2E</code>). Common&#39;s <code>DataGridListPageBase</code> carries a <code>DenseGrid</code> toggle, so the density half is a Common-adoption task.</li>
-          <li>[~] <strong>#24 Forms, implementation 8 → 9: client rule-engine parity.</strong> All four create forms (<code>CategoryCreate</code>, <code>ProductCreate</code>, <code>CustomerCreate</code>, <code>InventoryItemCreate</code>) source their field rules from a DataAnnotations form model through Common&#39;s <code>ModelValidation</code> bridge (<code>Model=&quot;_model&quot;</code> plus <code>Validation=&quot;@_validate&quot;</code> plus <code>ModelValidation.IsRequired</code>), the shape ADC&#39;s 8 Conference create forms use; <code>FormsConventionTests</code> checks ADC&#39;s marker set with <code>MinimumCreateForms</code> 4. Client-side parity covers email format (mirroring <code>CustomerEmailRules</code>&#39; algorithm) on CustomerCreate and CustomerDetail, and per-field NewPassword min-length/128-cap plus confirm-match on the Profile change-password form (localized en + es keys). <em>Remaining:</em> the client rules are DataAnnotations, not full FluentValidation parity with the server rule set.</li>
-          <li><input disabled="" type="checkbox"> <strong>#25 Navigation, implementation 8 → 9: the navigation doc drifts with nothing to catch it.</strong> <code>store-NavigationFlow.md</code> places <code>/users</code> outside the route tests (<code>:15</code>, <code>:192</code>) although <code>IdentityRouteAuthorizationTests.cs:26-32</code> governs it, calls the notification pages routable (<code>:202</code>) although Store hides them (<code>UI.Web/appsettings.json:18</code>), and implies order detail requires sign-in (<code>:66</code>, <code>:192</code>) while <code>OrderDetail.razor:11</code> is <code>[AllowAnonymous]</code>. Two smaller residuals: route parameters are untyped (<code>ProductDetail.razor.cs:28</code>), and the Roles menu item is shown by capability (<code>IdentityUIModule.cs:29-35</code>) while <code>/roles</code> requires the Admin role (<code>RoleList.razor:2</code>). <em>Next:</em> reconcile the doc to the shell, then add a Store <code>NavigationContractTests</code> that reads its route contract and compares it with every <code>@page</code> route (the ADC pattern). <em>Effort:</em> M.</li>
-          <li><input disabled="" type="checkbox"> <strong>#27 Internationalization, implementation 8 → 9: pluralization.</strong> Money formatting is culture-aware (<code>MoneyExtensions.cs:54,90</code>, inside the v1.233.0 pin at <code>Directory.Packages.props:19</code>). Common ships <code>StringLocalizerPluralExtensions.cs:46</code> and the cart strings have <code>.One</code>/<code>.Other</code> keys, but <code>ProductReviewsPanel.resx:9</code> and <code>CatalogBrowse.resx:31</code> are single-form count keys (<code>&quot;(1 reviews)&quot;</code> renders at <code>ProductReviewsPanel.razor:10</code>), and single-form <code>(s)</code> keys survive in <code>CartDrawer.resx:9</code> (<code>Aria.ItemsInCart</code>) and <code>:22</code>, <code>CartButton.resx:7,10</code>, <code>CatalogProductDetail.resx:65</code> and <code>ShoppingCartList.resx:11</code>. Store-local, not <code>[C→A]</code>.</li>
-          <li><input disabled="" type="checkbox"> <strong>TD · #21, #22, #28: the deploy-gating a11y/E2E run is UI-scoped, so a backend-only merge deploys with no axe or Playwright run.</strong> The <code>e2e-gate</code> job runs only when <code>needs.changes.outputs.ui == &#39;true&#39;</code> (<code>deploy.yml:762</code>, job at <code>:752</code>, rationale comment <code>:754-761</code>, chromium-only input at <code>:765</code>), and the <code>deploy</code> job accepts it as <code>success</code> OR <code>skipped</code> (<code>deploy.yml:1117</code>, inside the gate block <code>:1107-1117</code>, with <code>e2e-gate</code> in the deploy <code>needs</code> list at <code>:1084</code>). On a backend-only merge the 32 WCAG 2.1 AA axe scans (<code>Tests/E2E/MMCA.Store.E2E.Tests/Workflows/AccessibilityTests.cs</code>, dark-palette scan at <code>:495</code>) and the Playwright workflow suite do not run, and the chromium-only blind window priced under Deliberate and accepted becomes 100% for all three engines. Backend tests do precede every code deploy: the required <code>build-and-test</code> check runs the <code>MMCA.Store.CI.slnf</code> unit + architecture + bUnit tier (<code>deploy.yml:255</code>, test run at <code>:338</code>), and branch protection enforces admins with strict up-to-date required checks (Store PR #197), so the merged tree is the PR-tested tree (<code>:758-761</code>). <em>Next:</em> make the browser gate unconditional, or record the UI-scoping as a deliberate accepted trade-off beside the chromium-only entry.</li>
-          <li><input disabled="" type="checkbox"> <strong>TD · #11: <code>[C→A]</code> Identity&#39;s customer gRPC edge accepts anonymous callers.</strong> Identity maps <code>CustomersGrpcService</code> with <code>.AllowAnonymous()</code> (<code>Identity.Service/Program.cs:369</code>); it returns email and full name keyed by a raw customer id, and the host&#39;s own comment states that internal ingress is not the authorization boundary and that any workload in the environment can enumerate it (<code>:336-345</code>). That is the rubric&#39;s &quot;internal services that trust any caller on the network&quot; red flag (<code>ArchitectureEvaluationCriteria.md:374</code>). ADC requires authorization on its equivalent edge (<code>MMCA.ADC.Identity.Service/Program.cs:362</code>). Catalog&#39;s <code>ProductVariantsGrpcService</code> is also anonymous (<code>Catalog.Service/Program.cs:346</code>) but carries no PII; <code>CustomerContactLookupGuard</code> is the compensating control. <em>Blocker:</em> Common has no service-to-service credential; the comment names that as the real fix (<code>:353-360</code>). <em>Resolution path:</em> a Common client-credentials token that Sales mints and <code>JwtForwardingClientInterceptor</code> attaches, then <code>.RequireAuthorization()</code> on the Identity edge. <em>Effort:</em> M in Common, S in Store.</li>
+          <li>[~] <strong>#25 Navigation, implementation 8 → 9: the navigation doc has no test to catch drift.</strong> <code>store-NavigationFlow.md</code> matches the shell: <code>/users</code> is listed as route-tested (<code>:15</code>, governed by <code>IdentityRouteAuthorizationTests.cs:26-32</code>), <code>/orders/{Id}</code> is <code>[AllowAnonymous]</code> (<code>:66</code>, <code>:225</code>, matching <code>OrderDetail.razor:11</code>), the notification pages are hidden (<code>:236</code>, <code>UI.Web/appsettings.json:18</code>), and a Route Contract table lists every routable Store page with its required access (<code>:188</code>). No Store test reads that contract (no <code>*Navigation*Tests.cs</code> under <code>Tests/</code>), so a new <code>@page</code> or a changed attribute can drift from the doc unnoticed. Two smaller residuals: route parameters are untyped (<code>ProductDetail.razor.cs:28</code>), and the Roles menu item is shown by capability (<code>IdentityUIModule.cs:29-35</code>) while <code>/roles</code> requires the Admin role (<code>RoleList.razor:2</code>). <em>Next:</em> add a Store <code>NavigationContractTests</code> that reads the Route Contract (<code>store-NavigationFlow.md:188</code>) and compares it with every <code>@page</code> route and its authorization attributes (the ADC pattern). <em>Effort:</em> M.</li>
+          <li><input disabled="" type="checkbox"> <strong>#27 Internationalization, implementation 8 → 9: pluralization.</strong> Money formatting is culture-aware (<code>MoneyExtensions.cs:54,90</code>, inside the v1.244.0 pin at <code>Directory.Packages.props:19</code>). Common ships <code>StringLocalizerPluralExtensions.cs:46</code> and the cart strings have <code>.One</code>/<code>.Other</code> keys, but <code>ProductReviewsPanel.resx:9</code> and <code>CatalogBrowse.resx:31</code> are single-form count keys (<code>&quot;(1 reviews)&quot;</code> renders at <code>ProductReviewsPanel.razor:10</code>), and single-form <code>(s)</code> keys survive in <code>CartDrawer.resx:9</code> (<code>Aria.ItemsInCart</code>) and <code>:22</code>, <code>CartButton.resx:7,10</code>, <code>CatalogProductDetail.resx:65</code> and <code>ShoppingCartList.resx:11</code>. Store-local, not <code>[C→A]</code>.</li>
           <li><input disabled="" type="checkbox"> <strong>TD · #27: six Spanish count values drop the accent.</strong> The <code>.One</code> and <code>.Other</code> values in <code>ShoppingCartList.es.resx:12-13</code>, <code>CartDrawer.es.resx:23-24</code> and the <code>Aria.ItemsInCart.One</code>/<code>.Other</code> pair at <code>CartDrawer.es.resx:10-11</code> spell the noun without its accent while the base keys they pair with (<code>ShoppingCartList.es.resx:11</code>, <code>CartDrawer.es.resx:9,22</code>) keep it, so a Spanish shopper sees two spellings of the same word depending on the count. User-visible, Store-local. <em>Blocker:</em> none. <em>Resolution path:</em> correct the six resx values; <code>TranslationCompletenessTests</code> checks presence, not spelling, so add the accented form to the pseudo-loc leak probe only if this recurs. <em>Effort:</em> S.</li>
           </ul>
           <h2 id="implementation-band">Implementation band</h2>
@@ -295,7 +250,7 @@
           <td>Security</td>
           <td>3</td>
           <td>7</td>
-          <td>the anonymous Identity customer gRPC edge (<code>Identity.Service/Program.cs:369</code>, the <code>[C→A]</code> TD under #11), then the plaintext Redis cache of the Stripe signing secret (<code>SharedCacheStripeWebhookSecretStore.cs:79</code>), the shared <code>db_owner</code> identity (<code>infra/SQL-MANAGED-IDENTITY.md:78</code>) and Manage-rights SAS rules (<code>infra/main.bicep:1042</code>, pre-create the topology in Bicep to drop Manage); seed-account rotation is operational</td>
+          <td>the plaintext Redis cache of the Stripe signing secret (<code>SharedCacheStripeWebhookSecretStore.cs:79</code>, 365-day lifetime <code>:54</code>); the shared <code>db_owner</code> identity (<code>infra/SQL-MANAGED-IDENTITY.md:80</code>) and the Manage-rights SAS rules (<code>infra/main.bicep:1069,1081,1093</code>, rationale <code>:1052-1057</code>) are accepted caps under Deliberate and accepted; seed-account rotation is operational</td>
           </tr>
           <tr>
           <td>3</td>
@@ -311,7 +266,7 @@
           <td>Microservices Readiness</td>
           <td>3</td>
           <td>8</td>
-          <td>the deploy half of independent deployability: one <code>azure/arm-deploy</code> of the whole <code>main.bicep</code> (<code>deploy.yml:1303</code>), all five images on one <code>IMAGE_SHA</code> (<code>:1145</code>), whole-fleet rollback block (<code>:1467-1513</code>, app list <code>:1349</code>); split the image parameters per service, or record the lockstep as accepted</td>
+          <td>the accepted lockstep deploy caps it: one <code>azure/arm-deploy</code> of the whole <code>main.bicep</code> (<code>deploy.yml:1317</code>), all five images on one <code>IMAGE_SHA</code> (<code>:1145</code>), whole-fleet rollback block (<code>:1481-1527</code>, app list <code>:1363</code>), recorded under Deliberate and accepted; no lever scheduled</td>
           </tr>
           <tr>
           <td>3</td>
@@ -319,7 +274,7 @@
           <td>Messaging &amp; Integration Architecture</td>
           <td>3</td>
           <td>8</td>
-          <td>the broker error queue has no alert, runbook or replay path (<code>infra/main.bicep:435</code> matches only the outbox text; Common <code>FaultIntegrationEventConsumer.cs:57</code>), plus the stale consumer inventory at <code>infra/OPERATIONS.md:140</code>, no real-broker round-trip for <code>CustomerErased</code>/<code>ProductInfoChanged</code>, and no declared ordering for <code>ProductVariantChanged</code>; #10 is also in the maturity band</td>
+          <td>the broker error queue has no alert, runbook or replay path (<code>infra/main.bicep:462</code> matches only the outbox text; Common <code>FaultIntegrationEventConsumer.cs:57</code>), plus the stale consumer inventory at <code>infra/OPERATIONS.md:164</code>, no real-broker round-trip for <code>CustomerErased</code>/<code>ProductInfoChanged</code>, and no declared ordering for <code>ProductVariantChanged</code>; #10 is also in the maturity band</td>
           </tr>
           <tr>
           <td>3</td>
@@ -327,7 +282,7 @@
           <td>UI Architecture &amp; Components</td>
           <td>3</td>
           <td>8</td>
-          <td>not yet identified (held at 8: four code-behinds sit near the 400-line cap, <code>ProductReviewsPanel.razor.cs</code> at 376 lines the largest)</td>
+          <td>not yet identified (held at 8: four code-behinds sit near the 400-line cap, <code>ProductReviewsPanel.razor.cs</code> at 389 lines the largest, 11 under the cap; the cap stays at 400, see Deliberate and accepted)</td>
           </tr>
           <tr>
           <td>3</td>
@@ -367,7 +322,7 @@
           <td>CQRS &amp; Event-Driven</td>
           <td>2</td>
           <td>8</td>
-          <td>not yet identified (held at 8: the non-atomic publish window on the <code>ProductVariantChanged</code> Added path, narrowed at <code>AddVariantHandler.cs:79-98</code> but not closed)</td>
+          <td>not yet identified (held at 8: the <code>ProductVariantChanged</code> Added path is transactional, <code>AddVariantCommand.cs:25</code> is <code>ITransactional</code> and the publish is a durable <code>InternalCommands</code> row in the same transaction, <code>AddVariantHandler.cs:79-82,92-97</code>, but a refused schedule is logged at Error and not retried, <code>:98-100</code>)</td>
           </tr>
           <tr>
           <td>2</td>
@@ -375,7 +330,7 @@
           <td>Performance &amp; Scalability</td>
           <td>2</td>
           <td>8</td>
-          <td>not yet identified</td>
+          <td>not yet identified (the monthly k6 run plus <code>load-freshness</code> is the accepted posture, see Deliberate and accepted)</td>
           </tr>
           <tr>
           <td>2</td>
@@ -391,7 +346,7 @@
           <td>DevOps &amp; Deployment</td>
           <td>2</td>
           <td>8</td>
-          <td>the post-deploy rollback covers only a failed activation: it skips every app whose newest revision is live (<code>deploy.yml:1483</code>) and still reports &quot;All apps rolled back&quot; (<code>:1511</code>); then a Bicep what-if before merge (<code>:1301-1303</code>), a non-prod environment (<code>:41</code>), and SQL dual-auth with public access (<code>infra/main.bicep:804-808</code>)</td>
+          <td>the post-deploy rollback covers only a failed activation: it skips every app whose newest revision is live (<code>deploy.yml:1497</code>) and still reports &quot;All apps rolled back&quot; (<code>:1525</code>); then a Bicep what-if before merge (<code>:1315-1317</code>), a non-prod environment (<code>:41</code>), and SQL dual-auth with public access (<code>infra/main.bicep:831-835</code>)</td>
           </tr>
           <tr>
           <td>2</td>
@@ -423,7 +378,7 @@
           <td>Forms, Validation &amp; UX Safety</td>
           <td>2</td>
           <td>8</td>
-          <td>client validation is DataAnnotations-level, not full FluentValidation parity with the server rules</td>
+          <td>the accepted cap: client validation is DataAnnotations-level with per-field parity, and full FluentValidation parity on the client is not pursued (Deliberate and accepted); no lever scheduled</td>
           </tr>
           <tr>
           <td>2</td>
@@ -431,7 +386,7 @@
           <td>Navigation &amp; Information Arch</td>
           <td>2</td>
           <td>8</td>
-          <td>a Store <code>NavigationContractTests</code> that reads the route contract in the published <code>store-NavigationFlow.md</code> and compares it with every <code>@page</code> route and its authorization attributes (the ADC pattern), after reconciling the doc&#39;s stale lines (<code>store-NavigationFlow.md:15,66,192,202</code>; <code>OrderDetail.razor:11</code> is <code>[AllowAnonymous]</code>)</td>
+          <td>a Store <code>NavigationContractTests</code> that reads the Route Contract in the published <code>store-NavigationFlow.md</code> (<code>:188</code>) and compares it with every <code>@page</code> route and its authorization attributes (the ADC pattern); the doc itself matches the shell (<code>:15</code>, <code>:66</code>, <code>:225</code>, <code>:236</code>)</td>
           </tr>
           <tr>
           <td>2</td>
@@ -439,7 +394,7 @@
           <td>Compliance, Privacy &amp; Governance</td>
           <td>2</td>
           <td>8</td>
-          <td>not yet identified (held at 8: consent and lawful basis have no implementation, held until legal documents exist; the data-subject-rights surface now has a UI, the Profile &quot;Your data&quot; card with export and self-service delete, <code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.UI/Pages/Users/Profile/YourDataCard.razor</code>, mounted at <code>Profile.razor:111</code>)</td>
+          <td>not yet identified, named at the next re-score (consent capture is the candidate: a lawful basis per <code>[Pii]</code> member is recorded in <code>MMCA.Store/PRIVACY.md:121-125</code>, section 12, and checked by <code>Tests/Architecture/MMCA.Store.Architecture.Tests/Privacy/PiiInventoryTests.cs:13</code>, but no consent capture exists in Source; the data-subject-rights surface has a UI, the Profile &quot;Your data&quot; card with export and self-service delete, <code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.UI/Pages/Users/Profile/YourDataCard.razor</code>, mounted at <code>Profile.razor:111</code>)</td>
           </tr>
           <tr>
           <td>2</td>
@@ -447,7 +402,7 @@
           <td>Cost Efficiency / FinOps</td>
           <td>2</td>
           <td>8</td>
-          <td>not yet identified (held at 8: the surge guard is read-only, <code>cost-guard.yml:7</code>, and the budget is whole-RG with no tag filter, <code>infra/main.bicep:766-794</code>; per-service <code>service</code> tags exist on every container app and service database, <code>:955</code>, <code>:1422</code>, <code>:1601</code>, <code>:1725</code>, <code>:1874</code>, <code>:2003</code>)</td>
+          <td>not yet identified (held at 8: the surge guard is read-only, <code>cost-guard.yml:7</code>, the recorded posture under Deliberate and accepted, and the budget is whole-RG with no tag filter, <code>infra/main.bicep:793-821</code>; per-service <code>service</code> tags exist on every container app and service database, <code>:982</code>, <code>:1458</code>, <code>:1640</code>, <code>:1764</code>, <code>:1916</code>, <code>:2045</code>)</td>
           </tr>
           <tr>
           <td>2</td>
@@ -501,19 +456,25 @@
           <td>Performance &amp; Scalability</td>
           <td>2</td>
           <td>3</td>
-          <td>add a latency-regression check to the merge path, or record the monthly k6 cadence as the accepted posture (ADC has not accepted it either: its in-band k6 item is still open, <code>adc-RemediationBacklog.md:39</code>); the <code>load-freshness</code> break-glass skip is at <code>deploy.yml:818-819</code> (job at <code>:807</code>), the gate keys on the latest SUCCESSFUL k6 run (<code>:810-811</code>) so a threshold failure blocks nothing, and <code>deploy.needs</code> at <code>:1084</code> contains no perf job</td>
+          <td>the accepted cap: no latency check runs on the merge path, and the monthly k6 run plus <code>load-freshness</code> is the recorded posture (Deliberate and accepted); the <code>load-freshness</code> break-glass skip is at <code>deploy.yml:818-819</code> (job at <code>:807</code>), the gate keys on the latest SUCCESSFUL k6 run (<code>:810-811</code>) so a threshold failure blocks nothing, and <code>deploy.needs</code> at <code>:1084</code> contains no perf job; no lever scheduled</td>
           </tr>
           </tbody></table></div>
           <h2 id="deliberate-and-accepted">Deliberate and accepted</h2>
           <ul>
           <li><strong>§16 AI-Native Application Architecture is N/A</strong> (rubric v2, <a href="../adr/110-rubric-v2-category-realignment.html">ADR-110</a>): no product feature calls a language model, so its weight 2 leaves both denominators until one does.</li>
           <li><strong>#5 layered-by-project hybrid.</strong> Cross-cutting concerns live in the pipeline and module projects keep a layered split; a deliberate design choice that caps §5 at Implementation 8, not a maturity deduction.</li>
-          <li><strong>Chromium-only deploy E2E gate (#22, #21): accepted CI-cost trade-off.</strong> The deploy-gating <code>e2e-gate</code> runs a single engine (job at <code>deploy.yml:752</code>, rationale <code>:743-751</code>, <code>browsers: &#39;[&quot;chromium&quot;]&#39;</code> at <code>:765</code>); firefox and webkit run on the advisory schedule, one alternating engine per week (the <code>browser</code> matrix expression at <code>e2e.yml:139-142</code>, Monday firefox <code>:140</code>, Thursday webkit <code>:141</code>, crons <code>:46-47</code>, schedule-scoped <code>continue-on-error</code> at <code>:149</code>). The <code>cross-browser-freshness</code> gate bounds each engine&#39;s blind window at 10 days as a hard <code>deploy</code> condition (<code>deploy.yml:857</code>, <code>:1084</code>, <code>:1114</code>). Revisit if a webkit-only or firefox-only defect reaches production, which is the risk being priced. The UI-scoping of the gate is a separate open TD under #21.</li>
+          <li><strong>Chromium-only deploy E2E gate (#22, #21): accepted CI-cost trade-off.</strong> The deploy-gating <code>e2e-gate</code> runs a single engine (job at <code>deploy.yml:752</code>, rationale <code>:743-751</code>, <code>browsers: &#39;[&quot;chromium&quot;]&#39;</code> at <code>:765</code>); firefox and webkit run on the advisory schedule, one alternating engine per week (the <code>browser</code> matrix expression at <code>e2e.yml:139-142</code>, Monday firefox <code>:140</code>, Thursday webkit <code>:141</code>, crons <code>:46-47</code>, schedule-scoped <code>continue-on-error</code> at <code>:149</code>). The <code>cross-browser-freshness</code> gate bounds each engine&#39;s blind window at 10 days as a hard <code>deploy</code> condition (<code>deploy.yml:857</code>, <code>:1084</code>, <code>:1114</code>). Revisit if a webkit-only or firefox-only defect reaches production, which is the risk being priced. The UI-scoping of the gate is the separate entry below.</li>
+          <li><strong>UI-scoped <code>e2e-gate</code> (#21, #22, #28): accepted Actions-minute trade-off, next to the chromium-only entry.</strong> The <code>e2e-gate</code> job runs only when <code>needs.changes.outputs.ui == &#39;true&#39;</code> (<code>deploy.yml:762</code>, job at <code>:752</code>, rationale comment <code>:754-761</code>, chromium-only input at <code>:765</code>), and the <code>deploy</code> job accepts it as <code>success</code> OR <code>skipped</code> (<code>:1117</code>, with <code>e2e-gate</code> in the deploy <code>needs</code> list at <code>:1084</code>). On a backend-only merge the 32 WCAG 2.1 AA axe scans (<code>Tests/E2E/MMCA.Store.E2E.Tests/Workflows/AccessibilityTests.cs</code>) and the Playwright workflow suite do not run. Backend tests precede every code deploy: the required <code>build-and-test</code> check runs the <code>MMCA.Store.CI.slnf</code> unit + architecture + bUnit tier (<code>deploy.yml:255</code>, test run at <code>:338</code>), branch protection enforces admins with strict up-to-date required checks, so the merged tree is the PR-tested tree, and the post-deploy smoke gate probes Catalog and Sales through the gateway. Revisit if a UI defect reaches production through a backend-only merge.</li>
           <li><strong>TD · #22: the <code>cross-browser-freshness</code> gate is break-glass skippable.</strong> The gate proves a green firefox and webkit leg within 10 days (<code>deploy.yml:873</code>), not that this exact tree passes on those engines, and the <code>skip_freshness_gates</code> <code>workflow_dispatch</code> input (declared at <code>deploy.yml:26</code>) that also skips #12&#39;s <code>load-freshness</code> skips it with a justification (<code>:880-881</code>). Accepted as priced on the ADC precedent, whose row carries the identical caveat. <em>Blocker:</em> none; a per-change three-engine gate is the Actions-minute cost the chromium-only entry prices. <em>Resolution path:</em> none scheduled; revisit if a single-engine defect reaches production or the break-glass is used outside an incident. <em>Effort:</em> S (denying the skip is one <code>if:</code> change).</li>
           <li><strong>#33 Service Bus emulator tier gates through recency.</strong> <code>Tests/Integration/MMCA.Store.ServiceBusEmulator.IntegrationTests</code> runs MassTransit v8 against the official Service Bus emulator (pinned 2.0.1) with the real <code>ProductVariantChanged</code> contract, and <code>cross-service-freshness</code> requires both it and the RabbitMQ tier to have succeeded in the same nightly run (the <code>cross-service-freshness</code> step of the <code>freshness</code> job, <code>deploy.yml:826</code>, required jobs <code>:841-843</code>, <code>freshness</code> in deploy <code>needs</code> at <code>:1084</code>). The tier needs Docker, so it stays out of both solution filters and reaches the deploy chain through the recency check rather than per PR. Mirrors ADC&#39;s TD-17; ADR-066 records the gated end state in both consumers.</li>
           <li><strong>TD · Product-image derivatives (#12, #23): deferred.</strong> Images are full-size DB blobs streamed as-is and rendered as card thumbnails with no <code>srcset</code>/dimensions, so a 12-card browse grid can pull 12 full-size assets. Fixing it is a storage-design decision, not a local change; not scheduled.</li>
           <li><strong>Single-region deployment</strong>: accepted in <code>infra/DISASTER-RECOVERY.md</code> (real load does not justify multi-region cost).</li>
           <li><strong>All per-service DBs on one physical SQL server</strong>: logical isolation is complete; the shared server is a cost choice (minor §7/§8).</li>
+          <li><strong>#7 lockstep deploy: per-service image parameters are not adopted.</strong> The deploy is one <code>azure/arm-deploy</code> of the whole <code>main.bicep</code> (<code>deploy.yml:1317</code>) with all five images on one <code>IMAGE_SHA</code> (<code>:1145</code>) and a whole-fleet rollback (<code>:1481-1527</code>). Splitting the image parameters per service would add permanent complexity to the deploy and rollback logic for a five-app, one-developer fleet, so the lockstep deploy is accepted and caps section 7 at Implementation 8. The build half stays per-image incremental (per-image dirty flags in the <code>changes</code> job, <code>deploy.yml:80-218</code>, matrix <code>:956</code>).</li>
+          <li><strong>#11 per-service database identities and Bicep-created Service Bus topology: not adopted.</strong> One shared identity is <code>db_owner</code> in all three databases (<code>infra/SQL-MANAGED-IDENTITY.md:80</code>) and every per-app SAS rule keeps Manage rights (<code>infra/main.bicep:1069,1081,1093</code>) because MassTransit creates the topology at runtime (<code>:1052-1057</code>). Pre-creating the topology in Bicep would make every new consumer a Bicep edit, and a missing subscription loses messages silently, so the shared identity and SAS Manage are accepted at this scale. They remain red flags on the section 11 row.</li>
+          <li><strong>#12 in-band k6 on every deploy, and a shopper script that writes to production: not adopted.</strong> Either would load production on every deploy at a peak of about 67 users. The monthly <code>load-test.yml</code> run (<code>:21</code>, dispatch at <code>:12</code>) plus the 35-day <code>load-freshness</code> deploy gate (<code>deploy.yml:807</code>, window <code>:816</code>) is the accepted posture, with the Web Vitals budgets asserted per deploy in the chromium <code>e2e-gate</code>; section 12 stays at Maturity 3 on it.</li>
+          <li><strong>#18 code-behind cap lowered to 300: not adopted.</strong> Lowering the cap would force about a dozen extractions at once; the cap stays at 400 (<code>UIArchitectureConventionTests.cs:9</code>), and only the files near 400 are candidates for extraction (<code>ProductReviewsPanel.razor.cs</code> at 389 lines is the largest).</li>
+          <li><strong>#31 scheduled revert of surge drift: not adopted.</strong> <code>cost-guard</code> stays read-only (<code>cost-guard.yml:7</code>, manual reset printed at <code>:109</code>), because a scheduled revert would act on production unwatched (schedule detection, never action). The guard still blocks the deploy on drift (<code>deploy.yml:730,1113</code>) and runs on the Monday cron (<code>cost-guard.yml:21</code>); it caps section 31 at Implementation 8, the same basis as ADC&#39;s.</li>
           <li><strong>SQL public network access (no VNet)</strong>: the documented acceptance behind the §17 cap, the same caveat ADC carries.</li>
           <li><strong>ADR-042 device capability abstraction: latent.</strong> The core extension point is converged (Store wires browser + MAUI capabilities via <code>UseMauiDeviceCapabilities</code>/<code>AddBrowserDeviceCapabilities</code> and renders the shared <code>OfflineBanner</code>), but Store consumes no further capability in its own product UI: no <code>ExternalLink</code>, no <code>DeviceUIModule</code>/<code>DeepLinkListener</code>, no app actions. No Store product page carries an external anchor, so the WebView dead-end risk is latent, not a live defect. Adopt <code>ExternalLink</code> on any Store product page that grows an external anchor, and register a Store <code>IUIModule</code> with <code>DeepLinkListener</code> (the way ADC&#39;s <code>DeviceUIModule</code> does) if a Store MAUI feature surface is wanted. The framework side is complete in Common (18 capability contracts + the <code>MMCA.Common.UI.Maui</code> package), so this is consumer-side only, not <code>[C→A]</code>.</li>
           <li><strong>ADR-043 adoption (mobile deep links / app association / native OAuth callback): deferred.</strong> Adoption is feature-scale (Store-scheme deep links, iOS/Android manifest entries, associated domains) and rides the same trigger as ADR-042: adopt when a Store MAUI surface is actively wanted.</li>
@@ -524,6 +485,7 @@
           <li><strong>#11 threat model: not maintained, by decision.</strong> No threat-model document is kept for Store, matching the Common backlog; §11 is scored on its other red flags, and a re-score does not add a threat-model item.</li>
           <li><strong>#23 catalog trade-offs</strong>: price sorts fall back to Newest; search is Name-contains.</li>
           <li><strong>#24 server-only and inline rules</strong>: SKU uniqueness stays server-only (it needs the DB); the Profile-form password fields stay inline by design, in both consumers.</li>
+          <li><strong>#24 full FluentValidation parity on the client: not adopted.</strong> All four create forms (<code>CategoryCreate</code>, <code>ProductCreate</code>, <code>CustomerCreate</code>, <code>InventoryItemCreate</code>) source their field rules from a DataAnnotations form model through Common&#39;s <code>ModelValidation</code> bridge, and the existing per-field parity is kept: email format (mirroring <code>CustomerEmailRules</code>&#39; algorithm) on CustomerCreate and CustomerDetail, and NewPassword min-length/128-cap plus confirm-match on the Profile change-password form (localized en + es keys). Full parity would duplicate the server rule set, so it caps section 24 at Implementation 8.</li>
           <li><strong>#19 silent cart initialization</strong>: <code>CartStateService.InitializeAsync</code> loads the cart without raising <code>OnChange</code>; initialization is silent and only user-visible mutations notify (pinned intended behavior).</li>
           <li><strong><code>OrderDetail</code> without <code>[Authorize]</code></strong>: a recorded deliberate choice from the E2E gap review.</li>
           </ul>
@@ -565,7 +527,7 @@
           <td>#7</td>
           <td>Database-per-service</td>
           <td>M4 / I8</td>
-          <td><code>Store_Catalog</code>/<code>Store_Sales</code>/<code>Store_Identity</code>, each with its own outbox (<code>infra/main.bicep:943-967</code>); the legacy <code>MMCAStore</code> DB is archived to a bacpac and absent from IaC (<code>:927-934</code>)</td>
+          <td><code>Store_Catalog</code>/<code>Store_Sales</code>/<code>Store_Identity</code>, each with its own outbox (<code>infra/main.bicep:966-999</code>); the legacy <code>MMCAStore</code> DB is archived to a bacpac and absent from IaC (<code>:954-966</code>)</td>
           </tr>
           <tr>
           <td>#8</td>
@@ -584,6 +546,12 @@
           <td>API &amp; Contract Design</td>
           <td>M4 / I9</td>
           <td>v2 <code>ServiceInfoController</code> (<code>ServiceInfoController.cs:19</code>) + seven contract-guard files in the required <code>integration-tests</code> check; <code>ProtoContractTests.cs:9</code></td>
+          </tr>
+          <tr>
+          <td>#11</td>
+          <td>Customers gRPC edge requires a user or service token</td>
+          <td>M4 / I7</td>
+          <td><code>.RequireAuthorization(ServiceTokenDefaults.InternalCallerPolicy)</code> at <code>Identity.Service/Program.cs:343</code> (scheme <code>:173</code>), Sales <code>AddServiceTokenClient</code> at <code>Sales.Service/Program.cs:289</code>, Key Vault secret <code>Grpc--ServiceToken--SigningKey</code> at <code>infra/main.bicep:1366-1369</code>, deploy fail-fast on a missing <code>GRPC_SERVICE_TOKEN_SIGNING_KEY</code> (<code>deploy.yml:1226-1230</code>), pinned by <code>CustomersGrpcAuthorizationTests.cs:40</code></td>
           </tr>
           <tr>
           <td>#11</td>
@@ -754,6 +722,12 @@
           <td>32 scans (<code>AccessibilityTests.cs:30-623</code>) in the deploy-gating chromium <code>e2e-gate</code></td>
           </tr>
           <tr>
+          <td>#21</td>
+          <td>Cart-drawer keyboard gate</td>
+          <td>M3 / I8</td>
+          <td><code>CartDrawerKeyboardTests.cs:21</code> on the shared <code>KeyboardOperabilityTestsBase</code>: skip link and focus indicators on home and catalog, drawer open/trap/Escape contract</td>
+          </tr>
+          <tr>
           <td>#22</td>
           <td>Cross-browser freshness gate</td>
           <td>M4 / I8</td>
@@ -820,6 +794,12 @@
           <td>ISO-week rotation across <code>Store_Catalog</code>/<code>Store_Sales</code>/<code>Store_Identity</code> (<code>MMCAStore</code> by dispatch only), 60-min timeout, <code>skip_freshness_gates</code> break-glass with mandatory justification on the three freshness gates; each live DB dispatch-drilled PASS (3.6 / 2.1 / 1.3 min)</td>
           </tr>
           <tr>
+          <td>#30</td>
+          <td>Personal-data inventory with lawful basis</td>
+          <td>M4 / I8</td>
+          <td><code>PRIVACY.md:121-125</code> (section 12: purpose, lawful basis and retention per <code>[Pii]</code> member), checked by <code>Privacy/PiiInventoryTests.cs:13</code> in the architecture tier</td>
+          </tr>
+          <tr>
           <td>#31</td>
           <td>Cost-guard deploy gate</td>
           <td>M4 / I8</td>
@@ -853,7 +833,7 @@
           <td>#34</td>
           <td>Architecture Governance &amp; Docs</td>
           <td>M4 / I9</td>
-          <td>53 fitness-test classes under <code>Tests/Architecture/MMCA.Store.Architecture.Tests/</code> (55 <code>.cs</code> files with the map and <code>GlobalUsings.cs</code>); framework-wide fitness figures at <code>MMCA.Common/FACTS.md:51</code>; the single per-repo ledger</td>
+          <td>62 fitness-test classes under <code>Tests/Architecture/MMCA.Store.Architecture.Tests/</code> (64 <code>.cs</code> files with the map and <code>GlobalUsings.cs</code>), including <code>Governance/SubstitutabilityTests.cs:14</code> and <code>Privacy/PiiInventoryTests.cs:13</code>; framework-wide fitness figures at <code>MMCA.Common/FACTS.md:51</code>; the single per-repo ledger</td>
           </tr>
           <tr>
           <td>-</td>
