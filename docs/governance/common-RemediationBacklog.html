@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>MMCA.Common: Architecture Remediation Backlog · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Derived from the scorecard: Maturity 96.6% (317/328) and Implementation 86.0% (705/820), framework v1.233.0, evidence as of 2026-10-07. Tasks are…">
+  <meta name="description" content="Derived from the scorecard: Maturity 96.6% (317/328) and Implementation 85.7% (703/820), framework v1.244.0, evidence as of 2026-10-18. Tasks are…">
   <link rel="canonical" href="https://ivanball.github.io/docs/governance/common-RemediationBacklog.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="MMCA.Common: Architecture Remediation Backlog">
-  <meta property="og:description" content="Derived from the scorecard: Maturity 96.6% (317/328) and Implementation 86.0% (705/820), framework v1.233.0, evidence as of 2026-10-07. Tasks are…">
+  <meta property="og:description" content="Derived from the scorecard: Maturity 96.6% (317/328) and Implementation 85.7% (703/820), framework v1.244.0, evidence as of 2026-10-18. Tasks are…">
   <meta property="og:url" content="https://ivanball.github.io/docs/governance/common-RemediationBacklog.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="MMCA.Common: Architecture Remediation Backlog">
-  <meta name="twitter:description" content="Derived from the scorecard: Maturity 96.6% (317/328) and Implementation 86.0% (705/820), framework v1.233.0, evidence as of 2026-10-07. Tasks are…">
+  <meta name="twitter:description" content="Derived from the scorecard: Maturity 96.6% (317/328) and Implementation 85.7% (703/820), framework v1.244.0, evidence as of 2026-10-18. Tasks are…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Governance","item":"https://ivanball.github.io/docs/governance/index.html"},{"@type":"ListItem","position":4,"name":"Common · MMCA.Common: Architecture Remediation Backlog","item":"https://ivanball.github.io/docs/governance/common-RemediationBacklog.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
@@ -114,7 +114,7 @@
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Architecture governance</p>
           <h1 id="mmcacommon-architecture-remediation-backlog">MMCA.Common: Architecture Remediation Backlog</h1>
-          <p>Derived from the <a href="common-ArchitectureScorecard.html">scorecard</a>: Maturity <strong>96.6%</strong> (317/328) and Implementation <strong>86.0%</strong> (705/820), framework v1.233.0, evidence as of 2026-10-07. Tasks are ranked on both scorecard axes, one band per axis. The <strong>maturity band</strong> holds every category with maturity &lt; 4, ranked by <strong>priority = (4 − maturity) × weight</strong>; the <strong>implementation band</strong> holds every category with implementation &lt;= 8, ranked by **implPriority = max(0, 9 − implementation) × weight** (target 9: a 10 is awardable at re-score time, but it is recognition, not scheduled work). Ties break by weight descending, then category number. A category reaches the Resolved table only at maturity 4 AND implementation &gt;= 9. The maturity band holds <strong>4 categories, 11 gap points</strong>; the implementation band holds <strong>15 categories, 33 gap points</strong>. Levers are cited only where this ledger or the scorecard records one; an unnamed lever is named at the next re-score, never invented here.</p>
+          <p>Derived from the <a href="common-ArchitectureScorecard.html">scorecard</a>: Maturity <strong>96.6%</strong> (317/328) and Implementation <strong>85.7%</strong> (703/820), framework v1.244.0, evidence as of 2026-10-18. Tasks are ranked on both scorecard axes, one band per axis. The <strong>maturity band</strong> holds every category with maturity &lt; 4, ranked by <strong>priority = (4 − maturity) × weight</strong>; the <strong>implementation band</strong> holds every category with implementation &lt;= 8, ranked by **implPriority = max(0, 9 − implementation) × weight** (target 9: a 10 is awardable at re-score time, but it is recognition, not scheduled work). Ties break by weight descending, then category number. A category reaches the Resolved table only at maturity 4 AND implementation &gt;= 9. The maturity band holds <strong>4 categories, 11 gap points</strong>; the implementation band holds <strong>16 categories, 35 gap points</strong>. Levers are cited only where this ledger or the scorecard records one; an unnamed lever is named at the next re-score, never invented here.</p>
           <h2 id="open-work-at-a-glance">Open work at a glance</h2>
           <div class="table-wrap"><table>
           <thead>
@@ -141,7 +141,7 @@
           <td>SOLID Principles</td>
           <td>3 / 8</td>
           <td>Maturity + Implementation</td>
-          <td>Lever not yet named; ISP, LSP and OCP have no automated gate and S107/S1200 sit at severity suggestion</td>
+          <td>Lever not yet named; OCP, ISP and the type-sniffing half of LSP have no automated gate, and S107/S1200 sit at severity suggestion</td>
           </tr>
           <tr>
           <td>3 (I)</td>
@@ -157,7 +157,7 @@
           <td>Security</td>
           <td>4 / 8</td>
           <td>Implementation</td>
-          <td>Authenticate the broker origin headers, give in-cluster gRPC a service identity, default tenant resolution to claim-only; the written threat model stays an accepted, unscheduled gap</td>
+          <td>Make the in-cluster service identity per-service or transport-level (today an opt-in HS256 token over one shared key, unadopted by ADC); signing the broker origin headers and the written threat model stay accepted, unscheduled gaps</td>
           </tr>
           <tr>
           <td>3 (I)</td>
@@ -173,7 +173,7 @@
           <td>DevOps &amp; Deployment</td>
           <td>3 / 8</td>
           <td>Maturity + Implementation</td>
-          <td>Smoke-deploy the <code>samples/deployment</code> sample; the Bicep job is compile-only and not a required context</td>
+          <td>None scheduled in-repo: the Bicep job is compile-only and not a required context, and a scheduled Azure smoke deploy is accepted, not adopted</td>
           </tr>
           <tr>
           <td>2 (M), 2 (I)</td>
@@ -197,7 +197,7 @@
           <td>Performance &amp; Scalability</td>
           <td>4 / 8</td>
           <td>Implementation</td>
-          <td>Lever not yet named; the load tier is scheduled-only, not a merge gate</td>
+          <td>Lever not yet named; the load tier stays scheduled, not a merge gate (accepted)</td>
           </tr>
           <tr>
           <td>2 (I)</td>
@@ -213,7 +213,7 @@
           <td>Design System &amp; UI Consistency</td>
           <td>4 / 8</td>
           <td>Implementation</td>
-          <td>Source the brand hex from one token</td>
+          <td>Lever not yet named; the 42 <code>!important</code> overrides are kept by decision</td>
           </tr>
           <tr>
           <td>2 (I)</td>
@@ -221,7 +221,15 @@
           <td>Front-End Performance</td>
           <td>4 / 8</td>
           <td>Implementation</td>
-          <td>Make the consumers&#39; <code>wasm-payload-budget</code> job a required check, and run it in Common&#39;s <code>ci.yml</code></td>
+          <td>Make the consumers&#39; <code>wasm-payload-budget</code> job a required check</td>
+          </tr>
+          <tr>
+          <td>2 (I)</td>
+          <td>#24</td>
+          <td>Forms, Validation &amp; UX Safety</td>
+          <td>4 / 8</td>
+          <td>Implementation</td>
+          <td>Have <code>ChangePasswordCard</code> call the shared <code>PasswordComplexity</code> rule and default <code>MaxLength</code> to the server cap (deferred to the next Common release)</td>
           </tr>
           <tr>
           <td>2 (I)</td>
@@ -245,15 +253,15 @@
           <td>Internationalization (i18n)</td>
           <td>4 / 8</td>
           <td>Implementation</td>
-          <td>Error-code coverage for <code>es</code>, localized default emails</td>
+          <td>Lever not yet named</td>
           </tr>
           </tbody></table></div>
           <h2 id="open-items">Open items</h2>
           <h3 id="1--solid-principles">[ ] #1 · SOLID Principles</h3>
           <ul>
-          <li><em>Gap (maturity):</em> SRP and DIP are enforced automatically: a ratcheted constructor-dependency ceiling is subclassed in Common (<code>Tests/Architecture/MMCA.Common.Architecture.Tests/Cqrs/ConstructorDependencies/FrameworkConstructorDependencyTests.cs:25</code>; services 7 at <code>:33</code>, controllers 5 at <code>:37</code>, handlers 7 at <code>:40</code>), beside the compile-time layer targets and the NetArchTest layer, purity and clock-read subclasses. ISP, LSP and OCP have no automated gate, and S107 and S1200 sit at severity suggestion (<code>.editorconfig:478,492</code>).</li>
-          <li><em>Gap (implementation):</em> LSP, OCP and ISP have no explicit gate, and <code>NotSupportedException</code> appears in 20 source files (mostly MAUI capability classes). The <code>InternalCommandDeadLetter</code> 8-field record is excluded from the ceiling by design (<code>FrameworkConstructorDependencyTests.cs:57-68</code>).</li>
-          <li><em>Lever (maturity):</em> not yet identified.</li>
+          <li><em>Gap (maturity):</em> SRP, DIP and the throw half of LSP are enforced automatically: a ratcheted constructor-dependency ceiling is subclassed in Common (<code>Tests/Architecture/MMCA.Common.Architecture.Tests/Cqrs/ConstructorDependencies/FrameworkConstructorDependencyTests.cs:25</code>; services 7 at <code>:33</code>, controllers 5 at <code>:37</code>, handlers 7 at <code>:40</code>), beside the compile-time layer targets and the NetArchTest layer, purity and clock-read subclasses, and <code>SubstitutabilityTestsBase</code> (<code>Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/SubstitutabilityTestsBase.cs:34</code>) is subclassed with no exclusions at <code>Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/Substitutability/CommonSubstitutabilityTests.cs:10</code>. OCP and ISP have no automated gate, the type-sniffing half of LSP is ungated (<code>ChildEntityHandlerBase.cs:139</code>, <code>IdentityModuleDbSeederBase.cs:162</code>), and S107 and S1200 sit at severity suggestion (<code>.editorconfig:478,492</code>).</li>
+          <li><em>Gap (implementation):</em> <code>NotSupportedException</code> appears in 19 Source files, and the MAUI capability files catch <code>FeatureNotSupportedException</code> rather than throw; <code>MMCA.Common.UI.Maui</code> sits outside <code>CommonArchitectureMap</code> (<code>CommonArchitectureMap.cs:9</code>), so the LSP gate does not scan it. <code>ApplicationDbContext</code> resolves about 13 collaborators through an injected <code>IServiceProvider</code> (<code>ApplicationDbContext.cs:48</code>), out of sight of the SRP ceiling. The <code>InternalCommandDeadLetter</code> 8-field record is excluded from the ceiling by design (<code>FrameworkConstructorDependencyTests.cs:57-68</code>).</li>
+          <li><em>Lever (maturity):</em> not yet identified (an ISP member-count ceiling is recorded under <em>Deliberate and accepted</em>, not scheduled).</li>
           <li><em>Lever (implementation):</em> not yet identified.</li>
           </ul>
           <h3 id="4--domain-driven-design">[ ] #4 · Domain-Driven Design</h3>
@@ -261,16 +269,16 @@
           <li><em>Gap:</em> strategic DDD (bounded contexts, ubiquitous language) is realized downstream: the Domain layer holds one aggregate family (Notifications) plus auth support types. The tenant identifier is a plain string by deliberate decision rather than a strong type; ADR-073 records the tenancy model, and <code>Tests/Architecture/MMCA.Common.Architecture.Tests/Domain/EntityModel/TenantEntityConventionTests.cs:20</code> gates the <code>TenantId</code> marker. Common subclasses <code>EntityConventionTestsBase</code> and <code>ImmutabilityTestsBase</code> (<code>Domain/EntityModel/EntityConventionTests.cs:12</code>, <code>ImmutabilityTests.cs:11</code>).</li>
           <li><em>Lever:</em> not yet identified.</li>
           </ul>
-          <h3 id="11--security">[ ] #11 · Security</h3>
+          <h3 id="11--security">[~] #11 · Security</h3>
           <ul>
-          <li><em>Gap:</em> authorization is RBAC with capability indirection plus the opt-in, claim-trusting <code>OwnerOrAdminFilter</code> (<code>Source/Presentation/MMCA.Common.API/DependencyInjection.cs:85</code>) rather than a resource/attribute policy engine; the ADR-037 <code>EncryptedStringConverter</code> is unadopted in Source; and the written threat model the rubric requires is absent repo-wide (an unmet criterion that counts against the score, recorded as not scheduled work under <em>Deliberate and accepted</em>).</li>
-          <li><input disabled="" type="checkbox"> <strong>Close three internal trust gaps.</strong><ul>
-          <li>(a) the broker consumer restores user id, roles and tenant from unsigned <code>MMCA-*</code> headers (<code>Source/Core/MMCA.Common.Infrastructure/Messaging/Consumers/ConsumerOriginRestore.cs:50</code>; roles as plain text at <code>Source/Core/MMCA.Common.Shared/Messaging/MessageHeaders.cs:31</code>), so any party able to publish to the broker can assert roles: sign or otherwise authenticate the origin headers;</li>
-          <li>(b) in-cluster gRPC forwards the user JWT over deliberate cleartext h2c (<code>Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:55,95</code>) with no transport-level service identity: add one;</li>
-          <li>(c) the default tenant resolution order is <code>[Claim, Header]</code> (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettings.cs:56</code>), so <code>X-Tenant-Id</code> (<code>Source/Presentation/MMCA.Common.API/Middleware/TenantResolutionMiddleware.cs:112</code>) picks the tenant when a token has no tenant claim: default to claim-only, and add a tenant fitness base to <code>MMCA.Common.Testing.Architecture</code>.</li>
+          <li><em>Gap:</em> authorization is RBAC with capability indirection plus the opt-in, claim-trusting <code>OwnerOrAdminFilter</code> (<code>Source/Presentation/MMCA.Common.API/DependencyInjection.cs:85</code>) rather than a resource/attribute policy engine; the ADR-037 <code>EncryptedStringConverter</code> is unadopted in Source; the workflows carry no CodeQL or secret-scanning step; and the written threat model the rubric requires is absent repo-wide (an unmet criterion that counts against the score, recorded as not scheduled work under <em>Deliberate and accepted</em>).</li>
+          <li>[~] <strong>Close the internal trust gaps.</strong><ul>
+          <li>[accepted] (a) the broker consumer restores user id, roles and tenant from unsigned <code>MMCA-*</code> headers (<code>Source/Core/MMCA.Common.Infrastructure/Messaging/Consumers/ConsumerOriginRestore.cs:44,53</code>; roles as plain text at <code>Source/Core/MMCA.Common.Shared/Messaging/MessageHeaders.cs:31</code>; zero HMAC or signature matches under <code>Messaging</code>), so any party able to publish to the broker can assert roles. Signing the headers is recorded under <em>Deliberate and accepted</em>, not scheduled;</li>
+          <li>[~] (b) in-cluster gRPC forwards the user JWT over deliberate cleartext h2c (<code>Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:97-99</code>). An opt-in app-layer service token ships (<code>Source/Presentation/MMCA.Common.Grpc/Authentication/ServiceTokenServiceCollectionExtensions.cs:35,63,85,144</code>, attached per client by <code>ServiceTokenHttpClientBuilderExtensions.cs:28</code>), but it is HS256 over one key shared by every service (<code>ServiceTokenSettings.cs:13,30</code>), so any service can mint any service name, the transport stays cleartext, and only Store adopts it (zero matches in <code>MMCA.ADC/Source</code>): make the identity per-service or transport-level;</li>
+          <li><input checked="" disabled="" type="checkbox"> (c) tenant resolution defaults to claim-only (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettings.cs:61-62</code>, header opt-in documented at <code>:18-19</code>), with a tenant conformance base in <code>MMCA.Common.Testing</code> (<code>Source/Hosting/MMCA.Common.Testing/Conformance/TenantResolutionTestsBase.cs:27</code>, subclassed at <code>Tests/Hosting/MMCA.Common.Testing.Tests/Conformance/TenantResolutionConformanceTests.cs:11</code>).</li>
           </ul>
           </li>
-          <li><em>Lever:</em> the three trust gaps above; a future re-score must not mint a sub-item for the threat model.</li>
+          <li><em>Lever:</em> item (b) above; a future re-score must not mint a sub-item for the threat model or for signing the broker headers.</li>
           </ul>
           <h3 id="29--resilience--business-continuity">[ ] #29 · Resilience &amp; Business Continuity</h3>
           <ul>
@@ -279,59 +287,60 @@
           </ul>
           <h3 id="17--devops--deployment">[ ] #17 · DevOps &amp; Deployment</h3>
           <ul>
-          <li><em>Gap (both bands):</em> the <code>sample-deployment-validate</code> job is a compile check (<code>az bicep build</code> at <code>ci.yml:778</code> and <code>:782</code>, job at <code>ci.yml:766</code>) and is not among the 8 required contexts, and a library cannot deploy itself, so real CD-to-Azure lives in consumers.</li>
-          <li><em>Lever:</em> a smoke-deploy of the <code>samples/deployment</code> sample, which moves the category from referenced toward proven.</li>
+          <li><em>Gap (both bands):</em> the <code>sample-deployment-validate</code> job is a compile check (<code>az bicep build</code> at <code>ci.yml:719</code> and <code>:723</code>, job at <code>ci.yml:707</code>) and is not among the 8 required contexts, nor is package-consumption; a release has no rollback beyond the irreversible nuget.org versions; and a library cannot deploy itself, so real CD-to-Azure lives in consumers.</li>
+          <li><em>Lever:</em> none scheduled in-repo. A scheduled Azure smoke deploy of <code>samples/deployment</code> is recorded under <em>Deliberate and accepted</em>.</li>
           </ul>
           <h3 id="30--compliance-privacy--governance">[ ] #30 · Compliance, Privacy &amp; Governance</h3>
           <ul>
-          <li><em>Gap (both bands):</em> the in-repo mechanism is complete (erasure extension point, <code>PiiRedactor</code>, a fitness-gated erasure contract, DSAR export, audit trail with retention purge, <code>PRIVACY.md</code>, a fail-closed CSV export at <code>Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:231,272</code>, and a non-vacuous PII marking rule at <code>Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/PiiConventionTests.cs:10-14</code>), but the audit-trail and export surfaces are opt-in, <code>DataResidencyTestsBase</code> has only a self-test probe subclass (<code>Governance/DataResidencyTestsBaseTests.cs:24</code>), and consent/lawful basis is absent (zero matches in Domain, Application and Infrastructure).</li>
+          <li><em>Gap (both bands):</em> the in-repo mechanism is complete (erasure extension point, <code>PiiRedactor</code>, a fitness-gated erasure contract, DSAR export, audit trail with retention purge, <code>PRIVACY.md</code>, a fail-closed CSV export at <code>Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:231,272</code>, and a non-vacuous PII marking rule at <code>Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/PiiConventionTests.cs:10-14</code>), but the audit-trail and export surfaces are opt-in, <code>DataResidencyTestsBase</code> has only a self-test probe subclass (<code>Governance/DataResidencyTestsBaseTests.cs:24</code>), the lawful-basis inventory gate <code>PiiInventoryTestsBase</code> (<code>Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Privacy/PiiInventoryTestsBase.cs:33</code>) has only a self-test subclass (<code>Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/Privacy/PiiInventoryTestsBaseTests.cs:14</code>), and consent/lawful basis is absent (zero matches in Domain, Application and Infrastructure; <code>PRIVACY.md:20</code> states the framework records neither).</li>
           <li><em>Lever:</em> not yet identified; further maturity movement needs the consumer apps to carry the consent, lawful-basis and residency process that the framework&#39;s <code>[Pii]</code>/<code>IAnonymizable</code> extension points feed (ADR-005).</li>
           </ul>
           <h3 id="5--vertical-slice-architecture">[ ] #5 · Vertical Slice Architecture</h3>
           <ul>
           <li><em>Gap:</em> Common is an SDK with no business use-case slices of its own, so slice cohesion is proven in the consumer repos, and handler bases that implement <code>ICommandHandler</code>/<code>IQueryHandler</code> over a generic parameter stay exempt from the slice rule by design (<code>Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Cqrs/ArchitectureRules.Slices.cs:31</code>).</li>
-          <li><em>Lever:</em> not yet identified.</li>
+          <li><em>Lever:</em> not yet identified (a slice rule with a frozen allowlist is recorded under <em>Deliberate and accepted</em>, not scheduled).</li>
           </ul>
           <h3 id="12--performance--scalability">[ ] #12 · Performance &amp; Scalability</h3>
           <ul>
           <li><em>Gap:</em> the rubric&#39;s load/stress-at-realistic-volumes criterion is met in part: the load tier (<code>Tests/Performance/MMCA.Common.LoadTests</code>, <code>OutboxThroughputLoadTests.cs</code> and <code>PagedQueryLoadTests.cs</code>) runs weekly or on dispatch only, on SQLite, and is not a merge gate (<code>.github/workflows/load-tests.yml:16</code>, cron <code>17 4 * * 0</code>), and Common carries no capacity-provisioning evidence. The opt-in <code>MessageBus:PrefetchCount</code> / <code>ConcurrentMessageLimit</code> backpressure knobs (<code>Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:222,232</code>) cover the backpressure half.</li>
-          <li><em>Lever:</em> not yet identified.</li>
+          <li><em>Lever:</em> not yet identified (a load tier on every pull request is recorded under <em>Deliberate and accepted</em>, not scheduled).</li>
           </ul>
           <h3 id="13--observability--operability">[ ] #13 · Observability &amp; Operability</h3>
           <ul>
-          <li><em>Gap:</em> alerts, dashboards and runbooks are provisioned and used only by deployers. The sample&#39;s SLO alerts, runbook and workbook (<code>samples/deployment/main.bicep:338</code>) are compile-only in CI, and the shipped <code>ObservabilityConventionTestsBase</code> defaults its workbook requirement to false (<code>Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/ObservabilityConventionTestsBase.cs:58</code>).</li>
+          <li><em>Gap:</em> alerts, dashboards and runbooks are provisioned and used only by deployers. The sample&#39;s SLO alerts, runbook and workbook (<code>samples/deployment/main.bicep:338</code>) are compile-only in CI; the shipped <code>ObservabilityConventionTestsBase</code> requires a workbook by default (<code>Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/ObservabilityConventionTestsBase.cs:60</code>).</li>
           <li><em>Lever:</em> not yet identified.</li>
           </ul>
           <h3 id="20--design-system--ui-consistency">[ ] #20 · Design System &amp; UI Consistency</h3>
           <ul>
-          <li><input disabled="" type="checkbox"> <strong>Source the brand hex from one token.</strong> <code>#1565C0</code> is defined in both <code>Source/Presentation/MMCA.Common.UI/Theme/BrandColors.cs:13</code> and <code>wwwroot/app.css:63</code>, and restated raw at <code>Layout/ReconnectModal.razor.css:99</code>, outside the token drift guard. Common&#39;s razor files carry 0 inline style declarations, enforced by <code>InlineStyleTests</code> (<code>Tests/Architecture/MMCA.Common.Architecture.Tests/Ui/ComponentConventions/InlineStyleTests.cs:12</code>) over the shared <code>InlineStyleTestsBase</code> (<code>Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Ui/InlineStyleTestsBase.cs</code>).</li>
-          <li><em>Gap beyond the lever:</em> the shared layout scoped CSS carries 42 <code>!important</code> overrides (28 in <code>Layout/NavMenu.razor.css:160-311</code>, 14 in <code>Layout/MainLayout.razor.css</code>) with raw nav colors, and a badge override block duplicated between <code>Layout/MainLayout.razor.css:76</code> and <code>NavMenu.razor.css:274-292</code>.</li>
+          <li><em>Gap:</em> the shared layout scoped CSS carries 42 <code>!important</code> overrides (28 in <code>Layout/NavMenu.razor.css</code>, 14 in <code>Layout/MainLayout.razor.css</code>) with raw nav colors, and a badge override block duplicated between <code>Layout/MainLayout.razor.css:76</code> and <code>NavMenu.razor.css:274-292</code>; removing the overrides is recorded under <em>Deliberate and accepted</em>. The brand hex is defined in C# and CSS (<code>Source/Presentation/MMCA.Common.UI/Theme/BrandColors.cs:13</code>, <code>wwwroot/app.css:63</code>), mirrored by <code>Tests/Presentation/MMCA.Common.UI.Tests/Theme/BrandColorTokenTests.cs:35-38</code> rather than sourced from one token.</li>
+          <li><em>Lever:</em> not yet identified.</li>
           </ul>
           <h3 id="23--front-end-performance">[ ] #23 · Front-End Performance</h3>
           <ul>
-          <li><input disabled="" type="checkbox"> <strong>Make the WASM payload budget a merge gate.</strong> The composite action ships in Common (<code>.github/actions/wasm-payload-budget/action.yml</code>) and both consumers run it on pull requests (<code>MMCA.ADC/.github/workflows/deploy.yml:464-485</code>, budget 5,900 KB; <code>MMCA.Store/.github/workflows/deploy.yml:493-514</code>, budget 5,700 KB), but in neither is it a required check (the required contexts are build-and-test, supply-chain, integration-tests and coverage), and Common&#39;s own <code>ci.yml</code> does not run it. The web-vitals budgets sit at the good-band values (LCP 2500, FCP 1800, TTFB 800, CLS 0.1, INP 200; <code>Tests/Presentation/MMCA.Common.UI.E2E.Tests/WebVitals/WebVitalsE2ETests.cs:19-23</code>) on all three required engines.<ul>
+          <li><input disabled="" type="checkbox"> <strong>Make the WASM payload budget a merge gate in the consumers.</strong> The composite action ships in Common (<code>.github/actions/wasm-payload-budget/action.yml</code>) and both consumers run it on pull requests (<code>MMCA.ADC/.github/workflows/deploy.yml:476-497</code>, budget 5,900 KB at <code>:497</code>; <code>MMCA.Store/.github/workflows/deploy.yml:493-514</code>, budget 5,700 KB), but in neither is it a required check (the required contexts are build-and-test, supply-chain, integration-tests and coverage). Running it in Common&#39;s own <code>ci.yml</code> is not applicable (see <em>Deliberate and accepted</em>). The web-vitals budgets sit at the good-band values (LCP 2500, FCP 1800, TTFB 800, CLS 0.1, INP 200; <code>Tests/Presentation/MMCA.Common.UI.E2E.Tests/WebVitals/WebVitalsE2ETests.cs:19-23</code>) on all three required engines. No component in Common UI overrides <code>ShouldRender</code>.<ul>
           <li><em>Evaluated and not adopted: route-level WASM lazy loading.</em> It needs a framework lazy-module registry, an <code>OnNavigateAsync</code> hook in Common&#39;s <code>Routes.razor</code> and deferred DI registration, and in ADC the landing module (Conference) and a layout-rendered module (Engagement) must load eagerly anyway, so little would be deferred. The payload-budget action is the #23 lever instead. Revisit when a consumer gains a large module that is neither the landing route nor rendered by the layout.</li>
           </ul>
           </li>
           </ul>
+          <h3 id="24--forms-validation--ux-safety">[ ] #24 · Forms, Validation &amp; UX Safety</h3>
+          <ul>
+          <li><input disabled="" type="checkbox"> <strong>Bring the shared change-password card to client/server parity.</strong> <code>ChangePasswordCard</code> checks only <code>Length &gt;= MinLength</code> on the client (<code>Source/Presentation/MMCA.Common.UI/Components/Auth/ChangePasswordCard.razor.cs:88-91</code>) and leaves <code>MaxLength</code> unbounded by default (<code>:45</code>), while the server applies <code>StrongPasswordRules</code> (complexity plus a 128-character cap, <code>Source/Core/MMCA.Common.Application/Validation/CommonValidationRules.cs:191,197</code>) to change-password (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/Validation/ChangePasswordRequestValidator.cs:18</code>). A password the server refuses passes the form, and the refusal surfaces as a toast (<code>ChangePasswordCard.razor.cs:130</code>) rather than a field message. Have <code>ValidateNewPassword</code> call the shared <code>PasswordComplexity</code> rule (<code>Source/Core/MMCA.Common.Shared/Auth/PasswordComplexity.cs:52</code>) and default <code>MaxLength</code> to the server cap, so the client rejects what the server rejects with a field-level message. Deferred to the next Common release, not scheduled now.</li>
+          <li><em>Gap beyond the lever:</em> server FluentValidation messages are English literals (<code>Source/Core/MMCA.Common.Application/Auth/Validation/LoginRequestValidator.cs:16</code>), Register has no unsaved-changes guard, the shipped forms gate matches string markers, and forgiving input (masks, undo) is thin.</li>
+          </ul>
           <h3 id="33--developer-experience--inner-loop">[ ] #33 · Developer Experience &amp; Inner Loop</h3>
           <ul>
-          <li><em>Gap:</em> the criteria are met with several small, documented gaps: source mode binds a consumer to Common&#39;s last-built Debug reference assembly and needs a manual rebuild (<code>MMCA.Common/CONTRIBUTING.md:150</code>), contributors are told to expect CI-only analyzer and restore round-trips (<code>CONTRIBUTING.md:167</code>), the AppHost stalls when launched headless and its test tier is advisory (<code>.github/workflows/ci.yml:905</code>), and the agent guardrail hooks live in the workspace harness rather than in Common (Common&#39;s <code>.claude/settings.local.json</code> configures no hooks).</li>
+          <li><em>Gap:</em> the criteria are met with several small, documented gaps: source mode binds a consumer to Common&#39;s last-built Debug reference assembly and needs a manual rebuild (<code>MMCA.Common/CONTRIBUTING.md:150</code>), contributors are told to expect CI-only analyzer and restore round-trips (<code>CONTRIBUTING.md:167</code>), the AppHost stalls when launched headless and its test tier fails the run but is not a required check (<code>.github/workflows/ci.yml:851-852</code>), package-consumption is not a required check either, and the agent guardrail hooks live in the workspace harness rather than in Common (Common&#39;s <code>.claude/settings.local.json</code> is an allow-list with stale entries and configures no hooks).</li>
           <li><em>Lever:</em> not yet identified.</li>
           </ul>
           <h3 id="34--architecture-governance--documentation">[ ] #34 · Architecture Governance &amp; Documentation</h3>
           <ul>
-          <li><em>Gap:</em> governance prose defers to the generated <code>FACTS.md</code> for version, package count and fitness counts (<code>FACTS.md:4,14,19,51,54</code>) and to the ADR index for the ADR range (<code>Website/docs-src/adr/README.md:6</code>); an ADR template ships at <code>Website/docs-src/adr/_template.md</code>, and the workspace architecture map marks its body figures historical and points at <code>FACTS.md</code> (<code>Docs/Architecture/ArchitecturalAnalysis.md:3</code>). No residual is recorded against the criteria.</li>
+          <li><em>Gap:</em> governance prose defers to the generated <code>FACTS.md</code> for version, package count and fitness counts (<code>FACTS.md:4,14,19,81,84</code>) and to the ADR index for the ADR range (<code>Website/docs-src/adr/README.md:6</code>); an ADR template ships at <code>Website/docs-src/adr/_template.md</code>, and the workspace architecture map marks its body figures historical and points at <code>FACTS.md</code> (<code>Docs/Architecture/ArchitecturalAnalysis.md:3</code>). Some ADR index rows have grown into long revision logs, and Common carries no dedicated change-coupling or tech-debt-ledger gate of its own.</li>
           <li><em>Lever:</em> not yet identified.</li>
           </ul>
           <h3 id="27--internationalization-i18n">[ ] #27 · Internationalization (i18n)</h3>
           <ul>
-          <li><input disabled="" type="checkbox"> <strong>Close the remaining localization gaps:</strong><ul>
-          <li><input checked="" disabled="" type="checkbox"> (a) UTC instants render in the viewer&#39;s time zone through <code>ViewerTimeZone</code> (<code>Source/Presentation/MMCA.Common.UI/Services/Culture/ViewerTimeZone.cs:18</code>, <code>Format</code> at <code>:113</code>, registered at <code>MMCA.Common.UI/DependencyInjection.cs:190</code>), used at <code>Pages/Notifications/NotificationInbox.razor:58</code>, <code>NotificationList.razor:80</code> and <code>Pages/Auth/Sessions.razor.cs:255</code>;</li>
-          <li><input disabled="" type="checkbox"> (b) cover the framework&#39;s emitted error codes for <code>es</code>: <code>ErrorResources.resx</code> and <code>ErrorResources.es.resx</code> hold 15 codes each, so <code>Auth.InvalidCredentials</code> (<code>Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:158,165</code>) falls back to English in <code>Source/Presentation/MMCA.Common.API/Localization/ErrorLocalizer.cs:32</code> and reaches Spanish users through <code>Login.razor:246</code>; <code>LocalizationResourceTests</code> checks key parity, not emitted-code coverage;</li>
-          <li><input disabled="" type="checkbox"> (c) localize the default transactional emails, which are English-only with a fixed plural (&quot;{minutes} minutes&quot;) at <code>Source/Core/MMCA.Common.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandlerBase.cs:133</code> and <code>Users/UseCases/EmailConfirmation/SendEmailConfirmationHandlerBase.cs:153</code> (English subject at <code>:134</code>).</li>
-          </ul>
-          </li>
+          <li><em>Gap:</em> breadth: two locales with zero RTL support under <code>Source/Presentation</code>, a two-category plural mechanism with the CLDR selector deferred (<code>Source/Presentation/MMCA.Common.UI/Globalization/StringLocalizerPluralExtensions.cs:14-18</code>), and the culture list hard-coded in the framework (<code>Source/Core/MMCA.Common.Shared/Globalization/SupportedCultures.cs:18</code>). Time zones, emitted error codes for <code>es</code> and the default emails are closed (see <em>Resolved</em>).</li>
+          <li><em>Lever:</em> not yet identified.</li>
           </ul>
           <h2 id="implementation-band">Implementation band</h2>
           <p>Every category at implementation &lt;= 8, ranked by implPriority = max(0, 9 − implementation) × weight. Four of these categories (#1, #17, #30, #31) also sit in the maturity band; this band records only their implementation half.</p>
@@ -352,7 +361,7 @@
           <td>SOLID Principles</td>
           <td>3</td>
           <td>8</td>
-          <td>not yet identified (the constructor ceiling is subclassed at <code>Tests/Architecture/MMCA.Common.Architecture.Tests/Cqrs/ConstructorDependencies/FrameworkConstructorDependencyTests.cs:25</code>; LSP, OCP and ISP have no explicit gate, and <code>NotSupportedException</code> appears in 20 uninspected source files, mostly MAUI capability classes) (#1 is also in the maturity band)</td>
+          <td>not yet identified (the constructor ceiling is subclassed at <code>Tests/Architecture/MMCA.Common.Architecture.Tests/Cqrs/ConstructorDependencies/FrameworkConstructorDependencyTests.cs:25</code> and the LSP throw half at <code>Governance/Substitutability/CommonSubstitutabilityTests.cs:10</code>; OCP, ISP and type-sniffing have no gate, and <code>ApplicationDbContext</code> resolves collaborators through <code>IServiceProvider</code>) (#1 is also in the maturity band)</td>
           </tr>
           <tr>
           <td>3</td>
@@ -368,7 +377,7 @@
           <td>Security</td>
           <td>3</td>
           <td>8</td>
-          <td>close three internal trust gaps (see <em>Open items</em>): unsigned broker origin headers (<code>Source/Core/MMCA.Common.Infrastructure/Messaging/Consumers/ConsumerOriginRestore.cs:50</code>), no service identity on in-cluster h2c gRPC (<code>Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:95</code>), header-fallback tenant resolution by default (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettings.cs:56</code>); the written threat model is absent repo-wide and recorded as not scheduled work, ownership is opt-in claim-trusting <code>OwnerOrAdminFilter</code> (<code>Source/Presentation/MMCA.Common.API/DependencyInjection.cs:85</code>) rather than ABAC, and the ADR-037 <code>EncryptedStringConverter</code> is unadopted in Source</td>
+          <td>per-service or transport-level service identity for in-cluster gRPC (see <em>Open items</em>): the shipped token is opt-in HS256 over one shared key (<code>Source/Presentation/MMCA.Common.Grpc/Authentication/ServiceTokenServiceCollectionExtensions.cs:35</code>, <code>ServiceTokenSettings.cs:13,30</code>) over cleartext h2c (<code>Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:97-99</code>), adopted by Store only; unsigned broker origin headers (<code>ConsumerOriginRestore.cs:53</code>) and the absent written threat model are accepted, not scheduled; ownership is opt-in claim-trusting <code>OwnerOrAdminFilter</code> (<code>Source/Presentation/MMCA.Common.API/DependencyInjection.cs:85</code>) rather than ABAC, and the ADR-037 <code>EncryptedStringConverter</code> is unadopted in Source</td>
           </tr>
           <tr>
           <td>3</td>
@@ -392,7 +401,7 @@
           <td>Performance &amp; Scalability</td>
           <td>2</td>
           <td>8</td>
-          <td>not yet identified (the load tier runs weekly or on dispatch only, on SQLite, and is not a merge gate, <code>.github/workflows/load-tests.yml:16</code>; the opt-in backpressure knobs at <code>Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:222,232</code> cover the backpressure half)</td>
+          <td>not yet identified (the load tier runs weekly or on dispatch only, on SQLite, and is not a merge gate by decision, <code>.github/workflows/load-tests.yml:16</code>; the opt-in backpressure knobs at <code>Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:222,232</code> cover the backpressure half)</td>
           </tr>
           <tr>
           <td>2</td>
@@ -408,7 +417,7 @@
           <td>DevOps &amp; Deployment</td>
           <td>2</td>
           <td>8</td>
-          <td>the Bicep job is a compile check and is not among the required contexts (the validate job at <code>ci.yml:766</code>, <code>az bicep build</code> at <code>:778</code> and <code>:782</code>); a smoke-deploy of the sample is the lever</td>
+          <td>none scheduled in-repo: the Bicep job is a compile check and is not among the required contexts (the validate job at <code>ci.yml:707</code>, <code>az bicep build</code> at <code>:719</code> and <code>:723</code>); a scheduled Azure smoke deploy is accepted, not adopted</td>
           </tr>
           <tr>
           <td>2</td>
@@ -416,7 +425,7 @@
           <td>Design System &amp; UI Consistency</td>
           <td>2</td>
           <td>8</td>
-          <td>source the brand hex from one token (<code>Theme/BrandColors.cs:13</code> vs <code>wwwroot/app.css:63</code>, raw <code>#1565C0</code> at <code>Layout/ReconnectModal.razor.css:99</code>)</td>
+          <td>not yet identified (42 <code>!important</code> overrides kept by decision, <code>Layout/NavMenu.razor.css</code> and <code>Layout/MainLayout.razor.css</code>; brand hex mirrored in C# and CSS, <code>Theme/BrandColors.cs:13</code> and <code>wwwroot/app.css:63</code>)</td>
           </tr>
           <tr>
           <td>2</td>
@@ -424,7 +433,15 @@
           <td>Front-End Performance</td>
           <td>2</td>
           <td>8</td>
-          <td>make the consumers&#39; <code>wasm-payload-budget</code> job a required check (PR-only today, <code>MMCA.ADC/.github/workflows/deploy.yml:464</code>, <code>MMCA.Store/.github/workflows/deploy.yml:493</code>) and run it in Common&#39;s <code>ci.yml</code>; route-level lazy loading is evaluated and not adopted</td>
+          <td>make the consumers&#39; <code>wasm-payload-budget</code> job a required check (PR-only today, <code>MMCA.ADC/.github/workflows/deploy.yml:476</code>, <code>MMCA.Store/.github/workflows/deploy.yml:493</code>); running it in Common&#39;s <code>ci.yml</code> is not applicable, and route-level lazy loading is evaluated and not adopted</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td>#24</td>
+          <td>Forms, Validation &amp; UX Safety</td>
+          <td>2</td>
+          <td>8</td>
+          <td>have <code>ChangePasswordCard</code> call the shared <code>PasswordComplexity</code> rule and default <code>MaxLength</code> to the server cap (<code>Source/Presentation/MMCA.Common.UI/Components/Auth/ChangePasswordCard.razor.cs:45,88-91</code>); deferred to the next Common release</td>
           </tr>
           <tr>
           <td>2</td>
@@ -440,7 +457,7 @@
           <td>Cost Efficiency / FinOps</td>
           <td>2</td>
           <td>8</td>
-          <td><strong>documented accepted cap, not scheduled work</strong> (see <em>Deliberate and accepted</em>); the default-ON probe-telemetry filter and its span processor ship in-repo (<code>Aspire/Extensions.Telemetry.cs:19,129,234</code>: config key, <code>ProbeTelemetryFilterProcessor</code> registration and default-ON read), and the category ranks first on the maturity band</td>
+          <td><strong>documented accepted cap, not scheduled work</strong> (see <em>Deliberate and accepted</em>); the default-ON probe-telemetry filter and its span processor ship in-repo (<code>Aspire/Extensions.Telemetry.cs:19,129,235</code>: config key, <code>ProbeTelemetryFilterProcessor</code> registration and default-ON read), and the category ranks first on the maturity band</td>
           </tr>
           <tr>
           <td>2</td>
@@ -464,10 +481,10 @@
           <td>Internationalization (i18n)</td>
           <td>1</td>
           <td>8</td>
-          <td>two gaps (see <em>Open items</em>): <code>ErrorResources.resx</code> covers 15 codes, so <code>Auth.InvalidCredentials</code> (<code>AuthenticationServiceBase.cs:158,165</code>) reaches Spanish users in English; default emails are English-only with a fixed plural (<code>ForgotPasswordHandlerBase.cs:133</code>)</td>
+          <td>not yet identified (no RTL support; two locales with a hard-coded culture list, <code>SupportedCultures.cs:18</code>)</td>
           </tr>
           </tbody></table></div>
-          <p><strong>Σ implPriority = 33</strong> across the 15 live rows (3 + 3 + 3 + 3 + 2 + 2 + 2 + 2 + 2 + 2 + 2 + 2 + 2 + 2 + 1).</p>
+          <p><strong>Σ implPriority = 35</strong> across the 16 live rows (3 + 3 + 3 + 3 + 2 + 2 + 2 + 2 + 2 + 2 + 2 + 2 + 2 + 2 + 2 + 1).</p>
           <h2 id="maturity-band">Maturity band</h2>
           <p>Every category at maturity &lt; 4, ranked by priority = (4 − maturity) × weight.</p>
           <div class="table-wrap"><table>
@@ -495,7 +512,7 @@
           <td>SOLID Principles</td>
           <td>3</td>
           <td>3</td>
-          <td>not yet identified: SRP (the constructor ceiling at <code>Tests/Architecture/MMCA.Common.Architecture.Tests/Cqrs/ConstructorDependencies/FrameworkConstructorDependencyTests.cs:25</code>) and DIP are enforced automatically, while ISP, LSP and OCP have no automated gate and S107/S1200 sit at severity suggestion (<code>.editorconfig:478,492</code>)</td>
+          <td>not yet identified: SRP (the constructor ceiling at <code>Tests/Architecture/MMCA.Common.Architecture.Tests/Cqrs/ConstructorDependencies/FrameworkConstructorDependencyTests.cs:25</code>), DIP and the LSP throw half (<code>Governance/Substitutability/CommonSubstitutabilityTests.cs:10</code>) are enforced automatically, while OCP, ISP and LSP type-sniffing have no automated gate and S107/S1200 sit at severity suggestion (<code>.editorconfig:478,492</code>)</td>
           </tr>
           <tr>
           <td>2</td>
@@ -521,8 +538,21 @@
           <p>The computed maturity priority = (4 − 2) × 2 = <strong>4</strong> is the highest weighted gap of any open category, but the unmet §31 criteria are consumer/IaC execution a NuGet library cannot perform: <strong>right-sizing</strong> and <strong>reversible scale-events</strong> are host-infrastructure actions the framework provisions nothing to take, and <strong>per-service cost attribution</strong> via Aspire resource annotations is inert for the hand-written <code>main.bicep</code> consumers (ADC/Store). The in-repo levers ship and are documented: the <code>Telemetry:TracesSampleRatio</code> OTel sampler knob, the outbox per-message log at Debug, the default-ON probe-telemetry filter, a fifth <code>rubric §31</code> cost knob (<code>Telemetry:EnablePollyDurationMetrics</code>, <code>CHANGELOG.md:233</code>), and the cost guide&#39;s cost-attribution-tag plus cost-guard samples (<a href="../guides/common-COST.html"><code>common-COST.md</code></a>). No cost convention is enforced by review or CI (<code>Tests/Architecture</code> has zero cost/FinOps matches; the <code>.github</code> hits are incidental prose, for example the comment at <code>ci.yml:330</code>), so Maturity stays 2. Further movement is a consumer-side lift. Reversing this entry is a user decision.</p>
           <h3 id="accepted-11--a-written-threat-model-is-not-scheduled-work">[accepted] #11 · A written threat model is not scheduled work</h3>
           <p>The three §11 threat-model documentation items are out of the workspace program by user decision and are not to be re-scheduled without asking. The rubric&#39;s §11 criteria name a written threat model, no such document exists in MMCA.Common (zero &quot;threat model&quot; matches in <code>SECURITY.md</code>), and its absence is a named §11 red flag, so the criterion stays <strong>unmet and counted</strong>: #11 holds at Maturity 4 / Implementation 8 with its implementation-band row at implPriority 3. The #11 lever does not carry the threat model as schedulable work, and a re-score must not mint a sub-item for it.</p>
+          <h3 id="accepted-options-cut-as-over-engineering">[accepted] Options cut as over-engineering</h3>
+          <p>Each was weighed and declined by user decision; none is scheduled, and a re-score must not re-propose one as a lever.</p>
+          <ul>
+          <li><strong>#11 (a): signing the broker origin headers.</strong> It earns no score (8 to 9 needs the excluded threat model). Exploiting the unsigned headers needs broker send rights, which narrowing Store&#39;s Service Bus SAS rules to Send/Listen would cover more cheaply, and signing would cost key distribution and rotation in every service.</li>
+          <li><strong>#17: a scheduled Azure smoke deploy of <code>samples/deployment</code>.</strong> It adds new Azure credentials, ongoing spend and a new CI failure path for a library, while ADC and Store prove the same Bicep/OIDC path in production.</li>
+          <li><strong>Item 15b: cache invalidation in <code>ChildEntityServiceBase</code>.</strong> Only needed if Store re-adopts <code>IUiReadCache</code>; build it then.</li>
+          <li><strong>#20: removing the 42 <code>!important</code> overrides.</strong> They exist to beat MudBlazor&#39;s own styles, and removing them carries a real risk of visual regressions in both apps.</li>
+          <li><strong>#1: an ISP member-count ceiling.</strong> A metric proxy that invites artificial interface splits; the LSP rule is kept.</li>
+          <li><strong>#5: a slice rule with a frozen allowlist.</strong> Its first act would be to freeze the existing violations; low confidence.</li>
+          <li><strong>#12: the load tier on every pull request.</strong> SQLite numbers on shared runners make a flaky merge gate and cost Actions minutes; the tier stays scheduled.</li>
+          </ul>
+          <h3 id="na-23--running-wasm-payload-budget-in-commons-own-ciyml">[n/a] #23 · Running <code>wasm-payload-budget</code> in Common&#39;s own <code>ci.yml</code></h3>
+          <p>Common has no WASM app of its own, so there is no payload for its <code>ci.yml</code> to measure; the composite action ships here (<code>.github/actions/wasm-payload-budget/action.yml</code>) for the consumers to run. The open #23 item is the consumers&#39; required check only. The category score is unaffected.</p>
           <h3 id="accepted-dual-registry-publishing-and-the-release-workflow-filename-is-load-bearing">[accepted] Dual-registry publishing, and the release-workflow filename is load-bearing</h3>
-          <p>Every release publishes to <strong>both</strong> nuget.org and GitHub Packages (ADR-053). The nuget.org leg uses keyless OIDC trusted publishing: <code>NuGet/login</code> exchanges the workflow&#39;s <code>id-token</code> for a short-lived, single-use API key, so there is <strong>no stored <code>NUGET_API_KEY</code> secret</strong> (<code>id-token: write</code> at <code>release.yml:23</code> and <code>:156</code>, <code>NuGet/login</code> at <code>:131</code> and <code>:245</code>, nuget.org pushes at <code>:138</code> and <code>:253</code>, the API key read from <code>steps.nuget-login.outputs</code>). The trusted-publishing policy on nuget.org is pinned to this workflow <strong>file</strong>, so renaming or relocating <code>release.yml</code> breaks the token exchange by design; the constraint is recorded in-file at <code>release.yml:126</code> (and <code>:240-241</code> for the MAUI job), at its point of use. <code>FACTS.md:20</code>, emitted by <code>FactsGenerator.cs:208</code>, names nuget.org alongside GitHub Packages.</p>
+          <p>Every release publishes to <strong>both</strong> nuget.org and GitHub Packages (ADR-053). The nuget.org leg uses keyless OIDC trusted publishing: <code>NuGet/login</code> exchanges the workflow&#39;s <code>id-token</code> for a short-lived, single-use API key, so there is <strong>no stored <code>NUGET_API_KEY</code> secret</strong> (<code>id-token: write</code> at <code>release.yml:23</code> and <code>:160</code>, <code>NuGet/login</code> at <code>:133</code> and <code>:249</code>, nuget.org pushes at <code>:140</code> and <code>:257</code>, the API key read from <code>steps.nuget-login.outputs</code>). The trusted-publishing policy on nuget.org is pinned to this workflow <strong>file</strong>, so renaming or relocating <code>release.yml</code> breaks the token exchange by design; the constraint is recorded in-file at <code>release.yml:126-128</code> (and <code>:243-245</code> for the MAUI job), at its point of use. <code>FACTS.md:20</code>, emitted by <code>FactsGenerator.cs:208</code>, names nuget.org alongside GitHub Packages.</p>
           <h3 id="accepted-consumers-skipped-v11280-through-v11300">[accepted] Consumers skipped v1.128.0 through v1.130.0</h3>
           <p>MMCA.ADC, MMCA.Store and MMCA.Helpdesk went from 1.127.0 straight to 1.131.0 and never pinned 1.128.0, 1.129.0 or 1.130.0 (<code>CHANGELOG.md:9-15</code>). This is ADR-016 lockstep behavior, not drift: 1.128.0 was distribution-only (assemblies byte-identical to 1.127.0), and 1.129.0 and 1.130.0 were superseded within the same day by 1.131.0. Recorded so an audit reading the version ladder does not score the window as three missed lockstep sweeps.</p>
           <h3 id="accepted-domain-design-decisions-4">[accepted] Domain design decisions (#4)</h3>
@@ -546,10 +576,10 @@
           <li><input disabled="" type="checkbox"> <strong>FR-2 (§15) - <code>Result&lt;T&gt;.Value</code> throw-on-failure guard.</strong> Reading <code>.Value</code> on a failed result silently returns <code>null</code>/default; a guard that throws would convert the silent-null trap into a loud contract violation. Deferred as a breaking behavioral change (consumers may depend on the lenient read); the trap is documented in the <code>Result&lt;T&gt;</code> doc-comments. <em>(Effort M, breaking.)</em></li>
           <li><input disabled="" type="checkbox"> <strong>FR-3 (§6) - <code>TResult : Result</code> compile-time constraint on handler signatures.</strong> The decorator pipeline assumes handler results are <code>Result</code>-shaped (the Transactional decorator pattern-matches <code>Result { IsFailure: true }</code>); a generic constraint would make that assumption compile-time instead of runtime. Deferred as a breaking generic-signature change; covered by an architecture rule asserting command/query result types derive from <code>Result</code>. <em>(Effort M, breaking.)</em></li>
           <li><input disabled="" type="checkbox"> <strong>FR-4 (§33) - Reconsider the C# preview extension-type DI surface.</strong> DI registration methods use <code>extension(IServiceCollection)</code> blocks (<code>LangVersion: preview</code>). As the public registration surface of a published framework this is an adoption risk: consumers must also build with a preview language version until the feature GAs. Revisit when .NET ships the feature as stable; reverting to classic extension methods is mechanical but wide. <em>(Effort M, watch item.)</em></li>
-          <li><input disabled="" type="checkbox"> <strong>FR-6 (§14) - <code>MMCA.Common.UI.Maui</code> has zero automated tests.</strong> The one MAUI-TFM package is built and packed by the dedicated windows CI jobs (ADR-042) but nothing exercises it: the capability contracts and fallbacks are tested in <code>MMCA.Common.UI.Tests</code>, while the thin Essentials wrappers are verified only on-device. Options: a windows-job unit tier for the wrapper logic, or a documented on-device smoke checklist. <em>(Effort M.)</em></li>
+          <li><input disabled="" type="checkbox"> <strong>FR-6 (§14) - <code>MMCA.Common.UI.Maui</code> has zero automated tests.</strong> The one MAUI-TFM package is built and packed by the dedicated windows CI jobs (ADR-042) but nothing exercises it: the capability contracts and fallbacks are tested in <code>MMCA.Common.UI.Tests</code>, while the thin Essentials wrappers are verified only on-device, and the package sits outside <code>CommonArchitectureMap</code> (<code>CommonArchitectureMap.cs:9</code>), so the LSP gate does not cover it either. Options: a windows-job unit tier for the wrapper logic, or a documented on-device smoke checklist. <em>(Effort M.)</em></li>
           </ul>
           <h3 id="mostly-consumer-assessed-21-accessibility-26-front-end-security">Mostly consumer-assessed: #21 Accessibility, #26 Front-End Security</h3>
-          <p>The shared Common.UI surface is scored here; each app&#39;s concrete posture is scored downstream. For #26, a host may register its own <code>ICspPolicyProvider</code> (first-registered provider wins, <code>Aspire/Security/SecurityHeaders.cs:263</code>), so each app&#39;s concrete CSP is consumer-assessed; for #21, axe breadth covers the gallery&#39;s representative states, and deep consumer states are scored in the consumer repos.</p>
+          <p>The shared Common.UI surface is scored here; each app&#39;s concrete posture is scored downstream. For #26, a host may register its own <code>ICspPolicyProvider</code> (first-registered provider wins through <code>TryAddSingleton</code>, <code>Aspire/Security/SecurityHeaders.cs:288</code>), so each app&#39;s concrete CSP is consumer-assessed; for #21, axe breadth covers the gallery&#39;s representative states, and deep consumer states are scored in the consumer repos.</p>
           <h2 id="resolved">Resolved</h2>
           <p>Categories at maturity 4 AND implementation &gt;= 9 (protect them, do not regress), then the closed items inside categories that are still open.</p>
           <div class="table-wrap"><table>
@@ -589,7 +619,7 @@
           <td>#8</td>
           <td>Data Architecture</td>
           <td>4 / 9</td>
-          <td>Required-gate CI migration-apply with outcome assertions, <code>ci.yml:635,654</code>, plus <code>MigrationApplyProofTests.cs:95</code> and the cascade-soft-delete rule <code>CascadeSoftDeleteConventionTestsBase.cs:29-31</code></td>
+          <td>Required-gate CI migration-apply with outcome assertions, <code>ci.yml:582,601</code>, plus <code>MigrationApplyProofTests.cs:95</code> and the cascade-soft-delete rule <code>CascadeSoftDeleteConventionTestsBase.cs:29-31</code></td>
           </tr>
           <tr>
           <td>#9</td>
@@ -607,7 +637,7 @@
           <td>#14</td>
           <td>Testability &amp; Test Strategy</td>
           <td>4 / 9</td>
-          <td>68.3% line-coverage floor <code>ci.yml:462</code> and the <code>--minimum-expected-tests 2000</code> guard at <code>:161</code></td>
+          <td>68.3% line-coverage floor <code>ci.yml:409</code> and the <code>--minimum-expected-tests 2000</code> guard at <code>:163</code></td>
           </tr>
           <tr>
           <td>#15</td>
@@ -643,13 +673,7 @@
           <td>#22</td>
           <td>Responsive &amp; Cross-Browser</td>
           <td>4 / 9</td>
-          <td>All three engines are required merge gates, <code>.github/workflows/ci.yml:257-260</code></td>
-          </tr>
-          <tr>
-          <td>#24</td>
-          <td>Forms, Validation &amp; UX Safety</td>
-          <td>4 / 9</td>
-          <td>One Unicode-aware password rule on client and server, <code>Shared/Auth/PasswordComplexity.cs:52</code>, pinned by <code>PasswordRuleParityTests.cs:36</code>; resource-keyed auth errors <code>RegisterModel.cs:16</code>; confirm-before-revoke <code>Sessions.razor.cs:117,176</code></td>
+          <td>All three engines are required merge gates, <code>.github/workflows/ci.yml:232</code> (job <code>ui-e2e</code> at <code>:223</code>)</td>
           </tr>
           <tr>
           <td>#25</td>
@@ -661,7 +685,7 @@
           <td>#26</td>
           <td>Front-End Security</td>
           <td>4 / 9</td>
-          <td>Hardened default CSP <code>Aspire/Security/SecurityHeaders.cs:65</code>, pinned by <code>SecurityHeadersMiddlewareTests.cs:138-142</code></td>
+          <td>Hardened default CSP <code>Aspire/Security/SecurityHeaders.cs:67-69</code>, pinned by <code>SecurityHeadersMiddlewareTests.cs:157-161</code></td>
           </tr>
           <tr>
           <td>#28</td>
@@ -673,7 +697,7 @@
           <td>#32</td>
           <td>Dependency &amp; Supply-Chain</td>
           <td>4 / 9</td>
-          <td>MassTransit-major gate <code>DependencyVersionTestsBase.cs:24-37</code>, blocking SBOM <code>release.yml:104,217</code>, signed provenance <code>release.yml:95,212</code></td>
+          <td>MassTransit-major gate <code>DependencyVersionTestsBase.cs:24-37</code>, blocking SBOM <code>release.yml:107,225</code>, signed provenance <code>release.yml:98,217</code></td>
           </tr>
           <tr>
           <td>#1 (item)</td>
@@ -685,7 +709,7 @@
           <td>#1 (item)</td>
           <td>Narrowed constructors and per-engine data-source strategy</td>
           <td>3 / 8</td>
-          <td><code>AuthenticationServiceBase.cs:63-70</code> (7 parameters); <code>Persistence/DataSources/Engines/IDataSourceEngine.cs:18</code> via <code>DataSourceEngines.For</code>; engine-neutral <code>RequestExplicitKeyInsert()</code> at <code>IUnitOfWork.cs:45</code></td>
+          <td><code>AuthenticationServiceBase.cs:64-71</code> (7 parameters); <code>Persistence/DataSources/Engines/IDataSourceEngine.cs:18</code> via <code>DataSourceEngines.For</code>; engine-neutral <code>RequestExplicitKeyInsert()</code> at <code>IUnitOfWork.cs:45</code></td>
           </tr>
           <tr>
           <td>#4 (item)</td>
@@ -718,16 +742,22 @@
           <td><code>SECURITY.md:83-86</code> (<code>AddCommonKeyVaultConfiguration</code>, no-op unless <code>KeyVault:Uri</code>)</td>
           </tr>
           <tr>
+          <td>#11 (item)</td>
+          <td>Claim-only tenant resolution by default, tenant conformance base</td>
+          <td>4 / 8</td>
+          <td><code>Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettings.cs:61-62</code>; <code>Source/Hosting/MMCA.Common.Testing/Conformance/TenantResolutionTestsBase.cs:27</code>, subclassed at <code>TenantResolutionConformanceTests.cs:11</code></td>
+          </tr>
+          <tr>
           <td>#12 (item)</td>
           <td>Performance regression gate as a required check</td>
           <td>4 / 8</td>
-          <td><code>ci.yml:355</code> job matching the required context, baseline <code>Tests/Performance/perf-baseline.json:3-13</code></td>
+          <td><code>ci.yml:310</code> job matching the required context, baseline <code>Tests/Performance/perf-baseline.json:3-13</code></td>
           </tr>
           <tr>
           <td>#13 (item)</td>
           <td>SLO alerting as code with a paired runbook</td>
           <td>4 / 8</td>
-          <td><code>samples/deployment/main.bicep:177,196,237,280</code> gated by <code>SampleDeploymentObservabilityTests.cs:12</code>; outbox meter registered at <code>Extensions.Telemetry.cs:307</code></td>
+          <td><code>samples/deployment/main.bicep:177,196,237,280</code> gated by <code>SampleDeploymentObservabilityTests.cs:12</code>; outbox meter registered at <code>Extensions.Telemetry.cs:308</code></td>
           </tr>
           <tr>
           <td>#13 (item)</td>
@@ -739,7 +769,7 @@
           <td>#17 (item)</td>
           <td>Reference Bicep secret binding, Dependabot, gated release</td>
           <td>3 / 8</td>
-          <td>Secrets array <code>samples/deployment/main.bicep:151-152</code> with binding at <code>:164</code>; <code>.github/dependabot.yml:4,85</code>; <code>environment: release</code> at <code>release.yml:19,152</code></td>
+          <td>Secrets array <code>samples/deployment/main.bicep:151-152</code> with binding at <code>:164</code>; <code>.github/dependabot.yml:4,85</code>; <code>environment: release</code> at <code>release.yml:19,156</code></td>
           </tr>
           <tr>
           <td>#18 (item)</td>
@@ -754,10 +784,22 @@
           <td>Dark <code>PrimaryContrastText</code>/<code>ErrorContrastText</code> at <code>Theme/MMCATheme.cs:66,93</code> locked by <code>Layout/DarkModeE2ETests.cs:30</code>; no Bootstrap in the RCL (<code>wwwroot/app.css:108</code>)</td>
           </tr>
           <tr>
+          <td>#20 (item)</td>
+          <td>No raw brand hex outside the two token definitions</td>
+          <td>4 / 8</td>
+          <td><code>Layout/ReconnectModal.razor.css:100</code> reads <code>var(--mmca-primary)</code>; <code>#1565C0</code> only at <code>Theme/BrandColors.cs:13</code> and <code>wwwroot/app.css:63</code>, pinned by <code>BrandColorTokenTests.cs:35-38</code></td>
+          </tr>
+          <tr>
+          <td>#20 (item)</td>
+          <td>Zero inline style declarations, gated</td>
+          <td>4 / 8</td>
+          <td><code>Tests/Architecture/MMCA.Common.Architecture.Tests/Ui/ComponentConventions/InlineStyleTests.cs:12</code> over <code>Bases/Ui/InlineStyleTestsBase.cs</code></td>
+          </tr>
+          <tr>
           <td>#23 (item)</td>
           <td>Packaged-asset hygiene and grid virtualization</td>
           <td>4 / 8</td>
-          <td><code>wwwroot</code> about 398 KB with a <code>Content Remove</code> for <code>.map</code> files; opt-in virtualization <code>DataGridListPageBase.cs:154,642</code></td>
+          <td><code>wwwroot</code> about 398 KB with a <code>Content Remove</code> for <code>.map</code> files; opt-in virtualization <code>DataGridListPageBase.cs:155,643</code></td>
           </tr>
           <tr>
           <td>#23 (item)</td>
@@ -769,31 +811,49 @@
           <td>#23 (item)</td>
           <td>Consumers run the shipped WASM payload budget</td>
           <td>4 / 8</td>
-          <td><code>MMCA.ADC/.github/workflows/deploy.yml:464,482</code> (5,900 KB at <code>:485</code>); <code>MMCA.Store/.github/workflows/deploy.yml:493,511</code></td>
+          <td><code>MMCA.ADC/.github/workflows/deploy.yml:476,494</code> (5,900 KB at <code>:497</code>); <code>MMCA.Store/.github/workflows/deploy.yml:493,511</code></td>
           </tr>
           <tr>
           <td>#24 (item)</td>
           <td>Password length cap and guard wiring</td>
-          <td>4 / 9</td>
-          <td><code>ResetPasswordModel.cs:20-21</code> matches <code>CommonValidationRules.cs:194</code>; guard at <code>RoleAdminEdit.razor:7</code> and <code>NotificationSend.razor:12</code></td>
+          <td>4 / 8</td>
+          <td><code>ResetPasswordModel.cs:27-28</code> matches <code>CommonValidationRules.cs:197</code>; guard at <code>RoleAdminEdit.razor:7</code> and <code>NotificationSend.razor:25</code></td>
+          </tr>
+          <tr>
+          <td>#24 (item)</td>
+          <td>One Unicode-aware password rule on the auth pages, client and server</td>
+          <td>4 / 8</td>
+          <td><code>Shared/Auth/PasswordComplexity.cs:52</code>, pinned by <code>PasswordRuleParityTests.cs:36</code>; resource-keyed auth errors <code>RegisterModel.cs:16</code>; confirm-before-revoke <code>Sessions.razor.cs:130,195</code></td>
           </tr>
           <tr>
           <td>#26 (TD-08)</td>
           <td>Same-origin data-call proxy adopted by ADC and Store</td>
           <td>4 / 9</td>
-          <td>Framework half <code>Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxyEndpoint.cs:29</code>; <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:161,284</code>, <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:153,262</code>, both pinning 1.233.0</td>
+          <td>Framework half <code>Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxyEndpoint.cs:29</code>; <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:161,284</code>, <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:153,262</code>, both pinning 1.244.0 (<code>MMCA.ADC/Directory.Packages.props:128</code>, <code>MMCA.Store/Directory.Packages.props:20</code>)</td>
           </tr>
           <tr>
           <td>#27 (item)</td>
           <td>UTC instants rendered in the viewer&#39;s time zone</td>
           <td>4 / 8</td>
-          <td><code>Source/Presentation/MMCA.Common.UI/Services/Culture/ViewerTimeZone.cs:18</code>, used at <code>NotificationInbox.razor:58</code>, <code>NotificationList.razor:80</code>, <code>Sessions.razor.cs:255</code></td>
+          <td><code>Source/Presentation/MMCA.Common.UI/Services/Culture/ViewerTimeZone.cs:18</code> (registered at <code>MMCA.Common.UI/DependencyInjection.cs:198</code>), used at <code>NotificationInbox.razor:58</code>, <code>NotificationList.razor:82</code>, <code>Sessions.razor.cs:244</code></td>
           </tr>
           <tr>
           <td>#27 (item)</td>
           <td>Pluralization and the plural-sentence convention check</td>
           <td>4 / 8</td>
           <td><code>Globalization/StringLocalizerPluralExtensions.cs:40</code>, 6 facts at <code>StringLocalizerPluralExtensionsTests.cs:43</code>, plus <code>PluralSentenceResourceTests.cs:18</code></td>
+          </tr>
+          <tr>
+          <td>#27 (item)</td>
+          <td>Emitted error codes covered for <code>es</code></td>
+          <td>4 / 8</td>
+          <td><code>Source/Presentation/MMCA.Common.API/Resources/ErrorResources.resx</code> and <code>ErrorResources.es.resx</code> (81 entries each, <code>Auth.InvalidCredentials</code> at <code>:115</code>), gated by <code>ErrorResourceCoverageTests.cs:158</code></td>
+          </tr>
+          <tr>
+          <td>#27 (item)</td>
+          <td>Localized default transactional emails</td>
+          <td>4 / 8</td>
+          <td><code>ForgotPasswordHandlerBase.cs:117,136</code> (localized subject, pluralized minutes), <code>Users/Emails/UserEmailResources.cs:32</code> (recipient <code>PreferredCulture</code>), <code>SendEmailConfirmationHandlerBase.cs:156</code></td>
           </tr>
           <tr>
           <td>#29 (item)</td>
