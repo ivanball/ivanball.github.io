@@ -37,7 +37,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/index.html</loc>
-    <lastmod>2026-10-19</lastmod>
+    <lastmod>2026-10-20</lastmod>
     <priority>0.8</priority>
   </url>
   <url>
@@ -62,7 +62,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html</loc>
-    <lastmod>2026-10-19</lastmod>
+    <lastmod>2026-10-20</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -107,7 +107,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/014-cqrs-decorator-pipeline.html</loc>
-    <lastmod>2026-10-19</lastmod>
+    <lastmod>2026-10-20</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -272,7 +272,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/047-soft-deleted-user-session-revocation.html</loc>
-    <lastmod>2026-10-19</lastmod>
+    <lastmod>2026-10-20</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -332,7 +332,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/059-module-contract-and-composition.html</loc>
-    <lastmod>2026-10-19</lastmod>
+    <lastmod>2026-10-20</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -367,7 +367,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/066-broker-transport-selection.html</loc>
-    <lastmod>2026-10-19</lastmod>
+    <lastmod>2026-10-20</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -387,7 +387,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html</loc>
-    <lastmod>2026-10-19</lastmod>
+    <lastmod>2026-10-20</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -407,7 +407,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/074-recurring-job-scheduler.html</loc>
-    <lastmod>2026-10-19</lastmod>
+    <lastmod>2026-10-20</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -432,7 +432,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/079-shared-http-middleware-pipeline.html</loc>
-    <lastmod>2026-10-19</lastmod>
+    <lastmod>2026-10-20</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -447,7 +447,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/082-two-tier-cors-posture.html</loc>
-    <lastmod>2026-10-19</lastmod>
+    <lastmod>2026-10-20</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -567,7 +567,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/106-extension-members-as-public-di-surface.html</loc>
-    <lastmod>2026-10-19</lastmod>
+    <lastmod>2026-10-20</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -732,7 +732,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-02-domain-building-blocks.html</loc>
-    <lastmod>2026-10-19</lastmod>
+    <lastmod>2026-10-20</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -747,7 +747,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-05-cqrs-pipeline.html</loc>
-    <lastmod>2026-10-19</lastmod>
+    <lastmod>2026-10-20</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -757,7 +757,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-07-persistence-ef-core.html</loc>
-    <lastmod>2026-10-19</lastmod>
+    <lastmod>2026-10-20</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -782,7 +782,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-12-api-hosting-mapping.html</loc>
-    <lastmod>2026-10-19</lastmod>
+    <lastmod>2026-10-20</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -792,7 +792,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-14-module-system-composition.html</loc>
-    <lastmod>2026-10-19</lastmod>
+    <lastmod>2026-10-20</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -802,7 +802,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-16-aspire-orchestration.html</loc>
-    <lastmod>2026-10-19</lastmod>
+    <lastmod>2026-10-20</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -937,7 +937,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/governance/store-RemediationBacklog.html</loc>
-    <lastmod>2026-10-19</lastmod>
+    <lastmod>2026-10-20</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -962,7 +962,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/guides/adc-specifications.html</loc>
-    <lastmod>2026-10-19</lastmod>
+    <lastmod>2026-10-20</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -972,7 +972,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/guides/common-BUILD-BY-HAND.html</loc>
-    <lastmod>2026-10-19</lastmod>
+    <lastmod>2026-10-20</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -992,7 +992,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/guides/common-GETTING-STARTED.html</loc>
-    <lastmod>2026-10-19</lastmod>
+    <lastmod>2026-10-20</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -1077,7 +1077,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/articles/cqrs-decorator-pipeline.html</loc>
-    <lastmod>2026-10-19</lastmod>
+    <lastmod>2026-10-20</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -1087,12 +1087,12 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/articles/transactional-outbox-dotnet.html</loc>
-    <lastmod>2026-10-19</lastmod>
+    <lastmod>2026-10-20</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/articles/database-per-service.html</loc>
-    <lastmod>2026-10-19</lastmod>
+    <lastmod>2026-10-20</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -1152,7 +1152,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/articles/live-channel-push.html</loc>
-    <lastmod>2026-10-19</lastmod>
+    <lastmod>2026-10-20</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -1237,7 +1237,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/articles/build-your-first-module.html</loc>
-    <lastmod>2026-10-19</lastmod>
+    <lastmod>2026-10-20</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
