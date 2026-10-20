@@ -267,7 +267,9 @@
           <code>DependencyInjection.cs</code>, <code>DependencyInjection.ModuleScanning.cs</code> and <code>DependencyInjection.Crud.cs</code>).
           Revised 2026-10-01 (the record states where each kind of validation lives: UI form models, the
           Validating decorator with its coverage fitness gate, and domain factories; see Revision below).
-          Revised 2026-10-06: the Decision states the shipped seven-decorator command chain and six-decorator query chain instead of the pre-2026-08-18 order. Revised 2026-10-07: anchors refreshed after the v1.233.0 release.</p>
+          Revised 2026-10-06: the Decision states the shipped seven-decorator command chain and six-decorator query chain instead of the pre-2026-08-18 order. Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised 2026-10-19: the Helpdesk
+          reference host composes through <code>AddMmcaApplicationPipeline</code> too, so all eight hosts take the sealed
+          path; see the Revision (2026-10-19) at the end.</p>
           <h2 id="context">Context</h2>
           <p>Commands and queries share cross-cutting concerns: validation, transactions, cache invalidation,
           logging / timing, and feature gating. Putting that logic inside each handler scatters it, makes the
@@ -308,10 +310,12 @@
           directly); <code>AddApplicationDecorators()</code> MUST be called <strong>last</strong>, after every module&#39;s concrete handlers
           exist, so <code>TryDecorate</code> can find them. The hand-written form of that sequence is <code>AddApplication</code> -&gt;
           <code>AddInfrastructure</code> -&gt; <code>AddAPI</code> -&gt; module handler scan via <code>ModuleLoader.DiscoverAndRegister</code> -&gt;
-          <code>AddApplicationDecorators</code>, and <code>MMCA.Helpdesk.Web</code> still ends its host wiring that way
-          (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:132</code>). The seven production service hosts
-          compose the same sequence through <code>AddMmcaApplicationPipeline(pipeline =&gt; ...)</code> instead, which runs it
-          in order and seals it (see the Revision (2026-08-26) below): ADC Identity / Conference / Engagement /
+          <code>AddApplicationDecorators</code>. All eight hosts compose it through
+          <code>AddMmcaApplicationPipeline(pipeline =&gt; ...)</code> instead, which runs <code>AddApplication</code> first, the
+          callback&#39;s registration steps, and <code>AddApplicationDecorators</code> last, and seals the collection (see the
+          Revision (2026-08-26) below): the Helpdesk reference host
+          (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:121</code>) and the seven production service
+          hosts, ADC Identity / Conference / Engagement /
           Notification (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:324</code>, <code>...Conference.Service/Program.cs:416</code>,
           <code>...Engagement.Service/Program.cs:286</code>, <code>...Notification.Service/Program.cs:227</code>) and Store Identity /
           Catalog / Sales (<code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:236</code>,
@@ -720,6 +724,19 @@
           <code>:324</code> and Notification <code>:227</code>, Store Identity <code>:236</code>, Catalog <code>:256</code> and Sales <code>:236</code>, and
           <code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:132</code> still match.</li>
           </ol>
+          <h2 id="revision-2026-10-19">Revision (2026-10-19)</h2>
+          <p>The Helpdesk reference host joins the sealed composition path. The decision and both decorator chains
+          are unchanged; what changed is that no host writes the decorators-last sequence by hand any more.</p>
+          <ol>
+          <li><code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs</code> composes through
+          <code>AddMmcaApplicationPipeline</code> at <code>:121</code>, with module discovery as a <code>Register</code> step (<code>:125-133</code>) and
+          the broker wiring as a second <code>Register</code> step (<code>:139</code>); <code>AddInfrastructure</code> (<code>:77</code>), <code>AddAPI</code> (<code>:99</code>)
+          and <code>AddModuleHealthChecks</code> (<code>:141</code>) stay outside the call. The host no longer calls <code>AddApplication()</code>
+          or <code>AddApplicationDecorators()</code> directly, so the Decision now names eight composing hosts.</li>
+          <li>The <code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:132</code> anchor in the Decision and in the
+          Revision (2026-10-07) above is dead (that line no longer holds <code>AddApplicationDecorators()</code>); the
+          Decision cites <code>:121</code>, and the Revision (2026-10-07) is left as recorded.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -746,6 +763,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
+            <li><a href="#revision-2026-10-19">Revision (2026-10-19)</a></li>
             </ul>
           </nav>
         </aside>

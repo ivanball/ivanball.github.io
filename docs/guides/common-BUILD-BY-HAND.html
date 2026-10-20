@@ -732,7 +732,7 @@
           and construct the framework&#39;s generic <code>UpdateEntityCommand&lt;TEntity, TUpdateRequest, TId&gt;(id, request, SupportsIfMatchAttribute.RequiredToken(HttpContext))</code>, whose third positional parameter is the same
           token; the mutation then lives on the aggregate behind an <code>IEntityUpdateApplier</code>.</p>
           <h3 id="what-the-pipeline-does-for-you">What the pipeline does for you</h3>
-          <p>Once <code>AddApplicationDecorators()</code> runs (Phase 5), every handler is wrapped by the Scrutor decorator
+          <p>Once <code>AddMmcaApplicationPipeline(...)</code> closes the pipeline (Phase 5), every handler is wrapped by the Scrutor decorator
           chain (outermost first). See <a href="../adr/014-cqrs-decorator-pipeline.html">ADR-014</a>:</p>
           <pre class="doc-pre" tabindex="0"><code class="">Commands: FeatureGate -&gt; Logging -&gt; Caching -&gt; Validating -&gt; Transactional -&gt; your handler
 Queries:  FeatureGate -&gt; Logging -&gt; Caching -&gt; your handler</code></pre>
@@ -881,7 +881,13 @@ handler.Invocations.Should().Be(<span class="hljs-number">2</span>);</code></pre
           <p>Create <code>Source/Hosts/Contoso.Support.Web</code> (the REST API host). Its <code>Program.cs</code> follows the <strong>fixed DI
           sequence</strong>, and the load-bearing rule is that <code>AddApplicationDecorators()</code> comes <strong>last</strong>: decorators
           wrap handlers that already exist, and the module handlers are registered by <code>ModuleLoader</code> (each
-          <code>IModule.Register</code> composes its Application+Infrastructure+API layers):</p>
+          <code>IModule.Register</code> composes its Application+Infrastructure+API layers). The host does not write that
+          order by hand: every handler registration (module discovery, the broker wiring) goes inside
+          <code>AddMmcaApplicationPipeline(...)</code>, which runs <code>AddApplication()</code> first, then each <code>Register</code> step in
+          order, then <code>AddApplicationDecorators()</code> last, and <strong>seals</strong> the collection, so a handler registered
+          after it throws at startup instead of running unwrapped. Registrations that are not handlers
+          (<code>AddInfrastructure</code>, <code>AddAPI</code>, error resources, health checks) stay outside the call, because their
+          order relative to the decorators does not matter:</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">var</span> builder = WebApplication.CreateBuilder(<span class="hljs-keyword">args</span>);
 builder.AddServiceDefaults();        <span class="hljs-comment">// from MMCA.Common.Aspire: OpenTelemetry, health checks, resilience</span>
 
@@ -923,7 +929,6 @@ services.AddCommonResponseCompression();
 
 services.AddCommonExceptionHandlers();
 
-services.AddApplication();                       <span class="hljs-comment">// core services, event dispatcher</span>
 services.AddInfrastructure(builder.Configuration); <span class="hljs-comment">// repos, UoW, context, caching, outbox</span>
 <span class="hljs-keyword">var</span> modulesSettings = builder.Configuration.GetSection(ModulesSettings.SectionName).Get&lt;ModulesSettings&gt;() ?? [];
 services.AddAPI(modulesSettings);                <span class="hljs-comment">// controllers, idempotency, exception handlers</span>
@@ -934,20 +939,23 @@ services.AddErrorResources&lt;OrdersErrorResources&gt;();
 
 <span class="hljs-keyword">using</span> <span class="hljs-keyword">var</span> loggerFactory = LoggerFactory.Create(logging =&gt; logging.AddConsole());
 <span class="hljs-keyword">var</span> moduleLoader = <span class="hljs-keyword">new</span> ModuleLoader { Logger = loggerFactory.CreateLogger&lt;ModuleLoader&gt;() };
-<span class="hljs-comment">// The host NAMES the module assemblies discovery scans, one marker type per module. That is what</span>
-<span class="hljs-comment">// makes discovery deterministic: a referenced assembly no code path has touched yet is not loaded,</span>
-<span class="hljs-comment">// so an ambient scan would silently miss it.</span>
-moduleLoader.DiscoverAndRegister(
-    services,
-    builder.Configuration,
-    applicationSettings,
-    modulesSettings,
-    builder.Environment.EnvironmentName,
-    [<span class="hljs-meta">typeof(OrdersModule).Assembly</span>]);
 services.AddSingleton(moduleLoader);
 
-services.AddBrokerMessaging(builder.Configuration);  <span class="hljs-comment">// InProcessMessageBus until a broker is configured</span>
-services.AddApplicationDecorators();             <span class="hljs-comment">// MUST be last</span>
+<span class="hljs-comment">// Application pipeline (ADR-014): AddApplication() first, each Register step in order,</span>
+<span class="hljs-comment">// AddApplicationDecorators() LAST, then the collection is sealed.</span>
+services.AddMmcaApplicationPipeline(pipeline =&gt; pipeline
+    <span class="hljs-comment">// The host NAMES the module assemblies discovery scans, one marker type per module. That is what</span>
+    <span class="hljs-comment">// makes discovery deterministic: a referenced assembly no code path has touched yet is not loaded,</span>
+    <span class="hljs-comment">// so an ambient scan would silently miss it.</span>
+    .Register(s =&gt; moduleLoader.DiscoverAndRegister(
+        s,
+        builder.Configuration,
+        applicationSettings,
+        modulesSettings,
+        builder.Environment.EnvironmentName,
+        [<span class="hljs-meta">typeof(OrdersModule).Assembly</span>]))
+    <span class="hljs-comment">// InProcessMessageBus until a broker is configured; after discovery so its Replace calls win.</span>
+    .Register(s =&gt; s.AddBrokerMessaging(builder.Configuration)));
 
 services.AddModuleHealthChecks(moduleLoader);    <span class="hljs-comment">// per-module readiness, after the modules are known</span>
 
@@ -1279,9 +1287,13 @@ builder.AddProject&lt;Projects.Contoso_Support_UI_Web&gt;(<span class="hljs-stri
           and JWKS-validated auth. See <a href="../adr/012-grpc-host-transport.html">ADR-012</a> (Profile A). Pattern source:
           <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs</code>.</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs">builder.WebHost.ConfigureKestrel(k =&gt; k.ConfigureEndpointDefaults(o =&gt; o.Protocols = HttpProtocols.Http2));
-<span class="hljs-comment">// ...same AddApplication/AddInfrastructure/AddAPI/ModuleLoader sequence...</span>
+<span class="hljs-comment">// ...same AddInfrastructure/AddAPI/ModuleLoader sequence as the monolith host...</span>
 services.AddGrpcServiceDefaults();
-services.AddBrokerMessaging(builder.Configuration, x =&gt; x.RegisterIntegrationEventConsumer&lt;SomeEvent&gt;());</code></pre>
+services.AddMmcaApplicationPipeline(pipeline =&gt; pipeline
+    .Register(s =&gt; moduleLoader.DiscoverAndRegister(<span class="hljs-comment">/* ...same arguments... */</span>))
+    .Register(s =&gt; s.AddBrokerMessaging(
+        builder.Configuration,
+        x =&gt; x.RegisterIntegrationEventConsumer&lt;SomeEvent&gt;())));</code></pre>
           <h3 id="8b-a-contracts-project-for-synchronous-calls">8b. A <code>.Contracts</code> project for synchronous calls</h3>
           <p>If Orders needs a synchronous answer from Identity (for example, the requester&#39;s display name),
           define it in <code>Source/Services/Contoso.Support.Identity.Contracts</code> as a <code>.proto</code>. The <code>.Contracts</code>

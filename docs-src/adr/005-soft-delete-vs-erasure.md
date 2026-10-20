@@ -8,7 +8,7 @@ Updated 2026-09-07 (a pseudonymous key kept through anonymization must not appea
 anonymous surface; Store's public review list is served through a contract that declares none).
 Updated 2026-10-01 (corrected the `DeleteChildren` composition description; citations refreshed).
 Revised 2026-10-06: Store's public review contract carries no reviewer name either, and the interceptor and controller anchors were refreshed.
-Revised 2026-10-19: the framework guard runs in both directions (a reverse rule and a sample-coverage fact in `PiiConventionTestsBase`, v1.246.0), and ADC and Store both adopt it.
+Revised 2026-10-19: the framework guard runs in both directions (a reverse rule and a sample-coverage fact in `PiiConventionTestsBase`, v1.246.0), and ADC and Store both adopt it. Same date: ADC's `Speaker` becomes `IAnonymizable` with a `[Pii]` email that the cross-service `UserDeleted` erasure anonymizes before unlinking.
 ## Context
 The framework's default deletion model is **soft-delete**: `AuditableBaseEntity.Delete()` sets `IsDeleted = true` and EF Core global query filters exclude the row from normal queries. The row (including any personal data it holds) stays in the database indefinitely, which is exactly what audit, referential integrity, and "undelete" (BR-135) require.
 
@@ -115,13 +115,33 @@ framework rather than from one consumer (MMCA.Common v1.246.0):
 Both apps adopt it. Store moved its hand-written reverse rule into the base and keeps only its four
 samples (`ProductReview`, `Customer`, `User`, `Order`) plus a non-vacuity guard
 (`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Privacy/PiiConventionTests.cs:33-48`,
-`:55-61`). ADC supplies a `User` sample built as an external account with every device field filled
-(`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Privacy/PiiConventionTests.cs:17-28`). The
-reverse rule found six fields ADC's `Anonymize()` overwrote without a marker; `DeviceFormFactor`,
+`:55-61`). ADC supplies two samples: a `User` built as an external account with every device field
+filled, and a `Speaker` with every profile field and the user link filled
+(`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Privacy/PiiConventionTests.cs:23-30`,
+`:31-41`). The reverse rule found six fields ADC's `Anonymize()` overwrote without a marker; `DeviceFormFactor`,
 `DevicePlatform`, `DeviceModel`, `DeviceManufacturer`, `DeviceType` and `LoginProvider` now carry
 `[Pii]` (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:85`, `:89`, `:93`,
 `:97`, `:105`, `:109`), and a data-only migration redacts their existing audit-trail rows
 (`MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Identity/Migrations/20261019200206_RedactAuditTrailDeviceAndProviderValues.cs:26-29`).
+
+ADC's `Speaker` is the second anonymizable entity. It implements `IAnonymizable`
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:28`) with one
+`[Pii]` field, the organizer-held `Email` (`:40-41`). `Anonymize()` (`:330`) replaces it with
+`deleted-{Id}@anonymized.invalid` (`:337`) and keeps the name, biography and the rest of the profile,
+because those are the published event program rather than account data; a speaker with no email, or
+already carrying the placeholder, is a no-op. The erasure reaches it across services: Identity's
+`UserDeleted` integration event is consumed in Conference by `UserDeletedSpeakerErasureHandler`
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Users/IntegrationEventHandlers/UserDeletedSpeakerErasureHandler.cs:40`),
+which anonymizes every speaker linked to the erased account and then unlinks it (`:66`, `:74`) in
+one save, since the link is the only way to find the speaker. A data-only migration redacts the
+speaker email values already in the Conference audit trail
+(`MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Conference/Migrations/20261019232613_RedactAuditTrailSpeakerEmailValues.cs:24-27`).
+Two paths cannot bring the address back. The Sessionize sync never writes an email: a new speaker is
+created with none and an update passes the stored value through
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/UseCases/RefreshFromSessionize/SpeakerSyncStrategy.cs:126`,
+`:163`). And the BR-207 auto-link matches only a provider-verified email
+(`.../Users/IntegrationEventHandlers/UserRegisteredHandler.cs:99`), which an address on the reserved
+`.invalid` domain can never be, so the placeholder cannot re-attach the profile to anyone.
 
 The Trade-offs residual narrows accordingly: a field that `Anonymize()` overwrites can no longer go
 unmarked. A personal-data field that the erasure never touches is still invisible to both directions,

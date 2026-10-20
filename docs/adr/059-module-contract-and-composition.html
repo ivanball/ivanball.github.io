@@ -292,8 +292,9 @@
           <code>MMCA.ADC.Conference.Service/Program.cs:371-373</code>, <code>MMCA.ADC.Engagement.Service/Program.cs:213-215</code>,
           <code>MMCA.ADC.Notification.Service/Program.cs:195-197</code>) each name the single assembly of the one module
           that host enables, so an extracted service&#39;s scan surface equals its own module. Helpdesk calls
-          <code>DiscoverAndRegister</code> directly with its one module assembly
-          (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:116-124</code>), and the unit tests name their
+          <code>DiscoverAndRegister</code> with its one module assembly inside a <code>Register</code> step of its
+          <code>AddMmcaApplicationPipeline</code> call
+          (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:125-133</code>), and the unit tests name their
           own assembly the same way
           (<code>MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Modules/ModuleLoaderTests.cs:42-49</code>).</li>
           <li><strong>Registration order is a Kahn topological sort over the declared names.</strong> The loader sorts before
@@ -577,6 +578,12 @@
           <code>:13</code>, <code>:15</code>). Helpdesk Tickets is the one module still unchecked. The undeclared Conference-to-Engagement
           gRPC edge recorded in the 2026-10-07 revision is unchanged, and the new test pins that declaration as it
           stands rather than resolving it.</p>
+          <p>Same date, separately: the Helpdesk host no longer calls <code>DiscoverAndRegister</code> as a bare statement.
+          It runs inside a <code>Register</code> step of <code>services.AddMmcaApplicationPipeline(...)</code>
+          (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:121</code>, step <code>:125-133</code>), so discovery sits
+          between <code>AddApplication()</code> and <code>AddApplicationDecorators()</code> by construction. The scan input is
+          unchanged (one named assembly, <code>typeof(TicketsModule).Assembly</code> at <code>:132</code>); the Decision&#39;s dead
+          <code>:116-124</code> anchor is re-pointed.</p>
           <h2 id="related">Related</h2>
           <p>ADR-008 (the extraction topology that consumes this model: &quot;a service is the monolith with one module
           enabled&quot; is a statement about <code>ModuleLoader</code> plus the <code>Disabled*</code> stubs, cited there as pre-existing

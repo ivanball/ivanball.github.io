@@ -493,7 +493,7 @@ explicit `EnableInbox: true` on four ADC and three Store service hosts `:81-87` 
 trail last through `GetService` `:319-322` (comment `:314-318`). `AddAuditTrail` call sites:
 `MMCA.Store` Sales `Program.cs:208`, Catalog `:233`, Identity `:195`; `MMCA.ADC` Identity
 `Program.cs:249`, Conference `:356`, Engagement `:202`; `MMCA.Helpdesk`
-`Source/Hosts/MMCA.Helpdesk.Web/Program.cs:90`. Transaction contract
+`Source/Hosts/MMCA.Helpdesk.Web/Program.cs:88`. Transaction contract
 (`Website/docs-src/adr/107-transaction-execution-contract.md`, Accepted 2026-09-03 at `:4`, revised
 2026-09-25 `:5-8` and 2026-10-01 `:9-11`): Decision `:39-42`, re-entrant join `:50-58`, retriable
 unit and `ResetForRetry` `:60-68`, failed-Result rollback and the enrolled-command flush `:70-80`,

@@ -189,12 +189,12 @@ instead of silently producing an undecorated handler (`DependencyInjection.cs:31
 `AddMmcaApplicationPipeline(...)` (`DependencyInjection.cs:207`) runs the whole sequence in the one
 order that works: `AddApplication()`, then the caller's registrations through an
 [`MmcaApplicationPipelineBuilder`](group-14-module-system-composition.md#mmcaapplicationpipelinebuilder),
-then `AddApplicationDecorators()` (`DependencyInjection.cs:209-215`). Seven production service hosts
-compose it that way (for example
+then `AddApplicationDecorators()` (`DependencyInjection.cs:209-215`). The seven production service
+hosts compose it that way (for example
 `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:418` and
-`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:233`), while MMCA.Helpdesk's web
-host still writes the hand-composed form and ends with the decorators call
-(`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:120`). Alongside it,
+`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:233`), and so does MMCA.Helpdesk's
+web host, with module discovery and the broker wiring as its two `Register` steps
+(`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:121`). Alongside it,
 `VerifyDecoratorPipeline()` (`DependencyInjection.cs:244`) is a registration-shape assertion an
 architecture fitness test can call: it never builds a provider, it just looks for a surviving
 non-keyed descriptor that still carries an implementation type, which after `TryDecorate` is proof
@@ -959,7 +959,7 @@ rules of the pipeline.
 - **Where it's used**: one implementation exists in the workspace today.
   - The framework ships `AuditTrailCleanupJob` (see [AuditTrailCleanupJob](group-07-persistence-ef-core.md#audittrailcleanupjob)), declared at `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailCleanupJob.cs:47-54`, named `"audit-trail-cleanup"` and scheduled `"0 3 * * *"`, daily at 03:00 UTC (`:63,67`). It is registered by `AddAuditTrail` rather than by `AddScheduledJobs` (`.../Infrastructure/DependencyInjection.cs:478`), which keeps the trail and the scheduler independent features (`:475-477`).
   - MMCA.ADC no longer recovers interrupted AI-scoring passes with a scheduled sweep job: `SessionScoringSweepJob` was replaced by the ADR-114 internal command `Conference.ScoreEventSessions.v1`, whose handler runs at-least-once (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsInternalCommandHandler.cs:23-28`), so an interrupted pass is picked up again by the framework's internal-command processor and its backoff/attempt ceiling rather than by a five-minute cron sweep.
-  - The runner itself is switched on per host. Seven hosts call `AddScheduledJobs(builder.Configuration)` today: ADC's three service hosts (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:352`, `.../MMCA.ADC.Engagement.Service/Program.cs:193`, `.../MMCA.ADC.Identity.Service/Program.cs:228`), Store's three (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:211`, `.../MMCA.Store.Sales.Service/Program.cs:207`, `.../MMCA.Store.Identity.Service/Program.cs:189`) and the reference app (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:79`).
+  - The runner itself is switched on per host. Seven hosts call `AddScheduledJobs(builder.Configuration)` today: ADC's three service hosts (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:352`, `.../MMCA.ADC.Engagement.Service/Program.cs:193`, `.../MMCA.ADC.Identity.Service/Program.cs:228`), Store's three (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:211`, `.../MMCA.Store.Sales.Service/Program.cs:207`, `.../MMCA.Store.Identity.Service/Program.cs:189`) and the reference app (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:75`).
 - **Caveats / not-in-source**: `MMCA.Store/Source` implements no `IScheduledJob` of its own; its hosts enable the scheduler for the framework's retention job, which is exactly what the comment above those calls says (`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:202-207`). Retention only happens in a host that enables both features: registering the trail without the scheduler records every change and purges nothing, leaving `AuditTrail:RetentionDays` inert, which is what the `AddAuditTrail` doc warns about (`.../Infrastructure/DependencyInjection.cs:450-456`).
 
 ---

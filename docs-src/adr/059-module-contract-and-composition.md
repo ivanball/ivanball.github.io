@@ -56,8 +56,9 @@ rather than by absence.
   `MMCA.ADC.Conference.Service/Program.cs:371-373`, `MMCA.ADC.Engagement.Service/Program.cs:213-215`,
   `MMCA.ADC.Notification.Service/Program.cs:195-197`) each name the single assembly of the one module
   that host enables, so an extracted service's scan surface equals its own module. Helpdesk calls
-  `DiscoverAndRegister` directly with its one module assembly
-  (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:116-124`), and the unit tests name their
+  `DiscoverAndRegister` with its one module assembly inside a `Register` step of its
+  `AddMmcaApplicationPipeline` call
+  (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:125-133`), and the unit tests name their
   own assembly the same way
   (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Modules/ModuleLoaderTests.cs:42-49`).
 - **Registration order is a Kahn topological sort over the declared names.** The loader sorts before
@@ -341,6 +342,13 @@ seven of eight: ADC adds `ConferenceModuleTests`, which pins `Conference` with n
 `:13`, `:15`). Helpdesk Tickets is the one module still unchecked. The undeclared Conference-to-Engagement
 gRPC edge recorded in the 2026-10-07 revision is unchanged, and the new test pins that declaration as it
 stands rather than resolving it.
+
+Same date, separately: the Helpdesk host no longer calls `DiscoverAndRegister` as a bare statement.
+It runs inside a `Register` step of `services.AddMmcaApplicationPipeline(...)`
+(`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:121`, step `:125-133`), so discovery sits
+between `AddApplication()` and `AddApplicationDecorators()` by construction. The scan input is
+unchanged (one named assembly, `typeof(TicketsModule).Assembly` at `:132`); the Decision's dead
+`:116-124` anchor is re-pointed.
 
 ## Related
 ADR-008 (the extraction topology that consumes this model: "a service is the monolith with one module

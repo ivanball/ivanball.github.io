@@ -1046,7 +1046,7 @@
           </tr>
           <tr>
           <td>BR-56</td>
-          <td>Soft-deleting a User soft-deletes the User record and revokes the user&#39;s refresh token (preventing further token refresh). Raises <code>UserDeleted</code> domain event. Engagement data (bookmarks) is retained but excluded from user-facing queries.</td>
+          <td>Soft-deleting a User soft-deletes the User record and revokes the user&#39;s refresh token (preventing further token refresh). Raises <code>UserDeleted</code> domain event. <strong>Clarification (2026-10-19):</strong> the erasure is also published cross-service as the <code>UserDeleted</code> integration event, and each service that holds the account&#39;s data outside Identity erases it there. Conference anonymizes the email of every speaker profile linked to the account (<code>Speaker.Anonymize()</code>, BR-66) and then unlinks it (BR-207), and erases the account&#39;s feedback answers; Engagement takes the account off the leaderboard, deletes its bookmarks, live-poll votes, question upvotes and badge, and erases its session questions. See Event Handlers &amp; Side Effects.</td>
           </tr>
           <tr>
           <td>BR-58</td>
@@ -2707,7 +2707,7 @@
           </tr>
           <tr>
           <td><code>UserDeleted</code></td>
-          <td>User account is soft-deleted</td>
+          <td>User account is soft-deleted (also published as the <code>UserDeleted</code> integration event, consumed by Conference and Engagement; see Event Handlers below)</td>
           <td>UserId</td>
           <td>Identity</td>
           </tr>
@@ -2794,11 +2794,21 @@
           <tr>
           <td><code>SpeakerChanged</code> (Deleted)</td>
           <td>Identity</td>
-          <td><strong>Cross-context link cleanup:</strong> Clears <code>User.LinkedSpeakerId</code> for the linked user (if any). See BR-70. This is the only handler that crosses a bounded context boundary: it enables the Conference context to notify Identity of a speaker deletion without a direct cross-context write.</td>
+          <td><strong>Cross-context link cleanup:</strong> Clears <code>User.LinkedSpeakerId</code> for the linked user (if any). See BR-70. It enables the Conference context to notify Identity of a speaker deletion without a direct cross-context write.</td>
+          </tr>
+          <tr>
+          <td><code>UserDeleted</code> (integration event)</td>
+          <td>Conference</td>
+          <td><strong>Cross-service erasure:</strong> <code>UserDeletedSpeakerErasureHandler</code> anonymizes the email of every speaker linked to the erased account and unlinks it in one save (BR-56, BR-66); <code>UserDeletedFeedbackHandler</code> soft-deletes the account&#39;s feedback answers, overwriting any free-text value first (ratings are kept).</td>
+          </tr>
+          <tr>
+          <td><code>UserDeleted</code> (integration event)</td>
+          <td>Engagement</td>
+          <td><strong>Cross-service erasure:</strong> takes the account off the leaderboard and overwrites the name it published there, deletes its bookmarks, live-poll votes, question upvotes and badge, and erases its session questions.</td>
           </tr>
           </tbody></table></div>
           <blockquote>
-          <p><strong>Note:</strong> Only <code>RoomChanged</code>, <code>SessionCreated</code>, and <code>SpeakerChanged</code> (Deleted) currently have registered handlers. All three perform logging or link cleanup. The remaining domain events (including <code>UserRegistered</code>, <code>UserPasswordChanged</code>, <code>UserDeleted</code>, <code>SpeakerQuestionAnswerChanged</code>, and others) are defined but have no handlers: they exist as extension points and will gain handlers when concrete requirements emerge (e.g., real-time notifications, audit logging, analytics, engagement analytics via <code>UserSessionBookmarkChanged</code>).</p>
+          <p><strong>Note:</strong> Of the domain events in the table, <code>RoomChanged</code>, <code>SessionCreated</code>, and <code>SpeakerChanged</code> (Deleted) have registered handlers, which perform logging or link cleanup, and <code>UserDeleted</code> is handled across services through its integration event (the two erasure rows above); <code>UserRegistered</code> likewise reaches Conference as an integration event for the BR-207 speaker auto-link. The remaining domain events (including <code>UserPasswordChanged</code>, <code>SpeakerQuestionAnswerChanged</code>, and others) are defined but have no handlers: they exist as extension points and will gain handlers when concrete requirements emerge (e.g., real-time notifications, audit logging, analytics, engagement analytics via <code>UserSessionBookmarkChanged</code>).</p>
           </blockquote>
           <h3 id="dispatch-mechanism">Dispatch Mechanism</h3>
           <p>Domain events are raised during entity mutations and dispatched asynchronously after changes are persisted.</p>
@@ -2842,7 +2852,7 @@
           </tr>
           <tr>
           <td>Soft-delete (User)</td>
-          <td>Soft-deletes the User record per BR-56. Engagement records (bookmarks) are retained but excluded from user-facing queries.</td>
+          <td>Soft-deletes the User record per BR-56. The cross-service <code>UserDeleted</code> consumers erase the account&#39;s data in Conference (linked speaker email, feedback answers) and Engagement (leaderboard entry, bookmarks, votes, session questions, badge).</td>
           </tr>
           </tbody></table></div>
           <h3 id="cross-entity-constraints">Cross-Entity Constraints</h3>
@@ -3514,7 +3524,7 @@
           </thead>
           <tbody><tr>
           <td>BR-66</td>
-          <td><code>Speaker.Email</code> is optional (speakers may not have their email published in Sessionize) and <strong>not unique</strong>: though duplicates would be unusual. Speaker email is <strong>not exposed</strong> via public API read endpoints (GET /api/speakers) because email is PII: it is not information attendees need. Social links (BR-99) are public because speakers intentionally share them for professional networking. Speaker email is visible to Organizers via the write/management endpoints. It follows the Sessionize source-of-truth rule (BR-48). <strong>Redaction covers the lookup label too:</strong> <code>/api/speakers/lookup</code> restricts <code>nameProperty</code> to <code>FirstName</code> or <code>LastName</code> for non-privileged callers, so <code>nameProperty=Email</code> cannot be used to project the address the read DTO withholds (see Section 11.7).</td>
+          <td><code>Speaker.Email</code> is optional (speakers may not have their email published in Sessionize) and <strong>not unique</strong>: though duplicates would be unusual. Speaker email is <strong>not exposed</strong> via public API read endpoints (GET /api/speakers) because email is PII: it is not information attendees need. Social links (BR-99) are public because speakers intentionally share them for professional networking. Speaker email is visible to Organizers via the write/management endpoints. It follows the Sessionize source-of-truth rule (BR-48). <strong>Redaction covers the lookup label too:</strong> <code>/api/speakers/lookup</code> restricts <code>nameProperty</code> to <code>FirstName</code> or <code>LastName</code> for non-privileged callers, so <code>nameProperty=Email</code> cannot be used to project the address the read DTO withholds (see Section 11.7). <strong>Clarification (2026-10-19):</strong> <code>Speaker.Email</code> is marked <code>[Pii]</code>, so the audit trail stores it redacted, and <code>Speaker</code> is <code>IAnonymizable</code>: when the linked user account is erased (BR-56) the email is replaced with the placeholder <code>deleted-{SpeakerId}@anonymized.invalid</code>, while the name, biography and the rest of the public profile are kept as event program content. The Sessionize sync never writes an email, so a re-sync cannot restore the address.</td>
           </tr>
           </tbody></table></div>
           <hr>
@@ -5061,7 +5071,7 @@
           </tr>
           <tr>
           <td>BR-207</td>
-          <td><strong>Speaker-user linking</strong> is automatic at registration and login when <code>User.Email</code> matches <code>Speaker.Email</code> (case-insensitive). The link is stored bidirectionally (<code>User.LinkedSpeakerId</code>, <code>Speaker.LinkedUserId</code>). <strong>Discovery limitation:</strong> Speaker emails are not exposed via public API (BR-66), so attendees cannot verify which email their Speaker profile uses in Sessionize. Organizers should inform speakers of their Sessionize-registered email address before the conference so they register with the matching email. When automatic matching fails (e.g., speaker uses a different personal email), organizers can use manual linking (BR-209). <strong>Clarification (2026-09-07):</strong> matching is by email equality AND requires a <strong>provider-verified</strong> address: the <code>UserRegistered</code> integration event carries an <code>EmailVerified</code> flag, and the Conference-side handler links only when an external identity provider asserted the address. A local password registration under a speaker&#39;s address links nothing (an address typed into a form proves nothing, and a speaker profile carries rights over that speaker&#39;s own record and sessions); when the name matches unlinked speakers the handler logs an organizer cue instead, and the organizer manual link (BR-209) is the path. <strong>Clarification (2026-08-04, BugHunt C5):</strong> matching is by email equality ONLY; a name-based fallback that briefly existed in code was removed as a security fix (registration names are unverified free text, so a name match would let anyone claim a speaker profile). Sessionize-imported speakers carry no email, so the organizer manual link (BR-209) is their intended path; when a registration&#39;s email match misses but unlinked speakers share the registrant&#39;s name, the handler logs an Information-level cue for the organizer rather than linking.</td>
+          <td><strong>Speaker-user linking</strong> is automatic at registration and login when <code>User.Email</code> matches <code>Speaker.Email</code> (case-insensitive). The link is stored bidirectionally (<code>User.LinkedSpeakerId</code>, <code>Speaker.LinkedUserId</code>). <strong>Discovery limitation:</strong> Speaker emails are not exposed via public API (BR-66), so attendees cannot verify which email their Speaker profile uses in Sessionize. Organizers should inform speakers of their Sessionize-registered email address before the conference so they register with the matching email. When automatic matching fails (e.g., speaker uses a different personal email), organizers can use manual linking (BR-209). <strong>Clarification (2026-09-07):</strong> matching is by email equality AND requires a <strong>provider-verified</strong> address: the <code>UserRegistered</code> integration event carries an <code>EmailVerified</code> flag, and the Conference-side handler links only when an external identity provider asserted the address. A local password registration under a speaker&#39;s address links nothing (an address typed into a form proves nothing, and a speaker profile carries rights over that speaker&#39;s own record and sessions); when the name matches unlinked speakers the handler logs an organizer cue instead, and the organizer manual link (BR-209) is the path. <strong>Clarification (2026-08-04, BugHunt C5):</strong> matching is by email equality ONLY; a name-based fallback that briefly existed in code was removed as a security fix (registration names are unverified free text, so a name match would let anyone claim a speaker profile). Sessionize-imported speakers carry no email, so the organizer manual link (BR-209) is their intended path; when a registration&#39;s email match misses but unlinked speakers share the registrant&#39;s name, the handler logs an Information-level cue for the organizer rather than linking. <strong>Clarification (2026-10-19):</strong> an erased speaker&#39;s placeholder email (BR-66) is on the reserved <code>.invalid</code> domain, which no identity provider can verify, so it can never satisfy the provider-verified match and never auto-links.</td>
           </tr>
           <tr>
           <td>BR-208</td>

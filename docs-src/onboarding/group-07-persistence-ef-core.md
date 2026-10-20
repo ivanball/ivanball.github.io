@@ -3427,7 +3427,7 @@ survives a module being pulled out into its own service.
   Behavior is pinned by
   `MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/AuditTrail/AuditTrailSaveChangesInterceptorTests.cs`
   and `AuditTrailModelGateTests.cs`. Hosts opting in today include MMCA.Helpdesk
-  (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:78`), all three MMCA.Store services
+  (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:88`), all three MMCA.Store services
   (`Identity.Service/Program.cs:188`, `Sales.Service/Program.cs:206`,
   `Catalog.Service/Program.cs:210`) and all three MMCA.ADC services
   (`Engagement.Service/Program.cs:197`, `Identity.Service/Program.cs:232`,

@@ -136,7 +136,7 @@ every REST/gRPC host call it instead of composing its own.
   (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:320`), Store Identity
   (`MMCA.Store.Identity.Service/Program.cs:299`) and Store Sales
   (`MMCA.Store.Sales.Service/Program.cs:299`). The reference app calls it too
-  (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:142`), and because that tree **is** the
+  (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:149`), and because that tree **is** the
   `mmca-app` template (`MMCA.Helpdesk/.template.config/template.json:5,7`, ADR-065), a scaffolded app
   gets the same line.
 - **Hosts extend it by appending, after the call, or through the builder.** Service hosts map their

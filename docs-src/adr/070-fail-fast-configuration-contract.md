@@ -123,7 +123,7 @@ value through `IOptions<T>` of the concrete settings class.**
   says what the call binds) and Store's three
   (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:125-127`) each declare the two
   sections in a single line of host code. The Helpdesk monolith seed still writes both chains out in its
-  own `Program.cs` (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:19-22` and `:94-97`), which is
+  own `Program.cs` (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:19-22` and `:92-95`), which is
   exactly what the shared call expands to, so the contract reads the same whether a host takes the helper
   or spells it out. Modules may add their own sections on the same chain, as Store's Sales module does for
   Stripe.

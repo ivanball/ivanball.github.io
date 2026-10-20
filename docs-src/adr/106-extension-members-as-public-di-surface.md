@@ -1,22 +1,23 @@
 # ADR-106: C# Extension Members as the Public DI Registration Surface
 
 ## Status
-Accepted (2026-09-01; counts re-measured 2026-10-01). Revised 2026-10-06: counts re-measured against current source, and ADC's broker selection is now credited to the framework rather than to an ADC block. Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
+Accepted (2026-09-01; counts re-measured 2026-10-01). Revised 2026-10-06: counts re-measured against current source, and ADC's broker selection is now credited to the framework rather than to an ADC block. Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised 2026-10-19: the Helpdesk host examples re-pointed after the host moved to `AddMmcaApplicationPipeline`.
 
 ## Context
 Every host in this workspace boots the same way: a `Program.cs` calls a short list of `Add*` methods
 on `IServiceCollection`, one per layer, and all of the framework's wiring sits behind those names.
-MMCA.Helpdesk's web host is the smallest of them, calling `services.AddApplication()`
-(`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:78`),
-`services.AddInfrastructure(builder.Configuration)` (`:79`), `services.AddAPI(modulesSettings)`
-(`:101`) and `services.AddApplicationDecorators()` (`:132`). Even that host is not four calls any
-more: its capability opt-ins arrive through the same surface, as
-`services.AddAuditTrail(builder.Configuration)` (`:90`),
-`services.AddScheduledJobs(builder.Configuration)` (`:91`),
-`services.AddMultiTenancy(builder.Configuration)` (`:92`),
-`services.AddErrorResources<TicketsErrorResources>()` (`:106`) and
-`services.AddBrokerMessaging(builder.Configuration)` (`:130`). Every one of them is an `Add*` name on
-`IServiceCollection`.
+MMCA.Helpdesk's web host is the smallest of them, calling
+`services.AddInfrastructure(builder.Configuration)`
+(`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:77`), `services.AddAPI(modulesSettings)`
+(`:99`) and `services.AddMmcaApplicationPipeline(...)` (`:121`), which runs `AddApplication()`
+first and `AddApplicationDecorators()` last around the host's registration steps. Even that host is
+not three calls: its capability opt-ins arrive through the same surface, as
+`services.AddAuditTrail(builder.Configuration)` (`:88`),
+`services.AddScheduledJobs(builder.Configuration)` (`:89`),
+`services.AddMultiTenancy(builder.Configuration)` (`:90`),
+`services.AddErrorResources<TicketsErrorResources>()` (`:104`) and
+`s.AddBrokerMessaging(builder.Configuration)` inside a pipeline `Register` step (`:139`). Every one
+of them is an `Add*` name on `IServiceCollection`.
 
 What is unusual is how those methods are declared. None of them is a classic static extension method
 with a `this` parameter. Each is a member of a C# `extension(T)` block: `AddApplication` is written
@@ -130,7 +131,8 @@ method is what keeps the choice reversible, and the public-API baselines record 
    its `.API` and `.Infrastructure` siblings). The reference seed teaches the shape by using it.
 
 6. **The call site is indistinguishable from a classic extension method.** A host writes
-   `services.AddApplication();` (`Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:78`), and the
+   `services.AddInfrastructure(builder.Configuration);`
+   (`Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:77`), and the
    same holds for every other entry point. Nothing about the declaration style is visible to the
    caller.
 
@@ -301,6 +303,16 @@ baselined. Only line anchors moved after the v1.233.0 release.
    its classic static form at `:1241`, so the classic `DependencyInjection` block runs `:1241-1253`
    (ending at `VerifyDecoratorPipeline`); `dotnet-version: '10.0.x'` in
    `MMCA.Common/.github/workflows/release.yml` is at `:50` and `:186`.
+
+## Revision (2026-10-19)
+Re-verified against current source. No decision, rationale, count or trade-off changed; the Helpdesk
+host the Context and Decision use as their example composes through `AddMmcaApplicationPipeline`.
+1. `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs` no longer calls `services.AddApplication()`
+   or `services.AddApplicationDecorators()` directly: both run inside
+   `services.AddMmcaApplicationPipeline(...)` (`:121`). The Context lists `AddInfrastructure` (`:77`),
+   `AddAPI` (`:99`) and the pipeline call (`:121`) instead, with the opt-ins at `:88`, `:89`, `:90`,
+   `:104` and the broker registration as a `Register` step at `:139`; Decision point 6 uses the
+   `AddInfrastructure` call site (`:77`) as its plain-extension example.
 
 ## Related
 [ADR-015](015-architecture-fitness-functions.md) (the RS0016/RS0017 baseline that freezes both
