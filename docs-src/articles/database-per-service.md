@@ -392,7 +392,7 @@ DB-per-tenant: `ResolveTenantOverride` at
 (`Infrastructure/Persistence/DbContexts/Factory/TransactionCommitAmbiguousException.cs`) exposes
 `CommittedSources` `:76`, `AmbiguousSource` `:85`, `RolledBackSources` `:93`, and appends
 `" Per-source outcome: ..."` at `:117`. Registration: `services.AddInfrastructure` at
-`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:79`, `services.AddMultiTenancy` at `:92`;
+`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:77`, `services.AddMultiTenancy` at `:90`;
 the two demo tenants (`acme` shared, `globex` overriding `Default` to `Helpdesk_Globex`) at
 `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/appsettings.json:29-45`. ADR-073 adoption and the two
 honest costs: `Website/docs-src/adr/073-multi-tenancy-model.md:219-224` and `:263-268`.

@@ -32,6 +32,8 @@ helper, ADC's per-service broker secret is recorded alongside Store's, and ancho
 Revised 2026-10-07: ADC's `cross-service-freshness` gate is now a step of one consolidated
 `freshness` deploy job rather than a job of its own, so the gate citation is restated, and the ADC
 anchors are refreshed after the v1.233.0 release.
+Revised 2026-10-19: the Helpdesk broker registration is a `Register` step of
+`AddMmcaApplicationPipeline`; anchor re-pointed (see Revision below).
 ## Context
 ADR-003 decides that integration events leave an aggregate through the outbox and are published by
 `OutboxProcessor` via `IMessageBus`, and it settles the *dispatch* question ("in-process for the
@@ -190,8 +192,9 @@ carry a dedicated test tier for the transport that only production uses.
 
 Adoption differs by repo. ADC and Store select a broker on every extracted service, local and
 production alike. MMCA.Helpdesk stays on `InProcess`: its monolith host calls the same
-`AddBrokerMessaging(builder.Configuration)` with no `MessageBus:Provider` configured
-(`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:130`), and its AppHost provisions no
+`AddBrokerMessaging(builder.Configuration)` with no `MessageBus:Provider` configured, as a
+`.Register(s => s.AddBrokerMessaging(builder.Configuration))` step of its application pipeline
+(`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:139`), and its AppHost provisions no
 broker, so extraction later is an AppHost change rather than a code change.
 
 ## Rationale
@@ -359,6 +362,15 @@ gate and every ADC anchor, shifted by the changes merged on 2026-10-07.
    `:116-126`, cron `:32`; ADC `deploy.yml` window `:883` and break-glass `skip_freshness_gates`
    input `:13`. The 2026-10-06 revision's anchors and its re-verification note were accurate on
    that date and stay as written.
+
+## Revision (2026-10-19)
+Re-verified against current source. The transport decision is unchanged. The Helpdesk monolith host
+composes its application pipeline through `AddMmcaApplicationPipeline`
+(`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:121`), and the same
+`AddBrokerMessaging(builder.Configuration)` call is now its second `Register` step (`:139`), after
+module discovery (`:125-133`) so its `Replace` calls still win over the loader's. Helpdesk still
+configures no `MessageBus:Provider` and stays on `InProcess`; the Adoption paragraph's dead `:130`
+anchor is re-pointed to `:139`.
 
 ## Related
 ADR-003 (the outbox that feeds `IMessageBus`; this ADR picks the transport underneath it), ADR-016

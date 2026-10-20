@@ -409,6 +409,13 @@ were re-read this run and corrected in place below; every other anchor carries f
 refresh (MMCA.Common v1.221.0), which re-read all of them unless marked otherwise and replaced the
 2026-09-19 ledger, because most of its line numbers had moved and `DependencyInjection.cs` is split
 into three partial files.
+**2026-10-19 entry (Helpdesk PR #177, Common PR #572, both open).** No body change. The Helpdesk host composes
+with `AddMmcaApplicationPipeline`, so the DI-sequence anchors below are corrected in place, re-read from
+the `refactor/h1-application-pipeline` branch of `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs`.
+The `MMCA.Common/AGENTS.md` drift noted in the 2026-10-08 entry is corrected on Common's
+`docs/agents-pipeline-call` branch: `:75` says the method runs `AddApplication()`, the configure callback
+and `AddApplicationDecorators()`, with `AddInfrastructure` and `AddAPI` outside the call, which is what
+the body already says.
 **2026-10-08 entry (MMCA.Common v1.233.0).** Three body changes. (1) Profiling: `AddApplicationProfiling()`
 (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:160`, doc "Registers
 MiniProfiler decorators" `:156`) registers the pair at `:162-163` with no toggle; it wraps from the
@@ -496,9 +503,9 @@ is not described in the body: it does not change the three outcomes the article 
 example (the article's `ScanModule` / `Register` snippet) at `:200-203`. The seal guards only the
 framework registration methods; `VerifyDecoratorPipeline()` (`:244`) is the opt-in fitness check, and
 the body's scoping ("every registration method that could add handlers afterwards") stays accurate.
-Helpdesk wires the sequence by hand with `AddApplicationDecorators()` last:
-`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:132`, after `AddApplication()` `:78`,
-`AddInfrastructure` `:79`, `AddAPI` `:101`, `DiscoverAndRegister` `:116`, `AddBrokerMessaging` `:130`.
+Helpdesk composes the sequence with `AddMmcaApplicationPipeline`:
+`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:121`, with `AddInfrastructure` `:77` and `AddAPI` `:99`
+outside the call and `DiscoverAndRegister` (`:125`) and `AddBrokerMessaging` (`:139`) as `Register` steps inside it.
 Markers: `Markers/` holds eight interfaces (`ICacheInvalidating`, `IFeatureGated`, `IHasTimeout`,
 `IQueryCacheable`, `IRequiresMfa`, `IRequiresPermission`, `ISharedQueryCache`, `ITransactional`); the
 ones the body names are `ITransactional.cs:6`, `ICacheInvalidating.cs:8,14`, `IQueryCacheable.cs:23,28`,
@@ -526,7 +533,7 @@ protocol-keyed exemption and the `CommonForwardedHeaders.Create()` factory
 `MMCA.ADC.Conference.Service/Program.cs:442`, `MMCA.ADC.Identity.Service/Program.cs:345`,
 `MMCA.ADC.Engagement.Service/Program.cs:320`, `MMCA.ADC.Notification.Service/Program.cs:262`,
 `MMCA.Store.Sales.Service/Program.cs:299`, `MMCA.Store.Identity.Service/Program.cs:299`,
-`MMCA.Store.Catalog.Service/Program.cs:320`, `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:142`.
+`MMCA.Store.Catalog.Service/Program.cs:320`, `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:149`.
 **Mapping.** Rubric sections re-anchored in `Website/docs-src/governance/ArchitectureEvaluationCriteria.md`:
 section 1 (SOLID) `:122`, section 6 (CQRS and event-driven) `:229`, section 10 (Messaging and
 integration) `:329`. Section 10 matches the README mapping row but the body carries no messaging

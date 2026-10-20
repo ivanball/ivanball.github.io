@@ -88,7 +88,7 @@ deliberately broader one for gateways.
   (`MMCA.ADC.Identity.Service/Program.cs:356`, `MMCA.ADC.Conference.Service/Program.cs:448`,
   `MMCA.ADC.Engagement.Service/Program.cs:325`, `MMCA.ADC.Notification.Service/Program.cs:269`,
   `MMCA.Store.Catalog.Service/Program.cs:320`, `MMCA.Store.Identity.Service/Program.cs:299`,
-  `MMCA.Store.Sales.Service/Program.cs:299`, `MMCA.Helpdesk.Web/Program.cs:142`). Both gateways call
+  `MMCA.Store.Sales.Service/Program.cs:299`, `MMCA.Helpdesk.Web/Program.cs:149`). Both gateways call
   `AddCommonGatewayCors` and the bare `app.UseCors()`
   (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:125`, `:173`;
   `MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:77`, `:162`).

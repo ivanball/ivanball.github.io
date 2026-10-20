@@ -396,23 +396,24 @@ dotnet test  <span class="hljs-literal">--solution</span> Contoso.Support.slnx  
           <code>TryDecorate</code> can only wrap handlers that are already registered. That is the only constraint that
           matters here. Registrations that are not handlers (infrastructure, API, telemetry, options) can sit on
           either side of it: DI dependencies resolve at runtime, not at registration time, so the infrastructure
-          that backs the decorated handlers can be registered before or after them. The generated host spells the
-          sequence out by hand:</p>
+          that backs the decorated handlers can be registered before or after them. The generated host composes
+          the handler registrations inside <code>AddMmcaApplicationPipeline</code>, which runs <code>AddApplication()</code> first and
+          <code>AddApplicationDecorators()</code> last, and keeps everything else outside the call:</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Host composition root: the generated Web/Program.cs, abridged (representative module names)</span>
 services.AddCommonExceptionHandlers();                  <span class="hljs-comment">// ProblemDetails exception handlers</span>
-services.AddApplication();                              <span class="hljs-comment">// core services, event dispatcher</span>
 services.AddInfrastructure(builder.Configuration);      <span class="hljs-comment">// repos, UoW, DbContexts, caching, outbox</span>
 services.AddAPI(modulesSettings);                       <span class="hljs-comment">// controllers, idempotency, feature flags, error localization</span>
 services.AddErrorResources&lt;OrdersErrorResources&gt;();     <span class="hljs-comment">// one per module: error-code translations</span>
 services.AddErrorResources&lt;PromotionsErrorResources&gt;();
 
-moduleLoader.DiscoverAndRegister(
-    services, builder.Configuration, applicationSettings, modulesSettings,
-    builder.Environment.EnvironmentName,
-    [<span class="hljs-meta">typeof(OrdersModule).Assembly, typeof(PromotionsModule).Assembly</span>]); <span class="hljs-comment">// each module scans itself</span>
+services.AddMmcaApplicationPipeline(pipeline =&gt; pipeline <span class="hljs-comment">// AddApplication() first, decorators LAST, then sealed</span>
+    .Register(s =&gt; moduleLoader.DiscoverAndRegister(
+        s, builder.Configuration, applicationSettings, modulesSettings,
+        builder.Environment.EnvironmentName,
+        [<span class="hljs-meta">typeof(OrdersModule).Assembly, typeof(PromotionsModule).Assembly</span>])) <span class="hljs-comment">// each module scans itself</span>
+    .Register(s =&gt; s.AddBrokerMessaging(builder.Configuration)));
 
-services.AddBrokerMessaging(builder.Configuration);
-services.AddApplicationDecorators();                    <span class="hljs-comment">// MUST be last: Scrutor wraps existing handlers</span></code></pre>
+services.AddModuleHealthChecks(moduleLoader);           <span class="hljs-comment">// not a handler registration: stays outside</span></code></pre>
           <p>The rules embedded in that order:</p>
           <ul>
           <li><strong><code>ScanModuleApplicationServices&lt;TMarker&gt;()</code></strong> runs once per module, from inside that module&#39;s own
@@ -428,9 +429,10 @@ services.AddApplicationDecorators();                    <span class="hljs-commen
           one case that still slips through: it runs with no transactions, no caching, no logging, and no error
           to tell you.</li>
           <li><strong><code>AddMmcaApplicationPipeline(pipeline =&gt; ...)</code></strong> is the framework&#39;s preferred form of the same
-          sequence: it runs <code>AddApplication()</code>, then your callback (module scans, a <code>ModuleLoader</code> run, broker
-          wiring), then <code>AddApplicationDecorators()</code>, so the handler registrations cannot land on the wrong side
-          of the decorators. The generated host keeps the explicit calls shown above.</li>
+          sequence and the one the generated host uses: it runs <code>AddApplication()</code>, then your callback&#39;s
+          <code>Register</code> steps in order (module discovery, then broker wiring, so the broker&#39;s <code>Replace</code> calls win
+          over the loader&#39;s), then <code>AddApplicationDecorators()</code>, so the handler registrations cannot land on the
+          wrong side of the decorators.</li>
           </ul>
           <h2 id="step-7-watch-the-decorator-pipeline-kick-in-for-free">Step 7: watch the decorator pipeline kick in, for free</h2>
           <p>With the sequence correct, every command and query handler is now wrapped, in this execution order:</p>

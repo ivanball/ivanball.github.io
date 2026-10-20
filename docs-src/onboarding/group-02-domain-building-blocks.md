@@ -734,7 +734,7 @@ in it.
   The opting-in hosts are the three ADC services
   (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:249`,
   `MMCA.ADC.Conference.Service/Program.cs:356`, `MMCA.ADC.Engagement.Service/Program.cs:202`) and the
-  Helpdesk web host (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:78`).
+  Helpdesk web host (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:88`).
 - **Caveats / not-in-source**: retention is not automatic. `AuditTrailSettings.RetentionDays` defaults
   to 90 (`AuditTrailSettings.cs:38`), but the doc comment states the purge only happens if the host
   also runs the scheduler; without it the trail still records and the table grows until an operator
@@ -968,7 +968,7 @@ in it.
   are Helpdesk's `Ticket` and its child `TicketComment`
   (`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/Tickets/Ticket.cs:26` and
   `.../TicketComment.cs:16`), opted in at
-  `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:80`; ADC and Store carry no `ITenantEntity`
+  `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:90`; ADC and Store carry no `ITenantEntity`
   today.
 - **Caveats / not-in-source**: `Tenancy:Enabled` gates **resolution**, not isolation. The filter and the
   interceptor are always registered and are inert whenever no tenant is resolved

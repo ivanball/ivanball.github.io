@@ -234,7 +234,7 @@ code around them:
 
 | Know this | Because | Detail |
 |---|---|---|
-| `AddApplicationDecorators()` is the **last** handler registration (only `AddModuleHealthChecks` follows it) | decorators wrap handlers that already exist, and modules register theirs during `ModuleLoader` | [Phase 5](common-BUILD-BY-HAND.md#phase-5-compose-the-monolith-host-and-run-it) |
+| every handler registration goes **inside** `AddMmcaApplicationPipeline(...)` (it runs `AddApplicationDecorators()` last and seals; only `AddModuleHealthChecks` follows it) | decorators wrap handlers that already exist, and modules register theirs during `ModuleLoader` | [Phase 5](common-BUILD-BY-HAND.md#phase-5-compose-the-monolith-host-and-run-it) |
 | the AppHost does `WaitFor(sql)`, never `WaitFor(db)` | the host creates the database at startup, so waiting on the database resource deadlocks at "Waiting" forever | [Phase 5](common-BUILD-BY-HAND.md#the-aspire-apphost) |
 | the AppHost needs its `Properties/launchSettings.json` | without it the dashboard endpoints are never configured, and a missing dashboard presents as a hang | [Phase 5](common-BUILD-BY-HAND.md#the-aspire-apphost) |
 | every module must appear in `IArchitectureMap` | a module missing from the map is **silently** not covered by the layering and isolation rules | [Phase 6](common-BUILD-BY-HAND.md#the-architecture-fitness-map-mandatory) |

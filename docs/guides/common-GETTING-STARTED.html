@@ -312,7 +312,7 @@ Tests/
           </tr>
           </thead>
           <tbody><tr>
-          <td><code>AddApplicationDecorators()</code> is the <strong>last</strong> handler registration (only <code>AddModuleHealthChecks</code> follows it)</td>
+          <td>every handler registration goes <strong>inside</strong> <code>AddMmcaApplicationPipeline(...)</code> (it runs <code>AddApplicationDecorators()</code> last and seals; only <code>AddModuleHealthChecks</code> follows it)</td>
           <td>decorators wrap handlers that already exist, and modules register theirs during <code>ModuleLoader</code></td>
           <td><a href="common-BUILD-BY-HAND.html#phase-5-compose-the-monolith-host-and-run-it">Phase 5</a></td>
           </tr>

@@ -247,7 +247,7 @@
           anonymous surface; Store&#39;s public review list is served through a contract that declares none).
           Updated 2026-10-01 (corrected the <code>DeleteChildren</code> composition description; citations refreshed).
           Revised 2026-10-06: Store&#39;s public review contract carries no reviewer name either, and the interceptor and controller anchors were refreshed.
-          Revised 2026-10-19: the framework guard runs in both directions (a reverse rule and a sample-coverage fact in <code>PiiConventionTestsBase</code>, v1.246.0), and ADC and Store both adopt it.</p>
+          Revised 2026-10-19: the framework guard runs in both directions (a reverse rule and a sample-coverage fact in <code>PiiConventionTestsBase</code>, v1.246.0), and ADC and Store both adopt it. Same date: ADC&#39;s <code>Speaker</code> becomes <code>IAnonymizable</code> with a <code>[Pii]</code> email that the cross-service <code>UserDeleted</code> erasure anonymizes before unlinking.</p>
           <h2 id="context">Context</h2>
           <p>The framework&#39;s default deletion model is <strong>soft-delete</strong>: <code>AuditableBaseEntity.Delete()</code> sets <code>IsDeleted = true</code> and EF Core global query filters exclude the row from normal queries. The row (including any personal data it holds) stays in the database indefinitely, which is exactly what audit, referential integrity, and &quot;undelete&quot; (BR-135) require.</p>
           <p>This conflicts with data-subject <strong>erasure</strong> rights (GDPR Art. 17 right-to-be-forgotten, CCPA deletion): when a person requests deletion, their personal data must actually be removed or anonymized, not merely hidden. Soft-delete alone is therefore non-compliant for personal data, and a consumer app&#39;s published privacy policy (e.g. a &quot;we delete your data within 30 days&quot; promise) cannot be honored by soft-delete.</p>
@@ -351,13 +351,32 @@
           <p>Both apps adopt it. Store moved its hand-written reverse rule into the base and keeps only its four
           samples (<code>ProductReview</code>, <code>Customer</code>, <code>User</code>, <code>Order</code>) plus a non-vacuity guard
           (<code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Privacy/PiiConventionTests.cs:33-48</code>,
-          <code>:55-61</code>). ADC supplies a <code>User</code> sample built as an external account with every device field filled
-          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Privacy/PiiConventionTests.cs:17-28</code>). The
-          reverse rule found six fields ADC&#39;s <code>Anonymize()</code> overwrote without a marker; <code>DeviceFormFactor</code>,
+          <code>:55-61</code>). ADC supplies two samples: a <code>User</code> built as an external account with every device field
+          filled, and a <code>Speaker</code> with every profile field and the user link filled
+          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Privacy/PiiConventionTests.cs:23-30</code>,
+          <code>:31-41</code>). The reverse rule found six fields ADC&#39;s <code>Anonymize()</code> overwrote without a marker; <code>DeviceFormFactor</code>,
           <code>DevicePlatform</code>, <code>DeviceModel</code>, <code>DeviceManufacturer</code>, <code>DeviceType</code> and <code>LoginProvider</code> now carry
           <code>[Pii]</code> (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:85</code>, <code>:89</code>, <code>:93</code>,
           <code>:97</code>, <code>:105</code>, <code>:109</code>), and a data-only migration redacts their existing audit-trail rows
           (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Identity/Migrations/20261019200206_RedactAuditTrailDeviceAndProviderValues.cs:26-29</code>).</p>
+          <p>ADC&#39;s <code>Speaker</code> is the second anonymizable entity. It implements <code>IAnonymizable</code>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:28</code>) with one
+          <code>[Pii]</code> field, the organizer-held <code>Email</code> (<code>:40-41</code>). <code>Anonymize()</code> (<code>:330</code>) replaces it with
+          <code>deleted-{Id}@anonymized.invalid</code> (<code>:337</code>) and keeps the name, biography and the rest of the profile,
+          because those are the published event program rather than account data; a speaker with no email, or
+          already carrying the placeholder, is a no-op. The erasure reaches it across services: Identity&#39;s
+          <code>UserDeleted</code> integration event is consumed in Conference by <code>UserDeletedSpeakerErasureHandler</code>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Users/IntegrationEventHandlers/UserDeletedSpeakerErasureHandler.cs:40</code>),
+          which anonymizes every speaker linked to the erased account and then unlinks it (<code>:66</code>, <code>:74</code>) in
+          one save, since the link is the only way to find the speaker. A data-only migration redacts the
+          speaker email values already in the Conference audit trail
+          (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Conference/Migrations/20261019232613_RedactAuditTrailSpeakerEmailValues.cs:24-27</code>).
+          Two paths cannot bring the address back. The Sessionize sync never writes an email: a new speaker is
+          created with none and an update passes the stored value through
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/UseCases/RefreshFromSessionize/SpeakerSyncStrategy.cs:126</code>,
+          <code>:163</code>). And the BR-207 auto-link matches only a provider-verified email
+          (<code>.../Users/IntegrationEventHandlers/UserRegisteredHandler.cs:99</code>), which an address on the reserved
+          <code>.invalid</code> domain can never be, so the placeholder cannot re-attach the profile to anyone.</p>
           <p>The Trade-offs residual narrows accordingly: a field that <code>Anonymize()</code> overwrites can no longer go
           unmarked. A personal-data field that the erasure never touches is still invisible to both directions,
           so marking discipline remains the consumer&#39;s for those.</p>

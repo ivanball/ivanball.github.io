@@ -238,7 +238,7 @@ with v1.232.1.
    `MMCA.ADC.Conference.Service/Program.cs:350`, `MMCA.ADC.Engagement.Service/Program.cs:197`), Store in three
    (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:234`,
    `MMCA.Store.Sales.Service/Program.cs:209`, `MMCA.Store.Identity.Service/Program.cs:196`), and Helpdesk in
-   its one service host (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:91`). The table is created by
+   its one service host (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:89`). The table is created by
    migrations combined with the audit trail: ADC `20260814114610`, `20260814114613` and
    `20260814114616_AddAuditTrailAndScheduler`, Store `20260814114204`, `20260814114208` and
    `20260814114212_AddAuditTrail`, Helpdesk `20260814112727_CommonV1150AuditTrailSchedulerAndTenancy`.

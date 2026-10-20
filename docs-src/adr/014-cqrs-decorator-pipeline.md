@@ -28,7 +28,9 @@ Citations refreshed: the Common `DependencyInjection` registration helpers now s
 `DependencyInjection.cs`, `DependencyInjection.ModuleScanning.cs` and `DependencyInjection.Crud.cs`).
 Revised 2026-10-01 (the record states where each kind of validation lives: UI form models, the
 Validating decorator with its coverage fitness gate, and domain factories; see Revision below).
-Revised 2026-10-06: the Decision states the shipped seven-decorator command chain and six-decorator query chain instead of the pre-2026-08-18 order. Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
+Revised 2026-10-06: the Decision states the shipped seven-decorator command chain and six-decorator query chain instead of the pre-2026-08-18 order. Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised 2026-10-19: the Helpdesk
+reference host composes through `AddMmcaApplicationPipeline` too, so all eight hosts take the sealed
+path; see the Revision (2026-10-19) at the end.
 
 ## Context
 Commands and queries share cross-cutting concerns: validation, transactions, cache invalidation,
@@ -69,10 +71,12 @@ Use single-responsibility handlers behind a Scrutor-composed decorator pipeline.
   directly); `AddApplicationDecorators()` MUST be called **last**, after every module's concrete handlers
   exist, so `TryDecorate` can find them. The hand-written form of that sequence is `AddApplication` ->
   `AddInfrastructure` -> `AddAPI` -> module handler scan via `ModuleLoader.DiscoverAndRegister` ->
-  `AddApplicationDecorators`, and `MMCA.Helpdesk.Web` still ends its host wiring that way
-  (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:132`). The seven production service hosts
-  compose the same sequence through `AddMmcaApplicationPipeline(pipeline => ...)` instead, which runs it
-  in order and seals it (see the Revision (2026-08-26) below): ADC Identity / Conference / Engagement /
+  `AddApplicationDecorators`. All eight hosts compose it through
+  `AddMmcaApplicationPipeline(pipeline => ...)` instead, which runs `AddApplication` first, the
+  callback's registration steps, and `AddApplicationDecorators` last, and seals the collection (see the
+  Revision (2026-08-26) below): the Helpdesk reference host
+  (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:121`) and the seven production service
+  hosts, ADC Identity / Conference / Engagement /
   Notification (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:324`, `...Conference.Service/Program.cs:416`,
   `...Engagement.Service/Program.cs:286`, `...Notification.Service/Program.cs:227`) and Store Identity /
   Catalog / Sales (`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:236`,
@@ -497,3 +501,16 @@ inside the earlier Revision sections are left as historical records.
    (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:286`) are re-pointed; ADC Identity
    `:324` and Notification `:227`, Store Identity `:236`, Catalog `:256` and Sales `:236`, and
    `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:132` still match.
+
+## Revision (2026-10-19)
+The Helpdesk reference host joins the sealed composition path. The decision and both decorator chains
+are unchanged; what changed is that no host writes the decorators-last sequence by hand any more.
+
+1. `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs` composes through
+   `AddMmcaApplicationPipeline` at `:121`, with module discovery as a `Register` step (`:125-133`) and
+   the broker wiring as a second `Register` step (`:139`); `AddInfrastructure` (`:77`), `AddAPI` (`:99`)
+   and `AddModuleHealthChecks` (`:141`) stay outside the call. The host no longer calls `AddApplication()`
+   or `AddApplicationDecorators()` directly, so the Decision now names eight composing hosts.
+2. The `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:132` anchor in the Decision and in the
+   Revision (2026-10-07) above is dead (that line no longer holds `AddApplicationDecorators()`); the
+   Decision cites `:121`, and the Revision (2026-10-07) is left as recorded.

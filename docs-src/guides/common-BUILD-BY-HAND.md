@@ -688,7 +688,7 @@ token; the mutation then lives on the aggregate behind an `IEntityUpdateApplier`
 
 ### What the pipeline does for you
 
-Once `AddApplicationDecorators()` runs (Phase 5), every handler is wrapped by the Scrutor decorator
+Once `AddMmcaApplicationPipeline(...)` closes the pipeline (Phase 5), every handler is wrapped by the Scrutor decorator
 chain (outermost first). See [ADR-014](../adr/014-cqrs-decorator-pipeline.md):
 
 ```
@@ -875,7 +875,13 @@ error rather than a database created the wrong way.
 Create `Source/Hosts/Contoso.Support.Web` (the REST API host). Its `Program.cs` follows the **fixed DI
 sequence**, and the load-bearing rule is that `AddApplicationDecorators()` comes **last**: decorators
 wrap handlers that already exist, and the module handlers are registered by `ModuleLoader` (each
-`IModule.Register` composes its Application+Infrastructure+API layers):
+`IModule.Register` composes its Application+Infrastructure+API layers). The host does not write that
+order by hand: every handler registration (module discovery, the broker wiring) goes inside
+`AddMmcaApplicationPipeline(...)`, which runs `AddApplication()` first, then each `Register` step in
+order, then `AddApplicationDecorators()` last, and **seals** the collection, so a handler registered
+after it throws at startup instead of running unwrapped. Registrations that are not handlers
+(`AddInfrastructure`, `AddAPI`, error resources, health checks) stay outside the call, because their
+order relative to the decorators does not matter:
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
@@ -919,7 +925,6 @@ else
 
 services.AddCommonExceptionHandlers();
 
-services.AddApplication();                       // core services, event dispatcher
 services.AddInfrastructure(builder.Configuration); // repos, UoW, context, caching, outbox
 var modulesSettings = builder.Configuration.GetSection(ModulesSettings.SectionName).Get<ModulesSettings>() ?? [];
 services.AddAPI(modulesSettings);                // controllers, idempotency, exception handlers
@@ -930,20 +935,23 @@ services.AddErrorResources<OrdersErrorResources>();
 
 using var loggerFactory = LoggerFactory.Create(logging => logging.AddConsole());
 var moduleLoader = new ModuleLoader { Logger = loggerFactory.CreateLogger<ModuleLoader>() };
-// The host NAMES the module assemblies discovery scans, one marker type per module. That is what
-// makes discovery deterministic: a referenced assembly no code path has touched yet is not loaded,
-// so an ambient scan would silently miss it.
-moduleLoader.DiscoverAndRegister(
-    services,
-    builder.Configuration,
-    applicationSettings,
-    modulesSettings,
-    builder.Environment.EnvironmentName,
-    [typeof(OrdersModule).Assembly]);
 services.AddSingleton(moduleLoader);
 
-services.AddBrokerMessaging(builder.Configuration);  // InProcessMessageBus until a broker is configured
-services.AddApplicationDecorators();             // MUST be last
+// Application pipeline (ADR-014): AddApplication() first, each Register step in order,
+// AddApplicationDecorators() LAST, then the collection is sealed.
+services.AddMmcaApplicationPipeline(pipeline => pipeline
+    // The host NAMES the module assemblies discovery scans, one marker type per module. That is what
+    // makes discovery deterministic: a referenced assembly no code path has touched yet is not loaded,
+    // so an ambient scan would silently miss it.
+    .Register(s => moduleLoader.DiscoverAndRegister(
+        s,
+        builder.Configuration,
+        applicationSettings,
+        modulesSettings,
+        builder.Environment.EnvironmentName,
+        [typeof(OrdersModule).Assembly]))
+    // InProcessMessageBus until a broker is configured; after discovery so its Replace calls win.
+    .Register(s => s.AddBrokerMessaging(builder.Configuration)));
 
 services.AddModuleHealthChecks(moduleLoader);    // per-module readiness, after the modules are known
 
@@ -1300,9 +1308,13 @@ and JWKS-validated auth. See [ADR-012](../adr/012-grpc-host-transport.md) (Profi
 
 ```csharp
 builder.WebHost.ConfigureKestrel(k => k.ConfigureEndpointDefaults(o => o.Protocols = HttpProtocols.Http2));
-// ...same AddApplication/AddInfrastructure/AddAPI/ModuleLoader sequence...
+// ...same AddInfrastructure/AddAPI/ModuleLoader sequence as the monolith host...
 services.AddGrpcServiceDefaults();
-services.AddBrokerMessaging(builder.Configuration, x => x.RegisterIntegrationEventConsumer<SomeEvent>());
+services.AddMmcaApplicationPipeline(pipeline => pipeline
+    .Register(s => moduleLoader.DiscoverAndRegister(/* ...same arguments... */))
+    .Register(s => s.AddBrokerMessaging(
+        builder.Configuration,
+        x => x.RegisterIntegrationEventConsumer<SomeEvent>())));
 ```
 
 ### 8b. A `.Contracts` project for synchronous calls

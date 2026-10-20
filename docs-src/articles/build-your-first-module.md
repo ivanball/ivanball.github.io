@@ -302,25 +302,26 @@ load-bearing. `AddApplicationDecorators()` must run after every module's handler
 `TryDecorate` can only wrap handlers that are already registered. That is the only constraint that
 matters here. Registrations that are not handlers (infrastructure, API, telemetry, options) can sit on
 either side of it: DI dependencies resolve at runtime, not at registration time, so the infrastructure
-that backs the decorated handlers can be registered before or after them. The generated host spells the
-sequence out by hand:
+that backs the decorated handlers can be registered before or after them. The generated host composes
+the handler registrations inside `AddMmcaApplicationPipeline`, which runs `AddApplication()` first and
+`AddApplicationDecorators()` last, and keeps everything else outside the call:
 
 ```csharp
 // Host composition root: the generated Web/Program.cs, abridged (representative module names)
 services.AddCommonExceptionHandlers();                  // ProblemDetails exception handlers
-services.AddApplication();                              // core services, event dispatcher
 services.AddInfrastructure(builder.Configuration);      // repos, UoW, DbContexts, caching, outbox
 services.AddAPI(modulesSettings);                       // controllers, idempotency, feature flags, error localization
 services.AddErrorResources<OrdersErrorResources>();     // one per module: error-code translations
 services.AddErrorResources<PromotionsErrorResources>();
 
-moduleLoader.DiscoverAndRegister(
-    services, builder.Configuration, applicationSettings, modulesSettings,
-    builder.Environment.EnvironmentName,
-    [typeof(OrdersModule).Assembly, typeof(PromotionsModule).Assembly]); // each module scans itself
+services.AddMmcaApplicationPipeline(pipeline => pipeline // AddApplication() first, decorators LAST, then sealed
+    .Register(s => moduleLoader.DiscoverAndRegister(
+        s, builder.Configuration, applicationSettings, modulesSettings,
+        builder.Environment.EnvironmentName,
+        [typeof(OrdersModule).Assembly, typeof(PromotionsModule).Assembly])) // each module scans itself
+    .Register(s => s.AddBrokerMessaging(builder.Configuration)));
 
-services.AddBrokerMessaging(builder.Configuration);
-services.AddApplicationDecorators();                    // MUST be last: Scrutor wraps existing handlers
+services.AddModuleHealthChecks(moduleLoader);           // not a handler registration: stays outside
 ```
 
 The rules embedded in that order:
@@ -338,9 +339,10 @@ The rules embedded in that order:
   one case that still slips through: it runs with no transactions, no caching, no logging, and no error
   to tell you.
 - **`AddMmcaApplicationPipeline(pipeline => ...)`** is the framework's preferred form of the same
-  sequence: it runs `AddApplication()`, then your callback (module scans, a `ModuleLoader` run, broker
-  wiring), then `AddApplicationDecorators()`, so the handler registrations cannot land on the wrong side
-  of the decorators. The generated host keeps the explicit calls shown above.
+  sequence and the one the generated host uses: it runs `AddApplication()`, then your callback's
+  `Register` steps in order (module discovery, then broker wiring, so the broker's `Replace` calls win
+  over the loader's), then `AddApplicationDecorators()`, so the handler registrations cannot land on the
+  wrong side of the decorators.
 
 ## Step 7: watch the decorator pipeline kick in, for free
 
@@ -517,10 +519,10 @@ part."), execution order at :81-82, per-decorator bullets at :85-91 (Authorizati
 :86, Caching :88, Validating :89, Timeout :90, Transactional :91). Source inconsistency recorded, not
 resolved: `AGENTS.md:74` says `AddMmcaApplicationPipeline` runs `AddInfrastructure` and `AddAPI`, but
 the method body at `DependencyInjection.cs:207-216` does not; the article follows the code. Generated
-host sequence read from `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:78-132`
-(`AddApplication` :78, `AddInfrastructure` :79, `AddAPI` :101, `AddErrorResources` :106,
-`ModuleLoader.DiscoverAndRegister` with the host-named assembly list :116-124, `AddBrokerMessaging`
-:130, `AddApplicationDecorators` :132); the module's own scan at
+host sequence read from `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:77-141`
+(`AddInfrastructure` :77, `AddAPI` :99, `AddErrorResources` :104, `AddMmcaApplicationPipeline` :121
+with `ModuleLoader.DiscoverAndRegister` and the host-named assembly list as a `Register` step
+:125-133 and `AddBrokerMessaging` as a second step :139, `AddModuleHealthChecks` :141); the module's own scan at
 `Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Application/DependencyInjection.cs:35`. Seed fitness test
 `Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/DecoratorPipelineOrderTests.cs:35` (subclass of
 `DecoratorPipelineOrderTestsBase`, one command plus one query, sequence at :59-61;
@@ -586,6 +588,15 @@ handler set (:64-77, :76), with the caveat that it runs the module registration 
 :20 (set by `Delete()` at :67-77, :77), `CreatedOn/By` and `LastModifiedOn/By` at :25-31, `DeletedOn`
 :39 and `DeletedBy` :45 (stamped by the audit interceptor, doc :60-63), `RowVersion` :53; rollback
 anchors :599/:608/:610/:613 -> :606/:615/:617/:620. "Green solution in about a minute" (Step 0) is
-not a figure any source on disk records; left as the author's own observation.*
+not a figure any source on disk records; left as the author's own observation. 2026-10-19 pass
+(Helpdesk PR #177 and Common PR #572, both open, read from their branches): the generated host
+composes through `AddMmcaApplicationPipeline`
+(`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:121` on `refactor/h1-application-pipeline`)
+and no longer calls `AddApplication()` or `AddApplicationDecorators()` directly, so the Step 6 lead-in,
+code block and `AddMmcaApplicationPipeline` bullet describe the composed call and the host anchors
+above are re-read in place (:77-141). The recorded `AGENTS.md:74` inconsistency is resolved on
+Common's `docs/agents-pipeline-call` branch: `MMCA.Common/AGENTS.md:75` lists `AddApplication()`, the
+configure callback and `AddApplicationDecorators()`, with `AddInfrastructure` and `AddAPI` outside the
+call, matching `DependencyInjection.cs:207-216`.*
 
 - Full series index: https://ivanball.github.io/writing.html

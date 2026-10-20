@@ -577,7 +577,7 @@ and the Cronos package pin are carried from the 2026-09-19 pass. Adoption by gre
 Sales (`.../MMCA.Store.Sales.Service/Program.cs:209`), Identity (`.../MMCA.Store.Identity.Service/Program.cs:196`);
 ADC Identity (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:245`), Engagement
 (`.../MMCA.ADC.Engagement.Service/Program.cs:198`), Conference (`.../MMCA.ADC.Conference.Service/Program.cs:352`);
-Helpdesk web host (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:91`).
+Helpdesk web host (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:89`).
 Illustrative-of-documented-shape: the scheduler code block pairs the three `IScheduledJob` member
 signatures (inline comments replace the XML docs) with the claim from `ScheduledJobRunner.cs:435-445`.
 The live-channel code block condenses `CastVoteHandler.cs:56-73` (commit, build results for the caller,

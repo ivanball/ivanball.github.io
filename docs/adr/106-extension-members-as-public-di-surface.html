@@ -240,21 +240,22 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-106-c-extension-members-as-the-public-di-registration-surface">ADR-106: C# Extension Members as the Public DI Registration Surface</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-09-01; counts re-measured 2026-10-01). Revised 2026-10-06: counts re-measured against current source, and ADC&#39;s broker selection is now credited to the framework rather than to an ADC block. Revised 2026-10-07: anchors refreshed after the v1.233.0 release.</p>
+          <p>Accepted (2026-09-01; counts re-measured 2026-10-01). Revised 2026-10-06: counts re-measured against current source, and ADC&#39;s broker selection is now credited to the framework rather than to an ADC block. Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised 2026-10-19: the Helpdesk host examples re-pointed after the host moved to <code>AddMmcaApplicationPipeline</code>.</p>
           <h2 id="context">Context</h2>
           <p>Every host in this workspace boots the same way: a <code>Program.cs</code> calls a short list of <code>Add*</code> methods
           on <code>IServiceCollection</code>, one per layer, and all of the framework&#39;s wiring sits behind those names.
-          MMCA.Helpdesk&#39;s web host is the smallest of them, calling <code>services.AddApplication()</code>
-          (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:78</code>),
-          <code>services.AddInfrastructure(builder.Configuration)</code> (<code>:79</code>), <code>services.AddAPI(modulesSettings)</code>
-          (<code>:101</code>) and <code>services.AddApplicationDecorators()</code> (<code>:132</code>). Even that host is not four calls any
-          more: its capability opt-ins arrive through the same surface, as
-          <code>services.AddAuditTrail(builder.Configuration)</code> (<code>:90</code>),
-          <code>services.AddScheduledJobs(builder.Configuration)</code> (<code>:91</code>),
-          <code>services.AddMultiTenancy(builder.Configuration)</code> (<code>:92</code>),
-          <code>services.AddErrorResources&lt;TicketsErrorResources&gt;()</code> (<code>:106</code>) and
-          <code>services.AddBrokerMessaging(builder.Configuration)</code> (<code>:130</code>). Every one of them is an <code>Add*</code> name on
-          <code>IServiceCollection</code>.</p>
+          MMCA.Helpdesk&#39;s web host is the smallest of them, calling
+          <code>services.AddInfrastructure(builder.Configuration)</code>
+          (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:77</code>), <code>services.AddAPI(modulesSettings)</code>
+          (<code>:99</code>) and <code>services.AddMmcaApplicationPipeline(...)</code> (<code>:121</code>), which runs <code>AddApplication()</code>
+          first and <code>AddApplicationDecorators()</code> last around the host&#39;s registration steps. Even that host is
+          not three calls: its capability opt-ins arrive through the same surface, as
+          <code>services.AddAuditTrail(builder.Configuration)</code> (<code>:88</code>),
+          <code>services.AddScheduledJobs(builder.Configuration)</code> (<code>:89</code>),
+          <code>services.AddMultiTenancy(builder.Configuration)</code> (<code>:90</code>),
+          <code>services.AddErrorResources&lt;TicketsErrorResources&gt;()</code> (<code>:104</code>) and
+          <code>s.AddBrokerMessaging(builder.Configuration)</code> inside a pipeline <code>Register</code> step (<code>:139</code>). Every one
+          of them is an <code>Add*</code> name on <code>IServiceCollection</code>.</p>
           <p>What is unusual is how those methods are declared. None of them is a classic static extension method
           with a <code>this</code> parameter. Each is a member of a C# <code>extension(T)</code> block: <code>AddApplication</code> is written
           as <code>public IServiceCollection AddApplication()</code> inside <code>extension(IServiceCollection services)</code>
@@ -364,7 +365,8 @@
           its <code>.API</code> and <code>.Infrastructure</code> siblings). The reference seed teaches the shape by using it.</p>
           </li>
           <li><p><strong>The call site is indistinguishable from a classic extension method.</strong> A host writes
-          <code>services.AddApplication();</code> (<code>Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:78</code>), and the
+          <code>services.AddInfrastructure(builder.Configuration);</code>
+          (<code>Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:77</code>), and the
           same holds for every other entry point. Nothing about the declaration style is visible to the
           caller.</p>
           </li>
@@ -539,6 +541,17 @@
           (ending at <code>VerifyDecoratorPipeline</code>); <code>dotnet-version: &#39;10.0.x&#39;</code> in
           <code>MMCA.Common/.github/workflows/release.yml</code> is at <code>:50</code> and <code>:186</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-19">Revision (2026-10-19)</h2>
+          <p>Re-verified against current source. No decision, rationale, count or trade-off changed; the Helpdesk
+          host the Context and Decision use as their example composes through <code>AddMmcaApplicationPipeline</code>.</p>
+          <ol>
+          <li><code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs</code> no longer calls <code>services.AddApplication()</code>
+          or <code>services.AddApplicationDecorators()</code> directly: both run inside
+          <code>services.AddMmcaApplicationPipeline(...)</code> (<code>:121</code>). The Context lists <code>AddInfrastructure</code> (<code>:77</code>),
+          <code>AddAPI</code> (<code>:99</code>) and the pipeline call (<code>:121</code>) instead, with the opt-ins at <code>:88</code>, <code>:89</code>, <code>:90</code>,
+          <code>:104</code> and the broker registration as a <code>Register</code> step at <code>:139</code>; Decision point 6 uses the
+          <code>AddInfrastructure</code> call site (<code>:77</code>) as its plain-extension example.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="015-architecture-fitness-functions.html">ADR-015</a> (the RS0016/RS0017 baseline that freezes both
           emitted shapes of every extension member, and the fitness-rule tier that had to learn about
@@ -569,6 +582,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
+            <li><a href="#revision-2026-10-19">Revision (2026-10-19)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>
