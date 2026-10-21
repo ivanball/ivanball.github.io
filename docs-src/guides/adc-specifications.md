@@ -1511,7 +1511,7 @@ BR-7 covers add and update but is silent on what happens when an entity exists l
 
 | # | Rule |
 |---|---|
-| BR-62 | Sessionize refresh performs **additive sync only**: it creates new entities and updates existing ones but **never soft-deletes** entities absent from the Sessionize response. Entities removed from Sessionize remain active locally until an organizer manually soft-deletes them. This prevents data loss when Sessionize returns partial data due to API pagination, filtering, or transient errors. |
+| BR-62 | Sessionize refresh performs **additive sync only**: it creates new entities and updates existing ones but **never soft-deletes** entities absent from the Sessionize response. Entities removed from Sessionize remain active locally until an organizer manually soft-deletes them. This prevents data loss when Sessionize returns partial data due to API pagination, filtering, or transient errors. **Detection, not deletion:** the refresh response carries one warning naming every live imported session of the event that the response no longer contains (the first 10 by title and id, then a count of the rest), so the organizer can delete the ones that were removed or unscheduled in Sessionize. Sessions in the reserved organizer-created id band (`SessionInvariants.ManualIdRangeStart`..`ManualIdRangeEnd`) never come from Sessionize and are not reported. |
 
 #### Refresh Throttling
 
