@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>MMCA.ADC: Architecture Remediation Backlog · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Derived from ArchitectureScorecard.md (evidence as of 2026-10-18 at MMCA.Common. v1.244.0): Maturity 96.9% (314/324) / Implementation 86.0% (697/810),…">
+  <meta name="description" content="Derived from ArchitectureScorecard.md (evidence as of 2026-10-22 at MMCA.Common. v1.250.0): Maturity 97.5% (316/324) / Implementation 86.0% (697/810),…">
   <link rel="canonical" href="https://ivanball.github.io/docs/governance/adc-RemediationBacklog.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="MMCA.ADC: Architecture Remediation Backlog">
-  <meta property="og:description" content="Derived from ArchitectureScorecard.md (evidence as of 2026-10-18 at MMCA.Common. v1.244.0): Maturity 96.9% (314/324) / Implementation 86.0% (697/810),…">
+  <meta property="og:description" content="Derived from ArchitectureScorecard.md (evidence as of 2026-10-22 at MMCA.Common. v1.250.0): Maturity 97.5% (316/324) / Implementation 86.0% (697/810),…">
   <meta property="og:url" content="https://ivanball.github.io/docs/governance/adc-RemediationBacklog.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Principal Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="MMCA.ADC: Architecture Remediation Backlog">
-  <meta name="twitter:description" content="Derived from ArchitectureScorecard.md (evidence as of 2026-10-18 at MMCA.Common. v1.244.0): Maturity 96.9% (314/324) / Implementation 86.0% (697/810),…">
+  <meta name="twitter:description" content="Derived from ArchitectureScorecard.md (evidence as of 2026-10-22 at MMCA.Common. v1.250.0): Maturity 97.5% (316/324) / Implementation 86.0% (697/810),…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Governance","item":"https://ivanball.github.io/docs/governance/index.html"},{"@type":"ListItem","position":4,"name":"ADC · MMCA.ADC: Architecture Remediation Backlog","item":"https://ivanball.github.io/docs/governance/adc-RemediationBacklog.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
@@ -114,9 +114,9 @@
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Architecture governance</p>
           <h1 id="mmcaadc-architecture-remediation-backlog">MMCA.ADC: Architecture Remediation Backlog</h1>
-          <p>Derived from <a href="adc-ArchitectureScorecard.html"><code>ArchitectureScorecard.md</code></a> (evidence as of 2026-10-18 at MMCA.Common.* v1.244.0): <strong>Maturity 96.9% (314/324) / Implementation 86.0% (697/810)</strong>, weight total 81, no N/A category. Work is ranked on both scorecard axes, one band per axis. <strong>Maturity band:</strong> every category scoring maturity &lt; 4, ranked by <code>(4 - maturity) x weight</code>. <strong>Implementation band:</strong> every category scoring implementation &lt;= 8, ranked by <code>max(0, 9 - implementation) x weight</code> (target 9: a 10 is awardable at re-score time for an almost perfect implementation, but ranking against 10 would drown the real gaps, so 9 governs scheduling). Ties break by weight descending, then category number. Today 4 categories sit in the maturity band (10 weighted points), 14 in the implementation band (34 gap points), 30 score maturity 4 (protect, do not regress) and 19 of those also score implementation &gt;= 9, which is the only combination that is done on both axes. This is the single remediation and tech-debt ledger: each deferred sub-item keeps its <code>TD-NN</code> ID with its blocker, resolution path and effort. <strong>Effort key:</strong> <strong>S</strong> = hours · <strong>M</strong> = about 1 day · <strong>L</strong> = multi-day. Right-size every fix to the measured conference load (~76 accounts / ~67 peak concurrent).</p>
+          <p>Derived from <a href="adc-ArchitectureScorecard.html"><code>ArchitectureScorecard.md</code></a> (evidence as of 2026-10-22 at MMCA.Common.* v1.250.0): <strong>Maturity 97.5% (316/324) / Implementation 86.0% (697/810)</strong>, weight total 81, no N/A category. Work is ranked on both scorecard axes, one band per axis. <strong>Maturity band:</strong> every category scoring maturity &lt; 4, ranked by <code>(4 - maturity) x weight</code>. <strong>Implementation band:</strong> every category scoring implementation &lt;= 8, ranked by <code>max(0, 9 - implementation) x weight</code> (target 9: a 10 is awardable at re-score time for an almost perfect implementation, but ranking against 10 would drown the real gaps, so 9 governs scheduling). Ties break by weight descending, then category number. Today 3 categories sit in the maturity band (8 weighted points), 14 in the implementation band (32 gap points), 31 score maturity 4 (protect, do not regress) and 19 of those also score implementation &gt;= 9, which is the only combination that is done on both axes. This is the single remediation and tech-debt ledger: each deferred sub-item keeps its <code>TD-NN</code> ID with its blocker, resolution path and effort. <strong>Effort key:</strong> <strong>S</strong> = hours · <strong>M</strong> = about 1 day · <strong>L</strong> = multi-day. Right-size every fix to the measured conference load (~76 accounts / ~67 peak concurrent).</p>
           <h2 id="open-work-at-a-glance">Open work at a glance</h2>
-          <p><strong>Triage 2026-10-19.</strong> The A2 wave (ADC #280, MMCA.Common v1.245.0) shipped the §10, §15, §22, §23, §25 and §31 levers and adopted the §9 detector; each is marked shipped below, with its score movement pending the next re-score. Every other open item was weighed for over-engineering at the measured load: the ones closed are under Deliberate and accepted (Closed as over-engineering, 2026-10-19) and must not be re-proposed without new evidence. Scores are unchanged, so every row keeps its band position. The only open work is the manual screen-reader pass (§21), which needs a human.</p>
+          <p>The only open item is the manual screen-reader pass (§21), which needs a human. Every other band row holds its score: its recorded lever either ships in the code or is closed by decision (Deliberate and accepted), and where a lever ships and the score holds, the next lever is not yet identified and is named at the next re-score rather than invented. Items closed as over-engineering are not re-proposed without new evidence.</p>
           <div class="table-wrap"><table>
           <thead>
           <tr>
@@ -129,46 +129,6 @@
           </tr>
           </thead>
           <tbody><tr>
-          <td>4</td>
-          <td>§22</td>
-          <td>Responsive &amp; Cross-Browser</td>
-          <td>3 / 7</td>
-          <td>Maturity and implementation</td>
-          <td>Phone-viewport E2E shipped (ADC #280); density and table reflow closed 2026-10-19; re-score pending</td>
-          </tr>
-          <tr>
-          <td>3</td>
-          <td>§7</td>
-          <td>Microservices Readiness</td>
-          <td>4 / 8</td>
-          <td>Implementation</td>
-          <td>Closed 2026-10-19 (no lever; the cached bookmark-count read is accepted)</td>
-          </tr>
-          <tr>
-          <td>3</td>
-          <td>§10</td>
-          <td>Messaging &amp; Integration Architecture</td>
-          <td>3 / 8</td>
-          <td>Maturity and implementation</td>
-          <td>Error-queue alert-as-code and runbook shipped (ADC #280); re-score pending</td>
-          </tr>
-          <tr>
-          <td>3</td>
-          <td>§11</td>
-          <td>Security</td>
-          <td>4 / 8</td>
-          <td>Implementation</td>
-          <td>Closed 2026-10-19 (the threat model is deliberately not scheduled)</td>
-          </tr>
-          <tr>
-          <td>3</td>
-          <td>§18</td>
-          <td>UI Architecture &amp; Components</td>
-          <td>4 / 8</td>
-          <td>Implementation</td>
-          <td>Closed 2026-10-19: TD-16 is not scheduled; the 400-line cap forces a split when one is due</td>
-          </tr>
-          <tr>
           <td>3</td>
           <td>§21</td>
           <td>Accessibility (a11y)</td>
@@ -177,20 +137,36 @@
           <td><strong>Open (needs a human):</strong> record the dated manual screen-reader pass</td>
           </tr>
           <tr>
-          <td>2</td>
-          <td>§5</td>
-          <td>Vertical Slice Architecture</td>
-          <td>4 / 8</td>
-          <td>Implementation</td>
-          <td>Closed 2026-10-19 (the layered-by-project hybrid is the accepted cap)</td>
+          <td>3</td>
+          <td>§10</td>
+          <td>Messaging &amp; Integration Architecture</td>
+          <td>3 / 8</td>
+          <td>Maturity and implementation</td>
+          <td>Maturity lever: the broker round-trip tier inside a merge gate; implementation lever not yet identified</td>
           </tr>
           <tr>
-          <td>2</td>
-          <td>§9</td>
-          <td>API &amp; Contract Design</td>
+          <td>3</td>
+          <td>§7</td>
+          <td>Microservices Readiness</td>
           <td>4 / 8</td>
           <td>Implementation</td>
-          <td>Parameter-aware detector adopted at v1.245.0 (Common #567); the baseline ratchet is cut; re-score pending</td>
+          <td>Lever not yet identified; the cached bookmark-count read is accepted</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td>§11</td>
+          <td>Security</td>
+          <td>4 / 8</td>
+          <td>Implementation</td>
+          <td>Lever not yet identified; the threat model is deliberately not scheduled</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td>§18</td>
+          <td>UI Architecture &amp; Components</td>
+          <td>4 / 8</td>
+          <td>Implementation</td>
+          <td>TD-16 is not scheduled; the 400-line cap forces a split when one is due</td>
           </tr>
           <tr>
           <td>2</td>
@@ -202,11 +178,35 @@
           </tr>
           <tr>
           <td>2</td>
+          <td>§5</td>
+          <td>Vertical Slice Architecture</td>
+          <td>4 / 8</td>
+          <td>Implementation</td>
+          <td>Lever not yet identified; the layered-by-project hybrid is the accepted cap</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td>§9</td>
+          <td>API &amp; Contract Design</td>
+          <td>4 / 8</td>
+          <td>Implementation</td>
+          <td>Lever not yet identified; the parameter-aware detector ships, the baseline ratchet and AsyncAPI are declined</td>
+          </tr>
+          <tr>
+          <td>2</td>
           <td>§15</td>
           <td>Best Practices &amp; Code Quality</td>
           <td>4 / 8</td>
           <td>Implementation</td>
-          <td>TD-18 shipped: weekly MAUI head build (ADC #280); re-score pending</td>
+          <td>Lever not yet identified; the MAUI head builds weekly (TD-18)</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td>§22</td>
+          <td>Responsive &amp; Cross-Browser</td>
+          <td>4 / 8</td>
+          <td>Implementation</td>
+          <td>Lever not yet identified; density and organizer-table reflow are accepted</td>
           </tr>
           <tr>
           <td>2</td>
@@ -214,7 +214,7 @@
           <td>Front-End Performance</td>
           <td>4 / 8</td>
           <td>Implementation</td>
-          <td>Image recompressed and EFIGS ICU pinned (ADC #280); re-score pending</td>
+          <td>Lever not yet identified; the EFIGS ICU shard ships, code-splitting is declined</td>
           </tr>
           <tr>
           <td>2</td>
@@ -222,7 +222,7 @@
           <td>Forms, Validation &amp; UX Safety</td>
           <td>4 / 8</td>
           <td>Implementation</td>
-          <td>Closed 2026-10-19: the 21-form accessibility tests would mirror one shared component</td>
+          <td>Not scheduled: the 21-form accessibility tests would mirror one shared component</td>
           </tr>
           <tr>
           <td>2</td>
@@ -230,7 +230,7 @@
           <td>Navigation &amp; Information Arch</td>
           <td>4 / 8</td>
           <td>Implementation</td>
-          <td>Nav-item-to-page-guard test shipped (ADC #280); re-score pending</td>
+          <td>Lever not yet identified; the nav-item-to-page-guard test ships</td>
           </tr>
           <tr>
           <td>2</td>
@@ -238,7 +238,7 @@
           <td>Cost Efficiency / FinOps</td>
           <td>4 / 8</td>
           <td>Implementation</td>
-          <td><code>cost-guard</code> runs daily (ADC #280); re-score pending</td>
+          <td>Lever not yet identified; <code>cost-guard</code> runs daily</td>
           </tr>
           <tr>
           <td>1</td>
@@ -254,7 +254,7 @@
           <td>Front-End Testing &amp; Quality</td>
           <td>4 / 9</td>
           <td>Outside both bands</td>
-          <td>Closed 2026-10-19: pixel-level visual regression is not adopted</td>
+          <td>Pixel-level visual regression is not adopted</td>
           </tr>
           <tr>
           <td>-</td>
@@ -266,72 +266,76 @@
           </tr>
           </tbody></table></div>
           <h2 id="open-items">Open items</h2>
-          <h3 id="x-10--messaging--integration-architecture--m3--i8-weight-3-maturity-priority-3-implpriority-3">[x] #10 · Messaging &amp; Integration Architecture · M3 / I8 (weight 3; maturity priority 3, implPriority 3)</h3>
-          <p>Shipped 2026-10-19 (ADC #280): the <code>adc-prod-alert-broker-error-queue</code> rule matches &quot;moved to the error queue&quot; beside the outbox dead-letter rule (<code>infra/main.bicep:604</code>), and <code>infra/OPERATIONS.md:232</code> holds the error-queue runbook (queue names, inspect, replay, discard); ADR-087 records it (Website #260). Score movement is pending the next re-score. The original finding follows.
-          Most criteria are CI-enforced (a frozen contract snapshot that spells out generic arguments and is keyed by the <code>[EventName]</code> wire identity, Common <code>ArchitectureRules.Events.cs:45,:82-89</code>; every integration event must declare that name, Common <code>Bases/Contracts/EventConventionTestsBase.cs:21</code> inherited by <code>Contracts/EventConventionTests.cs:3</code>; gateway route-map tests in <code>MMCA.ADC.CI.slnf:60</code>; the Service Bus emulator tier gating deploys through <code>cross-service-freshness</code>, <code>cross-service-tests.yml:142</code> and <code>deploy.yml:884</code>, documented as authoritative in <code>AGENTS.md:76</code>), but broker faults are not wired to alert-as-code, which is the maturity 3→4 lever. M4 is also defensible; M3 is the adjudicated score. The missing ordering stamp on the speaker-link handlers is accepted (see Deliberate and accepted).</p>
-          <ul>
-          <li><input checked="" disabled="" type="checkbox"> <strong>Dead-letter procedure (implementation 8→9, and the maturity lever when wired as alert-as-code).</strong> Add an alert on &quot;moved to the error queue&quot; in <code>infra/main.bicep</code> beside the outbox dead-letter rule (<code>:603-605</code>) and an <code>infra/OPERATIONS.md</code> error-queue section (inspect, replay, discard). <code>FaultIntegrationEventConsumer.cs:57</code> (Common) logs &quot;faulted ... moved to the error queue&quot;, but the only messaging log alert matches &quot;dead-lettered&quot;, the outbox text (<code>infra/main.bicep:605</code>); the dead-letter runbook covers outbox rows only (<code>infra/OPERATIONS.md:188</code>, manual replay by a row reset at <code>:219</code>), and ADR-087 records no alert, runbook or replay path (<code>../adr/087-broker-poison-message-handling.md:202-204</code>). Rubric criterion: <code>ArchitectureEvaluationCriteria.md:336</code>. Effort <strong>S-M</strong>.</li>
-          </ul>
           <h3 id="21--accessibility--m3--i8-weight-3-maturity-priority-3-implpriority-3">[ ] #21 · Accessibility · M3 / I8 (weight 3; maturity priority 3, implPriority 3)</h3>
-          <p>The axe layer is an enforced deploy gate (45 scans, <code>AccessibilityTests.cs:23</code>, inside the chromium <code>e2e-gate</code>), with a stated WCAG 2.1 AA target, and the live-moderation dialog carries a keyboard-operability E2E test (<code>Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/Engagement/LiveModerationKeyboardTests.cs:23</code>, a subclass of Common&#39;s <code>KeyboardOperabilityTestsBase</code>). Maturity stops at 3 because the rubric pairs automated CI checks with a recorded manual screen-reader pass. The implementation lever is not yet identified (axe is E2E-only, chromium-only, non-PR and conditional, and keyboard coverage is one dialog).</p>
+          <p>The axe layer is an enforced deploy gate (<code>AccessibilityTests.cs:23</code>, inside the chromium <code>e2e-gate</code>), with a stated WCAG 2.1 AA target, and the live-moderation dialog carries a keyboard-operability E2E test (<code>Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/Engagement/LiveModerationKeyboardTests.cs:23</code>, a subclass of Common&#39;s <code>KeyboardOperabilityTestsBase</code>). Maturity stops at 3 because the rubric pairs automated CI checks with a recorded manual screen-reader pass. The implementation lever is not yet identified (axe is E2E-only, chromium-only, non-PR and conditional, and keyboard coverage is one dialog).</p>
           <ul>
-          <li><input disabled="" type="checkbox"> <strong>Record a dated manual screen-reader pass</strong> in <code>adc-ACCESSIBILITY-SCREENREADER-PASS.md</code> (Website <code>docs-src/guides/</code>), whose results table holds only the empty placeholder row (<code>:64</code>). Needs a human with NVDA or VoiceOver against the running Aspire app; it cannot be done headless. This is the cheapest maturity 3→4 win.</li>
+          <li><input disabled="" type="checkbox"> <strong>Record a dated manual screen-reader pass</strong> in <code>adc-ACCESSIBILITY-SCREENREADER-PASS.md</code> (Website <code>docs-src/guides/</code>), whose results table holds only the empty placeholder row (<code>:64</code>). Needs a human with NVDA or VoiceOver against the running Aspire app; it cannot be done headless. This is the cheapest maturity 3 to 4 win.</li>
           </ul>
-          <h3 id="22--responsive--cross-browser--m3--i7-weight-2-maturity-priority-2-implpriority-4-the-top-of-the-implementation-band">[~] #22 · Responsive &amp; Cross-Browser · M3 / I7 (weight 2; maturity priority 2, implPriority 4, the top of the implementation band)</h3>
-          <p>Cross-engine recency is gated by the <code>cross-browser-freshness</code> step of the <code>freshness</code> job (<code>deploy.yml:923</code>, <code>:1159</code>, <code>:1193</code>), the only automated check in the category; it does not count toward implementation.</p>
+          <h3 id="10--messaging--integration-architecture--m3--i8-weight-3-maturity-priority-3-implpriority-3">[~] #10 · Messaging &amp; Integration Architecture · M3 / I8 (weight 3; maturity priority 3, implPriority 3)</h3>
+          <p>Most criteria are CI-enforced: a frozen contract snapshot that spells out generic arguments and is keyed by the <code>[EventName]</code> wire identity (Common <code>ArchitectureRules.Events.cs:45,:82-89</code>); every integration event must declare that name (Common <code>Bases/Contracts/EventConventionTestsBase.cs:21</code>, inherited by <code>Contracts/EventConventionTests.cs:3</code>); gateway route-map tests in <code>MMCA.ADC.CI.slnf:60</code>; the Service Bus emulator tier (<code>cross-service-tests.yml:142</code>) reaches the deploy through <code>cross-service-freshness</code> (<code>deploy.yml:885</code>). Maturity holds at 3 because the broker round-trip tier runs on a weekday schedule (<code>cross-service-tests.yml:32</code>) and reaches the deploy only through that recency gate, not as a merge gate: bringing it inside a merge gate is the recorded maturity lever. Implementation holds at 8: no compensating saga or reconciliation sweep exists (<code>../adr/054-saga-compensation-and-reconciliation.md:201-202</code>), replay is manual (<code>infra/OPERATIONS.md:262</code>), and message retention is documented only for outbox dead-letter rows; the implementation lever is not yet identified. The missing ordering stamp on the speaker-link handlers is accepted (see Deliberate and accepted).</p>
           <ul>
-          <li><input checked="" disabled="" type="checkbox"> <strong>Automated phone-viewport check (maturity 3→4).</strong> Shipped 2026-10-19 (ADC #280): <code>Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/Conference/Public/PhoneViewportTests.cs</code> sets 390x844 and asserts a visible heading and no horizontal overflow on the public home, session list and detail, and speaker list and detail, inside the chromium <code>e2e-gate</code>. Re-score pending. The original finding follows. No ADC test sets a phone viewport (the only phone-viewport E2E is Common&#39;s <code>UserPreferencesTestsBase.cs:92</code> at 390x844), no responsive fitness test exists in <code>Tests/Architecture</code>, and bUnit asserts the mobile branch on some list pages only (<code>UserListTests.cs:331</code>), so reflow, density and touch targets are review-enforced. Add an E2E or fitness check that asserts layout at a phone breakpoint. Effort <strong>M</strong>.</li>
-          <li>[closed] <strong>Density options</strong> (closed 2026-10-19, see Deliberate and accepted). The framework ships the capability (<code>DataGridListPageBase.cs:78</code> <code>DenseGrid</code>, <code>:909</code> <code>ToggleDensity()</code>) and ADC adopts none of it; <code>EventList.razor:73</code> hardcodes <code>Dense=&quot;true&quot;</code>.</li>
-          <li>[closed] <strong>Content reflow on the raw-table surfaces</strong> (closed 2026-10-19, see Deliberate and accepted). 20 <code>.razor</code> files render <code>MudSimpleTable</code>/<code>&lt;table&gt;</code> outside the DataGrid; 12 are key/value detail tables that wrap on mobile (<code>adc-ui.css:21-40</code>), while the session-selection statistics tables use fixed-width columns with no mobile alternative (<code>adc-ui.css:80</code>), alongside the organizer surfaces (<code>OrganizerPointsOverview.razor:61,:98</code>, <code>OrganizerAttendance.razor:50</code>); the DataGrid pages already degrade to card lists. Effort <strong>M</strong> together with density.</li>
+          <li><input checked="" disabled="" type="checkbox"> <strong>Dead-letter procedure.</strong> The <code>broker-error-queue</code> rule matches &quot;moved to the error queue&quot; (<code>infra/main.bicep:634-636</code>), the text Common&#39;s <code>FaultIntegrationEventConsumer.cs:57</code> logs, beside the outbox dead-letter rule (<code>:610-612</code>); <code>infra/OPERATIONS.md:231</code> holds the error-queue runbook (queue names, inspect, replay, discard) beside the outbox dead-letter runbook (<code>:188</code>), and ADR-087 records it (<code>../adr/087-broker-poison-message-handling.md:331</code>). Rubric criterion: <code>ArchitectureEvaluationCriteria.md:336</code>.</li>
+          </ul>
+          <h3 id="x-22--responsive--cross-browser--m4--i8-weight-2-implpriority-2">[x] #22 · Responsive &amp; Cross-Browser · M4 / I8 (weight 2; implPriority 2)</h3>
+          <p>Cross-engine recency is gated by the <code>cross-browser-freshness</code> step of the <code>freshness</code> job (<code>deploy.yml:924</code>, <code>:1160</code>, <code>:1194</code>).</p>
+          <ul>
+          <li><input checked="" disabled="" type="checkbox"> <strong>Automated phone-viewport check.</strong> <code>Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/Conference/Public/PhoneViewportTests.cs</code> sets 390x844 (<code>:20-21</code>, <code>:32</code>) and asserts a visible heading and no horizontal overflow (<code>:97-98</code>) on the public home, session list and detail, and speaker list and detail, inside the chromium <code>e2e-gate</code> (<code>deploy.yml:807</code>, required at <code>:1197</code>). It covers five anonymous pages and no organizer page, and it runs post-merge (<code>deploy.yml:818</code>).</li>
+          <li>[closed] <strong>Density options</strong> (see Deliberate and accepted). The framework ships the capability (<code>DataGridListPageBase.cs:90</code> <code>DenseGrid</code>, <code>:1151</code> <code>ToggleDensity()</code>) and ADC adopts none of it; <code>EventList.razor:73</code> hardcodes <code>Dense=&quot;true&quot;</code>.</li>
+          <li>[closed] <strong>Content reflow on the raw-table surfaces</strong> (see Deliberate and accepted). The key/value detail tables wrap on mobile (<code>adc-ui.css:21-40</code>), while the session-selection statistics tables use fixed-width columns with no mobile alternative (<code>adc-ui.css:80</code>), alongside the organizer surfaces (<code>OrganizerPointsOverview.razor:61,:98</code>, <code>OrganizerAttendance.razor:57</code>); the DataGrid pages already degrade to card lists.
+          §22 holds at implementation 8 with both deductions recorded as accepted; the next lever is not yet identified.</li>
           </ul>
           <h3 id="closed-18--ui-architecture--components--m4--i8-weight-3-implpriority-3">[closed] #18 · UI Architecture &amp; Components · M4 / I8 (weight 3; implPriority 3)</h3>
           <ul>
-          <li>[closed] <strong>TD-16 (the §18 impl 8→9 lever, effort S; closed 2026-10-19, see Deliberate and accepted).</strong> The enforced cap is <code>MaxCodeBehindLines =&gt; 400</code> (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Ui/UIArchitectureConventionTestsBase.cs:22</code>, unoverridden in <code>Ui/UIArchitectureConventionTests.cs:10-13</code>). Two pages are extracted: <code>PublicSessionList.razor.cs</code> (its event catalog in <code>PublicSessionEventCatalog.cs</code>, page at 328, ADC #264) and <code>SessionFeedback.razor.cs</code> (its answer state in <code>Engagement.UI/Pages/Feedback/SessionFeedbackAnswers.cs</code>, page at 299, ADC #265). Measured with <code>File.ReadAllLines</code> (as the cap counts, <code>UIArchitectureConventionTestsBase.cs:52</code>), the high-water code-behind is now <code>Conference.UI/Pages/Home/ADCHome.razor.cs</code> at <strong>370</strong> (30 lines of headroom), then EventDetail 354, EventFeedback 351, SessionAssetsPanel 349, SessionLive 347, SpeakerDashboard 340, SpeakerDetail 339, PublicSessionDetail 334. Extract from <code>ADCHome</code> next. §18 holds at 8 because extraction is applied file by file rather than systematically, and the component-lifetime (render hooks) and render-fragment/slot criteria are thinly met. <strong>Blocker:</strong> none. <strong>Resolution path:</strong> presentational sub-component extraction per the TD-13 pattern, markup moved verbatim so the rendered DOM and the E2E selectors are unchanged. The cap itself stays at 400 (see Deliberate and accepted).</li>
+          <li>[closed] <strong>TD-16 (the §18 impl 8 to 9 lever, effort S; see Deliberate and accepted).</strong> The enforced cap is <code>MaxCodeBehindLines =&gt; 400</code> (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Ui/UIArchitectureConventionTestsBase.cs:22</code>, unoverridden in <code>Ui/UIArchitectureConventionTests.cs:10</code>). Two pages are extracted: <code>PublicSessionList.razor.cs</code> (its event catalog in <code>PublicSessionEventCatalog.cs</code>, ADC #264) and <code>SessionFeedback.razor.cs</code> (its answer state in <code>Engagement.UI/Pages/Feedback/SessionFeedbackAnswers.cs</code>, ADC #265). Measured with <code>File.ReadAllLines</code> (as the cap counts, <code>UIArchitectureConventionTestsBase.cs:52</code>), the high-water code-behind is <code>Engagement.UI/Pages/SessionLive/SessionLive.razor.cs</code> at <strong>399</strong> (1 line of headroom), then <code>Conference.UI/Pages/Events/EventDetail.razor.cs</code> at 396 and <code>EventFeedback.razor.cs</code> at 390; 12 code-behinds sit within 70 lines of the cap. §18 holds at 8 because extraction is applied file by file rather than systematically, and the component-lifetime (render hooks) and render-fragment/slot criteria are thinly met. <strong>Blocker:</strong> none. <strong>Resolution path:</strong> presentational sub-component extraction per the TD-13 pattern, markup moved verbatim so the rendered DOM and the E2E selectors are unchanged; the cap&#39;s fitness test forces the <code>SessionLive</code> or <code>EventDetail</code> split on the change that crosses 400. The cap itself stays at 400 (see Deliberate and accepted).</li>
           </ul>
           <h3 id="x-9--api--contract-design--m4--i8-weight-2-implpriority-2">[x] #9 · API &amp; Contract Design · M4 / I8 (weight 2; implPriority 2)</h3>
-          <p>Shipped 2026-10-19: the Common detector compares operation parameters and request bodies (Common #567, <code>OpenApiBreakingChangeDetector.cs:271</code>), adopted at v1.245.0 by ADC #280. The baseline ratchet is cut (see Deliberate and accepted). Re-score pending. The original finding follows.
-          The baseline-diff half of the contract-test criterion ships: all four services diff the live document against a committed <code>Contract/openapi-baseline.json</code> (Conference <code>Tests/Integration/MMCA.ADC.Conference.IntegrationTests/Contract/OpenApiContractTests.cs:29</code>, Identity <code>:39</code>, Engagement <code>:30</code>, Notification <code>:31</code>) through the Common base&#39;s opt-in mode (<code>OpenApiContractTestsBase.cs:21-28</code>, failing on any detected breaking change at <code>:118-159</code>), inside the required <code>integration-tests</code> check (<code>deploy.yml:641-729</code>). The AsyncAPI half is accepted, not scheduled (see Deliberate and accepted), so TD-24 is closed (see Resolved).</p>
+          <p>The baseline-diff half of the contract-test criterion ships: all four services diff the live document against a committed <code>Contract/openapi-baseline.json</code> (Conference <code>Tests/Integration/MMCA.ADC.Conference.IntegrationTests/Contract/OpenApiContractTests.cs:29</code>, Identity <code>:39</code>, Engagement <code>:30</code>, Notification <code>:31</code>) through the Common base&#39;s opt-in mode (<code>OpenApiContractTestsBase.cs:21-28</code>, test at <code>:118</code>), inside the required <code>integration-tests</code> check (<code>deploy.yml:642-730</code>). The AsyncAPI half is accepted, not scheduled (see Deliberate and accepted), so TD-24 is closed (see Resolved).</p>
           <ul>
-          <li><input checked="" disabled="" type="checkbox"> <strong>Parameter-aware, ratcheting breaking-change detection (implementation lever; Common first; parameter half shipped, ratchet cut).</strong> <code>CompareOperation</code> reads only request bodies and responses, never operation parameters (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/Conformance/OpenApiBreakingChangeDetector.cs:190-216</code>; the Conference baseline carries 159 <code>parameters</code> blocks), so a removed, renamed or newly required query or path parameter, or a parameter type change, passes; a request body is compared only when both sides have one (<code>:192-193</code>) and a removed media type passes (<code>:226-230</code>). The baseline does not ratchet: nothing keeps <code>openapi-baseline.json</code> in step with the committed build documents (<code>Source/Services/*/openapi/*.json</code>, drift-gated at <code>deploy.yml:305-320</code>), so a route added after seeding is unprotected until the baseline is refreshed by hand. <strong>Blocker:</strong> the detector lives in MMCA.Common, so parameter comparison is a framework change first. <strong>Resolution path:</strong> extend the detector to operation parameters and request-body presence, then keep each ADC baseline in step with its committed build document. With the async half accepted, the frozen event and proto snapshots carry the async side of the criterion; whether they read as its equivalent decides a 9 at the next re-score.</li>
+          <li><input checked="" disabled="" type="checkbox"> <strong>Parameter-aware breaking-change detection.</strong> The Common detector compares operation parameters (<code>CompareParameters</code>, <code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/Conformance/OpenApiBreakingChangeDetector.cs:260</code>, called at <code>:103</code>) and request-body presence and media types (<code>:326</code>, <code>:366-371</code>), at the pinned v1.250.0. The baseline ratchet is declined (see Deliberate and accepted).
+          §9 holds at implementation 8; the next lever is not yet identified.</li>
           </ul>
           <h3 id="x-15--best-practices--code-quality--m4--i8-weight-2-implpriority-2">[x] #15 · Best Practices &amp; Code Quality · M4 / I8 (weight 2; implPriority 2)</h3>
           <ul>
-          <li><input checked="" disabled="" type="checkbox"> <strong>TD-18 (effort L) · the MAUI app is outside every CI build.</strong> Shipped 2026-10-19 (ADC #280) as the reduced lever: the weekly <code>maui-audit.yml</code> now builds <code>MMCA.ADC.UI</code> for <code>net10.0-android</code> in Release with analyzers and TreatWarningsAsErrors (<code>.github/workflows/maui-audit.yml:197-198</code>). Detection only, no per-PR leg. Re-score pending. The original finding follows. <code>MMCA.ADC.CI.slnf</code> lists only <code>UI.Web</code> (<code>:25</code>) and <code>UI.Web.Client</code> (<code>:26</code>); the weekly <code>maui-audit.yml</code> installs the <code>maui-android</code> workload (<code>:109</code>) only to restore and audit (<code>:93</code>, <code>:128</code>), so <code>MMCA.ADC.UI</code> is never compiled in CI and its analyzers, <code>TreatWarningsAsErrors</code> and its own <code>NoWarn CA5392</code> (<code>Source/Hosts/UI/MMCA.ADC.UI/MMCA.ADC.UI.csproj:155</code>) are review-enforced only. The gating vulnerable-package audit is the shared MMCA.Common composite action in the <code>supply-chain</code> job (<code>deploy.yml:577</code>, <code>uses</code> at <code>:608</code>), scoped to <code>MMCA.ADC.CI.slnf</code> at <code>:610</code>. <code>.github/workflows/maui-audit.yml</code> audits the MAUI graph weekly (android-only, in no <code>deploy.needs</code>), so the detector half exists and the gating half does not. <strong>Blocker:</strong> a MAUI leg installs the <code>maui-android</code> workload on every run, against the deliberate Actions-minute budget. <strong>Resolution path:</strong> a scheduled (not per-PR) MAUI build leg, or wiring the audit result somewhere that can fail, verified by a full-solution package-mode restore rather than <code>CI.slnf</code>; Store carries the identical gap and should be swept in the same pass. Maturity 4 on §15 is <code>CI.slnf</code>-wide, not repo-wide, while this is open.</li>
+          <li><input checked="" disabled="" type="checkbox"> <strong>TD-18 (effort L) · the MAUI head inside a CI build.</strong> The weekly <code>maui-audit.yml</code> (Sunday cron, <code>.github/workflows/maui-audit.yml:43</code>) builds <code>MMCA.ADC.UI</code> for <code>net10.0-android</code> in Release with analyzers and TreatWarningsAsErrors (<code>:183</code>, <code>:197</code>) beside its suppress-aware audit: detection only, in no <code>deploy.needs</code>, with no per-PR leg. <code>MMCA.ADC.CI.slnf</code> lists only <code>UI.Web</code> (<code>:25</code>) and <code>UI.Web.Client</code> (<code>:26</code>), so the MAUI head&#39;s analyzers, <code>TreatWarningsAsErrors</code> and its own <code>NoWarn CA5392</code> (<code>Source/Hosts/UI/MMCA.ADC.UI/MMCA.ADC.UI.csproj:160</code>) are checked weekly rather than on the pull request. A per-PR MAUI leg installs the <code>maui-android</code> workload on every run, against the deliberate Actions-minute budget.
+          §15 holds at implementation 8; the next lever is not yet identified.</li>
           </ul>
           <h3 id="x-23--front-end-performance--m4--i8-weight-2-implpriority-2">[x] #23 · Front-End Performance · M4 / I8 (weight 2; implPriority 2)</h3>
           <ul>
-          <li><input checked="" disabled="" type="checkbox"> <strong>Optimize images and load the EFIGS ICU shard.</strong> Shipped 2026-10-19 (ADC #280): <code>jared-rhodes.jpg</code> re-encoded from 313,143 to 30,397 bytes, and the client pins <code>BlazorIcuDataFileName</code> to <code>icudt_EFIGS.dat</code> (<code>MMCA.ADC.UI.Web.Client.csproj:16</code>); Brotli <code>_framework</code> payload 5405 KB to 5224 KB. Re-score pending. The original finding follows. The WebAssembly head loads all globalization data (<code>BlazorWebAssemblyLoadAllGlobalizationData</code> at <code>Source/Hosts/UI/MMCA.ADC.UI.Web.Client/MMCA.ADC.UI.Web.Client.csproj:11</code>) for an en-US + es app; record the Brotli payload before and after. The CWV budgets themselves are enforced (<code>WebVitalsTests.cs:39</code>), and a 5900 KB Brotli payload budget runs on every code PR (<code>wasm-payload-budget</code>, <code>deploy.yml:476</code>, <code>budget-kb</code> at <code>:497</code>) without being a required check (<code>:472</code>), so promoting it to a required check is a candidate cheap lever. Code-splitting the bundle is declined (see Deliberate and accepted).</li>
+          <li><input checked="" disabled="" type="checkbox"> <strong>Load the EFIGS ICU shard.</strong> The client pins <code>BlazorIcuDataFileName</code> to <code>icudt_EFIGS.dat</code> for the en-US + es app (<code>Source/Hosts/UI/MMCA.ADC.UI.Web.Client/MMCA.ADC.UI.Web.Client.csproj:16</code>). The CWV budgets are enforced inside the deploy-gating <code>e2e-gate</code>, and the 5900 KB Brotli payload budget (<code>wasm-payload-budget</code>, <code>deploy.yml:477</code>, <code>budget-kb</code> at <code>:498</code>) is a required check on every code PR (<code>:472-473</code>, <code>CONTRIBUTING.md:82</code>). Code-splitting the bundle is declined (see Deliberate and accepted).
+          §23 holds at implementation 8; the next lever is not yet identified.</li>
           </ul>
           <h3 id="closed-24--forms-validation--ux-safety--m4--i8-weight-2-implpriority-2">[closed] #24 · Forms, Validation &amp; UX Safety · M4 / I8 (weight 2; implPriority 2)</h3>
           <ul>
-          <li>[closed] <strong>Extend <code>ShouldExposeFieldErrorAccessibly</code> to the remaining <code>MudForm</code> pages (implementation 8→9, effort S-M; closed 2026-10-19, see Deliberate and accepted).</strong> The render-level assertion of <code>role=alert</code>, <code>aria-invalid</code> and <code>aria-describedby</code> on a field error covers EventCreate only (<code>Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/Pages/Events/EventCreateTests.cs:104</code>), against 21 <code>MudForm</code> files that each render an <code>&lt;ErrorSummary&gt;</code> (<code>EventCreate.razor:41</code>). The forms fitness gate (<code>Ui/FormsConventionTests.cs:17</code>, <code>MinimumCreateForms =&gt; 9</code>) is string-marker based and scans the create forms and Profile only.</li>
+          <li>[closed] <strong>Extend <code>ShouldExposeFieldErrorAccessibly</code> to the remaining <code>MudForm</code> pages (implementation 8 to 9, effort S-M; see Deliberate and accepted).</strong> The render-level assertion of <code>role=alert</code>, <code>aria-invalid</code> and <code>aria-describedby</code> on a field error covers EventCreate only (<code>Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/Pages/Events/EventCreateTests.cs:104</code>), against 21 <code>MudForm</code> files that each render an <code>&lt;ErrorSummary&gt;</code> (<code>EventCreate.razor:41</code>). The forms fitness gate (<code>Ui/FormsConventionTests.cs:17</code>, <code>MinimumCreateForms =&gt; 9</code>) is string-marker based and scans the create forms and Profile only.</li>
           </ul>
           <h3 id="x-25--navigation--information-architecture--m4--i8-weight-2-implpriority-2">[x] #25 · Navigation &amp; Information Architecture · M4 / I8 (weight 2; implPriority 2)</h3>
           <ul>
-          <li><input checked="" disabled="" type="checkbox"> <strong>ADC-side navigation-contract test.</strong> <code>Tests/Architecture/MMCA.ADC.Architecture.Tests/Api/NavigationContractTests.cs</code> compares every <code>@page</code> route and its guard with the Route Contract table in <code>adc-NavigationFlow.md:639</code> (set equality <code>:63-76</code>, access <code>:79-104</code>, missing doc fails <code>:246</code>); <code>build-and-test</code> downloads the published doc (<code>deploy.yml:338-348</code>). A route or guard change now needs its Website doc PR merged first.</li>
+          <li><input checked="" disabled="" type="checkbox"> <strong>ADC-side navigation-contract test.</strong> <code>Tests/Architecture/MMCA.ADC.Architecture.Tests/Api/NavigationContractTests.cs</code> compares every <code>@page</code> route and its guard with the Route Contract table in <code>adc-NavigationFlow.md:639</code> (set equality <code>:63-76</code>, access <code>:79-104</code>, missing doc fails <code>:246</code>); <code>build-and-test</code> downloads the published doc (<code>deploy.yml:338-348</code>). A route or guard change needs its Website doc PR merged first.</li>
           <li><input checked="" disabled="" type="checkbox"> <strong>Type the bare <code>{Id}</code> routes.</strong> All 13 are typed: <code>:int</code> for the integer-keyed aggregates and <code>:guid</code> for the two speaker routes, with typed parameters in place of the <code>Parse&lt;T&gt;</code> coercion (<code>EventDetail.razor:1</code> with <code>EventDetail.razor.cs:27</code>, <code>SpeakerDetail.razor.cs:34</code>, <code>PublicSpeakerDetail.razor.cs:31</code>, <code>SessionFeedback.razor.cs:24</code>), so a malformed id answers with the router&#39;s not-found page. <code>/roles/{Role}</code> stays untyped (a role name). The Route Contract rows match (<code>adc-NavigationFlow.md:639</code>), enforced by <code>NavigationContractTests</code>.</li>
           <li><input checked="" disabled="" type="checkbox"> <strong>Guard the speaker self-edit form.</strong> <code>SpeakerDashboard.razor:11</code> carries <code>UnsavedChangesGuard</code>, dirty only while an edited field differs from the loaded profile (<code>SpeakerDashboard.razor.cs:69</code>); pinned by <code>SpeakerDashboardTests.cs:287</code>.</li>
           <li><input checked="" disabled="" type="checkbox"> <strong><code>/profile/sessions</code> hidden but routable:</strong> decided, recorded under Deliberate and accepted.</li>
-          <li><input checked="" disabled="" type="checkbox"> <strong>Nav-item-to-page-guard fitness test (effort S).</strong> Shipped 2026-10-19 (ADC #280): <code>Tests/Architecture/MMCA.ADC.Architecture.Tests/Api/NavItemGuardContractTests.cs</code> fails when any nav item is looser than its page; it found and fixed two (Happening Now moved to the signed-in section, Roles gated on Organizer). Re-score pending. The original finding: Each module&#39;s <code>IUIModule.NavItems</code> declares a <code>RequiredRole</code> / <code>RequiredClaim</code> / <code>RequiredPermission</code> (<code>EngagementUIModule.cs:25-28</code>), but no test pairs it with the guard of the page it opens; <code>NavigationContractTests.cs:44-104</code> covers routes and page guards only. A test that resolves each nav item&#39;s route to its <code>@page</code> and asserts the menu requirement is no looser than the page guard closes the review-enforced half of the role-based-flows criterion.</li>
-          <li><input checked="" disabled="" type="checkbox"> <strong>URL-projected list state:</strong> already shipped, so this residual was a misread. Every list page on <code>DataGridListPageBase</code> mirrors page, page size, sort and its named filters into the query string on each change (Common <code>DataGridListPageBase.cs:978-981</code> through <code>ListPageQueryStateService.ReplaceState</code>, <code>ListPageQueryStateService.cs:203-216</code>) and reads the URL first on load (<code>DataGridListPageBase.cs:217-228</code>), so the public session, event and speaker lists carry shareable state; <code>?mine</code> is an additional named parameter, not the only one. The activity and sponsor lists have no adjustable state.</li>
+          <li><input checked="" disabled="" type="checkbox"> <strong>Nav-item-to-page-guard fitness test (effort S).</strong> <code>Tests/Architecture/MMCA.ADC.Architecture.Tests/Api/NavItemGuardContractTests.cs:41</code> fails when any nav item declares a requirement looser than the guard of the page it opens, pairing each module&#39;s <code>IUIModule.NavItems</code> requirement (<code>RequiredRole</code> / <code>RequiredClaim</code> / <code>RequiredPermission</code>) with its target page.</li>
+          <li><input checked="" disabled="" type="checkbox"> <strong>URL-projected list state:</strong> every list page on <code>DataGridListPageBase</code> mirrors page, page size, sort and its named filters into the query string on each change (Common <code>DataGridListPageBase.cs:978-981</code> through <code>ListPageQueryStateService.ReplaceState</code>, <code>ListPageQueryStateService.cs:203-216</code>) and reads the URL first on load (<code>DataGridListPageBase.cs:217-228</code>), so the public session, event and speaker lists carry shareable state; <code>?mine</code> is an additional named parameter, not the only one. The activity and sponsor lists have no adjustable state.
+          §25 holds at implementation 8; the next lever is not yet identified.</li>
           </ul>
           <h3 id="x-31--cost-efficiency--finops--m4--i8-weight-2-implpriority-2">[x] #31 · Cost Efficiency / FinOps · M4 / I8 (weight 2; implPriority 2)</h3>
           <ul>
-          <li><input checked="" disabled="" type="checkbox"> <strong>Run <code>cost-guard</code> daily (effort S)</strong>, shipped 2026-10-19 (ADC #280: <code>cost-guard.yml:14</code>, cron <code>0 7 * * *</code>; still read-only, no auto-revert; re-score pending). The original finding: the open half of the rubric&#39;s &quot;reversible scale events&quot; criterion. The surge is declared in IaC (<code>conferenceMode</code>, <code>infra/main.bicep:157</code>, sizing <code>:191-192</code>, SQL tier <code>:995-997</code>) and switched by the <code>CONFERENCE_MODE_UNTIL</code> repository variable on every deploy (<code>deploy.yml:1430-1445</code>), so the first deploy after the window is the revert (<code>deploy.yml:793</code>), and <code>cost-guard</code> fails an expired-but-live surge (<code>cost-guard.yml:116-118</code>). The surge is reverted: <code>az containerapp list -g acc-rg</code> reads all six <code>adc-prod-*</code> apps at minReplicas 1 / maxReplicas 2, and <code>CONFERENCE_MODE_UNTIL</code> is no longer a repository variable. The structural gap stands: nothing schedules the revert deploy, and the read-only guard runs weekly (<code>cost-guard.yml:14</code>, Mondays 07:00 UTC), so an expired surge can bill for up to a week before it is flagged. Distinct from TD-15, the topology-collapse option under Deliberate and accepted.</li>
+          <li><input checked="" disabled="" type="checkbox"> <strong>Run <code>cost-guard</code> daily (effort S).</strong> <code>cost-guard.yml:14</code> schedules the read-only guard at <code>0 7 * * *</code>, with no auto-revert. The surge is declared in IaC (<code>conferenceMode</code>, <code>infra/main.bicep:157</code>, sizing <code>:191-192</code>, SQL tier <code>:995-997</code>) and switched by the <code>CONFERENCE_MODE_UNTIL</code> repository variable on every deploy (<code>deploy.yml:1430-1445</code>), so the first deploy after the window is the revert (<code>deploy.yml:793</code>); <code>cost-guard</code> fails an expired-but-live surge (<code>cost-guard.yml:116-118</code>), and its daily run flags one whose revert deploy has not run within a day. Distinct from TD-15, the topology-collapse option under Deliberate and accepted.
+          §31 holds at implementation 8; the next lever is not yet identified.</li>
           </ul>
-          <h3 id="rows-with-no-recorded-lever-closed-2026-10-19">Rows with no recorded lever (closed 2026-10-19)</h3>
-          <p>§5 (the accepted layered-by-project hybrid is the cap and is not itself a lever), §7 (eight typed gRPC client registrations with two bidirectional pairs and a three-node call loop; the modernization-patterns criterion is met in the ADRs, <code>../adr/007-grpc-extraction.md:26</code> and <code>../adr/008-service-extraction-topology.md:52</code>, and the cached bookmark-count read is accepted) and §11 (the committed threat model is deliberately not scheduled), plus §21&#39;s implementation half. Closed on 2026-10-19: each would need new machinery (a broker projection, a threat model, a slice re-layout, axe on every PR) against no observed defect. A re-score records them as the cap and does not invent a lever.</p>
-          <h3 id="outside-both-bands-the-910-rung-not-ranked">Outside both bands (the 9→10 rung, not ranked)</h3>
+          <h3 id="rows-with-no-recorded-lever">Rows with no recorded lever</h3>
+          <p>§5 (the accepted layered-by-project hybrid is the cap and is not itself a lever), §7 (eight typed gRPC client registrations with two bidirectional pairs and a three-node call loop; the modernization-patterns criterion is met in the ADRs, <code>../adr/007-grpc-extraction.md:26</code> and <code>../adr/008-service-extraction-topology.md:52</code>, and the cached bookmark-count read is accepted) and §11 (the committed threat model is deliberately not scheduled), plus §21&#39;s implementation half. Each would need new machinery (a broker projection, a threat model, a slice re-layout, axe on every PR) against no observed defect. A re-score records them as the cap and does not invent a lever.</p>
+          <h3 id="outside-both-bands-the-9-to-10-rung-not-ranked">Outside both bands (the 9 to 10 rung, not ranked)</h3>
           <h3 id="x-26--front-end-security--m4--i9">[x] #26 · Front-End Security · M4 / I9</h3>
           <ul>
           <li><input checked="" disabled="" type="checkbox"> <strong>TD-08 (effort L) · same-origin data-call proxy.</strong> Resolved: the Common backlog records TD-08 under Resolved (<code>SameOriginApiProxyEndpoint.cs:29</code>), adopted here at <code>Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:161,284</code>.</li>
           </ul>
           <h3 id="closed-28--front-end-testing--quality--m4--i9">[closed] #28 · Front-End Testing &amp; Quality · M4 / I9</h3>
           <ul>
-          <li>[closed] <strong>Pixel-level visual regression</strong> (closed 2026-10-19, see Deliberate and accepted). The markup-snapshot half exists (<code>ComponentsSnapshotTests.cs:27</code>, 12 <code>[Fact]</code>s over 12 committed <code>.html</code> baselines, missing baseline = non-match, in <code>MMCA.ADC.CI.slnf:43,:49,:55</code>); pixel-level Playwright visual regression is open, and 12 components is a small slice of the surface.</li>
+          <li>[closed] <strong>Pixel-level visual regression</strong> (see Deliberate and accepted). The markup-snapshot half exists (<code>ComponentsSnapshotTests.cs:27</code>, 12 <code>[Fact]</code>s over 12 committed <code>.html</code> baselines, missing baseline = non-match, in <code>MMCA.ADC.CI.slnf:43,:49,:55</code>); pixel-level Playwright visual regression is not adopted, and 12 components is a small slice of the surface.</li>
           </ul>
           <h2 id="implementation-band">Implementation band</h2>
-          <p>Categories scoring implementation &lt;= 8, ranked by implPriority (target 9). §10, §21 and §22 also hold a maturity-band row; their items are under Open items. The rows and the levers below are as scored on 2026-10-18. After the 2026-10-19 triage, the §9, §10, §15, §22 (phone viewport), §23, §25 and §31 levers have shipped (ADC #280, re-score pending), and the §5, §7, §11, §18, §22 (density, reflow) and §24 levers are closed (Deliberate and accepted). Neither band carries other scheduled work.</p>
+          <p>Categories scoring implementation &lt;= 8, ranked by implPriority (target 9). §10 and §21 also hold a maturity-band row; their items are under Open items. Where a recorded lever ships and the score holds, the row reads &quot;lever not yet identified&quot; until the next re-score names one; levers closed by decision are under Deliberate and accepted.</p>
           <div class="table-wrap"><table>
           <thead>
           <tr>
@@ -344,20 +348,12 @@
           </tr>
           </thead>
           <tbody><tr>
-          <td>4</td>
-          <td>§22</td>
-          <td>Responsive &amp; Cross-Browser</td>
-          <td>2</td>
-          <td>7</td>
-          <td>Adopt the density-options criterion (zero adoption; <code>DataGridListPageBase.cs:78</code> <code>DenseGrid</code>, <code>:909</code> <code>ToggleDensity()</code>; <code>EventList.razor:73</code> hardcodes <code>Dense=&quot;true&quot;</code>) and complete content reflow on the fixed-width selection-dashboard tables (<code>adc-ui.css:80</code>) and organizer surfaces (<code>OrganizerPointsOverview.razor:61,:98</code>, <code>OrganizerAttendance.razor:50</code>). Effort M</td>
-          </tr>
-          <tr>
           <td>3</td>
           <td>§7</td>
           <td>Microservices Readiness</td>
           <td>3</td>
           <td>8</td>
-          <td>Not yet identified: eight typed gRPC client registrations (<code>Conference.Service/Program.cs:392</code>, <code>Engagement.Service/Program.cs:281</code>, <code>Identity.Service/Program.cs:316</code>, <code>Notification.Service/Program.cs:225</code>), two bidirectional pairs and a three-node call loop; the rubric v2 modernization-patterns criterion is met in the ADRs (Anti-Corruption Layer at <code>../adr/007-grpc-extraction.md:26</code>, Strangler Fig at <code>../adr/008-service-extraction-topology.md:52</code>); the cached Conference→Engagement bookmark-count read is accepted (Deliberate and accepted)</td>
+          <td>Not yet identified: eight typed gRPC client registrations across the four <code>*.Contracts</code> assemblies (<code>Conference.Contracts/DependencyInjection.cs:46,:76,:104</code>, <code>Engagement.Contracts/DependencyInjection.cs:45,:78</code>, <code>Identity.Contracts/DependencyInjection.cs:43</code>, <code>Notification.Contracts/DependencyInjection.cs:44,:80</code>), two bidirectional pairs and a three-node call loop; the rubric v2 modernization-patterns criterion is met in the ADRs (Anti-Corruption Layer at <code>../adr/007-grpc-extraction.md:26</code>, Strangler Fig at <code>../adr/008-service-extraction-topology.md:52</code>); the cached Conference-to-Engagement bookmark-count read is accepted (Deliberate and accepted)</td>
           </tr>
           <tr>
           <td>3</td>
@@ -365,7 +361,7 @@
           <td>Messaging &amp; Integration Architecture</td>
           <td>3</td>
           <td>8</td>
-          <td>Alert, runbook and replay procedure for the broker error queue (<code>FaultIntegrationEventConsumer.cs:57</code> vs the outbox-only rule at <code>infra/main.bicep:603-605</code> and runbook at <code>infra/OPERATIONS.md:188</code>)</td>
+          <td>Not yet identified: the error-queue alert and runbook ship (<code>infra/main.bicep:634-636</code>, <code>infra/OPERATIONS.md:231</code>); 8 holds on no saga or reconciliation sweep (<code>../adr/054-saga-compensation-and-reconciliation.md:201-202</code>), manual replay (<code>infra/OPERATIONS.md:262</code>) and thin message-retention documentation</td>
           </tr>
           <tr>
           <td>3</td>
@@ -373,7 +369,7 @@
           <td>Security</td>
           <td>3</td>
           <td>8</td>
-          <td>Not yet identified: no threat model (a committed model is deliberately not scheduled), service-to-service identity on four of seven gRPC surfaces (<code>BookmarkCountsGrpcService</code>, <code>Engagement.Service/Program.cs:347</code>, <code>LiveChannelGrpcService</code>, <code>Notification.Service/Program.cs:293</code>, and <code>EventLiveValidationGrpcService</code>, <code>Conference.Service/ConferenceGrpcEndpoints.cs:32</code>, are <code>AllowAnonymous</code> by network position), an FCM client key committed at <code>MMCA.ADC.UI/appsettings.json:34</code> (deliberate, minor). The accepted SQL public-network exposure (<code>infra/main.bicep:861</code>, <code>:867</code>, <code>:876</code>) is the 9→10 rung</td>
+          <td>Not yet identified: no threat model (a committed model is deliberately not scheduled), service-to-service identity on four of seven gRPC surfaces (<code>BookmarkCountsGrpcService</code>, <code>Engagement.Service/Program.cs:347</code>, <code>LiveChannelGrpcService</code>, <code>Notification.Service/Program.cs:293</code>, and <code>EventLiveValidationGrpcService</code>, <code>Conference.Service/ConferenceGrpcEndpoints.cs:32</code>, are <code>AllowAnonymous</code> by network position), an FCM client key committed at <code>MMCA.ADC.UI/appsettings.json:34</code> (deliberate, minor). The accepted SQL public-network exposure (<code>infra/main.bicep:983</code>, <code>:989</code>) is the 9 to 10 rung</td>
           </tr>
           <tr>
           <td>3</td>
@@ -381,7 +377,7 @@
           <td>UI Architecture &amp; Components</td>
           <td>3</td>
           <td>8</td>
-          <td><strong>TD-16</strong>: the high-water code-behind is <code>ADCHome.razor.cs</code> at 370 of the 400 cap (<code>PublicSessionList</code> and <code>SessionFeedback</code> extracted, ADC #264 and #265); systematic presentational sub-component extraction. Effort S</td>
+          <td><strong>TD-16</strong> (not scheduled): the high-water code-behind is <code>SessionLive.razor.cs</code> at 399 of the 400 cap, then <code>EventDetail.razor.cs</code> at 396; systematic presentational sub-component extraction. Effort S</td>
           </tr>
           <tr>
           <td>3</td>
@@ -389,7 +385,7 @@
           <td>Accessibility (a11y)</td>
           <td>3</td>
           <td>8</td>
-          <td>Not yet identified: axe is E2E-only, chromium-only, non-PR and conditional (45 scans, <code>AccessibilityTests.cs:23</code>), and keyboard operability is tested on one dialog (<code>LiveModerationKeyboardTests.cs:23</code>); the screen-reader pass is the maturity half</td>
+          <td>Not yet identified: axe is E2E-only, chromium-only, non-PR and conditional (<code>AccessibilityTests.cs:23</code>), and keyboard operability is tested on one dialog (<code>LiveModerationKeyboardTests.cs:23</code>); the screen-reader pass is the maturity half</td>
           </tr>
           <tr>
           <td>2</td>
@@ -405,7 +401,7 @@
           <td>API &amp; Contract Design</td>
           <td>2</td>
           <td>8</td>
-          <td>Parameter-aware, ratcheting breaking-change detection: the Common detector compares no operation parameters (<code>OpenApiBreakingChangeDetector.cs:190-216</code>) and the four committed baselines (<code>OpenApiContractTests.cs:29</code>) do not ratchet against the build documents; the AsyncAPI document is accepted as not built (Deliberate and accepted)</td>
+          <td>Not yet identified: the parameter-aware detector ships (<code>OpenApiBreakingChangeDetector.cs:260</code>); the baseline ratchet and the AsyncAPI document are declined (Deliberate and accepted)</td>
           </tr>
           <tr>
           <td>2</td>
@@ -413,7 +409,15 @@
           <td>Best Practices &amp; Code Quality</td>
           <td>2</td>
           <td>8</td>
-          <td><strong>TD-18</strong>: the MAUI head is in no CI build (<code>MMCA.ADC.CI.slnf:25</code>); <code>maui-audit.yml</code> runs weekly, android-only, in no <code>deploy.needs</code>, so the detector exists and the gate does not.</td>
+          <td>Not yet identified: the MAUI head builds weekly with analyzers and TreatWarningsAsErrors (<code>maui-audit.yml:197</code>, cron <code>:43</code>), detection only with no per-PR leg (TD-18)</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td>§22</td>
+          <td>Responsive &amp; Cross-Browser</td>
+          <td>2</td>
+          <td>8</td>
+          <td>Not yet identified: the phone-viewport check ships (<code>PhoneViewportTests.cs:32</code>); density options (<code>EventList.razor:73</code>) and organizer/statistics table reflow (<code>adc-ui.css:80</code>) are accepted (Deliberate and accepted)</td>
           </tr>
           <tr>
           <td>2</td>
@@ -421,7 +425,7 @@
           <td>Front-End Performance</td>
           <td>2</td>
           <td>8</td>
-          <td>Optimize images and load the EFIGS ICU shard (<code>MMCA.ADC.UI.Web.Client.csproj:11</code> loads all globalization data); code-splitting is declined by decision (Deliberate and accepted)</td>
+          <td>Not yet identified: the EFIGS ICU shard ships (<code>MMCA.ADC.UI.Web.Client.csproj:16</code>); code-splitting is declined by decision (Deliberate and accepted)</td>
           </tr>
           <tr>
           <td>2</td>
@@ -429,7 +433,7 @@
           <td>Forms, Validation &amp; UX Safety</td>
           <td>2</td>
           <td>8</td>
-          <td>Extend <code>ShouldExposeFieldErrorAccessibly</code> (EventCreate only, <code>EventCreateTests.cs:104</code>) to the remaining <code>MudForm</code> pages; client/server parity is complete (BR-122 mirrored at <code>SessionFormModel.cs:87-92</code>, server error surfaced at <code>SessionCreate.razor.cs:178</code>) and the forms fitness gate is string-marker based. Effort S-M</td>
+          <td>Extend <code>ShouldExposeFieldErrorAccessibly</code> (EventCreate only, <code>EventCreateTests.cs:104</code>) to the remaining <code>MudForm</code> pages, closed by decision (Deliberate and accepted); client/server parity is complete (BR-122 mirrored at <code>SessionFormModel.cs:87-92</code>, server error surfaced at <code>SessionCreate.razor.cs:178</code>) and the forms fitness gate is string-marker based</td>
           </tr>
           <tr>
           <td>2</td>
@@ -437,7 +441,7 @@
           <td>Navigation &amp; Information Arch</td>
           <td>2</td>
           <td>8</td>
-          <td>The contract test ships (<code>Api/NavigationContractTests.cs</code>) and the four recorded residuals are closed (typed routes, the speaker form guard, <code>/profile/sessions</code> accepted, URL list state confirmed); 8 holds because nav-item requirements are not tested against page guards (<code>EngagementUIModule.cs:25-28</code>) and the flow diagrams sit outside the contract. Effort S</td>
+          <td>Not yet identified: the contract test (<code>Api/NavigationContractTests.cs</code>) and the nav-item-to-page-guard test (<code>Api/NavItemGuardContractTests.cs:41</code>) ship</td>
           </tr>
           <tr>
           <td>2</td>
@@ -445,7 +449,7 @@
           <td>Cost Efficiency / FinOps</td>
           <td>2</td>
           <td>8</td>
-          <td>Run the read-only <code>cost-guard</code> daily: the surge is IaC (<code>infra/main.bicep:157</code>) switched per deploy by <code>CONFERENCE_MODE_UNTIL</code> (<code>deploy.yml:1430-1445</code>) and is reverted, but nothing schedules a revert and the guard is weekly (<code>cost-guard.yml:14</code>, <code>:116</code>). Effort S</td>
+          <td>Not yet identified: the surge is IaC (<code>infra/main.bicep:157</code>) switched per deploy by <code>CONFERENCE_MODE_UNTIL</code> (<code>deploy.yml:1430-1445</code>), and the read-only guard runs daily (<code>cost-guard.yml:14</code>)</td>
           </tr>
           <tr>
           <td>1</td>
@@ -456,7 +460,7 @@
           <td>Deferred by decision: pseudo-localization covers 3 public pages (<code>PseudoLocalizationTests.cs:41-43</code>, public by design <code>:25</code>); do not re-propose without new evidence (re-open triggers under Deliberate and accepted)</td>
           </tr>
           </tbody></table></div>
-          <p><strong>Σ implPriority = 34</strong> across the 14 live rows above (4+3+3+3+3+3+2+2+2+2+2+2+2+1); ties are broken by weight descending, then category number ascending. The index gap to a full 810 is 113 weighted points; the 34 are the scheduling gap to 9 on every category.</p>
+          <p><strong>Σ implPriority = 32</strong> across the 14 live rows above (3+3+3+3+3+2+2+2+2+2+2+2+2+1); ties are broken by weight descending, then category number ascending. The index gap to a full 810 is 113 weighted points; the 32 are the scheduling gap to 9 on every category.</p>
           <h2 id="maturity-band">Maturity band</h2>
           <div class="table-wrap"><table>
           <thead>
@@ -475,7 +479,7 @@
           <td>Messaging &amp; Integration Architecture</td>
           <td>3</td>
           <td>3</td>
-          <td>Wire broker faults to alert-as-code</td>
+          <td>Bring the broker round-trip tier inside a merge gate: it runs on a weekday schedule (<code>cross-service-tests.yml:32</code>) and reaches the deploy only through the <code>cross-service-freshness</code> recency gate (<code>deploy.yml:885</code>)</td>
           </tr>
           <tr>
           <td>3</td>
@@ -491,24 +495,16 @@
           <td>Performance &amp; Scalability</td>
           <td>2</td>
           <td>3</td>
-          <td>Held by decision: an in-band capacity proof is declined, so the monthly k6 run behind the recency-only <code>load-freshness</code> gate (<code>load-test.yml:23</code>, <code>deploy.yml:863</code>) is the accepted posture (Deliberate and accepted)</td>
-          </tr>
-          <tr>
-          <td>2</td>
-          <td>§22</td>
-          <td>Responsive &amp; Cross-Browser</td>
-          <td>2</td>
-          <td>3</td>
-          <td>An automated phone-viewport check (E2E or fitness test) so reflow, density and touch targets are enforced rather than review-only; the <code>cross-browser-freshness</code> recency gate (<code>deploy.yml:923</code>) covers only the browser matrix</td>
+          <td>Held by decision: an in-band capacity proof is declined, so the monthly k6 run behind the recency-only <code>load-freshness</code> gate (<code>load-test.yml:23</code>, <code>deploy.yml:864</code>) is the accepted posture (Deliberate and accepted)</td>
           </tr>
           </tbody></table></div>
-          <p>Σ maturity priority = 10 across the 4 rows (3+3+2+2).</p>
+          <p>Σ maturity priority = 8 across the 3 rows (3+3+2).</p>
           <h2 id="deliberate-and-accepted">Deliberate and accepted</h2>
           <p>Recorded decisions, not scheduled work.</p>
           <ul>
-          <li><strong>Closed as over-engineering, 2026-10-19.</strong> Each was weighed against the measured load (~76 accounts, ~67 peak) and one developer; none has a defect behind it that an existing gate misses, so each would add permanent machinery for a score point. Do not re-propose without new evidence (a named re-open trigger, an incident, or an explicit ask).<ul>
-          <li><strong>§22 DataGrid density toggle and organizer table reflow</strong> (<code>adc-ui.css:80</code>, <code>OrganizerPointsOverview.razor:61,98</code>, <code>OrganizerAttendance.razor:50</code>): no user asked for density, the organizer surfaces are used on desktop, and the phone-viewport E2E now guards the attendee pages. <strong>Re-open:</strong> that test fails, or an organizer reports a phone layout problem.</li>
-          <li><strong>§18 TD-16 <code>ADCHome.razor.cs</code> extraction</strong> (370 of 400): under the cap, and the cap&#39;s fitness test forces the split the day it is due.</li>
+          <li><strong>Closed as over-engineering.</strong> Each was weighed against the measured load (~76 accounts, ~67 peak) and one developer; none has a defect behind it that an existing gate misses, so each would add permanent machinery for a score point. Do not re-propose without new evidence (a named re-open trigger, an incident, or an explicit ask).<ul>
+          <li><strong>§22 DataGrid density toggle and organizer table reflow</strong> (<code>adc-ui.css:80</code>, <code>OrganizerPointsOverview.razor:61,98</code>, <code>OrganizerAttendance.razor:57</code>): no user asked for density, the organizer surfaces are used on desktop, and the phone-viewport E2E (<code>PhoneViewportTests.cs:32</code>) guards the attendee pages. <strong>Re-open:</strong> that test fails, or an organizer reports a phone layout problem.</li>
+          <li><strong>§18 TD-16 code-behind extraction</strong> (<code>SessionLive.razor.cs</code> at 399 of 400, <code>EventDetail.razor.cs</code> at 396): under the cap, and the cap&#39;s fitness test forces the split the day it is due.</li>
           <li><strong>§24 <code>ShouldExposeFieldErrorAccessibly</code> on 21 more forms:</strong> the behavior lives in the one shared <code>ErrorSummary</code>, so 21 tests would mirror one component; EventCreate pins it.</li>
           <li><strong>§28 pixel-level visual regression:</strong> screenshot baselines break on every MudBlazor bump and font change (the reason the Store markup-snapshot port was cut); the markup snapshots and the axe scans cover the regressions that matter.</li>
           <li><strong>§9 baseline ratchet</strong> keeping <code>openapi-baseline.json</code> in step with the build documents: a route added after seeding is protected once the baseline is regenerated in the pull request that changes the contract, which is the documented procedure.</li>
@@ -524,27 +520,27 @@
           <li><strong>Constructor-dependency ceilings (§1):</strong> <code>AuthenticationService</code> is a cohesive auth facade and is accepted as-is. The service ceiling is 10 (<code>:28</code>, set for <code>AuthenticationService</code>), the controller ceiling 10 (<code>Tests/Architecture/MMCA.ADC.Architecture.Tests/Cqrs/ConstructorDependencyCountTests.cs:56</code>) and the handler ceiling 7 (<code>:65</code>), the last set at the widest handler (<code>ResetPasswordHandler</code>, <code>SubmitQuestionHandler</code>). <code>SessionsController</code> sits at 10 on a dispensation documented in the test&#39;s XML doc (<code>ConstructorDependencyCountTests.cs:44-53</code>): its tenth dependency, <code>IEntityQueryService&lt;Event, ...&gt;</code>, exists only for the BR-86 advisory <code>X-Warning</code> header on create, which the framework&#39;s fixed create-handler signature cannot set. Lower it the moment a framework change makes 9 true.</li>
           <li><strong>Vertical slice, deliberate layered-by-project hybrid (§5):</strong> cross-cutting concerns run in the decorator pipeline, slice cohesion is held by the CI-gated <code>SliceCohesionTests</code>, and the hybrid is the accepted choice that caps implementation at 8. It does not absorb enforcement-coverage gaps, which stay schedulable.</li>
           <li>[~] <strong>Design-system residuals (§20), Common-side and watch item:</strong> eight <code>!important</code> overrides live in MMCA.Common&#39;s shared <code>app.css</code> (<code>:189</code>, <code>:209-210</code>, <code>:297</code>, <code>:302</code>, <code>:307-308</code>, <code>:314</code>, each with a mobile or a11y rationale; a generalized selector at <code>:206</code>); these are MMCA.Common changes, not ADC-local. ADC&#39;s own markup carries zero inline styles: layout and sizing values ride semantic classes in the module stylesheet (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/wwwroot/adc-ui.css:75</code> <code>.text-center-cell</code> through <code>:308</code> <code>.presenter-main</code>, global because they land on markup MudBlazor renders), and <code>Tests/Architecture/MMCA.ADC.Architecture.Tests/Ui/InlineStyleTests.cs:22</code> pins the count at zero with no allow-list (<code>:13</code>), so a reintroduced <code>style=</code>, <code>Style=</code> or <code>CellStyle=</code> fails the CI architecture tier.</li>
-          <li><strong>Deploy E2E gate is chromium-only, ui-scoped and cross-engine by recency:</strong> <code>e2e-gate</code> invokes one browser (<code>deploy.yml:806</code>, <code>browsers: &#39;[&quot;chromium&quot;]&#39;</code> at <code>:820</code>) and runs only on UI-affecting diffs (<code>:817</code>, rationale <code>:808-816</code>); firefox and webkit run on alternating weekly single-engine nightly legs (Monday firefox, Thursday webkit) with <code>continue-on-error</code> on the schedule (<code>e2e.yml:147</code>). The <code>cross-browser-freshness</code> step (<code>deploy.yml:923</code>; <code>freshness</code> in <code>deploy.needs</code> <code>:1159</code>, required <code>:1193</code>) requires an in-window green proof per engine, so cross-engine coverage is enforced by recency rather than per-deploy execution: a UI deploy can ship code never run on firefox or webkit until the next weekly leg goes red and stale. The deploys <code>e2e-gate</code> skips still ship a PR-tested tree: the required <code>build-and-test</code> runs the CI.slnf unit, architecture and bUnit tier (<code>deploy.yml:366</code>), and branch protection enforces admins with strict up-to-date required checks (ADC PR #258), so the merged tree is the tree it ran on. A deliberate Actions-minute trade-off.</li>
+          <li><strong>Deploy E2E gate is chromium-only, ui-scoped and cross-engine by recency:</strong> <code>e2e-gate</code> invokes one browser (<code>deploy.yml:807</code>, <code>browsers: &#39;[&quot;chromium&quot;]&#39;</code> at <code>:821</code>) and runs only on UI-affecting diffs (<code>:818</code>, rationale <code>:809-817</code>); firefox and webkit run on alternating weekly single-engine nightly legs (Monday firefox, Thursday webkit) with <code>continue-on-error</code> on the schedule (<code>e2e.yml:147</code>). The <code>cross-browser-freshness</code> step (<code>deploy.yml:924</code>; <code>freshness</code> in <code>deploy.needs</code> <code>:1160</code>, required <code>:1194</code>) requires an in-window green proof per engine, so cross-engine coverage is enforced by recency rather than per-deploy execution: a UI deploy can ship code never run on firefox or webkit until the next weekly leg goes red and stale. The deploys <code>e2e-gate</code> skips still ship a PR-tested tree: the required <code>build-and-test</code> runs the CI.slnf unit, architecture and bUnit tier (<code>deploy.yml:366</code>), and branch protection enforces admins with strict up-to-date required checks (ADC PR #258), so the merged tree is the tree it ran on. A deliberate Actions-minute trade-off.</li>
           <li><strong>E2E runs Blazor Server mode in CI:</strong> <code>e2e.yml</code> pins <code>E2E_FORCE_SERVER=true</code>; forcing WebAssembly in CI fails wholesale on the 2-core hosted runner (every fresh browser context pays a cold WASM boot and the readiness probe is satisfied during prerender). <code>E2E_FORCE_WASM</code> stays supported for local runs. Retrying WASM in CI needs all three of: a WASM-aware readiness signal, amortized per-context WASM boot, and a raised job cap. A faster self-hosted runner makes the suite fail more (Blazor Server circuits drop under sustained fast-suite load), so do not repeat the rejected test-side and circuit-config tweaks; the only paths that work are a slower pace or dedicated UI-host CPU.</li>
           <li><strong>Freshness-gate break-glass:</strong> the four recency gates (<code>dr-freshness</code>, <code>load-freshness</code>, <code>cross-service-freshness</code>, <code>cross-browser-freshness</code>, the four steps of the <code>freshness</code> job) each accept a <code>skip_freshness_gates</code> workflow_dispatch input with a required justification (declared at <code>deploy.yml:13-18</code>, passed to the shared Common freshness-gate action at <code>:855</code>, <code>:874</code>, <code>:904</code>, <code>:943</code>), so each proof is bypassable by an operator. This qualifies the &quot;enforced deploy precondition&quot; language used for §6, §12, §22, §29 and §33.</li>
           <li><strong>No ordering stamp on the speaker-link handlers (§10):</strong> neither <code>SpeakerLinkedToUser</code> nor <code>User</code> carries an ordering stamp, so a late redelivery (second-level redelivery reaches 3600 s on Azure Service Bus, Common <code>MessageBusSettings.cs:211</code>) can overwrite <code>LinkedSpeakerId</code> (<code>SpeakerLinkedToUserHandler.cs:59</code>). The limit is recorded as accepted in the code (<code>:25-27</code>): an organizer repairs it by re-linking, and <code>SpeakerUnlinkedFromUserHandler.cs:56</code> guards the stale direction.</li>
           <li><strong>Pseudo-localization breadth deferred (§27):</strong> broadening <code>PseudoLocalizationTests</code> beyond its three public pages (<code>PseudoLocalizationTests.cs:41-43</code>, public by design per <code>:25</code>) across the authenticated authoring surface is worth 1 weighted point and costs authenticated-login plumbing plus text-expansion and overflow assertions across roughly 54 of the 57 routable <code>@page</code> files, the weakest cost-to-benefit ratio on either band. The assertion is a rendered-layout property, so bUnit cannot close it, and every browser case added to the deploy-gating chromium <code>e2e-gate</code> is paid on every future deploy. A citable culture-aware-formatting violation also stands against the lift. §27 keeps its band row at implPriority 1, but the lever is not to be re-proposed without new evidence. <strong>Re-open triggers:</strong> a second locale beyond <code>es</code>, any RTL locale, or a reported layout regression on an authenticated page. Maturity 4 is unaffected (<code>TranslationCompletenessTests</code> + <code>LocalizedTextConventionTests</code>, both in <code>MMCA.ADC.CI.slnf:58</code>, run at <code>deploy.yml:366</code>).</li>
           <li><strong>BR-130 room double-booking overlap check is a SOFT guard:</strong> <code>SessionRoomScheduling.ValidateRoomAssignmentAsync</code> is a read-then-write advisory check with no transaction, lock or DB exclusion constraint, so two concurrent organizer writes for the same room with overlapping windows can both pass. Each alternative is rejected on evidence: a transactional re-check cannot close the race below SERIALIZABLE (which escalates to key-range or table locks across the Sessionize import path with no <code>(RoomId, StartsAt)</code> index); <code>IDistributedLock</code>&#39;s contract forbids sole-guard use on a correctness invariant and degrades to in-process when Redis is absent; <code>sp_getapplock</code> needs an EF/SqlClient reference the Application layer forbids. The spec&#39;s BR-130 promises only the cross-event room check (422); a double-booking is repairable by editing either session. Documented in the class XML doc (ADC PR #94). <strong>Re-open triggers:</strong> organizer concurrency materially above today&#39;s handful, a real double-booking incident, or a cheap DB-level range-exclusion capability.</li>
-          <li><strong>§16 is scored, not N/A:</strong> rubric v2&#39;s &quot;N/A in all three repos&quot; claim (<a href="../adr/110-rubric-v2-category-realignment.html">ADR-110</a>) does not hold for ADC, because AI session scoring calls a model in production. §16 sits at M4/I10, governed by <a href="../adr/111-ai-session-scoring-governance.html">ADR-111</a> and <a href="../adr/120-governed-chat-client-boundary.html">ADR-120</a>. The ADR-110 wording is a Website-side correction for <code>/update-adrs</code>. The former Maintainability &amp; Evolvability criteria score under §34 (coupling, tech-debt register), §32 (lockstep upgrades) and §33 (onboarding).</li>
-          <li>[accepted] <strong>SQL data plane on public network access, password path retained (§11 / §17):</strong> <code>publicNetworkAccess: &#39;Enabled&#39;</code> (<code>infra/main.bicep:861</code>) plus the AllowAzureServices 0.0.0.0 firewall rule (<code>:867</code>), with <code>azureADOnlyAuthentication</code> deliberately not set (<code>:876</code>, the password path kept as a dormant fallback) and the <code>sqlAdminPassword</code> parameter always supplied (<code>deploy.yml:1296</code>); managed-identity SQL auth is opt-in through the <code>useManagedIdentitySql</code> repo variable (bicep default <code>false</code>, <code>:36</code>) and active in production. Moving onto private endpoints is the VNet and private-endpoint epic, which recreates the Container Apps environment, so it is deferred by design and documented-accepted in <code>infra/SQL-MANAGED-IDENTITY.md</code>; it is the 9→10 rung, not a scheduled lever. The three <code>AllowAnonymous</code> internal gRPC surfaces (<code>BookmarkCountsGrpcService</code> at <code>Engagement.Service/Program.cs:347</code>, <code>LiveChannelGrpcService</code> at <code>Notification.Service/Program.cs:293</code>, and <code>EventLiveValidationGrpcService</code> at <code>Conference.Service/ConferenceGrpcEndpoints.cs:32</code>, rationale <code>:22-31</code>, with &quot;a fresh token at join&quot; recorded as its follow-up at <code>:30-31</code>) are accepted with their compensating controls: bounded payloads, no user ids on the wire, no Gateway route. Service-to-service identity holds on the other four (<code>ConferenceGrpcEndpoints.cs:20</code>, <code>Engagement.Service/Program.cs:355</code>, <code>Notification.Service/Program.cs:301</code>, <code>Identity.Service/Program.cs:373</code>). <strong>Re-open triggers:</strong> a VNet-integrated environment landing for another reason, or a data-plane exposure finding.</li>
+          <li><strong>§16 is scored, not N/A:</strong> rubric v2&#39;s &quot;N/A in all three repos&quot; claim (<a href="../adr/110-rubric-v2-category-realignment.html">ADR-110</a>) does not hold for ADC, because AI session scoring calls a model in production. §16 sits at M4/I9, governed by <a href="../adr/111-ai-session-scoring-governance.html">ADR-111</a> and <a href="../adr/120-governed-chat-client-boundary.html">ADR-120</a>. The ADR-110 wording is a Website-side correction for <code>/update-adrs</code>. The former Maintainability &amp; Evolvability criteria score under §34 (coupling, tech-debt register), §32 (lockstep upgrades) and §33 (onboarding).</li>
+          <li>[accepted] <strong>SQL data plane on public network access, password path retained (§11 / §17):</strong> <code>publicNetworkAccess: &#39;Enabled&#39;</code> (<code>infra/main.bicep:983</code>) plus the AllowAzureServices 0.0.0.0 firewall rule (<code>:989</code>), with <code>azureADOnlyAuthentication</code> deliberately not set (<code>:998</code>, the password path kept as a dormant fallback) and the <code>sqlAdminPassword</code> parameter always supplied (<code>deploy.yml:1296</code>); managed-identity SQL auth is opt-in through the <code>useManagedIdentitySql</code> repo variable (bicep default <code>false</code>, <code>:36</code>) and active in production. Moving onto private endpoints is the VNet and private-endpoint epic, which recreates the Container Apps environment, so it is deferred by design and documented-accepted in <code>infra/SQL-MANAGED-IDENTITY.md</code>; it is the 9→10 rung, not a scheduled lever. The three <code>AllowAnonymous</code> internal gRPC surfaces (<code>BookmarkCountsGrpcService</code> at <code>Engagement.Service/Program.cs:347</code>, <code>LiveChannelGrpcService</code> at <code>Notification.Service/Program.cs:293</code>, and <code>EventLiveValidationGrpcService</code> at <code>Conference.Service/ConferenceGrpcEndpoints.cs:32</code>, rationale <code>:22-31</code>, with &quot;a fresh token at join&quot; recorded as its follow-up at <code>:30-31</code>) are accepted with their compensating controls: bounded payloads, no user ids on the wire, no Gateway route. Service-to-service identity holds on the other four (<code>ConferenceGrpcEndpoints.cs:20</code>, <code>Engagement.Service/Program.cs:355</code>, <code>Notification.Service/Program.cs:301</code>, <code>Identity.Service/Program.cs:373</code>). <strong>Re-open triggers:</strong> a VNet-integrated environment landing for another reason, or a data-plane exposure finding.</li>
           <li>[accepted] <strong>§11 threat model not scheduled (TD-26, effort M):</strong> a committed STRIDE-style model per trust boundary (Gateway edge, per-service gRPC, outbox/broker, Key Vault, mobile client) under <code>infra/</code> or <code>Docs/</code> is cut by decision; do not re-schedule it without asking. The rubric&#39;s &quot;no threat model&quot; red flag stays citable (no threat-model file exists in the repo), so §11 holds at implementation 8; the mitigations such a model would enumerate are enforced individually (the CI-gated <code>Tests/Architecture/MMCA.ADC.Architecture.Tests/Api/AnonymousEndpointTests.cs:21</code> allowlist, the gating supply-chain job, the compensating controls above). <strong>Re-open triggers:</strong> an explicit request for the model, a compliance requirement that names one, or a security finding a maintained model would have caught.</li>
           <li>[accepted] <strong>TD-15 (effort L) · topology collapse to one host and one database:</strong> the framework supports collapsing the distributed topology into a modular monolith with no application-code rewrite (<code>AddBrokerMessaging</code> falls back to the in-process bus, <code>DataSourceResolver</code> collapses the per-module sources onto one database, <code>ModuleLoader</code> boots all four modules in one host; MMCA.Helpdesk is the single-host proof). The recorded estimate is a run cost of ~$190-220/mo cut to roughly a third, with the gRPC partial-failure class eliminated (ACA ~$110-130, SQL ~$25, Log Analytics ~$25, Redis ~$13 at Balanced B0, Service Bus ~$10 at Standard); those dollar figures are unverified against billing. <strong>Blocker (deliberate):</strong> the distributed topology is the GTM demonstrator of the framework&#39;s extract-a-service path. <strong>Resolution path when revisited:</strong> single service host enabling all modules (Helpdesk pattern), one <code>ADC</code> database via the resolver collapse, drop Service Bus/Redis/Gateway from <code>main.bicep</code>, point the UI at the host, and re-run the k6 capacity proof at the collapsed tier.</li>
-          <li>[closed] <strong>Batch the feedback submit:</strong> <code>EventFeedback</code>/<code>SessionFeedback</code> send one HTTP POST per answered question over a 10-question set, each its own transaction, outbox write and audit stamp. Needs a batch upsert command and endpoint. Closed 2026-10-19 (see Closed as over-engineering).</li>
-          <li>[closed] <strong>Session-scoped live-poll management endpoint:</strong> <code>SessionLive</code> fetches event-wide polls and filters client-side. Not a type-compatible swap (<code>GetEventPollsAsync</code> returns <code>LivePollDTO</code>, the session-scoped call <code>LivePollResultsDTO</code>), and the event list is organizer-only with speakers falling back on 403, so it needs an authorization decision too. Closed 2026-10-19 (see Closed as over-engineering).</li>
-          <li>[closed] <strong><code>GetOpenPollsHandler</code> issues two queries per poll:</strong> the N+1 shape <code>SessionQuestionViewBuilder</code> removed, one file over. Theoretical at ADC&#39;s scale (1-3 open polls). Closed 2026-10-19 (see Closed as over-engineering).</li>
+          <li>[closed] <strong>Batch the feedback submit:</strong> <code>EventFeedback</code>/<code>SessionFeedback</code> send one HTTP POST per answered question over a 10-question set, each its own transaction, outbox write and audit stamp. Needs a batch upsert command and endpoint. Closed (see Closed as over-engineering).</li>
+          <li>[closed] <strong>Session-scoped live-poll management endpoint:</strong> <code>SessionLive</code> fetches event-wide polls and filters client-side. Not a type-compatible swap (<code>GetEventPollsAsync</code> returns <code>LivePollDTO</code>, the session-scoped call <code>LivePollResultsDTO</code>), and the event list is organizer-only with speakers falling back on 403, so it needs an authorization decision too. Closed (see Closed as over-engineering).</li>
+          <li>[closed] <strong><code>GetOpenPollsHandler</code> issues two queries per poll:</strong> the N+1 shape <code>SessionQuestionViewBuilder</code> removed, one file over. Theoretical at ADC&#39;s scale (1-3 open polls). Closed (see Closed as over-engineering).</li>
           <li><strong>UI read cache not adopted (§12):</strong> the Conference UI services do not opt into <code>IUiReadCache</code> (zero occurrences in ADC <code>Source</code>); the opt-in caused e2e-gate staleness failures. This is the §12 9→10 residual.</li>
           <li>[closed] <strong>Optional cross-service broker-tier coverage (§14):</strong> the Testcontainers RabbitMQ + SQL round-trip tier (<code>MMCA.ADC.CrossService.IntegrationTests</code>, nightly <code>cross-service-tests.yml</code>, its recency gating deploys through <code>cross-service-freshness</code>) does not cover speaker analytics or the Conference→Engagement bookmark-count gRPC reads. Optional, not scheduled.</li>
           <li><strong>Dedicated rate-limit integration fixtures skipped:</strong> the WebApplicationFactory hosts neutralize the limiter; proving the 300/min cap and the per-IP registration throttle needs a tight-limit fixture variant, low value at this volume. Revisit only if abuse is observed.</li>
           <li><strong>Refresh cookie keeps <code>SameSite=Lax</code>, not <code>Strict</code>:</strong> Lax is load-bearing for the SSR-prerender path (<code>[Authorize]</code> pages opened in a new tab, on F5 or from an external link are cross-site top-level navigations that Strict would strip the cookie from, forcing a spurious /login bounce, the scenario ADR-022&#39;s cookie scheme exists to serve). CSRF is covered by the <code>/auth/session/token</code> endpoint&#39;s <code>Sec-Fetch-Site</code> check, POST-only, and <code>SameSite=Lax</code>. The session/refresh cookie lives 7 days (<code>SessionCookieJar</code>, aligned to the refresh-token lifetime).</li>
           <li><strong>Data export excludes feedback answers (§30):</strong> the export aggregates Identity, Engagement (bookmarks, submitted questions) and Notification (inbox items); event and session feedback answers live in the Conference database and would need a third gRPC edge. Out of scope by decision.</li>
-          <li><strong>No in-band k6 capacity proof (§12):</strong> running the k6 tier inside every deploy loads production on every deploy at a peak of about 67 users, so the monthly read-only run (<code>load-test.yml:23</code>) plus the <code>load-freshness</code> recency gate (<code>deploy.yml:863</code>, 35-day window <code>:872</code>) is the accepted posture. §12 keeps its maturity-band row at priority 2 and holds at maturity 3 by this decision; do not re-propose the in-band proof without asking.</li>
-          <li><strong>No AsyncAPI document for the integration events (§9, TD-24&#39;s async half):</strong> ADC has no external event consumers, and the frozen contract snapshot (<code>Tests/Architecture/MMCA.ADC.Architecture.Tests/Contracts/IntegrationEventContractTests.cs:9</code>) already guards the seven events byte-exactly. With the OpenAPI baseline-diff half shipped (see Resolved), TD-24 is closed rather than deferred; the parameter-aware detector and the baseline ratchet under #9 are the remaining §9 lever.</li>
-          <li><strong>No WASM code-splitting (§23):</strong> already evaluated and rejected in Common (<code>common-RemediationBacklog.md</code> #23). The image-optimization and EFIGS ICU shard half of #23 stays open.</li>
+          <li><strong>No in-band k6 capacity proof (§12):</strong> running the k6 tier inside every deploy loads production on every deploy at a peak of about 67 users, so the monthly read-only run (<code>load-test.yml:23</code>) plus the <code>load-freshness</code> recency gate (<code>deploy.yml:864</code>, 35-day window <code>:873</code>) is the accepted posture. §12 keeps its maturity-band row at priority 2 and holds at maturity 3 by this decision; do not re-propose the in-band proof without asking.</li>
+          <li><strong>No AsyncAPI document for the integration events (§9, TD-24&#39;s async half):</strong> ADC has no external event consumers, and the frozen contract snapshot (<code>Tests/Architecture/MMCA.ADC.Architecture.Tests/Contracts/IntegrationEventContractTests.cs:9</code>) already guards the seven events byte-exactly. With the OpenAPI baseline-diff half shipped (see Resolved), TD-24 is closed rather than deferred. The parameter-aware detector under #9 ships (<code>OpenApiBreakingChangeDetector.cs:260</code>) and the baseline ratchet is declined, so §9 holds at implementation 8 with its next lever not yet identified.</li>
+          <li><strong>No WASM code-splitting (§23):</strong> already evaluated and rejected in Common (<code>common-RemediationBacklog.md</code> #23). The EFIGS ICU shard half of #23 ships (<code>MMCA.ADC.UI.Web.Client.csproj:16</code>), and §23 holds at implementation 8.</li>
           <li><strong>§18 code-behind cap stays at 400:</strong> lowering <code>MaxCodeBehindLines</code> to 300 (<code>UIArchitectureConventionTestsBase.cs:22</code>) would force about twelve extractions at once; only the files near 400 are extracted (TD-16), and the cap is kept at 400.</li>
           <li><strong>Cached bookmark-count gRPC read kept (§7):</strong> Engagement owns the bookmark counts, and Conference reads them in one batched gRPC call behind the 60-second <code>BookmarkCountsCache</code> policy with broker-driven eviction (<code>Source/Services/MMCA.ADC.Conference.Service/Program.cs:294-301</code>), so the read is not a chatty-sync defect. Replacing it with an event-fed Conference-side projection (an outbox event, a projection table, an ADR-114 backfill) adds a contract, a table, a backfill and drift risk for one implementation point, and is rejected. §7 holds at implementation 8 on the remaining bidirectional pairs and call loop; do not re-propose the projection.</li>
           <li><strong>ImageSharp 3.1.12 advisory hold (§15 / §32):</strong> five <code>NuGetAuditSuppress</code> items (<code>Directory.Build.props:55-59</code>, rationale <code>:46-53</code>) cover the 3.1.12 advisories: the package arrives only transitively through <code>MMCA.Common.Infrastructure</code>, the fix ships only in 4.1.2, which the v3 license pin rules out, and the single decode path is Common&#39;s <code>ImageSharpImageProcessor</code>. The hold mirrors MMCA.Common&#39;s; revisit it with MMCA.Common on the next ImageSharp release.</li>
@@ -652,8 +648,8 @@
           <tr>
           <td>§16</td>
           <td>AI-Native Application Architecture</td>
-          <td>4 / 10</td>
-          <td>TD-22 golden replay and prompt hash (<code>GoldenReplayTests.cs:183</code>, <code>PromptContractTests.cs:57</code>); TD-23 input envelope and redaction; TD-25 trace source (<code>MMCA.Common.Aspire/Extensions.cs:185</code>); output guardrail at the boundary (<code>SessionScoreResponseGuardrail.cs:74</code>, pinned by <code>ConferenceAiGuardrailsRegistrationTests.cs:81</code>); permanent kill switch (<code>ConferenceFeatures.cs:38</code>)</td>
+          <td>4 / 9</td>
+          <td>TD-22 golden replay and prompt hash (<code>GoldenReplayTests.cs:183</code>, <code>PromptContractTests.cs:55</code>); TD-23 input envelope and redaction; TD-25 trace source (<code>MMCA.Common.Aspire/Extensions.cs:185</code>); output guardrail at the boundary (<code>SessionScoreResponseGuardrail.cs:74</code>, pinned by <code>ConferenceAiGuardrailsRegistrationTests.cs:81</code>); permanent kill switch (<code>ConferenceFeatures.cs:38</code>)</td>
           </tr>
           <tr>
           <td>§17</td>
