@@ -259,7 +259,8 @@
           <code>AddSingleton</code> still wins; only a late <code>TryAdd</code> registration loses to the static default).
           Revised 2026-10-06 (credential paths also answer <code>Pragma: no-cache</code>, re-apply their cache headers at
           response start over a weaker downstream value, and have their prefixes validated at startup).
-          Revised 2026-10-07: anchors refreshed after the v1.233.0 release.</p>
+          Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
+          Revised 2026-10-21: re-verified against current source, no content or anchor change.</p>
           <h2 id="context">Context</h2>
           <p>Every client-facing host (the YARP Gateway and the Blazor UI web host in each app) must stamp the same
           hardened HTTP response headers: <code>X-Content-Type-Options</code>, <code>X-Frame-Options</code>, <code>Referrer-Policy</code>,
@@ -535,6 +536,20 @@
           limiter). The ordering is unchanged: forwarded headers, then security headers, then rate limiting,
           then the HTTPS redirect.</li>
           </ol>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. No decision, rationale or trade-off changed, and no live-section
+          anchor moved since the 2026-10-07 revision.</p>
+          <ol>
+          <li>Anchors re-verified against current source: the static default&#39;s <code>TryAddSingleton</code> registration
+          is still <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Security/SecurityHeaders.cs:288</code>, the
+          register-first guidance still <code>:265-266</code> and the <code>ICspPolicyProvider</code> summary <code>:83-84</code> (interface
+          at <code>:86</code>); <code>AddCommonBlazorCsp</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:67</code>)
+          still registers with plain <code>AddSingleton</code> at <code>:77</code>, with its call-before comment at <code>:56-58</code>. The
+          Decision defaults hold as written: <code>X-Frame-Options: DENY</code> (<code>SecurityHeaders.cs:25</code>),
+          <code>strict-origin-when-cross-origin</code> (<code>:28</code>), the <code>Permissions-Policy</code> value (<code>:31</code>), HSTS
+          <code>max-age=31536000; includeSubDomains</code> (<code>:51</code>) gated on <code>EnableHsts</code> outside Development (<code>:175</code>),
+          the static baseline (<code>:67-69</code>), and the 128-bit <code>{nonce}</code> (16 bytes, <code>:153</code>, generated at <code>:228</code>).</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-019 (rate limiting, the other always-on edge protection living in the same Aspire layer), ADR-022
           (browser session-cookie auth, the other browser-edge security control), ADR-008 (the gateway topology
@@ -560,6 +575,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

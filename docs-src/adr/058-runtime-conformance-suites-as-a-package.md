@@ -7,11 +7,12 @@ Revised 2026-09-25 (the live-document OpenAPI guard is reconciled with the commi
 Revised 2026-09-10 (the security-headers suite reaches both UI web hosts) and 2026-10-01 (the switchable gateway probe gate and the two full-coverage suites are stated consistently); see those Revisions below.
 Revised 2026-10-06: the consumers' lockstep `MMCA.Common.Shared` pin is now 1.232.0 and this Status block lists every Revision section; see the Revision (2026-10-06) below.
 Revised 2026-10-07: the consumers' lockstep `MMCA.Common.Shared` pin is now 1.233.0 and the ADC pin anchor moved to `Directory.Packages.props:101`; see the Revision (2026-10-07) below.
+Revised 2026-10-21: the OpenAPI base gains an opt-in committed-baseline breaking-change diff that all seven OpenAPI subclasses adopt, the decorator pipeline is now sealed against late registration through the framework helpers, the lockstep pin is 1.250.0, and anchors are refreshed; see the Revision (2026-10-21) below.
 
 ## Context
 ADR-015 turned the architecture invariants into build-gating tests, and drew its own boundary
 explicitly: the fitness suite asserts "**structure / registration**, not runtime behavior"
-(`015-architecture-fitness-functions.md:83`). NetArchTest can prove a controller lives in the right
+(`015-architecture-fitness-functions.md:95`). NetArchTest can prove a controller lives in the right
 assembly and that an outbound client *wires* resilience. It cannot prove that a booted host answers a
 bad page number with an RFC 9457 problem document, emits HSTS on a liveness probe, drains within a
 bounded stop, serves the OpenAPI document it claims to serve, answers two API versions, or nests the
@@ -20,7 +21,7 @@ one of them is only true if the consuming host wired it correctly: the framework
 the controller base, and the decorator registrations, but the host composes them.
 
 The gap is visible in the ADR set. ADR-046 names exactly one of these checks (a "shared
-fitness contract" for versioning, one Decision bullet at `046-http-api-versioning.md:87`), and ADR-013 defines the RFC 9457
+fitness contract" for versioning, one Decision bullet at `046-http-api-versioning.md:99`), and ADR-013 defines the RFC 9457
 edge contract that another one guards, but neither decides the layer itself. The runtime-conformance
 tier has been referenced repeatedly and never recorded on its own.
 
@@ -38,9 +39,9 @@ booted.
   `type`/`traceId`/`errors`, `ProblemDetailsContractTestsBase.cs:30`) and the framework's
   `HandleFailure` Result mapping (404, `ProblemDetailsContractTestsBase.cs:42`), against the shared
   shape check `AssertProblemDetailsShapeAsync` (`ProblemDetailsContractTestsBase.cs:68`).
-  `OpenApiContractTestsBase<TFixture>` (`OpenApiContractTestsBase.cs:22`) asserts the live
+  `OpenApiContractTestsBase<TFixture>` (`OpenApiContractTestsBase.cs:32`) asserts the live
   `/openapi/v1.json` document is OpenAPI 3.x and still describes the pinned public resources
-  (`OpenApiContractTestsBase.cs:53`, `OpenApiContractTestsBase.cs:68`).
+  (`OpenApiContractTestsBase.cs:83`, `OpenApiContractTestsBase.cs:98`).
   `ServiceInfoVersioningContractTestsBase<TFixture>` (`ServiceInfoVersioningContractTestsBase.cs:20`)
   drives `/ServiceInfo` at `api-version: 1.0` and `2.0` and checks the deprecated/supported reporting
   headers (`ServiceInfoVersioningContractTestsBase.cs:39`, `:55`). `SecurityHeadersTestsBase`
@@ -85,7 +86,7 @@ booted.
 - **The consumer supplies its host and its host-specific facts, nothing else.** The abstract surface
   is deliberately small: two probe requests for problem details
   (`ProblemDetailsContractTestsBase.cs:55`, `:61`), a route-count floor and a pinned resource list for
-  OpenAPI (`OpenApiContractTestsBase.cs:38`, `:51`), a client factory for security headers
+  OpenAPI (`OpenApiContractTestsBase.cs:58`, `:71`), a client factory for security headers
   (`SecurityHeadersTestsBase.cs:42`), a service-collection configurator for the decorator pipeline
   (`DecoratorPipelineOrderTestsBase.cs:46`), the booted factory plus the host's own route-table facts
   (the permit limit, a limited path, the downstream service names) for gateway hardening
@@ -101,14 +102,34 @@ booted.
   walks outermost to innermost by reading each decorator's private inner-handler field
   (`DecoratorPipelineOrderTestsBase.cs:105`) and compares the names against the ADR-014 order
   (`DecoratorPipelineOrderTestsBase.cs:49`, `:61`). That is what makes it a runtime check: Scrutor
-  `TryDecorate` applies decorators in reverse registration order, so a reordered
-  `AddApplicationDecorators()` or a module scan that ran after it changes the constructed pipeline
-  while every registration still exists.
-- **No committed snapshot in the runtime guard.** The OpenAPI guard asserts against the live document
-  rather than a checked-in file (`OpenApiContractTestsBase.cs:16`), so a new controller can never
-  leave a stale snapshot behind, and the assertions are deliberately coarse: a path-count floor plus
-  presence (not exact casing) of the pinned resources (`OpenApiContractTestsBase.cs:78-81`). The
-  committed `openapi/<host>.json` documents that MMCA.ADC and MMCA.Store diff in CI (ADR-046) are a
+  `TryDecorate` applies decorators in reverse registration order, so a regression in the decorator
+  registration order changes the constructed pipeline while every registration still exists. A
+  module scan that runs after the decorators no longer does so silently: `AddApplicationDecorators()`
+  seals the collection, and every framework registration helper called after it throws
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:310-319`, checked by
+  `AddApplicationDecorators` and `AddMmcaApplicationPipeline` at `:116` and `:209`,
+  `ScanModuleApplicationServices` at `DependencyInjection.ModuleScanning.cs:49`, and `AddEntityCrud`,
+  `AddEntityUpdateVerb` and `AddEntityUpdate` at `DependencyInjection.Crud.cs:80`, `:142`, `:193`).
+  A raw handler registration made outside those helpers is not checked at registration; the
+  `VerifyDecoratorPipeline()` fitness check (`DependencyInjection.cs:244`) reports it instead. All
+  three consumer subclasses compose the sequence through the sealing `AddMmcaApplicationPipeline(...)`
+  (`DependencyInjection.cs:207`).
+- **The live document is the oracle; a committed baseline is an opt-in breaking-change diff.** By
+  default the OpenAPI guard reads no checked-in file (`OpenApiContractTestsBase.cs:15-17`), so a new
+  controller can never leave a stale snapshot behind, and those assertions are deliberately coarse:
+  a path-count floor plus presence (not exact casing) of the pinned resources
+  (`OpenApiContractTestsBase.cs:106-114`). A subclass that overrides `BaselineDocumentPath`
+  (`OpenApiContractTestsBase.cs:80`, default `null`) also runs
+  `OpenApiDocument_HasNoBreakingChangesAgainstTheBaseline` (`OpenApiContractTestsBase.cs:118`),
+  which diffs the live document against that committed baseline with `OpenApiBreakingChangeDetector`
+  (`OpenApiContractTestsBase.cs:149`, `OpenApiBreakingChangeDetector.cs:38`) and fails only on a
+  breaking change. Refreshing it is deliberate: setting `MMCA_UPDATE_OPENAPI_BASELINE=1`
+  (`OpenApiContractTestsBase.cs:41`) rewrites the file and fails the run (`:129-140`), so a
+  regenerating run never passes. All seven OpenAPI subclasses opt in to an
+  `openapi-baseline.json` beside the test file
+  (`MMCA.ADC/Tests/Integration/MMCA.ADC.Conference.IntegrationTests/Contract/OpenApiContractTests.cs:29-32`,
+  `MMCA.Store/Tests/Integration/MMCA.Store.Catalog.IntegrationTests/Contract/OpenApiContractTests.cs:30`).
+  The committed `openapi/<host>.json` documents that MMCA.ADC and MMCA.Store diff in CI (ADR-046) are a
   separate, build-time check owned by each consumer, not an input to this suite.
 - **Hosts extend the base where they have more to prove.** ADC Conference adds a 412
   stale-precondition test on top of the inherited 400/404 facts, driving two editors through the
@@ -118,13 +139,13 @@ booted.
 
 Adoption today is real but **partial, and uneven per suite**. The OpenAPI and problem-details guards are
 the two with full coverage of the extracted REST hosts. OpenAPI covers all four ADC services
-(`MMCA.ADC/Tests/Integration/MMCA.ADC.Conference.IntegrationTests/Contract/OpenApiContractTests.cs:14`,
-`MMCA.ADC.Engagement.IntegrationTests/Contract/OpenApiContractTests.cs:14`,
-`MMCA.ADC.Identity.IntegrationTests/Contract/OpenApiContractTests.cs:15`,
-`MMCA.ADC.Notification.IntegrationTests/Contract/OpenApiContractTests.cs:16`) and all three Store
-services (`MMCA.Store/Tests/Integration/MMCA.Store.Catalog.IntegrationTests/Contract/OpenApiContractTests.cs:14`,
-`MMCA.Store.Identity.IntegrationTests/Contract/OpenApiContractTests.cs:14`,
-`MMCA.Store.Sales.IntegrationTests/Contract/OpenApiContractTests.cs:14`). The problem-details guard
+(`MMCA.ADC/Tests/Integration/MMCA.ADC.Conference.IntegrationTests/Contract/OpenApiContractTests.cs:15`,
+`MMCA.ADC.Engagement.IntegrationTests/Contract/OpenApiContractTests.cs:15`,
+`MMCA.ADC.Identity.IntegrationTests/Contract/OpenApiContractTests.cs:16`,
+`MMCA.ADC.Notification.IntegrationTests/Contract/OpenApiContractTests.cs:17`) and all three Store
+services (`MMCA.Store/Tests/Integration/MMCA.Store.Catalog.IntegrationTests/Contract/OpenApiContractTests.cs:15`,
+`MMCA.Store.Identity.IntegrationTests/Contract/OpenApiContractTests.cs:15`,
+`MMCA.Store.Sales.IntegrationTests/Contract/OpenApiContractTests.cs:15`). The problem-details guard
 covers all three Store services
 (`MMCA.Store/Tests/Integration/MMCA.Store.Catalog.IntegrationTests/Contract/ProblemDetailsContractTests.cs:21`,
 `MMCA.Store.Identity.IntegrationTests/Contract/ProblemDetailsContractTests.cs:16`,
@@ -164,9 +185,18 @@ against the Identity module's `ChangePreferencesCommand` / `GetUserPreferencesQu
 (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Cqrs/DecoratorPipelineOrderTests.cs:29`,
 `MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Cqrs/DecoratorPipelineOrderTests.cs:29`),
 and MMCA.Helpdesk against a real Tickets pair, described below.
-MMCA.Common dogfoods the only base it can, since it ships no host of its own: a synthetic
-`PingCommand`/`PingQuery` pair driven through the framework's own registration sequence
-(`Tests/Hosting/MMCA.Common.Testing.Tests/Conformance/DecoratorPipelineOrderTests.cs:23`).
+MMCA.Common ships no host of its own, so the decorator suite is the one of the seven it runs as a
+collected subclass: a synthetic `PingCommand`/`PingQuery` pair driven through the framework's own
+registration sequence
+(`Tests/Hosting/MMCA.Common.Testing.Tests/Conformance/DecoratorPipelineOrderTests.cs:23`). The same
+folder holds two more collected subclasses, both of bases outside the seven: the ADR-079 edge-pipeline
+check (`Tests/Hosting/MMCA.Common.Testing.Tests/Conformance/MiddlewarePipelineOrderTests.cs:12`) and
+the tenancy fitness check (`TenantResolutionConformanceTests.cs:11`). For the seven themselves, its
+other conformance tests are self-tests of the bases, not adoption: the OpenAPI baseline gate runs
+through a private stub-fixture subclass
+(`Tests/Hosting/MMCA.Common.Testing.Tests/Conformance/OpenApiContractTestsBaseBaselineTests.cs:155-156`),
+and the gateway-hardening base is checked for shape over an abstract sample
+(`Tests/Hosting/MMCA.Common.Testing.Tests/Conformance/MmcaGatewayHardeningTestsBaseTests.cs:21`, `:75`).
 
 **MMCA.Helpdesk adopts exactly one of them, the decorator suite**, having adopted none of them when
 this record was written. Its architecture-test project now references `MMCA.Common.Testing` alongside the
@@ -175,9 +205,10 @@ structural package
 and subclasses `DecoratorPipelineOrderTestsBase` against a real Tickets pair: the framework's generic
 `UpdateEntityCommand<Ticket, TicketUpdateRequest, TicketIdentifierType>`, closed over the Ticket
 aggregate by the seed's own `AddEntityCrud` wiring, and the module's hand-written `GetTicketByIdQuery`
-(`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/DecoratorPipelineOrderTests.cs:37`,
-`:39`), whose `ConfigureServices` runs the seed's own registration sequence: `AddApplication()`, the
-Tickets module registration, then `AddApplicationDecorators()` last (`:59-61`). Two files in that
+(`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/DecoratorPipelineOrderTests.cs:38`,
+`:40-43`), whose `ConfigureServices` runs the seed's own registration sequence through the composed
+`AddMmcaApplicationPipeline(...)`: `AddApplication()`, the Tickets module registration, then
+`AddApplicationDecorators()` last, with the collection sealed afterwards (`:67-68`). Two files in that
 project import the `MMCA.Common.Testing.Conformance` namespace, and only one of them belongs to this
 record: that decorator subclass (`:13`). The other, `MiddlewarePipelineOrderTests.cs` (`:1`), is a
 one-line subclass of `MiddlewarePipelineOrderTestsBase`
@@ -210,7 +241,12 @@ from `MMCA.Common.Testing` one base from this record's set plus the ADR-079 edge
   the host's own init strategy produced, not a fixture's guess.
 - **A live document beats a snapshot as this suite's oracle.** Asserting against the served OpenAPI
   document removes the class of failure where the guard passes because the snapshot was regenerated
-  along with the regression. The consumers' committed documents (ADR-046) do not reopen that failure:
+  along with the regression. The opt-in baseline narrows that failure to a reviewed commit rather than
+  removing it: the baseline is only the comparison point for a breaking-change diff of the live
+  document, and a refresh run always fails (`OpenApiContractTestsBase.cs:129-140`), so a CI run can
+  never regenerate it and pass. A PR that commits a regenerated `openapi-baseline.json` together with
+  a breaking change does pass the gate on its next run; the baseline diff in that PR is what review
+  has to catch. The consumers' committed documents (ADR-046) do not reopen that failure either:
   the build regenerates them and CI fails on any uncommitted difference, so a regenerated contract
   arrives as a reviewable diff in the PR that changed it rather than as a silent pass.
 
@@ -233,11 +269,15 @@ from `MMCA.Common.Testing` one base from this record's set plus the ADR-079 edge
   pass; the three Gateway suites (security headers, graceful shutdown, gateway hardening: no DbContext,
   no broker) and the decorator suite run in the fast tier. That splits the runtime gate across two CI
   jobs with different prerequisites.
-- **The assertions are coarse by construction.** `MinimumPathCount` is a floor, `CorePublicResources`
-  checks presence rather than exact casing or schema (`OpenApiContractTestsBase.cs:78-81`), and the
-  problem-details base checks shape (`status`, `title`, a
-  diagnostic extension) rather than message content. These catch wholesale regressions, not subtle
-  ones.
+- **The default assertions are coarse by construction.** `MinimumPathCount` is a floor,
+  `CorePublicResources` checks presence rather than exact casing or schema
+  (`OpenApiContractTestsBase.cs:106-114`), and the problem-details base checks shape (`status`,
+  `title`, a diagnostic extension) rather than message content. On their own these catch wholesale
+  regressions, not subtle ones. The opt-in baseline diff is what reaches the subtle OpenAPI changes (a
+  newly required request property, a removed response property, a type change, a new required
+  parameter: `OpenApiBreakingChangeDetector.cs:6-13`, `:32-35`), and all seven OpenAPI subclasses opt
+  in; a host that does not override `BaselineDocumentPath` gets only the coarse checks, and the
+  problem-details shape check has no such diff.
 - **The decorator check reads private fields.** Unwrapping the chain depends on each decorator holding
   its inner handler in a field that implements the same closed interface
   (`DecoratorPipelineOrderTestsBase.cs:112-115`); a decorator that stored it differently would silently
@@ -380,6 +420,73 @@ the subclass inventory above stand. Only the lockstep pin moved.
    now opens the `MMCA.Common.AI` block); the Store (`:8`) and Helpdesk (`:84`) pin lines are
    unchanged.
 
+## Revision (2026-10-21)
+
+Re-verified against current source. The decision stands: the seven contract bases still ship in
+`MMCA.Common.Testing` and are subclassed as inventoried above. What moved is the OpenAPI guard's
+reach, the decorator registration it protects, the pin, and the anchors.
+
+1. **The OpenAPI base carries an opt-in baseline diff, and every OpenAPI subclass opts in.**
+   Overriding `BaselineDocumentPath`
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/Conformance/OpenApiContractTestsBase.cs:80`)
+   enables `OpenApiDocument_HasNoBreakingChangesAgainstTheBaseline` (`:118`), which compares the live
+   document with the committed baseline through `OpenApiBreakingChangeDetector.Detect` (`:149`,
+   `OpenApiBreakingChangeDetector.cs:44`) and fails only on a breaking change; setting
+   `MMCA_UPDATE_OPENAPI_BASELINE` (`:41`) to `1` rewrites the baseline and fails the run (`:129-140`).
+   All four ADC and all three Store subclasses return an `openapi-baseline.json` beside the test file
+   (for example
+   `MMCA.ADC/Tests/Integration/MMCA.ADC.Conference.IntegrationTests/Contract/OpenApiContractTests.cs:29-32`,
+   `MMCA.Store/Tests/Integration/MMCA.Store.Sales.IntegrationTests/Contract/OpenApiContractTests.cs:31`).
+   The Decision bullet formerly headed "No committed snapshot in the runtime guard" and the matching
+   Rationale bullet now say so, the Rationale stating that the baseline narrows the regenerated-snapshot
+   failure to a reviewed commit rather than removing it, and the Trade-offs bullet on coarse
+   assertions now scopes "coarse" to the default checks, since the opted-in diff catches a newly
+   required request property, a removed response property or a type change
+   (`OpenApiBreakingChangeDetector.cs:32-35`); the 2026-09-25 statement that the base "still reads no committed file"
+   holds only for its default path.
+2. **The decorator pipeline is sealed.** `AddApplicationDecorators()` marks the collection, and a
+   later `ScanModuleApplicationServices`, `AddEntityCrud`, `AddEntityUpdateVerb`, `AddEntityUpdate`
+   or a second pipeline call throws
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:310-319`, `:116`, `:209`,
+   `DependencyInjection.ModuleScanning.cs:49`, `DependencyInjection.Crud.cs:80`, `:142`, `:193`); a
+   raw handler registration outside those helpers is caught by `VerifyDecoratorPipeline()`
+   (`DependencyInjection.cs:244`) rather than at registration. The ADC, Store and
+   Helpdesk subclasses register through `AddMmcaApplicationPipeline(...)`
+   (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Cqrs/DecoratorPipelineOrderTests.cs:50`,
+   `MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Cqrs/DecoratorPipelineOrderTests.cs:52`,
+   `MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/DecoratorPipelineOrderTests.cs:67-68`),
+   so the runtime walk now guards a regression in the decorator registration order rather than a late
+   module scan, which fails at registration instead. The Decision bullet and the Helpdesk paragraph
+   are updated.
+3. **The `Conformance` folder holds more than the seven bases and the ADR-079 base.** It also ships
+   `TenantResolutionTestsBase`
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/Conformance/TenantResolutionTestsBase.cs:27`), a
+   fitness base that builds no host and sends no request (`:24`), subclassed only by MMCA.Common's own
+   `Tests/Hosting/MMCA.Common.Testing.Tests/Conformance/TenantResolutionConformanceTests.cs:11` and by
+   no ADC, Store or Helpdesk test, plus the breaking-change detector and its two result types
+   (`OpenApiBreakingChangeDetector.cs:38`, `OpenApiBreakingChange.cs`, `OpenApiBreakingChangeKind.cs`).
+   None of them is counted among the seven; the Related entry names them.
+4. **MMCA.Common's own conformance tests are stated precisely.** The decorator suite remains the one
+   base of the seven it runs as a collected subclass; it also runs two collected subclasses of bases
+   outside the seven, `MiddlewarePipelineOrderTests`
+   (`Tests/Hosting/MMCA.Common.Testing.Tests/Conformance/MiddlewarePipelineOrderTests.cs:12`) and
+   `TenantResolutionConformanceTests` (`TenantResolutionConformanceTests.cs:11`). The OpenAPI baseline
+   gate and the gateway-hardening base are exercised as self-tests through a private stub subclass and
+   an abstract sample
+   (`Tests/Hosting/MMCA.Common.Testing.Tests/Conformance/OpenApiContractTestsBaseBaselineTests.cs:155-156`,
+   `MmcaGatewayHardeningTestsBaseTests.cs:75`).
+5. **The lockstep pin is now 1.250.0.** MMCA.ADC, MMCA.Store and MMCA.Helpdesk all pin
+   `MMCA.Common.Shared` 1.250.0 (`MMCA.ADC/Directory.Packages.props:100`,
+   `MMCA.Store/Directory.Packages.props:8`, `MMCA.Helpdesk/Directory.Packages.props:83`), not the
+   1.233.0 the 2026-10-07 Revision recorded.
+6. Anchors re-verified against current source: `OpenApiContractTestsBase` class `:32`, its two facts
+   `:83` and `:98`, `MinimumPathCount` `:58`, `CorePublicResources` `:71`, the presence check
+   `:106-114`; the OpenAPI subclasses at ADC Conference `:15`, Engagement `:15`, Identity `:16`,
+   Notification `:17` and Store Catalog, Identity and Sales `:15`; the Helpdesk decorator subclass
+   `:38` with its generic arguments `:40-43` (the `:13` namespace import and the ADC and Store `:29`
+   classes are unchanged); and the cross-references `015-architecture-fitness-functions.md:95` and
+   `046-http-api-versioning.md:99`.
+
 ## Related
 ADR-015 (the structural / registration fitness layer this complements; its stated non-goal, "not
 runtime behavior", is exactly this ADR's scope, and the two tiers ship as two separate packages),
@@ -387,7 +494,10 @@ ADR-014 (the decorator execution order `DecoratorPipelineOrderTestsBase` proves 
 (the RFC 9457 ProblemDetails edge contract `ProblemDetailsContractTestsBase` guards), ADR-046 (HTTP
 API versioning, whose "shared fitness contract" is one of these bases), ADR-079 (the shared HTTP edge
 pipeline, whose own order-checking base ships beside these in the same `Conformance` folder but is not
-one of these seven),
+one of these seven; the folder also holds the no-host tenancy fitness base `TenantResolutionTestsBase`,
+`MMCA.Common/Source/Hosting/MMCA.Common.Testing/Conformance/TenantResolutionTestsBase.cs:27`, which only
+MMCA.Common's own tests subclass, and the `OpenApiBreakingChangeDetector` the OpenAPI baseline gate uses,
+with its `OpenApiBreakingChange` and `OpenApiBreakingChangeKind` result types),
 ADR-016 (lockstep versioning:
 a new conformance base reaches consumers only through a release and a full sweep). Package inventory
 for the framework lives in `MMCA.Common/FACTS.md`.

@@ -249,7 +249,9 @@
           moved; the guard now lives in the <code>DependencyInjection.Messaging.cs</code> partial). Revised 2026-10-01 (re-anchored the startup-guard and
           model-configuration citations and named the guard&#39;s second call site). Revised 2026-10-06: Decision 1
           now scopes the explicit-value-wins rule to the in-process transport, as its cited source does.
-          Revised 2026-10-07: anchors refreshed after the v1.233.0 release.</p>
+          Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
+          Revised 2026-10-21: anchors refreshed after the registration block and the outbox model
+          configuration moved.</p>
           <h2 id="context">Context</h2>
           <p>ADR-003 gives every host a transactional outbox: domain and integration events are written to
           <code>OutboxMessages</code> in the same transaction as the aggregate changes, <code>OutboxProcessor</code> publishes them,
@@ -287,8 +289,8 @@
           <li><p><strong>Resolution happens once, at registration.</strong> <code>AddInfrastructure</code> binds the section, and on the
           enabled path registers <code>OutboxProcessor</code> and <code>OutboxCleanupService</code>; on the disabled path it
           registers neither and adds <code>OutboxDisabledNoticeService</code> instead
-          (<code>Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:217-225</code>, settings read at
-          <code>:213-214</code>, reasoning at <code>:207-212</code>).</p>
+          (<code>Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:222-230</code>, settings read at
+          <code>:218-219</code>, reasoning at <code>:212-217</code>).</p>
           </li>
           <li><p><strong>The row writes are gated at both write points</strong>, not only the background services:
           <code>InProcessEventBus</code> takes its direct-dispatch branch when the outbox is off, with no rows, no save
@@ -304,7 +306,7 @@
           <code>EnsureOutboxAvailableForProvider</code> throws when the provider is anything other than <code>InProcess</code> and
           <code>EnableOutbox</code> is explicitly <code>false</code>
           (<code>Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:202</code>, guard at <code>:204</code>,
-          throw at <code>:206-207</code>; called from <code>DependencyInjection.cs:215</code> and from <code>AddBrokerMessaging</code> at
+          throw at <code>:206-207</code>; called from <code>DependencyInjection.cs:220</code> and from <code>AddBrokerMessaging</code> at
           <code>DependencyInjection.Messaging.cs:60</code>, so a broker host that skips <code>AddInfrastructure</code> still fails
           at startup). The message names the
           mechanism (<code>BrokerEventBus</code> writes the rows, <code>OutboxProcessor</code> publishes them), the consequence
@@ -322,7 +324,7 @@
           <li><p><strong>The EF model does not change.</strong> <code>OutboxMessage</code> is configured in <code>OnModelCreating</code> for every
           relational provider
           (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:417</code>,
-          <code>ConfigureOutbox</code> called at <code>:424</code>, configuration at <code>:662-715</code>),
+          <code>ConfigureOutbox</code> called at <code>:424</code>, configuration at <code>:662-720</code>),
           independent of the setting. Flipping the flag in either direction is a configuration change and a
           restart, with no migration in any consumer.</p>
           </li>
@@ -399,6 +401,24 @@
           <code>ConfigureOutbox</code> call <code>:424</code> (was <code>:423</code>), body <code>:662-715</code> (was <code>:661-714</code>), Cosmos skip
           documented at <code>:654</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. No decision, default or rationale changed: <code>AddInfrastructure</code>
+          still registers <code>OutboxProcessor</code> and <code>OutboxCleanupService</code> on the enabled path and
+          <code>OutboxDisabledNoticeService</code> otherwise, the startup guard still throws only for a non-<code>InProcess</code>
+          provider with <code>EnableOutbox</code> explicitly <code>false</code>, and <code>ConfigureOutbox</code> is still called
+          unconditionally for every relational engine. The <code>ConfigureOutbox</code> body grew by a third filtered
+          index, <code>IX_OutboxMessages_Ordering</code>, which does not touch the setting. Only line anchors in
+          Decisions 2, 4 and 6 moved.</p>
+          <ol>
+          <li>Anchors re-verified against current source: <code>DependencyInjection.cs:222-230</code> (enabled/disabled
+          registration, was <code>:217-225</code>; processor <code>:224</code>, cleanup <code>:225</code>, notice <code>:229</code>), settings read
+          <code>:218-219</code> (was <code>:213-214</code>), reasoning comment <code>:212-217</code> (was <code>:207-212</code>),
+          <code>EnsureOutboxAvailableForProvider</code> call <code>:220</code> (was <code>:215</code>); <code>DependencyInjection.Messaging.cs:202</code>
+          (method, unchanged), guard <code>:204</code>, throw <code>:206-207</code>, <code>AddBrokerMessaging</code> call site <code>:60</code>;
+          <code>ApplicationDbContext.cs:417</code> (<code>OnModelCreating</code>, unchanged), <code>ConfigureOutbox</code> call <code>:424</code>
+          (unchanged), body <code>:662-720</code> (was <code>:662-715</code>; <code>IX_OutboxMessages_Ordering</code> at <code>:709-719</code>), Cosmos
+          skip documented at <code>:654</code>.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="003-outbox-dual-dispatch.html">ADR-003</a> (the outbox itself: the dual-dispatch contract, the processor,
           the retry and dead-letter policy, all unchanged for a host that runs it),
@@ -429,6 +449,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

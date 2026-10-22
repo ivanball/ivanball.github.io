@@ -26,6 +26,10 @@ and the Stripe retry predicate also treats a client timeout as transient. See th
 
 Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 
+Revised 2026-10-21: the gRPC retry predicate is stated as before-send connection failures only, the
+outbox breaker is recorded as also wrapping in-process integration handlers on a monolith, and the
+database posture is recorded for PostgreSQL as well as SQL Server.
+
 ## Context
 The framework already supplies the *mechanisms* for surviving partial failure: a standard Polly
 resilience handler (timeout / retry / circuit breaker), the outbox for at-least-once delivery
@@ -46,11 +50,12 @@ resilience handler (timeout / retry / circuit breaker), the outbox for at-least-
    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:170-179`), and
    switches the retry off for POST and PATCH (`:177`), the same two verbs the Aspire defaults exclude.
    `AddTypedGrpcClient` reads `GrpcResilienceDefaults`
-   (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:127-142`), which re-exposes
+   (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:129-152`), which re-exposes
    those same timeouts and retry budget
    (`MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/GrpcResilienceDefaults.cs:15-24`) but states
-   its own breaker shape (`:27-33`) and retries only a failure to reach the peer
-   (`DependencyInjection.cs:137`). This is enforced by a fitness function
+   its own breaker shape (`:27-33`) and retries only a failure to reach the peer before the request
+   was sent: an `HttpRequestException` whose `HttpRequestError` is a name-resolution, connect or TLS
+   handshake failure (`DependencyInjection.cs:142-147`). This is enforced by a fitness function
    (`ResilienceHandlerTests` in `MMCA.Common.Grpc.Tests`) so the policy cannot silently regress.
 2. **Consumers must declare recovery objectives.** Each consuming app documents, in its own
    `infra/DISASTER-RECOVERY.md`: RTO/RPO per failure scenario, the backup/restore mechanism, and an
@@ -86,9 +91,11 @@ restore is drilled.
 - The named gate (`ResilienceHandlerTests`, `MMCA.Common.Grpc.Tests`) asserts every option the gRPC
   client path (`AddTypedGrpcClient`) configures
   (`MMCA.Common/Tests/Presentation/MMCA.Common.Grpc.Tests/ResilienceHandlerTests.cs:53-77`), pins the
-  `GrpcResilienceDefaults` values (`:113-123`), ties its timeouts and retry budget to
-  `HttpResilienceDefaults` (`:126-133`), and checks the retry predicate at runtime (`:81-96`). Choosing
-  the values is still a review concern; a silent change to them is not. A separate fault-injection
+  `GrpcResilienceDefaults` values (`:140-150`), ties its timeouts and retry budget to
+  `HttpResilienceDefaults` (`:153-160`), and checks the retry predicate at runtime (`:81-96`), with a
+  theory proving that only the three before-send `HttpRequestError` values are retried
+  (`:99-123`). Choosing the values is still a review concern; a silent change to them is not. A
+  separate fault-injection
   test (`ResilienceCircuitBreakerFaultInjectionTests`, same project) drives sustained failures and
   proves the circuit breaker actually trips and short-circuits. `AddTypedServiceClient` has its own
   registration test
@@ -96,10 +103,10 @@ restore is drilled.
   asserting one retry and the 30-second attempt, 90-second total and 60-second sampling values, plus a
   theory proving the retry refuses a POST or PATCH replay (`:34-55`).
 - Per-consumer DR docs can drift from reality. The drill-result table is hand-maintained and lags the
-  drills (its last rows are 2026-08-10 in `MMCA.ADC/infra/DISASTER-RECOVERY.md:201` and 2026-07-28 in
+  drills (its last rows are 2026-08-10 in `MMCA.ADC/infra/DISASTER-RECOVERY.md:204` and 2026-07-28 in
   `MMCA.Store/infra/DISASTER-RECOVERY.md:212`), so it is not the operative mitigation: drill recency
   is enforced from `dr-drill.yml` run history by each consumer's `dr-freshness` deploy gate
-  (`MMCA.ADC/.github/workflows/deploy.yml:830-839`, `MMCA.Store/.github/workflows/deploy.yml:788-796`).
+  (`MMCA.ADC/.github/workflows/deploy.yml:845-857`, `MMCA.Store/.github/workflows/deploy.yml:790-801`).
 - A gRPC client that needs bespoke timeouts must override the standard handler explicitly rather than
   opt out of resilience entirely: intentional friction.
 
@@ -300,3 +307,48 @@ including several the 2026-10-06 revision listed as current.
    `MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.Telemetry.cs` (meter name `:31`,
    `resilience.polly.strategy.events` `:52`, `AddMeter` `:322`, the duration-histogram opt-in `:332`,
    config key `:25`). Citations inside the earlier Revision sections are left as recorded.
+
+## Revision (2026-10-21)
+Re-verified against current source. The Decision's three points, the reference objectives, the
+Stripe single-retry-owner pipeline, the Polly meter wiring and both consumers' 8-day `dr-freshness`
+gates stand as recorded. Three statements are made more precise, and line positions moved.
+
+1. The gRPC retry predicate is narrower than "retries only an `HttpRequestException`" (the 2026-10-01
+   wording): it retries an `HttpRequestException` only when its `HttpRequestError` is
+   `NameResolutionError`, `ConnectionError` or `SecureConnectionError`, a failure before the request
+   was sent
+   (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:142-147`). A
+   `ResponseEnded`, `HttpProtocolError`, `InvalidResponse` or `Unknown` error is not retried, because
+   the call may already have reached the handler. A theory in `ResilienceHandlerTests` proves each
+   case
+   (`MMCA.Common/Tests/Presentation/MMCA.Common.Grpc.Tests/ResilienceHandlerTests.cs:99-123`).
+   Decision point 1 and the Trade-offs entry now say so.
+2. The outbox breaker wraps the integration-event `IMessageBus` publish, not strictly the broker hop:
+   on a host with broker messaging that is the broker publish, and on a monolith the default
+   `InProcessMessageBus` runs the integration-event handlers in-process inside the breaker, so failing
+   handlers can open it too. Only the pure domain-event dispatch branch sits outside it
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:776-791`,
+   field documentation at `:101-106`). It remains a breaker with no retry (`:1072-1083`).
+3. The database posture recorded on 2026-08-18 applies to both engines, not only SQL Server:
+   `PostgreSQLDbContext` sets the same `CommandTimeout` and `EnableRetryOnFailure` (5 retries, 10-second
+   maximum delay)
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/PostgreSQLDbContext.cs:66`,
+   `:74-77`) as `SQLServerDbContext` (`SQLServerDbContext.cs:55`, `:63-66`).
+4. Anchors re-verified against current source: `AddTypedGrpcClient`'s standard handler at
+   `DependencyInjection.cs:129-152`, with the `SocketsHttpHandler` override at `:103-120`; the
+   `ResilienceHandlerTests` pin test at `:140-150` and the HTTP-tie test at `:153-160` (`:53-77` and
+   `:81-96` unchanged); the outbox broker pipeline field at `OutboxProcessor.cs:116`, built by
+   `BuildBrokerPublishPipeline` at `:1072-1083`, wrapping the publish at `:781-785` with the
+   domain-event branch outside it at `:787-791`, and `BrokenCircuitException` recognized at `:613`;
+   `CreateExecutionStrategy()` at
+   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:602`;
+   the global handler at `MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:49-64` (POST and
+   PATCH excluded at `:63`) inside `ConfigureHttpClientDefaults` (`:39-87`); the Polly meter wiring in
+   `Extensions.Telemetry.cs` (`AddMeter` `:323`, the duration-histogram opt-in `:333`; meter name
+   `:31`, instrument `:52` and config key `:25` unchanged); the Stripe `IsTransientFailure` at
+   `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Stripe/StripePaymentService.cs:571-578`
+   (the timeout arm at `:576`; the pipeline at `:76-113` unchanged); the `dr-freshness` gates at
+   `MMCA.ADC/.github/workflows/deploy.yml:845-857` and `MMCA.Store/.github/workflows/deploy.yml:790-801`
+   (the 8-day window at `:854` and `:798`); and the ADC drill table's last row at
+   `MMCA.ADC/infra/DISASTER-RECOVERY.md:204`. Citations inside the earlier Revision sections are left
+   as recorded.

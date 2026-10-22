@@ -28,6 +28,7 @@ Revised 2026-10-07: ADC's unchanged-leg re-tag also refreshes `latest` against t
 SBOM step is recorded as pull-request-only, the publish-property citation is corrected, and every
 `deploy.yml` and `main.bicep` anchor is refreshed after both workflow prunes.
 Revised 2026-10-19: Store's unchanged-leg re-tag also refreshes `latest` against the ACR purge, so the open gap recorded on 2026-10-07 is closed and both consumers re-tag the same way.
+Revised 2026-10-21: anchors refreshed after the `deploy.yml` and `main.bicep` growth in both consumers; no decision or posture changed. See Revision (2026-10-21).
 ## Context
 Eleven Dockerfiles produce every deployable container in the two Azure-hosted applications: six in
 MMCA.ADC (four services, the Gateway, the Blazor web host) and five in MMCA.Store (three services,
@@ -85,13 +86,13 @@ into a shell-local `GITHUB_TOKEN` that lives only for that command, which is the
 `nuget.config` expands. The Dockerfile states the reason in place: a build-arg promoted to `ENV`
 lands in image layers, the build cache, and `docker history` (`:12-14`). CI passes it as a
 `secrets:` input to the build action, not a `build-args:` input
-(`MMCA.ADC/.github/workflows/deploy.yml:1068-1069`,
-`MMCA.Store/.github/workflows/deploy.yml:1013-1014`), and the workflow repeats the constraint in its
-own comments (`MMCA.ADC/.github/workflows/deploy.yml:988-991`). Secret *content* is deliberately not
+(`MMCA.ADC/.github/workflows/deploy.yml:1083-1084`,
+`MMCA.Store/.github/workflows/deploy.yml:1015-1016`), and the workflow repeats the constraint in its
+own comments (`MMCA.ADC/.github/workflows/deploy.yml:1003-1006`). Secret *content* is deliberately not
 part of the BuildKit cache key, so rotating the token does not invalidate the restore layer; that is
 safe only because the package set is pinned by committed lock files and any
 `Directory.Packages.props` change lands in a `COPY` layer that busts the cache anyway
-(`MMCA.ADC/.github/workflows/deploy.yml:1063-1067`).
+(`MMCA.ADC/.github/workflows/deploy.yml:1078-1082`).
 
 **2. There is deliberately no separate `dotnet build` stage.** The `build` stage restores and stops;
 `publish` does its own restore and build. This is a measured decision, dated in the file: on
@@ -120,10 +121,10 @@ Blazor web hosts do not (`.../MMCA.ADC.UI.Web/Dockerfile:55`,
 scale-out replicas skip first-request JIT (`.../MMCA.ADC.Conference.Service/Dockerfile:43-44`), and
 the containers those replicas land on are fractional-vCPU Container Apps. Outside conference mode
 all six ADC apps (identity, conference, engagement, notification, gateway, ui) run on 0.25 vCPU /
-0.5 GiB: notification declares it literally (`MMCA.ADC/infra/main.bicep:2258`), and the other five
-take it as the baseline branch of `conferenceScaledResources` (`:182`; conference `:1966`,
-engagement `:2109`, gateway `:2448`, ui `:2599`) or `conferenceIdentityResources` (`:186`;
-identity `:1717`). The `conferenceMode` parameter (`:157`) lifts those four to 0.5 vCPU / 1 GiB and
+0.5 GiB: notification declares it literally (`MMCA.ADC/infra/main.bicep:2414`), and the other five
+take it as the baseline branch of `conferenceScaledResources` (`:182`; conference `:2122`,
+engagement `:2265`, gateway `:2604`, ui `:2755`) or `conferenceIdentityResources` (`:186`;
+identity `:1867`). The `conferenceMode` parameter (`:157`) lifts those four to 0.5 vCPU / 1 GiB and
 Identity to 1.0 vCPU / 2 GiB for conference day (rationale `:174-186`). On that much CPU, JIT time
 is not noise.
 
@@ -132,10 +133,10 @@ is not noise.
 `USER $APP_UID` (added 2026-09-07, see the revision below) and `ENTRYPOINT ["dotnet", "<Host>.dll"]`
 (`.../MMCA.ADC.Conference.Service/Dockerfile:55-68`); the base stage exposes 8080 and 8081
 (`:6-7`). For Identity, Conference and Engagement, 8080 is the h2c ingress endpoint and 8081 the
-HTTP/1.1 health-probe listener (Identity `MMCA.ADC/infra/main.bicep:1691,1694,1733`, Conference
-`:1938,1941,1980`, Engagement `:2091,2094,2122`); only Notification serves h2c gRPC on 8081, the
+HTTP/1.1 health-probe listener (Identity `MMCA.ADC/infra/main.bicep:1841,1844,1883`, Conference
+`:2094,2097,2136`, Engagement `:2247,2250,2278`); only Notification serves h2c gRPC on 8081, the
 ADR-012 mixed profile, behind an `http` main ingress on 8080, with its probe listener on 8082
-(`MMCA.ADC/infra/main.bicep:2226,2228,2230-2238,2276`). No image installs a package, adds
+(`MMCA.ADC/infra/main.bicep:2382,2384,2390-2396,2432`). No image installs a package, adds
 a shell script, or runs a health-check command of its own: liveness is the Container Apps probe
 configured in Bicep.
 
@@ -147,7 +148,7 @@ configured in Bicep.
 the same runtime layer, and Microsoft's monthly runtime patches arrive as a Dependabot bump of the
 digest rather than as a side effect of rebuilding (ADR-038). That restores the symmetry with the
 application layer, which was already pinned: the deployment references each image by commit sha, not
-by `latest` (`MMCA.ADC/.github/workflows/deploy.yml:1061,1234,1268-1273`). See Revision (2026-09-07)
+by `latest` (`MMCA.ADC/.github/workflows/deploy.yml:1076,1249,1283-1288`). See Revision (2026-09-07)
 item 1.
 
 **Every image drops privileges.** `USER $APP_UID` is the last instruction before the entrypoint in
@@ -159,14 +160,14 @@ outside the range a non-root user cannot bind
 (`.../MMCA.ADC.Conference.Service/Dockerfile:59-66`). See Revision (2026-09-07) item 2.
 
 What stays open is the gate, not the image. Each deploy scans the image it pushes with Trivy, but
-report-only in both consumers (`MMCA.ADC/.github/workflows/deploy.yml:1132-1133`,
-`MMCA.Store/.github/workflows/deploy.yml:1070-1071`), so a base-layer CRITICAL or HIGH is printed in the
+report-only in both consumers (`MMCA.ADC/.github/workflows/deploy.yml:1147-1148`,
+`MMCA.Store/.github/workflows/deploy.yml:1085-1086`), so a base-layer CRITICAL or HIGH is printed in the
 step log and does not stop a rollout. Both scan every leg's tag, including a leg that only re-tagged
-an unchanged image (ADC `MMCA.ADC/.github/workflows/deploy.yml:1118-1120`; Store's scan runs after its
-re-tag step, `MMCA.Store/.github/workflows/deploy.yml:1056-1058`), so a CVE disclosed after an image
+an unchanged image (ADC `MMCA.ADC/.github/workflows/deploy.yml:1133-1135`; Store's scan runs after its
+re-tag step, `MMCA.Store/.github/workflows/deploy.yml:1071-1073`), so a CVE disclosed after an image
 was built is still found. The supply-chain job generates its CycloneDX SBOM from the solution filter,
-on pull requests only (`MMCA.ADC/.github/workflows/deploy.yml:601-615`, condition `:602`, filter
-`:612`; `MMCA.Store/.github/workflows/deploy.yml:564-577`, condition `:565`, filter `:574`), so it
+on pull requests only (`MMCA.ADC/.github/workflows/deploy.yml:615-629`, condition `:616`, filter
+`:626`; `MMCA.Store/.github/workflows/deploy.yml:565-578`, condition `:566`, filter `:575`), so it
 describes the NuGet graph
 and not the image, which leaves that report-only scan as the only thing in either pipeline that
 looks at the base layer at all. Keeping it non-gating while the baseline is observed is the recorded
@@ -454,3 +455,28 @@ matrix `:1028-1047`, buildx `:1065`, build-push `:1069`, `matrix.changed` `:1068
 cache `:1091-1092`, re-tag step `:1101-1127`, rationale `:1008-1012`; Store job `:942`, matrix
 `:957-973`, `matrix.changed` `:999`, `latest` push `:1008`, re-tag step `:1026-1064`). Workflow and
 Bicep anchors outside that paragraph were not re-verified in this revision.
+
+## Revision (2026-10-21)
+
+Re-verified against current source. No decision, runtime posture or rationale changed: the
+`secrets:` input, the PR-only SBOM, the non-gating Trivy scan on every leg (`continue-on-error:
+true`, `exit-code: '1'`, `ignore-unfixed: true` in both consumers), the sha-addressed deployment,
+the `conferenceMode` sizing and the port topology all read as recorded. The re-tag paragraph in
+Context, re-pointed on 2026-10-19, still holds. What moved is every other `deploy.yml` and
+`main.bicep` anchor in Decision and Runtime postures, re-pointed in place. The earlier Revision
+sections keep the anchors they recorded on their dates, including the open-gap wording of Revision
+(2026-10-07) item 1, which Revision (2026-10-19) and the Context paragraph already record as closed.
+
+1. Anchors re-verified against current source: ADC `deploy.yml` `secrets:` `:1083-1084`, job-header
+   BuildKit secret comment `:1003-1006`, secret and cache-key comment `:1078-1082`, sha tag `:1076`,
+   `IMAGE_TAG` `:1249`, per-image arguments `:1283-1288` (the every-image-by-sha comment is `:1095`),
+   Trivy step `:1147` (`continue-on-error` `:1148`, `ignore-unfixed` `:1154`, `exit-code: '1'`
+   `:1155`, every-leg comment `:1133-1135`), SBOM step `:615-629` (condition `:616`, filter `:626`);
+   Store `deploy.yml` `secrets:` `:1015-1016`, Trivy step `:1085` (`continue-on-error` `:1086`,
+   `ignore-unfixed` `:1092`, `exit-code: '1'` `:1093`, every-leg comment `:1071-1073`), SBOM step
+   `:565-578` (condition `:566`, filter `:575`); ADC `main.bicep` notification literal `:2414`,
+   conference `:2122`, engagement `:2265`, gateway `:2604`, ui `:2755`, identity `:1867`
+   (`conferenceMode` `:157`, `conferenceScaledResources` `:182`, `conferenceIdentityResources`
+   `:186`, rationale `:174-186` unchanged), Identity ports `:1841,1844,1883`, Conference
+   `:2094,2097,2136`, Engagement `:2247,2250,2278`, Notification `:2382,2384,2390-2396,2432`, and the
+   conference and gateway right-sizing comments `:2115-2121` and `:2597-2603`.

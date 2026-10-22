@@ -7,7 +7,8 @@ engine. Revised 2026-10-01 (the Helpdesk canary and the `--database postgresql` 
 are shipped, the canary as an advisory template-generated job; see Revision below). Revised
 2026-10-06: engine behavior is delegated to a `PostgreSQLDataSourceEngine` in the `DataSourceEngines`
 registry rather than per-site switch arms. Revised 2026-10-07: anchors refreshed after the
-v1.233.0 release.
+v1.233.0 release. Revised 2026-10-21: anchors refreshed after the v1.250.0 release and the
+Helpdesk template-staging changes.
 
 ## Context
 The framework has shipped three database engines since its first release: SQL Server, Azure Cosmos DB
@@ -71,7 +72,7 @@ and differing from it only where the server forces a difference.**
    `PhysicalDbContextFactory` delegates to its `CreateDbContext`
    (`.../DbContexts/Factory/PhysicalDbContextFactory.cs:32`, `PostgreSQLDataSourceEngine.cs:85`) and
    `ApplyConfigurationsForEntitiesInContext` reads its `EntityConfigurationInterface`
-   (`.../DbContexts/ApplicationDbContext.cs:956`, `PostgreSQLDataSourceEngine.cs:30`).
+   (`.../DbContexts/ApplicationDbContext.cs:962`, `PostgreSQLDataSourceEngine.cs:30`).
 
 3. **The mapping is the SQL Server mapping, not PostgreSQL house style.**
    `EntityTypeConfigurationPostgreSQL<TEntity, TIdentifierType>`
@@ -136,7 +137,7 @@ and differing from it only where the server forces a difference.**
    `AddInfrastructureHealthChecks()` registers an `AddNpgSql` check per declared PostgreSQL database
    (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.Health.cs:232`), named `postgresql` for
    the first one (`Extensions.Health.cs:263`), and `WithPostgreSQLDataSource(database, logicalName)`
-   (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:513`) wires a service
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:560`) wires a service
    project to its own `PostgresDatabaseResource` with the same reference / `WaitFor` / environment
    shape `WithSQLServerDataSource` uses. **No Aspire client integration is added**
    (`Aspire.Npgsql.EntityFrameworkCore.PostgreSQL`), because the SQL Server path does not use one
@@ -147,7 +148,7 @@ and differing from it only where the server forces a difference.**
    `Tests/Core/MMCA.Common.Infrastructure.PostgreSQL.Tests` is a Testcontainers project outside
    `MMCA.Common.slnx` (the posture `Tests/Core/MMCA.Common.Infrastructure.Redis.Tests` established:
    Docker-gated, own CI job, kept out of the fast solution-wide unit loop), run by the
-   `postgresql-integration` CI job (`MMCA.Common/.github/workflows/ci.yml:828`). It creates the whole
+   `postgresql-integration` CI job (`MMCA.Common/.github/workflows/ci.yml:769`). It creates the whole
    schema, round-trips an auditable entity's UTC audit stamps, proves a soft-deleted row is hidden AND
    frees its unique slot, writes and drains the outbox row of a local domain event, and writes the
    outbox row of an integration event and asserts it stays pending for `OutboxProcessor`
@@ -169,7 +170,7 @@ taken.
    `Migrations.PostgreSQL` project is checked in, entity configurations reach
    `EntityTypeConfigurationPostgreSQL` through the template rename, and the AppHost's
    `WithPostgreSQLDataSource` branch is injected at staging time
-   (`MMCA.Helpdesk/build/templates/stage.ps1:430-451`).
+   (`MMCA.Helpdesk/build/templates/stage.ps1:428-475`).
 2. **Template axis.** `MMCA.Helpdesk/.template.config/template.json` carries a `database` choice
    parameter with `sqlserver`, `sqlite` and `postgresql` (`template.json:264`) and two derived
    symbols, `engineName` and `engineNameUpper`, that rename the migrations project, the provider
@@ -177,7 +178,7 @@ taken.
    connection-string settings. For `--database postgresql` both derive `PostgreSQL`
    (`template.json:74-91`): the framework spells this engine the same way in both positions, which is
    the one place this choice is simpler than the other two. The two package ids the rename cannot
-   reach (the EF provider and the readiness check) are injected by `stage.ps1:480-507`.
+   reach (the EF provider and the readiness check) are injected by `stage.ps1:489-520`.
 
 ## Rationale
 The shape follows from the alternatives that were weighed and declined:
@@ -276,6 +277,21 @@ above are unchanged; only line anchors moved.
    stays at `:35`), `DatabaseInitializationExtensions.cs:90-105` (the migration-less loop, its
    `UsesMigrations` skip at `:99` and `EnsureCreatedAsync` at `:104-105`, Decision 6), and the
    `postgresql-integration` job at `MMCA.Common/.github/workflows/ci.yml:828` (Decision 9).
+
+## Revision (2026-10-21)
+Re-verified against current source. The engine decision, its rationale and every behavior described
+above are unchanged; only line anchors moved.
+
+1. Anchors re-verified against current source: `ApplicationDbContext.cs:962` (`EntityConfigurationInterface`
+   read inside `ApplyConfigurationsForEntitiesInContext` at `:960`, Decision 2),
+   `MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:560`
+   (`WithPostgreSQLDataSource`; its peer `WithSQLServerDataSource` at `:530`, Decision 8), the
+   `postgresql-integration` job at `MMCA.Common/.github/workflows/ci.yml:769` (Decision 9), the
+   injected AppHost branch at `MMCA.Helpdesk/build/templates/stage.ps1:428-475` (comment `:428-432`,
+   `WithPostgreSQLDataSource` call `:461`, Rollout 1), and the two package ids at `stage.ps1:489-520`
+   (`Directory.Packages.props` pins `:499-500`, `AspNetCore.HealthChecks.NpgSql` `:509`,
+   `Npgsql.EntityFrameworkCore.PostgreSQL` `:518`, Rollout 2; the `Aspire.Hosting.PostgreSQL` entry at
+   `:480-488` renames cleanly and is not one of them).
 
 ## Related
 [ADR-006](006-database-per-service.md) (one sealed context per engine, one instance per database),

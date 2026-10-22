@@ -52,6 +52,7 @@ line numbers. Nothing in the decision changes.
 
 Revised 2026-10-06: the edge correlation middleware now sanitizes a caller-supplied id, the gateway config filters are recorded as fixed for the process lifetime, and the citations are refreshed; see the Revision (2026-10-06) below.
 Revised 2026-10-07: anchors refreshed after the v1.233.0 release; see the Revision (2026-10-07) below.
+Revised 2026-10-21: `AddMmcaGateway` now fail-fast validates the nested gateway settings on both overloads, ADC's route-table comment now agrees with its no-fallback host, and anchors are refreshed after the v1.250.0 release; see the Revision (2026-10-21) below.
 
 ## Context
 [ADR-008](008-service-extraction-topology.md) made the Gateway the only client entry point and gave it
@@ -183,7 +184,7 @@ by the `"/Payments"` prefix at
 to Stripe is a retry and eventually a disabled endpoint, which silently stops every payment update
 ([ADR-084](084-stripe-webhook-ingress.md)); and ADC's SignalR hub route (`/hubs/{**catch-all}`,
 bypassed by the `"/hubs"` prefix at
-`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:25`, route at `:254-258`), because a
+`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:25`, route at `:256-260`), because a
 negotiate-plus-reconnect storm from one office's shared address is exactly the pattern a per-IP window
 misreads as abuse ([ADR-039](039-live-channel-push.md)).
 
@@ -243,8 +244,8 @@ every request on the concurrency partition, go through the shared `IsExemptFromL
 A configured secret shorter than 32 characters fails at registration
 (`GatewayRateLimitingSettings.cs:153`). The secret is deployment data on both sides of the boundary:
 each consumer injects `GatewayRateLimiting__TrustedCallerSecret` into gateway and UI container alike
-from Key Vault (`MMCA.ADC/infra/main.bicep:2491` and `:2650`, `MMCA.Store/infra/main.bicep:1958-1959` and
-`:2084`), and the client half is framework code, `AddTrustedCallerHeader`
+from Key Vault (`MMCA.ADC/infra/main.bicep:2647` and `:2806`, `MMCA.Store/infra/main.bicep:2052-2053` and
+`:2178`), and the client half is framework code, `AddTrustedCallerHeader`
 (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:121`, attaching
 `TrustedCallerHandler`, `Security/TrustedCallerHandler.cs:35`, at `:156`). It exempts a component you
 deployed, never a browser, so it must never reach client-side code.
@@ -274,22 +275,28 @@ to a startup task.
 
 **4. One call composes the YARP-level extension points (2026-08-27).** `AddMmcaGateway` has two
 overloads on `IReverseProxyBuilder`
-(`MMCA.Common/Source/Hosting/MMCA.Common.Gateway/GatewayReverseProxyExtensions.cs:47` taking
-`IConfiguration`, `:68` taking a `GatewaySettings` instance), and both funnel into one `Wire` method
-(`:86`) that registers, in order: the named per-route rate-limiter policies (`:88`), the cluster
-profile config filter that owns each cluster's `HttpRequest` version policy (`:91`), the health-check
-defaults filter (`:92`), and the trace-header transform (`:93`). Filter order carries no meaning and
+(`MMCA.Common/Source/Hosting/MMCA.Common.Gateway/GatewayReverseProxyExtensions.cs:48` taking
+`IConfiguration`, `:74` taking a `GatewaySettings` instance), and both funnel into one `Wire` method
+(`:92`) that first validates the settings with `GatewaySettingsValidator.ThrowIfInvalid` (`:97`) and
+then registers, in order: the named per-route rate-limiter policies (`:98`), the cluster profile
+config filter that owns each cluster's `HttpRequest` version policy (`:101`), the health-check
+defaults filter (`:102`), and the trace-header transform (`:103`). Filter order carries no meaning and
 the type says so: the two filters own disjoint parts of a cluster and neither reads what the other
-wrote (`:37-41`). Settings bind from the `"MmcaGateway"` section (`GatewaySettings.cs:15`) through
-`ValidateDataAnnotations().ValidateOnStart()` (`GatewayReverseProxyExtensions.cs:54-57`), the same
-ADR-070 contract the rate-limit settings honor, and the per-route policies are additionally validated
+wrote (`:39-41`). Settings bind from the `"MmcaGateway"` section (`GatewaySettings.cs:15`) through
+`ValidateDataAnnotations().ValidateOnStart()` (`GatewayReverseProxyExtensions.cs:55-58`), the same
+ADR-070 contract the rate-limit settings honor. Because `ValidateDataAnnotations` does not recurse
+into the nested trace-header and health-check objects, the configuration overload also registers
+`GatewaySettingsValidator` as an `IValidateOptions<GatewaySettings>` (`:62-63`, reasoning at
+`:60-61`), and the registration-time `ThrowIfInvalid` in `Wire` covers BOTH overloads, so a blank
+trace-header name fails at startup rather than throwing on every proxied request (`:94-96`). The
+per-route policies are additionally validated
 at registration with `Validator.ValidateObject`
 (`RateLimiting/GatewayRoutePolicyExtensions.cs:62`, reasoning at `:45-46`), because the limiter
 factory closes over each policy object (`:76`), so a bad value would otherwise surface only at the
 first throttled request.
 
 **It registers services and maps nothing, and it does not load the route table.** The host still
-calls `MapReverseProxy()` and `UseRateLimiter()` itself (`GatewayReverseProxyExtensions.cs:42-45`),
+calls `MapReverseProxy()` and `UseRateLimiter()` itself (`GatewayReverseProxyExtensions.cs:44-45`),
 and `LoadFromConfig` stays the host's call because which section owns the routes, and whether they
 come from configuration at all, is a host decision (`:15-20`). That keeps
 [ADR-089](089-gateway-topology-owned-by-configuration.md)'s "the route table is the consumer's data"
@@ -378,11 +385,11 @@ anywhere in the framework, in either consumer gateway's configuration, or in eit
 bicep. It is not needed, because **every cluster fronts exactly one destination**: an Aspire
 service-discovery name (`http://identity`, `http://conference`) that ACA ingress resolves and
 balances across the replicas behind it. ADC declares five clusters with one destination each
-(`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:261-269`, `:270-278`, `:279-287`,
-`:288-292`, `:293-297`) and Store three (`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:146-154`,
+(`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:263-271`, `:272-280`, `:281-289`,
+`:290-294`, `:295-299`) and Store three (`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:146-154`,
 `:155-163`, `:164-168`), resolved through `AddServiceDiscoveryDestinationResolver`
 (ADC `Program.cs:151`, Store `Program.cs:141`) against the bicep address book
-(`MMCA.ADC/infra/main.bicep:2468-2471`). The shape is not incidental: both repositories **pin it as
+(`MMCA.ADC/infra/main.bicep:2624-2627`). The shape is not incidental: both repositories **pin it as
 an invariant**, asserting that each cluster contains a single destination
 (`MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/RouteMapTests.cs:251-253`,
 `MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/RouteMapTests.cs:315-317`). A second destination in
@@ -394,8 +401,10 @@ configuration, no Polly pipeline and no `IForwarderHttpClientFactory` appears in
 either host. Retries live in the client the user is waiting on, where
 `EntityServiceBase` runs a Polly exponential-backoff-with-jitter policy declared on its base
 `AuthenticatedServiceBase` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/AuthenticatedServiceBase.cs:27`,
-built by `BuildRetryPolicy` at `:170-173`; executed in `EntityServiceBase.cs` at
-`:365` and `:393`), while the server-to-server budget is deliberately one retry beyond the initial attempt
+built by `BuildRetryPolicy` at `:201-204`, backoff with jitter at `:184-186`; executed in
+`EntityServiceBase.cs` at `:365` and `:393`), and that policy itself refuses to resend a POST or PATCH
+without an `Idempotency-Key` once it may have been sent (`IsRetryableException`, `:175-179`, rule
+at `:167-174`), while the server-to-server budget is deliberately one retry beyond the initial attempt
 (`.../MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:30`, the up-to-16x storm argument at
 `:22-26`). The decisive reason is [ADR-017](017-request-idempotency.md): the `Idempotency-Key` is
 minted client-side and held constant across that client's own attempts, and it appears nowhere in
@@ -485,12 +494,12 @@ same path under a 5 second default and feeds
   misdiagnose the next incident. They are also tuned differently on purpose: the readiness probe is
   the tighter budget because it gates traffic to the whole process.
 - **`AddMmcaGateway`'s configuration overload closes over an eagerly-bound copy too**
-  (`GatewayReverseProxyExtensions.cs:59`), so the per-route limiter policies never see an
+  (`GatewayReverseProxyExtensions.cs:65`), so the per-route limiter policies never see an
   `IOptionsMonitor` reload, exactly as the Aspire kit's limiter does not. The config filters share
   that shape: each copies `IOptions<GatewaySettings>.Value` into a readonly field at construction
   (`Configuration/GatewayClusterProfileConfigFilter.cs:27`,
   `Configuration/GatewayHealthCheckDefaultsConfigFilter.cs:19`), and the code states that the filters
-  close over the settings for the process lifetime (`GatewayReverseProxyExtensions.cs:73-75`). A
+  close over the settings for the process lifetime (`GatewayReverseProxyExtensions.cs:79-81`). A
   change to `MmcaGateway` settings, filter-owned or limit, is therefore a restart; only the YARP
   route table itself hot-reloads.
 - **The delegations are correct today because of facts nothing enforces framework-side.** Load
@@ -799,6 +808,59 @@ as recorded. Only the version pin and line anchors moved with the v1.233.0 relea
      `:110-113`, superseding `:108-112` in the 2026-10-01 revision. The route-table comment at
      `MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:72-77` still describes a registered
      fallback, and this record still follows `Program.cs`.
+
+## Revision (2026-10-21)
+
+Re-verified against current source. Nothing in the decision changes: the edge responsibilities, the
+three declines, the delegations and the four bypass tiers hold as recorded. One validation path is
+added to the Decision, one flagged discrepancy is retired, and the pin and anchors moved with the
+v1.250.0 release.
+
+1. **`AddMmcaGateway` validates the nested settings, on both overloads.** `Wire` now runs
+   `GatewaySettingsValidator.ThrowIfInvalid(settings)` before registering anything
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Gateway/GatewayReverseProxyExtensions.cs:97`, reasoning
+   at `:94-96`), and the configuration overload adds the same validator as an
+   `IValidateOptions<GatewaySettings>` (`:62-63`), because `ValidateDataAnnotations` does not recurse
+   into the nested trace-header and health-check objects (`:60-61`). A blank trace-header name now
+   fails at startup instead of throwing on every proxied request. Decision item 4 is corrected to
+   record this third validation path.
+2. **ADC's route-table comment now agrees with the host.** The comment flagged in the 2026-10-01
+   revision and restated in the 2026-10-07 revision now says the framework fallback policy is
+   deliberately not registered and that an undeclared route inherits the anonymous default rather
+   than failing closed (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:72-79`), matching
+   the plain `AddAuthorization()` at `MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:114`
+   (reasoning at `:110-113`). The flag is retired; those revisions stay as written.
+3. **The client retry policy refuses an unsafe replay.** `IsRetryableException`
+   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/AuthenticatedServiceBase.cs:175-179`,
+   rule at `:167-174`) retries a POST or PATCH without an `Idempotency-Key` only when it failed before
+   it was sent, which reinforces the ADR-017 reason the proxy-hop retry delegation gives. The
+   delegation paragraph now records it.
+4. Anchors re-verified against current source:
+   - The `MMCA.Common.Gateway` pin is 1.250.0 in both consumers
+     (`MMCA.ADC/Directory.Packages.props:120`, `MMCA.Store/Directory.Packages.props:14`), still in
+     lockstep with the rest of the framework, superseding the 1.233.0 figure and the ADC `:121`
+     anchor in the 2026-10-07 revision.
+   - `GatewayRateLimiting__TrustedCallerSecret` is injected at `MMCA.ADC/infra/main.bicep:2647`
+     (gateway) and `:2806` (UI), and at `MMCA.Store/infra/main.bicep:2052-2053` (gateway) and `:2178`
+     (UI), superseding the anchors in the 2026-10-07 revision (Decision refreshed).
+   - ADC's service-discovery address book is `MMCA.ADC/infra/main.bicep:2624-2627` (Decision
+     refreshed).
+   - `AddMmcaGateway` overloads at `GatewayReverseProxyExtensions.cs:48` and `:74`, `Wire` at `:92`,
+     route policies `:98`, cluster profile filter `:101`, health-check defaults filter `:102`,
+     trace-header transform `:103`, options validation `:55-58`, filter-order remark `:39-41`,
+     maps-nothing remark `:44-45`; the eager copy at `:65` and the process-lifetime comment at
+     `:79-81` (Decision and Trade-offs refreshed).
+   - ADC's `/hubs` route at `MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:256-260` and
+     its five clusters at `:263-271`, `:272-280`, `:281-289`, `:290-294`, `:295-299` (Decision
+     refreshed); the `/hubs` bypass prefix at `:25` holds.
+   - `BuildRetryPolicy` at `AuthenticatedServiceBase.cs:201-204`, the jittered backoff at
+     `:184-186` (Decision refreshed).
+   - The kit's release entry is `MMCA.Common/CHANGELOG.md:1142` (`[1.206.0]`), superseding `:823`
+     in the 2026-10-07 revision.
+   - ADC's health-report cache explanation is at
+     `MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:92-98` (`:90` is the
+     `AddGatewayDownstreamHealthChecks` call), superseding `:90-96` in the 2026-10-01 revision;
+     `appsettings.json:40-42` holds.
 
 ## Related
 [ADR-008](008-service-extraction-topology.md) (the record that made the Gateway the only entry point

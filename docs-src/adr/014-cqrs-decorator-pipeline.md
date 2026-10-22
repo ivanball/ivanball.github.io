@@ -30,7 +30,8 @@ Revised 2026-10-01 (the record states where each kind of validation lives: UI fo
 Validating decorator with its coverage fitness gate, and domain factories; see Revision below).
 Revised 2026-10-06: the Decision states the shipped seven-decorator command chain and six-decorator query chain instead of the pre-2026-08-18 order. Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised 2026-10-19: the Helpdesk
 reference host composes through `AddMmcaApplicationPipeline` too, so all eight hosts take the sealed
-path; see the Revision (2026-10-19) at the end.
+path; see the Revision (2026-10-19) at the end. Revised 2026-10-21: anchors refreshed after
+the ADC and Store service hosts moved their `AddMmcaApplicationPipeline` call sites.
 
 ## Context
 Commands and queries share cross-cutting concerns: validation, transactions, cache invalidation,
@@ -77,10 +78,10 @@ Use single-responsibility handlers behind a Scrutor-composed decorator pipeline.
   Revision (2026-08-26) below): the Helpdesk reference host
   (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:121`) and the seven production service
   hosts, ADC Identity / Conference / Engagement /
-  Notification (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:324`, `...Conference.Service/Program.cs:416`,
-  `...Engagement.Service/Program.cs:286`, `...Notification.Service/Program.cs:227`) and Store Identity /
-  Catalog / Sales (`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:236`,
-  `...Catalog.Service/Program.cs:256`, `...Sales.Service/Program.cs:236`). Only that decorators-last
+  Notification (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:328`, `...Conference.Service/Program.cs:418`,
+  `...Engagement.Service/Program.cs:287`, `...Notification.Service/Program.cs:228`) and Store Identity /
+  Catalog / Sales (`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:244`,
+  `...Catalog.Service/Program.cs:256`, `...Sales.Service/Program.cs:237`). Only that decorators-last
   ordering is load-bearing; the relative position of `AddInfrastructure`/`AddAPI` is not.
 - **Each kind of validation has one home.** UI form models declare DataAnnotations rules once and
   bridge them onto `MudForm` through `ModelValidation.For(model, validator)`
@@ -514,3 +515,17 @@ are unchanged; what changed is that no host writes the decorators-last sequence 
 2. The `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:132` anchor in the Decision and in the
    Revision (2026-10-07) above is dead (that line no longer holds `AddApplicationDecorators()`); the
    Decision cites `:121`, and the Revision (2026-10-07) is left as recorded.
+
+## Revision (2026-10-21)
+Re-verified against current source. The decision, both decorator chains and the eight composing hosts
+are unchanged; only six `AddMmcaApplicationPipeline` call sites in the Decision moved. Stale anchors
+inside the earlier Revision sections are left as historical records.
+
+1. Anchors re-verified against current source: in the Decision, ADC Identity
+   (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:328`), Conference
+   (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:418`), Engagement
+   (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:287`) and Notification
+   (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:228`), Store Identity
+   (`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:244`) and Sales
+   (`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:237`) are re-pointed; Store Catalog
+   `:256` and `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:121` still match.

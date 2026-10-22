@@ -16,6 +16,9 @@ citations below rebased to their current lines.
 Revised 2026-09-07 (sort keys, filter keys and lookup name columns resolve against the response
 contract rather than the entity, navigation depth and lookup rows are capped, and the selector cache
 is bounded).
+Revised 2026-10-21: the generic create now builds its `Location` itself and returns `Created`
+rather than `CreatedAtRoute`, the filter registry also covers the `Email` value object, and the
+fail-closed CSV export is recorded among the virtual reads; anchors refreshed.
 ## Context
 Every module exposes many entities, and most of them need the same read and write
 surface: list, page, look up for a dropdown, fetch by id, create, delete. Hand
@@ -49,13 +52,17 @@ contract, supplied by two controller bases over a shared query pipeline.
 
 2. **Generic write controller.** `AggregateRootEntityControllerBase<TEntity,
    TEntityDTO, TIdentifierType, TCreateRequest>`
-   (`Source/Presentation/MMCA.Common.API/Controllers/AggregateRootEntityControllerBase.cs:28`)
+   (`Source/Presentation/MMCA.Common.API/Controllers/AggregateRootEntityControllerBase.cs:29`)
    inherits all of the above and adds `[HttpPost]` create
-   (`AggregateRootEntityControllerBase.cs:59`, returning 201 `CreatedAtRoute` at
-   `:73`) and `[HttpDelete("{id}")]`
-   (`AggregateRootEntityControllerBase.cs:85`). The create action is decorated with
-   `[Idempotent]` (`AggregateRootEntityControllerBase.cs:60`) so a retried POST does
-   not create a duplicate (ADR-017).
+   (`AggregateRootEntityControllerBase.cs:75`) and `[HttpDelete("{id}")]`
+   (`AggregateRootEntityControllerBase.cs:107`). The create returns 201 through
+   `Created(location, created)` (`AggregateRootEntityControllerBase.cs:98`), with the
+   `Location` resolved before the result is returned: `Url.Link(GetByIdRouteName, ...)` when
+   the named route resolves (`:94`, `GetByIdRouteName` defaulting to `Get{EntityName}ById` at
+   `:57`), otherwise the new id appended to the collection path the POST was made to (`:96`).
+   The create action is decorated with `[Idempotent]`
+   (`AggregateRootEntityControllerBase.cs:76`) so a retried POST does not create a
+   duplicate (ADR-017).
 
 3. **Sparse fieldsets via `fields`.** A comma-separated `fields` query parameter
    (`EntityControllerBase.cs:111`, `:163`, `:365`) drives a server-side projection:
@@ -74,17 +81,17 @@ contract, supplied by two controller bases over a shared query pipeline.
    which parses `filters[Property].operator` / `filters[Property].value` query keys
    (`Source/Presentation/MMCA.Common.API/ModelBinders/QueryFilterModelBinder.cs:24`).
    `QueryFilterService.ApplyFilters`
-   (`Source/Core/MMCA.Common.Application/Services/Filtering/QueryFilterService.cs:78`)
-   resolves a `IFilterStrategy`
+   (`Source/Core/MMCA.Common.Application/Services/Filtering/QueryFilterService.cs:81`,
+   with a second overload at `:102`) resolves a `IFilterStrategy`
    (`Source/Core/MMCA.Common.Application/Services/Filtering/IFilterStrategy.cs:6`)
    per property CLR type from a strategy registry (string, bool, int, long, DateTime,
-   decimal, Guid and their nullables, declared at `QueryFilterService.cs:32`, entries
-   at `:35-47`), each strategy declaring its `SupportedOperators`
-   (`IFilterStrategy.cs:24`). Extra types register via
-   `QueryFilterService.RegisterStrategy` (`QueryFilterService.cs:62`); a strongly
-   typed identifier column (ADR-115) needs no registration, because `ResolveStrategy`
-   builds a `StronglyTypedIdFilterStrategy` on first use and memoizes it beside the
-   built-ins (`QueryFilterService.cs:406-416`).
+   decimal, Guid and their nullables, plus the `Email` value object through
+   `EmailFilterStrategy`; declared at `QueryFilterService.cs:34`, entries at `:37-50`),
+   each strategy declaring its `SupportedOperators` (`IFilterStrategy.cs:24`). Extra types
+   register via `QueryFilterService.RegisterStrategy` (`QueryFilterService.cs:65`); a
+   strongly typed identifier column (ADR-115) needs no registration, because
+   `ResolveStrategy` (`QueryFilterService.cs:413`) builds a `StronglyTypedIdFilterStrategy`
+   on first use (`:421`) and memoizes it beside the built-ins.
 
 5. **Sort.** `sortColumn` / `sortDirection` (`EntityControllerBase.cs:161-162`)
    feed `QueryFieldService.ApplySorting` (`QueryFieldService.cs:155`), an
@@ -128,13 +135,13 @@ contract, supplied by two controller bases over a shared query pipeline.
 - **Bounded dynamic querying, not open SQL.** Filtering is dynamic over the wire but
   not unbounded in the engine: each property is filtered only by a registered
   `IFilterStrategy` whose `SupportedOperators` are validated before the database is
-  touched (`QueryFilterService.ValidateFilters`, `QueryFilterService.cs:159`,
-  invoked at `Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:301`),
+  touched (`QueryFilterService.ValidateFilters`, `QueryFilterService.cs:166` and `:182`,
+  invoked at `Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:304`),
   and `MaxUnboundedResultLimit` (`EntityQueryPipeline.cs:23`) plus the `MaxPageSize`
   clamp (`EntityControllerBase.cs:169`) bound the result size.
 - **Composes with manual DTO mapping (ADR-001).** Entities are projected to DTOs by
   an injected `IEntityDTOMapper` (`EntityQueryService.cs:36`, property at `:91`) via
-  `DTOMapper.MapToDTOs` (`EntityQueryService.cs:360`); a `DTOToEntityPropertyMap`
+  `DTOMapper.MapToDTOs` (`EntityQueryService.cs:361`); a `DTOToEntityPropertyMap`
   (`EntityQueryService.cs:101`) translates DTO field names to entity property paths
   for filter and sort, so the wire contract speaks DTO names while the engine speaks
   entity names.
@@ -150,7 +157,7 @@ contract, supplied by two controller bases over a shared query pipeline.
 - **Dynamic filtering is an injection and over-fetch surface.** Arbitrary
   client-supplied property/operator/value triples are an attack surface; it is
   bounded by validating properties and operators up front
-  (`QueryFilterService.ValidateFilters`, `QueryFilterService.cs:159`), routing each
+  (`QueryFilterService.ValidateFilters`, `QueryFilterService.cs:166`), routing each
   type through its registered `IFilterStrategy` rather than free-form expression
   evaluation, and capping rows with `MaxUnboundedResultLimit`
   (`EntityQueryPipeline.cs:23`). Sparse fieldsets reject non-writable properties
@@ -160,10 +167,19 @@ contract, supplied by two controller bases over a shared query pipeline.
   shape per entity is consistent but conveys less domain intent than a named,
   purpose-built endpoint; the query contract (filter key syntax, operators) must be
   learned once rather than read off each endpoint.
-- **Opting out means overriding the base.** All four reads and the two writes are
-  `virtual` (`EntityControllerBase.cs:110`, `AggregateRootEntityControllerBase.cs:64`),
-  so a controller that needs bespoke behavior overrides the specific action rather
-  than abandoning the base, but the default surface is opt-out, not opt-in.
+- **Opting out means overriding the base.** All five reads (list, paged, CSV export, lookup
+  and by-id: `EntityControllerBase.cs:110`, `:158`, `:257`, `:320`, `:361`) and the two
+  writes (`AggregateRootEntityControllerBase.cs:80`, `:112`) are `virtual`, so a controller
+  that needs bespoke behavior overrides the specific action rather than abandoning the base,
+  but the default surface is opt-out, not opt-in.
+- **The CSV export widens the inherited surface, so it fails closed.** `ExportAsync`
+  (`EntityControllerBase.cs:257`) reads pages of `MaxPageSize` rows (`:277`) up to
+  `MaxExportRows` (default `DefaultMaxExportRows` 100_000, `EntityControllerBase.cs:472`),
+  announcing that ceiling in the `X-Export-Row-Limit` header (`:481`, appended at `:625`).
+  When the controller declares no row scope it refuses with a 403 carrying
+  `Export.RowScopeRequired` (`:273-274`, code at `:487`) unless `AllowUnscopedExport`
+  (`:508`, default `false`) opts in, so a controller that forgot to scope its export serves
+  no rows rather than every row.
 
 ## Revision (2026-09-07)
 The query layer's shape is unchanged. What a caller is allowed to **name** is not, from the
@@ -207,7 +223,7 @@ ADR-001 (manual DTO mapping: the generic controllers project through
 `IEntityDTOMapper`), ADR-002 (navigation populators: the unsupported-include path),
 ADR-013 (Result pattern at the edge: every action returns through
 `HandleFailure(result.Errors)`, `EntityControllerBase.cs:129`), ADR-017 (idempotency:
-the generic create is `[Idempotent]`, `AggregateRootEntityControllerBase.cs:60`),
+the generic create is `[Idempotent]`, `AggregateRootEntityControllerBase.cs:76`),
 ADR-019 (rate limiting: these GET routes are the authenticated read surface the
 always-on global limiter caps per principal).
 
@@ -292,3 +308,37 @@ No decision, rationale or behavior changed; this pass refreshes citations from a
 Anchors in Decision and Trade-offs were re-verified against current source and rebased
 (`EntityControllerBase.cs`, `QueryFieldService.cs`). Anchors inside the earlier Revision sections are
 left as recorded.
+
+## Revision (2026-10-21)
+Re-verified against current source. The two controller bases, the dynamic query contract and the
+pipeline bounds are unchanged; the create's 201 construction, the filter type list and the read
+surface moved.
+
+1. **The create resolves its own `Location`.** `CreateAsync`
+   (`Source/Presentation/MMCA.Common.API/Controllers/AggregateRootEntityControllerBase.cs:80`)
+   returns `Created(location, created)` (`:98`) instead of `CreatedAtRoute`. The location is
+   `Url.Link(GetByIdRouteName, ...)` when that route resolves (`:94`), otherwise the new id
+   appended to the request's collection path (`:96`), so a derived controller that does not
+   declare the named route no longer turns a saved create into a 500 when the result executes
+   (rationale at `:67-74`).
+2. **The filter registry covers `Email`.** The built-in entries
+   (`Source/Core/MMCA.Common.Application/Services/Filtering/QueryFilterService.cs:37-50`) now
+   include `[typeof(Email)] = new ValueObjects.EmailFilterStrategy()` (`:50`); Decision item 4
+   lists it.
+3. **The CSV export is part of the inherited read surface.** `ExportAsync`
+   (`Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:257`) is a fifth
+   `virtual` read. It pages at `MaxPageSize` (`:277`), stops at `MaxExportRows` (default
+   100_000, `:472`), announces the ceiling in `X-Export-Row-Limit` (`:481`, appended at `:625`)
+   and refuses an unscoped export with a 403 `Export.RowScopeRequired` (`:273-274`, `:487`)
+   unless `AllowUnscopedExport` (`:508`) opts in. Trade-offs records it.
+4. Anchors re-verified against current source: `AggregateRootEntityControllerBase.cs` class `:29`,
+   `[HttpPost]` `:75`, `[Idempotent]` `:76`, `[HttpDelete("{id}")]` `:107`, `DeleteAsync` `:112`;
+   `EntityControllerBase.cs` reads `:110`, `:158`, `:257`, `:320`, `:361`;
+   `QueryFilterService.cs` registry `:34`, `ApplyFilters` `:81` and `:102`, `RegisterStrategy`
+   `:65`, `ValidateFilters` `:166` and `:182`, `ResolveStrategy` `:413`,
+   `StronglyTypedIdFilterStrategy.TryCreate` `:421`; `EntityQueryService.cs` `ValidateFilters`
+   call `:304`, `MapToDTOs` `:361`, and (for revision 2026-09-07 item 3, left as recorded) the
+   `LookupNameContract` check at `:394`; `EFReadRepository.GetAllForLookupAsync` applies
+   `MaxUnboundedResultLimit` at
+   `Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:245`, with
+   the other `Take` at `:288`.

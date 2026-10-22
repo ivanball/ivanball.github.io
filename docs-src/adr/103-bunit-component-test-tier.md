@@ -9,7 +9,10 @@ real authorization service, so a component test can assert a role denial; see Re
 Revised 2026-10-06: the helper's call-site count refreshed and two omitted registrations recorded (the
 base's `ViewerTimeZone` default and the ADC Conference subclass's inert event lookup). See Revision
 (2026-10-06) at the end. Revised 2026-10-07: anchors refreshed after the v1.233.0 release. See Revision
-(2026-10-07) at the end.
+(2026-10-07) at the end. Revised 2026-10-21: the `bunit` pin moved to 2.12.5 and a fourth central
+package file (MMCA.Helpdesk's) names it, the helper's call-site count refreshed, and the third facade
+registration (`IPendingToastService`) and the `FieldErrorAccessibilityExtensions` helper recorded.
+See Revision (2026-10-21) at the end.
 
 ## Context
 Three test tiers in this workspace are decided in writing and one is not. ADR-015 gates **structure**
@@ -45,18 +48,23 @@ fixes every choice above once, in one file.
   and its remarks state why: v2 is the line compatible with xUnit v3 and Microsoft Testing Platform,
   and derived test classes call `RenderUnderTest` / `RenderAs` and never touch the version-specific
   symbols, so a move off that line changes this file and no other
-  (`BunitComponentTestBase.cs:30-35`). The line is pinned at `bunit` 2.11.3 in each repo's central
-  package file (`MMCA.Common/Directory.Packages.props:234-235`,
-  `MMCA.ADC/Directory.Packages.props:32`, `MMCA.Store/Directory.Packages.props:54`), and the
+  (`BunitComponentTestBase.cs:30-35`). The line is pinned at `bunit` 2.12.5 in each repo's central
+  package file (`MMCA.Common/Directory.Packages.props:241-242`,
+  `MMCA.ADC/Directory.Packages.props:32`, `MMCA.Store/Directory.Packages.props:54`,
+  `MMCA.Helpdesk/Directory.Packages.props:32`), and the
   package carries a direct `AngleSharp` pin because central package management does not pin
   transitives (`MMCA.Common.Testing.UI.csproj:15-17`).
 - **MudBlazor services plus the ADR-067 facades, registered once.** The constructor calls
   `Services.AddMudServices()` (`BunitComponentTestBase.cs:47`) and then
   `Services.AddCommonUiFacades()` (`:54`), which is the same call the production shell makes from
-  `AddUIShared` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:159`). That
-  call registers `IToastService` -> `MudToastService` and `IAppDialogService` -> `MudAppDialogService`
-  with `TryAdd` (`DependencyInjection.cs:227-230`), so a component test resolves the vendor-neutral
-  facades and exercises the real Mud-backed path, and a test that wants a recording double registers
+  `AddUIShared` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:167`). That
+  call registers `IToastService` -> `MudToastService`, `IAppDialogService` -> `MudAppDialogService`
+  and `IPendingToastService` -> `PendingToastService` (the toast that survives a `forceLoad`
+  navigation) with `TryAdd` (`DependencyInjection.cs:238-242`), so a component test resolves the vendor-neutral
+  facades and exercises the real Mud-backed toast and dialog path. The pending-toast facade is not
+  Mud-backed: it wraps `sessionStorage` through `IJSRuntime`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/PendingToastService.cs:7-13`), so under
+  loose JSInterop its storage calls only return defaults. A test that wants a recording double registers
   one afterwards (last registration wins, `BunitComponentTestBase.cs:49-53`).
 - **Loose JSInterop.** `JSInterop.Mode = JSRuntimeMode.Loose` (`:56`) so MudBlazor components that
   probe JS during render return default values instead of throwing (`:18-19`).
@@ -87,24 +95,30 @@ fixes every choice above once, in one file.
   call itself (`:78-81`).
 - **`SetRendererInfo` behind one helper, because its call ordering is load-bearing.**
   `ConfigureDataGridListPageHost` (`:111-129`) registers the list-page state services (`:116-117`),
-  substitutes MudBlazor's `IBrowserViewportService` with an inert double so `IsMobile` stays
-  deterministically false (`:121`, which is why `Moq` is a package dependency rather than a
+  by default substitutes MudBlazor's `IBrowserViewportService` with an inert double so `IsMobile` stays
+  deterministically false (`stubViewport: false` keeps the real service, `:114`, `:119-122`; which is why `Moq` is a package dependency rather than a
   hand-written stub, `MMCA.Common.Testing.UI.csproj:19-23`), adds bUnit's persistent component state
   for the prerender boundary (`:125`), and calls `SetRendererInfo` **last** (`:128`). The rule is
   written where the helper is: `SetRendererInfo` builds and freezes the bUnit service provider, so any
   registration made after it is silently ignored and the page resolves the framework default instead
-  of the test's double (`:89-93`). Thirty-two test files across MMCA.Common, MMCA.ADC and MMCA.Store
-  call the helper today (three in MMCA.Common, nineteen in MMCA.ADC, ten in MMCA.Store); its comment
+  of the test's double (`:89-93`). Thirty-eight test files across MMCA.Common, MMCA.ADC and MMCA.Store
+  call the helper today (five in MMCA.Common, twenty-three in MMCA.ADC, ten in MMCA.Store); its comment
   records the fifteen hand-rolled copies of the block that the extraction replaced (`:92-93`).
 - **The rest of the harness ships with it.** `RenderMudProviders` renders the popover, dialog and
   snackbar providers into the test's render root and returns handles (`:154-165`, `:168-171`);
   `BunitInteractionExtensions` expresses clicks and text reads over accessible text rather than CSS
   paths (`Infrastructure/BunitInteractionExtensions.cs:12-34`); `MarkupSnapshot` is a dependency-free
   golden-markup comparison that normalizes MudBlazor's per-render GUIDs
-  (`Infrastructure/MarkupSnapshot.cs:21`); and the HTTP-facing doubles cover the UI service layer
+  (`Infrastructure/MarkupSnapshot.cs:22`); `FieldErrorAccessibilityExtensions` asserts that a field's
+  validation error reaches assistive technology (an alert role, `aria-invalid`, and a description
+  reference; `Infrastructure/FieldErrorAccessibilityExtensions.cs:7-12`); and the HTTP-facing doubles
+  cover the UI service layer
   (`Infrastructure/UiHttpServiceHarness.cs:12`, `Infrastructure/CapturingHttpMessageHandler.cs:20`,
   `Infrastructure/StubTokenStorageService.cs:13`, `Infrastructure/HttpTestDoubles.cs:12`,
-  `Infrastructure/ErrorSummaryExtensions.cs:10`).
+  `Infrastructure/ErrorSummaryExtensions.cs:10`). The package also ships three shared page-test bases
+  over the base class (`Pages/ConfirmEmailPageTestsBase.cs:26`, `Pages/RoleAdminEditPageTestsBase.cs:22`,
+  `Pages/RoleAdminListPageTestsBase.cs:21`), and for them it carries `AwesomeAssertions` and
+  `xunit.v3.extensibility.core` into every consuming test project (`MMCA.Common.Testing.UI.csproj:24-27`).
 - **Adoption is a thin repo-local subclass, or the shipped base directly.** Six consumer test projects take the
   package reference: ADC Conference, Identity and Engagement
   (`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/MMCA.ADC.Conference.UI.Tests.csproj:12`,
@@ -149,7 +163,7 @@ architecture), so the tier is adopted in three of the four repos with a Blazor U
   every UI test class in three repos (`:30-35`).
 - **Test-time and run-time resolve the same facades.** Because the base calls the production
   `AddCommonUiFacades` rather than registering its own doubles (`:54`,
-  `MMCA.Common.UI/DependencyInjection.cs:159,227-230`), a component test asserts against the real
+  `MMCA.Common.UI/DependencyInjection.cs:167,238-242`), a component test asserts against the real
   toast and dialog implementations ADR-067 put behind those interfaces, and a test that wants to
   assert on a toast opts into a double explicitly.
 - **A package matches how every other shipped test tier is delivered.** Runtime conformance
@@ -179,9 +193,11 @@ architecture), so the tier is adopted in three of the four repos with a Blazor U
   directly as well
   (`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/MMCA.ADC.Conference.UI.Tests.csproj:10`),
   so each repo's central package file names the number
-  (`MMCA.Common/Directory.Packages.props:235`, `MMCA.ADC/Directory.Packages.props:32`,
-  `MMCA.Store/Directory.Packages.props:54`) and three files have to agree. The `AngleSharp` advisory
-  pin does not spread that way: it is named once, in `MMCA.Common/Directory.Packages.props:240`, and
+  (`MMCA.Common/Directory.Packages.props:242`, `MMCA.ADC/Directory.Packages.props:32`,
+  `MMCA.Store/Directory.Packages.props:54`). MMCA.Helpdesk's central file names `bunit` and
+  `MMCA.Common.Testing.UI` too (`MMCA.Helpdesk/Directory.Packages.props:32,94`) although no Helpdesk
+  project references either, so four files have to agree. The `AngleSharp` advisory
+  pin does not spread that way: it is named once, in `MMCA.Common/Directory.Packages.props:247`, and
   reaches consumers transitively through the package's own direct reference
   (`MMCA.Common.Testing.UI.csproj:17`).
 
@@ -281,3 +297,38 @@ only in MMCA.Common's. Only the MMCA.Store anchor for the `bunit` pin moved.
 1. Anchors re-verified against current source: `MMCA.Store/Directory.Packages.props:54` (was `:58`,
    in the Decision bullet and the per-repo pin trade-off), `MMCA.Common/Directory.Packages.props:234-235,240`
    and `MMCA.ADC/Directory.Packages.props:32` (unchanged).
+
+## Revision (2026-10-21)
+**The decision and the mechanism are unchanged.** Re-verified against current source: the `AngleSharp`
+pin is still named only in MMCA.Common's central package file (no ADC or Store props or project file
+names it), and six of the seven `Infrastructure/*.cs` helper-inventory anchors are exact (only
+`MarkupSnapshot.cs` moved). The `bunit` number, the pin's file count, the helper's call-site count and
+two inventories moved.
+1. `bunit` is pinned at 2.12.5, not 2.11.3, and the files still agree
+   (`MMCA.Common/Directory.Packages.props:242`, `MMCA.ADC/Directory.Packages.props:32`,
+   `MMCA.Store/Directory.Packages.props:54`).
+2. A fourth central package file names it: `MMCA.Helpdesk/Directory.Packages.props:32` pins `bunit`
+   2.12.5 and `:94` pins `MMCA.Common.Testing.UI`, although no Helpdesk project references either
+   package. The per-repo pin trade-off now says four files have to agree, not three.
+3. `ConfigureDataGridListPageHost` has thirty-eight calling test files, not thirty-two (five in
+   MMCA.Common, twenty-three in MMCA.ADC, ten in MMCA.Store). One further ADC file names the helper
+   only in a comment and is not counted.
+4. `AddCommonUiFacades` registers a third facade, `IPendingToastService` -> `PendingToastService`
+   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:242`), which the Decision
+   bullet now lists. It is not Mud-backed (it wraps `sessionStorage` through `IJSRuntime`,
+   `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/PendingToastService.cs:7-13`), so the
+   real-path claim is scoped to the toast and dialog pair.
+5. The viewport substitution is a default, not unconditional: `ConfigureDataGridListPageHost` takes
+   `stubViewport` (default true), and `false` keeps MudBlazor's real service
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.UI/Infrastructure/BunitComponentTestBase.cs:114,119-122`).
+6. The package also ships `FieldErrorAccessibilityExtensions`, which asserts that a field's validation
+   error is exposed to assistive technology
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.UI/Infrastructure/FieldErrorAccessibilityExtensions.cs:12`);
+   the helper inventory now lists it. The inventory also now lists the three shared page-test bases
+   under `Pages/` and the `AwesomeAssertions` / `xunit.v3.extensibility.core` references they bring
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.UI/MMCA.Common.Testing.UI.csproj:24-27`), which
+   the 2026-10-01 revision recorded outside it.
+7. Anchors re-verified against current source: `MMCA.Common/Directory.Packages.props:241-242,247`
+   (were `:234-235,240`), `DependencyInjection.cs:167` (was `:159`), `DependencyInjection.cs:238-242`
+   (was `:227-230`), `Infrastructure/MarkupSnapshot.cs:22` (was `:21`),
+   `MMCA.Store/Directory.Packages.props:54` and `MMCA.ADC/Directory.Packages.props:32` (unchanged).

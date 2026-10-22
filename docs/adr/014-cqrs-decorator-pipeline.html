@@ -269,7 +269,8 @@
           Validating decorator with its coverage fitness gate, and domain factories; see Revision below).
           Revised 2026-10-06: the Decision states the shipped seven-decorator command chain and six-decorator query chain instead of the pre-2026-08-18 order. Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised 2026-10-19: the Helpdesk
           reference host composes through <code>AddMmcaApplicationPipeline</code> too, so all eight hosts take the sealed
-          path; see the Revision (2026-10-19) at the end.</p>
+          path; see the Revision (2026-10-19) at the end. Revised 2026-10-21: anchors refreshed after
+          the ADC and Store service hosts moved their <code>AddMmcaApplicationPipeline</code> call sites.</p>
           <h2 id="context">Context</h2>
           <p>Commands and queries share cross-cutting concerns: validation, transactions, cache invalidation,
           logging / timing, and feature gating. Putting that logic inside each handler scatters it, makes the
@@ -316,10 +317,10 @@
           Revision (2026-08-26) below): the Helpdesk reference host
           (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:121</code>) and the seven production service
           hosts, ADC Identity / Conference / Engagement /
-          Notification (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:324</code>, <code>...Conference.Service/Program.cs:416</code>,
-          <code>...Engagement.Service/Program.cs:286</code>, <code>...Notification.Service/Program.cs:227</code>) and Store Identity /
-          Catalog / Sales (<code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:236</code>,
-          <code>...Catalog.Service/Program.cs:256</code>, <code>...Sales.Service/Program.cs:236</code>). Only that decorators-last
+          Notification (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:328</code>, <code>...Conference.Service/Program.cs:418</code>,
+          <code>...Engagement.Service/Program.cs:287</code>, <code>...Notification.Service/Program.cs:228</code>) and Store Identity /
+          Catalog / Sales (<code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:244</code>,
+          <code>...Catalog.Service/Program.cs:256</code>, <code>...Sales.Service/Program.cs:237</code>). Only that decorators-last
           ordering is load-bearing; the relative position of <code>AddInfrastructure</code>/<code>AddAPI</code> is not.</li>
           <li><strong>Each kind of validation has one home.</strong> UI form models declare DataAnnotations rules once and
           bridge them onto <code>MudForm</code> through <code>ModelValidation.For(model, validator)</code>
@@ -737,6 +738,20 @@
           Revision (2026-10-07) above is dead (that line no longer holds <code>AddApplicationDecorators()</code>); the
           Decision cites <code>:121</code>, and the Revision (2026-10-07) is left as recorded.</li>
           </ol>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. The decision, both decorator chains and the eight composing hosts
+          are unchanged; only six <code>AddMmcaApplicationPipeline</code> call sites in the Decision moved. Stale anchors
+          inside the earlier Revision sections are left as historical records.</p>
+          <ol>
+          <li>Anchors re-verified against current source: in the Decision, ADC Identity
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:328</code>), Conference
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:418</code>), Engagement
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:287</code>) and Notification
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:228</code>), Store Identity
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:244</code>) and Sales
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:237</code>) are re-pointed; Store Catalog
+          <code>:256</code> and <code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:121</code> still match.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -764,6 +779,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-19">Revision (2026-10-19)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             </ul>
           </nav>
         </aside>

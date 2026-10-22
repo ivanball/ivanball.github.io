@@ -280,7 +280,12 @@
           figures are re-counted. See Revision (2026-10-06) at the end.
           Revised 2026-10-07: MMCA.Common runs a second architecture map, <code>FrameworkModuleArchitectureMap</code>, over
           its own aggregates, the shipped baselines are re-counted against v1.233.0, and the anchors that moved
-          are refreshed.</p>
+          are refreshed.
+          Revised 2026-10-21: two rule families joined the library since v1.233.0 (Liskov substitutability,
+          <code>SubstitutabilityTestsBase</code>, and a two-way <code>PRIVACY.md</code> inventory gate, <code>PiiInventoryTestsBase</code>) and
+          <code>PiiConventionTestsBase</code> gained the reverse erasure checks; the shipped public API baselines are
+          re-counted against v1.250.0 (8,434 declarations, every unshipped file header-only) and anchors
+          refreshed after v1.250.0, the counts <code>FACTS.md</code> owns now sitting at <code>:81</code> / <code>:84</code>.</p>
           <h2 id="context">Context</h2>
           <p>The codebase rests on invariants that are easy to state and easy to erode by accident: clean-
           architecture layer flow (Domain depends on nothing above it), module isolation (no module reaches into
@@ -881,6 +886,63 @@
           <code>[HubMethodName]</code> at <code>NotificationHub.cs:127</code> and <code>:144</code> and <code>Context.ConnectionAborted</code> at <code>:136</code>
           and <code>:150</code> still resolve. The Status block&#39;s <code>FACTS.md:51</code> / <code>:54</code> pointers still resolve.</li>
           </ol>
+          <h2 id="revision-2026-10-21-re-counted-baselines-moved-anchors">Revision (2026-10-21): re-counted baselines, moved anchors</h2>
+          <p>Re-verified against current source. No decision changed: the two enforcement layers plus the public
+          API gate, the <code>MMCA.Common.UI.Maui</code> exclusion, the <code>--minimum-expected-tests 2000</code> floor
+          (<code>.github/workflows/ci.yml:163</code>, still as the Decision cites it) and the RS rule severities are as the
+          earlier entries describe. Two rule families joined the shared library after v1.233.0 and one existing
+          base gained rules (the method and base counts are <code>MMCA.Common/FACTS.md:81</code>), the baselines moved with
+          the v1.250.0 release (<code>MMCA.Common/FACTS.md:14</code>), and several anchors drifted, including some the
+          2026-10-07 entry said still resolve.</p>
+          <ol>
+          <li><strong>The rule library grew by two bases and five rules.</strong> All paths below sit under
+          <code>Source/Hosting/MMCA.Common.Testing.Architecture/</code>.<ul>
+          <li><strong>Liskov substitutability.</strong> <code>SubstitutabilityTestsBase</code> (<code>Bases/Governance/SubstitutabilityTestsBase.cs:21</code>)
+          runs <code>SubstitutableMembersDoNotRefuseTheContract</code>
+          (<code>Rules/Governance/ArchitectureRules.Substitutability.cs:50</code>): no override of a base virtual or
+          abstract member, and no interface member implementation, throws <code>NotSupportedException</code> or
+          <code>NotImplementedException</code>, read from IL; a reviewed refusal is listed in <code>ExcludedMembers</code>
+          (<code>SubstitutabilityTestsBase.cs:31</code>). MMCA.Common
+          (<code>Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/Substitutability/CommonSubstitutabilityTests.cs:10</code>),
+          MMCA.ADC and MMCA.Store subclass it.</li>
+          <li><strong>Personal-data inventory.</strong> <code>PiiInventoryTestsBase</code> (<code>Bases/Privacy/PiiInventoryTestsBase.cs:33</code>)
+          holds the <code>[Pii]</code> markers and the <code>PRIVACY.md</code> inventory table to the same set in both directions:
+          <code>PiiMembersHaveInventoryRows</code> (<code>Rules/Governance/ArchitectureRules.PiiInventory.cs:23</code>) and
+          <code>PiiInventoryRowsMapToPiiMembers</code> (<code>:61</code>). MMCA.ADC and MMCA.Store subclass it; MMCA.Common
+          exercises it through a fixture subclass
+          (<code>Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/Privacy/PiiInventoryTestsBaseTests.cs:14</code>).</li>
+          <li><strong>Reverse erasure checks.</strong> The existing <code>PiiConventionTestsBase</code>
+          (<code>Bases/Governance/PiiConventionTestsBase.cs:19</code>) now also runs
+          <code>AnonymizableEntitiesAreCoveredBySamples</code> (<code>Rules/Governance/ArchitectureRules.Anonymization.cs:12</code>)
+          and <code>PropertiesOverwrittenByAnonymizeCarryPii</code> (<code>:49</code>) over its <code>AnonymizableSamples</code>
+          (<code>PiiConventionTestsBase.cs:31</code>, <code>:37-44</code>), so whatever <code>Anonymize()</code> overwrites must carry <code>[Pii]</code>.</li>
+          </ul>
+          </li>
+          <li><strong>The shipped baselines hold 8,434 declarations across 8,455 non-empty lines</strong> in the 21
+          <code>PublicAPI.Shipped.txt</code> files, each carrying exactly one <code>#nullable enable</code> header (four of them,
+          <code>MMCA.Common.Application</code>, <code>MMCA.Common.Infrastructure</code>, <code>MMCA.Common.Testing.Architecture</code> and
+          <code>MMCA.Common.API</code>, open with a UTF-8 byte-order mark before it). The 2026-10-07 entry read 8,260
+          across 8,281 against v1.233.0. The 21-pair count stands, the <code>MMCA.Common</code> metapackage&#39;s shipped
+          file (<code>Source/MMCA.Common/PublicAPI.Shipped.txt:1</code>) is still the only header-only shipped file, and
+          all 21 <code>PublicAPI.Unshipped.txt</code> files still hold the header alone, so no unshipped declarations
+          exist today.</li>
+          <li><strong>Anchors re-verified against current source:</strong> the live method and base counts are
+          <code>MMCA.Common/FACTS.md:81</code> and the executed count <code>:84</code> (the re-run across Common, ADC and Store is
+          stated at <code>:82-83</code>), where the Status block&#39;s earlier sentences cite <code>:51</code> / <code>:54</code>; read <code>FACTS.md</code>
+          for the values. The <code>PublicApiAnalyzers</code> 5.6.0 <code>PackageVersion</code> is
+          <code>MMCA.Common/Directory.Packages.props:235</code> (its comment ending on <code>:234</code>). In
+          <code>MMCA.Common/Directory.Build.props</code>: the public API gate comment <code>:101-110</code> (RS0016 / RS0017 at
+          <code>:103-104</code>, the Maui rationale <code>:107-109</code>), the ItemGroup condition with the
+          <code>MMCA.Common.UI.Maui</code> exclusion <code>:111</code>, the <code>PackageReference</code> <code>:112</code>, the <code>AdditionalFiles</code>
+          <code>:116-117</code>; the RS0041 rationale <code>:22-26</code>, the <code>NoWarn</code> line <code>:30</code> and <code>TreatWarningsAsErrors</code> <code>:7</code>
+          still resolve. The v1.153.0 changelog heading is <code>MMCA.Common/CHANGELOG.md:3663</code> and its &quot;Three new
+          build gates&quot; bullet <code>:3718-3724</code> (PublicApiAnalyzers on <code>:3722</code>). <code>[HubMethodName]</code> at
+          <code>NotificationHub.cs:127</code> and <code>:144</code> still resolves, and <code>Context.ConnectionAborted</code> is passed at
+          <code>:136</code> and <code>:153</code> (and to the channel authorizer at <code>:168</code>); the framework client&#39;s
+          <code>JoinChannelMethodName</code> / <code>LeaveChannelMethodName</code> constants at
+          <code>Source/Presentation/MMCA.Common.UI/Services/Notifications/NotificationHubService.cs:49-50</code> still
+          resolve.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-009 (resilience gate), ADR-010 (event-version gate), ADR-016 (MassTransit pin gate, and the
           lockstep release cadence the public API baseline is pinned to), ADR-006/007/008 (the transport and
@@ -916,6 +978,7 @@
             <li><a href="#revision-2026-10-01-rs0026--rs0027-become-errors-the-baselines-roll-over-citations-move">Revision (2026-10-01): RS0026 / RS0027 become errors, the baselines roll over, citations move</a></li>
             <li><a href="#revision-2026-10-06-the-adr-115-rules-reach-commons-own-idempotency-gate-re-counted-baselines">Revision (2026-10-06): the ADR-115 rule&#39;s reach, Common&#39;s own idempotency gate, re-counted baselines</a></li>
             <li><a href="#revision-2026-10-07-commons-second-architecture-map-re-counted-baselines-moved-anchors">Revision (2026-10-07): Common&#39;s second architecture map, re-counted baselines, moved anchors</a></li>
+            <li><a href="#revision-2026-10-21-re-counted-baselines-moved-anchors">Revision (2026-10-21): re-counted baselines, moved anchors</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

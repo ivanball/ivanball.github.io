@@ -248,7 +248,7 @@
           mechanism. Revised 2026-10-01: citations re-anchored. Revised 2026-10-06: the ADR-075 history claim
           is scoped to opted-in entities, with retention purging only where the host runs the scheduler. Revised 2026-10-07: the rationale acknowledges ADC&#39;s append-only points ledger and why it
           is not event sourcing, and the Marten rejection separates framework PostgreSQL support (ADR-113)
-          from production, where no deployment runs a PostgreSQL server.</p>
+          from production, where no deployment runs a PostgreSQL server. Revised 2026-10-21: anchors refreshed after Common and ADC source commits moved the outbox, inbox, provider and snapshot lines.</p>
           <h2 id="context">Context</h2>
           <p>Event sourcing keeps an append-only log of the facts that happened to an aggregate and treats that log
           as the system of record. Current state becomes a fold over the log, a &quot;state as of&quot; question is that
@@ -280,11 +280,11 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:15</code>, the
           identity at <code>:40</code>), the table is mapped on every relational source
           (<code>.../DbContexts/ApplicationDbContext.cs:668</code>, and per service database in ADC at
-          <code>MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Conference/Migrations/SQLServerDbContextModelSnapshot.cs:1590</code>),
+          <code>MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Conference/Migrations/SQLServerDbContextModelSnapshot.cs:1596</code>),
           the processor drains it
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:56</code>),
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:58</code>),
           and the consume edge de-duplicates it
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Inbox/EfInboxStore.cs:41</code>). A
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Inbox/EfInboxStore.cs:43</code>). A
           processed outbox row is a delivered message; nothing reads it back and no code path rebuilds state
           from one.</p>
           <h2 id="decision">Decision</h2>
@@ -341,7 +341,7 @@
           (<a href="113-postgresql-as-a-first-class-engine.html">ADR-113</a>,
           <code>MMCA.Common/Directory.Packages.props:63</code>), and the provider ships in every consumer as a direct
           dependency of <code>MMCA.Common.Infrastructure</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj:47</code>), but no
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj:50</code>), but no
           production deployment runs a PostgreSQL server and no production entity routes to a
           non-SQL-Server engine (<a href="018-polyglot-persistence.html">ADR-018</a>). So Marten would add no engine to the
           framework, but it would add a deployed PostgreSQL server for the adopting module&#39;s database
@@ -410,6 +410,20 @@
           <code>EfInboxStore.cs:38</code> and snapshot <code>:1589</code> (and the 2026-10-01 <code>:57</code>) are superseded by these;
           <code>EventType</code> (<code>OutboxMessage.cs:40</code>) and the save (<code>ApplicationDbContext.cs:194</code>) hold.</li>
           </ol>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. The decision (event sourcing not adopted), the rationale and the
+          revisit trigger are unchanged; four body anchors moved after source commits shifted the lines they
+          cited. The ADC <code>OutboxMessages</code> table still exists per service database, and the PostgreSQL provider
+          is still a direct dependency of <code>MMCA.Common.Infrastructure</code>.</p>
+          <ol>
+          <li>Anchors re-verified against current source: ADC&#39;s <code>OutboxMessages</code> table mapping
+          (<code>SQLServerDbContextModelSnapshot.cs:1596</code>, previously <code>:1590</code>, which now holds the
+          <code>IX_OutboxMessages_Pending</code> index), <code>OutboxProcessor</code> class declaration
+          (<code>.../Outbox/Processing/OutboxProcessor.cs:58</code>, previously <code>:56</code>), <code>EfInboxStore</code> class declaration
+          (<code>.../Persistence/Inbox/EfInboxStore.cs:43</code>, previously <code>:41</code>), and the Npgsql provider reference
+          (<code>MMCA.Common.Infrastructure.csproj:50</code>, previously <code>:47</code>). <code>MMCA.Common/Directory.Packages.props:63</code>
+          holds.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="003-outbox-dual-dispatch.html">ADR-003</a> (at-least-once delivery of domain events, the mechanism a
           per-aggregate event log would duplicate rather than replace),
@@ -441,6 +455,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

@@ -240,7 +240,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-010-integration-event-schema-versioning--upcaster-policy">ADR-010: Integration-Event Schema Versioning &amp; Upcaster Policy</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-06-19). Updated 2026-06-27 (Helpdesk enforcement gap closed; all three consumers now gate the convention). Updated 2026-08-14 (ADC now gates seven events, and a fourth tree, the local MMCA.ECommerce sample, subclasses the same base). Revised 2026-08-18 (MMCA.Common now ships its own concrete integration event, <code>OutputCacheEvictionRequested</code>, so the framework&#39;s convention test is no longer vacuous: enforcement runs at five points, not four). Updated 2026-08-21: the upcaster registration extension point named below as follow-up work now ships; see <a href="090-event-upcaster-registration.html">ADR-090</a>. Amended 2026-09-11: <strong>payload purity</strong> is now part of the contract and is build-gated, so an integration event may neither ship from outside a <code>*.Shared</code> assembly nor expose a type declared in a <code>*.Domain</code> assembly on its wire shape (see the amendment section at the end). Updated 2026-09-19 (Store now ships four concrete integration events, not one: <code>ProductVariantChanged</code>, <code>ProductInfoChanged</code>, <code>OrderFulfilled</code> and <code>CustomerErased</code>).</p>
+          <p>Accepted (2026-06-19). Updated 2026-06-27 (Helpdesk enforcement gap closed; all three consumers now gate the convention). Updated 2026-08-14 (ADC now gates seven events, and a fourth tree, the local MMCA.ECommerce sample, subclasses the same base). Revised 2026-08-18 (MMCA.Common now ships its own concrete integration event, <code>OutputCacheEvictionRequested</code>, so the framework&#39;s convention test is no longer vacuous: enforcement runs at five points, not four). Updated 2026-08-21: the upcaster registration extension point named below as follow-up work now ships; see <a href="090-event-upcaster-registration.html">ADR-090</a>. Amended 2026-09-11: <strong>payload purity</strong> is now part of the contract and is build-gated, so an integration event may neither ship from outside a <code>*.Shared</code> assembly nor expose a type declared in a <code>*.Domain</code> assembly on its wire shape (see the amendment section at the end). Updated 2026-09-19 (Store now ships four concrete integration events, not one: <code>ProductVariantChanged</code>, <code>ProductInfoChanged</code>, <code>OrderFulfilled</code> and <code>CustomerErased</code>). Revised 2026-10-21: <code>EventConventionTestsBase</code> now carries the <code>[EventName]</code> rule as a third event-shape companion rule, the ECommerce sample is disclosed as pinned to an older rule set, and anchors moved.</p>
           <h2 id="context">Context</h2>
           <p>Integration events cross service boundaries (Identity → Conference, Conference ↔ Engagement, …) and
           are resolved by consumers solely by their type string: the outbox serializes the event to JSON keyed
@@ -259,8 +259,10 @@
           <code>int SchemaVersion</code>, so a new event cannot ship without one. The rule body
           (<code>ArchitectureRules.IntegrationEventsDeclareSchemaVersion</code>) lives once in the shared
           <code>MMCA.Common.Testing.Architecture</code> package and is surfaced through <code>EventConventionTestsBase</code>,
-          alongside two companion rules: every integration event inherits <code>BaseIntegrationEvent</code> and resides
-          in a Shared-layer <code>*.IntegrationEvents</code> namespace.</li>
+          alongside three event-shape companion rules: every integration event inherits <code>BaseIntegrationEvent</code>,
+          declares <code>[EventName]</code> (the stable wire identity its outbox and inbox rows store), and resides in a
+          Shared-layer <code>*.IntegrationEvents</code> namespace. The same base also carries the two upcaster rules of
+          <a href="090-event-upcaster-registration.html">ADR-090</a>.</li>
           <li><strong>Additive, optional changes keep the same version.</strong> Adding a nullable/optional field, or a field
           with a safe default, is backward-compatible: consumers ignore unknown fields (System.Text.Json
           default) and old payloads deserialize with the default. No version bump required.</li>
@@ -283,7 +285,7 @@
           changes and no outbox row migrates: System.Text.Json tolerates the missing field on old payloads and
           the type supplies the default; new rows simply gain <code>&quot;SchemaVersion&quot;:1</code> (the outbox serializer
           options set no naming policy, so outbox payloads keep PascalCase:
-          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:17-20</code>, <code>:142</code>).</li>
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:17-20</code>, <code>:149</code>).</li>
           <li><strong>New-type-for-breaking-change</strong> is the only safe option when transport binds by type (MassTransit)
           and consumers are independently deployed: an in-place reshape has no compatibility window.</li>
           </ul>
@@ -304,21 +306,22 @@
           <code>EventVersioningConventionTests</code> gates a real event in Common&#39;s own build. Enforcement therefore runs
           at five points, not four. (Common&#39;s map declares no modules, so the namespace rule&#39;s Shared-layer half
           is relaxed there: <code>ArchitectureRules.IntegrationEventsResideInSharedIntegrationEventsNamespace</code>
-          (<code>Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.Events.cs:28-33</code>) applies the
+          (<code>Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.Events.cs:44-54</code>) applies the
           <code>sharedAssemblies</code> check only when <code>map.ModuleNames.Count &gt; 0</code>, which is why the framework&#39;s own
           event may sit in a Domain-assembly <code>*.IntegrationEvents</code> namespace while every module-bearing consumer
           is still held to Shared.) The other four are the consumer trees, which subclass
-          <code>EventConventionTestsBase</code> and run the identical rules against their own event assemblies:
+          <code>EventConventionTestsBase</code> and run its rules against their own event assemblies (each at the rule
+          set of the MMCA.Common release it resolves; see the <code>MMCA.ECommerce</code> qualification below):
           <code>EventConventionTests</code> in <code>MMCA.ADC.Architecture.Tests</code> (ADC&#39;s seven events, spread across the
           Identity, Conference and Engagement Shared assemblies the map registers) and
           <code>MMCA.Store.Architecture.Tests</code>
           (<code>Tests/Architecture/MMCA.Store.Architecture.Tests/Contracts/EventConventionTests.cs:3</code>, Store&#39;s
           four events across three modules: <code>ProductVariantChanged</code>
-          (<code>Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Products/IntegrationEvents/ProductVariantChanged.cs:41</code>)
+          (<code>Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Products/IntegrationEvents/ProductVariantChanged.cs:34</code>)
           and <code>ProductInfoChanged</code>
-          (<code>Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Products/IntegrationEvents/ProductInfoChanged.cs:31</code>)
+          (<code>Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Products/IntegrationEvents/ProductInfoChanged.cs:27</code>)
           in Catalog Shared, <code>OrderFulfilled</code>
-          (<code>Source/Modules/Sales/MMCA.Store.Sales.Shared/Orders/IntegrationEvents/OrderFulfilled.cs:28</code>) in
+          (<code>Source/Modules/Sales/MMCA.Store.Sales.Shared/Orders/IntegrationEvents/OrderFulfilled.cs:24</code>) in
           Sales Shared, and <code>CustomerErased</code>
           (<code>Source/Modules/Identity/MMCA.Store.Identity.Shared/Customers/IntegrationEvents/CustomerErased.cs:22</code>)
           in Identity Shared), a matching <code>EventConventionTests</code> in
@@ -328,7 +331,17 @@
           repo that is not published) gating its <code>ProductCreatedIntegrationEvent</code> and
           <code>OrderPlacedIntegrationEvent</code>. The earlier Helpdesk gap (the rule was once subclassed only in ADC and
           Store) is <strong>closed</strong>: every concrete integration event across the four consumer trees is enforced, and
-          so is the framework&#39;s own.</li>
+          so is the framework&#39;s own. One qualification: the <code>MMCA.ECommerce</code> sample pins
+          <code>MMCA.Common.Testing.Architecture</code> <code>1.142.0</code> (<code>MMCA.ECommerce/Directory.Packages.props:123</code>), so in
+          package mode it runs the rule set of that release rather than the current one: the 1.142.0 base
+          carries only the SchemaVersion, inherit and namespace rules, so it runs neither the <code>[EventName]</code>
+          rule nor the two ADR-090 upcaster rules. (With a <code>local.props</code> from <code>local.props.template</code>, which
+          sets <code>UseLocalMMCA=true</code>, <code>MMCA.ECommerce/Directory.Build.targets:71</code> swaps in the current
+          <code>Testing.Architecture</code> source instead; no <code>local.props</code> exists in that tree today.)</li>
+          <li>In a module-bearing map the shared event scan covers only module assemblies, so framework-shipped
+          events such as <code>OutputCacheEvictionRequested</code> are gated in Common&#39;s own build and not re-gated in
+          consumer runs (<code>IntegrationEvents(map)</code> at
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.Events.cs:155-164</code>).</li>
           <li>A get-only <code>SchemaVersion</code> is informational on the wire (it round-trips out, not back in): intentional
           (version is a property of the type, not per-instance data), but it means you read it off the concrete
           type/JSON, not by mutating it.</li>
@@ -404,6 +417,40 @@
           <a href="003-outbox-dual-dispatch.html">ADR-003</a>; the Context is left as decision-time framing.</li>
           <li>All other anchors in the live sections were re-verified against current source and still hold.</li>
           </ul>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. The versioning policy, the upcaster rule and the payload-purity
+          amendment are unchanged; the convention base gained a rule and several anchors moved.</p>
+          <ol>
+          <li><code>EventConventionTestsBase</code> now surfaces three event-shape companion rules, not two (beside the
+          SchemaVersion rule at <code>:15</code> and the two ADR-090 upcaster rules at <code>:27</code> and <code>:30</code>): beside the inherit rule
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Contracts/EventConventionTestsBase.cs:18</code>)
+          and the namespace rule (<code>:24</code>) sits <code>IntegrationEvents_ShouldDeclare_EventName</code> (<code>:21</code>), whose
+          body <code>IntegrationEventsDeclareEventName</code> is at
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.Events.cs:33</code>.
+          Decision item 1 now names it.</li>
+          <li>The <code>MMCA.ECommerce</code> sample pins <code>MMCA.Common.Testing.Architecture</code> <code>1.142.0</code>
+          (<code>MMCA.ECommerce/Directory.Packages.props:123</code>), so in package mode it runs that release&#39;s rule
+          set (no <code>[EventName]</code> rule, no upcaster rules) rather than the current one; source mode via
+          <code>local.props</code> would swap in current source (<code>MMCA.ECommerce/Directory.Build.targets:71</code>). The
+          Trade-offs entry now says so and no longer claims the consumer trees run identical rules.</li>
+          <li>In a module-bearing map, <code>IntegrationEvents(map)</code> scans only module assemblies
+          (<code>ArchitectureRules.Events.cs:155-164</code>), so framework-shipped events are gated in Common&#39;s own
+          build and not in consumer runs; recorded as a Trade-offs entry.</li>
+          <li>The 2026-10-06 Revision&#39;s closing line (&quot;all other anchors ... still hold&quot;) did not hold: the three
+          Store event anchors below were already off. That revision is left as recorded.</li>
+          <li>Anchors re-verified against current source:<ul>
+          <li>Outbox serialization call: <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:149</code>
+          (was <code>:142</code>); serializer options still at <code>:17-20</code>; the stored name from
+          <code>EventNameResolver.GetStorageName</code> is at <code>:148</code>.</li>
+          <li><code>IntegrationEventsResideInSharedIntegrationEventsNamespace</code>: <code>ArchitectureRules.Events.cs:44-54</code>
+          (was <code>:28-33</code>), with <code>enforceSharedLayer = map.ModuleNames.Count &gt; 0</code> at <code>:47</code>.</li>
+          <li><code>ProductVariantChanged</code>: <code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Products/IntegrationEvents/ProductVariantChanged.cs:34</code>
+          (was <code>:41</code>); <code>ProductInfoChanged</code>: <code>ProductInfoChanged.cs:27</code> (was <code>:31</code>); <code>OrderFulfilled</code>:
+          <code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Shared/Orders/IntegrationEvents/OrderFulfilled.cs:24</code>
+          (was <code>:28</code>). <code>CustomerErased.cs:22</code> still holds.</li>
+          </ul>
+          </li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -422,6 +469,7 @@
             <li><a href="#amendment-2026-09-11-integration-event-payload-purity">Amendment (2026-09-11): integration-event payload purity</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             </ul>
           </nav>
         </aside>

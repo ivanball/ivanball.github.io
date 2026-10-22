@@ -1,7 +1,7 @@
 # ADR-027: Multi-Locale Internationalization (Supersedes ADR-011)
 
 ## Status
-Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, 2026-07-09, 2026-07-29, and 2026-09-15: the MudBlazor localization interceptor is replaced so no dependency assigns the current culture on a hybrid head; corrected 2026-08-01: the pseudo-locale CI gate is required on all three browser engines, and the hybrid applier sets only the thread defaults; revised 2026-10-01: four statements corrected to match the code; revised 2026-10-06: displayed times follow the viewer's clock except a conference schedule, which follows the event's own time zone (Decision 11), and client-synthesized HTTP failures localize by error code; revised 2026-10-07: when the caller supplies a localizer, a code-keyed client failure resolves from the framework's own `SharedResource` pair before the English fallback, and the stale "only coverage collection is chromium-only" note on the pseudo-locale gate is removed). **Supersedes [ADR-011](011-single-locale-i18n.md)** (single-locale by design).
+Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, 2026-07-09, 2026-07-29, and 2026-09-15: the MudBlazor localization interceptor is replaced so no dependency assigns the current culture on a hybrid head; corrected 2026-08-01: the pseudo-locale CI gate is required on all three browser engines, and the hybrid applier sets only the thread defaults; revised 2026-10-01: four statements corrected to match the code; revised 2026-10-06: displayed times follow the viewer's clock except a conference schedule, which follows the event's own time zone (Decision 11), and client-synthesized HTTP failures localize by error code; revised 2026-10-07: when the caller supplies a localizer, a code-keyed client failure resolves from the framework's own `SharedResource` pair before the English fallback, and the stale "only coverage collection is chromium-only" note on the pseudo-locale gate is removed). Revised 2026-10-21: Decision 10 names the server-side account-email caller of `SupportedCultures.ResolveClosest`, the `Http.{status}` key count is corrected to eleven, and anchors are refreshed. **Supersedes [ADR-011](011-single-locale-i18n.md)** (single-locale by design).
 
 ## Context
 ADR-011 recorded single-locale (en-US) as a deliberate, *revisitable* non-goal and sketched what
@@ -233,7 +233,11 @@ machine `Code`, which makes server-side error localization a keyed lookup rather
     (`MMCA.Common/Source/Core/MMCA.Common.Shared/Globalization/SupportedCultures.cs:51`, called from
     `.../MMCA.Common.UI.Maui/Globalization/MauiCultureStore.cs:43`); web heads keep the parent-culture
     matching of ASP.NET request localization (`UseCommonRequestLocalization`,
-    `.../MMCA.Common.API/Startup/WebApplicationExtensions.cs:73-93`). The active culture still reaches the services as `Accept-Language`: the
+    `.../MMCA.Common.API/Startup/WebApplicationExtensions.cs:73-93`). The one other caller is
+    server-side: the account emails resolve a recipient's stored preference through it and run the
+    composition under that `CurrentUICulture`, restoring the previous culture afterwards
+    (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/Emails/UserEmailResources.cs:34`,
+    restored at `:43`). The active culture still reaches the services as `Accept-Language`: the
     hybrid head already shares `CultureDelegatingHandler` through `AddUIShared`, so once
     `CurrentUICulture` is right, localized backend errors follow with no extra wiring.
 
@@ -241,7 +245,7 @@ machine `Code`, which makes server-side error localization a keyed lookup rather
     zone (added 2026-10-06).** Instants are stored and serialized in UTC. `MMCA.Common.UI` renders
     them on the viewer's clock through `ViewerTimeZone`
     (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Culture/ViewerTimeZone.cs:18`, registered
-    by `AddUIShared` at `.../MMCA.Common.UI/DependencyInjection.cs:190`): it reads the browser's IANA
+    by `AddUIShared` at `.../MMCA.Common.UI/DependencyInjection.cs:198`): it reads the browser's IANA
     zone once per scope through JS interop and resolves it with `TimeZoneInfo` (`:49-87`, `:122-125`);
     until then, during SSR prerender, on a host without JS, or for an id the runtime does not know,
     every conversion uses UTC (`:32`). The server's own zone is never used, because on Blazor Server
@@ -346,6 +350,28 @@ shared-resource fallback for code-keyed failures, and one Decision 8 parenthetic
    remarks) and `:407-416` (the pass-through `Localize` helper), replacing the 2026-10-06 `:19-29`
    and `:376-385`; `LocalizeError` at `:350-373` with its code branches at `:360-370` (were
    `:339-365` and `:346-362`).
+
+## Revision (2026-10-21)
+Re-verified against current source. No decision or rationale changed; Decision 10 now names the
+second caller of `SupportedCultures.ResolveClosest`, and one count recorded on 2026-10-07 is corrected.
+
+1. Decision 10: besides the hybrid head (`MauiCultureStore.cs:43`), the account emails call
+   `SupportedCultures.ResolveClosest` on the server to run their composition in the recipient's
+   stored culture
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/Emails/UserEmailResources.cs:34`, previous
+   culture restored at `:43`), so the 2026-10-01 statement that only the hybrid head calls it no
+   longer holds. No caller exists in ADC, Store or Helpdesk source.
+2. Decision 9: the framework `SharedResource` pair carries eleven `Http.{status}` keys (400, 401,
+   403, 404, 408, 409, 429, 500, 502, 503, 504), not the twelve recorded on 2026-10-07.
+3. Anchors re-verified against current source: `ViewerTimeZone` registration at
+   `.../MMCA.Common.UI/DependencyInjection.cs:198` (was `:190`); `Http.Status`
+   (`.../MMCA.Common.UI/Resources/SharedResource.resx:796`), the `Http.{status}` keys (`:799-829`),
+   `Http.TransportFailure` (`:832`) and `Http.Timeout` (`:835`), at the same lines in
+   `SharedResource.es.resx` (the 2026-10-07 `:799`, `:802-832`, `:835`, `:838` are stale);
+   `Common.Error.Load` at `SharedResource.resx:79-80` and `Common.Button.Cancel` at `:265-266` (the
+   2026-10-01 `:82-83` and `:268` are stale); the MudBlazor 9.11.0 pin at
+   `MMCA.Common/Directory.Packages.props:183` (the 2026-10-01 `:180` and 2026-10-06 `:176` are
+   stale).
 
 ## Related
 [ADR-011](011-single-locale-i18n.md) (superseded), [ADR-013](013-result-pattern.md) (the `Error.Code`

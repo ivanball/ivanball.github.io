@@ -17,6 +17,9 @@ order total the payment provider cannot charge rather than a non-positive line p
 Revised 2026-10-06: the database-per-service citation points at ADR-008 rather than ADR-005, and the
 body row-version token is scoped to the two variant discount endpoints.
 
+Revised 2026-10-21: a list-price change on a variant whose discount window has already ended is no
+longer blocked by that discount; anchors refreshed after the Catalog and Sales export moves.
+
 ## Context
 MMCA.Store sells product variants, and a variant's price is one `Money` on the variant row
 (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/ProductVariant.cs:30`).
@@ -53,14 +56,14 @@ discounting is fan-out over the same value object, all or
 nothing: `Product.SetDiscountOnAllVariants` refuses a product that has no active variant to discount
 (`Product.NoActiveVariants`, an invariant error surfaced as 400) and otherwise validates the discount
 against every active variant's list price before it touches any of them
-(`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/Product.cs:590-605`,
+(`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/Product.cs:592-607`,
 `MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/ProductInvariants.cs:114`).
 
 **The list price is preserved and the effective price is computed in one method.**
 `ProductVariant.Price` stays the list price whatever the discount says, so clearing a discount
 restores the original price with no bookkeeping. `ProductVariant.GetEffectivePrice(now)` and its
 static twin `ResolveEffectivePrice` are the single computation
-(`ProductVariant.cs:183-184,195-203`): they return the list price when there is no discount, when the window
+(`ProductVariant.cs:190-191,202-210`): they return the list price when there is no discount, when the window
 does not cover `now`, and when the stored pairing no longer resolves. Every caller goes through it:
 the DTO mapper for the read model
 (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Products/DTOs/ProductVariantDTOMapper.cs:48-49`)
@@ -103,13 +106,14 @@ the order id and the customer id from it.
 `list_price = 3` and `promotion_label = 4`
 (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Contracts/Protos/product_variants.proto:106,109`) and
 the data-subject export line gains `list_price_amount = 6` and `promotion_label = 7`
-(`MMCA.Store/Source/Services/MMCA.Store.Sales.Contracts/Protos/user_sales_export.proto:87,90`,
-`UserSalesExportService.cs:70-71`): new numbers on existing messages, which a peer built against the
+(`MMCA.Store/Source/Services/MMCA.Store.Sales.Contracts/Protos/user_sales_export.proto:93,96`,
+`UserSalesExportService.cs:71-72`): new numbers on existing messages, which a peer built against the
 previous generation ignores. The `ProductVariantChanged` integration event keeps carrying the list
-price and nothing else (`Product.cs:547-548,568-569,613-614`), so ADR-010's schema-version rule is not engaged and
-ADR-083's one-lifecycle-event-per-entity taxonomy is unchanged. The two Sales columns land NOT NULL
-with defaults plus a guarded backfill from the unit price, add-only under ADR-057
-(`MMCA.Store/Source/Hosting/MMCA.Store.Migrations.SqlServer.Sales/Migrations/20260907232734_AddOrderLineListPrice.cs:60-63`).
+price and nothing else (`Product.cs:549-550,570-571,615-616`), so ADR-010's schema-version rule is not engaged and
+ADR-083's one-lifecycle-event-per-entity taxonomy is unchanged. The two list-price columns land NOT NULL
+with defaults (`MMCA.Store/Source/Hosting/MMCA.Store.Migrations.SqlServer.Sales/Migrations/20260907232734_AddOrderLineListPrice.cs:28-44`)
+plus a guarded backfill from the unit price (`:60-63`), and `PromotionLabel` lands nullable
+(`:46-52`), add-only under ADR-057.
 
 **The effective price must stay above zero.** Sales allows a zero line price
 (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/OrderInvariants.cs:24-30`) but refuses
@@ -117,17 +121,19 @@ an order whose total the payment provider cannot charge, a zero total included, 
 written (`CheckOutHandler.cs:155-160`), so a discount that resolves to zero would produce a variant
 that can be added to a cart and fails checkout whenever it leaves the order unchargeable. Catalog refuses that pairing at the write instead: `VariantDiscount.ApplyTo` fails with
 `EffectivePriceNotPositive` (`VariantDiscount.cs:61-62,216-218,237-239`), which in practice means a
-zero-priced variant cannot carry a discount at all.
+zero-priced variant cannot carry an active or scheduled discount. A discount whose window has ended
+is not re-checked when the list price changes (`ProductVariant.cs:130-131`) and stays on the row
+(`:138`), so a variant repriced to zero can still hold an ended one, which prices nothing.
 
 The three write endpoints are gated on `catalog:pricing:manage`
 (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Authorization/CatalogPermissions.cs:29`,
-`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ProductVariantsController.cs:150-151,177-178`,
-`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ProductsController.cs:145-146`), a narrower
+`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ProductVariantsController.cs:157-158,184-185`,
+`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ProductsController.cs:164-165`), a narrower
 permission than variant management. All three take the product ETag in `If-Match` (ADR-035,
-`ProductsController.cs:147,159`); the two variant endpoints also carry the variant row version in the
+`ProductsController.cs:165,177`); the two variant endpoints also carry the variant row version in the
 body for ADR-035's `IRowVersioned` child overload (`ProductVariantSetDiscountRequest.cs:20`,
 `ProductVariantClearDiscountRequest.cs:18`), while the product-wide request carries none
-(`ProductSetDiscountRequest.cs:15-27`).
+(`ProductSetDiscountRequest.cs:15-34`).
 
 ## Rationale
 A discount that belongs to exactly one variant, is replaced rather than edited, and has no life of
@@ -166,10 +172,15 @@ a sale that ends between cart-add and checkout charges the list price, with no r
 - **No coupon codes, no category-wide or basket-level promotions, no stacking.** One discount per
   variant, replaced wholesale. A future Promotion aggregate is not foreclosed: it would resolve into
   the same `ResolveEffectivePrice` call, which is the one place a price is decided.
-- **A discount cannot be applied to a free variant, and a discounted variant's list price cannot be
-  changed to an inconsistent value.** `ChangePrice` fails rather than silently dropping the discount
-  (`ProductVariant.cs:118-134`, the failure at `:124-129`), so an admin repricing a variant on sale has to clear the discount
-  first. Failing loudly beats repricing a storefront nobody asked to reprice.
+- **A discount cannot be applied to a free variant, and the list price of a variant with an active or
+  scheduled discount cannot be changed to an inconsistent value.** `ChangePrice(price, now)` fails
+  rather than silently dropping the discount (`ProductVariant.cs:124-141`, the re-check at `:133` and
+  the failure at `:134-135`), so an admin repricing such a variant to a value the discount no longer
+  resolves against has to clear the discount first; a reprice the discount still resolves against
+  succeeds and keeps it (`:138`). A
+  discount whose window has already ended prices nothing and is skipped (`ProductVariant.cs:130-131`),
+  so an expired promotion never blocks a list-price change. Failing loudly beats repricing a
+  storefront nobody asked to reprice.
 - **Two clocks answer the same question.** The DTO's `IsActive` flag and the checkout price are both
   resolved server-side against `TimeProvider`, but at different instants, so a shopper can see a sale
   price on a page and be charged list price seconds later at a window boundary. Accepted as the cost
@@ -202,6 +213,28 @@ live in `CheckOutPreflight` (`CheckOutPreflight.cs:50-52,58-60`), and the anchor
 - Every `path:line` anchor in the live sections was re-verified against current source and re-pointed
   where it had moved (`ProductVariant.cs`, `ProductVariantService.cs`, `Product.cs`,
   `ProductsController.cs`, `Program.cs`, `SendOrderPaidEmailInternalCommandHandler.cs`).
+
+## Revision (2026-10-21)
+Re-verified against current source. The decision, the invariants and the wire and event contracts are
+unchanged; one trade-off gained a nuance and the anchors into the Catalog domain, the Catalog
+controllers and the Sales export moved.
+
+1. `ChangePrice` now takes the current instant and skips a discount whose window has already ended
+   (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/ProductVariant.cs:124,130-131`,
+   documented at `:116-118`), so the trade-off that a repricing admin must clear the discount first
+   now applies only to repricing to an inconsistent value under an active or scheduled discount. The
+   re-check against the new price is at `:133`, the failure at `:134-135`, and a consistent reprice
+   keeps the discount (`:138`). The Decision's zero-price sentence is qualified the same way.
+2. The migration sentence names its columns precisely: the two list-price columns are NOT NULL with
+   defaults
+   (`MMCA.Store/Source/Hosting/MMCA.Store.Migrations.SqlServer.Sales/Migrations/20260907232734_AddOrderLineListPrice.cs:28-44`,
+   rationale at `:12-18`), while `PromotionLabel` is nullable (`:46-52`).
+3. Anchors re-verified against current source: `ProductVariant.cs:190-191,202-210`
+   (`GetEffectivePrice`, `ResolveEffectivePrice`), `Product.cs:592-607` (`SetDiscountOnAllVariants`)
+   and `:549-550,570-571,615-616` (`ProductVariantChanged` with the list price),
+   `user_sales_export.proto:93,96`, `UserSalesExportService.cs:71-72`,
+   `ProductVariantsController.cs:157-158,184-185`, `ProductsController.cs:164-165,177`, and
+   `ProductSetDiscountRequest.cs:15-34` (still no row-version member).
 
 ## Related
 - [ADR-006](006-database-per-service.md), [ADR-008](008-service-extraction-topology.md): each service

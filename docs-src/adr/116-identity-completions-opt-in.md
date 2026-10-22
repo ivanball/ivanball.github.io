@@ -8,6 +8,7 @@ routeless administration component). Revised 2026-10-01 (item 10 now records tha
 ships the email confirmation page; see Revision below). Revised 2026-10-06: item 13 records versioned
 Terms of Service acceptance as a fifth opt-in completion of the same shape (see Revision below).
 Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
+Revised 2026-10-21: anchors refreshed after the v1.250.0 release.
 Layers stored permission grants over
 [ADR-020](020-permission-based-authorization.md)'s compiled registry and extends the shared sign-in
 workflow of [ADR-050](050-jwt-refresh-token-rotation.md) with optional collaborators.
@@ -45,8 +46,8 @@ either be too thin to use or force fields an app has no column for.
 **Sign-in is a chain no consumer can afford to have changed under it.** ADC and Store both run their
 production sign-in through the shared base. A new mandatory step in that chain is a behaviour change
 in a deployed system, and the framework's own history says so: the 1.188.0 release needed an
-`UPGRADING.md` section with eight items (`MMCA.Common/UPGRADING.md:803`), one of which (the fallback
-authorization policy, item 1 at `:809`) broke unannotated endpoints.
+`UPGRADING.md` section with eight items (`MMCA.Common/UPGRADING.md:1219`), one of which (the fallback
+authorization policy, item 1 at `:1225`) broke unannotated endpoints.
 
 **Pages are where apps diverge most.** The framework ships credential pages in `MMCA.Common.UI`, and
 their existence is already the exception rather than the rule. A two-factor enrollment page has to
@@ -74,7 +75,7 @@ same one.**
    `IOptions<EmailConfirmationSettings>? emailConfirmationSettings = null`
    (`.../Auth/AuthenticationServiceBase.cs:70-71`), the optional trailing-parameter shape
    `ChangePasswordHandlerBase` uses for its `TimeProvider? timeProvider = null`
-   (`.../Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:48`). `ChallengeSecondFactorAsync` (`:530`) answers `NotEnrolled` outright when no
+   (`.../Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:62`). `ChallengeSecondFactorAsync` (`:530`) answers `NotEnrolled` outright when no
    authenticator was supplied (`:534-535`), so an unadopted consumer pays not even a query, and every
    existing subclass keeps compiling because it simply passes fewer arguments.
 
@@ -113,7 +114,7 @@ same one.**
    `.../Infrastructure/DependencyInjection.Auth.cs:147`), and `ApplicationDbContext` resolves that marker
    with `GetService` and maps the table only when it is present AND this context instance targets the
    physical source named by `Authentication:PermissionGrants:DataSourceName`
-   (`.../Persistence/DbContexts/ApplicationDbContext.cs:914-919`, applied at `:937-945`). No consumer calls the model-builder
+   (`.../Persistence/DbContexts/ApplicationDbContext.cs:920-925`, applied at `:943-951`). No consumer calls the model-builder
    extension by hand, a host that never opts in keeps a byte-identical model, and the other databases
    in an opted-in host stay unchanged because one database owns the rows (the refresh-session
    precedent).
@@ -135,14 +136,14 @@ same one.**
 
 7. **The administration API is two controller bases over two services, one of which ships filled in.**
    `UsersAdminControllerBase<TUserDto>`
-   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Administration/UsersAdminControllerBase.cs:49`)
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Administration/UsersAdminControllerBase.cs:43`)
    takes a consumer-implemented `IUserAdministrationService<TUserDto>`
-   (`.../Auth/Administration/IUserAdministrationService.cs:24`), because only the app knows its user
+   (`.../Auth/Administration/IUserAdministrationService.cs:25`), because only the app knows its user
    table. `RolesAdminControllerBase` takes `IRoleAdministrationService`
    (`.../Auth/Administration/IRoleAdministrationService.cs:29`), which the framework CAN implement in
    full because both halves are framework-owned, so `AddStoredPermissionGrants` registers a default.
    Both bases are gated on capabilities, not role names
-   (`.../Controllers/Administration/UsersAdminControllerBase.cs:48`,
+   (`.../Controllers/Administration/UsersAdminControllerBase.cs:42`,
    `.../Controllers/Administration/RolesAdminControllerBase.cs:60`), against
    `AdministrationPermissions.ManageUsers` / `ManageRoles`
    (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/Permissions/AdministrationPermissions.cs:18`,
@@ -169,7 +170,7 @@ same one.**
 9. **One new package, in Infrastructure only.** `Otp.NET` (MIT, netstandard2.0, no transitive graph)
    supplies the RFC 6238 grammar and the Base32 alphabet, which the BCL has no primitive for. It is
    referenced by `MMCA.Common.Infrastructure` alone
-   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj:79`, used by
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj:82`, used by
    `.../Auth/TwoFactor/TotpTwoFactorService.cs:35`); Application, Domain and Shared stay
    dependency-free, matching the `Cronos` precedent.
 
@@ -186,20 +187,20 @@ same one.**
     `RoleAdminList`
     (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Administration/RoleAdminList.razor.cs:28`),
     `RoleAdminEdit` (`.../Pages/Administration/RoleAdminEdit.razor.cs:36`) and `UserAdminList<TUser>`
-    (`.../Pages/Administration/UserAdminList.razor.cs:47`) are components the app routes, authorizes
+    (`.../Pages/Administration/UserAdminList.razor.cs:44`) are components the app routes, authorizes
     and links for itself (`RoleAdminList.razor.cs:13-14`). They were promoted under the rule the
     framework already applies to shared components, two consumers wanting the same one. The two role
     components are non-generic because roles and permissions are strings the framework already owns,
     so there is no app DTO to name
-    (`.../Presentation/MMCA.Common.UI/DependencyInjection.cs:287-288`); the roster is generic instead,
+    (`.../Presentation/MMCA.Common.UI/DependencyInjection.cs:300-301`); the roster is generic instead,
     over an app-owned DTO that only has to implement `IUserAdminDTO`
-    (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/Administration/IUserAdminDTO.cs:15`), which is
+    (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/Administration/IUserAdminDTO.cs:25`), which is
     the one place a routeless component still names app shape. The role pair talks to the controller
     base through `IRoleAdminUIService`
     (`.../UI/Services/Administration/IRoleAdminUIService.cs:22`) and its typed-client implementation
     `RoleAdminService` (`.../UI/Services/Administration/RoleAdminService.cs:25-28`), registered by
-    `AddRoleAdministrationUI()` (`.../UI/DependencyInjection.cs:294`); the roster registers through
-    `AddUserAdministrationUI<TUserDto>()` (`.../UI/DependencyInjection.cs:268`). An app that serves no
+    `AddRoleAdministrationUI()` (`.../UI/DependencyInjection.cs:307`); the roster registers through
+    `AddUserAdministrationUI<TUserDto>()` (`.../UI/DependencyInjection.cs:281`). An app that serves no
     role-administration endpoints registers nothing and renders neither role component, and an app
     that serves no `Admin/Users` endpoints never renders the roster.
 
@@ -257,7 +258,7 @@ same one.**
     service, and it routes a subclass of `LegalAcceptanceControllerBase`
     (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Legal/LegalAcceptanceControllerBase.cs:45`).
     The version is the server's: at registration the client sends only an `AcceptedTerms` flag and the
-    server stamps its own configured version (`MMCA.Common/CHANGELOG.md:230`), a `POST` naming any
+    server stamps its own configured version (`MMCA.Common/CHANGELOG.md:549`), a `POST` naming any
     other version is refused with `Legal.VersionNotCurrent`
     (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Legal/LegalAcceptancePolicy.cs:33`), and
     both controller answers pass through `LegalAcceptancePolicy.Normalize` (`:47`), which re-derives
@@ -266,12 +267,12 @@ same one.**
     (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/Legal/TermsAcceptanceGate.razor.cs:29`)
     is a layout component the host adds itself; its dialog cannot be dismissed (no backdrop click,
     Escape, close on navigation or close button, `:39-42`), so a user whose accepted version is no
-    longer current re-accepts or signs out. It shipped in 1.223.0 (`MMCA.Common/CHANGELOG.md:224`).
+    longer current re-accepts or signs out. It shipped in 1.223.0 (`MMCA.Common/CHANGELOG.md:543`).
     MMCA.ADC adopts it
-    (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:241`,
+    (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:242`,
     `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:35`,
     `.../Identity.API/Controllers/LegalAcceptanceController.cs:28`,
-    `.../Identity.UI/IdentityUIModule.cs:40`); MMCA.Store and MMCA.Helpdesk do not.
+    `.../Identity.UI/IdentityUIModule.cs:33`); MMCA.Store and MMCA.Helpdesk do not.
 
 ## Rationale
 Six shapes were considered for these four capabilities, and each rejection is what produced the
@@ -321,7 +322,7 @@ opt-in posture above:
 - Adopting the `PermissionGrants` table is a migration in the consumer's Identity database, as
   `RefreshSessions` was. `AddStoredPermissionGrants(configuration)` is what maps it, and only in the
   context whose physical source `Authentication:PermissionGrants:DataSourceName` names
-  (`.../Persistence/DbContexts/ApplicationDbContext.cs:914-919`), so a host that never opts in gets no
+  (`.../Persistence/DbContexts/ApplicationDbContext.cs:920-925`), so a host that never opts in gets no
   table in any of its databases and an opted-in host gets it in exactly one.
 - A permission granted by a stored row reaches another service only through a token claim, so it lands
   on the holder's next sign-in rather than within `CacheSeconds`. That is the same latency a role
@@ -374,6 +375,33 @@ moved.
    `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Permissions/IPermissionGrantCache.cs:53`;
    and in item 13 the server-stamped version is `MMCA.Common/CHANGELOG.md:230` and the 1.223.0
    release is `MMCA.Common/CHANGELOG.md:224`. Items 5, 6, 8 and 13 and the Trade-offs now cite these.
+
+## Revision (2026-10-21)
+Re-verified against current source. The decision, the five opt-in completions and their behaviour
+are unchanged: `ChangePasswordHandlerBase` still takes `TimeProvider? timeProvider = null` as its
+optional trailing parameter, `ApplicationDbContext` still maps the grant table only when the
+`PermissionGrantModelGate` marker resolves AND the context targets the source named by
+`Authentication:PermissionGrants:DataSourceName`, and MMCA.ADC still adopts Terms of Service
+acceptance while MMCA.Store and MMCA.Helpdesk still do not. Only line anchors moved.
+
+1. Anchors re-verified against current source: the 1.188.0 section is `MMCA.Common/UPGRADING.md:1219`
+   and its item 1 `:1225`; the optional `TimeProvider` is
+   `.../Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:62`; the gate logic is
+   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:920-925`,
+   applied at `:943-951`; `UsersAdminControllerBase` is
+   `MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Administration/UsersAdminControllerBase.cs:43`
+   with its capability gate at `:42`, and `IUserAdministrationService` is
+   `.../Auth/Administration/IUserAdministrationService.cs:25`; `Otp.NET` is referenced at
+   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj:82`;
+   `UserAdminList<TUser>` is `.../Pages/Administration/UserAdminList.razor.cs:44`, `IUserAdminDTO` is
+   `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/Administration/IUserAdminDTO.cs:25`, and in
+   `MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs` the non-generic rationale
+   is `:300-301`, `AddRoleAdministrationUI` `:307` and `AddUserAdministrationUI<TUserDto>` `:281`; in
+   item 13 the server-stamped version is `MMCA.Common/CHANGELOG.md:549` and the 1.223.0 release
+   `:543`, and MMCA.ADC registers `AddLegalAcceptance` at
+   `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:242` and `TermsAcceptanceGate` at
+   `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.UI/IdentityUIModule.cs:33`. The Context,
+   items 2, 5, 7, 9, 10 and 13 and the Trade-offs now cite these.
 
 ## Related
 [ADR-020](020-permission-based-authorization.md) (the compiled role-to-permission registry stored

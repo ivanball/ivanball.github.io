@@ -19,6 +19,10 @@ the shape sweep finds 35 lifecycle events across the three apps (25 in ADC, of w
 Conference; 9 in Store; 1 in Helpdesk).
 Revised 2026-10-06: `Session` now raises `SessionChanged` from four sites (a second `Updated` from
 `UnassignRoom`), and the stale source citations were re-anchored.
+Revised 2026-10-21: the list of integration-event fitness rules now names the `[EventName]`,
+`*.IntegrationEvents` namespace, upcaster and payload-purity rules, records the domain-free purity
+rule as a partial enforcer of the Shared-typed wire discriminator, and the contract snapshot
+builder citation was re-anchored after the `[EventName]` rule landed above it.
 
 ## Context
 ADR-003 decides how a domain event **moves**: captured into the outbox inside `SaveChangesAsync`,
@@ -90,7 +94,7 @@ carrying a `DomainEntityState` discriminator; handlers filter on `State`.
   and stops on `Deleted`
   (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Inventory/DomainEventHandlers/ProductVariantChangedHandler.cs:56-59`).
   Because integration-event shapes are snapshot-frozen by an architecture test
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.Events.cs:40-57`),
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.Events.cs:56-73`),
   `State:ProductChangeState` is a committed line of the wire contract
   (`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Contracts/IntegrationEventContractTests.cs:12`, and
   the sibling `ProductInfoChanged` entry at `:11` carries it too),
@@ -129,8 +133,19 @@ carrying a `DomainEntityState` discriminator; handlers filter on `State`.
   be immutable (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Domain/ArchitectureRules.Immutability.cs:34-38`),
   and require integration events to inherit
   `BaseIntegrationEvent` and declare an `int SchemaVersion`
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.Events.cs:6-25`), but no
-  rule mentions `EntityChangedEvent` or the discriminator. The framework's own coverage of the base is
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.Events.cs:6-25`),
+  carry `[EventName]` (`:33-41`) and live in a `*.IntegrationEvents` namespace, inside the Shared layer
+  when the repo has modules (`:44-54`); the same base also checks the upcasters
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Contracts/EventConventionTestsBase.cs:26-30`).
+  Two purity rules require an integration event to ship from a `*.Shared` assembly and to expose no
+  type from a `.Domain` assembly on its wire shape
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.IntegrationEventPurity.cs:18-34,56-78`,
+  run by `.../Bases/Contracts/IntegrationEventPayloadPurityTestsBase.cs:38,41`, which all four repos
+  subclass). No rule mentions `EntityChangedEvent` or the discriminator. The one partial exception is
+  the domain-free rule: it rejects `DomainEntityState` (declared in `MMCA.Common.Domain`) on any
+  integration event (`ArchitectureRules.IntegrationEventPurity.cs:105-108,151-152`), so it does
+  enforce that a wire discriminator is a Shared type such as `ProductChangeState`, without checking
+  that one exists or what it is called. The framework's own coverage of the base is
   five unit tests over two test doubles, one `int`-keyed and one `Guid`-keyed
   (`MMCA.Common/Tests/Core/MMCA.Common.Domain.Tests/DomainEvents/EntityChangedEventTests.cs:10-59`,
   doubles at `:63-69`).
@@ -221,6 +236,25 @@ total number of records deriving the base to **19**.
   `:324`, `:345`), the hand-built `Unchanged` test helper (`SessionQuestionSubmittedPointsHandlerTests.cs:79,203-220`),
   the `Added` guard (`SessionQuestionSubmittedPointsHandler.cs:66-70`) and the contract snapshot builder
   (`ArchitectureRules.Events.cs:40-57`).
+
+## Revision (2026-10-21)
+Re-verified against current source. The taxonomy, the adopter counts and the frozen wire
+discriminator are unchanged; the contract snapshot builder moved down when a new integration-event
+rule was inserted above it.
+
+1. The "Nothing enforces the taxonomy" list now also names the rules that integration events carry
+   `[EventName]` (`ArchitectureRules.Events.cs:33-41`) and live in a `*.IntegrationEvents`
+   namespace (`:44-54`), the two upcaster rules (`EventConventionTestsBase.cs:26-30`) and the two
+   payload-purity rules (`ArchitectureRules.IntegrationEventPurity.cs:18-34,56-78`, wired in all
+   four repos through `IntegrationEventPayloadPurityTestsBase.cs:38,41`). No rule names
+   `EntityChangedEvent` or the discriminator, but the domain-free purity rule is a partial
+   exception: it rejects `DomainEntityState` on the wire
+   (`ArchitectureRules.IntegrationEventPurity.cs:105-108,151-152`), which enforces the Decision's
+   point that the wire discriminator is a Shared type such as `ProductChangeState`.
+2. Anchors re-verified against current source: the contract snapshot builder
+   (`ArchitectureRules.Events.cs:56-73`, keyed by `[EventName]` in `ContractKey` at `:93-105`) and the two
+   `State:ProductChangeState` contract lines (`IntegrationEventContractTests.cs:11-12`, keyed
+   `Catalog.ProductInfoChanged.v1` and `Catalog.ProductVariantChanged.v1`).
 
 ## Related
 ADR-003 (how these events are captured and dispatched; this ADR decides only their shape), ADR-010

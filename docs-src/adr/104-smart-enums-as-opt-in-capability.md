@@ -10,6 +10,8 @@ asserts (sealed, Shared-layer assembly, no public mutable setters). The rule car
 check.
 Revised 2026-10-07: Decision point 13 now separates code references from comment-only mentions of
 `Enumeration<T>`; adoption remains zero.
+Revised 2026-10-21: anchors refreshed after the Shared public-API baseline grew; the eighteen
+shipped declarations are unchanged.
 
 ## Context
 A bounded set of named values shows up everywhere in this workspace: the state that triggered a
@@ -143,8 +145,8 @@ whose members need behavior or data, and nothing in the framework pushes a consu
 
 12. **The surface is frozen public API.** Every member of the base and the factory is in
     `MMCA.Common.Shared`'s shipped baseline
-    (`MMCA.Common/Source/Core/MMCA.Common.Shared/PublicAPI.Shipped.txt:567-572`, `:763-767`,
-    `:991-993`), and both converters are in Infrastructure's
+    (`MMCA.Common/Source/Core/MMCA.Common.Shared/PublicAPI.Shipped.txt:567-572`, `:766-770`,
+    `:994-996`), and both converters are in Infrastructure's
     (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:356-357`, `:360-361`).
     Under
     ADR-015's RS0016/RS0017 gate, removing or reshaping any of it is a reviewable text diff and a
@@ -197,7 +199,7 @@ whose members need behavior or data, and nothing in the framework pushes a consu
   fails a build when a set that would benefit from behavior stays a `switch`, and nothing fails when
   a trivial set is declared as a smart enumeration.
 - **Public API surface with no consumer.** Eighteen shipped declarations across two packages
-  (`Shared/PublicAPI.Shipped.txt:567-572`, `:763-767`, `:991-993`;
+  (`Shared/PublicAPI.Shipped.txt:567-572`, `:766-770`, `:994-996`;
   `Infrastructure/PublicAPI.Shipped.txt:356-357`, `:360-361`) are frozen under ADR-015 and can only
   be removed as a breaking change.
 - **The JSON attribute does not inherit.** A concrete enumeration serialized outside `AddAPI`'s
@@ -263,6 +265,17 @@ derivations in MMCA.Common remain the five private test fixtures. One statement 
 2. Anchors re-verified against current source: `DependencyInjection.cs:59` (factory registration),
    `EnumerationTests.cs:122`, `:134`, `EnumerationSerializationTests.cs:111`, `:122` and
    `EnumerationValueConverterTests.cs:89` (the five fixtures), all unchanged.
+
+## Revision (2026-10-21)
+Re-verified against current source. No decision, rationale or content changed, and the shipped
+surface still holds eighteen declarations; only the Shared public-API anchors moved. No
+`PublicAPI.Unshipped.txt` carries an `Enumeration` entry.
+
+1. Anchors re-verified against current source: in Decision point 12 and the Trade-offs, the Shared
+   override block (`Equals`, `GetHashCode`, `ToString`, `CanConvert`, `CreateConverter`) now sits at
+   `MMCA.Common/Source/Core/MMCA.Common.Shared/PublicAPI.Shipped.txt:766-770` and the static block
+   (`All`, `FromName`, `FromValue`) at `:994-996`. Unchanged: Shared `:567-572` and Infrastructure
+   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:356-357`, `:360-361`.
 
 ## Related
 [ADR-037](037-field-level-encryption-at-rest.md) (the precedent for recording a shipped, tested and

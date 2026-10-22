@@ -4,7 +4,7 @@
 Accepted (2026-09-12). Extends [ADR-045](045-managed-file-storage-and-avatars.md) from images to
 documents: the framework gains a document content sniffer, a blob-name sanitizer and stored response
 headers, and ADC gains a `SessionAsset` aggregate that uses them. ADR-045's avatar-only scope
-statement ("no other managed uploads exist") is superseded by this record. Revised 2026-10-01 (the upload-options overload is abstract and the template enables on-upload malware scanning by default; see Revision below). Revised 2026-10-06: all three delete paths schedule blob removal inside the delete's transaction, so there is no post-commit tail. Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
+statement ("no other managed uploads exist") is superseded by this record. Revised 2026-10-01 (the upload-options overload is abstract and the template enables on-upload malware scanning by default; see Revision below). Revised 2026-10-06: all three delete paths schedule blob removal inside the delete's transaction, so there is no post-commit tail. Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised 2026-10-21: the file upload action now runs a claim-level pre-check that refuses a caller with neither a speaker_id claim nor the manage capability before the handler (the per-session decision stays in the handler), and anchors were refreshed.
 
 ## Context
 A speaker finishes a talk and forty people want the deck. Until now ADC's only answer was
@@ -72,7 +72,10 @@ plain `[Authorize]`
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionAssets/SessionAssetsController.cs:50`)
 and every handler re-asks `SessionAssetAccessService`
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/SessionAssets/SessionAssetAccessService.cs:22`,
-the decision at `:47`), which reads the session's own `SessionSpeakers` rows (`:132-134`). Reading
+the decision at `:47`), which reads the session's own `SessionSpeakers` rows (`:135-137`). The file
+upload action alone adds a claim-level pre-check that refuses a caller holding neither a `speaker_id`
+claim nor the capability before its handler runs (`SessionAssetsController.cs:175-182`); it settles
+no per-session question, and the link, update and delete actions have none. Reading
 the speaker list rather than the asset's `UploadedBySpeakerId` is deliberate: a co-speaker can fix a
 colleague's typo, and a speaker removed from the session loses the right immediately without any row
 being rewritten.
@@ -84,7 +87,7 @@ cannot see the session gets an **empty list**
 (`.../SessionAssets/UseCases/GetBySession/GetSessionAssetsHandler.cs:44-47`), so a guessed session id
 cannot confirm that an unannounced talk has materials. Visibility reuses the same BR-49 status
 allow-list every other public read uses, plus BR-108's published-event rule
-(`SessionAssetAccessService.cs:118-130`). A speaker or a privileged reader sees more than the public
+(`SessionAssetAccessService.cs:118-133`). A speaker or a privileged reader sees more than the public
 projection, so their response is kept out of the shared cache entry by turning cache storage off for
 that request (`SessionAssetsController.cs:90-93`).
 
@@ -122,10 +125,10 @@ safe precisely because a blob name carries a fresh asset id and therefore never 
 
 **5. Storage reuses ADR-045 with its own container, and downloads go straight to the blob.** The
 Conference service registers the same `AddAzureBlobFileStorage`
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:359`) against a new **public-read
-`session-assets` container** on the existing storage account (`MMCA.ADC/infra/main.bicep:1328-1334`,
-container name injected at `:2029`); the account-scoped data-plane grant already covers it, so no
-second role assignment (`:1362-1370`, comment at `:1355-1357`). The blob name is
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:361`) against a new **public-read
+`session-assets` container** on the existing storage account (`MMCA.ADC/infra/main.bicep:1478-1484`,
+container name injected at `:2185`); the account-scoped data-plane grant already covers it, so no
+second role assignment (`:1512-1520`, comment at `:1505-1507`). The blob name is
 `{eventId}/{sessionId}/{assetId}/{sanitized-file-name}`
 (`UploadSessionAssetHandler.cs:90-94`), which is what makes a public container acceptable: the GUID
 segment is unguessable, so holding one asset URL reveals nothing about any other. Attendees download
@@ -134,9 +137,9 @@ Where storage is not configured, the null default stands and an upload fails wit
 `SessionAsset.StorageNotConfigured` while links keep working (`:56-62`), which is the local-dev
 posture. Optional on-upload malware scanning (Microsoft Defender for Storage) is available behind the
 bicep parameter `enableSessionAssetMalwareScanning`, **defaulting to true**
-(`MMCA.ADC/infra/main.bicep:136`, resource at `:1382-1398`): the deploy identity's Contributor role covers
-the settings write (comment at `:1372-1381`), and the per-GB scanning cost is bounded by a
-50 GB monthly cap (`:1390`). Production diverges from the template: an `az rest` read of the
+(`MMCA.ADC/infra/main.bicep:136`, resource at `:1532-1548`): the deploy identity's Contributor role covers
+the settings write (comment at `:1522-1531`), and the per-GB scanning cost is bounded by a
+50 GB monthly cap (`:1540`). Production diverges from the template: an `az rest` read of the
 account's `defenderForStorageSettings/current` on 2026-10-01 returned Defender for Storage enabled
 but `malwareScanning.onUpload.isEnabled=false` (`capGBPerMonth=-1`). It is defence in depth behind the content gate, not the primary
 control.
@@ -179,7 +182,7 @@ terminates the request before the service sees it and has no endpoint to hang an
 body-size raise there is **path-scoped to `/SessionAssets/file` alone**
 (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:207-226`), not global: every other route keeps
 its default budget. The gateway's forwarding route itself is anonymous, as every gateway route is
-(`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:219-223`).
+(`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:221-225`).
 
 **UI.** Speakers and organizers manage a session's materials through
 `Conference.UI/Pages/SessionAssets/SessionAssetsPanel.razor`, hosted on both the speaker dashboard
@@ -260,8 +263,14 @@ an attendee "materials posted" notification on a bookmarked session.
   two numbers have to be changed together.
 - **Two authorization shapes now live in one module.** Every other Conference controller is readable
   from its attributes; this one is not, because half its rule is data. The handlers are the authority
-  and the controller only stamps the claim, which is correct and is also the kind of thing a reviewer
-  scanning attributes will miss. The architecture test that pins the anonymous surface names the list
+  for the per-session decision and the controller stamps the claim; the one thing it decides itself
+  is a claim-level pre-check on the file upload, which refuses a caller holding neither a
+  `speaker_id` claim nor the manage capability before the 50 MB buffer, the sniff and the handler run
+  (`SessionAssetsController.cs:175-182`). It does not stop the upload being buffered: MVC form binding
+  has already spooled the multipart body to a temp file before the action runs, and refusing earlier
+  needs a claim-level policy evaluated before binding, which the source records as a follow-up
+  (`:172-174`). That split is correct and is also the kind of thing a
+  reviewer scanning attributes will miss. The architecture test that pins the anonymous surface names the list
   action explicitly for that reason.
 - **A speaker can publish to the public web with no review.** The capability model deliberately gives
   a session's speakers the same authority an organizer has over that session. The counterweights are
@@ -319,6 +328,33 @@ statement that every live-section anchor had been re-verified no longer holds fo
    `:1372-1381`); the v1.210.0 breaking change at `MMCA.Common/CHANGELOG.md:697-698` (release
    heading `:635`); and the public download list at `PublicSessionDetail.razor:121`, after the
    `ResourceLinks` row at `:111-113`.
+
+## Revision (2026-10-21)
+Re-verified against current source. The decision, the six parts, the limits and the template's
+on-upload scanning default with the 50 GB cap are unchanged, and the recorded production read
+(2026-10-01) is not re-checked here. One trade-off wording moved, and the anchors below moved, so the
+2026-10-07 list no longer holds for them.
+
+1. The "Two authorization shapes" trade-off no longer says the controller only stamps the claim. The
+   file upload action runs a claim-level pre-check (M213) that answers `SessionAsset.Forbidden` to a
+   caller holding neither a `speaker_id` claim nor the manage capability, before the size check, the
+   format sniff and the handler
+   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionAssets/SessionAssetsController.cs:168-182`).
+   The per-session decision stays in the handlers through `SessionAssetAccessService.cs:47`. The
+   pre-check runs after MVC form binding has already buffered the multipart body to a temp file; a
+   claim-level policy evaluated before binding is a recorded follow-up (`SessionAssetsController.cs:172-174`),
+   so the trade-off states that residual. Part 2 of the decision now names the same pre-check; the link,
+   update and delete actions carry none (`:118-131`, `:240-257`, `:267-281`).
+2. Anchors re-verified against current source: the Conference service registration
+   `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:361`; the public-read container
+   `MMCA.ADC/infra/main.bicep:1478-1484` (name `:1480`, `publicAccess: 'Blob'` `:1482`), its
+   container name injected at `:2185`; the account-scoped grant `:1512-1520` with its coverage
+   comment at `:1505-1507`; the scanning resource `:1532-1548` (cap `:1540`, Contributor comment
+   `:1522-1531`), its parameter default still at `:136`; the gateway route
+   `MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:221-225`; the speaker check
+   `SessionAssetAccessService.cs:135-137` and the public visibility rule `:118-133`; the v1.210.0
+   breaking change at `MMCA.Common/CHANGELOG.md:1016-1017` (release heading `:954`); and the panel on
+   `SpeakerDashboard.razor:231`.
 
 ## Related
 [ADR-045](045-managed-file-storage-and-avatars.md) (the storage abstraction, the image path this

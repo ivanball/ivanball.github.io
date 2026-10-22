@@ -243,7 +243,8 @@
           <p>Accepted (2026-09-11). Supersedes <a href="052-background-job-execution.html">ADR-052</a>.
           Revised 2026-10-01: the scoring trigger&#39;s feature gate and failure path, and ADR-025&#39;s place among the framework hosted services.
           Revised 2026-10-06: the scoring trigger&#39;s event-existence 404 and the handler&#39;s current retry remarks.
-          Revised 2026-10-07: the live drain&#39;s bounded shutdown flush (complete the queue, then publish what remains within a 5-second budget) and its <code>WaitToReadAsync</code> loop.</p>
+          Revised 2026-10-07: the live drain&#39;s bounded shutdown flush (complete the queue, then publish what remains within a 5-second budget) and its <code>WaitToReadAsync</code> loop.
+          Revised 2026-10-21: anchors refreshed after the live drain, upvote handler and question submit handler moved.</p>
           <h2 id="context">Context</h2>
           <p>ADR-052 ran two different kinds of work through one mechanism: ephemeral broadcasts that must not
           put a gRPC round trip on the hot path of a vote, and an AI scoring pass that takes minutes and issues
@@ -301,8 +302,8 @@
           <li><strong>A <code>BackgroundService</code> drain per queue</strong>, <code>SingleReader</code> (<code>LiveChannelPublishQueue.cs:37</code>),
           consuming with a <code>WaitToReadAsync(stoppingToken)</code> loop. The live drain also tests the stopping
           token before each <code>TryRead</code>
-          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/Live/LiveChannelPublishProcessor.cs:85-86</code>,
-          test and <code>TryRead</code> at <code>:90</code>; the <code>BackgroundService</code> base at <code>:43</code>, registered by
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/Live/LiveChannelPublishProcessor.cs:85-90</code>,
+          test and <code>TryRead</code> at <code>:94</code>; the <code>BackgroundService</code> base at <code>:44</code>, registered by
           <code>AddHostedService&lt;LiveChannelPublishProcessor&gt;()</code> at
           <code>MMCA.ADC.Engagement.Infrastructure/DependencyInjection.cs:23</code>). The test and the read are two
           separate steps, so a stop that lands between them still dequeues one item onto a cancelled token.
@@ -310,27 +311,27 @@
           (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/Caching/BookmarkCacheEvictionProcessor.cs:56-60</code>).
           Because it is a hosted service the
           host owns the work. The drain is a singleton, so it resolves scoped services through
-          <code>IServiceScopeFactory</code> per item (<code>CreateAsyncScope</code> at <code>LiveChannelPublishProcessor.cs:126</code>).</li>
+          <code>IServiceScopeFactory</code> per item (<code>CreateAsyncScope</code> at <code>LiveChannelPublishProcessor.cs:130</code>).</li>
           <li><strong>Shutdown flushes rather than drops, inside one bounded budget.</strong> The live drain overrides
-          <code>StopAsync</code> (<code>LiveChannelPublishProcessor.cs:52-78</code>): it completes the queue first (<code>:56</code>), so the
+          <code>StopAsync</code> (<code>LiveChannelPublishProcessor.cs:53-82</code>): it completes the queue first (<code>:57</code>), so the
           remaining items are a finite set, then gives the whole stop one <code>ShutdownDrainBudget</code> of 5 seconds
-          (<code>:49</code>, applied at <code>:58</code>). Within that budget it cancels the stopping token and waits for
-          <code>ExecuteAsync</code> to return (<code>base.StopAsync</code> at <code>:63</code>). That cancellation aborts the publish in
-          progress rather than letting it finish: the drain publishes on the stopping token (<code>:92</code>),
+          (<code>:50</code>, applied at <code>:59</code>). Within that budget it cancels the stopping token and waits for
+          <code>ExecuteAsync</code> to return (<code>base.StopAsync</code> at <code>:67</code>). That cancellation aborts the publish in
+          progress rather than letting it finish: the drain publishes on the stopping token (<code>:96</code>),
           <code>BestEffort</code> passes it through and rethrows the cancellation
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/BestEffort.cs:57-63</code>), and the gRPC
           adapter forwards it to the call and turns <code>Cancelled</code> into an <code>OperationCanceledException</code>
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Contracts/LiveChannelPublisherGrpcAdapter.cs:49-53</code>).
           That item was already dequeued, so it is lost. Then, only if
           the worker has let go of the single reader, publishes the remaining items in FIFO order on its own
-          token (<code>DrainRemainingAsync</code> at <code>:70</code>, defined at <code>:105</code>), because the stopping token is already
+          token (<code>DrainRemainingAsync</code> at <code>:74</code>, defined at <code>:109</code>), because the stopping token is already
           cancelled. Anything still queued when the budget runs out is counted and logged as a <code>Warning</code>
-          (<code>:73-77</code>, message at <code>:136-139</code>) and abandoned. The flush is best effort: it narrows the loss at a
+          (<code>:77-81</code>, message at <code>:140-143</code>) and abandoned. The flush is best effort: it narrows the loss at a
           deploy or scale-in, it does not make the queue durable.</li>
           <li><strong>One failure posture per drain, stated once.</strong> Each item runs inside <code>BestEffort.ExecuteAsync</code>
-          (<code>LiveChannelPublishProcessor.cs:121</code>) so one failed publish cannot kill the loop, and shutdown
+          (<code>LiveChannelPublishProcessor.cs:125</code>) so one failed publish cannot kill the loop, and shutdown
           cancellation is handled on its own arm that returns quietly instead of recording an error
-          (<code>:96-101</code>, with a second arm for an exhausted budget in <code>DrainRemainingAsync</code> at <code>:114-117</code>).</li>
+          (<code>:100-105</code>, with a second arm for an exhausted budget in <code>DrainRemainingAsync</code> at <code>:118-121</code>).</li>
           <li><strong>Post-commit work is enqueued after the write is durable, never beside it.</strong> The failure this
           rules out is enqueuing while the write can still be undone, which leaves the queued work describing
           state that never persisted. Two shapes satisfy it and both are in use:<ul>
@@ -340,9 +341,9 @@
           (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/LivePolls/DomainEventHandlers/LivePollVoteChangedHandler.cs:41</code>)
           and enqueues at <code>:79</code>; <code>SessionQuestionUpvoteChangedHandler</code> implements
           <code>IDomainEventHandler&lt;SessionQuestionUpvoteChanged&gt;</code>
-          (<code>.../SessionQuestions/DomainEventHandlers/SessionQuestionUpvoteChangedHandler.cs:42</code>) and
-          enqueues at <code>:80</code>. Both are singletons that open their own scope (<code>:53</code>, <code>:54</code>) and wrap the work
-          in <code>BestEffort.ExecuteAsync</code> (<code>:51</code>, <code>:52</code>).</li>
+          (<code>.../SessionQuestions/DomainEventHandlers/SessionQuestionUpvoteChangedHandler.cs:44</code>) and
+          enqueues at <code>:87</code>. Both are singletons that open their own scope (<code>:53</code>, <code>:56</code>) and wrap the work
+          in <code>BestEffort.ExecuteAsync</code> (<code>:51</code>, <code>:54</code>).</li>
           <li><em>From the command handler side of a non-transactional command, once its save has returned.</em>
           <code>TransactionalCommandDecorator</code> wraps only commands implementing <code>ITransactional</code> and passes
           everything else straight through
@@ -362,12 +363,12 @@
           branch (<code>:140</code>, <code>:154</code>).</li>
           <li><em>One site keeps the ordering by hand, and the rule is stated in its own terms.</em>
           <code>SubmitQuestionHandler</code> implements <code>ICommandHandler&lt;SubmitQuestionCommand, Result&lt;SessionQuestionDTO&gt;&gt;</code>
-          directly (<code>.../SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs:38</code>), so it owns its
+          directly (<code>.../SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs:39</code>), so it owns its
           sequence. Its save is not inline: the count-decide-insert-save sequence runs inside
-          <code>CreateUnderClaimAsync</code> under a per-<code>(session, user)</code> <code>IDistributedLock</code> claim (<code>:147-149</code>,
-          <code>SaveChangesAsync</code> at <code>:184</code>), and <code>HandleAsync</code> calls that helper at <code>:91</code>, logs at <code>:97</code> and
-          awaits <code>EnqueueSubmittedAsync(question)</code> at <code>:99</code>, whose <code>BestEffort.ExecuteAsync</code> body
-          (<code>:205-206</code>) writes the queue at <code>:217-218</code> (approved) and <code>:232-233</code> (pending count). The rule a
+          <code>CreateUnderClaimAsync</code> (<code>:148</code>) under a per-<code>(session, user)</code> <code>IDistributedLock</code> claim (<code>:154</code>,
+          <code>SaveChangesAsync</code> at <code>:190</code>), and <code>HandleAsync</code> calls that helper at <code>:97</code>, logs at <code>:103</code> and
+          awaits <code>EnqueueSubmittedAsync(question)</code> at <code>:105</code>, whose <code>BestEffort.ExecuteAsync</code> body
+          (<code>:211-212</code>) writes the queue at <code>:223</code> (approved) and <code>:238</code> (pending count). The rule a
           future edit has to keep is therefore <strong>the enqueue stays below the <code>CreateUnderClaimAsync</code> call</strong>,
           not below a save statement in the same method.</li>
           </ul>
@@ -410,7 +411,7 @@
           crash, a stop that outlasts the budget, or a write after the queue is completed still loses
           items, and even a stop well inside the budget loses the item being published when it lands,
           because the stopping token cancels that publish and nothing retries it
-          (<code>LiveChannelPublishProcessor.cs:63</code>, <code>:92</code>, <code>:96-101</code>). Accepted because
+          (<code>LiveChannelPublishProcessor.cs:67</code>, <code>:96</code>, <code>:100-105</code>). Accepted because
           every job left here is ephemeral by definition. Work that must survive a crash belongs in the
           outbox (ADR-003) or the internal-command queue (ADR-114), not here.</li>
           <li><strong>Drops are silent at the call site.</strong> The producer has no way to know, and the counter
@@ -421,7 +422,7 @@
           needs its own queue rather than a wider reader, or ordering is lost.</li>
           <li><strong>One post-save ordering is remembered rather than enforced.</strong> The three base-class handlers cannot
           express the wrong order, but <code>SubmitQuestionHandler</code> can: an edit that lifted its enqueue above the
-          <code>CreateUnderClaimAsync</code> call (<code>SubmitQuestionHandler.cs:91</code>, <code>:99</code>) would broadcast a question that
+          <code>CreateUnderClaimAsync</code> call (<code>SubmitQuestionHandler.cs:97</code>, <code>:105</code>) would broadcast a question that
           may never have persisted, and no test or analyzer catches that shape.</li>
           <li><strong>Choosing this over ADR-114 is a per-job judgement.</strong> Putting must-run work on a <code>DropOldest</code>
           channel loses it silently, and putting a broadcast through a durable command pays a row, a poll
@@ -493,6 +494,33 @@
           command handler enqueue lines, and the <code>MutateEntityHandlerBase</code> (<code>:339</code>, <code>:322</code>, <code>:325</code>) and
           <code>TransactionalCommandDecorator</code> (<code>:30</code>) lines.</li>
           </ol>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. The decision, rationale and trade-offs are unchanged, and so
+          is every behavior they describe (the live drain&#39;s stop test, bounded shutdown flush and cancellation
+          arms, the post-commit enqueue in both shapes, and the <code>SubmitQuestionHandler</code> ordering rule); only
+          line numbers moved in the live drain, the upvote handler and <code>SubmitQuestionHandler</code>.</p>
+          <ol>
+          <li>Anchors re-verified against current source: in
+          <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/Live/LiveChannelPublishProcessor.cs</code>,
+          the <code>BackgroundService</code> base (<code>:44</code>), <code>ShutdownDrainBudget</code> (<code>:50</code>), <code>StopAsync</code> (<code>:53-82</code>),
+          <code>Complete()</code> (<code>:57</code>), the budget source (<code>:59</code>), <code>base.StopAsync</code> (<code>:67</code>), the
+          <code>DrainRemainingAsync</code> call (<code>:74</code>, defined at <code>:109</code>), the abandon check (<code>:77-81</code>) and its
+          message (<code>:140-143</code>), <code>ExecuteAsync</code> and its <code>WaitToReadAsync</code> loop (<code>:85-90</code>), the stop test
+          and <code>TryRead</code> (<code>:94</code>), the publish on the stopping token (<code>:96</code>), the cancellation arm
+          (<code>:100-105</code>), the <code>DrainRemainingAsync</code> arm (<code>:118-121</code>), <code>BestEffort.ExecuteAsync</code> (<code>:125</code>) and
+          <code>CreateAsyncScope</code> (<code>:130</code>); in
+          <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/SessionQuestions/DomainEventHandlers/SessionQuestionUpvoteChangedHandler.cs</code>,
+          the <code>IDomainEventHandler</code> declaration (<code>:44</code>), <code>BestEffort.ExecuteAsync</code> (<code>:54</code>),
+          <code>CreateAsyncScope</code> (<code>:56</code>) and <code>Enqueue</code> (<code>:87</code>); in
+          <code>.../SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs</code>, the <code>ICommandHandler</code>
+          declaration (<code>:39</code>), <code>CreateUnderClaimAsync</code> (defined at <code>:148</code>, claim at <code>:154</code>),
+          <code>SaveChangesAsync</code> (<code>:190</code>), the helper call (<code>:97</code>), the log (<code>:103</code>), the
+          <code>EnqueueSubmittedAsync</code> call (<code>:105</code>, body at <code>:211-212</code>) and the queue writes (<code>:223</code>, <code>:238</code>).
+          Unchanged and confirmed: <code>LivePollVoteChangedHandler.cs</code> (<code>:41</code>, <code>:51</code>, <code>:53</code>, <code>:79</code>) and the
+          gRPC adapter&#39;s token forwarding and <code>Cancelled</code> mapping
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Contracts/LiveChannelPublisherGrpcAdapter.cs:49-53</code>,
+          forward at <code>:49</code>, catch at <code>:51</code>, rethrow at <code>:53</code>).</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="114-internal-commands-durable-job-queue.html">ADR-114</a> (the durable, leased, retrying queue that owns
           expensive and must-run work),
@@ -522,6 +550,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

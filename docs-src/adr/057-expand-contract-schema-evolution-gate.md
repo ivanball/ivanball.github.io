@@ -9,27 +9,29 @@ are per-module migration projects only), the guard steps are additionally gated 
 `needs.changes.outputs.code`, MMCA.Helpdesk's CI now has four jobs and one of them applies a
 migration in a generated seed app, and MMCA.Common now commits one real EF Core migration as a test
 fixture. The decision itself is unchanged. Revised 2026-10-07: anchors refreshed after the v1.233.0 release, and the
-Decision's MMCA.Store regex anchor corrected to the regex line.
+Decision's MMCA.Store regex anchor corrected to the regex line. Revised 2026-10-21: the filter case of
+an in-place index rebuild is attributed to the MMCA.ADC override marker rather than to MMCA.Store's
+CONTRIBUTING (which documents INCLUDE columns only), and anchors refreshed.
 
 ## Context
 ADR-030 decides **who** applies a migration: every service host runs `DatabaseInitStrategy = Migrate`
 and self-applies its pending EF Core migrations at startup as the sole migrator, with no deploy-step
-`sqlcmd` backstop (`MMCA.Store/.github/workflows/deploy.yml:1308-1316`,
-`MMCA.ADC/.github/workflows/deploy.yml:1442-1451`). It says nothing about what **shape** a migration
+`sqlcmd` backstop (`MMCA.Store/.github/workflows/deploy.yml:1337-1347`,
+`MMCA.ADC/.github/workflows/deploy.yml:1456-1469`). It says nothing about what **shape** a migration
 may take.
 
 That gap is load-bearing because production rollback is **revision-only**. When the post-deploy smoke
 gate fails, the deploy rolls every container app back to its previous revision with
-`az containerapp revision copy --from-revision` (`MMCA.Store/.github/workflows/deploy.yml:1493`,
-`MMCA.ADC/.github/workflows/deploy.yml:1607`). That reverts the **image** and nothing else:
+`az containerapp revision copy --from-revision` (`MMCA.Store/.github/workflows/deploy.yml:1530`,
+`MMCA.ADC/.github/workflows/deploy.yml:1625`). That reverts the **image** and nothing else:
 the new revision already migrated the database on boot, and no down-migration runs. The previous
 release therefore keeps serving traffic against the **new** schema, which is exactly the statement
-both repos' CONTRIBUTING makes (`MMCA.Store/CONTRIBUTING.md:56-59`, `MMCA.ADC/CONTRIBUTING.md:57-60`).
+both repos' CONTRIBUTING makes (`MMCA.Store/CONTRIBUTING.md:58-61`, `MMCA.ADC/CONTRIBUTING.md:58-61`).
 A `DropColumn` shipped alongside the code that stopped reading it makes the rollback path a broken
 release rather than a recovery.
 
 The existing build-time gate does not cover this. `dotnet ef migrations has-pending-model-changes`
-(`MMCA.Store/.github/workflows/deploy.yml:415-429`, `MMCA.ADC/.github/workflows/deploy.yml:437-452`)
+(`MMCA.Store/.github/workflows/deploy.yml:415-429`, `MMCA.ADC/.github/workflows/deploy.yml:450-465`)
 asserts a migration **exists** for every model change; it has no opinion on whether that migration is
 survivable one release back. The gate below is the shape rule that ADR-030 left open. It arrived in
 MMCA.ADC with the 2026-07-19 security/resilience/ops review batch (commit `adee5058`, PR #38) and was
@@ -41,7 +43,7 @@ Schema changes follow **expand/contract**, and a CI step enforces the contract h
 - **Expand now, contract later, as a written rule.** Adding nullable columns, new tables and new
   indexes is safe in any release; `DropColumn` / `DropTable` / `DropIndex` belong to a LATER release,
   once no revision that reads the old shape can still be rolled back to
-  (`MMCA.Store/CONTRIBUTING.md:61-64`, `MMCA.ADC/CONTRIBUTING.md:62-65`).
+  (`MMCA.Store/CONTRIBUTING.md:63-66`, `MMCA.ADC/CONTRIBUTING.md:63-66`).
 - **A migration ADDED by a PR may not drop without a marker.** The `Expand/contract migration guard
   (schema rollback safety)` step fails the build when a newly added migration's `Up()` matches
   `\.(DropColumn|DropTable|DropIndex)\s*(<[^>]*>)?\s*\(` and the same `Up()` body does not carry the
@@ -49,7 +51,7 @@ Schema changes follow **expand/contract**, and a CI step enforces the contract h
   `MMCA.ADC/.github/workflows/deploy.yml:234-282`, regex at `:274`). Those three operations are the entire matched set.
 - **The marker's documented format is one comment line:**
   `// EXPAND-CONTRACT-OVERRIDE: <why this drop is safe one release back>`
-  (`MMCA.Store/CONTRIBUTING.md:72-74`, `MMCA.ADC/CONTRIBUTING.md:73-75`). What the step actually
+  (`MMCA.Store/CONTRIBUTING.md:74-76`, `MMCA.ADC/CONTRIBUTING.md:74-76`). What the step actually
   enforces is looser: `grep -q 'EXPAND-CONTRACT-OVERRIDE'` over the `Up()` body
   (`MMCA.Store/.github/workflows/deploy.yml:475`, `MMCA.ADC/.github/workflows/deploy.yml:275`), so the
   token must appear inside `Up()`, but the `//` prefix, the colon and the reason text are convention,
@@ -82,14 +84,19 @@ Schema changes follow **expand/contract**, and a CI step enforces the contract h
   goes false only when every changed file is Markdown
   (`MMCA.Store/.github/workflows/deploy.yml:192-193`, `MMCA.ADC/.github/workflows/deploy.yml:138-139`), and a PR that adds a migration `.cs` file always
   sets it true.
-- **The common legitimate override is an index rebuilt in place.** Adding INCLUDE columns or a filter
-  emits a `DropIndex` immediately followed by a `CreateIndex` under the same name, which a
-  one-release-back revision reads as a superset of what it expects
-  (`MMCA.Store/CONTRIBUTING.md:76-78`). The live markers say exactly that:
+- **The common legitimate override is an index rebuilt in place.** Adding INCLUDE columns emits a
+  `DropIndex` immediately followed by a `CreateIndex` under the same name, which a one-release-back
+  revision reads as a superset of what it expects (`MMCA.Store/CONTRIBUTING.md:78-80`; MMCA.ADC's
+  CONTRIBUTING has no such paragraph). Adding a filter also drops and recreates the index under the
+  same name within one migration, though not necessarily as adjacent operations. No CONTRIBUTING
+  documents that case; ADR-095 does, for the soft-delete unique-index filter
+  (`Website/docs-src/adr/095-soft-delete-unique-indexes.md:135-153`), and each marker argues it for
+  its own index. The live markers say exactly that:
   `MMCA.Store/Source/Hosting/MMCA.Store.Migrations.SqlServer.Sales/Migrations/20260725133726_AddOutboxInboxRetentionIndexes.cs:13-17`
   (outbox pending index gains INCLUDE columns) and
   `MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Identity/Migrations/20260720031638_CommonV1120OutboxLeaseAndSoftDeleteIndexFilters.cs:14-17`
-  (unique index gains an `[IsDeleted] = 0` filter). The second legitimate case is an index replaced by
+  (unique index dropped at `:18` and recreated with an `[IsDeleted] = 0` filter at `:37-43`, two
+  `AddColumn` operations between them). The second legitimate case is an index replaced by
   a wider composite with the same leading column, reasoned out in
   `MMCA.Store/Source/Hosting/MMCA.Store.Migrations.SqlServer.Sales/Migrations/20260725044543_AddOrderStatusAndCreatedOnIndexes.cs:13-17`.
 
@@ -212,6 +219,31 @@ the live-section anchors moved again.
    model-drift gate `MMCA.ADC/.github/workflows/deploy.yml:437-452`, startup-migrate note
    `:1442-1451`, rollback `:1607`; the guard-step anchors (`:225`, `:229-232`, `:234-282`,
    `:253-266`, `:258-259`, `:270-275`) and the Markdown-only filter `:138-139` still hold.
+
+## Revision (2026-10-21)
+Re-verified against current source. No decision, rationale or behavior changed: the regex, the
+three-operation set, the `Up()`-only scan, the fail-closed diff, the Markdown-only `code` filter, the
+merge-check placement and the revision-only rollback are as recorded, and the override markers and
+migration project sets still hold. The deploy-phase anchors in both `deploy.yml` files, the MMCA.ADC
+model-drift gate and both CONTRIBUTING files moved.
+
+1. The Decision bullet on in-place index rebuilds attributed both the INCLUDE-column case and the
+   filter case to `MMCA.Store/CONTRIBUTING.md:76-78` (that paragraph now sits at `:78-80`); it covers
+   INCLUDE columns only, and MMCA.ADC's CONTRIBUTING has no equivalent. The filter case is now
+   attributed to ADR-095 and to the markers that argue it
+   (`MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Identity/Migrations/20260720031638_CommonV1120OutboxLeaseAndSoftDeleteIndexFilters.cs:14-17`),
+   and the bullet no longer says the drop and recreate are adjacent for that case (`:18`, `:37`).
+2. Anchors re-verified against current source: the startup-migrate note
+   `MMCA.Store/.github/workflows/deploy.yml:1337-1347` and `MMCA.ADC/.github/workflows/deploy.yml:1456-1469`
+   (no deploy-phase step invokes `sqlcmd`; its only uses are in the integration-test job, the
+   install at Store `:622`, ADC `:677` and the SQL Server wait at Store `:644`, ADC `:697`),
+   rollback Store `:1530`, ADC `:1625`, MMCA.ADC model-drift gate `:450-465` (MMCA.Store `:415-429`
+   still holds), the rollback statement `MMCA.Store/CONTRIBUTING.md:58-61` and
+   `MMCA.ADC/CONTRIBUTING.md:58-61`, the expand/contract bullets `:63-66` in both, the marker block
+   `:74-76` in both, the in-place rebuild paragraph `MMCA.Store/CONTRIBUTING.md:78-80`; the merge check
+   `:37-38` in both, the MMCA.Store guard-step anchors (`:431-482`, `:432`, `:458-459`, `:470-475`,
+   `:261`, `:265-271`, `:192-193`) and the MMCA.ADC guard-step anchors (`:225`, `:229-232`,
+   `:234-282`, `:258-259`, `:270-275`, `:138-139`) still hold.
 
 ## Related
 ADR-030 (decides that each service self-applies its migrations at startup, which is precisely why a

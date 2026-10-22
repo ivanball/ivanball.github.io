@@ -7,7 +7,8 @@ source citations re-anchored, and the registration path corrected. Revised 2026-
 backward-compatible `UseCommonBarcodeScanner(string, string)` overload and the paired
 `MauiBarcodeScannerService(string, string)` constructor were removed in the v1.173.0
 collapse-dual-paths wave, so the deferred-resolution delegates are now the only registration path;
-citations re-anchored and the ZXing pin updated.
+citations re-anchored and the ZXing pin updated. Revised 2026-10-21: the QRCoder pin is 1.8.1
+(bumped in v1.249.0), and the package and check-in page anchors are refreshed.
 
 ## Context
 ADC's badge check-in feature ([ADR-072](072-qr-badge-check-in-and-points.md)) needs two things that
@@ -84,9 +85,9 @@ scanning ships as an ADR-042 capability whose native half is opt-in per head.**
 - **Supported means Android or iOS.** `IsSupported` gates on `DeviceInfo.Current.Platform` (`:51-53`);
   Windows and Mac Catalyst heads keep the null behavior even after opting in.
 
-Packaging follows ADR-042 exactly: `QRCoder` 1.8.0 (MIT) is a `MMCA.Common.UI` dependency and
+Packaging follows ADR-042 exactly: `QRCoder` 1.8.1 (MIT) is a `MMCA.Common.UI` dependency and
 `ZXing.Net.Maui.Controls` 0.10.4 (MIT) a `MMCA.Common.UI.Maui` one, both pinned in
-`MMCA.Common/Directory.Packages.props` (`:187`, `:221`), and the MAUI package keeps its
+`MMCA.Common/Directory.Packages.props` (`:194`, `:228`), and the MAUI package keeps its
 windows-job build and pack.
 
 ## Rationale
@@ -132,9 +133,9 @@ windows-job build and pack.
 - **A null fallback still masks a missing registration.** This is ADR-042's recorded trade-off, and here
   it is functional rather than decorative: a MAUI head that forgets `UseCommonBarcodeScanner` gets the
   same behavior as a browser head. The mitigation is on the consumer, which is why ADC's check-in page
-  shows its scan card only when `IsSupported` is true (`CheckInScan.razor:69-93`, `ScannerAvailable`
+  shows its scan card only when `IsSupported` is true (`CheckInScan.razor:76-100`, `ScannerAvailable`
   at `CheckInScan.razor.cs:46`) and always renders a manual attendee search beside it on every head
-  (`CheckInScan.razor:113-118`, ADR-072), so the task stays completable when the scanner is absent.
+  (`CheckInScan.razor:120-125`, ADR-072), so the task stays completable when the scanner is absent.
 - **Opt-in means the platform matrix is not uniform.** A Windows or Mac Catalyst MAUI head that calls
   `UseCommonBarcodeScanner` still reports `IsSupported == false`, so "registered" and "usable" are two
   different questions a caller has to ask separately.
@@ -164,6 +165,17 @@ ZXing.Net.Maui.Controls 0.10.4).
   `ScannerAvailable => Scanner.IsSupported` at `CheckInScan.razor.cs:46`.
 - Anchors in the live sections were re-verified against current source and re-anchored
   (`QrCodeImage.razor`, `Directory.Packages.props`, `CheckInScan.razor.cs`).
+
+## Revision (2026-10-21)
+Re-verified against current source. No decision, rationale or behavior changed; the QRCoder version
+moved and the package and check-in page anchors drifted.
+1. The Packaging paragraph now records `QRCoder` 1.8.1
+   (`MMCA.Common/Directory.Packages.props:194`), bumped from 1.8.0 in v1.249.0. It is still a
+   managed, MIT-licensed `MMCA.Common.UI` dependency, so the WebAssembly reasoning is unchanged.
+2. Anchors re-verified against current source: `Directory.Packages.props:194` (QRCoder 1.8.1) and
+   `:228` (ZXing.Net.Maui.Controls 0.10.4, version unchanged); `CheckInScan.razor:76-100` (the
+   `@if (ScannerAvailable)` scan card) and `CheckInScan.razor:120-125` (the always-rendered manual
+   fallback ending in `AttendeeSearchPanel`); `CheckInScan.razor.cs:46` (`ScannerAvailable`, unmoved).
 
 ## Related
 [ADR-042](042-device-capability-abstraction.md) (the capability pattern this extends: contract in

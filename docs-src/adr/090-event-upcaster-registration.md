@@ -11,6 +11,7 @@ citations are re-anchored after the flat-namespace split): see the revision at t
 Revised 2026-10-01: citations refreshed only. Revised 2026-10-06: a terminal unresolvable-type
 miss leaves `ProcessedOn` null rather than stamping it, so the row stays listed and replayable.
 Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
+Revised 2026-10-21: anchors refreshed after the outbox releases through v1.247.0.
 
 ## Context
 ADR-010 splits event evolution into a signal and a discipline. The signal (`SchemaVersion`, a
@@ -201,6 +202,29 @@ anchors in `OutboxProcessor.cs` moved. Anchors inside the earlier revisions are 
    dead-letter counter increment is at `:845-848` with the `reason` `type_unresolvable` tag at
    `:848`. In `OutboxMessage.cs`, `FromDomainEvent` (`:133`) stores `GetStorageName` at `:141`,
    `DeserializeEvent` (`:168`) calls `ResolveEventType` (`:191`), and the fallback is at `:201`.
+   `AddEventUpcaster` remains at `DependencyInjection.Extensibility.cs:81` (singleton via
+   `TryAddEnumerable` at `:86`). The Decision section paths for `IEventUpcaster`,
+   `EventUpcasterRegistry`, `IntegrationEventConsumerExtensions` and `ArchitectureRules.Upcasters.cs`
+   are unchanged.
+
+## Revision (2026-10-21)
+Re-verified against current source. The decision, the mechanism, both delivery paths, and the
+terminal unresolvable-type behavior recorded by the 2026-10-06 revision are unchanged; line anchors
+moved in both `OutboxProcessor.cs` and `OutboxMessage.cs` (the latter after the v1.247.0 release
+added the `UserPermissions` ambient-context column to the outbox row). Anchors inside the earlier
+revisions are left as recorded.
+
+1. **Anchors re-verified against current source:** In
+   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs`,
+   the `DeserializeEvent` call is at `:572`, the `HandleUnresolvableType` call at `:575`, and the
+   method at `:1032`, with its XML doc at `:1016-1026` (`ProcessedOn` stays null, `:1022-1023`). The
+   terminal miss sets `RetryCount` to `MaxRetries` and clears `LockedUntil` at `:1047-1048`, and the
+   dead-letter counter increment is at `:1049-1052` with the `reason` `type_unresolvable` tag at
+   `:1052`. In
+   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs`,
+   `FromDomainEvent` (`:140`) stores `GetStorageName` at `:148`, `DeserializeEvent` (`:176`) calls
+   `ResolveEventType` at `:178` (defined at `:199`), and the
+   `Type.GetType(...) ?? EventNameResolver.FindTypeByDeclaredName(...)` fallback is at `:209`.
    `AddEventUpcaster` remains at `DependencyInjection.Extensibility.cs:81` (singleton via
    `TryAddEnumerable` at `:86`). The Decision section paths for `IEventUpcaster`,
    `EventUpcasterRegistry`, `IntegrationEventConsumerExtensions` and `ArchitectureRules.Upcasters.cs`

@@ -245,7 +245,9 @@
           fitness rule&#39;s subclass list was completed; see the Revision (2026-09-19) at the end). Revised
           2026-10-01 (the <code>TypeDescriptor</code> nullable-converter failure mode, the shipped public API surface and
           the <code>CheckIn</code> parameter types were corrected). Revised 2026-10-06: the <code>string</code> identity-path
-          rationale was corrected, since <code>System.String</code> does implement <code>IParsable&lt;string&gt;</code>.
+          rationale was corrected, since <code>System.String</code> does implement <code>IParsable&lt;string&gt;</code>. Revised
+          2026-10-21: the alias count is 49 (47 <code>int</code>), <code>StronglyTypedIdMappings</code> ships two conversions
+          rather than four, and the public API surface is 53 declarations rather than 55.
           <strong>Revisits <a href="048-primitive-identifier-type-aliases.html">ADR-048</a> and
           <a href="085-identifier-type-aliases-revisited.html">ADR-085</a></strong> by adding the capability those records deferred,
           without migrating anything. ADR-048&#39;s decision (every entity identity is a primitive named through a
@@ -258,13 +260,15 @@
           2026-08-18, priced the migration in numbers (44 aliases, 43 of them <code>int</code>, 3,192 occurrences across
           1,001 files, the August figures), deferred again, and replaced the open-ended &quot;not now&quot; with three
           named revisit triggers: a production defect traced to an identifier transposition, a greenfield fifth
-          consumer, or a cross-module identifier count that keeps climbing. Those numbers have moved twice
-          since. A recount of the ten <code>GlobalUsings.*IdentifierType.cs</code> files on 2026-09-19 gives <strong>48 aliases,
-          46 of them <code>int</code></strong>; the two exceptions are both <code>System.Guid</code> and both in ADC&#39;s Conference module
+          consumer, or a cross-module identifier count that keeps climbing. Those numbers keep moving. A
+          recount of the ten <code>GlobalUsings.*IdentifierType.cs</code> files on 2026-10-21 gives <strong>49 aliases, 47 of
+          them <code>int</code></strong> (the newest is ADC Engagement&#39;s <code>ErasedUserIdentifierType</code>,
+          <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/MMCA.ADC.Engagement.GlobalUsings.IdentifierType.cs:6</code>);
+          the two exceptions are both <code>System.Guid</code> and both in ADC&#39;s Conference module
           (<code>SessionAssetIdentifierType</code> and <code>SpeakerIdentifierType</code>,
           <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:17</code>
-          and <code>:23</code>). ADR-085&#39;s 2026-09-19 census puts the migration surface at 3,767 alias-carrying lines
-          across 1,192 files.</p>
+          and <code>:23</code>). The migration surface is ADR-085&#39;s figure to own: its census is re-measured at each of
+          its revisions and has grown well past the August figure.</p>
           <p><strong>None of the three has fired, and this record is not claiming otherwise.</strong> The trigger here is a
           different one: the 2026-09-09 framework gap analysis of what a .NET application framework is expected
           to ship. The strongly typed identifier is named in four separate &quot;modern .NET building blocks&quot; lists
@@ -351,16 +355,16 @@
           </li>
           <li><p><strong>One call is the whole opt-in.</strong>
           <code>services.AddStronglyTypedIds(typeof(OrderId).Assembly)</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:376</code>) scans the named
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:382</code>) scans the named
           assemblies for wrappers, registers the <code>TypeConverter</code> for each, and registers a
-          <code>StronglyTypedIdRegistry</code> singleton
+          <code>StronglyTypedIdRegistry</code> singleton through <code>TryAddSingleton</code> (<code>:391</code>)
           (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Identifiers/StronglyTypedIdRegistry.cs:22</code>). A host
           that never calls it keeps the aliases and sees no behavioural change anywhere.</p>
           </li>
           <li><p><strong>EF Core maps a wrapper as a PRE-CONVENTION type mapping, registered once on the base
           context.</strong> <code>ApplicationDbContext.ConfigureConventions</code> resolves the registry with <code>GetService</code> and
           applies it
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:406-408</code>);
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:407-409</code>);
           <code>StronglyTypedIdModelConfiguration.Apply</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Conventions/StronglyTypedIdModelConfiguration.cs:29</code>)
           declares <code>configurationBuilder.Properties(identifierType).HaveConversion(converterType, comparerType)</code>
@@ -391,7 +395,7 @@
           there is no <code>&gt;</code> to build a range predicate from, and an ordering operator on a wrapped column is
           refused by <code>ValidateFilters</code> as a 400 rather than silently widening the result set.
           <code>QueryFilterService.ResolveStrategy</code> builds and memoizes the strategy on first use
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Filtering/QueryFilterService.cs:399-417</code>),
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Filtering/QueryFilterService.cs:413-424</code>),
           so a consumer never calls <code>RegisterStrategy</code> per identifier. Sorting is untouched: an <code>ORDER BY</code>
           over a converted column is the primitive&#39;s ordering
           (<a href="034-generic-entity-query-layer.html">ADR-034</a> sort keys).</p>
@@ -411,10 +415,12 @@
           <code>IBaseDTO&lt;TIdentifierType&gt;</code> over the SAME identifier type its entity uses, so a wrapper maps to
           itself as a plain assignment. For a contract that deliberately keeps primitives on the wire,
           <code>StronglyTypedIdMappings&lt;TSelf, TValue&gt;</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Identifiers/StronglyTypedIdMappings.cs:31</code>) supplies
-          the four conversions (<code>:38</code>, <code>:43</code>, <code>:48</code>, <code>:53</code>) as plain public static methods, reached with
-          <code>[UseStaticMapper(typeof(StronglyTypedIdMappings&lt;OrderId, int&gt;))]</code>. They carry no Mapperly
-          attribute, so the Shared layer takes no dependency on <code>Riok.Mapperly.Abstractions</code>.</p>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Identifiers/StronglyTypedIdMappings.cs:36</code>) supplies
+          two conversions, <code>ToValue</code> (<code>:43</code>) and <code>ToIdentifier</code> (<code>:48</code>), as plain public static methods,
+          reached with <code>[UseStaticMapper(typeof(StronglyTypedIdMappings&lt;OrderId, int&gt;))]</code>. An optional
+          identifier needs no third method: Mapperly lifts the pair over <code>Nullable&lt;T&gt;</code> itself (<code>:25-27</code>).
+          They carry no Mapperly attribute, so the Shared layer takes no dependency on
+          <code>Riok.Mapperly.Abstractions</code>.</p>
           </li>
           <li><p><strong>A fitness rule holds the shape, and passes vacuously today.</strong>
           <code>StronglyTypedIdsAreReadonlyRecordStructs</code>
@@ -436,8 +442,8 @@
           </li>
           <li><p><strong>Adoption is zero and this record says so.</strong> No production type in MMCA.Common, MMCA.Store,
           MMCA.ADC, MMCA.Helpdesk or the MMCA.ECommerce sample implements <code>IStronglyTypedId&lt;,&gt;</code>. The only
-          implementations anywhere are the fixtures in seven of the framework&#39;s own test files. The 48
-          aliases in force across the four repositories on 2026-09-19 (46 <code>int</code>, two <code>System.Guid</code>) are
+          implementations anywhere are the fixtures in seven of the framework&#39;s own test files. The 49
+          aliases in force across the four repositories on 2026-10-21 (47 <code>int</code>, two <code>System.Guid</code>) are
           untouched, and no consumer needs a version-bump behaviour change:
           without a call to <code>AddStronglyTypedIds</code>, every framework site that reads the registry treats its
           absence as &quot;no wrappers in use&quot;.</p>
@@ -471,8 +477,8 @@
           converter. The alternative, leaving the code in place with no record, reads as unfinished adoption
           to the next reader.</li>
           <li><strong>The aliases are still right for the four repos.</strong> ADR-085&#39;s conclusion did not change, though its
-          arithmetic did: its 2026-09-19 census reports 3,767 alias-carrying lines across 1,192 files, up
-          from the 3,192 across 1,001 it priced in August. There is still no incident traced to a
+          arithmetic did: its census, re-measured at each of its revisions, has grown well past the 3,192
+          occurrences across 1,001 files it priced in August. There is still no incident traced to a
           transposition, and a partial migration is still worse than either endpoint. A surface that grows on
           its own makes the migration more expensive, not the deferral less sound. Nothing here proposes
           moving any of it.</li>
@@ -535,7 +541,7 @@
           THAN and BETWEEN are refused with a 400 where the same column as a primitive accepted them. That
           is a deliberate narrowing, and it is a behaviour difference a client would notice if a column
           changed type.</li>
-          <li><strong>Public API surface with no consumer.</strong> The 55 declarations these types add across Shared,
+          <li><strong>Public API surface with no consumer.</strong> The 53 declarations these types add across Shared,
           Infrastructure, API and Testing.Architecture are in the shipped baselines (<code>PublicAPI.Shipped.txt</code>
           in each of the four packages) and are frozen under
           <a href="015-architecture-fitness-functions.html">ADR-015</a>&#39;s RS0016/RS0017 gate.
@@ -637,6 +643,36 @@
           <code>ApplicationDbContext.cs:406-408</code>, and the transformer registration is
           <code>WebApplicationBuilderExtensions.cs:110-111</code>; <code>QueryFilterService.cs:399-417</code> still holds.</li>
           </ul>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. The decision is unchanged: the framework still ships the
+          capability, the aliases are still the default, and adoption is still zero. The alias count, the
+          Mapperly helper and the public API surface moved, and four anchors were re-pointed.</p>
+          <ol>
+          <li><strong>The alias count is 49, 47 of them <code>int</code>.</strong> ADC Engagement gained <code>ErasedUserIdentifierType = int</code>
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/MMCA.ADC.Engagement.GlobalUsings.IdentifierType.cs:6</code>),
+          taking Engagement to 11 (<code>:4-14</code>). Every other per-module count in the Revision (2026-09-19) still
+          holds, and the two <code>System.Guid</code> aliases are unmoved
+          (<code>MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:17</code> and <code>:23</code>). The Context and Decision
+          point 13 now carry 49.</li>
+          <li><strong><code>StronglyTypedIdMappings</code> supplies two conversions, not four.</strong> The class
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Identifiers/StronglyTypedIdMappings.cs:36</code>) keeps
+          <code>ToValue</code> (<code>:43</code>) and <code>ToIdentifier</code> (<code>:48</code>); the nullable pair is gone, and the doc comment
+          (<code>:25-27</code>) records that Mapperly lifts the two methods over <code>Nullable&lt;T&gt;</code> itself. Decision
+          point 11 is updated.</li>
+          <li><strong>The public API surface is 53 declarations, not 55.</strong> Shared&#39;s <code>PublicAPI.Shipped.txt</code> carries
+          32 <code>StronglyTyped</code> lines (down from 34, the removed nullable mapping pair), Infrastructure 10,
+          API 6 and Testing.Architecture 5. No <code>PublicAPI.Unshipped.txt</code> carries any of them, so the surface
+          is still all shipped. The Trade-offs bullet now says 53.</li>
+          <li><strong>The migration surface is cited by reference, not by figure.</strong> The Context and Rationale quoted
+          ADR-085&#39;s 2026-09-19 census as if current, and ADR-085 has re-measured it since. This record now
+          points at ADR-085 for the figure rather than restating one that goes stale with every alias.</li>
+          <li>Anchors re-verified against current source: <code>AddStronglyTypedIds</code> is
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:382</code> (singleton
+          registered through <code>TryAddSingleton</code> at <code>:391</code>), the registry lookup is
+          <code>ApplicationDbContext.cs:407-409</code>, <code>QueryFilterService.ResolveStrategy</code> is
+          <code>QueryFilterService.cs:413-424</code> (the <code>:399-417</code> recorded by the Revision (2026-10-06) note was
+          correct then; the method moved on 2026-10-10), and <code>StronglyTypedIdMappings.cs:36</code>.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -656,6 +692,7 @@
             <li><a href="#revision-2026-09-19">Revision (2026-09-19)</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             </ul>
           </nav>
         </aside>

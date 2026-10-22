@@ -254,7 +254,10 @@
           citations below rebased to their current lines.
           Revised 2026-09-07 (sort keys, filter keys and lookup name columns resolve against the response
           contract rather than the entity, navigation depth and lookup rows are capped, and the selector cache
-          is bounded).</p>
+          is bounded).
+          Revised 2026-10-21: the generic create now builds its <code>Location</code> itself and returns <code>Created</code>
+          rather than <code>CreatedAtRoute</code>, the filter registry also covers the <code>Email</code> value object, and the
+          fail-closed CSV export is recorded among the virtual reads; anchors refreshed.</p>
           <h2 id="context">Context</h2>
           <p>Every module exposes many entities, and most of them need the same read and write
           surface: list, page, look up for a dropdown, fetch by id, create, delete. Hand
@@ -284,13 +287,17 @@
           (<code>EntityControllerBase.cs:356</code>).</p>
           </li>
           <li><p><strong>Generic write controller.</strong> <code>AggregateRootEntityControllerBase&lt;TEntity, TEntityDTO, TIdentifierType, TCreateRequest&gt;</code>
-          (<code>Source/Presentation/MMCA.Common.API/Controllers/AggregateRootEntityControllerBase.cs:28</code>)
+          (<code>Source/Presentation/MMCA.Common.API/Controllers/AggregateRootEntityControllerBase.cs:29</code>)
           inherits all of the above and adds <code>[HttpPost]</code> create
-          (<code>AggregateRootEntityControllerBase.cs:59</code>, returning 201 <code>CreatedAtRoute</code> at
-          <code>:73</code>) and <code>[HttpDelete(&quot;{id}&quot;)]</code>
-          (<code>AggregateRootEntityControllerBase.cs:85</code>). The create action is decorated with
-          <code>[Idempotent]</code> (<code>AggregateRootEntityControllerBase.cs:60</code>) so a retried POST does
-          not create a duplicate (ADR-017).</p>
+          (<code>AggregateRootEntityControllerBase.cs:75</code>) and <code>[HttpDelete(&quot;{id}&quot;)]</code>
+          (<code>AggregateRootEntityControllerBase.cs:107</code>). The create returns 201 through
+          <code>Created(location, created)</code> (<code>AggregateRootEntityControllerBase.cs:98</code>), with the
+          <code>Location</code> resolved before the result is returned: <code>Url.Link(GetByIdRouteName, ...)</code> when
+          the named route resolves (<code>:94</code>, <code>GetByIdRouteName</code> defaulting to <code>Get{EntityName}ById</code> at
+          <code>:57</code>), otherwise the new id appended to the collection path the POST was made to (<code>:96</code>).
+          The create action is decorated with <code>[Idempotent]</code>
+          (<code>AggregateRootEntityControllerBase.cs:76</code>) so a retried POST does not create a
+          duplicate (ADR-017).</p>
           </li>
           <li><p><strong>Sparse fieldsets via <code>fields</code>.</strong> A comma-separated <code>fields</code> query parameter
           (<code>EntityControllerBase.cs:111</code>, <code>:163</code>, <code>:365</code>) drives a server-side projection:
@@ -309,17 +316,17 @@
           which parses <code>filters[Property].operator</code> / <code>filters[Property].value</code> query keys
           (<code>Source/Presentation/MMCA.Common.API/ModelBinders/QueryFilterModelBinder.cs:24</code>).
           <code>QueryFilterService.ApplyFilters</code>
-          (<code>Source/Core/MMCA.Common.Application/Services/Filtering/QueryFilterService.cs:78</code>)
-          resolves a <code>IFilterStrategy</code>
+          (<code>Source/Core/MMCA.Common.Application/Services/Filtering/QueryFilterService.cs:81</code>,
+          with a second overload at <code>:102</code>) resolves a <code>IFilterStrategy</code>
           (<code>Source/Core/MMCA.Common.Application/Services/Filtering/IFilterStrategy.cs:6</code>)
           per property CLR type from a strategy registry (string, bool, int, long, DateTime,
-          decimal, Guid and their nullables, declared at <code>QueryFilterService.cs:32</code>, entries
-          at <code>:35-47</code>), each strategy declaring its <code>SupportedOperators</code>
-          (<code>IFilterStrategy.cs:24</code>). Extra types register via
-          <code>QueryFilterService.RegisterStrategy</code> (<code>QueryFilterService.cs:62</code>); a strongly
-          typed identifier column (ADR-115) needs no registration, because <code>ResolveStrategy</code>
-          builds a <code>StronglyTypedIdFilterStrategy</code> on first use and memoizes it beside the
-          built-ins (<code>QueryFilterService.cs:406-416</code>).</p>
+          decimal, Guid and their nullables, plus the <code>Email</code> value object through
+          <code>EmailFilterStrategy</code>; declared at <code>QueryFilterService.cs:34</code>, entries at <code>:37-50</code>),
+          each strategy declaring its <code>SupportedOperators</code> (<code>IFilterStrategy.cs:24</code>). Extra types
+          register via <code>QueryFilterService.RegisterStrategy</code> (<code>QueryFilterService.cs:65</code>); a
+          strongly typed identifier column (ADR-115) needs no registration, because
+          <code>ResolveStrategy</code> (<code>QueryFilterService.cs:413</code>) builds a <code>StronglyTypedIdFilterStrategy</code>
+          on first use (<code>:421</code>) and memoizes it beside the built-ins.</p>
           </li>
           <li><p><strong>Sort.</strong> <code>sortColumn</code> / <code>sortDirection</code> (<code>EntityControllerBase.cs:161-162</code>)
           feed <code>QueryFieldService.ApplySorting</code> (<code>QueryFieldService.cs:155</code>), an
@@ -365,13 +372,13 @@
           <li><strong>Bounded dynamic querying, not open SQL.</strong> Filtering is dynamic over the wire but
           not unbounded in the engine: each property is filtered only by a registered
           <code>IFilterStrategy</code> whose <code>SupportedOperators</code> are validated before the database is
-          touched (<code>QueryFilterService.ValidateFilters</code>, <code>QueryFilterService.cs:159</code>,
-          invoked at <code>Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:301</code>),
+          touched (<code>QueryFilterService.ValidateFilters</code>, <code>QueryFilterService.cs:166</code> and <code>:182</code>,
+          invoked at <code>Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:304</code>),
           and <code>MaxUnboundedResultLimit</code> (<code>EntityQueryPipeline.cs:23</code>) plus the <code>MaxPageSize</code>
           clamp (<code>EntityControllerBase.cs:169</code>) bound the result size.</li>
           <li><strong>Composes with manual DTO mapping (ADR-001).</strong> Entities are projected to DTOs by
           an injected <code>IEntityDTOMapper</code> (<code>EntityQueryService.cs:36</code>, property at <code>:91</code>) via
-          <code>DTOMapper.MapToDTOs</code> (<code>EntityQueryService.cs:360</code>); a <code>DTOToEntityPropertyMap</code>
+          <code>DTOMapper.MapToDTOs</code> (<code>EntityQueryService.cs:361</code>); a <code>DTOToEntityPropertyMap</code>
           (<code>EntityQueryService.cs:101</code>) translates DTO field names to entity property paths
           for filter and sort, so the wire contract speaks DTO names while the engine speaks
           entity names.</li>
@@ -388,7 +395,7 @@
           <li><strong>Dynamic filtering is an injection and over-fetch surface.</strong> Arbitrary
           client-supplied property/operator/value triples are an attack surface; it is
           bounded by validating properties and operators up front
-          (<code>QueryFilterService.ValidateFilters</code>, <code>QueryFilterService.cs:159</code>), routing each
+          (<code>QueryFilterService.ValidateFilters</code>, <code>QueryFilterService.cs:166</code>), routing each
           type through its registered <code>IFilterStrategy</code> rather than free-form expression
           evaluation, and capping rows with <code>MaxUnboundedResultLimit</code>
           (<code>EntityQueryPipeline.cs:23</code>). Sparse fieldsets reject non-writable properties
@@ -398,10 +405,19 @@
           shape per entity is consistent but conveys less domain intent than a named,
           purpose-built endpoint; the query contract (filter key syntax, operators) must be
           learned once rather than read off each endpoint.</li>
-          <li><strong>Opting out means overriding the base.</strong> All four reads and the two writes are
-          <code>virtual</code> (<code>EntityControllerBase.cs:110</code>, <code>AggregateRootEntityControllerBase.cs:64</code>),
-          so a controller that needs bespoke behavior overrides the specific action rather
-          than abandoning the base, but the default surface is opt-out, not opt-in.</li>
+          <li><strong>Opting out means overriding the base.</strong> All five reads (list, paged, CSV export, lookup
+          and by-id: <code>EntityControllerBase.cs:110</code>, <code>:158</code>, <code>:257</code>, <code>:320</code>, <code>:361</code>) and the two
+          writes (<code>AggregateRootEntityControllerBase.cs:80</code>, <code>:112</code>) are <code>virtual</code>, so a controller
+          that needs bespoke behavior overrides the specific action rather than abandoning the base,
+          but the default surface is opt-out, not opt-in.</li>
+          <li><strong>The CSV export widens the inherited surface, so it fails closed.</strong> <code>ExportAsync</code>
+          (<code>EntityControllerBase.cs:257</code>) reads pages of <code>MaxPageSize</code> rows (<code>:277</code>) up to
+          <code>MaxExportRows</code> (default <code>DefaultMaxExportRows</code> 100_000, <code>EntityControllerBase.cs:472</code>),
+          announcing that ceiling in the <code>X-Export-Row-Limit</code> header (<code>:481</code>, appended at <code>:625</code>).
+          When the controller declares no row scope it refuses with a 403 carrying
+          <code>Export.RowScopeRequired</code> (<code>:273-274</code>, code at <code>:487</code>) unless <code>AllowUnscopedExport</code>
+          (<code>:508</code>, default <code>false</code>) opts in, so a controller that forgot to scope its export serves
+          no rows rather than every row.</li>
           </ul>
           <h2 id="revision-2026-09-07">Revision (2026-09-07)</h2>
           <p>The query layer&#39;s shape is unchanged. What a caller is allowed to <strong>name</strong> is not, from the
@@ -444,7 +460,7 @@
           <code>IEntityDTOMapper</code>), ADR-002 (navigation populators: the unsupported-include path),
           ADR-013 (Result pattern at the edge: every action returns through
           <code>HandleFailure(result.Errors)</code>, <code>EntityControllerBase.cs:129</code>), ADR-017 (idempotency:
-          the generic create is <code>[Idempotent]</code>, <code>AggregateRootEntityControllerBase.cs:60</code>),
+          the generic create is <code>[Idempotent]</code>, <code>AggregateRootEntityControllerBase.cs:76</code>),
           ADR-019 (rate limiting: these GET routes are the authenticated read surface the
           always-on global limiter caps per principal).</p>
           <h2 id="revision-2026-07-24">Revision (2026-07-24)</h2>
@@ -527,6 +543,40 @@
           <p>Anchors in Decision and Trade-offs were re-verified against current source and rebased
           (<code>EntityControllerBase.cs</code>, <code>QueryFieldService.cs</code>). Anchors inside the earlier Revision sections are
           left as recorded.</p>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. The two controller bases, the dynamic query contract and the
+          pipeline bounds are unchanged; the create&#39;s 201 construction, the filter type list and the read
+          surface moved.</p>
+          <ol>
+          <li><strong>The create resolves its own <code>Location</code>.</strong> <code>CreateAsync</code>
+          (<code>Source/Presentation/MMCA.Common.API/Controllers/AggregateRootEntityControllerBase.cs:80</code>)
+          returns <code>Created(location, created)</code> (<code>:98</code>) instead of <code>CreatedAtRoute</code>. The location is
+          <code>Url.Link(GetByIdRouteName, ...)</code> when that route resolves (<code>:94</code>), otherwise the new id
+          appended to the request&#39;s collection path (<code>:96</code>), so a derived controller that does not
+          declare the named route no longer turns a saved create into a 500 when the result executes
+          (rationale at <code>:67-74</code>).</li>
+          <li><strong>The filter registry covers <code>Email</code>.</strong> The built-in entries
+          (<code>Source/Core/MMCA.Common.Application/Services/Filtering/QueryFilterService.cs:37-50</code>) now
+          include <code>[typeof(Email)] = new ValueObjects.EmailFilterStrategy()</code> (<code>:50</code>); Decision item 4
+          lists it.</li>
+          <li><strong>The CSV export is part of the inherited read surface.</strong> <code>ExportAsync</code>
+          (<code>Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:257</code>) is a fifth
+          <code>virtual</code> read. It pages at <code>MaxPageSize</code> (<code>:277</code>), stops at <code>MaxExportRows</code> (default
+          100_000, <code>:472</code>), announces the ceiling in <code>X-Export-Row-Limit</code> (<code>:481</code>, appended at <code>:625</code>)
+          and refuses an unscoped export with a 403 <code>Export.RowScopeRequired</code> (<code>:273-274</code>, <code>:487</code>)
+          unless <code>AllowUnscopedExport</code> (<code>:508</code>) opts in. Trade-offs records it.</li>
+          <li>Anchors re-verified against current source: <code>AggregateRootEntityControllerBase.cs</code> class <code>:29</code>,
+          <code>[HttpPost]</code> <code>:75</code>, <code>[Idempotent]</code> <code>:76</code>, <code>[HttpDelete(&quot;{id}&quot;)]</code> <code>:107</code>, <code>DeleteAsync</code> <code>:112</code>;
+          <code>EntityControllerBase.cs</code> reads <code>:110</code>, <code>:158</code>, <code>:257</code>, <code>:320</code>, <code>:361</code>;
+          <code>QueryFilterService.cs</code> registry <code>:34</code>, <code>ApplyFilters</code> <code>:81</code> and <code>:102</code>, <code>RegisterStrategy</code>
+          <code>:65</code>, <code>ValidateFilters</code> <code>:166</code> and <code>:182</code>, <code>ResolveStrategy</code> <code>:413</code>,
+          <code>StronglyTypedIdFilterStrategy.TryCreate</code> <code>:421</code>; <code>EntityQueryService.cs</code> <code>ValidateFilters</code>
+          call <code>:304</code>, <code>MapToDTOs</code> <code>:361</code>, and (for revision 2026-09-07 item 3, left as recorded) the
+          <code>LookupNameContract</code> check at <code>:394</code>; <code>EFReadRepository.GetAllForLookupAsync</code> applies
+          <code>MaxUnboundedResultLimit</code> at
+          <code>Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:245</code>, with
+          the other <code>Take</code> at <code>:288</code>.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -548,6 +598,7 @@
             <li><a href="#revision-2026-07-25">Revision (2026-07-25)</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             </ul>
           </nav>
         </aside>

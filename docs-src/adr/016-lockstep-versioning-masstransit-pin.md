@@ -49,6 +49,11 @@ which accepted Wolverine first and a raw-SDK adapter second and rejects a commer
 Revised 2026-10-07: the emulator proving ground is restated as a five-day recency gate (a red
 nightly blocks a deploy only once the last run green on both broker jobs is stale), and the Store
 props and both `cross-service-tests.yml` anchors are rebased.
+Revised 2026-10-21: MMCA.Common #576 tightened the dependabot half of the ImageSharp pin from a
+semver-major ignore to a `>= 3.2.0` version range (of the two gated packages, only MassTransit keeps
+a semver-major ignore), and the record now discloses that source disagrees on whether ImageSharp
+3.2.0+ already needs a commercial key (the new dependabot comment) or only v4 does (the fitness
+function and the `Directory.Packages.props` comment); anchors are rebased.
 
 ## Context
 MMCA.Common publishes its `MMCA.Common.*` NuGet package set (see `FACTS.md` for the authoritative
@@ -87,25 +92,41 @@ Two related governance questions had no recorded answer:
    package reaches the major where its licensing changes (ADR-015). Two are gated today: MassTransit
    below major 9 (v9 demands `MT_LICENSE` at startup, so every broker-enabled host crashes without
    one) and `SixLabors.ImageSharp` below major 4 (v4 demands a Six Labors key at BUILD time, so its
-   MSBuild targets fail outright), each mirrored as a dependabot major-update ignore so the bump is
-   never even proposed
-   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/DependencyVersionTestsBase.cs:17-60`,
+   MSBuild targets fail outright), each mirrored as a dependabot ignore so the bump is never even
+   proposed: MassTransit by a semver-major ignore (`MMCA.Common/.github/dependabot.yml:59-60`),
+   ImageSharp by a version range, `>= 3.2.0` (`:64-65`), which is tighter than the gate
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/DependencyVersionTestsBase.cs:16-62`,
    `MMCA.Common/Directory.Packages.props:119-126`, `:134-144`, `MMCA.Common/.github/dependabot.yml:57-65`).
    MassTransit is the original instance; ImageSharp is what showed the rule generalizes.
+   Source is internally inconsistent about where ImageSharp's licensing changes. The dependabot
+   comment says v4 AND 3.2.0+ already require a commercial key at build time
+   (`MMCA.Common/.github/dependabot.yml:61-63`). Every other source places the line at v4: the
+   fitness function's documentation and failure message say v3.x stays under the Split License's
+   Apache 2.0 terms (`DependencyVersionTestsBase.cs:43`, `:58-59`) and it gates only major below 4
+   (`:55`); the package comment says Apache 2.0 terms cover this project and the pin is "to v3"
+   because v4 requires a key (`MMCA.Common/Directory.Packages.props:134-138`); and the accepted
+   advisory note speaks of "the v3 license pin" and of "a patched 3.x" as a way out
+   (`MMCA.Common/Directory.Build.props:35-36`, `:45`). The HELD comment on the 3.1.12 entry instead
+   treats the Split License as within the workspace's commercial-package exclusion
+   (`MMCA.Common/Directory.Packages.props:141-143`), which sits against `:134-136` in the same file.
+   This record does not adjudicate which licensing statement is right. If the dependabot comment is,
+   a hand edit to 3.2.x passes the fitness function and the build itself is what stops it (its
+   MSBuild targets fail without a key, per `dependabot.yml:62`); the dependabot range only keeps
+   Dependabot from proposing the bump and does nothing against a hand edit.
 
    The assertions run in MMCA.Common only, the one repo that subclasses the base
    (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/DependencyVersionTests.cs:9`).
    Helpdesk declares neither package. Store and ADC take `MassTransit`, `MassTransit.RabbitMQ` and
    `MassTransit.Azure.ServiceBus.Core` transitively through `MMCA.Common.Infrastructure`
-   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj:52-54`),
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj:55-57`),
    but each **does** declare one MassTransit entry of its own: `MassTransit.Azure.ServiceBus.Core`
    8.5.11 for the Service Bus emulator test tier, carrying a comment that names Common's lockstep v8
-   pin (`MMCA.ADC/Directory.Packages.props:60-65`, `MMCA.Store/Directory.Packages.props:84-89`).
+   pin (`MMCA.ADC/Directory.Packages.props:60-65`, `MMCA.Store/Directory.Packages.props:87-92`).
    Common's own three MassTransit entries are on that same 8.5.11
    (`MMCA.Common/Directory.Packages.props:124-126`), so all three repos sit on one patch version.
    Alignment there is a convention the app-side comments carry, not something the gate enforces
    (Store's comment names the lockstep pin without a patch number,
-   `MMCA.Store/Directory.Packages.props:85-86`, so it holds across patch bumps):
+   `MMCA.Store/Directory.Packages.props:88-89`, so it holds across patch bumps):
    what the pin governs, and what the fitness function reads, is the major, so an app-side entry on
    a different v8 patch would still be inside the decision.
    They still do not subclass the test: its default list also names the two package ids they do not
@@ -122,7 +143,9 @@ Two related governance questions had no recorded answer:
   the build stayed green while every host was primed to crash at startup; ImageSharp v4 fails louder
   (the build itself) but arrives by exactly the same route. What stops both is the pair: the
   dependabot ignore keeps the proposal from being raised, and the fitness function catches it when a
-  hand edit raises it anyway (which is exactly the invariant-over-discipline posture of ADR-015).
+  hand edit raises it to the gated major anyway (which is exactly the invariant-over-discipline
+  posture of ADR-015). The gate reads majors only, so it does not cover the ImageSharp 3.2.x range
+  the dependabot comment also treats as licensed (Decision 3).
 
 ## Trade-offs
 - A consumer cannot adopt a single package in isolation: it takes the whole set at the new version.
@@ -210,8 +233,8 @@ Bus instead of replacing either, and a consumer opts in by configuration. The tw
 with a decision are the pin
 (`MMCA.Common/Directory.Packages.props:119-123`, the three entries at `:124-126`) and the fitness
 function that reads it
-(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/DependencyVersionTestsBase.cs:17-22`,
-the major ceiling at `:24-37`), plus the dependabot ignore they are paired with.
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/DependencyVersionTestsBase.cs:18-23`,
+the major ceiling at `:25-38`), plus the dependabot ignore they are paired with.
 
 A proving ground already exists: both consumers' nightlies run an Azure Service Bus emulator smoke
 against their real integration-event contracts, and the tier is authoritative rather than advisory
@@ -222,7 +245,8 @@ halves are recorded in ADR-066 and ADR-064). The deploy gate is a recency gate, 
 `cross-service-freshness` requires the `cross-service` and `servicebus-emulator-smoke` jobs to have
 both succeeded in one completed run of `cross-service-tests.yml` (whatever triggered it, so a
 dispatched green run counts too) within `window-days: '5'`
-(`MMCA.ADC/.github/workflows/deploy.yml:883-888`, `MMCA.Store/.github/workflows/deploy.yml:838-843`).
+(`MMCA.ADC/.github/workflows/deploy.yml:885-906`, window at `:898`, `same-run` at `:903`;
+`MMCA.Store/.github/workflows/deploy.yml:827-848`, window at `:840`, `same-run` at `:845`).
 The proof's age is floored to whole days and the gate fails only when that age exceeds the window
 (`MMCA.Common/.github/actions/freshness-gate/action.yml:25-26`, `:143-145`), so a red nightly blocks
 a deploy only once the last run green on both jobs is six or more whole days old.
@@ -303,6 +327,39 @@ of it, plus anchors moved by the 2026-10-07 workflow pruning in MMCA.ADC #258 an
    previously `:160` and `:140-154`. The ADC comment and entry
    `MMCA.ADC/Directory.Packages.props:60-65` are unchanged. The earlier anchors were exact when the
    2026-10-01 and 2026-10-06 revisions recorded them.
+
+## Revision (2026-10-21)
+Re-verified against current source. The pin, the gate and the dependency set are unchanged:
+MassTransit stays below major 9 and ImageSharp below major 4 in the fitness function, and all three
+repos sit on MassTransit 8.5.11 (`MMCA.Common/Directory.Packages.props:124-126`,
+`MMCA.ADC/Directory.Packages.props:65`, `MMCA.Store/Directory.Packages.props:92`). What moved is the
+dependabot half of the ImageSharp pin: MMCA.Common #576 (2026-10-21) replaced its semver-major
+ignore with a version range and rewrote its comment, so the record follows, plus anchors.
+
+1. Decision 3 no longer says each gated package is mirrored as a dependabot major-update ignore,
+   which was accurate until #576. Of the two gated packages only MassTransit still is
+   (`update-types: ["version-update:semver-major"]`, `MMCA.Common/.github/dependabot.yml:59-60`);
+   ImageSharp is now ignored by the version range `>= 3.2.0` (`:64-65`), which tightens the
+   dependabot side from v3 to 3.1.x and is tighter than the major-4 gate.
+2. Decision 3 now discloses that source is internally inconsistent about ImageSharp licensing:
+   `MMCA.Common/.github/dependabot.yml:61-63` says 3.2.0+ already requires a commercial key at build
+   time, while `DependencyVersionTestsBase.cs:43` and `:58-59`, `MMCA.Common/Directory.Packages.props:134-138`
+   and `MMCA.Common/Directory.Build.props:35-36`, `:45` place the licensing line at v4, and the gate
+   checks only major below 4 (`:55`). The HELD comment (`Directory.Packages.props:141-143`) treats
+   the Split License as within the commercial-package exclusion. The record states these and does
+   not adjudicate; which is right is an external licensing fact. Under the dependabot reading, a
+   hand edit to 3.2.x passes the gate and is stopped by the build itself, not by the dependabot range,
+   and **Rationale** now says the gate reads majors only.
+3. Anchors re-verified against current source: `DependencyVersionTestsBase.cs` class at `:16-62`,
+   the MassTransit package-id list at `:18-23` and the major ceiling at `:25-38` (previously
+   `:17-60`, `:17-22`, `:24-37`); the three `MMCA.Common.Infrastructure.csproj` MassTransit
+   references at `:55-57` (previously `:52-54`); Store's emulator-tier comment and entry at
+   `MMCA.Store/Directory.Packages.props:87-92` with the patch-agnostic pin sentence at `:88-89`
+   (previously `:84-89` and `:85-86`); the `cross-service-freshness` step at
+   `MMCA.ADC/.github/workflows/deploy.yml:885-906` (window `:898`, `same-run` `:903`) and
+   `MMCA.Store/.github/workflows/deploy.yml:827-848` (window `:840`, `same-run` `:845`), previously
+   `:883-888` and `:838-843`. The freshness-gate floor and comparison
+   (`MMCA.Common/.github/actions/freshness-gate/action.yml:25-26`, `:143-145`) are unchanged.
 
 ## Related
 ADR-015 (the fitness function that enforces the pins), ADR-003 / ADR-006 (MassTransit is the broker

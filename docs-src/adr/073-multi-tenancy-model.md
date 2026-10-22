@@ -36,6 +36,9 @@ Revised 2026-10-06: the background-work targets come from `TenantDataSourceTarge
 `ExpandRelational`), and the DB-per-tenant section now names the second context guard and the per-row
 outbox scope.
 Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
+Revised 2026-10-21: the default resolution order is the claim only since v1.243.0; header resolution is
+an explicit opt-in (claim-before-header is a recommended order checked only by an optional conformance
+base), Helpdesk opts in, and the unresolved-tenant 400 still names the header; anchors refreshed.
 
 ## Context
 MMCA.Common already partitions data along two axes and neither of them is a tenant. ADR-006 partitions by
@@ -92,12 +95,28 @@ boundaries and buy nothing. A tenant is never a key this system generates the wa
 idempotent for the same value and **throws on a different value**: a scope that has already answered
 queries for tenant A must not start answering them for tenant B, so the invariant is enforced, not advised.
 
-### Resolution is claim, then header, and fails closed
+### Resolution is claim-only by default, header by opt-in, and fails closed
 `TenancySettings` binds section `Tenancy` through the ADR-070 chain: `Enabled` (false), `ResolutionOrder`
-(`[Claim, Header]`), `ClaimType` (`tenant_id`), `HeaderName` (`X-Tenant-Id`), `RequireTenant` (**true**),
+(empty, read through `EffectiveResolutionOrder`, which falls back to `[Claim]` alone,
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettings.cs:61-62`, `:82-83`),
+`ClaimType` (`tenant_id`), `HeaderName` (`X-Tenant-Id`), `RequireTenant` (**true**),
 `ExcludedPathPrefixes` (health, alive, `.well-known`), and a `Tenants:{id}:DataSources:{sourceName}` map of
-per-tenant connection strings. Host-based resolution (tenant from subdomain) is deferred: it needs a
-hostname-to-tenant map and certificate handling that no consumer needs today.
+per-tenant connection strings. Header resolution is never part of the default order: a caller-supplied
+header lets any caller name any tenant, so a host that accepts it (service-to-service calls behind a
+trusted gateway) lists `Header` in `Tenancy:ResolutionOrder` explicitly, and resolution reads
+`HeaderName` only when `Header` is listed (`TenancySettings.cs:15-21`, `:74-79`, `:91-95`;
+`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/TenantResolutionMiddleware.cs:108-116`).
+Listing `Claim` before `Header` is the recommended order rather than a startup rule: options validation
+rejects only `Host`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettingsValidator.cs:55-63`),
+and the claim-before-header check lives in the optional conformance base `TenantResolutionTestsBase`
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing/Conformance/TenantResolutionTestsBase.cs:66-81`), which a
+host subclasses to enforce it. Helpdesk opts in, listing the claim first, without subclassing that base
+(`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/appsettings.json:32`). The fail-closed `400` names
+`HeaderName` beside `ClaimType` whatever the order lists, so a claim-only host still tells the caller it
+may supply the header (`TenantResolutionMiddleware.cs:143-147`). Host-based resolution (tenant
+from subdomain) is deferred: it needs a hostname-to-tenant map and certificate handling that no consumer
+needs today.
 
 `TenantResolutionMiddleware` (`Source/Presentation/MMCA.Common.API/Middleware/TenantResolutionMiddleware.cs`)
 mirrors `CorrelationIdMiddleware`, which is a named step of the same edge pipeline
@@ -142,7 +161,7 @@ directly-constructed test or design-time context that never registered it still 
 `CurrentTenantId => TenantIdAccessor?.Invoke()` (`ApplicationDbContext.cs:147`, `:154`). The scoped
 context factory assigns `() => tenantContext.TenantId` when it creates a context, inside
 `AttachScopeAccessors`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:147-161`,
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:147-164`,
 the assignment at `:152`), and the value is read at query-compile time
 rather than captured at construction. Copying at creation would make correctness depend on the middleware
 having run before the first context in the scope existed, a hazard no test catches and a reordered
@@ -153,7 +172,7 @@ When `TenancySettings.Tenants[tenant].DataSources[key.Name]` has an entry, the s
 clones the resolver's `PhysicalDataSource`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/PhysicalDataSource.cs:21`)
 with the override connection string (and the override Cosmos database name, when one is set) and the
-**same `DataSourceKey`** (`ResolveTenantOverride`, `DbContextFactory.cs:169-194`, the clone at `:186-193`), so EF's model cache key is unchanged
+**same `DataSourceKey`** (`ResolveTenantOverride`, `DbContextFactory.cs:172-197`, the clone at `:189-196`), so EF's model cache key is unchanged
 and one model still serves every tenant. Creation goes through a new
 `IPhysicalDbContextFactory.Create(key, physical)` overload (`:37`) beside the original single member
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/IPhysicalDbContextFactory.cs:22`).
@@ -162,8 +181,8 @@ with a custom implementation, and hiding that behind a default body would turn a
 runtime routing surprise, so it goes in the CHANGELOG as breaking-for-implementors. The tenant is not part
 of the per-scope context cache key (still keyed by `DataSourceKey` alone, `DbContextFactory.cs:103`,
 `:110`); instead two guards run when a cached context is handed back (`:125`, `:129`).
-`GuardRoutedTenantUnchanged` (`:202`) throws if the scope's tenant changes after an overridden context
-exists, and `GuardSharedContextNotRoutable` (`:227`) throws if a context created against the shared
+`GuardRoutedTenantUnchanged` (`:205`) throws if the scope's tenant changes after an overridden context
+exists, and `GuardSharedContextNotRoutable` (`:230`) throws if a context created against the shared
 database before the tenant resolved is requested for a tenant that turns out to override that source.
 Both restate the one-scope-one-tenant invariant where it would otherwise break.
 
@@ -172,8 +191,8 @@ Both restate the one-scope-one-tenant invariant where it would otherwise break.
 field carries the name,
 `private static readonly string[] SoftDeleteFilterOnly = [DbContexts.ApplicationDbContext.SoftDeleteFilterName]`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:41`), and
-it is passed to `IgnoreQueryFilters` at all **eight** call sites (`:58`, `:87`, `:108`, `:204`, `:394`,
-`:471`, `:485`, `:582`): one field rather than eight inline arrays, so the set of filters a
+it is passed to `IgnoreQueryFilters` at all **eight** call sites (`:58`, `:87`, `:108`, `:203`, `:393`,
+`:469`, `:483`, `:580`): one field rather than eight inline arrays, so the set of filters a
 soft-delete-inclusive read drops cannot diverge between two of them. The repository's `ignoreQueryFilters: true` parameter has always meant
 "include soft-deleted rows", and naming the filter keeps that meaning exactly while making it impossible
 for a soft-delete-inclusive read to cross tenants.
@@ -183,20 +202,20 @@ for a soft-delete-inclusive read to cross tenants.
 (`TenantDataSourceTargets.Expand`,
 `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/TenantDataSourceTargets.cs:52`,
 reached through `FrameworkTableTargets.Relational` (`FrameworkTableTargets.cs:44`, `:63`), which
-`OutboxProcessor.GetOutboxTargets` (`OutboxProcessor.cs:144-145`) and
+`OutboxProcessor.GetOutboxTargets` (`OutboxProcessor.cs:155-156`) and
 `OutboxCleanupService.GetRelationalTargets` (`OutboxCleanupService.cs:192`) call: one shared target per
 source plus one target per tenant that overrides that source) and call `ITenantContext.SetTenant` inside
 the per-target scope before obtaining the context, through the shared `CreateTenantScope` helper
 (`TenantDataSourceTargets.cs:100-119`, which sets the tenant under `AmbientOrigin.Suppress` at `:105`;
-called at `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:184`
+called at `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:195`
 and `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxCleanupService.cs:98`), so the
-factory routes to the tenant's database and the claim-lease update (`OutboxProcessor.cs:358-359`, the `ExecuteUpdateAsync`
-that sets `LockedUntil` and `LockToken` at `:359`) runs against the right rows. The processor also opens a
-fresh tenant scope per dispatched row through the same helper (`OutboxProcessor.cs:498`), on which the
+factory routes to the tenant's database and the claim-lease update (`OutboxProcessor.cs:371-372`, the `ExecuteUpdateAsync`
+that sets `LockedUntil` and `LockToken` at `:372`) runs against the right rows. The processor also opens a
+fresh tenant scope per dispatched row through the same helper (`OutboxProcessor.cs:556`), on which the
 row's stored origin is restored before dispatch. Routing does not depend on a tenant
 column, but the row does carry one: `OutboxMessage.TenantId`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:95`, assigned from the origin at
-`:146`) is a nullable string mapped with a 64-character, non-Unicode limit
+`:153`) is a nullable string mapped with a 64-character, non-Unicode limit
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:682`,
 the length from `TenantIdMaxLength` at `:484`),
 and it records the tenant the row was written under so delivery can restore it (see the Revision
@@ -416,3 +435,32 @@ in the Revision (2026-10-01).
    For the dated revisions, which keep their anchors as written: `OutboxMessage.TenantId` is at
    `OutboxMessage.cs:95` and mapped at `ApplicationDbContext.cs:682`; the processor restore is at
    `OutboxProcessor.cs:505-511`; `CreateTenantScope` is at `TenantDataSourceTargets.cs:100-119`.
+
+## Revision (2026-10-21)
+Re-verified against current source. The isolation model is unchanged: the tenant filter still composes
+with soft-delete by name, writes are still guarded by `TenantSaveChangesInterceptor`, DB-per-tenant is
+still a connection-string override behind the same `DataSourceKey`, and background work still drains per
+`(source, tenant?)` target. One default moved, and line numbers moved.
+
+1. **The default resolution order is the claim only.** Since v1.243.0 (`MMCA.Common/CHANGELOG.md:189`,
+   listed under Breaking) `TenancySettings` falls back to `[Claim]` when `ResolutionOrder` is empty
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettings.cs:61-62`,
+   `:82-83`), not `[Claim, Header]`. Header resolution is an explicit opt-in, because a caller-supplied
+   header lets any caller name any tenant (`TenancySettings.cs:15-21`, `:74-79`), and resolution reads
+   `HeaderName` only when `Header` is listed (`:91-95`; `TenantResolutionMiddleware.cs:108-116`). Listing
+   the claim first is recommended, not enforced at startup: `TenancySettingsValidator.cs:55-63` rejects
+   only `Host`, and the claim-before-header fact lives in the optional conformance base
+   `TenantResolutionTestsBase.cs:66-81`. Helpdesk, the reference adopter, opts in with the claim first
+   (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/appsettings.json:32`) and does not subclass that base.
+   The unresolved-tenant `400` still names `HeaderName` beside `ClaimType` in every response
+   (`TenantResolutionMiddleware.cs:143-147`), header listed or not. The Decision heading and the settings
+   paragraph now say so.
+2. Anchors re-verified against current source: `AttachScopeAccessors` `DbContextFactory.cs:147-164`
+   (the `TenantIdAccessor` assignment still at `:152`), `ResolveTenantOverride` `:172-197` with the clone
+   at `:189-196`, `GuardRoutedTenantUnchanged` `:205`, `GuardSharedContextNotRoutable` `:230` (the cache
+   key at `:103`/`:110` and the guard calls at `:125`/`:129` unchanged); the eight `EFReadRepository`
+   call sites `:58`, `:87`, `:108`, `:203`, `:393`, `:469`, `:483`, `:580` (still eight, the field still
+   at `:41`); `OutboxProcessor.GetOutboxTargets` `OutboxProcessor.cs:155-156`, the per-target
+   `CreateTenantScope` call at `:195`, the claim-lease `ExecuteUpdateAsync` at `:371-372` (`LockedUntil`
+   and `LockToken` at `:372`), the per-row scope at `:556`; the `OutboxMessage.TenantId` assignment from
+   the origin at `OutboxMessage.cs:153` (declared at `:95`).

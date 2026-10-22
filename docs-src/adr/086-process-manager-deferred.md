@@ -11,7 +11,8 @@ absent properties without meeting this record's trigger; the deferral stands. Se
 Revised 2026-10-07: the in-process provider is not MassTransit, so a state machine needs a broker
 provider (or a new in-process MassTransit registration) to ride, and the EF saga repository would be
 a fourth MassTransit package that the v8 pin gate covers only once its id is added; the deferral
-stands.
+stands. Revised 2026-10-21: anchors refreshed after the 2026-10-07 change to
+`DependencyVersionTestsBase` moved the pin gate's lines; the deferral stands.
 
 ## Context
 [ADR-054](054-saga-compensation-and-reconciliation.md) decided how this workspace achieves
@@ -247,6 +248,22 @@ capability, the coordinator's cost, one coordination technology) are qualified t
    `PaymentReconciliationService.cs:69` (class) and `:75` (`PeriodicBackgroundService` base),
    `RefreshSessionCleanupService.cs:53`, `PermissionGrantRefreshService.cs:36`,
    `InternalCommandCleanupService.cs:46`, `OutboxCleanupService.cs:49`.
+
+## Revision (2026-10-21)
+
+Re-verified against current source. No decision, rationale or trade-off changed: the deferral, its
+trigger, the coordinator's shape, the v8 licensing constraint and the absence evidence all hold. Only
+the build-gate anchors cited by the 2026-10-07 Revision moved; that Revision is kept as written.
+
+1. Anchors re-verified against current source: the pin gate's fixed list of exactly three ids,
+   `MassTransitPackageIds`, now sits at
+   `MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/DependencyVersionTestsBase.cs:18-23`
+   (the ids at `:20-22`), the test method at `:26` and its loop at `:28-37`, replacing the
+   2026-10-07 Revision's `:17-22` and `:27-35`. The gate runs in MMCA.Common through
+   `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/DependencyVersionTests.cs:9`.
+   The pin itself holds at 8.5.11 for all three packages (`MMCA.Common/Directory.Packages.props:124-126`),
+   and the arm call holds at `CheckOutHandler.cs:180`, delegating to
+   `CheckOutDeadlineScheduler.cs:55` for the scheduling.
 
 ## Related
 [ADR-054](054-saga-compensation-and-reconciliation.md) (the accepted mechanism this record defers an

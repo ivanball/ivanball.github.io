@@ -248,7 +248,9 @@
           asserts (sealed, Shared-layer assembly, no public mutable setters). The rule carries no <code>record</code>
           check.
           Revised 2026-10-07: Decision point 13 now separates code references from comment-only mentions of
-          <code>Enumeration&lt;T&gt;</code>; adoption remains zero.</p>
+          <code>Enumeration&lt;T&gt;</code>; adoption remains zero.
+          Revised 2026-10-21: anchors refreshed after the Shared public-API baseline grew; the eighteen
+          shipped declarations are unchanged.</p>
           <h2 id="context">Context</h2>
           <p>A bounded set of named values shows up everywhere in this workspace: the state that triggered a
           domain event, an error category, a rate-limiting algorithm, a message-bus provider, a JWT signing
@@ -376,8 +378,8 @@
           </li>
           <li><p><strong>The surface is frozen public API.</strong> Every member of the base and the factory is in
           <code>MMCA.Common.Shared</code>&#39;s shipped baseline
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/PublicAPI.Shipped.txt:567-572</code>, <code>:763-767</code>,
-          <code>:991-993</code>), and both converters are in Infrastructure&#39;s
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/PublicAPI.Shipped.txt:567-572</code>, <code>:766-770</code>,
+          <code>:994-996</code>), and both converters are in Infrastructure&#39;s
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:356-357</code>, <code>:360-361</code>).
           Under
           ADR-015&#39;s RS0016/RS0017 gate, removing or reshaping any of it is a reviewable text diff and a
@@ -433,7 +435,7 @@
           fails a build when a set that would benefit from behavior stays a <code>switch</code>, and nothing fails when
           a trivial set is declared as a smart enumeration.</li>
           <li><strong>Public API surface with no consumer.</strong> Eighteen shipped declarations across two packages
-          (<code>Shared/PublicAPI.Shipped.txt:567-572</code>, <code>:763-767</code>, <code>:991-993</code>;
+          (<code>Shared/PublicAPI.Shipped.txt:567-572</code>, <code>:766-770</code>, <code>:994-996</code>;
           <code>Infrastructure/PublicAPI.Shipped.txt:356-357</code>, <code>:360-361</code>) are frozen under ADR-015 and can only
           be removed as a breaking change.</li>
           <li><strong>The JSON attribute does not inherit.</strong> A concrete enumeration serialized outside <code>AddAPI</code>&#39;s
@@ -499,6 +501,17 @@
           <code>EnumerationTests.cs:122</code>, <code>:134</code>, <code>EnumerationSerializationTests.cs:111</code>, <code>:122</code> and
           <code>EnumerationValueConverterTests.cs:89</code> (the five fixtures), all unchanged.</li>
           </ol>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. No decision, rationale or content changed, and the shipped
+          surface still holds eighteen declarations; only the Shared public-API anchors moved. No
+          <code>PublicAPI.Unshipped.txt</code> carries an <code>Enumeration</code> entry.</p>
+          <ol>
+          <li>Anchors re-verified against current source: in Decision point 12 and the Trade-offs, the Shared
+          override block (<code>Equals</code>, <code>GetHashCode</code>, <code>ToString</code>, <code>CanConvert</code>, <code>CreateConverter</code>) now sits at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Shared/PublicAPI.Shipped.txt:766-770</code> and the static block
+          (<code>All</code>, <code>FromName</code>, <code>FromValue</code>) at <code>:994-996</code>. Unchanged: Shared <code>:567-572</code> and Infrastructure
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:356-357</code>, <code>:360-361</code>.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="037-field-level-encryption-at-rest.html">ADR-037</a> (the precedent for recording a shipped, tested and
           unadopted framework capability as a decision rather than leaving it to read as unfinished adoption),
@@ -530,6 +543,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

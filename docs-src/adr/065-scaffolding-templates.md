@@ -26,7 +26,10 @@ the generated-app test figure is stated only as unpinned on both sides. Revised 
 frozen wire contract is keyed by each event's `[EventName]` value and its failure points at
 `MMCA_CONTRACT_SNAPSHOT_OUT` rather than printing the live value. Revised 2026-10-06: the seed
 measurements were re-taken at MMCA.Helpdesk `f6ef4b0`, and `Directory.Build.targets` is now a 7-line
-import of the local-source swap MMCA.Common ships rather than the swap itself.
+import of the local-source swap MMCA.Common ships rather than the swap itself. Revised 2026-10-21:
+the seed measurements were re-taken at MMCA.Helpdesk `f10bc45` (139 files, 12,157 lines, 57 pins),
+the `--database` text now says only `sqlite` and `postgresql` carry a computed symbol with
+`sqlserver` the fallback, and the staging, README, smoke and FACTS anchors were re-pointed.
 
 ## Context
 
@@ -40,14 +43,15 @@ is now the six-step `dotnet new install MMCA.Templates` path
 (`common-GETTING-STARTED.md:10-22`) and the by-hand transcription moved to its own guide.
 
 Measured against MMCA.Helpdesk, the deliberately minimal seed, a brand-new app on the framework
-starts by hand-creating **12 projects, 137 files, and 11,571 lines** before a line of its own
-business logic. The method, re-run on 2026-10-06 at MMCA.Helpdesk `f6ef4b0` and stated here so the
-figures can be reproduced rather than trusted: every tracked file under `Source/` and `Tests/` (130
-files, 10,500 lines), plus the seven root build files below (1,071 lines). Those
-seven are an 827-line `.editorconfig`, a 100-line `Directory.Packages.props` carrying 58 pins,
-a 77-line `Directory.Build.props`, a 7-line `Directory.Build.targets` that imports the local-source
+starts by hand-creating **12 projects, 139 files, and 12,157 lines** before a line of its own
+business logic. The method, re-run on 2026-10-21 at MMCA.Helpdesk `f10bc45` and stated here so the
+figures can be reproduced rather than trusted: every tracked file under `Source/` and `Tests/` (132
+files, 11,068 lines), plus the seven root build files below (1,089 lines). Those
+seven are an 827-line `.editorconfig`, a 99-line `Directory.Packages.props` carrying 57 pins,
+a 92-line `Directory.Build.props`, a 7-line `Directory.Build.targets` that imports the local-source
 swap from MMCA.Common's `build/LocalSource/MMCA.Common.LocalSource.targets`
-(`Directory.Build.targets:6`), `global.json`, `nuget.config`, and the solution file. Under `Source/` and `Tests/` sit the module
+(`Directory.Build.targets:6`), a 5-line `global.json`, a 26-line `nuget.config`, and the 33-line
+solution file. Under `Source/` and `Tests/` sit the module
 project set, the vertical slice, the migrations project and its design-time factory, two hosts, the
 Aspire AppHost, three `.resx` pairs, and the architecture map with its fitness subclasses.
 
@@ -90,16 +94,16 @@ invalidates it and no fixed value is correct for every generated name:
   shape flags rather than the renames: the aggregate's private constructor assigns one property per
   optional axis, so `--no-status --no-description --no-owner` together leave it with a single
   statement, which the baseline then requires as an expression body. Staging appends a scoped delta
-  dropping those three to `suggestion` in the **staged** `.editorconfig` (`stage.ps1:1250-1252`); the
+  dropping those three to `suggestion` in the **staged** `.editorconfig` (`stage.ps1:1261-1263`); the
   seed's own copy, which is the shared analyzer baseline that
   `Tools/Scripts/compare-analyzer-config.ps1` holds identical across the four repos, is untouched,
   and it declares none of the three among its 215 explicit `dotnet_diagnostic.*.severity` lines.
-  Every other analyzer stays at error, as the delta's own header says (`stage.ps1:1247`). The
+  Every other analyzer stays at error, as the delta's own header says (`stage.ps1:1258`). The
   generated README carries
   `dotnet format analyzers MMCA.Helpdesk.slnx --diagnostics SA1210 SA1211 --severity info`
-  (`build/templates/overlay/mmca-app/README.md:111`), which restores the two ordering rules.
+  (`build/templates/overlay/mmca-app/README.md:115`), which restores the two ordering rules.
   `IDE0021` is not fixable by that command, so the README tells the adopter to fold the constructor
-  by hand and delete the line (`README.md:117-120`).
+  by hand and delete the line (`README.md:121-124`).
 
 **The wire-contract freeze ships, guarded rather than removed.**
 `IntegrationEventContractTestsBase` compares each event's members as a **set** rather than a
@@ -113,15 +117,15 @@ one member a shape flag can remove, `RequesterUserId`, is a comma-separated list
 `stage.ps1`'s `$optionalAxisLines` rewrites like any other. The generated app therefore arrives with
 its own contract already frozen, under its own names, green on the first test run. Staging asserts
 exactly one `IntegrationEventContractTests` class in the staged fitness map and throws otherwise
-(`stage.ps1:1310-1321`), because a class the staging pass cannot find is a template about to ship an
+(`stage.ps1:1321-1332`), because a class the staging pass cannot find is a template about to ship an
 unfrozen wire contract behind a README that says it is frozen. That README section tells the adopter
 what the test guards and how to evolve it: an event added or reshaped on purpose is versioned
 (ADR-010) and `ExpectedContract` updated in the same commit
-(`build/templates/overlay/mmca-app/README.md:122-134`). The failure lists each difference (missing or
+(`build/templates/overlay/mmca-app/README.md:126-143`). The failure lists each difference (missing or
 new event, missing, extra or retyped member) and names `MMCA_CONTRACT_SNAPSHOT_OUT`, which, set to a
 file path, writes the live contract as paste-ready literals on the next run
 (`IntegrationEventContractTestsBase.cs:27`, `:40-52`); the README's own line still says the failure
-prints the live value (`README.md:134`).
+prints the live value (`README.md:138`).
 
 `mmca-module` additionally prints seven numbered wire-ups `dotnet new` cannot perform
 (`templates/mmca-module/.template.config/template.json:261-277`): the solution entries for the eight
@@ -136,9 +140,10 @@ migration. That text now opens by telling anyone whose solution came from `mmca-
 for a hand-built solution.
 
 `--database` carries **three** choices in both templates, `sqlserver` (the default), `sqlite`, and
-`postgresql` (ADR-113), each with its own computed symbol
-(`MMCA.Helpdesk/.template.config/template.json:250-277`, and `useSqlite` / `usePostgreSQL` at
-`templates/mmca-module/.template.config/template.json:179-186`). The engine is a configuration-base
+`postgresql` (ADR-113). Two of them have a computed symbol, `useSqlite` and `usePostgreSQL`
+(`MMCA.Helpdesk/.template.config/template.json:250-277`, the symbols at `:270` and `:274`, and
+their peers at `templates/mmca-module/.template.config/template.json:179-186`); `sqlserver` has none
+and is the shape that applies when neither is set. The engine is a configuration-base
 choice plus a connection string, so the three shapes are the same application code: a derived
 `engineName` symbol supplies the Pascal spelling that renames the migrations project, the Aspire
 hosting integration package id, and the design-time helper call (`template.json:278-285`). The two
@@ -173,8 +178,8 @@ the exit code an adopter would see (`smoke.ps1:603-615`). The SQLite case proves
 the second module and is thin on purpose (`smoke.ps1:371-487`); the first case proves the wire-ups.
 That script performs all seven printed wire-ups plus the frozen-contract append and the first
 migration, and the smoke asserts the result on the files rather than on the script's output, wire-up
-by wire-up (`smoke.ps1:701-809`), including the migration (`:811-829`) and a rerun that must fail at
-the preflight before editing anything (`:834`).
+by wire-up (`smoke.ps1:701-810`), including the migration (`:812-830`) and a rerun that must fail at
+the preflight before editing anything (`:835`).
 
 A second generation path sits beside it: the `postgresql-canary` job (`ci.yml:146`) runs
 `build/templates/canary-postgresql.ps1` (`ci.yml:191-193`) against a `postgres:17` service container,
@@ -202,7 +207,7 @@ policy. This package ships from a different repo on a different cadence and pins
 version as a `--framework-version` parameter instead. Keeping it outside that family also leaves the
 package count in
 [FACTS.md](https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md) unchanged, since its generator
-counts only packable projects under `MMCA.Common/Source/` (`MMCA.Common/FACTS.md:78`), so the CI
+counts only packable projects under `MMCA.Common/Source/` (`MMCA.Common/FACTS.md:20`), so the CI
 drift gate is unaffected.
 
 **The token sweep is in the gate on purpose.** `sourceName` and the symbol replacements run as
@@ -240,9 +245,9 @@ silently: the output still compiles, it just carries someone else's domain vocab
   `IntegrationEventContractTests` (at `:99`) included, and it is frozen on its own event rather than
   the seed's, so it passes on arrival. The seed documents no run count of its own either. A generated
   app that turns off shape axes runs fewer than the seed, and no gate
-  pins the figure on either side: `smoke.ps1:361`, `:487` and `:909` all pass
+  pins the figure on either side: `smoke.ps1:361`, `:487` and `:910` all pass
   `--minimum-expected-tests 1`, as does the seed's own CI (`.github/workflows/ci.yml:104`). The cost
-  of shipping the freeze is that staging has to keep finding the class: `stage.ps1:1319-1320` throws when
+  of shipping the freeze is that staging has to keep finding the class: `stage.ps1:1330-1331` throws when
   the match count is not exactly one, so renaming or reshaping that subclass fails the pack rather
   than shipping an unfrozen contract behind a README that promises a frozen one.
 
@@ -276,3 +281,27 @@ No decision or rationale changed.
   (`Directory.Build.targets:6`). The 2026-10-01 root-file total (1,138 lines) predated that change.
 - Anchors were re-verified against current source; the build-by-hand copy instruction for
   `Directory.Build.props` moved to `common-BUILD-BY-HAND.md:171`.
+
+## Revision (2026-10-21)
+
+Re-verified against current source. No decision or rationale changed: the staged analyzer delta, the
+shipped wire-contract freeze and its staging guard, the printed `mmca-module` wire-ups and the smoke
+cases behave as described. The seed measurements and several anchors moved with the tree.
+
+1. The seed measurements were re-taken at MMCA.Helpdesk `f10bc45` with the same method: 132 files
+   and 11,068 lines under `Source/` and `Tests/`, plus 1,089 lines across the seven root build files
+   (`.editorconfig` 827, `Directory.Packages.props` 99 with 57 `PackageVersion` entries,
+   `Directory.Build.props` 92, `Directory.Build.targets` 7, `global.json` 5, `nuget.config` 26,
+   `MMCA.Helpdesk.slnx` 33), for 139 files and 12,157 lines. The 12 projects under `Source/` and
+   `Tests/` and the local-source import (`Directory.Build.targets:6`) are unchanged.
+2. `--database` has two computed symbols, not three: `useSqlite` and `usePostgreSQL`
+   (`.template.config/template.json:270`, `:274`; `templates/mmca-module/.template.config/template.json:179`,
+   `:183`). No `sqlserver` symbol exists; it is the shape that applies when neither is set. The
+   Decision text now says so.
+3. Anchors re-verified against current source: the staged delta at `stage.ps1:1261-1263` with its
+   header at `:1258`; the contract guard at `stage.ps1:1321-1332` (the count test at `:1330`, the throw
+   at `:1331`); the overlay README fixup command at `README.md:115`, the `IDE0021` note at `:121-124`,
+   the freeze section at `:126-143` and its still-stale "prints the live value" line at `:138`; the
+   smoke wire-up step at `smoke.ps1:701-810`, the migration step at `:812-830`, the rerun step at
+   `:835` and the third `--minimum-expected-tests 1` at `:910`; the packable-projects statement at
+   `MMCA.Common/FACTS.md:20`.

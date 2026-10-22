@@ -260,7 +260,8 @@
           answering 500; see Revision below).
           Revised 2026-10-07: a login or change-password lockout answers 429 <code>Auth.TooManyAttempts</code> (an
           <code>Error.TooManyRequests</code>, since Common 1.219.0) rather than a uniform 401, while the registration throttle
-          still answers 401; see Revision below.</p>
+          still answers 401; see Revision below.
+          Revised 2026-10-21: the timing burn for an address with no usable credential is a discarded hash rather than a decoy verify, a wrong second-factor code also increments the login counter, change-password rejects a credential-less account before its lockout check, and the hybrid-cache checks read past L1; anchors refreshed.</p>
           <h2 id="context">Context</h2>
           <p>ADR-019&#39;s global rate limiter is <strong>principal-keyed</strong>: it caps requests per authenticated principal,
           and anonymous traffic is exempt with one metered exception, the configured real-time hub path
@@ -306,7 +307,7 @@
           <li><strong>Keyed by submitted email / client IP, not by principal</strong>, so it works before authentication: the
           gap a per-principal limiter cannot fill. The one principal-keyed use is the authenticated
           change-password flow, which keys its counter on <code>password-change:{userId}</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:128-129</code>)
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:145-146</code>)
           because the user has no address to key on there, and a separate key keeps a change-password lockout
           from locking the owner out of sign-in.</li>
           <li><strong>The email key is the normalized address, not the raw request string.</strong> Keys route through the same
@@ -326,11 +327,13 @@
           the same default. <code>HybridCacheService</code>, the opt-in two-level implementation a host selects by calling
           <code>AddCommonHybridCache</code> (which replaces whatever <code>ICacheService</code> was registered) or its guarded form
           <code>AddCommonHybridCacheWhenRedisConfigured</code>, which registers it only when the Redis connection string
-          is set (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:200-212</code>),
-          overrides it (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:264</code>) with the
+          is set (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:202-214</code>),
+          overrides it (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:326</code>) with the
           same read-modify-write shape and additionally forces both legs past the in-process L1: an L1 hit would
           let a replica read a stale counter and write it back near its starting value, which is a security
-          control quietly weakened by a cache optimization. The accepted cost, in the code&#39;s own words: parallel attempts can overwrite each
+          control quietly weakened by a cache optimization. The checks read the same way: the lockout flag and
+          the registration count are read through <code>GetFromSharedStoreAsync</code>
+          (<code>LoginProtectionService.cs:59</code>, <code>:141</code>), which never answers from L1 (<code>HybridCacheService.cs:216</code>). The accepted cost, in the code&#39;s own words: parallel attempts can overwrite each
           other&#39;s increments, so a burst of genuinely concurrent guesses can undercount and stay below
           <code>MaxFailedAttempts</code>. Sequential guessing, which is what a credential-stuffing run against one account
           looks like, still trips the lockout. Because every shipped implementation writes the value back with
@@ -348,16 +351,20 @@
           throttle answers <code>401</code> (<code>:26</code>).</li>
           <li><strong>Centralized in framework code, not in consumer code.</strong> The login and registration call sequence
           lives in <code>AuthenticationServiceBase&lt;TUser&gt;</code> (<code>MMCA.Common.Application.Auth</code>): <code>CheckLockoutAsync</code>
-          before credential validation, <code>IncrementFailedAttemptsAsync</code> on each failed attempt,
+          before credential validation, <code>IncrementFailedAttemptsAsync</code> on each failed attempt (a wrong
+          password, and also a wrong second-factor code, <code>TwoFactorInvalidCode</code>, which bumps the same
+          email-keyed counter: <code>AuthenticationServiceBase.cs:548</code>, increment <code>:557</code>),
           <code>ResetFailedAttemptsAsync</code> on a successful login, and <code>CheckRegistrationRateLimitAsync</code> /
           <code>IncrementRegistrationCountAsync</code> around sign-up. Two further framework call sites sit outside that
           base. <code>ResetPasswordHandlerBase</code> takes <code>ILoginProtectionService</code> as a constructor dependency and
           calls <code>ResetFailedAttemptsAsync(request.Email)</code> once the new credential is persisted, so a user who
           reset the password <em>because</em> of a lockout is not left locked out by it. <code>ChangePasswordHandlerBase</code>
-          takes it as well (<code>ChangePasswordHandlerBase.cs:47</code>) and runs the full sequence on its own key:
-          <code>CheckLockoutAsync</code> before the current-password verify (<code>:89</code>), <code>IncrementFailedAttemptsAsync</code> on a
-          wrong current password (<code>:97</code>) and <code>ResetFailedAttemptsAsync</code> on a correct one (<code>:102</code>), so the
-          endpoint is not an unthrottled password oracle for anyone holding a session. Store and ADC
+          takes it as well (<code>ChangePasswordHandlerBase.cs:61</code>) and runs the full sequence on its own key:
+          <code>CheckLockoutAsync</code> before the current-password verify (<code>:103</code>), <code>IncrementFailedAttemptsAsync</code> on a
+          wrong current password (<code>:111</code>) and <code>ResetFailedAttemptsAsync</code> on a correct one (<code>:116</code>), so the
+          endpoint is not an unthrottled password oracle for anyone holding a session. Ahead of the lockout
+          check it rejects an account with no stored credential with <code>Auth.InvalidCurrentPassword</code> and no
+          counter increment (<code>:96-100</code>), since such an account has no current password to prove. Store and ADC
           <code>ChangePasswordHandler</code> subclass it and inject the service. Store and ADC
           <code>AuthenticationService</code> are sealed
           subclasses that inject <code>ILoginProtectionService</code> into the base constructor and inherit those calls;
@@ -387,8 +394,8 @@
           cache does not aggregate an attacker hitting different replicas. The answer is the same as ADR-026:
           register a distributed cache once scaled out. Both apps do: every ADC and Store service host calls
           <code>AddCommonHybridCacheWhenRedisConfigured</code> (for example
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:138</code>,
-          <code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:102</code>), so with Redis configured
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:139</code>,
+          <code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:103</code>), so with Redis configured
           the counters run through <code>HybridCacheService.IncrementAsync</code>.</li>
           <li><strong>Normalization widens the DoS lever slightly.</strong> Collapsing every spelling onto one counter is what
           makes the lockout enforceable, and it also means an attacker no longer needs to guess the exact
@@ -516,6 +523,46 @@
           (the read at <code>:271</code> through <code>SharedStoreReadOptions</code>, <code>:86-90</code>; the write at <code>:280</code>). The <code>:253</code> anchor in the 2026-10-01 Revision and the &quot;unchanged&quot; note in the 2026-10-06
           Revision record those passes as written.</li>
           </ol>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. The lockout model, the backoff formula, the registration
+          throttle, the non-atomic counters, the fail-open posture and the <code>429</code> / <code>401</code> answers are
+          unchanged. Three behaviors the earlier revisions did not record were added (items 2 to 4), one
+          recorded behavior was corrected (item 1), and the live anchors
+          were re-pointed. Anchors inside the dated revisions above (including the &quot;one throwaway
+          verification&quot; wording and the <code>:615</code> / <code>:624</code> anchors of the 2026-09-07 and 2026-10-06 passes, and
+          <code>MMCA.Common/CHANGELOG.md:286</code> in the 2026-10-07 pass) record those passes as written.</p>
+          <ol>
+          <li><strong>The timing burn is a discarded hash, not a decoy verify.</strong> <code>BurnPasswordVerificationCost</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:623</code>, called at
+          <code>:155</code>) returns early for a blank password (<code>:625-628</code>) and otherwise runs
+          <code>passwordHasher.HashPassword</code> and discards the result (<code>:630</code>). Its remarks (<code>:615-622</code>) give the
+          reason: hashing and verifying each run the hasher&#39;s key derivation once, while a verify against
+          fixed decoy material is answered instantly by a hasher that rejects wrong-sized material, which
+          reopens the timing gap. Every login branch still pays the same key-derivation cost.</li>
+          <li><strong>A wrong second-factor code counts as a failed attempt.</strong> <code>ChallengeSecondFactorCountingFailuresAsync</code>
+          (<code>AuthenticationServiceBase.cs:548</code>) increments the same email-keyed counter when the challenge
+          fails with <code>TwoFactorInvalidCode</code> (<code>:557</code>), so the second factor cannot be guessed outside the
+          lockout. The Decision&#39;s call-sequence bullet now says so.</li>
+          <li><strong>Change-password rejects a credential-less account before the lockout check.</strong>
+          <code>ChangePasswordHandlerBase</code> answers <code>Auth.InvalidCurrentPassword</code> without touching the counter
+          when the stored hash or salt is empty
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:96-100</code>),
+          then builds its key (<code>:102</code>) and runs check, increment and reset as before.</li>
+          <li><strong>The hybrid-cache checks bypass L1 too, not only the increment.</strong> <code>LoginProtectionService</code> reads the
+          lockout flag and the registration count through <code>GetFromSharedStoreAsync</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:59</code>, <code>:141</code>),
+          which <code>HybridCacheService</code> implements against the shared store only (<code>HybridCacheService.cs:216</code>).</li>
+          <li>Anchors re-verified against current source: <code>ChangePasswordHandlerBase.cs</code> constructor dependency
+          <code>:61</code>, <code>CheckLockoutAsync</code> <code>:103</code> (lockout returned unchanged at <code>:104-107</code>), increment <code>:111</code>,
+          reset <code>:116</code>, <code>password-change:{userId}</code> key <code>:145-146</code>; <code>HybridCacheService.IncrementAsync</code>
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:326</code>, read leg
+          through <code>SharedStoreReadOptions</code> at <code>:333</code> (defined <code>:89-94</code>), write leg with both L1 flags at
+          <code>:342</code>; <code>AddCommonHybridCacheWhenRedisConfigured</code> at
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:139</code> and
+          <code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:103</code>; the Common 1.219.0 entry
+          moving the lockout to <code>TooManyRequests</code> at <code>MMCA.Common/CHANGELOG.md:605</code> (heading <code>:593</code>).
+          <code>LoginProtectionService.cs:68</code>, <code>:150</code> and <code>AuthenticationServiceBase.cs:139</code> are unchanged.</li>
+          </ol>
           <h2 id="alternatives-rejected">Alternatives rejected</h2>
           <ul>
           <li><strong>Making the failed-attempt and registration counters atomic.</strong> The increment in
@@ -559,6 +606,7 @@
             <li><a href="#revision-2026-10-03">Revision (2026-10-03)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#alternatives-rejected">Alternatives rejected</a></li>
             <li><a href="#related">Related</a></li>
             </ul>

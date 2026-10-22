@@ -6,7 +6,9 @@ record quotes were re-measured, the `CheckIn` parameter run was corrected from "
 fitness rule's subclass list was completed; see the Revision (2026-09-19) at the end). Revised
 2026-10-01 (the `TypeDescriptor` nullable-converter failure mode, the shipped public API surface and
 the `CheckIn` parameter types were corrected). Revised 2026-10-06: the `string` identity-path
-rationale was corrected, since `System.String` does implement `IParsable<string>`.
+rationale was corrected, since `System.String` does implement `IParsable<string>`. Revised
+2026-10-21: the alias count is 49 (47 `int`), `StronglyTypedIdMappings` ships two conversions
+rather than four, and the public API surface is 53 declarations rather than 55.
 **Revisits [ADR-048](048-primitive-identifier-type-aliases.md) and
 [ADR-085](085-identifier-type-aliases-revisited.md)** by adding the capability those records deferred,
 without migrating anything. ADR-048's decision (every entity identity is a primitive named through a
@@ -20,13 +22,15 @@ ADR-048 chose primitive identifier aliases over wrapper structs. ADR-085 re-open
 2026-08-18, priced the migration in numbers (44 aliases, 43 of them `int`, 3,192 occurrences across
 1,001 files, the August figures), deferred again, and replaced the open-ended "not now" with three
 named revisit triggers: a production defect traced to an identifier transposition, a greenfield fifth
-consumer, or a cross-module identifier count that keeps climbing. Those numbers have moved twice
-since. A recount of the ten `GlobalUsings.*IdentifierType.cs` files on 2026-09-19 gives **48 aliases,
-46 of them `int`**; the two exceptions are both `System.Guid` and both in ADC's Conference module
+consumer, or a cross-module identifier count that keeps climbing. Those numbers keep moving. A
+recount of the ten `GlobalUsings.*IdentifierType.cs` files on 2026-10-21 gives **49 aliases, 47 of
+them `int`** (the newest is ADC Engagement's `ErasedUserIdentifierType`,
+`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/MMCA.ADC.Engagement.GlobalUsings.IdentifierType.cs:6`);
+the two exceptions are both `System.Guid` and both in ADC's Conference module
 (`SessionAssetIdentifierType` and `SpeakerIdentifierType`,
 `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:17`
-and `:23`). ADR-085's 2026-09-19 census puts the migration surface at 3,767 alias-carrying lines
-across 1,192 files.
+and `:23`). The migration surface is ADR-085's figure to own: its census is re-measured at each of
+its revisions and has grown well past the August figure.
 
 **None of the three has fired, and this record is not claiming otherwise.** The trigger here is a
 different one: the 2026-09-09 framework gap analysis of what a .NET application framework is expected
@@ -119,16 +123,16 @@ the framework pushes a consumer toward a wrapper.**
 
 6. **One call is the whole opt-in.**
    `services.AddStronglyTypedIds(typeof(OrderId).Assembly)`
-   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:376`) scans the named
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:382`) scans the named
    assemblies for wrappers, registers the `TypeConverter` for each, and registers a
-   `StronglyTypedIdRegistry` singleton
+   `StronglyTypedIdRegistry` singleton through `TryAddSingleton` (`:391`)
    (`MMCA.Common/Source/Core/MMCA.Common.Shared/Identifiers/StronglyTypedIdRegistry.cs:22`). A host
    that never calls it keeps the aliases and sees no behavioural change anywhere.
 
 7. **EF Core maps a wrapper as a PRE-CONVENTION type mapping, registered once on the base
    context.** `ApplicationDbContext.ConfigureConventions` resolves the registry with `GetService` and
    applies it
-   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:406-408`);
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:407-409`);
    `StronglyTypedIdModelConfiguration.Apply`
    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Conventions/StronglyTypedIdModelConfiguration.cs:29`)
    declares `configurationBuilder.Properties(identifierType).HaveConversion(converterType, comparerType)`
@@ -159,7 +163,7 @@ the framework pushes a consumer toward a wrapper.**
    there is no `>` to build a range predicate from, and an ordering operator on a wrapped column is
    refused by `ValidateFilters` as a 400 rather than silently widening the result set.
    `QueryFilterService.ResolveStrategy` builds and memoizes the strategy on first use
-   (`MMCA.Common/Source/Core/MMCA.Common.Application/Services/Filtering/QueryFilterService.cs:399-417`),
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/Services/Filtering/QueryFilterService.cs:413-424`),
    so a consumer never calls `RegisterStrategy` per identifier. Sorting is untouched: an `ORDER BY`
    over a converted column is the primitive's ordering
    ([ADR-034](034-generic-entity-query-layer.md) sort keys).
@@ -179,10 +183,12 @@ the framework pushes a consumer toward a wrapper.**
     `IBaseDTO<TIdentifierType>` over the SAME identifier type its entity uses, so a wrapper maps to
     itself as a plain assignment. For a contract that deliberately keeps primitives on the wire,
     `StronglyTypedIdMappings<TSelf, TValue>`
-    (`MMCA.Common/Source/Core/MMCA.Common.Shared/Identifiers/StronglyTypedIdMappings.cs:31`) supplies
-    the four conversions (`:38`, `:43`, `:48`, `:53`) as plain public static methods, reached with
-    `[UseStaticMapper(typeof(StronglyTypedIdMappings<OrderId, int>))]`. They carry no Mapperly
-    attribute, so the Shared layer takes no dependency on `Riok.Mapperly.Abstractions`.
+    (`MMCA.Common/Source/Core/MMCA.Common.Shared/Identifiers/StronglyTypedIdMappings.cs:36`) supplies
+    two conversions, `ToValue` (`:43`) and `ToIdentifier` (`:48`), as plain public static methods,
+    reached with `[UseStaticMapper(typeof(StronglyTypedIdMappings<OrderId, int>))]`. An optional
+    identifier needs no third method: Mapperly lifts the pair over `Nullable<T>` itself (`:25-27`).
+    They carry no Mapperly attribute, so the Shared layer takes no dependency on
+    `Riok.Mapperly.Abstractions`.
 
 12. **A fitness rule holds the shape, and passes vacuously today.**
     `StronglyTypedIdsAreReadonlyRecordStructs`
@@ -204,8 +210,8 @@ the framework pushes a consumer toward a wrapper.**
 
 13. **Adoption is zero and this record says so.** No production type in MMCA.Common, MMCA.Store,
     MMCA.ADC, MMCA.Helpdesk or the MMCA.ECommerce sample implements `IStronglyTypedId<,>`. The only
-    implementations anywhere are the fixtures in seven of the framework's own test files. The 48
-    aliases in force across the four repositories on 2026-09-19 (46 `int`, two `System.Guid`) are
+    implementations anywhere are the fixtures in seven of the framework's own test files. The 49
+    aliases in force across the four repositories on 2026-10-21 (47 `int`, two `System.Guid`) are
     untouched, and no consumer needs a version-bump behaviour change:
     without a call to `AddStronglyTypedIds`, every framework site that reads the registry treats its
     absence as "no wrappers in use".
@@ -237,8 +243,8 @@ the framework pushes a consumer toward a wrapper.**
   converter. The alternative, leaving the code in place with no record, reads as unfinished adoption
   to the next reader.
 - **The aliases are still right for the four repos.** ADR-085's conclusion did not change, though its
-  arithmetic did: its 2026-09-19 census reports 3,767 alias-carrying lines across 1,192 files, up
-  from the 3,192 across 1,001 it priced in August. There is still no incident traced to a
+  arithmetic did: its census, re-measured at each of its revisions, has grown well past the 3,192
+  occurrences across 1,001 files it priced in August. There is still no incident traced to a
   transposition, and a partial migration is still worse than either endpoint. A surface that grows on
   its own makes the migration more expensive, not the deferral less sound. Nothing here proposes
   moving any of it.
@@ -299,7 +305,7 @@ the framework pushes a consumer toward a wrapper.**
   THAN and BETWEEN are refused with a 400 where the same column as a primitive accepted them. That
   is a deliberate narrowing, and it is a behaviour difference a client would notice if a column
   changed type.
-- **Public API surface with no consumer.** The 55 declarations these types add across Shared,
+- **Public API surface with no consumer.** The 53 declarations these types add across Shared,
   Infrastructure, API and Testing.Architecture are in the shipped baselines (`PublicAPI.Shipped.txt`
   in each of the four packages) and are frozen under
   [ADR-015](015-architecture-fitness-functions.md)'s RS0016/RS0017 gate.
@@ -411,3 +417,33 @@ default, and adoption is still zero.
   `AddStronglyTypedIds` is now `DependencyInjection.cs:376`, the registry lookup is
   `ApplicationDbContext.cs:406-408`, and the transformer registration is
   `WebApplicationBuilderExtensions.cs:110-111`; `QueryFilterService.cs:399-417` still holds.
+
+## Revision (2026-10-21)
+Re-verified against current source. The decision is unchanged: the framework still ships the
+capability, the aliases are still the default, and adoption is still zero. The alias count, the
+Mapperly helper and the public API surface moved, and four anchors were re-pointed.
+
+1. **The alias count is 49, 47 of them `int`.** ADC Engagement gained `ErasedUserIdentifierType = int`
+   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/MMCA.ADC.Engagement.GlobalUsings.IdentifierType.cs:6`),
+   taking Engagement to 11 (`:4-14`). Every other per-module count in the Revision (2026-09-19) still
+   holds, and the two `System.Guid` aliases are unmoved
+   (`MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:17` and `:23`). The Context and Decision
+   point 13 now carry 49.
+2. **`StronglyTypedIdMappings` supplies two conversions, not four.** The class
+   (`MMCA.Common/Source/Core/MMCA.Common.Shared/Identifiers/StronglyTypedIdMappings.cs:36`) keeps
+   `ToValue` (`:43`) and `ToIdentifier` (`:48`); the nullable pair is gone, and the doc comment
+   (`:25-27`) records that Mapperly lifts the two methods over `Nullable<T>` itself. Decision
+   point 11 is updated.
+3. **The public API surface is 53 declarations, not 55.** Shared's `PublicAPI.Shipped.txt` carries
+   32 `StronglyTyped` lines (down from 34, the removed nullable mapping pair), Infrastructure 10,
+   API 6 and Testing.Architecture 5. No `PublicAPI.Unshipped.txt` carries any of them, so the surface
+   is still all shipped. The Trade-offs bullet now says 53.
+4. **The migration surface is cited by reference, not by figure.** The Context and Rationale quoted
+   ADR-085's 2026-09-19 census as if current, and ADR-085 has re-measured it since. This record now
+   points at ADR-085 for the figure rather than restating one that goes stale with every alias.
+5. Anchors re-verified against current source: `AddStronglyTypedIds` is
+   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:382` (singleton
+   registered through `TryAddSingleton` at `:391`), the registry lookup is
+   `ApplicationDbContext.cs:407-409`, `QueryFilterService.ResolveStrategy` is
+   `QueryFilterService.cs:413-424` (the `:399-417` recorded by the Revision (2026-10-06) note was
+   correct then; the method moved on 2026-10-10), and `StronglyTypedIdMappings.cs:36`.

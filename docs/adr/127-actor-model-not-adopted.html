@@ -248,7 +248,8 @@
           wording corrected. Revised 2026-10-06: the replica wording now reflects that not every ADC app runs
           <code>minReplicas: 1</code> under <code>conferenceMode</code>. Revised 2026-10-07: the replica wording now reflects
           that the ADC UI app holds four replicas under <code>conferenceMode</code> and the Notification app stays at a
-          ceiling of two, and anchors were refreshed.</p>
+          ceiling of two, and anchors were refreshed. Revised 2026-10-21: anchors refreshed after the vote
+          handler, the live-channel drain and both apps&#39; <code>main.bicep</code> scale blocks moved.</p>
           <h2 id="context">Context</h2>
           <p>The actor model gives every logical entity its own single-threaded unit of execution holding its state
           in memory and serializes all messages to that entity through it; a virtual-actor runtime makes the
@@ -258,8 +259,8 @@
           layer, which sounds like that workload. It is not, and the difference is this record.</p>
           <p><strong>The live state is small, and it is database state.</strong> A live poll is an aggregate root with a status
           and a set of options; a vote is a write through the module&#39;s unit of work
-          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/LivePolls/UseCases/CastVote/CastVoteHandler.cs:20</code>,
-          the repository call at <code>:33</code>) and the tallies are a read through the same one
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/LivePolls/UseCases/CastVote/CastVoteHandler.cs:21</code>,
+          the repository call at <code>:40</code>) and the tallies are a read through the same one
           (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/LivePolls/UseCases/GetPollResults/GetPollResultsHandler.cs:23</code>).
           Bookmark counts are a query behind a cross-module service contract rather than a resident counter
           (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/UserSessionBookmarks/IBookmarkCountService.cs:11</code>),
@@ -283,8 +284,8 @@
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/SignalRExtensions.cs:27</code>). ADC&#39;s Engagement
           module reaches it off the command hot path through a single-reader drain that preserves per-session
           ordering
-          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/Live/LiveChannelPublishProcessor.cs:40</code>,
-          resolving the publisher per item at <code>:127</code>), the one actor-shaped guarantee the live layer needs.</p>
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/Live/LiveChannelPublishProcessor.cs:41</code>,
+          resolving the publisher per item at <code>:131</code>), the one actor-shaped guarantee the live layer needs.</p>
           <p><strong>Read pressure is absorbed by caching, and the load is small.</strong> Tier 2 is an HTTP output cache in the
           pipeline
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Pipeline/MiddlewarePipelineBuilder.cs:133</code>)
@@ -338,9 +339,9 @@
           ADC Identity, Conference, Engagement, Gateway and UI apps reach four while Notification stays at two;
           every app runs <code>minReplicas: 1</code> except the ADC Gateway, which runs two under <code>conferenceMode</code>, and
           the ADC UI, which then holds its ceiling of four:
-          <code>MMCA.ADC/infra/main.bicep:1914</code>, <code>:2067</code>, <code>:2202</code>, <code>:2388</code>, <code>:2540</code> and <code>:2691</code>,
+          <code>MMCA.ADC/infra/main.bicep:2070</code>, <code>:2223</code>, <code>:2358</code>, <code>:2544</code>, <code>:2696</code> and <code>:2847</code>,
           <code>conferenceFrontDoorMinReplicas</code> at <code>:191</code>, <code>conferenceScaledMaxReplicas</code> at <code>:192</code>,
-          <code>MMCA.Store/infra/main.bicep:1591</code>),
+          <code>MMCA.Store/infra/main.bicep:1682</code>, <code>:1806</code>, <code>:1954</code>, <code>:2072</code> and <code>:2190</code>),
           so an in-process writer guarantee is not a guarantee, and it would silently weaken a
           correctness property the concurrency token holds across the fleet.</li>
           <li><strong>Adopting actors only for live polls.</strong> The live path is the least durable state in the system and
@@ -398,6 +399,29 @@
           resource (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:44</code>) and builder (<code>:10</code>).
           <code>MMCA.Store/infra/main.bicep:1591</code> still holds.</li>
           </ol>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. No decision or rationale changed: every container app still
+          declares at least <code>maxReplicas: 2</code>, the replica floors and ceilings match the 2026-10-07 wording, and
+          the single-reader FIFO drain is unchanged. Only anchors moved.</p>
+          <ol>
+          <li>Anchors re-verified against current source: the vote handler&#39;s class declaration
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/LivePolls/UseCases/CastVote/CastVoteHandler.cs:21</code>,
+          was <code>:20</code>) and its poll repository call (<code>:40</code>, was <code>:33</code>); <code>LiveChannelPublishProcessor</code>
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/Live/LiveChannelPublishProcessor.cs:41</code>,
+          was <code>:40</code>) and its per-item publisher resolution (<code>:131</code>, was <code>:127</code>), with the single reader at
+          <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/Live/LiveChannelPublishQueue.cs:37</code>;
+          the ADC scale blocks for Identity, Conference and Engagement (<code>MMCA.ADC/infra/main.bicep:2070</code>,
+          <code>:2223</code>, <code>:2358</code>, min 1 and max <code>conferenceScaledMaxReplicas</code>), Notification (<code>:2544</code>, min 1 and
+          max 2), Gateway (<code>:2696</code>, min <code>conferenceFrontDoorMinReplicas</code>) and UI (<code>:2847</code>, min
+          <code>conferenceMode ? conferenceScaledMaxReplicas : conferenceFrontDoorMinReplicas</code>), replacing
+          <code>:1914</code>, <code>:2067</code>, <code>:2202</code>, <code>:2388</code>, <code>:2540</code> and <code>:2691</code>; and every Store scale block
+          (<code>MMCA.Store/infra/main.bicep:1682</code>, <code>:1806</code>, <code>:1954</code>, <code>:2072</code> and <code>:2190</code>, all min 1 and max 2),
+          replacing <code>:1591</code>. <code>conferenceFrontDoorMinReplicas</code> (<code>MMCA.ADC/infra/main.bicep:191</code>),
+          <code>conferenceScaledMaxReplicas</code> (<code>:192</code>), <code>OnModelCreating</code> (<code>ApplicationDbContext.cs:417</code>,
+          <code>ConfigureConcurrencyTokens</code> at <code>:421</code> and <code>:589</code>, <code>IsRowVersion()</code> at <code>:602</code>,
+          <code>IsConcurrencyToken()</code> at <code>:606</code>) and the AppHost Redis resource and builder (<code>Program.cs:44</code> and
+          <code>:10</code>) still hold.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="007-grpc-extraction.html">ADR-007</a>, <a href="008-service-extraction-topology.html">ADR-008</a> and
           <a href="059-module-contract-and-composition.html">ADR-059</a> (the boundary a future silo would live behind),
@@ -428,6 +452,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

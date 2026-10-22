@@ -249,7 +249,9 @@
           Revised 2026-09-19 (Apple joins Google and GitHub as a third config-gated provider, the by-email
           link runs three guards rather than two, token issuance goes through the shared refresh-session
           workflow, and an external create carries the provider&#39;s assertion into the new account&#39;s
-          confirmation state).</p>
+          confirmation state).
+          Revised 2026-10-21: anchors refreshed after the <code>User.cs</code> and <code>ChangePasswordHandlerBase.cs</code> lines
+          moved.</p>
           <h2 id="context">Context</h2>
           <p>The framework&#39;s Identity story so far is entirely first-party: a user registers with an email and
           password, the credentials are hashed (ADR-032), and Identity mints its own RS256 JWT pair. Every auth
@@ -346,7 +348,7 @@
           argument and rides the <code>UserRegistered</code> event. It also settles the account&#39;s confirmation state
           (ADR-116): a verified assertion starts the account confirmed
           (<code>IsEmailConfirmed = emailVerified</code>,
-          <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:288</code>), while a provider
+          <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:300</code>), while a provider
           that asserts nothing starts it unconfirmed and it receives a confirmation link like a local
           registration. In the link and create cases the exchange then calls <code>IssueTokensAsync</code>
           (<code>AuthenticationService.cs:338</code>), which opens a refresh <strong>session</strong> for the device through the
@@ -523,6 +525,29 @@
           Identity.API <code>DependencyInjection.cs:56</code>, <code>IAuthenticationService.cs:139</code>) were re-verified
           against current source and still hold.</li>
           </ul>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. No decision or rationale changed: the by-email link guards, the
+          external create, and the empty-credential refusals behave as recorded; only <code>User.cs</code> and
+          <code>ChangePasswordHandlerBase.cs</code> lines moved, and two 2026-09-07 anchors that the 2026-10-06 refresh
+          never carried forward are re-pointed here.</p>
+          <ol>
+          <li>Anchors re-verified against current source:<ul>
+          <li><code>IsEmailConfirmed = emailVerified</code> sits in the <code>User.CreateExternal</code> object initializer at
+          <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:300</code> (factory declared
+          at <code>:276</code>); the Decision citation is re-pointed in place.</li>
+          <li><code>User.HasLocalPassword</code> (<code>PasswordHash.Length &gt; 0</code>) is at <code>User.cs:177</code>, with its reasoning in
+          the XML-doc summary at <code>:169-176</code>.</li>
+          <li>The change-password refusal for an account with no stored credential is
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:96</code>
+          (SECURITY comment <code>:92-95</code>), still ahead of the lockout check (<code>:103</code>) and the verify (<code>:109</code>).</li>
+          <li>In ADC&#39;s <code>AuthenticationService.cs</code>, the SEC-ADC-01 pre-registration takeover reasoning is at
+          <code>:383-389</code> and the <code>Auth.ExternalLinkRequiresLocalSignIn</code> refusal message at <code>:394</code>.</li>
+          <li>The Decision and Trade-offs citations into <code>AuthenticationService.cs</code> (<code>:214</code>, <code>:221</code>, <code>:226</code>,
+          <code>:235-236</code>, <code>:254</code>, <code>:258</code>, <code>:264</code>, <code>:286-287</code>, <code>:293</code>, <code>:338</code>, <code>:359</code>, <code>:362-363</code>, <code>:372-373</code>,
+          <code>:378</code>, <code>:390</code>, <code>:393</code>, <code>:398</code>) still hold.</li>
+          </ul>
+          </li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-004 (the RS256/JWKS token this flow exchanges the external identity <em>for</em>, and validates
           everywhere after), ADR-022 (the browser cookies that carry the resulting session), ADR-029 (the
@@ -549,6 +574,7 @@
             <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

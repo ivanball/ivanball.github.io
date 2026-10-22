@@ -272,7 +272,12 @@
           transitive fitness rule; see Revision below).
           Revised 2026-10-07: each row&#39;s lease is renewed before dispatch and its outcome written as soon as
           it finishes by a lock-token-guarded update (no batch save), and async-path local domain-event rows
-          are inserted already leased, so the lease, not the processing delay, bounds duplicate dispatch.</p>
+          are inserted already leased, so the lease, not the processing delay, bounds duplicate dispatch.
+          Revised 2026-10-21: delivered rows are buffered and stamped processed together by one
+          lock-token-guarded update per chunk while a failed row&#39;s retry state is still written per row, the
+          lease is renewed for every not-yet-dispatched row only once less than half of it remains, a crash
+          redelivers the rows delivered since the last flush, and a row carries a fifth ambient-context
+          column, <code>UserPermissions</code> (see the Revision (2026-10-21) at the end).</p>
           <h2 id="context">Context</h2>
           <p>Domain events must be reliably published after aggregate changes are persisted. Two failure modes exist:</p>
           <ol>
@@ -284,7 +289,7 @@
           <ol>
           <li><strong>Outbox persistence</strong>: Domain events are serialized into <code>OutboxMessage</code> rows within the same database transaction as the aggregate changes. This guarantees at-least-once persistence.</li>
           <li><strong>In-process dispatch</strong>: After <code>SaveChangesAsync</code>, events are dispatched immediately in-process via <code>DomainEventDispatcher</code> for low-latency handling.</li>
-          <li><strong>Background processor</strong>: <code>OutboxProcessor</code> (a <code>BackgroundService</code>) wakes on an in-memory signal when new entries are written, or after a fallback polling interval (<code>Outbox:PollingIntervalSeconds</code>, default 2s; ADC prod sets 300s). Entries become eligible <code>Outbox:ProcessingDelaySeconds</code> after creation (default 5s); when a cycle sees pending-but-not-yet-eligible entries it <strong>smart-waits</strong> only until the earliest becomes eligible instead of sleeping the full interval. Eligible entries that throw during dispatch are retried up to 5 times, then dropped from the eligible set (a message whose event type cannot be resolved is retried once before being dead-lettered; see the Revision (2026-08-26)).</li>
+          <li><strong>Background processor</strong>: <code>OutboxProcessor</code> (a <code>BackgroundService</code>) wakes on an in-memory signal when new entries are written, or after a fallback polling interval (<code>Outbox:PollingIntervalSeconds</code>, default 2s; ADC prod sets 300s). Entries become eligible <code>Outbox:ProcessingDelaySeconds</code> after creation (default 5s); when a cycle sees pending-but-not-yet-eligible entries it <strong>smart-waits</strong> only until the earliest becomes eligible instead of sleeping the full interval. Eligible entries that throw during dispatch are retried up to 5 times, then dropped from the eligible set (a message whose event type cannot be resolved is retried once before being dead-lettered; see the Revision (2026-08-26)). A cycle claims its eligible rows under one lock token and every later write it makes is guarded on that token; there is no batch save (<code>MMCA.Common/.../Outbox/Processing/OutboxProcessor.cs:241-244</code>). A failed row&#39;s retry or dead-letter state is written as soon as that row finishes (<code>RecordFailureOutcomeAsync</code> at <code>:719-740</code>, ending in <code>StampAsync</code> at <code>:993-1014</code>, guard at <code>:999-1000</code>). A delivered row only joins a buffer (<code>:702</code>), and the buffer is stamped processed by one set-based update per chunk of at most 500 ids (<code>FlushDeliveredAsync</code> at <code>:855-895</code>, the update at <code>:870-873</code>, <code>MaxIdsPerStatement</code> at <code>:90</code>) at the end of the batch (<code>:505</code>), before a lease renewal (<code>:678</code>) and on any early exit (<code>:509-514</code>). The lease is renewed only once less than half of <code>Outbox:LeaseSeconds</code> remains, and then for every row not yet dispatched (<code>RenewLeaseIfDueAsync</code> at <code>:669-683</code>, threshold at <code>:676</code>; <code>RenewRemainingLeasesAsync</code> at <code>:802-841</code>); a row the renewal finds under another token is skipped, not dispatched (<code>:542-545</code>).</li>
           <li><strong>Handlers do not save</strong>: by default a domain event handler does not flush a unit of work itself. It mutates state and the owning save persists it; a write that must happen independently goes on the outbox. The transitive IL call-graph fitness rule <code>DomainEventHandlersDoNotSave</code> (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Cqrs/ArchitectureRules.DomainEventHandlerSaves.cs:76</code>) enforces it, run through <code>DomainEventHandlerSaveTestsBase</code> (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Cqrs/DomainEventHandlerSaveTestsBase.cs:22</code>); a consumer names each accepted exception in its allowlist (see the Revision (2026-10-01)).</li>
           </ol>
           <h2 id="rationale">Rationale</h2>
@@ -304,9 +309,10 @@
           (2026-08-26)) and then dead-lettered, which requires manual investigation.
           A message that <strong>throws during dispatch</strong> is retried up to <code>Outbox:MaxRetries</code> (default 5) times,
           then dropped from the eligible set (it stops being polled once <code>RetryCount &gt;= MaxRetries</code>).</li>
-          <li>Failed-message retries are paced by an explicit exponential backoff, not by the polling interval, and the backoff is randomized. A failure re-leases its own row for <code>Outbox:RetryBackoffBaseSeconds * 2^(n-1)</code> seconds multiplied by a random jitter factor in <code>[0.8, 1.2]</code>, capped at <code>Outbox:LeaseSeconds</code> (the re-lease at <code>MMCA.Common/.../Outbox/Processing/OutboxProcessor.cs:543-544</code>; <code>ComputeRetryBackoffSeconds</code> at <code>:858-859</code> delegates to the jitter-then-cap formula in <code>PollingLoop.ComputeRetryBackoffSeconds</code> at <code>MMCA.Common/.../Persistence/Polling/PollingLoop.cs:183-197</code>, jitter at <code>:193</code>, cap at <code>:196</code>). At the shipped defaults (base 10s, <code>MaxRetries</code> 5, lease 300s, batch 50: <code>MMCA.Common/.../Outbox/Administration/OutboxSettings.cs:17,21,84,101</code>) the four waits between the five attempts are ranges rather than fixed values: about 8-12s, 16-24s, 32-48s and 64-96s. A persistently failing message therefore spends <strong>about 150 seconds of backoff (2.5 minutes), 120s to 180s across the jitter range</strong>, before the fifth failure dead-letters it, and the 300s cap never binds at those defaults (the longest jittered wait tops out near 96s; only a sixth attempt, nominally 320s, could reach the cap).</li>
-          <li>That backoff total is a floor, not a schedule. A backoff that expires between cycles is only noticed when the processor next wakes, and a failed-but-eligible row never shortens the wait (the next-cycle wait is computed only from the not-yet-eligible remainder: <code>OutboxProcessor.cs:202-210</code>), so the wall-clock horizon is the floor plus poll granularity at the 2s default interval, and up to one fallback interval per retry (about 20 minutes at the 300s prod interval) when no new write signals the loop sooner. A batch that dispatched nothing also does not re-poll immediately (<code>HasMoreEligibleWork</code> requires progress: <code>OutboxProcessor.cs:242</code>, reasoning at <code>:235-239</code>), so a batch of 50 that fails in full cannot hot-spin the processor. With progress, the loop re-polls at once both for a full eligible batch and for key-mates the cycle deferred behind their key&#39;s head row, so an ordering key is not serialized at one row per poll (<code>:242</code>).</li>
-          <li>Rows orphaned by a process crash (no signal exists) wait up to the polling interval before the safety-net pickup. A local domain-event row written on the async path first waits out the lease it was inserted under (<code>Outbox:LeaseSeconds</code>, default 300s: <code>OutboxSettings.cs:79-84</code>), because nothing released it (<code>DomainEventSaveChangesInterceptor.cs:20-23</code>).</li>
+          <li>Failed-message retries are paced by an explicit exponential backoff, not by the polling interval, and the backoff is randomized. A failure re-leases its own row for <code>Outbox:RetryBackoffBaseSeconds * 2^(n-1)</code> seconds multiplied by a random jitter factor in <code>[0.8, 1.2]</code>, capped at <code>Outbox:LeaseSeconds</code> (the re-lease at <code>MMCA.Common/.../Outbox/Processing/OutboxProcessor.cs:602-603</code>; <code>ComputeRetryBackoffSeconds</code> at <code>:1062-1063</code> delegates to the jitter-then-cap formula in <code>PollingLoop.ComputeRetryBackoffSeconds</code> at <code>MMCA.Common/.../Persistence/Polling/PollingLoop.cs:183-197</code>, jitter at <code>:193</code>, cap at <code>:196</code>). At the shipped defaults (base 10s, <code>MaxRetries</code> 5, lease 300s, batch 50: <code>MMCA.Common/.../Outbox/Administration/OutboxSettings.cs:17,21,85,102</code>) the four waits between the five attempts are ranges rather than fixed values: about 8-12s, 16-24s, 32-48s and 64-96s. A persistently failing message therefore spends <strong>about 150 seconds of backoff (2.5 minutes), 120s to 180s across the jitter range</strong>, before the fifth failure dead-letters it, and the 300s cap never binds at those defaults (the longest jittered wait tops out near 96s; only a sixth attempt, nominally 320s, could reach the cap).</li>
+          <li>That backoff total is a floor, not a schedule. A backoff that expires between cycles is only noticed when the processor next wakes, and a failed-but-eligible row never shortens the wait (the next-cycle wait is computed only from the not-yet-eligible remainder: <code>OutboxProcessor.cs:215-221</code>), so the wall-clock horizon is the floor plus poll granularity at the 2s default interval, and up to one fallback interval per retry (about 20 minutes at the 300s prod interval) when no new write signals the loop sooner. A batch that dispatched nothing also does not re-poll immediately (<code>HasMoreEligibleWork</code> requires progress: <code>OutboxProcessor.cs:255</code>, reasoning at <code>:248-252</code>), so a batch of 50 that fails in full cannot hot-spin the processor. With progress, the loop re-polls at once both for a full eligible batch and for key-mates the cycle deferred behind their key&#39;s head row, so an ordering key is not serialized at one row per poll (<code>:255</code>).</li>
+          <li>Rows orphaned by a process crash (no signal exists) wait up to the polling interval before the safety-net pickup. A local domain-event row written on the async path first waits out the lease it was inserted under (<code>Outbox:LeaseSeconds</code>, default 300s: <code>OutboxSettings.cs:76-85</code>), because nothing released it (<code>DomainEventSaveChangesInterceptor.cs:20-23</code>).</li>
+          <li>Delivered stamps are batched, so a crash costs redelivery. The rows delivered since the last flush carry no <code>ProcessedOn</code> when the process dies (or when the exit flush itself fails), so they are redelivered once their lease expires after <code>Outbox:LeaseSeconds</code> (<code>OutboxProcessor.cs:43-45</code>): up to one batch of already-delivered rows. The consumer-side inbox absorbs that on a broker transport (<a href="021-consumer-inbox-idempotency.html">ADR-021</a>); handlers stay idempotent regardless. <code>ProcessedOn</code>, and with it the <code>outbox.dispatch.lag</code> measurement, is the time of the flush rather than of each delivery (<code>:868</code>, <code>:948-950</code>). A graceful shutdown narrows the window: the buffered deliveries are flushed under the 5-second <code>ShutdownStampTimeout</code> (<code>FlushDeliveredOnExitAsync</code> at <code>:904-920</code>, budget at <code>:97</code>, <code>:911</code>), and a row that fails while shutdown is signalled has its retry state written under the same budget before the cancellation is rethrown (<code>RecordFailureOnShutdownAsync</code> at <code>:746-763</code>, rethrow at <code>:762</code>). A row whose delivery itself throws <code>OperationCanceledException</code> under shutdown is rethrown before any outcome is recorded (<code>:583-590</code>), so it is not stamped and is redelivered once its lease expires.</li>
           </ul>
           <h2 id="revision-2026-07-19">Revision (2026-07-19)</h2>
           <p>Four changes from the 2026-07-19 full review:</p>
@@ -740,6 +746,91 @@
           <code>OutboxSettings.cs</code>: <code>BatchSize</code> <code>:17</code>, <code>MaxRetries</code> <code>:21</code>, <code>LeaseSeconds</code> <code>:84</code>,
           <code>RetryBackoffBaseSeconds</code> <code>:101</code>. <code>PollingLoop.cs</code>: jitter <code>:193</code>, cap <code>:196</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. The dual-dispatch decision, the claim lease, the ordering
+          guard, the jittered retry curve (<code>MMCA.Common/.../Persistence/Polling/PollingLoop.cs:183-197</code>) and
+          the in-process insert lease are unchanged. What moved is how a claimed row&#39;s outcome and lease reach
+          the database (MMCA.Common v1.240.0, <code>MMCA.Common/CHANGELOG.md:236</code>, which restored the pre-1.233.0
+          drain rate after the per-row renewal and stamp of the Revision (2026-10-07) cut it from about 1,800
+          to about 50 messages per second on the load tier) and what a row carries (v1.247.0). This
+          supersedes the Revision (2026-10-07) items 1 to 3 and corrects one bullet of the Revision
+          (2026-10-06). The current-state Decision and Trade-offs above are corrected; the earlier Revision
+          sections stay as written.</p>
+          <ol>
+          <li><strong>Delivered rows are stamped in batches; failures are still written per row.</strong> After delivery
+          the cycle calls <code>RecordOutcomeAsync</code> (<code>MMCA.Common/.../Outbox/Processing/OutboxProcessor.cs:652</code>,
+          defined at <code>:690-704</code>). A failed row goes through <code>RecordFailureOutcomeAsync</code> (<code>:719-740</code>) to
+          <code>RecordFailureAsync</code> (<code>:959-978</code>) and <code>StampAsync</code> (<code>:993-1014</code>), the same id-and-token guarded
+          <code>ExecuteUpdateAsync</code> with no <code>LockedUntil</code> term (<code>:999-1000</code>). A delivered row only joins the
+          batch&#39;s buffer (<code>:702</code>). <code>FlushDeliveredAsync</code> (<code>:855-895</code>) stamps the buffer processed with one
+          guarded update per chunk of at most <code>MaxIdsPerStatement</code> (500, <code>:90</code>) ids, all sharing the flush
+          time as <code>ProcessedOn</code> (<code>:868-873</code>). The flush runs at the end of the batch (<code>:505</code>), before any
+          lease renewal (<code>:678</code>) and on every early exit (<code>:509-514</code>). A row the flush finds under another
+          token is logged as lost and detached rather than stamped (<code>:878-891</code>, <code>SyncDelivered</code> at
+          <code>:928-936</code>). There is still no batch save (<code>:241-244</code>). <code>WriteOutcomeAsync</code> and
+          <code>RecordDeliveredAsync</code> no longer exist.</li>
+          <li><strong>The lease is renewed for the rest of the batch once half of it is spent.</strong> <code>RenewLeaseIfDueAsync</code>
+          (<code>:669-683</code>, called before each row at <code>:542</code>) writes nothing while at least half of
+          <code>Outbox:LeaseSeconds</code> remains (<code>:675-676</code>). Once less remains it first flushes the buffered
+          stamps (<code>:678</code>), then <code>RenewRemainingLeasesAsync</code> (<code>:802-841</code>) extends <code>LockedUntil</code> for every row
+          not yet dispatched in one token-guarded statement per chunk (<code>:818-823</code>); rows that no longer
+          carry the token join the batch&#39;s lost set (<code>:830-837</code>), and a lost row is skipped, not dispatched
+          (<code>:542-545</code>). The cycle context still writes renewals and outcomes; delivery stays on the per-row
+          scope (<code>:552-556</code>).</li>
+          <li><strong>Shutdown flushes the delivered rows and writes a failed in-flight row.</strong> Delivered rows still
+          in the buffer are flushed by <code>FlushDeliveredOnExitAsync</code> (<code>:904-920</code>) under the 5-second
+          <code>ShutdownStampTimeout</code> (<code>:97</code>, budget at <code>:911</code>), from the <code>finally</code> at <code>:509-514</code>; a failure of
+          that flush is logged, never thrown (<code>:916-919</code>). A row that failed while shutdown was signalled,
+          or whose failure write was cancelled (<code>:725-737</code>), is written by <code>RecordFailureOnShutdownAsync</code>
+          (<code>:746-763</code>) under the same budget (<code>:752</code>), which then rethrows the cancellation (<code>:762</code>). After
+          each row&#39;s outcome the loop stops the batch if shutdown was signalled (<code>:656</code>). One case is still
+          not covered: when delivery itself throws <code>OperationCanceledException</code> under shutdown, the catch at
+          <code>:583-590</code> rethrows before any outcome is recorded, so that row is not stamped, although the rows
+          delivered before it are still flushed.</li>
+          <li><strong>A crash redelivers the rows delivered since the last flush.</strong> The cost of batching is recorded
+          in code: those rows carry no <code>ProcessedOn</code> after a crash (or a failed exit flush), so they are
+          redelivered once their lease expires (<code>OutboxProcessor.cs:43-45</code>), up to one batch of
+          already-delivered rows (<code>MMCA.Common/CHANGELOG.md:236</code>). Delivery stays at-least-once; the
+          consumer-side inbox (<a href="021-consumer-inbox-idempotency.html">ADR-021</a>) absorbs the duplicate on a
+          broker transport. The Trade-offs above carry this, and that <code>ProcessedOn</code> is the flush time.</li>
+          <li><strong>A row carries a fifth ambient-context column, <code>UserPermissions</code>.</strong> Beside <code>TenantId</code>,
+          <code>UserId</code>, <code>UserRoles</code> and <code>CorrelationId</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:95</code>,
+          <code>:102</code>, <code>:108</code>, <code>:122</code>), <code>UserPermissions</code> (<code>:115</code>) holds the raising user&#39;s permission claims as
+          a JSON array, unbounded and never truncated, null when the user held none (<code>:110-114</code>). It is
+          filled from the origin in <code>FromDomainEvent</code> (<code>:140</code>, assignments at <code>:153-157</code>), produced by
+          <code>AmbientOrigin.FlattenPermissions</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Context/AmbientOrigin.cs:110</code>) and restored
+          as <code>permission</code> claims before delivery (<code>OutboxProcessor.cs:563-570</code>, the column at <code>:567</code>), so a
+          claim-only grant passes the authorization gate deferred exactly as inline. The <code>mfa</code> claim is
+          still not carried. It is a second consumer migration (a new nullable column on <code>OutboxMessages</code>
+          and <code>InternalCommands</code>), released under <strong>Breaking</strong> in v1.247.0 (<code>MMCA.Common/CHANGELOG.md:49</code>).
+          The row also carries the W3C <code>TraceId</code> and <code>SpanId</code> captured when the event was raised
+          (<code>OutboxMessage.cs:73</code>, <code>:76</code>), which the Revision (2026-09-11) did not list. For readers of that
+          revision: roles are flattened by <code>AmbientOrigin.FlattenRoles</code> (<code>AmbientOrigin.cs:60</code>), which keeps
+          only the whole roles that fit the 512-character <code>MaxRolesLength</code> (<code>:37-40</code>) rather than cutting at
+          the column width.</li>
+          <li><strong><code>IOutboxAdministration</code> is registered whatever the outbox flag says.</strong> The Revision
+          (2026-10-06) placed the registration inside the <code>IsOutboxEnabled</code> branch. That branch registers
+          only the processor and the cleanup service
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:222-226</code>), with an
+          <code>else</code> that registers <code>OutboxDisabledNoticeService</code> (<code>:227-230</code>); the scoped
+          <code>IOutboxAdministration</code> registration follows the branch (<code>:234-235</code>), so a host with the outbox
+          disabled can still list, replay and count its dead letters.</li>
+          <li><strong>Anchors re-verified against current source:</strong> <code>OutboxProcessor.cs</code>: <code>PollingLoop.RunAsync</code> at
+          <code>:121</code>, <code>PollingLoop.DrainAllAsync</code> at <code>:166</code>, the eligible split at <code>:215-221</code>, the re-poll test
+          at <code>:255</code> (reasoning <code>:248-252</code>), the per-row <code>CreateTenantScope</code> at <code>:556</code> with
+          <code>AmbientOrigin.Restore</code> at <code>:563-570</code>, the cancellation catch at <code>:583-590</code>, the failure re-lease
+          at <code>:602-603</code>, the <code>MaxRetries</code> dead-letter check at <code>:627</code>, the <code>Outbox</code> authentication type at
+          <code>:81</code>, <code>ComputeRetryBackoffSeconds</code> at <code>:1062-1063</code>, <code>HandleUnresolvableType</code> at <code>:1032</code>; the
+          broker publish pipeline field at <code>:116</code> (built at <code>:1072</code>, applied at <code>:781</code>); the ordering guard
+          <code>FilterUnblocked</code> at <code>:437-447</code> (the correlated <code>!outbox.Any</code> at <code>:444</code>, the <code>RetryCount</code> term
+          <code>:446</code>, the <code>OccurredOn</code> term <code>:447</code>), chosen only for a batch holding a keyed row (<code>:366-368</code>)
+          and applied inside the claim&#39;s <code>ExecuteUpdateAsync</code> (<code>:370-374</code>); <code>SelectOrderedCandidates</code> at
+          <code>:400-416</code>. <code>OutboxSettings.cs</code>: <code>BatchSize</code> <code>:17</code>, <code>MaxRetries</code> <code>:21</code>, <code>LeaseSeconds</code> <code>:85</code>,
+          <code>RetryBackoffBaseSeconds</code> <code>:102</code>, <code>DeadLetterRetentionDays</code> <code>:111</code>. <code>PollingLoop.cs</code>: jitter
+          <code>:193</code>, cap <code>:196</code>. <code>AmbientOrigin.cs</code>: <code>Restore</code> at <code>:254</code>.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -765,6 +856,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             </ul>
           </nav>
         </aside>

@@ -1,7 +1,7 @@
 # ADR-129: The Tactical Aggregate Contract
 
 ## Status
-Accepted (2026-10-01).
+Accepted (2026-10-01). Revised 2026-10-21: anchors refreshed after the ADC `Speaker` aggregate moved its child-access call sites.
 
 ## Context
 Every entity in the four repos is written the same way: a sealed class over a framework base, a
@@ -91,8 +91,8 @@ every repo follows, not a test.
   finds a comment through `GetChildOrNotFound` (`:144`). `TicketInvariants` is the static class
   (`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/Tickets/TicketInvariants.cs:16`,
   `Result.Combine` at `:27`, `:33`, `:40`). The ADC and Store aggregates use the same members, for
-  example `Speaker` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:394`,
-  `:454`, `:474`) and `Product`
+  example `Speaker` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:437`,
+  `:497`, `:517`) and `Product`
   (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/Product.cs:407`, `:455`, `:474`).
 - **Adoption: the three application repos subclass the full base unchanged.** MMCA.ADC
   (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Domain/EntityConventionTests.cs:3-6`),
@@ -155,6 +155,18 @@ every repo follows, not a test.
 - Anchors re-verified against current source; the ADC `Speaker` examples now point at the
   `SetItems`, `RemoveChildOrNotFound` and `GetChildOrNotFound` call sites (`Speaker.cs:394`, `:454`,
   `:474`).
+
+## Revision (2026-10-21)
+Re-verified against current source. The contract is unchanged: ADC `Speaker` still uses the same
+child-access members as Helpdesk `Ticket` and Store `Product`, and the Store `Product` anchors still
+hold (`SetItems` at `Product.cs:407`, `RemoveChildOrNotFound` at `:455`, `GetChildOrNotFound` at
+`:474`). Only the ADC `Speaker` anchors moved.
+
+1. Anchors re-verified against current source: the ADC `Speaker` examples in the Decision now point
+   at the real call sites, `SetItems` at
+   `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:437`,
+   `RemoveChildOrNotFound` at `:497` and `GetChildOrNotFound` at `:517` (the same members also
+   appear at `:511` and `:423`). The earlier `:394`, `:454` and `:474` no longer land on these calls.
 
 ## Related
 [ADR-013](013-result-pattern.md) (the `Result<T>` factories this contract requires),

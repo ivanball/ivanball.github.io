@@ -6,6 +6,8 @@ filter instead of skipping the index). Revised 2026-10-01 (PostgreSQL coverage a
 quoting). Revised 2026-10-06: the per-engine predicate now comes from each engine's
 `IDataSourceEngine.BuildSoftDeleteFilter`, and the Cosmos no-op is a relational-capability check.
 Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
+Revised 2026-10-21: the opt-in path's test citation names SQL Server, SQLite and Cosmos and points
+to where the PostgreSQL predicate is pinned; anchors refreshed.
 
 ## Context
 ADR-005 makes deletion **soft**: an `IAuditableEntity` sets `IsDeleted = true`
@@ -123,8 +125,13 @@ at the moment it is called, so a `HasColumnName` on the soft-delete property has
   gets the soft-delete clause appended (`:78`), that a soft-deleted row no longer blocks a
   **pre-filtered** unique value (`:91`), and that an existing soft-delete clause is neither appended
   twice (`:108`) nor missed through different quoting and spacing (`:120`). The opt-in path is pinned
-  for both engines and for Cosmos in
-  `.../Persistence/Configuration/IndexBuilderExtensionsTests.cs:23-60`, and the combined predicate in
+  for SQL Server, SQLite and Cosmos in
+  `.../Persistence/Configuration/IndexBuilderExtensionsTests.cs:23-58` and for PostgreSQL in
+  `.../Persistence/Configuration/NotificationConfigurationEngineTests.cs:45-46` (the `(UserId, IsRead)`
+  index opts in at `UserNotificationConfiguration.cs:44-45`, and the dedup index's combined predicate
+  at `PushNotificationConfiguration.cs:69-71`). The convention's PostgreSQL predicate is pinned in
+  `.../Persistence/DbContexts/PostgreSQLDbContextModelTests.cs:156`, over a plain unique index
+  (`:251-252`), and the combined predicate in
   `.../Persistence/Configuration/PushNotificationConfigurationTests.cs:27-30`.
 
 ## Trade-offs
@@ -213,10 +220,27 @@ class summary gained a line), so the 2026-10-06 revision's anchors (`SoftDeleteF
    `= false` checks at `:58-59`), the quoting remarks `:45-52`, the class summary `:9-17`,
    `QuoteColumn` `:70-71`, the column-name fallback `:73-75` and the normalizer `:78-79`.
 
+## Revision (2026-10-21)
+Re-verified against current source. No decision, behavior or predicate changed. The Rationale's test
+citation for the opt-in path said "both engines and for Cosmos", which predates PostgreSQL coverage.
+1. `IndexBuilderExtensionsTests` covers the opt-in `HasSoftDeleteFilter` path for SQL Server, SQLite
+   and Cosmos only
+   (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Configuration/IndexBuilderExtensionsTests.cs:23`,
+   `:28`, `:33`). The opt-in path on PostgreSQL is pinned in
+   `.../Persistence/Configuration/NotificationConfigurationEngineTests.cs:45-46`, and the convention
+   path's PostgreSQL `"IsDeleted" = false` predicate in
+   `.../Persistence/DbContexts/PostgreSQLDbContextModelTests.cs:156`. The Rationale bullet now says
+   which path and which engines each file covers.
+2. Anchors re-verified against current source: `IndexBuilderExtensionsTests.cs` facts `:23-58`; the
+   ADC Identity override marker
+   (`MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Identity/Migrations/20260720031638_CommonV1120OutboxLeaseAndSoftDeleteIndexFilters.cs:14-17`)
+   and ADR-057's live-marker citation of it, now `057-expand-contract-schema-evolution-gate.md:97`
+   (the 2026-10-01 revision's `:90` stays as recorded).
+
 ## Related
 ADR-005 (decides soft-delete over erasure and owns the query filter that hides the row, but says
 nothing about uniqueness: this ADR closes that gap), ADR-057 (the expand/contract CI gate, which
 classifies the drop-and-recreate this convention produces as a legitimate override and cites the ADC
-Identity migration as its live marker at `057-expand-contract-schema-evolution-gate.md:90`),
+Identity migration as its live marker at `057-expand-contract-schema-evolution-gate.md:97`),
 ADR-006 (one context class per engine over the shared `ApplicationDbContext`, which is why a single
 convention registration reaches every module and every database).

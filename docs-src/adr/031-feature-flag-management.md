@@ -19,7 +19,8 @@ Decision and Rationale describe the bodies as they are. See the Revision (2026-1
 
 Revised 2026-10-06: the CQRS disabled failure no longer names the flag; its message is the generic
 wording the edge handler uses, and clients branch on the `Feature.Disabled` code. See the Revision
-(2026-10-06) at the end.
+(2026-10-06) at the end. Revised 2026-10-21: anchors refreshed after the `DisabledFeatureHandler`
+statement moved down one line.
 
 ## Context
 The apps need to decouple *release* from *deploy*: ship code dark, flip a kill switch, or roll a feature
@@ -40,7 +41,7 @@ is enforced at two independent surfaces:
 
 - **HTTP edge:** `[FeatureGate("X")]` (`Microsoft.FeatureManagement.Mvc`) on a controller or action. When
   `X` is off, `DisabledFeatureHandler` returns an **RFC 9457 ProblemDetails `404`** ("Feature not
-  available", `MMCA.Common.API/FeatureManagement/DisabledFeatureHandler.cs:18-26`). The body is built by
+  available", `MMCA.Common.API/FeatureManagement/DisabledFeatureHandler.cs:19-27`). The body is built by
   hand, so it does not carry the `ApiControllerBase.HandleFailure` shape (title "Operation failed" plus
   an `errors` extension, `MMCA.Common.API/Controllers/ApiControllerBase.cs:50-58`).
 - **CQRS pipeline:** a command/query implements `IFeatureGated` (exposing `FeatureName`). The
@@ -210,3 +211,17 @@ registration anchor in the Decision is refreshed to `DependencyInjection.cs:105-
   `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/AuthClaimTypes.cs:34`.
 - Anchors in the live sections were re-verified against current source; `BuildErrorsExtension` is at
   `ErrorHttpMapping.cs:62-70`.
+
+## Revision (2026-10-21)
+Re-verified against current source. The decision is unchanged: both surfaces answer `404`, the edge
+writes its own "Feature not available" ProblemDetails, and both decorators return the generic
+`Feature.Disabled` failure that does not name the flag. Only the edge handler's anchor moved.
+
+1. Anchors re-verified against current source: the `DisabledFeatureHandler` result statement is at
+   `MMCA.Common/Source/Presentation/MMCA.Common.API/FeatureManagement/DisabledFeatureHandler.cs:19-27`
+   (Title at `:22`, Detail at `:23`); the decorators' `Error.NotFoundError("Feature.Disabled", ...)`
+   is at
+   `MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/FeatureGateCommandDecorator.cs:60-62`
+   and `FeatureGateQueryDecorator.cs:59-61`; the `AddAPI` registration at `DependencyInjection.cs:105-107`,
+   `HandleFailure`'s body at `ApiControllerBase.cs:50-58` and `BuildErrorsExtension` at
+   `ErrorHttpMapping.cs:62-70` are unchanged.

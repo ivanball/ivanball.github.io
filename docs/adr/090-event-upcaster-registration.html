@@ -249,7 +249,8 @@
           citations are re-anchored after the flat-namespace split): see the revision at the end.
           Revised 2026-10-01: citations refreshed only. Revised 2026-10-06: a terminal unresolvable-type
           miss leaves <code>ProcessedOn</code> null rather than stamping it, so the row stays listed and replayable.
-          Revised 2026-10-07: anchors refreshed after the v1.233.0 release.</p>
+          Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
+          Revised 2026-10-21: anchors refreshed after the outbox releases through v1.247.0.</p>
           <h2 id="context">Context</h2>
           <p>ADR-010 splits event evolution into a signal and a discipline. The signal (<code>SchemaVersion</code>, a
           fitness-function-gated property on every integration event) shipped with ADR-010 itself. The
@@ -440,6 +441,29 @@ x.RegisterUpcastedIntegrationEventConsumer&lt;ProductVariantChanged&gt;(); <span
           <code>EventUpcasterRegistry</code>, <code>IntegrationEventConsumerExtensions</code> and <code>ArchitectureRules.Upcasters.cs</code>
           are unchanged.</li>
           </ol>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. The decision, the mechanism, both delivery paths, and the
+          terminal unresolvable-type behavior recorded by the 2026-10-06 revision are unchanged; line anchors
+          moved in both <code>OutboxProcessor.cs</code> and <code>OutboxMessage.cs</code> (the latter after the v1.247.0 release
+          added the <code>UserPermissions</code> ambient-context column to the outbox row). Anchors inside the earlier
+          revisions are left as recorded.</p>
+          <ol>
+          <li><strong>Anchors re-verified against current source:</strong> In
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs</code>,
+          the <code>DeserializeEvent</code> call is at <code>:572</code>, the <code>HandleUnresolvableType</code> call at <code>:575</code>, and the
+          method at <code>:1032</code>, with its XML doc at <code>:1016-1026</code> (<code>ProcessedOn</code> stays null, <code>:1022-1023</code>). The
+          terminal miss sets <code>RetryCount</code> to <code>MaxRetries</code> and clears <code>LockedUntil</code> at <code>:1047-1048</code>, and the
+          dead-letter counter increment is at <code>:1049-1052</code> with the <code>reason</code> <code>type_unresolvable</code> tag at
+          <code>:1052</code>. In
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs</code>,
+          <code>FromDomainEvent</code> (<code>:140</code>) stores <code>GetStorageName</code> at <code>:148</code>, <code>DeserializeEvent</code> (<code>:176</code>) calls
+          <code>ResolveEventType</code> at <code>:178</code> (defined at <code>:199</code>), and the
+          <code>Type.GetType(...) ?? EventNameResolver.FindTypeByDeclaredName(...)</code> fallback is at <code>:209</code>.
+          <code>AddEventUpcaster</code> remains at <code>DependencyInjection.Extensibility.cs:81</code> (singleton via
+          <code>TryAddEnumerable</code> at <code>:86</code>). The Decision section paths for <code>IEventUpcaster</code>,
+          <code>EventUpcasterRegistry</code>, <code>IntegrationEventConsumerExtensions</code> and <code>ArchitectureRules.Upcasters.cs</code>
+          are unchanged.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -459,6 +483,7 @@ x.RegisterUpcastedIntegrationEventConsumer&lt;ProductVariantChanged&gt;(); <span
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             </ul>
           </nav>
         </aside>

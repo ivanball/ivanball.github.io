@@ -248,7 +248,10 @@
           Revised 2026-10-06: the helper&#39;s call-site count refreshed and two omitted registrations recorded (the
           base&#39;s <code>ViewerTimeZone</code> default and the ADC Conference subclass&#39;s inert event lookup). See Revision
           (2026-10-06) at the end. Revised 2026-10-07: anchors refreshed after the v1.233.0 release. See Revision
-          (2026-10-07) at the end.</p>
+          (2026-10-07) at the end. Revised 2026-10-21: the <code>bunit</code> pin moved to 2.12.5 and a fourth central
+          package file (MMCA.Helpdesk&#39;s) names it, the helper&#39;s call-site count refreshed, and the third facade
+          registration (<code>IPendingToastService</code>) and the <code>FieldErrorAccessibilityExtensions</code> helper recorded.
+          See Revision (2026-10-21) at the end.</p>
           <h2 id="context">Context</h2>
           <p>Three test tiers in this workspace are decided in writing and one is not. ADR-015 gates <strong>structure</strong>
           with NetArchTest. ADR-058 ships the <strong>runtime conformance</strong> suites as abstract bases in
@@ -281,18 +284,23 @@
           and its remarks state why: v2 is the line compatible with xUnit v3 and Microsoft Testing Platform,
           and derived test classes call <code>RenderUnderTest</code> / <code>RenderAs</code> and never touch the version-specific
           symbols, so a move off that line changes this file and no other
-          (<code>BunitComponentTestBase.cs:30-35</code>). The line is pinned at <code>bunit</code> 2.11.3 in each repo&#39;s central
-          package file (<code>MMCA.Common/Directory.Packages.props:234-235</code>,
-          <code>MMCA.ADC/Directory.Packages.props:32</code>, <code>MMCA.Store/Directory.Packages.props:54</code>), and the
+          (<code>BunitComponentTestBase.cs:30-35</code>). The line is pinned at <code>bunit</code> 2.12.5 in each repo&#39;s central
+          package file (<code>MMCA.Common/Directory.Packages.props:241-242</code>,
+          <code>MMCA.ADC/Directory.Packages.props:32</code>, <code>MMCA.Store/Directory.Packages.props:54</code>,
+          <code>MMCA.Helpdesk/Directory.Packages.props:32</code>), and the
           package carries a direct <code>AngleSharp</code> pin because central package management does not pin
           transitives (<code>MMCA.Common.Testing.UI.csproj:15-17</code>).</li>
           <li><strong>MudBlazor services plus the ADR-067 facades, registered once.</strong> The constructor calls
           <code>Services.AddMudServices()</code> (<code>BunitComponentTestBase.cs:47</code>) and then
           <code>Services.AddCommonUiFacades()</code> (<code>:54</code>), which is the same call the production shell makes from
-          <code>AddUIShared</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:159</code>). That
-          call registers <code>IToastService</code> -&gt; <code>MudToastService</code> and <code>IAppDialogService</code> -&gt; <code>MudAppDialogService</code>
-          with <code>TryAdd</code> (<code>DependencyInjection.cs:227-230</code>), so a component test resolves the vendor-neutral
-          facades and exercises the real Mud-backed path, and a test that wants a recording double registers
+          <code>AddUIShared</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:167</code>). That
+          call registers <code>IToastService</code> -&gt; <code>MudToastService</code>, <code>IAppDialogService</code> -&gt; <code>MudAppDialogService</code>
+          and <code>IPendingToastService</code> -&gt; <code>PendingToastService</code> (the toast that survives a <code>forceLoad</code>
+          navigation) with <code>TryAdd</code> (<code>DependencyInjection.cs:238-242</code>), so a component test resolves the vendor-neutral
+          facades and exercises the real Mud-backed toast and dialog path. The pending-toast facade is not
+          Mud-backed: it wraps <code>sessionStorage</code> through <code>IJSRuntime</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/PendingToastService.cs:7-13</code>), so under
+          loose JSInterop its storage calls only return defaults. A test that wants a recording double registers
           one afterwards (last registration wins, <code>BunitComponentTestBase.cs:49-53</code>).</li>
           <li><strong>Loose JSInterop.</strong> <code>JSInterop.Mode = JSRuntimeMode.Loose</code> (<code>:56</code>) so MudBlazor components that
           probe JS during render return default values instead of throwing (<code>:18-19</code>).</li>
@@ -323,24 +331,30 @@
           call itself (<code>:78-81</code>).</li>
           <li><strong><code>SetRendererInfo</code> behind one helper, because its call ordering is load-bearing.</strong>
           <code>ConfigureDataGridListPageHost</code> (<code>:111-129</code>) registers the list-page state services (<code>:116-117</code>),
-          substitutes MudBlazor&#39;s <code>IBrowserViewportService</code> with an inert double so <code>IsMobile</code> stays
-          deterministically false (<code>:121</code>, which is why <code>Moq</code> is a package dependency rather than a
+          by default substitutes MudBlazor&#39;s <code>IBrowserViewportService</code> with an inert double so <code>IsMobile</code> stays
+          deterministically false (<code>stubViewport: false</code> keeps the real service, <code>:114</code>, <code>:119-122</code>; which is why <code>Moq</code> is a package dependency rather than a
           hand-written stub, <code>MMCA.Common.Testing.UI.csproj:19-23</code>), adds bUnit&#39;s persistent component state
           for the prerender boundary (<code>:125</code>), and calls <code>SetRendererInfo</code> <strong>last</strong> (<code>:128</code>). The rule is
           written where the helper is: <code>SetRendererInfo</code> builds and freezes the bUnit service provider, so any
           registration made after it is silently ignored and the page resolves the framework default instead
-          of the test&#39;s double (<code>:89-93</code>). Thirty-two test files across MMCA.Common, MMCA.ADC and MMCA.Store
-          call the helper today (three in MMCA.Common, nineteen in MMCA.ADC, ten in MMCA.Store); its comment
+          of the test&#39;s double (<code>:89-93</code>). Thirty-eight test files across MMCA.Common, MMCA.ADC and MMCA.Store
+          call the helper today (five in MMCA.Common, twenty-three in MMCA.ADC, ten in MMCA.Store); its comment
           records the fifteen hand-rolled copies of the block that the extraction replaced (<code>:92-93</code>).</li>
           <li><strong>The rest of the harness ships with it.</strong> <code>RenderMudProviders</code> renders the popover, dialog and
           snackbar providers into the test&#39;s render root and returns handles (<code>:154-165</code>, <code>:168-171</code>);
           <code>BunitInteractionExtensions</code> expresses clicks and text reads over accessible text rather than CSS
           paths (<code>Infrastructure/BunitInteractionExtensions.cs:12-34</code>); <code>MarkupSnapshot</code> is a dependency-free
           golden-markup comparison that normalizes MudBlazor&#39;s per-render GUIDs
-          (<code>Infrastructure/MarkupSnapshot.cs:21</code>); and the HTTP-facing doubles cover the UI service layer
+          (<code>Infrastructure/MarkupSnapshot.cs:22</code>); <code>FieldErrorAccessibilityExtensions</code> asserts that a field&#39;s
+          validation error reaches assistive technology (an alert role, <code>aria-invalid</code>, and a description
+          reference; <code>Infrastructure/FieldErrorAccessibilityExtensions.cs:7-12</code>); and the HTTP-facing doubles
+          cover the UI service layer
           (<code>Infrastructure/UiHttpServiceHarness.cs:12</code>, <code>Infrastructure/CapturingHttpMessageHandler.cs:20</code>,
           <code>Infrastructure/StubTokenStorageService.cs:13</code>, <code>Infrastructure/HttpTestDoubles.cs:12</code>,
-          <code>Infrastructure/ErrorSummaryExtensions.cs:10</code>).</li>
+          <code>Infrastructure/ErrorSummaryExtensions.cs:10</code>). The package also ships three shared page-test bases
+          over the base class (<code>Pages/ConfirmEmailPageTestsBase.cs:26</code>, <code>Pages/RoleAdminEditPageTestsBase.cs:22</code>,
+          <code>Pages/RoleAdminListPageTestsBase.cs:21</code>), and for them it carries <code>AwesomeAssertions</code> and
+          <code>xunit.v3.extensibility.core</code> into every consuming test project (<code>MMCA.Common.Testing.UI.csproj:24-27</code>).</li>
           <li><strong>Adoption is a thin repo-local subclass, or the shipped base directly.</strong> Six consumer test projects take the
           package reference: ADC Conference, Identity and Engagement
           (<code>MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/MMCA.ADC.Conference.UI.Tests.csproj:12</code>,
@@ -385,7 +399,7 @@
           every UI test class in three repos (<code>:30-35</code>).</li>
           <li><strong>Test-time and run-time resolve the same facades.</strong> Because the base calls the production
           <code>AddCommonUiFacades</code> rather than registering its own doubles (<code>:54</code>,
-          <code>MMCA.Common.UI/DependencyInjection.cs:159,227-230</code>), a component test asserts against the real
+          <code>MMCA.Common.UI/DependencyInjection.cs:167,238-242</code>), a component test asserts against the real
           toast and dialog implementations ADR-067 put behind those interfaces, and a test that wants to
           assert on a toast opts into a double explicitly.</li>
           <li><strong>A package matches how every other shipped test tier is delivered.</strong> Runtime conformance
@@ -416,9 +430,11 @@
           directly as well
           (<code>MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/MMCA.ADC.Conference.UI.Tests.csproj:10</code>),
           so each repo&#39;s central package file names the number
-          (<code>MMCA.Common/Directory.Packages.props:235</code>, <code>MMCA.ADC/Directory.Packages.props:32</code>,
-          <code>MMCA.Store/Directory.Packages.props:54</code>) and three files have to agree. The <code>AngleSharp</code> advisory
-          pin does not spread that way: it is named once, in <code>MMCA.Common/Directory.Packages.props:240</code>, and
+          (<code>MMCA.Common/Directory.Packages.props:242</code>, <code>MMCA.ADC/Directory.Packages.props:32</code>,
+          <code>MMCA.Store/Directory.Packages.props:54</code>). MMCA.Helpdesk&#39;s central file names <code>bunit</code> and
+          <code>MMCA.Common.Testing.UI</code> too (<code>MMCA.Helpdesk/Directory.Packages.props:32,94</code>) although no Helpdesk
+          project references either, so four files have to agree. The <code>AngleSharp</code> advisory
+          pin does not spread that way: it is named once, in <code>MMCA.Common/Directory.Packages.props:247</code>, and
           reaches consumers transitively through the package&#39;s own direct reference
           (<code>MMCA.Common.Testing.UI.csproj:17</code>).</li>
           </ul>
@@ -515,6 +531,42 @@
           in the Decision bullet and the per-repo pin trade-off), <code>MMCA.Common/Directory.Packages.props:234-235,240</code>
           and <code>MMCA.ADC/Directory.Packages.props:32</code> (unchanged).</li>
           </ol>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p><strong>The decision and the mechanism are unchanged.</strong> Re-verified against current source: the <code>AngleSharp</code>
+          pin is still named only in MMCA.Common&#39;s central package file (no ADC or Store props or project file
+          names it), and six of the seven <code>Infrastructure/*.cs</code> helper-inventory anchors are exact (only
+          <code>MarkupSnapshot.cs</code> moved). The <code>bunit</code> number, the pin&#39;s file count, the helper&#39;s call-site count and
+          two inventories moved.</p>
+          <ol>
+          <li><code>bunit</code> is pinned at 2.12.5, not 2.11.3, and the files still agree
+          (<code>MMCA.Common/Directory.Packages.props:242</code>, <code>MMCA.ADC/Directory.Packages.props:32</code>,
+          <code>MMCA.Store/Directory.Packages.props:54</code>).</li>
+          <li>A fourth central package file names it: <code>MMCA.Helpdesk/Directory.Packages.props:32</code> pins <code>bunit</code>
+          2.12.5 and <code>:94</code> pins <code>MMCA.Common.Testing.UI</code>, although no Helpdesk project references either
+          package. The per-repo pin trade-off now says four files have to agree, not three.</li>
+          <li><code>ConfigureDataGridListPageHost</code> has thirty-eight calling test files, not thirty-two (five in
+          MMCA.Common, twenty-three in MMCA.ADC, ten in MMCA.Store). One further ADC file names the helper
+          only in a comment and is not counted.</li>
+          <li><code>AddCommonUiFacades</code> registers a third facade, <code>IPendingToastService</code> -&gt; <code>PendingToastService</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:242</code>), which the Decision
+          bullet now lists. It is not Mud-backed (it wraps <code>sessionStorage</code> through <code>IJSRuntime</code>,
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/PendingToastService.cs:7-13</code>), so the
+          real-path claim is scoped to the toast and dialog pair.</li>
+          <li>The viewport substitution is a default, not unconditional: <code>ConfigureDataGridListPageHost</code> takes
+          <code>stubViewport</code> (default true), and <code>false</code> keeps MudBlazor&#39;s real service
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.UI/Infrastructure/BunitComponentTestBase.cs:114,119-122</code>).</li>
+          <li>The package also ships <code>FieldErrorAccessibilityExtensions</code>, which asserts that a field&#39;s validation
+          error is exposed to assistive technology
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.UI/Infrastructure/FieldErrorAccessibilityExtensions.cs:12</code>);
+          the helper inventory now lists it. The inventory also now lists the three shared page-test bases
+          under <code>Pages/</code> and the <code>AwesomeAssertions</code> / <code>xunit.v3.extensibility.core</code> references they bring
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.UI/MMCA.Common.Testing.UI.csproj:24-27</code>), which
+          the 2026-10-01 revision recorded outside it.</li>
+          <li>Anchors re-verified against current source: <code>MMCA.Common/Directory.Packages.props:241-242,247</code>
+          (were <code>:234-235,240</code>), <code>DependencyInjection.cs:167</code> (was <code>:159</code>), <code>DependencyInjection.cs:238-242</code>
+          (was <code>:227-230</code>), <code>Infrastructure/MarkupSnapshot.cs:22</code> (was <code>:21</code>),
+          <code>MMCA.Store/Directory.Packages.props:54</code> and <code>MMCA.ADC/Directory.Packages.props:32</code> (unchanged).</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -536,6 +588,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             </ul>
           </nav>
         </aside>

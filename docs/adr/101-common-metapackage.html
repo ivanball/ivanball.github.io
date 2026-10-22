@@ -249,7 +249,9 @@
           <a href="https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md" target="_blank" rel="noopener">FACTS.md</a>; this record does not restate
           them. Revised 2026-10-07: the lockstep rationale now says the metapackage sets its six dependencies
           as minimum-version floors rather than exact pins, and the host claim says application hosts depend
-          on all six mostly transitively; anchors refreshed after the v1.233.0 release.</p>
+          on all six mostly transitively; anchors refreshed after the v1.233.0 release. Revised 2026-10-21:
+          anchors refreshed after the package-consumption CI stages moved into
+          <code>build/consumer-check/Invoke-ConsumerCheck.ps1</code>.</p>
           <h2 id="context">Context</h2>
           <p>ADR-053 made the install path credential-free: <code>dotnet add package MMCA.Common.API</code> works for anyone,
           from nuget.org, with no token and no hand-written <code>nuget.config</code>. What it did not shorten is the
@@ -346,12 +348,15 @@
           <li><strong>NU5128 is suppressed rather than avoided.</strong> The suppression is scoped to this project and
           justified in place, but it is a warning switched off, and a future genuine packaging problem in
           this project would have to be caught by the pack output rather than by the build.</li>
-          <li><strong>No consumer exercises it.</strong> The package-consumption CI job packs every package in
-          <code>MMCA.Common.slnx</code> (<code>MMCA.Common/.github/workflows/ci.yml:671</code>), the metapackage included, so a
-          pack break is caught, but it never restores the metapackage: its throwaway consumer references
-          only <code>MMCA.Common.API</code>, <code>MMCA.Common.Infrastructure</code> and <code>MMCA.Common.Testing.Architecture</code>
-          (<code>:706-708</code>), its layer-rule probes take only Domain, Application and Infrastructure (<code>:750-757</code>),
-          and the <code>MMCA.Common.*</code> source-mapping pattern (<code>:690</code>) would not route the bare <code>MMCA.Common</code> id.
+          <li><strong>No consumer exercises it.</strong> The package-consumption CI job
+          (<code>MMCA.Common/.github/workflows/ci.yml:674-699</code>) runs its stages through
+          <code>MMCA.Common/build/consumer-check/Invoke-ConsumerCheck.ps1</code>, whose pack stage packs every package
+          in <code>MMCA.Common.slnx</code> (<code>:143-147</code>), the metapackage included, so a pack break is caught, but it
+          never restores the metapackage: its throwaway consumer references only <code>MMCA.Common.API</code>,
+          <code>MMCA.Common.Infrastructure</code> and <code>MMCA.Common.Testing.Architecture</code> (<code>:184-186</code>), its layer-rule
+          probes take only Domain, Application and Infrastructure (<code>:261-277</code>), and the <code>MMCA.Common.*</code>
+          source-mapping pattern in the generated <code>nuget.config</code> (<code>:168</code>) would not route the bare
+          <code>MMCA.Common</code> id, which falls through to nuget.org under the <code>*</code> pattern (<code>:171</code>).
           No application in this workspace builds against the metapackage today, so its ergonomics are
           asserted rather than demonstrated. That is a deliberate consequence of point 6.</li>
           </ul>
@@ -391,6 +396,28 @@
           the layer-rule probes that also never take the bare id are <code>:750-757</code>, and the <code>MMCA.Common.*</code>
           source-mapping pattern is <code>:690</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. The decision and every Trade-off are unchanged: the metapackage
+          still bundles the six in layer order (<code>MMCA.Common/Source/MMCA.Common/MMCA.Common.csproj:26-31</code>),
+          still ships no assembly (<code>:9</code>) with NU5128 suppressed (<code>:14</code>), and the package-consumption check
+          still packs it without ever restoring it. What moved is where that check lives: the CI job&#39;s pack,
+          scaffold, build and probe stages are now one script that <code>ci.yml</code> invokes stage by stage, so the
+          Trade-offs bullet cites the script instead of inline workflow steps.</p>
+          <ol>
+          <li><strong>The package-consumption check runs through a script.</strong> Each step of the job calls
+          <code>MMCA.Common/build/consumer-check/Invoke-ConsumerCheck.ps1</code> with one <code>-Stage</code>
+          (<code>MMCA.Common/.github/workflows/ci.yml:674-699</code>). The script packs <code>MMCA.Common.slnx</code> (<code>:143-147</code>),
+          writes the throwaway consumer&#39;s <code>nuget.config</code> mapping <code>MMCA.Common.*</code> to the local feed and <code>*</code> to
+          nuget.org (<code>:168</code>, <code>:171</code>), references only API, Infrastructure and Testing.Architecture
+          (<code>:184-186</code>), and builds layer-rule probes over Domain, Application and Infrastructure only
+          (<code>:261-277</code>). The bare <code>MMCA.Common</code> id is referenced nowhere, so the &quot;No consumer exercises it&quot;
+          statement still holds; the bullet is re-anchored in place.</li>
+          <li>Anchors re-verified against current source: the six core <code>PackageVersion</code> pins are
+          <code>MMCA.Helpdesk/Directory.Packages.props:83-88</code> (ADC and Store carry the same six), the job steps
+          <code>MMCA.Common/.github/workflows/ci.yml:674-699</code>, and the script stages
+          <code>MMCA.Common/build/consumer-check/Invoke-ConsumerCheck.ps1:143-147</code>, <code>:168</code>, <code>:171</code>, <code>:184-186</code>
+          and <code>:261-277</code>.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="053-dual-registry-package-publishing.html">ADR-053</a> (dual-registry publishing, which the metapackage
           joins with no workflow change),
@@ -418,6 +445,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

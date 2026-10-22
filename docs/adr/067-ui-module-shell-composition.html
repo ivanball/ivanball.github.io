@@ -253,7 +253,9 @@
           shell pages the route list omitted. Revised 2026-10-07: records that the delete confirmation bypasses
           <code>IAppDialogService</code> (the <code>DeleteConfirmation</code> component injects MudBlazor&#39;s <code>IDialogService</code>
           directly), scopes the facades to toasts and confirmation, and re-anchors the ADC Web host&#39;s assembly
-          wiring.</p>
+          wiring. Revised 2026-10-21: records that <code>AddCommonUiFacades()</code> also registers
+          <code>IPendingToastService</code> and is called directly by the Helpdesk Web head, names permission gating in
+          the nav-trimming rationale, and refreshes anchors that moved.</p>
           <h2 id="context">Context</h2>
           <p>ADR-059 decided how a module plugs into the <strong>server</strong>: an <code>IModule</code> implementation is discovered by
           reflection, registered in topological order, and a host composes an application out of those modules
@@ -318,15 +320,15 @@
           </li>
           <li><p><strong>Three component extension points render module-supplied types.</strong> <code>MainLayout</code> reads
           <code>AppBarComponentTypes</code>, <code>LayoutComponentTypes</code> and <code>ContentHeaderComponentTypes</code> off the
-          registrations (<code>MMCA.Common.UI/Layout/MainLayout.razor:155-157</code>) and renders them through
-          <code>DynamicComponent</code> in the top app bar (<code>:48-51</code>, mirrored on the mobile top row at
+          registrations (<code>MMCA.Common.UI/Layout/MainLayout.razor:156-158</code>) and renders them through
+          <code>DynamicComponent</code> in the top app bar (<code>:50-53</code>, mirrored on the mobile top row at
           <code>NavMenu.razor:48-51</code>), as content headers inside the main landmark directly above the page body
-          (<code>:79-82</code>), and at the root of the layout (<code>:120-123</code>), so a module can add an icon with a badge, a
+          (<code>:80-83</code>), and at the root of the layout (<code>:121-124</code>), so a module can add an icon with a badge, a
           banner above the page, or a drawer without touching the layout.</p>
           </li>
           <li><p><strong>Registration is one call.</strong> <code>AddUIModule&lt;TModule&gt;()</code> runs the Scrutor scan for the module&#39;s entity
           services and then registers the descriptor as a singleton <code>IUIModule</code>
-          (<code>MMCA.Common.UI/DependencyInjection.cs:319-329</code>); modules with extra services register the
+          (<code>MMCA.Common.UI/DependencyInjection.cs:332-341</code>); modules with extra services register the
           descriptor directly with <code>AddSingleton&lt;IUIModule, TModule&gt;()</code> after their own registrations
           (<code>MMCA.Common.UI/Notifications/DependencyInjection.cs:39</code>,
           <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/DependencyInjection.cs:76</code>).</p>
@@ -343,10 +345,16 @@
           <code>ConfirmAsync</code>, where dismissing the prompt counts as declining, so a caller only ever branches on
           <code>true</code>. Both facades are registered by one extracted call, <code>AddCommonUiFacades()</code>, which
           TryAdd-registers <code>MudToastService</code> and <code>MudAppDialogService</code> over MudBlazor&#39;s <code>ISnackbar</code> and
-          <code>IDialogService</code> (<code>MMCA.Common.UI/DependencyInjection.cs:227-230</code>). <code>AddUIShared</code> calls it (<code>:159</code>),
-          and so does the shipped bUnit base
+          <code>IDialogService</code> (<code>MMCA.Common.UI/DependencyInjection.cs:238-241</code>). The same call also
+          TryAdd-registers <code>IPendingToastService</code> (<code>:242</code>), a toast parked in <code>sessionStorage</code> that survives
+          a <code>forceLoad</code> navigation; its implementation names no vendor type (it wraps <code>IJSRuntime</code>,
+          <code>MMCA.Common.UI/Services/PendingToastService.cs:13</code>), and the layout&#39;s <code>PendingToastHost</code>
+          (<code>MainLayout.razor:19</code>) shows it through <code>IToastService</code>
+          (<code>MMCA.Common.UI/Components/Notifications/PendingToastHost.razor:3</code>). <code>AddUIShared</code> calls it
+          (<code>DependencyInjection.cs:167</code>), the Helpdesk Web head calls it directly
+          (<code>MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Program.cs:23</code>), and so does the shipped bUnit base
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.UI/Infrastructure/BunitComponentTestBase.cs:54</code>),
-          so a component test resolves the two contracts without pulling in the rest of the shared-UI surface.
+          so a component test resolves the contracts without pulling in the rest of the shared-UI surface.
           The framework helpers that raise a toast take the toast facade
           (<code>MMCA.Common.UI/Common/ResultUiExtensions.cs:289-291</code>, and
           <code>ListPageActions.DeleteWithConfirmationAsync</code> at <code>MMCA.Common.UI/Pages/Common/ListPageActions.cs:61</code>).
@@ -368,22 +376,23 @@
           <p>Adoption today is every module UI in both apps plus the framework&#39;s own and its test host: ADC
           Conference, Identity and Engagement
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/ConferenceUIModule.cs:14</code>,
-          <code>Identity/MMCA.ADC.Identity.UI/IdentityUIModule.cs:18</code>,
-          <code>Engagement/MMCA.ADC.Engagement.UI/EngagementUIModule.cs:17</code>); Store Catalog, Sales and Identity
+          <code>Identity/MMCA.ADC.Identity.UI/IdentityUIModule.cs:17</code>,
+          <code>Engagement/MMCA.ADC.Engagement.UI/EngagementUIModule.cs:18</code>); Store Catalog, Sales and Identity
           (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.UI/CatalogUIModule.cs:13</code>,
-          <code>Sales/MMCA.Store.Sales.UI/SalesUIModule.cs:17</code>, <code>Identity/MMCA.Store.Identity.UI/IdentityUIModule.cs:15</code>);
+          <code>Sales/MMCA.Store.Sales.UI/SalesUIModule.cs:17</code>, <code>Identity/MMCA.Store.Identity.UI/IdentityUIModule.cs:14</code>);
           the framework&#39;s own notification module
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Notifications/NotificationUIModule.cs:15</code>); and the
           backend-less component gallery, whose stub descriptor is the only reason its <code>/components</code> page is
           routable (<code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.Gallery/Stubs/GalleryUIModule.cs:14</code>,
-          registered at <code>GalleryHost.cs:91</code>). Two adopters are <strong>host-only</strong>: ADC&#39;s <code>DeviceUIModule</code> adds the
+          registered at <code>GalleryHost.cs:96</code>). Two adopters are <strong>host-only</strong>: ADC&#39;s <code>DeviceUIModule</code> adds the
           MAUI-only device settings page plus the deep-link listener
-          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/DeviceUIModule.cs:18</code>, registered at <code>MauiProgram.cs:161</code>), and
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/DeviceUIModule.cs:18</code>, registered at <code>MauiProgram.cs:167</code>), and
           Store&#39;s <code>MauiUIModule</code> contributes no nav and no pages at all, existing purely to hang the native
           theme sync on the layout extension point (<code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/MauiUIModule.cs:14</code>,
-          registered at <code>MauiProgram.cs:81</code>). MMCA.Helpdesk deliberately does <strong>not</strong> adopt this: the seed&#39;s
+          registered at <code>MauiProgram.cs:87</code>). MMCA.Helpdesk deliberately does <strong>not</strong> adopt this: the seed&#39;s
           Blazor head owns its own <code>Routes.razor</code> and <code>MainLayout</code> and never calls <code>AddUIShared</code>, because it has
-          no <code>ApiSettings</code>-backed client pipeline (<code>MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Program.cs:26-28</code>).</p>
+          no <code>ApiSettings</code>-backed client pipeline (<code>MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Program.cs:32-34</code>);
+          it registers the facades on their own with <code>AddCommonUiFacades()</code> instead (<code>:20-23</code>).</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
           <li><strong>One composition model across both tiers.</strong> A module already declares its server-side surface
@@ -399,7 +408,7 @@
           same shell serves a web head, a WASM client and a MAUI hybrid head with different module sets, and a
           head-specific module (device settings, native theme sync) is just another registration that other
           heads never make.</li>
-          <li><strong>Nav trimming belongs in one place.</strong> Role and claim gating computed once in <code>NavMenu</code> gives every
+          <li><strong>Nav trimming belongs in one place.</strong> Role, claim and permission gating computed once in <code>NavMenu</code> gives every
           module the same behavior, instead of each module re-implementing <code>AuthorizeView</code> around its links.</li>
           <li><strong>Why MudBlazor.</strong> It is MIT-licensed with no per-developer or per-deployment cost, which suits a
           framework meant to be adopted by a new app for the price of a package reference. It is Material
@@ -444,7 +453,8 @@
           limitation is the framework&#39;s limitation until upstream moves (ADR-063 records the accepted
           <code>MudTablePager</code> combobox exception to the WCAG 2.1 AA gate). Components still reference MudBlazor
           types directly, so <code>IToastService</code> / <code>IAppDialogService</code> shrink a vendor swap to a bounded project
-          rather than making it a configuration change.</li>
+          rather than making it a configuration change. <code>IPendingToastService</code> adds no third vendor surface:
+          it renders through <code>IToastService</code>.</li>
           </ul>
           <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
           <p>No decision or rationale changed. Re-anchored the citations that moved: <code>Routes.razor</code> (inject <code>:7</code>,
@@ -488,6 +498,31 @@
           <code>:313-330</code> (<code>.Concat</code> <code>:323</code>, <code>.Distinct()</code> <code>:324</code>, the overlap comment <code>:314-315</code>), and
           <code>ResultUiExtensions.NotifyOnFailure</code> (<code>MMCA.Common.UI/Common/ResultUiExtensions.cs:289-291</code>).</li>
           </ol>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. The contract, the shell, router and nav composition, the vendor
+          choice and the Helpdesk non-adoption are unchanged; the facade registration grew a third contract,
+          gained a third caller, and several anchors moved.</p>
+          <ol>
+          <li><code>AddCommonUiFacades()</code> also TryAdd-registers <code>IPendingToastService</code> -&gt; <code>PendingToastService</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:242</code>), a toast parked in
+          <code>sessionStorage</code> that survives a <code>forceLoad</code> navigation and is shown by the layout&#39;s
+          <code>PendingToastHost</code> (<code>MMCA.Common.UI/Layout/MainLayout.razor:19</code>) through <code>IToastService</code>
+          (<code>MMCA.Common.UI/Components/Notifications/PendingToastHost.razor:3</code>). Its implementation wraps
+          <code>IJSRuntime</code> and names no vendor type (<code>MMCA.Common.UI/Services/PendingToastService.cs:13</code>), so the
+          Trade-offs statement that the facades cover two vendor surfaces stands, with a clarifying sentence.</li>
+          <li>The Helpdesk Web head calls <code>AddCommonUiFacades()</code> directly
+          (<code>MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Program.cs:23</code>, reason at <code>:20-22</code>), the third
+          caller beside <code>AddUIShared</code> and the bUnit base. The Decision now names it, and its no-<code>AddUIShared</code>
+          citation moves to <code>Program.cs:32-34</code>.</li>
+          <li>The Rationale&#39;s nav-trimming bullet now names permission gating alongside role and claim, matching
+          the three filters the Decision already lists.</li>
+          <li>Anchors re-verified against current source: <code>MainLayout.razor</code> (list reads <code>:156-158</code>, app bar
+          <code>:50-53</code>, content header <code>:80-83</code>, layout root <code>:121-124</code>), <code>DependencyInjection.cs</code>
+          (<code>AddUIModule</code> <code>:332-341</code>, <code>AddCommonUiFacades</code> <code>:238-242</code>, called from <code>AddUIShared</code> at <code>:167</code>),
+          ADC <code>IdentityUIModule.cs:17</code> and <code>EngagementUIModule.cs:18</code>, Store <code>IdentityUIModule.cs:14</code>,
+          <code>GalleryHost.cs:96</code>, ADC <code>MauiProgram.cs:167</code>, Store <code>MauiProgram.cs:87</code>. The 2026-10-06 revision&#39;s
+          <code>MainLayout.razor:79-82</code> and its <code>IdentityUIModule.cs</code> line numbers are left as written there.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-059 (the server-side <code>IModule</code> contract this mirrors in the presentation layer), ADR-056 (the
           render-mode strategy for the web heads, which decides how these components render but not who supplies
@@ -511,6 +546,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

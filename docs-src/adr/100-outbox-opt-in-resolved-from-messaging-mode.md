@@ -11,6 +11,8 @@ moved; the guard now lives in the `DependencyInjection.Messaging.cs` partial). R
 model-configuration citations and named the guard's second call site). Revised 2026-10-06: Decision 1
 now scopes the explicit-value-wins rule to the in-process transport, as its cited source does.
 Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
+Revised 2026-10-21: anchors refreshed after the registration block and the outbox model
+configuration moved.
 
 ## Context
 ADR-003 gives every host a transactional outbox: domain and integration events are written to
@@ -53,8 +55,8 @@ something, keep the schema, and refuse the one combination that cannot work.
 2. **Resolution happens once, at registration.** `AddInfrastructure` binds the section, and on the
    enabled path registers `OutboxProcessor` and `OutboxCleanupService`; on the disabled path it
    registers neither and adds `OutboxDisabledNoticeService` instead
-   (`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:217-225`, settings read at
-   `:213-214`, reasoning at `:207-212`).
+   (`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:222-230`, settings read at
+   `:218-219`, reasoning at `:212-217`).
 
 3. **The row writes are gated at both write points**, not only the background services:
    `InProcessEventBus` takes its direct-dispatch branch when the outbox is off, with no rows, no save
@@ -70,7 +72,7 @@ something, keep the schema, and refuse the one combination that cannot work.
    `EnsureOutboxAvailableForProvider` throws when the provider is anything other than `InProcess` and
    `EnableOutbox` is explicitly `false`
    (`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:202`, guard at `:204`,
-   throw at `:206-207`; called from `DependencyInjection.cs:215` and from `AddBrokerMessaging` at
+   throw at `:206-207`; called from `DependencyInjection.cs:220` and from `AddBrokerMessaging` at
    `DependencyInjection.Messaging.cs:60`, so a broker host that skips `AddInfrastructure` still fails
    at startup). The message names the
    mechanism (`BrokerEventBus` writes the rows, `OutboxProcessor` publishes them), the consequence
@@ -88,7 +90,7 @@ something, keep the schema, and refuse the one combination that cannot work.
 6. **The EF model does not change.** `OutboxMessage` is configured in `OnModelCreating` for every
    relational provider
    (`Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:417`,
-   `ConfigureOutbox` called at `:424`, configuration at `:662-715`),
+   `ConfigureOutbox` called at `:424`, configuration at `:662-720`),
    independent of the setting. Flipping the flag in either direction is a configuration change and a
    restart, with no migration in any consumer.
 
@@ -161,6 +163,24 @@ unconditionally for every relational engine. Only line anchors in Decisions 3 an
    `:42-45`), row-writing gate `:257`; `ApplicationDbContext.cs:417` (`OnModelCreating`, was `:416`),
    `ConfigureOutbox` call `:424` (was `:423`), body `:662-715` (was `:661-714`), Cosmos skip
    documented at `:654`.
+
+## Revision (2026-10-21)
+Re-verified against current source. No decision, default or rationale changed: `AddInfrastructure`
+still registers `OutboxProcessor` and `OutboxCleanupService` on the enabled path and
+`OutboxDisabledNoticeService` otherwise, the startup guard still throws only for a non-`InProcess`
+provider with `EnableOutbox` explicitly `false`, and `ConfigureOutbox` is still called
+unconditionally for every relational engine. The `ConfigureOutbox` body grew by a third filtered
+index, `IX_OutboxMessages_Ordering`, which does not touch the setting. Only line anchors in
+Decisions 2, 4 and 6 moved.
+
+1. Anchors re-verified against current source: `DependencyInjection.cs:222-230` (enabled/disabled
+   registration, was `:217-225`; processor `:224`, cleanup `:225`, notice `:229`), settings read
+   `:218-219` (was `:213-214`), reasoning comment `:212-217` (was `:207-212`),
+   `EnsureOutboxAvailableForProvider` call `:220` (was `:215`); `DependencyInjection.Messaging.cs:202`
+   (method, unchanged), guard `:204`, throw `:206-207`, `AddBrokerMessaging` call site `:60`;
+   `ApplicationDbContext.cs:417` (`OnModelCreating`, unchanged), `ConfigureOutbox` call `:424`
+   (unchanged), body `:662-720` (was `:662-715`; `IX_OutboxMessages_Ordering` at `:709-719`), Cosmos
+   skip documented at `:654`.
 
 ## Related
 [ADR-003](003-outbox-dual-dispatch.md) (the outbox itself: the dual-dispatch contract, the processor,

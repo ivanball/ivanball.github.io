@@ -256,6 +256,9 @@
           so the consumer passages are restated as history, and MMCA.Common&#39;s <code>apphost-testing</code> tier is now
           blocking and remains where the base is exercised (see Revision below).</p>
           <p>Revised 2026-10-07: anchors refreshed after the v1.233.0 release.</p>
+          <p>Revised 2026-10-21: the Aspire pin reads 13.6.2 on every Aspire entry, decision 9 says the package&#39;s
+          only xUnit reference is <code>xunit.v3.extensibility.core</code> rather than its only reference, and anchors
+          are refreshed.</p>
           <h2 id="context">Context</h2>
           <p>The AppHost is the only file that states how a whole stack fits together: which project resources
           exist, which database each one owns, which broker they share, where JWKS discovery points, and the
@@ -286,7 +289,7 @@
           CI runner has no user secrets, so the JwtBearer options factory threw on the first request. Every
           request answered 500, including <code>/alive</code>, so the liveness probe never turned Identity healthy and
           every <code>WaitFor(identity)</code> edge waited out the twelve-minute budget. The framework already has the
-          channel for the fix (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:353</code>,
+          channel for the fix (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:365</code>,
           <code>WithE2eRsaKeys()</code>, which forwards <code>E2E_JWT_PRIVATE_KEY_PEM</code> / <code>E2E_JWT_PUBLIC_KEY_PEM</code> onto
           <code>Jwt__*</code> and <code>Jwks__*</code>); what it did not have was anything that put a keypair into those
           variables.</li>
@@ -344,7 +347,7 @@
           machine-level act a test fixture has no business performing silently; a CI job that needs one runs
           <code>dotnet dev-certs https --trust</code> as an explicit step. The framework&#39;s own <code>apphost-testing</code> job
           needs none, because its sample AppHost serves cleartext only, and its header says a consumer stack
-          with an https launch profile adds that step (<code>MMCA.Common/.github/workflows/ci.yml:905</code>, <code>:918-921</code>).</p>
+          with an https launch profile adds that step (<code>MMCA.Common/.github/workflows/ci.yml:846</code>, <code>:859-862</code>).</p>
           </li>
           <li><p><strong>The RS256 keypair is minted when the environment has none.</strong> <code>EphemeralRsaKeyPair.Create()</code>
           (<code>.../Preconditions/EphemeralRsaKeyPair.cs:42</code>) generates an RSA-2048 pair and the fixture pushes
@@ -387,7 +390,7 @@
           unit test cross-asserts each pair against the framework constant it mirrors.</p>
           </li>
           <li><p><strong>Skipping is the consuming project&#39;s call.</strong> The package takes no dependency on the xUnit
-          assertion library (the csproj references only <code>xunit.v3.extensibility.core</code>,
+          assertion library (its only xUnit reference is <code>xunit.v3.extensibility.core</code>,
           <code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/MMCA.Common.Testing.Aspire.csproj:25</code>), so a
           test class writes the skip itself, always with a non-null reason: <code>Assert.SkipWhen(!Fixture.IsAvailable, Fixture.SkipReason ?? &quot;...&quot;)</code>
           (<code>MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Aspire.AppHostTests/SampleAppHostTests.cs:155</code>) or
@@ -402,7 +405,7 @@
           </li>
           <li><p><strong>The tier runs in CI, blocking, against an in-repo sample.</strong> The <code>apphost-testing</code> job carries
           no <code>continue-on-error</code>, so a red fails the run, but it is not a required merge check
-          (<code>MMCA.Common/.github/workflows/ci.yml:905</code>, <code>:910-911</code>).
+          (<code>MMCA.Common/.github/workflows/ci.yml:846</code>, <code>:851-852</code>).
           <code>Tests/Hosting/MMCA.Common.Testing.Aspire.AppHostTests</code> boots a sample AppHost with a SQLite file
           and ONE sample service project declared as TWO resources, so it needs no container runtime, and
           asserts every helper against it. The two resources are the two cleartext protocol profiles,
@@ -470,7 +473,7 @@
           wants the wiring assertions back writes the subclass again rather than a harness.</li>
           <li><strong>Cost: this is the slowest tier per assertion, and it blocks the CI run without being a required
           merge check.</strong> The <code>apphost-testing</code> job has no <code>continue-on-error</code>, so a red fails the MMCA.Common
-          CI run, but it is not a required merge check (<code>MMCA.Common/.github/workflows/ci.yml:910-911</code>).</li>
+          CI run, but it is not a required merge check (<code>MMCA.Common/.github/workflows/ci.yml:851-852</code>).</li>
           <li><strong>A consumer&#39;s real stack still needs Docker on the runner.</strong> The in-repo sample avoids containers
           on purpose, so the framework&#39;s own CI does not pay for image pulls, but ADC&#39;s AppHost starts SQL
           Server, Redis, RabbitMQ and MailDev. That is why <code>AppHostEnvironmentRequirement.Docker</code> is part of
@@ -482,8 +485,8 @@
           in each consumer&#39;s <code>Directory.Packages.props</code> moves together at the next release
           (<a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a>).</li>
           <li><strong>Aspire versions are now coupled in one more place.</strong> <code>Aspire.Hosting.Testing</code> is pinned at the
-          same 13.6.0 as every other Aspire entry (<code>MMCA.Common/Directory.Packages.props:368</code>, against
-          <code>Aspire.Hosting</code> at <code>:359</code>), because the
+          same 13.6.2 as every other Aspire entry (<code>MMCA.Common/Directory.Packages.props:375</code>, against
+          <code>Aspire.Hosting</code> at <code>:366</code>), because the
           testing host builds the application model the AppHost package produces; a version split between
           them is a model mismatch rather than an upgrade.</li>
           </ul>
@@ -536,6 +539,29 @@
           step sit at <code>MMCA.Common/.github/workflows/ci.yml:918-921</code> (decision 4 and the item above), while
           the job name (<code>:905</code>) and the BLOCKING, not-a-required-check comment (<code>:910-911</code>) are unchanged.</li>
           </ul>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. No decision or rationale changed: the <code>apphost-testing</code> job is
+          still blocking with no <code>continue-on-error</code> and no dev-certs step, <code>WithE2eRsaKeys()</code> still forwards
+          the two E2E variables onto <code>Jwt__*</code> and <code>Jwks__*</code>, and the Aspire coupling still holds. What moved is
+          the pin version, one wording in decision 9, and the anchors.</p>
+          <ol>
+          <li>The Aspire pin reads 13.6.2 on every Aspire entry: <code>Aspire.Hosting</code> at
+          <code>MMCA.Common/Directory.Packages.props:366</code>, <code>Aspire.Hosting.Testing</code> at <code>:375</code>, with the
+          same-version rationale comment at <code>:371-374</code>. Trade-offs now says so.</li>
+          <li>Decision 9 said the csproj references only <code>xunit.v3.extensibility.core</code>. It also references
+          <code>AwesomeAssertions</code>, <code>Aspire.Hosting</code>, <code>Aspire.Hosting.Testing</code> and <code>MinVer</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/MMCA.Common.Testing.Aspire.csproj:13</code>,
+          <code>:17</code>, <code>:20</code>, <code>:21</code>) and takes a project reference to <code>MMCA.Common.Testing</code> (<code>:32</code>), so the
+          decision now says <code>xunit.v3.extensibility.core</code> (<code>:25</code>) is its only xUnit reference. The point is
+          unchanged: no <code>xunit.v3.assert</code> reference exists.</li>
+          <li>Anchors re-verified against current source: <code>apphost-testing</code> job at
+          <code>MMCA.Common/.github/workflows/ci.yml:846</code>, the BLOCKING, not-a-required-merge-check comment at
+          <code>:851-852</code>, the no-container, no-dev-certificate header and the consumer
+          <code>dotnet dev-certs https --trust</code> note at <code>:859-862</code> (decisions 4 and 10, Trade-offs);
+          <code>WithE2eRsaKeys()</code> at <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:365</code>
+          (variables read at <code>:369-370</code>, forwarded at <code>:377-379</code>). The anchors inside earlier revisions stay
+          as written.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="098-aspire-orchestration-not-testing-or-dashboards.html">ADR-098</a> (the orchestration posture this tier
           tests without changing),
@@ -563,6 +589,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

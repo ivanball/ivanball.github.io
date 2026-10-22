@@ -10,7 +10,9 @@ package list and count live in
 [FACTS.md](https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md); this record does not restate
 them. Revised 2026-10-07: the lockstep rationale now says the metapackage sets its six dependencies
 as minimum-version floors rather than exact pins, and the host claim says application hosts depend
-on all six mostly transitively; anchors refreshed after the v1.233.0 release.
+on all six mostly transitively; anchors refreshed after the v1.233.0 release. Revised 2026-10-21:
+anchors refreshed after the package-consumption CI stages moved into
+`build/consumer-check/Invoke-ConsumerCheck.ps1`.
 
 ## Context
 ADR-053 made the install path credential-free: `dotnet add package MMCA.Common.API` works for anyone,
@@ -108,12 +110,15 @@ Publish a metapackage named `MMCA.Common` that carries dependencies and no code.
 - **NU5128 is suppressed rather than avoided.** The suppression is scoped to this project and
   justified in place, but it is a warning switched off, and a future genuine packaging problem in
   this project would have to be caught by the pack output rather than by the build.
-- **No consumer exercises it.** The package-consumption CI job packs every package in
-  `MMCA.Common.slnx` (`MMCA.Common/.github/workflows/ci.yml:671`), the metapackage included, so a
-  pack break is caught, but it never restores the metapackage: its throwaway consumer references
-  only `MMCA.Common.API`, `MMCA.Common.Infrastructure` and `MMCA.Common.Testing.Architecture`
-  (`:706-708`), its layer-rule probes take only Domain, Application and Infrastructure (`:750-757`),
-  and the `MMCA.Common.*` source-mapping pattern (`:690`) would not route the bare `MMCA.Common` id.
+- **No consumer exercises it.** The package-consumption CI job
+  (`MMCA.Common/.github/workflows/ci.yml:674-699`) runs its stages through
+  `MMCA.Common/build/consumer-check/Invoke-ConsumerCheck.ps1`, whose pack stage packs every package
+  in `MMCA.Common.slnx` (`:143-147`), the metapackage included, so a pack break is caught, but it
+  never restores the metapackage: its throwaway consumer references only `MMCA.Common.API`,
+  `MMCA.Common.Infrastructure` and `MMCA.Common.Testing.Architecture` (`:184-186`), its layer-rule
+  probes take only Domain, Application and Infrastructure (`:261-277`), and the `MMCA.Common.*`
+  source-mapping pattern in the generated `nuget.config` (`:168`) would not route the bare
+  `MMCA.Common` id, which falls through to nuget.org under the `*` pattern (`:171`).
   No application in this workspace builds against the metapackage today, so its ergonomics are
   asserted rather than demonstrated. That is a deliberate consequence of point 6.
 
@@ -152,6 +157,28 @@ rationale statements were stated more strongly than source supports and are corr
    metapackage included), the throwaway consumer's three `PackageReference` items are `:706-708`,
    the layer-rule probes that also never take the bare id are `:750-757`, and the `MMCA.Common.*`
    source-mapping pattern is `:690`.
+
+## Revision (2026-10-21)
+Re-verified against current source. The decision and every Trade-off are unchanged: the metapackage
+still bundles the six in layer order (`MMCA.Common/Source/MMCA.Common/MMCA.Common.csproj:26-31`),
+still ships no assembly (`:9`) with NU5128 suppressed (`:14`), and the package-consumption check
+still packs it without ever restoring it. What moved is where that check lives: the CI job's pack,
+scaffold, build and probe stages are now one script that `ci.yml` invokes stage by stage, so the
+Trade-offs bullet cites the script instead of inline workflow steps.
+
+1. **The package-consumption check runs through a script.** Each step of the job calls
+   `MMCA.Common/build/consumer-check/Invoke-ConsumerCheck.ps1` with one `-Stage`
+   (`MMCA.Common/.github/workflows/ci.yml:674-699`). The script packs `MMCA.Common.slnx` (`:143-147`),
+   writes the throwaway consumer's `nuget.config` mapping `MMCA.Common.*` to the local feed and `*` to
+   nuget.org (`:168`, `:171`), references only API, Infrastructure and Testing.Architecture
+   (`:184-186`), and builds layer-rule probes over Domain, Application and Infrastructure only
+   (`:261-277`). The bare `MMCA.Common` id is referenced nowhere, so the "No consumer exercises it"
+   statement still holds; the bullet is re-anchored in place.
+2. Anchors re-verified against current source: the six core `PackageVersion` pins are
+   `MMCA.Helpdesk/Directory.Packages.props:83-88` (ADC and Store carry the same six), the job steps
+   `MMCA.Common/.github/workflows/ci.yml:674-699`, and the script stages
+   `MMCA.Common/build/consumer-check/Invoke-ConsumerCheck.ps1:143-147`, `:168`, `:171`, `:184-186`
+   and `:261-277`.
 
 ## Related
 [ADR-053](053-dual-registry-package-publishing.md) (dual-registry publishing, which the metapackage

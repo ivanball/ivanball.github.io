@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-078: CSV Export as a Dedicated Endpoint, Not Content Negotiation · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-08-13; revised 2026-08-18, 2026-08-31, 2026-09-19, 2026-10-01, 2026-10-06). The endpoint ships in the MMCA.Common &quot;enterprise capability…">
+  <meta name="description" content="Accepted (2026-08-13; revised 2026-08-18, 2026-08-31, 2026-09-19, 2026-10-01, 2026-10-06, 2026-10-07, 2026-10-21). The endpoint ships in the…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/078-csv-export-endpoint.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-078: CSV Export as a Dedicated Endpoint, Not Content Negotiation">
-  <meta property="og:description" content="Accepted (2026-08-13; revised 2026-08-18, 2026-08-31, 2026-09-19, 2026-10-01, 2026-10-06). The endpoint ships in the MMCA.Common &quot;enterprise capability…">
+  <meta property="og:description" content="Accepted (2026-08-13; revised 2026-08-18, 2026-08-31, 2026-09-19, 2026-10-01, 2026-10-06, 2026-10-07, 2026-10-21). The endpoint ships in the…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/078-csv-export-endpoint.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Principal Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-078: CSV Export as a Dedicated Endpoint, Not Content Negotiation">
-  <meta name="twitter:description" content="Accepted (2026-08-13; revised 2026-08-18, 2026-08-31, 2026-09-19, 2026-10-01, 2026-10-06). The endpoint ships in the MMCA.Common &quot;enterprise capability…">
+  <meta name="twitter:description" content="Accepted (2026-08-13; revised 2026-08-18, 2026-08-31, 2026-09-19, 2026-10-01, 2026-10-06, 2026-10-07, 2026-10-21). The endpoint ships in the…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation","item":"https://ivanball.github.io/docs/adr/078-csv-export-endpoint.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
@@ -240,7 +240,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-078-csv-export-as-a-dedicated-endpoint-not-content-negotiation">ADR-078: CSV Export as a Dedicated Endpoint, Not Content Negotiation</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-08-13; revised 2026-08-18, 2026-08-31, 2026-09-19, 2026-10-01, 2026-10-06). The endpoint ships in the MMCA.Common
+          <p>Accepted (2026-08-13; revised 2026-08-18, 2026-08-31, 2026-09-19, 2026-10-01, 2026-10-06, 2026-10-07, 2026-10-21). The endpoint ships in the MMCA.Common
           &quot;enterprise capability wave&quot; release (v1.150.0), its scoping hook in v1.151.0, and the widened
           read hook that supersedes that hook in v1.165.0; all three consumers run on pins that carry them.
           Every controller deriving from <code>EntityControllerBase</code> gains the route automatically, under that
@@ -249,7 +249,8 @@
           export is fail-closed, and a derivative that declares no row scope and does not opt in through
           <code>AllowUnscopedExport</code> answers 403 <code>Export.RowScopeRequired</code>.
           Revised 2026-10-06: the export is fail-closed since v1.218.0 (an unscoped derivative must opt in through <code>AllowUnscopedExport</code> or get 403), and since v1.219.0 each page is rendered into memory and written to the response with awaited writes only.
-          Revised 2026-10-07: anchors refreshed after the v1.233.0 release.</p>
+          Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
+          Revised 2026-10-21: anchors refreshed after the v1.250.0 release.</p>
           <h2 id="context">Context</h2>
           <p>The request is &quot;export what you filtered&quot;. The generic entity surface of
           <a href="034-generic-entity-query-layer.html">ADR-034</a> already accepts a full query vocabulary on the paged route
@@ -266,13 +267,13 @@
           <li><strong>The output cache does not vary by <code>Accept</code>.</strong> <code>PublicEndpointOutputCachePolicy</code>
           (<a href="040-authenticated-output-caching-for-public-reads.html">ADR-040</a>) sets
           <code>context.CacheVaryByRules.QueryKeys = &quot;*&quot;</code>
-          (<code>Source/Presentation/MMCA.Common.API/Caching/PublicEndpointOutputCachePolicy.cs:96</code>). The key has
+          (<code>Source/Presentation/MMCA.Common.API/Caching/PublicEndpointOutputCachePolicy.cs:101</code>). The key has
           exactly one other dimension, and it is not a header: when <code>ITenantContext</code> resolves a tenant the policy
           stamps that tenant into <code>CacheVaryByRules.VaryByValues[TenantVaryByKey]</code>
-          (<code>PublicEndpointOutputCachePolicy.cs:102-105</code>, the <code>&quot;t&quot;</code> key constant at <code>:50</code>), and an unresolved
+          (<code>PublicEndpointOutputCachePolicy.cs:107-111</code>, the <code>&quot;t&quot;</code> key constant at <code>:50</code>), and an unresolved
           tenant adds nothing. A caller holding one of the policy&#39;s configured bypass roles is out of the cache
           altogether rather than in a different entry: the policy leaves <code>AllowCacheLookup</code> and
-          <code>AllowCacheStorage</code> false for that request (<code>:86-90</code>, <code>IsBypassedCaller</code> at <code>:141-142</code>). Nothing in
+          <code>AllowCacheStorage</code> false for that request (<code>:86-90</code>, <code>IsBypassedCaller</code> at <code>:146-147</code>). Nothing in
           the policy varies by <code>Accept</code>. On any endpoint carrying that policy, a CSV request and a JSON request
           to the same URL with the same query string, from the same tenant and a non-bypass caller, are the same
           cache entry, so a CSV request can be served a stored JSON body with a <code>Content-Type</code> that no longer
@@ -481,12 +482,12 @@
           their read predicates as specifications through the same hooks (<code>EventsController.GetExportSpecification()</code>
           at <code>Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Events/EventsController.cs:72-73</code>,
           <code>Controllers/Sessions/SessionQuestionAnswersController.cs:109</code>, and async overrides on
-          <code>Controllers/Sessions/SessionsController.cs:75</code>, <code>Controllers/Speakers/SpeakersController.cs:109</code>,
+          <code>Controllers/Sessions/SessionsController.cs:76</code>, <code>Controllers/Speakers/SpeakersController.cs:110</code>,
           <code>Controllers/Sponsors/SponsorsController.cs:69</code> among others), opt their privileged readers in through
-          <code>AllowUnscopedExport</code> (for example <code>EventsController.cs:80</code>, <code>SessionsController.cs:93</code>,
+          <code>AllowUnscopedExport</code> (for example <code>EventsController.cs:80</code>, <code>SessionsController.cs:94</code>,
           <code>SessionQuestionAnswersController.cs:121</code>), and keep their <code>Forbid</code> gates on
           bulk export anyway (<code>Controllers/Events/EventsController.cs:147-150</code>,
-          <code>Controllers/Sessions/SessionsController.cs:258-261</code>): a deliberate
+          <code>Controllers/Sessions/SessionsController.cs:259-262</code>): a deliberate
           privileged-reader-only policy on a whole-catalog file, not a gap in what the framework can scope.
           v1.151.0 also hardened the formatter: binary and collection properties produce no column instead of
           rendering type names (<code>IsExportableType</code>, <code>EntityCsvExporter.cs:239-242</code>, which excludes <code>byte[]</code>, <code>ReadOnlyMemory&lt;byte&gt;</code> and
@@ -577,6 +578,25 @@
           revision have since moved (v1.218.0 fail-closed export at <code>MMCA.Common/CHANGELOG.md:314</code>,
           <code>AllowUnscopedExport</code> at <code>:329</code>; v1.219.0 awaited writes at <code>:294</code>) and stay as written there.</li>
           </ol>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. No decision, default or rationale changed: the cache policy still
+          varies by query string and resolved tenant only (never by <code>Accept</code>), bypass-role callers still skip
+          lookup and storage, and ADC&#39;s Conference controllers still scope reads, opt privileged readers in and
+          keep their <code>Forbid</code> gates on bulk export. Only line anchors moved.</p>
+          <ol>
+          <li>Anchors re-verified against current source: in
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/PublicEndpointOutputCachePolicy.cs</code>,
+          <code>QueryKeys = &quot;*&quot;</code> at <code>:101</code>, the tenant lookup and <code>VaryByValues</code> stamp at <code>:107-111</code>, and
+          <code>IsBypassedCaller</code> at <code>:146-147</code> (<code>:86-90</code> and <code>TenantVaryByKey</code> at <code>:50</code> unchanged); in
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/</code>, the async
+          <code>GetReadSpecificationAsync</code> overrides at <code>Sessions/SessionsController.cs:76</code> and
+          <code>Speakers/SpeakersController.cs:110</code>, <code>AllowUnscopedExport</code> at <code>SessionsController.cs:94</code>, and the
+          <code>Forbid</code> gate at <code>SessionsController.cs:259-262</code> (<code>EventsController.cs:72-73</code>, <code>:80</code> and <code>:147-150</code>,
+          <code>SponsorsController.cs:69</code>, <code>SessionQuestionAnswersController.cs:109</code> and <code>:121</code> unchanged). The
+          CHANGELOG anchors cited in the 2026-10-06 and 2026-10-07 revisions have moved again and stay as
+          written there: v1.218.0 is at <code>MMCA.Common/CHANGELOG.md:623</code> (fail-closed <code>ExportAsync</code> entry at
+          <code>:633</code>, <code>AllowUnscopedExport</code> added at <code>:648</code>) and v1.219.0 at <code>:593</code> (awaited writes at <code>:613</code>).</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="034-generic-entity-query-layer.html">ADR-034</a> (the generic entity surface and query contract this extends,
           and the <code>MaxUnboundedResultLimit</code> ceiling that forced the page loop),
@@ -609,6 +629,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

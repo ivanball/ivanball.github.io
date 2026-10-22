@@ -8,6 +8,8 @@ authentication chain is untouched: this is an additive sibling, not a revision. 
 (redemption serialized under a distributed lock, a reset revokes refresh sessions,
 and the link carries the token in the URL fragment; see Revision below).
 Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
+Revised 2026-10-21: session revocation is saved before the new password is applied and stands even
+when the aggregate rejects it, and the reset email is localized (English and Spanish).
 
 ## Context
 Both consumer apps shipped authenticated password *change* (`PUT /Auth/password`) and nothing for a
@@ -63,11 +65,13 @@ address, and so does a 500 when the SMTP hop is down.
    `ForgotPasswordHandlerBase` returns `Result.Success()` on every path: malformed address, no
    account, throttled, and failed send each log a reason and report success. `ResetPasswordHandlerBase`
    collapses every rejection (unknown, expired, mismatched, attempt-capped token, and an account that
-   no longer resolves) into one `Auth.InvalidResetToken` error, which the edge maps to 401. A
-   successful reset then revokes every live refresh session on the account
+   no longer resolves) into one `Auth.InvalidResetToken` error, which the edge maps to 401. Once a
+   token is redeemed and the account resolves, the handler revokes and saves every live refresh
+   session on the account before it applies the new password, and that revocation stands even when
+   the aggregate then rejects the password
    ([ADR-097](097-multi-device-refresh-sessions.md);
-   `Source/Core/MMCA.Common.Application/Users/UseCases/ResetPassword/ResetPasswordHandlerBase.cs:47`,
-   `:106`) and clears the account's login lockout (`:110`). A
+   `Source/Core/MMCA.Common.Application/Users/UseCases/ResetPassword/ResetPasswordHandlerBase.cs:48`,
+   `:106`, `:110`, `:112`). After the save (`:117`) it clears the account's login lockout (`:120`). A
    consumer therefore inherits the property rather than re-deriving it; the only app-specific member
    on the forgot base is `FindUntrackedByEmailAsync`, because each app's `User` stores its address
    differently.
@@ -83,16 +87,20 @@ address, and so does a 500 when the SMTP hop is down.
    `ComposeSubject`, `ComposeBody` and `ComposeResetLink` are `protected virtual`. The default body
    carries the reset link **and** the raw token, because the MAUI head cannot follow a deep link and
    its user has to type the token into the reset page. A blank `ResetUrl` degrades to the token
-   alone rather than shipping a broken link. Copy is English only in this version. The send is
-   awaited and its failure caught, logged and swallowed.
+   alone rather than shipping a broken link. Subject and body come from `UserEmailResources` and are
+   composed in the recipient's stored preferred culture when the account has one, otherwise in the
+   culture of the forgot-password request (`ForgotPasswordHandlerBase.cs:85`, `:117`, `:132`;
+   `UserEmailResources.cs:32-35`), with
+   English and Spanish shipped (`UserEmailResources.es.resx`). The send is awaited and its failure
+   caught, logged and swallowed.
 6. **Consumers opt in with thin wiring.** Each app adds a `ForgotPasswordCommand` /
    `ResetPasswordCommand` record, a handler that is a constructor call on the base, and a sealed
    `PasswordResetController` supplying the two command factories. Configuration is one key
    (`PasswordReset:ResetUrl`) in each Identity service's `appsettings.json` (MMCA.ADC
-   `Source/Services/MMCA.ADC.Identity.Service/appsettings.json:114`, MMCA.Store
-   `Source/Services/MMCA.Store.Identity.Service/appsettings.json:105`) and as `PasswordReset__ResetUrl`
-   in `infra/main.bicep` for production (MMCA.ADC `:1822`, MMCA.Store `:1551`). Only MMCA.ADC's Aspire
-   AppHost also sets it for local runs (`Source/Hosting/MMCA.ADC.AppHost/Program.cs:465`); MMCA.Store's
+   `Source/Services/MMCA.ADC.Identity.Service/appsettings.json:115`, MMCA.Store
+   `Source/Services/MMCA.Store.Identity.Service/appsettings.json:115`) and as `PasswordReset__ResetUrl`
+   in `infra/main.bicep` for production (MMCA.ADC `:1978`, MMCA.Store `:1640`). Only MMCA.ADC's Aspire
+   AppHost also sets it for local runs (`Source/Hosting/MMCA.ADC.AppHost/Program.cs:504`); MMCA.Store's
    local runs use the `appsettings.json` default. MMCA.ADC and MMCA.Store both
    adopted it in v1.160.0.
 
@@ -139,8 +147,10 @@ address, and so does a 500 when the SMTP hop is down.
 - **The token is consumed before the password is written.** A password change that fails a later
   aggregate invariant burns the token, costing the user one more request. The alternative, holding
   the token live until the write succeeds, opens a replay window, which is the worse of the two.
-- **Copy is English only.** The composition hooks exist and the localization pass does not, so a
-  Spanish-speaking user ([ADR-027](027-multi-locale-i18n.md)) reads an English reset email.
+- **The email speaks only the shipped cultures.** The copy is resource-backed and written in the
+  recipient's stored preferred culture, or the request culture when none is stored
+  ([ADR-027](027-multi-locale-i18n.md)), but only English and Spanish resources
+  ship, so a culture outside those two reads the English fallback.
 
 ## Revision (2026-10-01)
 Three behaviors changed after acceptance, and four statements are corrected: one was omitted at
@@ -199,3 +209,33 @@ only line anchors moved.
    `ResetPasswordHandlerBase.cs:47`, `:106`, `:110`; `ForgotPasswordHandlerBase.cs:155`; MMCA.ADC
    Identity `appsettings.json:114`; MMCA.Store Identity `appsettings.json:105` and
    `infra/main.bicep:1551`.
+
+## Revision (2026-10-21)
+Re-verified against current source. The cache-backed token, the distributed lock on redemption,
+the anti-enumeration contract and the URL-fragment link are unchanged. Two statements moved: the
+ordering of session revocation against the password save, and the language of the reset email.
+
+1. **Session revocation precedes the password write.** `ResetPasswordHandlerBase` revokes and saves
+   every live refresh session (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ResetPassword/ResetPasswordHandlerBase.cs:106`)
+   before it hashes and applies the new password (`:110`, `:111`) and before the unit-of-work save
+   (`:117`); a password the aggregate rejects fails the check at `:112` and returns at `:114` with the revocation already standing.
+   Only the lockout clear (`:120`) follows the save. Recorded in `MMCA.Common/CHANGELOG.md:75`
+   (M240, under `[1.247.0]`). Decision 3 now says this; the 2026-10-01 wording "after the save" no
+   longer describes the handler.
+2. **The reset email is localized.** `ForgotPasswordHandlerBase` composes subject and body under
+   `UserEmailResources.InRecipientCulture`
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandlerBase.cs:85`)
+   from resource keys (`:117`, `:132` to `:137`), and
+   `MMCA.Common/Source/Core/MMCA.Common.Application/Users/Emails/UserEmailResources.es.resx` ships
+   Spanish (`MMCA.Common/CHANGELOG.md:197`, under `[1.243.0]`). Decision 5 and the Trade-offs bullet
+   no longer say the copy is English only.
+3. Anchors re-verified against current source: `ResetPasswordHandlerBase.cs:48` (the required
+   `IRefreshSessionStore`, was `:47`) and `:120` (`ResetFailedAttemptsAsync`, was `:110`, which is
+   now `HashPassword`); MMCA.ADC Identity `appsettings.json:115` and MMCA.Store Identity
+   `appsettings.json:115` (the `ResetUrl` key, was `:114` and `:105`); MMCA.ADC `infra/main.bicep:1978`
+   (was `:1822`) and MMCA.Store `infra/main.bicep:1640` (was `:1551`); the MMCA.ADC AppHost key at
+   `Source/Hosting/MMCA.ADC.AppHost/Program.cs:504` (was `:465`; the email-confirmation comment is
+   now `:507`), and the MMCA.Store AppHost still sets no `PasswordReset` key. The `IDistributedLock`
+   breaking change and its fix sit at `MMCA.Common/CHANGELOG.md:771` and `:776` under `[1.213.0]`
+   (heading `:767`). Holding: `PasswordResetTokenService.cs:36`, `:41`, `:43`, `:68`, `:107`, `:128`;
+   `ResetPasswordHandlerBase.cs:106`; `ForgotPasswordHandlerBase.cs:155`.

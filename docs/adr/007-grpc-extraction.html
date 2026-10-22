@@ -246,7 +246,9 @@
           module&#39;s <strong>Anti-Corruption Layer</strong>; no code changed. Revised 2026-10-06: the <code>[ServiceContract]</code> ratchet
           is now triggered (ADC marks six interfaces and Store four), a second fitness rule keeps their
           implementations non-public, and the h2c, JWKS and disabled-stub bullets are narrowed to current wiring.
-          Revised 2026-10-07: anchors refreshed after the v1.233.0 release.</p>
+          Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
+          Revised 2026-10-21: ADC now marks seven <code>[ServiceContract]</code> interfaces, and the auth bullets record
+          Store&#39;s one shared-secret exception (an HS256 service token on the Sales -&gt; Identity Customers edge).</p>
           <h2 id="context">Context</h2>
           <p>Once modules became separate service processes, the in-process interface calls between them (e.g.
           Conference → Engagement&#39;s <code>IBookmarkCountService</code>, Engagement → Conference&#39;s
@@ -271,7 +273,15 @@
           transport fitness rule below, which forbids gRPC and protobuf types outside the adapter&#39;s layer.</li>
           <li><strong>Typed clients</strong> via <code>AddTypedGrpcClient&lt;T&gt;(serviceName)</code> resolve <code>http://&lt;service&gt;</code> through
           Aspire service discovery, wrapped in the standard Polly resilience pipeline and a
-          <code>JwtForwardingClientInterceptor</code> (the inbound bearer token is forwarded downstream).</li>
+          <code>JwtForwardingClientInterceptor</code> (the inbound bearer token is forwarded downstream). A client can
+          also opt in, one registration at a time, to a service token with <code>.WithServiceToken()</code>, which needs
+          the host to call <code>AddServiceTokenClient(configuration)</code> as well
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Authentication/ServiceTokenHttpClientBuilderExtensions.cs:23-25</code>);
+          registering the provider sends nothing by itself
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Authentication/ServiceTokenServiceCollectionExtensions.cs:17-22</code>).
+          Store&#39;s Customers client is the only adopter
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Identity.Contracts/DependencyInjection.cs:46</code>, with
+          <code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:289</code>); ADC uses neither.</li>
           <li><strong><code>Result</code> failures over the wire</strong>: the server-side <code>GrpcResultExceptionInterceptor</code> maps a failed
           <code>Result</code> to an <code>RpcException</code> carrying the structured <code>ErrorType</code>/code, mirroring the HTTP
           <code>HandleFailure</code> edge mapping (ADR-013). Adapters whose interface returns a <code>Result</code> (for example
@@ -283,20 +293,31 @@
           negotiate without TLS/ALPN (a deliberate <code>SocketsHttpHandler</code> override). That is the default endpoint
           of an <code>Http2</code>-only service, or a dedicated <code>Http2</code>-only <code>grpc</code> endpoint on the mixed-profile services
           (see Trade-offs).</li>
-          <li><strong>Federated auth, not a shared secret</strong>: services validate forwarded JWTs against the issuer&#39;s
+          <li><strong>Federated auth, not a shared secret (except one service-token edge)</strong>: services validate forwarded JWTs against the issuer&#39;s
           JWKS (ADR-004) through <code>AddForwardedJwtBearer</code>, which fetches OIDC discovery and the JWKS from the
           configured authority and pins RS256
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.Authentication.cs:52</code>,
           <code>:109</code>). Under the AppHost the authority is wired by <code>WithJwksDiscovery(identity, gateway)</code>, whose
-          gateway argument is optional (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:309-311</code>);
+          gateway argument is optional (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:321-323</code>);
           in production the bicep points the authority straight at Identity&#39;s internal cleartext URL with
-          <code>RequireHttpsMetadata=false</code>, not through the gateway (<code>MMCA.ADC/infra/main.bicep:2003</code>, <code>:2007</code>;
-          <code>MMCA.Store/infra/main.bicep:1684</code>, <code>:1689</code>).</li>
+          <code>RequireHttpsMetadata=false</code>, not through the gateway (<code>MMCA.ADC/infra/main.bicep:2159</code>, <code>:2163</code>;
+          <code>MMCA.Store/infra/main.bicep:1775</code>, <code>:1780</code>). This holds for every user token. The one
+          shared-secret exception is Store&#39;s Sales -&gt; Identity Customers edge: Identity registers
+          <code>AddServiceTokenAuthentication</code>
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:173</code>), a second JwtBearer
+          scheme that validates HS256 against the shared <code>Grpc:ServiceToken:SigningKey</code>
+          (<code>ServiceTokenServiceCollectionExtensions.cs:141-144</code>) and is never the default scheme, and maps
+          the Customers service under the <code>InternalCaller</code> policy
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:343</code>), which accepts an
+          authenticated caller under either scheme (<code>ServiceTokenServiceCollectionExtensions.cs:84-87</code>): a
+          forwarded user JWT, or a service token signed with the shared key and carrying a <code>svc</code> claim (the
+          scheme refuses one without it, <code>:151-157</code>; it does not check which service the claim names).
+          Sales is the only host that mints one, and attaches it on calls that have no user token to forward.</li>
           <li><strong>Disabled-module stubs</strong>: when a multi-module host runs with a peer module switched off,
           <code>ModuleLoader</code> registers that module&#39;s <code>Disabled*</code> stubs so resolution always succeeds
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Modules/ModuleLoader.cs:119</code>). The extracted
           service hosts name only their own module assembly (for example
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:213-215</code>), so peers are never
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:214-216</code>), so peers are never
           discovered, no stub is registered, and the gRPC adapter registration satisfies the interface.</li>
           </ul>
           <h2 id="rationale">Rationale</h2>
@@ -321,10 +342,10 @@
           <code>AllowedPublicImplementations</code> escape hatch (<code>ContractImplementationTestsBase.cs:30</code>); all four repos
           subclass it too. Both rules are <strong>triggered in ADC and Store</strong>, whose architecture maps register the
           module Shared assemblies (<code>AdcArchitectureMap.cs:31</code>, <code>:39</code>, <code>:47</code>, <code>:53</code>;
-          <code>StoreArchitectureMap.cs:25</code>, <code>:33</code>, <code>:41</code>). ADC marks six interfaces
+          <code>StoreArchitectureMap.cs:25</code>, <code>:33</code>, <code>:41</code>). ADC marks seven interfaces
           (<code>ISessionBookmarkValidationService.cs:10</code>, <code>IEventLiveValidationService.cs:12</code>,
           <code>IBookmarkCountService.cs:10</code>, <code>IUserEngagementExportService.cs:13</code>, <code>IAttendeeQueryService.cs:10</code>,
-          <code>IUserNotificationExportService.cs:13</code>) and Store four (<code>IProductVariantService.cs:33</code>,
+          <code>IUserNotificationExportService.cs:13</code>, <code>IUserConferenceExportService.cs:13</code>) and Store four (<code>IProductVariantService.cs:33</code>,
           <code>IUserCatalogExportService.cs:19</code>, <code>IUserSalesExportService.cs:20</code>, <code>ICustomerService.cs:25</code>), all
           with the parameterless form, so none passes a version. MMCA.Common and Helpdesk mark nothing
           (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/ServiceContractAttribute.cs:12-13</code>), so
@@ -342,7 +363,7 @@
           <code>:17</code>). Store&#39;s Sales service runs the same mixed profile: its default endpoints stay <code>Http1AndHttp2</code>
           because REST and the Stripe webhook arrive over HTTP/1.1, and a dedicated <code>Http2</code>-only <code>grpc</code>
           endpoint serves <code>IUserSalesExportService</code>
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:64-78</code>; <code>appsettings.json:13</code>, <code>:17</code>).</li>
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:65-79</code>; <code>appsettings.json:13</code>, <code>:17</code>).</li>
           <li><strong>Operational surface.</strong> gRPC adds proto tooling, service discovery, and resilience tuning to the
           deployment.</li>
           </ul>
@@ -373,6 +394,37 @@
           <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/ServiceContractAttribute.cs:12-13</code>;
           Store&#39;s <code>MMCA.Store/infra/main.bicep:1684</code>, <code>:1689</code> still hold.</li>
           </ol>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. The decision, the h2c profiles and the production JWKS wiring
+          are unchanged: both bicep files still set the authority to <code>http://${identityApp.name}</code> with
+          <code>RequireHttpsMetadata=false</code>, and MMCA.Common and Helpdesk still mark no type. The
+          <code>[ServiceContract]</code> adoption count and the auth description moved.</p>
+          <ol>
+          <li>ADC marks seven <code>[ServiceContract]</code> interfaces, not six: the seventh is
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Exports/IUserConferenceExportService.cs:13</code>,
+          parameterless like the rest. Store&#39;s four are unchanged.</li>
+          <li>Federated auth now carries one shared-secret exception, recorded in the Decision: Store Identity
+          registers <code>AddServiceTokenAuthentication</code>
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:173</code>), an HS256 scheme over
+          the shared <code>Grpc:ServiceToken:SigningKey</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Authentication/ServiceTokenServiceCollectionExtensions.cs:141-144</code>),
+          and maps the Customers gRPC service under the <code>InternalCaller</code> policy, which accepts a user JWT
+          or a service token carrying a <code>svc</code> claim, minted today only by Sales
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:343</code>). User tokens stay RS256
+          over JWKS.</li>
+          <li>The typed-client bullet now records the per-client <code>WithServiceToken()</code> opt-in: Store&#39;s Customers
+          client (<code>MMCA.Store/Source/Services/MMCA.Store.Identity.Contracts/DependencyInjection.cs:46</code>)
+          with <code>AddServiceTokenClient</code> in Sales
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:289</code>). ADC uses neither.</li>
+          <li>Anchors re-verified against current source: <code>WithJwksDiscovery</code> signature re-pointed to
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:321-323</code>; ADC JWKS authority
+          and <code>RequireHttpsMetadata</code> to <code>MMCA.ADC/infra/main.bicep:2159</code>, <code>:2163</code> (repeating at <code>:2295</code>,
+          <code>:2299</code> and <code>:2449</code>, <code>:2453</code>); Store&#39;s to <code>MMCA.Store/infra/main.bicep:1775</code>, <code>:1780</code> (repeating
+          at <code>:1911</code>, <code>:1916</code>); the Engagement host&#39;s single module assembly to
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:214-216</code>; Store Sales mixed
+          profile to <code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:65-79</code>
+          (<code>appsettings.json:13</code>, <code>:17</code> still hold).</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -390,6 +442,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             </ul>
           </nav>
         </aside>

@@ -242,7 +242,8 @@
           <h2 id="status">Status</h2>
           <p>Accepted (2026-06-27; revised 2026-07-15; revised 2026-08-31; revised 2026-10-01).
           Revised 2026-10-06: the first-paint flash is scoped to web heads and the MAUI first-frame mode source is recorded.
-          Revised 2026-10-19: the MAUI host pre-paint script ships from MMCA.Common.UI (<code>theme-prepaint.js</code>, v1.246.0) and both MAUI heads load it.</p>
+          Revised 2026-10-19: the MAUI host pre-paint script ships from MMCA.Common.UI (<code>theme-prepaint.js</code>, v1.246.0) and both MAUI heads load it.
+          Revised 2026-10-21: the Android status-bar fallback is recorded as part of the shared <code>theme-prepaint.js</code> (Store&#39;s host page has no inline script), the per-consumer <code>MauiHostShellTests</code> theme host-page fitness tests are credited at their actual scope (only Store&#39;s checks the pre-paint script), and the <code>BrandColorTokenTests</code> coverage claim is stated as what it checks.</p>
           <h2 id="context">Context</h2>
           <p><code>MMCATheme</code> (<code>MMCA.Common.UI/Theme/MMCATheme.cs</code>) has always defined a complete, brand-tuned <code>PaletteDark</code>
           alongside <code>PaletteLight</code>, but <code>MudThemeProvider</code> was hard-wired to light: no <code>@ref</code>, no <code>IsDarkMode</code>
@@ -267,7 +268,7 @@
           </li>
           <li><p><strong>A <code>ThemeService</code> (<code>MMCA.Common.UI</code>) owns the preference</strong>, registered in <code>AddUIShared</code>. It holds the
           current mode, reads/writes a <strong>non-HttpOnly cookie + localStorage</strong>, and raises a change event that
-          <code>MmcaThemeProviders</code> (<code>MmcaThemeProviders.razor:52</code>) and every <code>ThemeToggle</code> (<code>ThemeToggle.razor:16</code>)
+          <code>MmcaThemeProviders</code> (<code>MmcaThemeProviders.razor:56</code>) and every <code>ThemeToggle</code> (<code>ThemeToggle.razor:16</code>)
           subscribe to, so the shared providers component and the app-bar toggle stay in sync; the layout
           itself subscribes to nothing. First-visit default is the OS <code>prefers-color-scheme</code>, read
           via a small JS interop call (<code>theme.js</code> <code>systemPrefersDark()</code> -&gt;
@@ -294,9 +295,24 @@
           <code>MmcaThemeProviders.razor:77-99</code>); every selector requires <code>data-mmca-theme</code>, so web heads, which
           do not load the script, are untouched. Both MAUI heads load it as the first script in <code>&lt;head&gt;</code>
           (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/wwwroot/index.html:8</code>,
-          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/wwwroot/index.html:15</code>). Store keeps one inline script
-          of its own beside it, the Android status-bar height fallback (<code>index.html:16-23</code>), which is not a
-          theme concern.</p>
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/wwwroot/index.html:13</code>), and neither head carries an
+          inline script. The same file also carries a second, non-theme block: the Android status-bar
+          height fallback that turns the <code>MmcaStatusBar/&lt;px&gt;</code> user-agent token into
+          <code>--mmca-status-bar-fallback</code> (<code>theme-prepaint.js:45-56</code>). Each head carries a repo-local fitness
+          test, <code>MauiHostShellTests.HostPage_DoesNotPaintALightBackgroundBeforeTheThemeApplies</code>, that fails
+          when the host page would paint the default light surface before the theme applies, but only
+          Store&#39;s knows about the pre-paint script. Store&#39;s
+          (<code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Ui/MauiHostShellTests.cs:21-49</code>)
+          accepts any one of three routes (<code>:47</code>): a transparent <code>html</code>/<code>body</code>, a
+          <code>prefers-color-scheme: dark</code> aware one, or the pre-paint seed, which holds when the script runs
+          ahead of every stylesheet, Common&#39;s <code>app.css</code> is linked, and no host-local <code>html</code>/<code>body</code> rule
+          paints a background outside a <code>data-mmca-theme</code> selector (<code>:40-45</code>). Store&#39;s host <code>app.css</code> has
+          no <code>html</code>/<code>body</code> rule, so the seed is the route in use there. ADC&#39;s
+          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Ui/MauiHostShellTests.cs:42-58</code>)
+          accepts only the first two routes (<code>:56</code>) and does not check the script: ADC&#39;s host <code>app.css</code>
+          keeps a <code>prefers-color-scheme</code> aware <code>html</code>/<code>body</code> fallback surface
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/wwwroot/app.css:26-36</code>), so the test passes through that
+          rule and removing <code>theme-prepaint.js</code> from ADC&#39;s <code>index.html</code> would not fail it.</p>
           </li>
           <li><p><strong>The toggle ships in the shared <code>MainLayout</code></strong>, next to the i18n culture switcher, in the app-bar
           <code>appbar-icon-actions</code> slot, so every consumer gets both controls without per-host wiring.</p>
@@ -320,8 +336,18 @@
           <li><strong>Reusing the i18n cookie/profile machinery</strong> means one persistence model for both user preferences,
           instead of two subtly different ones. Theme and locale are the same shape of problem, so the no-flash SSR
           bootstrap built for locale is the template theme will follow when it is wired.</li>
-          <li><strong>The palette already existed</strong>, so the cost is wiring + persistence, not design, and <code>BrandColorTokenTests</code>
-          already guards the C# to CSS token sync, so the dark surfaces stay on-brand.</li>
+          <li><strong>The palette already existed</strong>, so the cost is wiring + persistence, not design. <code>BrandColorTokenTests</code>
+          guards the C# to CSS sync of the five <code>Primary*</code>/<code>Secondary*</code> brand tokens
+          (<code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Theme/BrandColorTokenTests.cs:34-50</code>), fails on
+          a raw <code>Primary*</code>/<code>Secondary*</code> hex in any MMCA.Common.UI stylesheet outside an <code>app.css</code> token
+          definition (<code>:52-92</code>), and pins the theme palettes to <code>BrandColors</code> on the C# side: the light
+          primary and the secondary family, including <code>PaletteDark.Secondary</code> (<code>:94-110</code>), and the dark
+          palette&#39;s background and primary (<code>:112-119</code>). The surface colors are restated by hand in two
+          places no test compares to <code>BrandColors.LightBackground</code>/<code>DarkBackground</code> (<code>BrandColors.cs:66</code>,
+          <code>:136</code>): the pre-paint tokens <code>--mmca-prepaint-background-light/dark</code>
+          (<code>MMCA.Common.UI/wwwroot/app.css:96-97</code>) and the <code>#FAFBFC</code>/<code>#1A2027</code> fallbacks in ADC&#39;s host
+          <code>app.css</code> (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/wwwroot/app.css:28</code>, <code>:34</code>), so either copy can
+          drift unnoticed.</li>
           <li><strong>Defaulting to the OS preference</strong> respects the user&#39;s system setting on first visit while letting an
           explicit choice win and follow them across devices.</li>
           </ul>
@@ -371,12 +397,41 @@
           <li>The <code>MmcaThemeProviders</code> read of <code>IInitialThemeModeSource</code> is re-cited at <code>MmcaThemeProviders.razor:50</code>
           (was <code>:47</code>); the registration at <code>MMCA.Common.UI.Maui/DependencyInjection.cs:68</code> is unchanged.</li>
           </ul>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. The binding, the <code>ThemeService</code> preference model, the MAUI
+          first-frame source and the web-head flash scope are unchanged; what moved is the Store host page,
+          which no longer carries any inline script, and the fitness-test coverage of the theme host wiring.</p>
+          <ol>
+          <li>Decision 3: Store&#39;s Android status-bar fallback is no longer an inline script in its host page;
+          it ships in Common&#39;s <code>theme-prepaint.js:45-56</code> beside the theme block, and Store&#39;s <code>index.html</code>
+          loads only external scripts (<code>:13</code>, <code>:27-29</code>). The 2026-10-19 note that Store keeps its
+          status-bar fallback inline no longer holds.</li>
+          <li>Decision 3 and Related: each consumer guards its theme host page with a repo-local
+          <code>MauiHostShellTests</code> fitness test, superseding the 2026-10-06 statement that no fitness test
+          asserts theme wiring. Only Store&#39;s (<code>MMCA.Store.Architecture.Tests/Ui/MauiHostShellTests.cs:21-49</code>)
+          recognizes the pre-paint script, as one of three accepted routes (<code>:40-47</code>); ADC&#39;s
+          (<code>MMCA.ADC.Architecture.Tests/Ui/MauiHostShellTests.cs:42-58</code>) passes on its host <code>app.css</code>
+          <code>prefers-color-scheme</code> fallback (<code>MMCA.ADC.UI/wwwroot/app.css:26-36</code>) and does not check the
+          script. The shared <code>MMCA.Common.Testing.Architecture</code> package still has no theme base.</li>
+          <li>Rationale: <code>BrandColorTokenTests</code> is now described at its actual scope: the five
+          <code>Primary*</code>/<code>Secondary*</code> C# to CSS tokens (<code>BrandColorTokenTests.cs:34-50</code>), the raw brand-hex
+          scan over the MMCA.Common.UI stylesheets (<code>:52-92</code>), and the C#-side palette checks
+          (<code>:94-119</code>). The surface colors restated by hand in the pre-paint tokens (<code>app.css:96-97</code>) and
+          in ADC&#39;s host <code>app.css</code> (<code>:28</code>, <code>:34</code>) are not compared to <code>BrandColors.cs:66</code> and <code>:136</code> by
+          any test.</li>
+          <li>Anchors re-verified against current source: <code>MmcaThemeProviders.razor:56</code> (<code>OnChange</code>,
+          superseding <code>:52</code>), Store <code>index.html:13</code> (superseding <code>:15</code>); <code>MmcaThemeProviders.razor:14</code>,
+          <code>:36</code>, <code>:38</code>, <code>:50</code>, <code>:77-99</code>, ADC <code>index.html:8</code>, <code>app.css:100-126</code> and
+          <code>theme-prepaint.js:14-43</code> unchanged.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="027-multi-locale-i18n.html">ADR-027</a> (shares the cookie source-of-truth and the <code>User</code> preference migration,
           and is the model for the theme no-flash SSR bootstrap that is not yet wired),
           <a href="022-browser-session-cookie-auth.html">ADR-022</a> (the SSR cookie-read pattern),
-          <a href="015-architecture-fitness-functions.html">ADR-015</a> (the fitness-function framework; no theme host-wiring
-          assertion exists in it today).</p>
+          <a href="015-architecture-fitness-functions.html">ADR-015</a> (the fitness-function framework; the shared
+          <code>MMCA.Common.Testing.Architecture</code> package carries no theme base, and the theme host-page assertion
+          lives in each consumer&#39;s own <code>MauiHostShellTests</code>, of which only Store&#39;s checks the pre-paint script,
+          see Decision 3).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -395,6 +450,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-19">Revision (2026-10-19)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

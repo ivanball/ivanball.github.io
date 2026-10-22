@@ -245,7 +245,8 @@
           <p>Revised 2026-09-19: the rule is adopted end to end. All eight migrations were authored and merged on
           2026-09-11 (four in ADC, three in Store, one in Helpdesk), and all three applications subclass the
           shipped fitness-function base, so the Decision and Trade-offs record adopted state instead of
-          pending work.</p>
+          pending work. Revised 2026-10-21: anchors refreshed after MMCA.Common moved the convention
+          registration and the permission-grant and internal-command hard deletes.</p>
           <h2 id="context">Context</h2>
           <p>EF Core picks a delete behavior for you. A required relationship gets <code>Cascade</code>, an optional one gets
           <code>ClientSetNull</code>, and neither choice appears anywhere a reviewer reads. The consequence is a database
@@ -267,8 +268,8 @@
           jobs against leaf tables (audit trail retention at
           <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailCleanupJob.cs:158-161</code>,
           refresh sessions at <code>.../Persistence/Auth/RefreshSessionCleanupService.cs:127</code>, permission grants at
-          <code>.../Persistence/Auth/EFPermissionGrantStore.cs:134-136</code>, internal commands at
-          <code>.../Persistence/InternalCommands/Administration/InternalCommandAdministration.cs:218-221</code> and
+          <code>.../Persistence/Auth/EFPermissionGrantStore.cs:145-148</code>, internal commands at
+          <code>.../Persistence/InternalCommands/Administration/InternalCommandAdministration.cs:223-225</code> and
           <code>.../Persistence/InternalCommands/Administration/InternalCommandCleanupService.cs:112</code> and <code>:147</code>,
           outbox messages at <code>.../Persistence/Outbox/Administration/OutboxCleanupService.cs:105</code>, <code>:161</code> and
           <code>:177</code>), ADC&#39;s session-score replacement
@@ -310,7 +311,7 @@
           <li><p><strong>It is registered on the one base context, after the other two finalizing conventions.</strong>
           <code>ApplicationDbContext.ConfigureConventions</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:378</code>)
-          adds it at <code>:399</code>, deliberately last of the three, so it never stamps a relationship the
+          adds it at <code>:400</code>, deliberately last of the three, so it never stamps a relationship the
           cross-source degrade convention has already removed. Because there is one context class per engine
           over one abstract base (<a href="006-database-per-service.html">ADR-006</a>), that single registration reaches
           every module, every database and every repo.</p>
@@ -415,6 +416,20 @@
           <code>AuditSaveChangesInterceptor.cs:101-102</code> (the <code>Deleted</code> case falls through to the default
           pass-through). Test-file and remaining anchors were re-checked and are unchanged.</li>
           </ul>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. No decision, rationale or trade-off changed: the convention is
+          still registered last of the three finalizing conventions, and both moved hard deletes are still
+          set-based deletes against leaf tables. Only line anchors in the live sections moved.</p>
+          <ol>
+          <li>The permission-grant revoke now removes the grant for every stored spelling of the role
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Auth/EFPermissionGrantStore.cs:139</code>)
+          in one set-based delete (<code>:145-148</code>, <code>ExecuteDeleteAsync</code> at <code>:147</code>); it remains a leaf-table hard
+          delete, so the Context list is unaffected in substance.</li>
+          <li>Anchors re-verified against current source: <code>ApplicationDbContext.cs:378</code> with the registration
+          at <code>:400</code> (degrade <code>:387</code>, soft-delete unique index <code>:393</code>), <code>EFPermissionGrantStore.cs:145-148</code>,
+          and <code>InternalCommandAdministration.cs:223-225</code>. The earlier dated revisions keep the anchors that
+          were accurate on their own dates.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="006-database-per-service.html">ADR-006</a> (one context class per engine over one abstract base, which is
           what makes this a single registration),
@@ -442,6 +457,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

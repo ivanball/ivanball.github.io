@@ -266,7 +266,8 @@
           Revised 2026-10-07: ADC&#39;s unchanged-leg re-tag also refreshes <code>latest</code> against the ACR purge, the
           SBOM step is recorded as pull-request-only, the publish-property citation is corrected, and every
           <code>deploy.yml</code> and <code>main.bicep</code> anchor is refreshed after both workflow prunes.
-          Revised 2026-10-19: Store&#39;s unchanged-leg re-tag also refreshes <code>latest</code> against the ACR purge, so the open gap recorded on 2026-10-07 is closed and both consumers re-tag the same way.</p>
+          Revised 2026-10-19: Store&#39;s unchanged-leg re-tag also refreshes <code>latest</code> against the ACR purge, so the open gap recorded on 2026-10-07 is closed and both consumers re-tag the same way.
+          Revised 2026-10-21: anchors refreshed after the <code>deploy.yml</code> and <code>main.bicep</code> growth in both consumers; no decision or posture changed. See Revision (2026-10-21).</p>
           <h2 id="context">Context</h2>
           <p>Eleven Dockerfiles produce every deployable container in the two Azure-hosted applications: six in
           MMCA.ADC (four services, the Gateway, the Blazor web host) and five in MMCA.Store (three services,
@@ -321,13 +322,13 @@
           <code>nuget.config</code> expands. The Dockerfile states the reason in place: a build-arg promoted to <code>ENV</code>
           lands in image layers, the build cache, and <code>docker history</code> (<code>:12-14</code>). CI passes it as a
           <code>secrets:</code> input to the build action, not a <code>build-args:</code> input
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:1068-1069</code>,
-          <code>MMCA.Store/.github/workflows/deploy.yml:1013-1014</code>), and the workflow repeats the constraint in its
-          own comments (<code>MMCA.ADC/.github/workflows/deploy.yml:988-991</code>). Secret <em>content</em> is deliberately not
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:1083-1084</code>,
+          <code>MMCA.Store/.github/workflows/deploy.yml:1015-1016</code>), and the workflow repeats the constraint in its
+          own comments (<code>MMCA.ADC/.github/workflows/deploy.yml:1003-1006</code>). Secret <em>content</em> is deliberately not
           part of the BuildKit cache key, so rotating the token does not invalidate the restore layer; that is
           safe only because the package set is pinned by committed lock files and any
           <code>Directory.Packages.props</code> change lands in a <code>COPY</code> layer that busts the cache anyway
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:1063-1067</code>).</p>
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:1078-1082</code>).</p>
           <p><strong>2. There is deliberately no separate <code>dotnet build</code> stage.</strong> The <code>build</code> stage restores and stops;
           <code>publish</code> does its own restore and build. This is a measured decision, dated in the file: on
           2026-07-24 (CI run 30115729720) the build stage emitted <code>bin/Release/net10.0/</code> while the
@@ -354,10 +355,10 @@
           scale-out replicas skip first-request JIT (<code>.../MMCA.ADC.Conference.Service/Dockerfile:43-44</code>), and
           the containers those replicas land on are fractional-vCPU Container Apps. Outside conference mode
           all six ADC apps (identity, conference, engagement, notification, gateway, ui) run on 0.25 vCPU /
-          0.5 GiB: notification declares it literally (<code>MMCA.ADC/infra/main.bicep:2258</code>), and the other five
-          take it as the baseline branch of <code>conferenceScaledResources</code> (<code>:182</code>; conference <code>:1966</code>,
-          engagement <code>:2109</code>, gateway <code>:2448</code>, ui <code>:2599</code>) or <code>conferenceIdentityResources</code> (<code>:186</code>;
-          identity <code>:1717</code>). The <code>conferenceMode</code> parameter (<code>:157</code>) lifts those four to 0.5 vCPU / 1 GiB and
+          0.5 GiB: notification declares it literally (<code>MMCA.ADC/infra/main.bicep:2414</code>), and the other five
+          take it as the baseline branch of <code>conferenceScaledResources</code> (<code>:182</code>; conference <code>:2122</code>,
+          engagement <code>:2265</code>, gateway <code>:2604</code>, ui <code>:2755</code>) or <code>conferenceIdentityResources</code> (<code>:186</code>;
+          identity <code>:1867</code>). The <code>conferenceMode</code> parameter (<code>:157</code>) lifts those four to 0.5 vCPU / 1 GiB and
           Identity to 1.0 vCPU / 2 GiB for conference day (rationale <code>:174-186</code>). On that much CPU, JIT time
           is not noise.</p>
           <p><strong>4. Every image is published with <code>UseAppHost=false</code> and started through the shared runtime.</strong> The
@@ -365,10 +366,10 @@
           <code>USER $APP_UID</code> (added 2026-09-07, see the revision below) and <code>ENTRYPOINT [&quot;dotnet&quot;, &quot;&lt;Host&gt;.dll&quot;]</code>
           (<code>.../MMCA.ADC.Conference.Service/Dockerfile:55-68</code>); the base stage exposes 8080 and 8081
           (<code>:6-7</code>). For Identity, Conference and Engagement, 8080 is the h2c ingress endpoint and 8081 the
-          HTTP/1.1 health-probe listener (Identity <code>MMCA.ADC/infra/main.bicep:1691,1694,1733</code>, Conference
-          <code>:1938,1941,1980</code>, Engagement <code>:2091,2094,2122</code>); only Notification serves h2c gRPC on 8081, the
+          HTTP/1.1 health-probe listener (Identity <code>MMCA.ADC/infra/main.bicep:1841,1844,1883</code>, Conference
+          <code>:2094,2097,2136</code>, Engagement <code>:2247,2250,2278</code>); only Notification serves h2c gRPC on 8081, the
           ADR-012 mixed profile, behind an <code>http</code> main ingress on 8080, with its probe listener on 8082
-          (<code>MMCA.ADC/infra/main.bicep:2226,2228,2230-2238,2276</code>). No image installs a package, adds
+          (<code>MMCA.ADC/infra/main.bicep:2382,2384,2390-2396,2432</code>). No image installs a package, adds
           a shell script, or runs a health-check command of its own: liveness is the Container Apps probe
           configured in Bicep.</p>
           <h2 id="runtime-postures-closed-2026-09-07">Runtime postures (closed 2026-09-07)</h2>
@@ -379,7 +380,7 @@
           the same runtime layer, and Microsoft&#39;s monthly runtime patches arrive as a Dependabot bump of the
           digest rather than as a side effect of rebuilding (ADR-038). That restores the symmetry with the
           application layer, which was already pinned: the deployment references each image by commit sha, not
-          by <code>latest</code> (<code>MMCA.ADC/.github/workflows/deploy.yml:1061,1234,1268-1273</code>). See Revision (2026-09-07)
+          by <code>latest</code> (<code>MMCA.ADC/.github/workflows/deploy.yml:1076,1249,1283-1288</code>). See Revision (2026-09-07)
           item 1.</p>
           <p><strong>Every image drops privileges.</strong> <code>USER $APP_UID</code> is the last instruction before the entrypoint in
           all eleven (ADC services <code>Dockerfile:67</code>, ADC Gateway <code>:72</code>, ADC UI.Web <code>:69</code>, Store services and
@@ -389,14 +390,14 @@
           outside the range a non-root user cannot bind
           (<code>.../MMCA.ADC.Conference.Service/Dockerfile:59-66</code>). See Revision (2026-09-07) item 2.</p>
           <p>What stays open is the gate, not the image. Each deploy scans the image it pushes with Trivy, but
-          report-only in both consumers (<code>MMCA.ADC/.github/workflows/deploy.yml:1132-1133</code>,
-          <code>MMCA.Store/.github/workflows/deploy.yml:1070-1071</code>), so a base-layer CRITICAL or HIGH is printed in the
+          report-only in both consumers (<code>MMCA.ADC/.github/workflows/deploy.yml:1147-1148</code>,
+          <code>MMCA.Store/.github/workflows/deploy.yml:1085-1086</code>), so a base-layer CRITICAL or HIGH is printed in the
           step log and does not stop a rollout. Both scan every leg&#39;s tag, including a leg that only re-tagged
-          an unchanged image (ADC <code>MMCA.ADC/.github/workflows/deploy.yml:1118-1120</code>; Store&#39;s scan runs after its
-          re-tag step, <code>MMCA.Store/.github/workflows/deploy.yml:1056-1058</code>), so a CVE disclosed after an image
+          an unchanged image (ADC <code>MMCA.ADC/.github/workflows/deploy.yml:1133-1135</code>; Store&#39;s scan runs after its
+          re-tag step, <code>MMCA.Store/.github/workflows/deploy.yml:1071-1073</code>), so a CVE disclosed after an image
           was built is still found. The supply-chain job generates its CycloneDX SBOM from the solution filter,
-          on pull requests only (<code>MMCA.ADC/.github/workflows/deploy.yml:601-615</code>, condition <code>:602</code>, filter
-          <code>:612</code>; <code>MMCA.Store/.github/workflows/deploy.yml:564-577</code>, condition <code>:565</code>, filter <code>:574</code>), so it
+          on pull requests only (<code>MMCA.ADC/.github/workflows/deploy.yml:615-629</code>, condition <code>:616</code>, filter
+          <code>:626</code>; <code>MMCA.Store/.github/workflows/deploy.yml:565-578</code>, condition <code>:566</code>, filter <code>:575</code>), so it
           describes the NuGet graph
           and not the image, which leaves that report-only scan as the only thing in either pipeline that
           looks at the base layer at all. Keeping it non-gating while the baseline is observed is the recorded
@@ -729,6 +730,29 @@
           cache <code>:1091-1092</code>, re-tag step <code>:1101-1127</code>, rationale <code>:1008-1012</code>; Store job <code>:942</code>, matrix
           <code>:957-973</code>, <code>matrix.changed</code> <code>:999</code>, <code>latest</code> push <code>:1008</code>, re-tag step <code>:1026-1064</code>). Workflow and
           Bicep anchors outside that paragraph were not re-verified in this revision.</p>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. No decision, runtime posture or rationale changed: the
+          <code>secrets:</code> input, the PR-only SBOM, the non-gating Trivy scan on every leg (<code>continue-on-error: true</code>, <code>exit-code: &#39;1&#39;</code>, <code>ignore-unfixed: true</code> in both consumers), the sha-addressed deployment,
+          the <code>conferenceMode</code> sizing and the port topology all read as recorded. The re-tag paragraph in
+          Context, re-pointed on 2026-10-19, still holds. What moved is every other <code>deploy.yml</code> and
+          <code>main.bicep</code> anchor in Decision and Runtime postures, re-pointed in place. The earlier Revision
+          sections keep the anchors they recorded on their dates, including the open-gap wording of Revision
+          (2026-10-07) item 1, which Revision (2026-10-19) and the Context paragraph already record as closed.</p>
+          <ol>
+          <li>Anchors re-verified against current source: ADC <code>deploy.yml</code> <code>secrets:</code> <code>:1083-1084</code>, job-header
+          BuildKit secret comment <code>:1003-1006</code>, secret and cache-key comment <code>:1078-1082</code>, sha tag <code>:1076</code>,
+          <code>IMAGE_TAG</code> <code>:1249</code>, per-image arguments <code>:1283-1288</code> (the every-image-by-sha comment is <code>:1095</code>),
+          Trivy step <code>:1147</code> (<code>continue-on-error</code> <code>:1148</code>, <code>ignore-unfixed</code> <code>:1154</code>, <code>exit-code: &#39;1&#39;</code>
+          <code>:1155</code>, every-leg comment <code>:1133-1135</code>), SBOM step <code>:615-629</code> (condition <code>:616</code>, filter <code>:626</code>);
+          Store <code>deploy.yml</code> <code>secrets:</code> <code>:1015-1016</code>, Trivy step <code>:1085</code> (<code>continue-on-error</code> <code>:1086</code>,
+          <code>ignore-unfixed</code> <code>:1092</code>, <code>exit-code: &#39;1&#39;</code> <code>:1093</code>, every-leg comment <code>:1071-1073</code>), SBOM step
+          <code>:565-578</code> (condition <code>:566</code>, filter <code>:575</code>); ADC <code>main.bicep</code> notification literal <code>:2414</code>,
+          conference <code>:2122</code>, engagement <code>:2265</code>, gateway <code>:2604</code>, ui <code>:2755</code>, identity <code>:1867</code>
+          (<code>conferenceMode</code> <code>:157</code>, <code>conferenceScaledResources</code> <code>:182</code>, <code>conferenceIdentityResources</code>
+          <code>:186</code>, rationale <code>:174-186</code> unchanged), Identity ports <code>:1841,1844,1883</code>, Conference
+          <code>:2094,2097,2136</code>, Engagement <code>:2247,2250,2278</code>, Notification <code>:2382,2384,2390-2396,2432</code>, and the
+          conference and gateway right-sizing comments <code>:2115-2121</code> and <code>:2597-2603</code>.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -753,6 +777,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-19">Revision (2026-10-19)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             </ul>
           </nav>
         </aside>

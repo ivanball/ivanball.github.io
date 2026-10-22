@@ -20,7 +20,9 @@ behavior **around** the route table and never the table itself, leaving `LoadFro
 The Context below records the prior state that motivated the change; the Decision describes what each
 gateway does today. Revised 2026-10-07: Store's gateway comment now agrees with its 15-route table,
 so the Rationale no longer cites it as a live off-by-N example, and the ADC AppHost and bicep anchors
-in the Context are refreshed.
+in the Context are refreshed. Revised 2026-10-21: anchors refreshed after the AppHost, bicep and
+gateway `appsettings.json` edits that moved the gateway blocks, address books and route and cluster
+tables.
 
 ## Context
 Before this record, both gateways built their route table by hand, in code. ADC made 26
@@ -55,10 +57,10 @@ was pinned by no test at all.
 
 **What is genuinely elsewhere is not the route table, and that distinction is worth recording**,
 because it is the duplication a reader assumes exists. The Aspire AppHost holds references and
-start-ordering (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:348-356`,
-`MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:307-313`) and the bicep templates hold
+start-ordering (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:353-361`,
+`MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:327-333`) and the bicep templates hold
 `services__<name>__http__0` environment variables on the gateway container app
-(`MMCA.ADC/infra/main.bicep:2468-2471`, `MMCA.Store/infra/main.bicep:1943-1945`). Both are **address
+(`MMCA.ADC/infra/main.bicep:2624-2627`, `MMCA.Store/infra/main.bicep:2037-2039`). Both are **address
 books**: service name to URL, with no path prefix anywhere in them. They answer "where does
 `conference` resolve" and never "what reaches conference", so neither is a second route table and
 neither should become one.
@@ -93,7 +95,7 @@ and `MapReverseProxy()`, and the `MapForwarder` lists are deleted. ADC wires it 
 `MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:138-141` and `:173`. Routes and clusters live
 in the gateway's own `appsettings.json`: 33 routes over five clusters for ADC (8 identity, 18
 conference, 5 engagement, 2 notification, at
-`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:78-259`) and 15 routes over three clusters
+`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:80-261`) and 15 routes over three clusters
 for Store (3 catalog, 8 identity, 4 sales, at
 `MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:51-144`). Destinations stay
 Aspire service-discovery names, so nothing about ADR-008's transport-at-the-edge posture, the AppHost
@@ -146,8 +148,8 @@ needs: the SignalR websocket on ADC's Notification hub route, and HTTP/1.1-capab
 Stripe webhook on Store's Sales, which has no websocket route
 (`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:127-131`). ADC's `identity`, `conference` and
 `engagement` clusters carry `Version` with
-`RequestVersionExact` (`appsettings.json:265-268`, `:274-277`, `:283-286`) and its two Notification
-clusters carry no `HttpRequest` block at all (`:288-292`, `:293-297`); Store's `catalog` and `identity`
+`RequestVersionExact` (`appsettings.json:267-270`, `:276-279`, `:285-288`) and its two Notification
+clusters carry no `HttpRequest` block at all (`:290-294`, `:295-299`); Store's `catalog` and `identity`
 clusters carry them (`appsettings.json:147-150`, `:156-159`) and its `sales` cluster states neither
 (`:164-168`).
 
@@ -289,6 +291,26 @@ example of an ungated comment drifting from the table no longer holds for Store.
    book (`MMCA.ADC/infra/main.bicep:2468-2471`) are re-pointed in the Context; the Store AppHost
    (`MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:307-313`) and Store bicep
    (`MMCA.Store/infra/main.bicep:1943-1945`) anchors still hold.
+
+## Revision (2026-10-21)
+Re-verified against current source. No decision and no current-state statement changed: both AppHost
+gateway blocks still hold only `WithReference`, `WaitFor` ordering and endpoint and health wiring with
+no route or path data, both bicep gateway address books still carry bare `http://<app>` destinations
+with no path prefix, ADC's `identity`, `conference` and `engagement` clusters still declare `Version`
+2.0 with `RequestVersionExact`, and neither Notification cluster declares an `HttpRequest` block.
+Only anchors moved.
+
+1. Anchors re-verified against current source: the ADC AppHost gateway block
+   (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:353-361`, with endpoint and health wiring
+   at `:362-364`), the Store AppHost gateway block
+   (`MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:327-333`, the block ending at `:360`),
+   the ADC bicep gateway address book (`MMCA.ADC/infra/main.bicep:2624-2627`, inside `gatewayApp`
+   at `:2556`), the Store bicep gateway address book (`MMCA.Store/infra/main.bicep:2037-2039`, inside
+   `gatewayApp` at `:1966`), the ADC route table
+   (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:80-261`), the ADC h2c cluster
+   `HttpRequest` blocks (`:267-270`, `:276-279`, `:285-288`) and the two Notification clusters
+   (`:290-294`, `:295-299`). The 2026-10-07 revision's statement that the Store AppHost and Store
+   bicep anchors still held is superseded by these.
 
 ## Related
 [ADR-008](008-service-extraction-topology.md) (amended: the Gateway keeps the route-to-service map it

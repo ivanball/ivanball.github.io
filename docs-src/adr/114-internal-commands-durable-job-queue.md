@@ -11,6 +11,9 @@ is due, and the two processors share one polling implementation; see Revision be
 Revised 2026-10-06: a schedule enrolled in a transaction now owes a processor wake that the unit of
 work releases once after a successful commit and drops on rollback.
 Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
+Revised 2026-10-21: Decision 2 now records that the transactional execution path saves a
+still-enrolled command row just before the commit when no later save follows, and live anchors
+were refreshed.
 
 ## Context
 The framework has had two ways to move work off the request thread and neither of them is a job
@@ -21,7 +24,7 @@ The **transactional outbox** ([ADR-003](003-outbox-dual-dispatch.md)) carries *e
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:15`) is
 written by the domain-event interceptor inside the same transaction as the aggregate change, and
 `OutboxProcessor`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:56`)
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:58`)
 drains one table per relational source with a claim lease, exponential backoff, dead-lettering and
 OpenTelemetry instrumentation. It answers "this happened, tell whoever cares". It does not answer
 "do this later", and bending it to do so means expressing an instruction as an event, which is
@@ -69,17 +72,24 @@ invalidation, validation, the timeout budget and the transaction
 exposes `ScheduleAsync(command, runAt)` and a `TimeSpan delay` overload, both returning
 `Result<Guid>`. The implementation
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/InternalCommandScheduler.cs:69`)
-adds the row to the context handed back by the scope's own `IDbContextFactory` (`:99`, `:103`),
+adds the row to the context handed back by the scope's own `IDbContextFactory` (`:101`, `:105`),
 which is the same instance the calling handler's repositories use. With a transaction active it
 enrolls the row and records an owed processor wake against that context instead of signalling
-(`EnrolledCommandWake.Defer`, `:113`), so the caller's commit persists the row and a rollback erases
-it; the unit of work releases the owed wake once, after a successful commit
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:481`
-and `:634`), and drops it on rollback (`:853`), with the wake itself kept in
+(`EnrolledCommandWake.Defer`, `:115`), so the caller's commit persists the row and a rollback erases
+it. The caller's next save writes the enrolled row; when no save follows, the transactional
+execution path saves it just before the commit
+(`FlushEnrolledCommandsBeforeCommitAsync`, called at
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:651`
+and defined at `:713`), and that flush refuses to commit, throwing so the unit rolls back, if
+anything other than added `InternalCommandMessage` rows is still unsaved. The explicit
+`CommitTransaction` (`:498`) performs no such flush. The unit of work releases the owed wake once,
+after a successful commit (`:507` and `:660`), and drops it on rollback (`EnrolledCommandWake.Drop`
+at `:885`, inside `DropDeferredWork`, which `RollbackTransaction` calls at `:520`), with the wake
+itself kept in
 `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/EnrolledCommandWake.cs:14`.
-With no transaction active it saves immediately (`:120`) and signals the processor whether or not the
+With no transaction active it saves immediately (`:124`) and signals the processor whether or not the
 row is due yet
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/InternalCommandScheduler.cs:125`):
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/InternalCommandScheduler.cs:129`):
 a due row runs on the wake, and a future-dated row re-arms the processor's smart wait on its
 `ScheduledOn` plus `ProcessingDelaySeconds`, floored at one second and capped at the polling
 interval (`InternalCommandProcessor.cs:101`, delegating to `PollingLoop.ComputeWaitTime` at
@@ -90,7 +100,7 @@ aborts schedules nothing.
 **3. One table per relational source, mapped unconditionally.** `InternalCommandMessage`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/InternalCommandMessage.cs:21`)
 is configured in `ApplicationDbContext.ConfigureInternalCommands`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:752`)
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:757`)
 alongside the outbox and inbox, with three filtered indexes for the poll, the retention sweep and the
 dead-letter view. It takes the engine the model is being built for and runs its partial-index
 predicates through the same `QuoteColumn`
@@ -108,28 +118,32 @@ databases, and a flag that changed the schema would make enabling the queue a mi
 deployment decision.
 
 **4. Execution restores the caller's context.** The row captures the scheduling user id, roles,
+permission claims (`InternalCommandMessage.UserPermissions`,
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/InternalCommandMessage.cs:129`),
 tenant and correlation id. The processor does not restore that context itself: before the dispatcher
 runs it calls the shared `AmbientOrigin.Restore`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Context/AmbientOrigin.cs:156`, called at `InternalCommandProcessor.cs:483`), the same helper
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Context/AmbientOrigin.cs:254`, called at `InternalCommandProcessor.cs:483`), the same helper
 the other background hops use, so every hop restores the same shape. `Restore` sets the tenant
-first, then rebuilds a `ClaimsPrincipal` carrying the `sub` claim and one role claim per stored role
-(`AmbientOrigin.BuildPrincipal`, same file `:86`) and hands it to `ScopedUserOverride`
+first, then rebuilds a `ClaimsPrincipal` carrying the `sub` claim, one role claim per stored role and one
+`AuthClaimTypes.Permission` claim per captured permission (`AmbientOrigin.BuildPrincipal`, same file
+`:179`, permissions added at `:202`; the processor passes `row.UserPermissions` at
+`InternalCommandProcessor.cs:487`) and hands it to `ScopedUserOverride`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Context/ScopedUserOverride.cs:27`), a scoped
 carrier read by `ImpersonatingCurrentUserService`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Context/ImpersonatingCurrentUserService.cs:20`),
 which decorates whatever `ICurrentUserService` the host registered
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:242`). With no override
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:247`). With no override
 set every member reads straight through, so an HTTP request behaves exactly as before.
 
 **5. Failure policy: the outbox's, with one deliberate divergence.** `InternalCommandProcessor`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Processing/InternalCommandProcessor.cs:43`)
 claims the due prefix of each batch with a lease token
 (`ClaimDueAsync`, `:286`), executes each row in a fresh DI scope, and stamps the outcome through a
-set-based update guarded by that token (`StampAsync`, `:606`) so a replica whose lease expired
+set-based update guarded by that token (`StampAsync`, `:607`) so a replica whose lease expired
 mid-execution silently drops its stale outcome. A `Result.Failure` and a thrown exception are the
 same operational fact and both consume an attempt; the backoff is
 `RetryBackoffBaseSeconds * 2^(attempts-1)` with jitter in `[0.8, 1.2]`, capped at
-`MaxRetryBackoffSeconds` (`ComputeRetryBackoffSeconds`, `:632`, delegating to the shared
+`MaxRetryBackoffSeconds` (`ComputeRetryBackoffSeconds`, `:633`, delegating to the shared
 `PollingLoop.ComputeRetryBackoffSeconds` at
 `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Polling/PollingLoop.cs:183`). A
 payload that no longer deserializes is dead-lettered on the first attempt as `payload_invalid`
@@ -227,8 +241,8 @@ poll. `InternalCommands:PollingIntervalSeconds` ships at 2
 which is the same default `OutboxSettings` ships
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxSettings.cs:31`),
 so the divergence is a deployment decision rather than a framework one: ADC and Store both run the
-queue at 60 seconds (`MMCA.ADC/infra/main.bicep:1750`, `MMCA.Store/infra/main.bicep:1500`) while
-pushing the outbox to 300 (`MMCA.ADC/infra/main.bicep:1744`, `MMCA.Store/infra/main.bicep:1493`).
+queue at 60 seconds (`MMCA.ADC/infra/main.bicep:1900`, `MMCA.Store/infra/main.bicep:1589`) while
+pushing the outbox to 300 (`MMCA.ADC/infra/main.bicep:1894`, `MMCA.Store/infra/main.bicep:1582`).
 A host that raises the interval to cut idle polling accepts that much latency on any
 transaction-scheduled work the post-commit wake does not reach.
 
@@ -293,6 +307,33 @@ Store are unchanged; only line anchors moved.
    `:59`, `:70`, `:79`, `:88`, `:95`, `:110`), and the ADC polling settings
    (`MMCA.ADC/infra/main.bicep:1750` for the queue and `:1744` for the outbox). The 2026-10-01 and
    2026-10-06 revisions keep their dated anchors as written.
+
+## Revision (2026-10-21)
+Re-verified against current source. The decision, the five parts, the failure policy, the settings
+defaults and the deployed 60-second queue and 300-second outbox intervals in ADC and Store are
+unchanged. One behavior was missing from Decision 2, and line anchors moved.
+
+1. Decision 2 now states that an enrolled row does not depend on the caller saving again: when no
+   save follows the schedule, the transactional execution path flushes it just before the commit
+   (`FlushEnrolledCommandsBeforeCommitAsync`, called at
+   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:651`,
+   defined at `:713`), and throws, rolling the unit back, if anything other than added
+   `InternalCommandMessage` rows is still unsaved. The explicit `CommitTransaction` (`:498`) does
+   not flush. The scheduler's own comment
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/InternalCommandScheduler.cs:110`)
+   describes the same contract.
+2. Anchors re-verified against current source: `OutboxProcessor` (`OutboxProcessor.cs:58`, its
+   `PollingLoop.RunAsync` call at `:121`); the scheduler's `GetDbContext` and `Add`
+   (`InternalCommandScheduler.cs:101`, `:105`), `EnrolledCommandWake.Defer` (`:115`), immediate save
+   (`:124`) and signal (`:129`); the wake release (`DbContextFactory.cs:507` and `:660`) and drop
+   (`:885`, in `DropDeferredWork` at `:882`, called from `RollbackTransaction` at `:520`);
+   `ConfigureInternalCommands` (`ApplicationDbContext.cs:757`); `AmbientOrigin.Restore`
+   (`AmbientOrigin.cs:254`) and `BuildPrincipal` (`:179`); the `ICurrentUserService` decoration
+   (`DependencyInjection.cs:247`); `StampAsync` (`InternalCommandProcessor.cs:607`) and
+   `ComputeRetryBackoffSeconds` (`:633`); and the deployed polling settings
+   (`MMCA.ADC/infra/main.bicep:1900` for the queue and `:1894` for the outbox,
+   `MMCA.Store/infra/main.bicep:1589` and `:1582`). The 2026-10-01, 2026-10-06 and 2026-10-07
+   revisions keep their dated anchors as written.
 
 ## Related
 [ADR-003](003-outbox-dual-dispatch.md) (the claim-lease, backoff and dead-letter machinery this

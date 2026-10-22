@@ -254,7 +254,8 @@
           Revision below). Revised 2026-10-07: the opt-in same-origin proxy base address and handler, the
           shared Aspire handler&#39;s refusal to retry POST and PATCH, and the <code>IdempotentReadRetry</code> GET path for
           read services outside the hierarchy are recorded, and the <code>IsNotFound</code> anchor is corrected.
-          Revised 2026-10-19: Store&#39;s two Sales lookup services now run their GETs through <code>IdempotentReadRetry</code>, so the helper has eleven call sites across both apps.</p>
+          Revised 2026-10-19: Store&#39;s two Sales lookup services now run their GETs through <code>IdempotentReadRetry</code>, so the helper has eleven call sites across both apps.
+          Revised 2026-10-21: the retry policy is recorded with its transport-failure arm (a keyless POST or PATCH is resent only when it failed before it was sent), the <code>EntityServiceBase</code> count is twenty with the two <code>UserListService</code> types, the list-page base&#39;s opt-in virtualized fetch path is recorded, and anchors are refreshed.</p>
           <h2 id="context">Context</h2>
           <p>ADR-034 decided the <strong>server</strong> half of entity data access: a generic controller base with a dynamic
           query contract, where filters arrive as <code>filters[Property].operator</code> / <code>filters[Property].value</code> query
@@ -283,17 +284,17 @@
           unavailable, <code>:72-75</code>), the explicit-token variant used to replay a 401 with a freshly refreshed
           token (<code>CreateClientWithToken</code>, <code>:88-95</code>, the client end of ADR-051), the retry policy, and the
           idempotency-key mint. The client itself is registered once, in <code>AddUIShared</code>
-          (<code>.../MMCA.Common.UI/DependencyInjection.cs:124-155</code>): base address from <code>ApiSettings</code>
-          (<code>SameOriginApiEndpoint</code> when set, otherwise <code>ApiEndpoint</code>, <code>:136</code>), <code>Accept: application/json</code>, <code>AuthDelegatingHandler</code> plus <code>CultureDelegatingHandler</code>, and a transport timeout
-          pinned to the shared 90-second budget (<code>:142</code>, <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:19</code>)
+          (<code>.../MMCA.Common.UI/DependencyInjection.cs:132-162</code>): base address from <code>ApiSettings</code>
+          (<code>SameOriginApiEndpoint</code> when set, otherwise <code>ApiEndpoint</code>, <code>:144</code>), <code>Accept: application/json</code>, <code>AuthDelegatingHandler</code> plus <code>CultureDelegatingHandler</code>, and a transport timeout
+          pinned to the shared 90-second budget (<code>:150</code>, <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:19</code>)
           so the BCL&#39;s uncoordinated 100-second default cannot cut a call off mid-policy. When
-          <code>Api:SameOriginApiEndpoint</code> is configured (<code>:120-121</code>, the opt-in same-origin proxy a WebAssembly
+          <code>Api:SameOriginApiEndpoint</code> is configured (<code>:128-129</code>, the opt-in same-origin proxy a WebAssembly
           client receives from its Server host), one more handler, <code>SameOriginProxyRequestHandler</code>, is added
-          innermost (<code>:149-155</code>), so it sees and strips every <code>Authorization</code> header the outer handlers
+          innermost (<code>:157-162</code>), so it sees and strips every <code>Authorization</code> header the outer handlers
           attached and stamps the proxy&#39;s CSRF header; without it the chain keeps only the two handlers
-          <code>AddUIShared</code> adds (<code>:146-147</code>). A host that calls <code>AddServiceDefaults</code> also wraps the client in the
+          <code>AddUIShared</code> adds (<code>:154-155</code>). A host that calls <code>AddServiceDefaults</code> also wraps the client in the
           standard resilience and service-discovery handlers through <code>ConfigureHttpClientDefaults</code>
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:39-85</code>).</li>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:39-87</code>).</li>
           <li><strong>Typed CRUD is <code>EntityServiceBase&lt;TEntityDTO, TIdentifierType&gt;</code></strong>
           (<code>.../MMCA.Common.UI/Services/Api/EntityServiceBase.cs:43</code>), implementing
           <code>IEntityService&lt;TEntityDTO, TIdentifierType&gt;</code> (<code>.../MMCA.Common.UI/Common/Interfaces/IEntityService.cs:20</code>).
@@ -326,15 +327,25 @@
           that may answer the retry of a write whose first attempt landed, a 5xx, a transport failure)
           leaves the server state changed or unknown and invalidates like a success.</li>
           <li><strong>Retry is owned by the client base, not by a resilience handler.</strong> <code>RetryPolicy</code>
-          (<code>AuthenticatedServiceBase.cs:27</code>, built by <code>BuildRetryPolicy</code>, <code>:170-173</code>) is a static Polly
-          policy: three retries after the initial attempt, on <code>HttpRequestException</code> or a retryable response,
-          with 2s / 4s / 8s exponential backoff plus up to 1000 ms of jitter so a fleet of clients does not
-          re-converge on one instant, and every retried response is disposed in <code>onRetry</code> (<code>:173</code>) so only
-          the final one reaches the caller. <code>IsRetryableResponse</code> (<code>:108-122</code>) retries 5xx <strong>except</strong> 501 and
-          505 (permanent verdicts) and adds 408 and 429 (the server explicitly inviting a later attempt), but
-          only for a request that is safe to send again: <code>IsReplaySafe</code> (<code>:134-148</code>, checked at <code>:115</code>)
-          answers false for a POST or PATCH carrying no <code>Idempotency-Key</code>, so a keyless write is never
-          replayed. Every dispatch runs through <code>SendRequestAsync</code> (<code>EntityServiceBase.cs:351-369</code> for the
+          (<code>AuthenticatedServiceBase.cs:27</code>, built by <code>BuildRetryPolicy</code>, <code>:201-204</code>) is a static Polly
+          policy: three retries after the initial attempt, on a retryable <code>HttpRequestException</code> or a
+          retryable response, with 2s / 4s / 8s exponential backoff plus up to 1000 ms of jitter so a fleet
+          of clients does not re-converge on one instant, and every retried response is disposed in
+          <code>onRetry</code> (<code>:204</code>) so only the final one reaches the caller. <code>IsRetryableResponse</code> (<code>:108-122</code>)
+          retries 5xx <strong>except</strong> 501 and 505 (permanent verdicts) and adds 408 and 429 (the server
+          explicitly inviting a later attempt), but only for a request that is safe to send again:
+          <code>IsReplaySafe</code> (<code>:134-148</code>, checked at <code>:115</code>) answers false for a POST or PATCH carrying no
+          <code>Idempotency-Key</code>, so a keyless write that got a response is never replayed. The exception arm
+          sees no request, so <code>AuthDelegatingHandler</code>, the outermost of the handlers <code>AddUIShared</code> registers
+          on <code>&quot;APIClient&quot;</code> (on a host that calls <code>AddServiceDefaults</code> the default resilience and
+          service-discovery handlers wrap it, <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:49</code>,
+          <code>:65</code>), stamps each transport failure that passes through it with the request&#39;s replay safety
+          (<code>.../MMCA.Common.UI/Services/Auth/AuthDelegatingHandler.cs:38</code>, through <code>MarkReplaySafety</code>,
+          <code>AuthenticatedServiceBase.cs:164-165</code>, under <code>ReplaySafeDataKey</code>, <code>:156</code>). <code>IsRetryableException</code>
+          (<code>:175-179</code>, wired at <code>:202</code>) then resends a keyless POST or PATCH only when it failed before it
+          was sent (name resolution, the TCP connect or the TLS handshake), since any later failure may
+          have reached the handler; every other request, and an exception no handler marked, keeps the
+          retry. Every dispatch runs through <code>SendRequestAsync</code> (<code>EntityServiceBase.cs:351-369</code> for the
           value-returning overload, <code>:381-397</code> for the body-less one, both taking an optional idempotency key
           and <code>If-Match</code> value), which passes the caller&#39;s <code>CancellationToken</code> into the policy (<code>:365</code>,
           <code>:393</code>) so cancellation aborts the wait between attempts instead of sleeping out the backoff budget.</li>
@@ -398,9 +409,9 @@
           at <code>:27</code>; taken at <code>IdempotentReadRetry.cs:24</code>), so the two paths cannot drift. It serves services
           that create the named <code>&quot;APIClient&quot;</code> themselves rather than through <code>CreateAuthenticatedClientAsync</code>
           or <code>CreateClientWithToken</code>. They never set a token explicitly, but the registered chain still
-          includes <code>AuthDelegatingHandler</code> (<code>.../MMCA.Common.UI/DependencyInjection.cs:146</code>), which attaches
+          includes <code>AuthDelegatingHandler</code> (<code>.../MMCA.Common.UI/DependencyInjection.cs:154</code>), which attaches
           the stored bearer to any request with no <code>Authorization</code> header
-          (<code>.../MMCA.Common.UI/Services/Auth/AuthDelegatingHandler.cs:34-40</code>), so these calls carry it
+          (<code>.../MMCA.Common.UI/Services/Auth/AuthDelegatingHandler.cs:52-58</code>), so these calls carry it
           whenever a user is signed in. Without the helper such a GET would get only the shared handler&#39;s
           single retry on a host that calls <code>AddServiceDefaults</code> (see Trade-offs), and one attempt on a head
           that does not. Eleven call sites across eight files in the two apps use it. In ADC, seven across six
@@ -436,18 +447,23 @@
           and <code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Ui/StateManagementConventionTests.cs:10</code>.
           MMCA.Helpdesk declares no subclass, so the rule is not enforced there.</li>
           </ul>
-          <p>Adoption inventory as of 2026-10-06, with every service filed under its aggregate folder.
-          <strong>Eighteen production services derive from <code>EntityServiceBase</code></strong>: ten in ADC Conference
+          <p>Adoption inventory as of 2026-10-21. Most services sit under their aggregate folder; a module with a
+          single aggregate per service keeps them at the <code>Services/</code> root (both <code>UserListService</code> types and
+          Store&#39;s <code>CustomerService</code>, <code>ProductService</code> and <code>CategoryService</code>).
+          <strong>Twenty production services derive from <code>EntityServiceBase</code></strong>: eleven in ADC, ten of them in
+          Conference
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Services/</code>:
           <code>Activities/ActivityService.cs:11</code>, <code>Categories/CategoryItemService.cs:11</code>,
           <code>Categories/ConferenceCategoryService.cs:11</code>, <code>Events/EventService.cs:27</code>,
           <code>Partners/PartnerService.cs:11</code>, <code>Questions/QuestionService.cs:11</code>, <code>Rooms/RoomService.cs:15</code>,
-          <code>Sessions/SessionService.cs:11</code>, <code>Speakers/SpeakerService.cs:23</code>, <code>Sponsors/SponsorService.cs:11</code>),
-          seven in Store
+          <code>Sessions/SessionService.cs:11</code>, <code>Speakers/SpeakerService.cs:23</code>, <code>Sponsors/SponsorService.cs:11</code>)
+          plus Identity&#39;s <code>UserListService</code>
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.UI/Services/UserListService.cs:21</code>), eight in
+          Store
           (<code>Catalog.UI/Services/ProductService.cs:27</code>, <code>CategoryService.cs:24</code> and
           <code>Reviews/ReviewService.cs:24</code>; <code>Sales.UI/Services/Orders/OrderService.cs:19</code>,
           <code>ShoppingCarts/ShoppingCartService.cs:18</code>, <code>Inventory/InventoryItemService.cs:20</code>;
-          <code>Identity.UI/Services/CustomerService.cs:25</code>), and one inside
+          <code>Identity.UI/Services/CustomerService.cs:25</code> and <code>UserListService.cs:22</code>), and one inside
           the framework itself
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Notifications/PushNotificationService.cs:20</code>).
           <strong>Four derive from <code>ChildEntityServiceBase</code></strong>, all in ADC Conference and all in one file
@@ -473,40 +489,46 @@
           separately because the two are used as a pair: a list page inherits the base and hands it a fetch
           delegate that is almost always an <code>EntityServiceBase.GetPagedAsync</code> call.</p>
           <p><code>DataGridListPageBase&lt;TDto&gt;</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/DataGridListPageBase.cs:22</code>) owns:</p>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/DataGridListPageBase.cs:23</code>) owns:</p>
           <ul>
-          <li><strong>Server-side paging through MudDataGrid <code>ServerData</code>.</strong> <code>LoadServerDataAsync</code> (<code>:521</code>) flattens the
+          <li><strong>Server-side paging through MudDataGrid <code>ServerData</code>.</strong> <code>LoadServerDataAsync</code> (<code>:641</code>) flattens the
           grid&#39;s filter definitions into the one-filter-per-column dictionary the fetch delegate takes, with
           the newest row winning when the user stacks two filters on one column (<code>ExtractGridFilters</code>,
-          <code>:911-924</code>), resolves sort from <code>GridState</code> (<code>ResolveSortParameters</code>, called in the paged fetch at
-          <code>:599</code>, defined at <code>:938-950</code>: it reads the grid&#39;s own <code>SortDefinition</code> through
-          <code>ExtractSortParameters</code>, <code>:926-931</code>, and falls back to the sort restored from the query string when
+          <code>:1031-1044</code>), resolves sort from <code>GridState</code> (<code>ResolveSortParameters</code>, called in the paged fetch at
+          <code>:719</code>, defined at <code>:1093-1105</code>: it reads the grid&#39;s own <code>SortDefinition</code> through
+          <code>ExtractSortParameters</code>, <code>:1081-1086</code>, and falls back to the sort restored from the query string when
           the grid has not picked one up yet, which is the normal case on a first fetch with a URL-driven
-          sort), and converts the grid&#39;s zero-based page to the API&#39;s one-based <code>pageNumber</code> (<code>:601</code>).</li>
+          sort), and converts the grid&#39;s zero-based page to the API&#39;s one-based <code>pageNumber</code> (<code>:721</code>).</li>
           <li><strong>Cancellation-token management.</strong> Each fetch swaps in a fresh source before tearing down the
           previous one, tolerating the <code>ObjectDisposedException</code> race a debounced reload after disposal would
-          otherwise raise (<code>ResetCancellationTokenAsync</code>, <code>:877-899</code>); during SSR pre-render the token
+          otherwise raise (<code>ResetCancellationTokenAsync</code>, <code>:997-1019</code>); during SSR pre-render the token
           additionally times out after <code>PrerenderFetchTimeoutMs</code> (5000 ms) so a cold backend cannot block the
-          page load (<code>:95</code>, <code>CreateFetchCts</code>, <code>:813-824</code>).</li>
-          <li><strong>A <code>LoadFailed</code> flag that distinguishes error-with-retry from genuinely empty</strong> (<code>:53</code>). The grid
-          and mobile paths share one fetch wrapper, <code>RunFetchAsync</code> (<code>:717</code>), which clears the flag (<code>:726</code>)
-          and sets it on a thrown fetch (<code>:752</code>), while <code>FailedFetch</code> (<code>:770</code>) sets it on a failed <code>Result</code> (<code>:773</code>). A failed fetch renders
+          page load (<code>:96</code>, <code>CreateFetchCts</code>, <code>:933-944</code>).</li>
+          <li><strong>An opt-in virtualized fetch path.</strong> A page that overrides <code>VirtualizeGrid</code> (<code>:155</code>, default
+          false) binds MudDataGrid <code>VirtualizeServerData</code> to <code>LoadVirtualizedServerDataAsync</code> (<code>:762</code>), which
+          maps the requested row window onto the same page-based fetch delegate (one or two pages, trimmed to
+          the window) through the same <code>RunFetchAsync</code> (<code>:774</code>) and <code>ExtractGridFilters</code> (<code>:777</code>), so a page
+          switches to virtualization without a second API contract. A virtualized grid renders no pager, so
+          the pager-restore workarounds are skipped for it (<code>:582-590</code>).</li>
+          <li><strong>A <code>LoadFailed</code> flag that distinguishes error-with-retry from genuinely empty</strong> (<code>:54</code>). The paged
+          grid, virtualized grid and mobile paths share one fetch wrapper, <code>RunFetchAsync</code> (<code>:837</code>), which clears the flag (<code>:846</code>)
+          and sets it on a thrown fetch (<code>:872</code>), while <code>FailedFetch</code> (<code>:890</code>) sets it on a failed <code>Result</code> (<code>:893</code>). A failed fetch renders
           zero rows, which is visually identical to an empty list once the error snackbar expires, so pages
           branch on this flag in <code>NoRecordsContent</code> instead of showing the &quot;no records&quot; state.</li>
-          <li><strong>Viewport-driven mobile card state.</strong> <code>IsMobile</code> (<code>:57</code>) flips from the browser-viewport observer
-          (<code>:318-331</code>) below the 960 px sidebar-collapse threshold, and the card view has its own paged fetch
-          path (<code>MobileItems</code> / <code>MobileTotalItems</code> / <code>MobileCurrentPage</code> / <code>MobilePageSize</code>, <code>:60-63</code>;
-          <code>LoadMobileDataAsync</code>, <code>:830</code>).</li>
+          <li><strong>Viewport-driven mobile card state.</strong> <code>IsMobile</code> (<code>:58</code>) flips from the browser-viewport observer
+          (<code>:319-332</code>) below the 960 px sidebar-collapse threshold, and the card view has its own paged fetch
+          path (<code>MobileItems</code> / <code>MobileTotalItems</code> / <code>MobileCurrentPage</code> / <code>MobilePageSize</code>, <code>:61-64</code>;
+          <code>LoadMobileDataAsync</code>, <code>:950</code>).</li>
           <li><strong>List state persisted and restored three ways.</strong> <code>ListPageState</code>
           (<code>.../MMCA.Common.UI/Services/ListPageStateService.cs:9</code>) carries page, page size, mobile page, sort,
           density, filters and scroll position; <code>ListPageStateService</code> (<code>:63</code>) holds it in memory and mirrors
           it to <code>sessionStorage</code>, and <code>ListPageQueryStateService</code>
           (<code>.../MMCA.Common.UI/Services/ListPageQueryStateService.cs:28</code>) encodes it into the URL. The URL is
           the source of truth on initialization, with the in-memory entry as the fallback and scroll position
-          read only from it (<code>DataGridListPageBase.cs:217-254</code>); writes go to all three (<code>SaveCurrentState</code>,
-          <code>:952-989</code>). Deferred writes are dropped once the user has navigated away, because the route is
+          read only from it (<code>DataGridListPageBase.cs:218-255</code>); writes go to all three (<code>SaveCurrentState</code>,
+          <code>:1107-1144</code>). Deferred writes are dropped once the user has navigated away, because the route is
           pinned at initialization rather than read from the live URI at write time (<code>_ownRoutePath</code>, field at
-          <code>:1032</code>, pinned at <code>:215</code>; <code>IsOwnRouteCurrent</code>, <code>:1040-1041</code>).</li>
+          <code>:1187</code>, pinned at <code>:216</code>; <code>IsOwnRouteCurrent</code>, <code>:1195-1196</code>).</li>
           </ul>
           <p><strong>Twenty types inherit this base</strong>: thirteen in ADC (seven directly, six through the abstract
           <code>Pages/Common/EventFilteredListPageBase.cs:25</code>) and seven in Store, nineteen of them routable list
@@ -549,13 +571,13 @@
           for the binder, <code>EntityServiceBaseTests.cs</code> for the emitter) rather than end to end.</li>
           <li><strong>Retry budgets stack across hops, and are deliberately bounded rather than eliminated.</strong> A host that
           calls <code>AddServiceDefaults</code> applies the standard resilience handler to every factory client through
-          <code>ConfigureHttpClientDefaults</code> (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:39-85</code>),
+          <code>ConfigureHttpClientDefaults</code> (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:39-87</code>),
           including <code>&quot;APIClient&quot;</code>. Because the UI base already makes up to four attempts, the shared
           per-hop retry count is pinned to <strong>one</strong>
           (<code>HttpResilienceDefaults.cs:21-30</code>, applied at <code>Extensions.cs:54</code>), with the reason stated in both
           places: full budgets at every hop turned a backend brownout into an up-to-16x request storm. The
           shared handler also never replays a POST or PATCH
-          (<code>options.Retry.DisableFor(HttpMethod.Post, HttpMethod.Patch)</code>, <code>Extensions.cs:61</code>), because a
+          (<code>options.Retry.DisableFor(HttpMethod.Post, HttpMethod.Patch)</code>, <code>Extensions.cs:63</code>), because a
           timed-out attempt may still be running server-side and the handler does not look for an
           idempotency key (even on <code>&quot;APIClient&quot;</code>, where the UI base&#39;s create does carry one), so a client
           create is retried only by the UI base, under its key. The cost is that the effective attempt count for a UI action is a product of two layers and cannot be
@@ -567,17 +589,21 @@
           <li><strong>Only <code>AddAsync</code> gets an idempotency key automatically.</strong> Any non-CRUD write (a hand-written POST on
           a service deriving from <code>AuthenticatedServiceBase</code>, such as <code>CartStateService</code>) has to mint and
           attach the key itself, and nothing fails the build if it does
-          not. The omission costs resilience rather than correctness: <code>RetryPolicy</code> never replays a POST or
-          PATCH that carries no key (<code>IsReplaySafe</code>, <code>AuthenticatedServiceBase.cs:134-148</code>), so a keyless
-          write cannot create a duplicate, but a transient fault on it surfaces to the user instead of being
-          absorbed. Both <code>ChildEntityServiceBase.PostAsync</code> overloads (<code>ChildEntityServiceBase.cs:36</code>, <code>:52</code>)
+          not. The omission mostly costs resilience rather than correctness: <code>RetryPolicy</code> never replays a
+          keyless POST or PATCH that got a response (<code>IsReplaySafe</code>, <code>AuthenticatedServiceBase.cs:134-148</code>),
+          and resends one that failed in transport only when it failed before it was sent, provided
+          <code>AuthDelegatingHandler</code> saw the failure and marked it (<code>IsRetryableException</code>, <code>:175-179</code>; the mark
+          at <code>AuthDelegatingHandler.cs:34-38</code>). An exception raised outside that handler carries no mark and
+          keeps the retry (<code>:176</code>), so the guarantee is &quot;not resent once the handler saw it fail&quot;, not an
+          absolute no-duplicate rule; any other transient fault on such a write surfaces to the user instead
+          of being absorbed. Both <code>ChildEntityServiceBase.PostAsync</code> overloads (<code>ChildEntityServiceBase.cs:36</code>, <code>:52</code>)
           are such writes and send no key today.</li>
           <li><strong><code>ChildEntityServiceBase</code> calls are not retried.</strong> Join add and remove operations get the bearer
           token and domain-error extraction but no transient-fault handling, so a blip surfaces to the user
           where the same blip on the parent entity would be absorbed.</li>
           <li><strong>The list-page base is deep.</strong> It coordinates render-mode-aware persistence, three state stores, JS
           interop for scroll tracking, and two MudDataGrid v9 parameter-setter workarounds
-          (<code>DataGridListPageBase.cs:421-428</code>, <code>:472-488</code>). That depth is the price of twenty pages behaving
+          (<code>DataGridListPageBase.cs:542-548</code>, <code>:592-608</code>). That depth is the price of twenty pages behaving
           identically, but it makes the base itself the hardest type in the UI package to change safely.</li>
           </ul>
           <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
@@ -652,6 +678,54 @@
           handlers single retry. The Decision bullet no longer says Store does not call it, and the count moves
           from seven call sites across six ADC files to eleven across eight files (ADC seven in six, Store four
           in two). ADCs <code>LiveEventService</code> call is re-cited at <code>:57</code> (was <code>:29</code>).</p>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. The client data-access contract, the idempotency-key mint, the
+          <code>ChildEntityServiceBase</code> count (four) and the list-page paging, cancellation and state contract are
+          unchanged; the retry bullet understated the policy&#39;s exception arm, the <code>EntityServiceBase</code> count
+          missed two services, the list-page section omitted the virtualized fetch path, and anchors moved.</p>
+          <ol>
+          <li>The retry bullet now records the transport-failure arm. <code>BuildRetryPolicy</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/AuthenticatedServiceBase.cs:201-204</code>)
+          handles <code>HttpRequestException</code> through <code>IsRetryableException</code> (<code>:175-179</code>), which reads the replay
+          safety <code>AuthDelegatingHandler</code> stamps on the exception
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/AuthDelegatingHandler.cs:38</code>,
+          <code>MarkReplaySafety</code> at <code>AuthenticatedServiceBase.cs:164-165</code>): a keyless POST or PATCH is resent
+          only after a name-resolution, connect or TLS failure, and an unmarked exception keeps the retry.
+          &quot;A keyless write is never replayed&quot; held for the response arm only; the idempotency-key
+          trade-off is restated to match.</li>
+          <li><strong>Twenty</strong> production services derive from <code>EntityServiceBase</code>, not eighteen: ADC&#39;s
+          <code>UserListService</code> (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.UI/Services/UserListService.cs:21</code>)
+          and Store&#39;s (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.UI/Services/UserListService.cs:22</code>)
+          were missing, so the split is eleven in ADC, eight in Store and one in Common. The inventory no
+          longer claims every service sits under an aggregate folder: those two and Store&#39;s
+          <code>CustomerService</code>, <code>ProductService</code> and <code>CategoryService</code> sit at their module&#39;s <code>Services/</code> root.</li>
+          <li><code>AuthDelegatingHandler</code> is recorded as the outermost of the handlers <code>AddUIShared</code> registers, not
+          of the whole <code>&quot;APIClient&quot;</code> chain: on a host that calls <code>AddServiceDefaults</code>, the default
+          resilience and service-discovery handlers wrap it (<code>Extensions.cs:49</code>, <code>:65</code>). The
+          idempotency-key trade-off now states the transport guarantee as &quot;not resent once the handler saw
+          it fail&quot;, since an exception raised outside that handler carries no mark and keeps the retry
+          (<code>AuthenticatedServiceBase.cs:176</code>).</li>
+          <li>The list-page section now records the opt-in virtualized path: <code>VirtualizeGrid</code>
+          (<code>DataGridListPageBase.cs:155</code>) and <code>LoadVirtualizedServerDataAsync</code> (<code>:762</code>), which runs through
+          the shared <code>RunFetchAsync</code> (<code>:774</code>) and <code>ExtractGridFilters</code> (<code>:777</code>), with the pager-restore
+          workarounds skipped for a virtualized grid (<code>:582-590</code>). The <code>LoadFailed</code> bullet names three
+          paths sharing the fetch wrapper, not two.</li>
+          <li>Anchors re-verified against current source: the <code>&quot;APIClient&quot;</code> registration spans
+          <code>DependencyInjection.cs:132-162</code> (same-origin flag <code>:128-129</code>, base address <code>:144</code>, timeout <code>:150</code>,
+          handlers <code>:154-155</code>, proxy handler <code>:157-162</code>); <code>ConfigureHttpClientDefaults</code> spans
+          <code>Extensions.cs:39-87</code> with <code>DisableFor(Post, Patch)</code> at <code>:63</code> (the retry count at <code>:54</code> holds);
+          the bearer attach is <code>AuthDelegatingHandler.cs:52-58</code>; <code>onRetry</code> disposal is
+          <code>AuthenticatedServiceBase.cs:204</code>; and in <code>DataGridListPageBase.cs</code> the class is <code>:23</code>,
+          <code>LoadFailed</code> <code>:54</code>, <code>IsMobile</code> <code>:58</code>, the mobile properties <code>:61-64</code>, <code>PrerenderFetchTimeoutMs</code>
+          <code>:96</code>, the restore <code>:218-255</code> with <code>_ownRoutePath</code> pinned at <code>:216</code>, the viewport observer
+          <code>:319-332</code>, the MudDataGrid workarounds <code>:542-548</code> and <code>:592-608</code>, <code>LoadServerDataAsync</code> <code>:641</code>,
+          the paged fetch&#39;s sort and page conversion <code>:719</code> and <code>:721</code>, <code>RunFetchAsync</code> <code>:837</code> (cleared
+          <code>:846</code>, set <code>:872</code>), <code>FailedFetch</code> <code>:890</code> (set <code>:893</code>), <code>CreateFetchCts</code> <code>:933-944</code>,
+          <code>LoadMobileDataAsync</code> <code>:950</code>, <code>ResetCancellationTokenAsync</code> <code>:997-1019</code>, <code>ExtractGridFilters</code>
+          <code>:1031-1044</code>, <code>ExtractSortParameters</code> <code>:1081-1086</code>, <code>ResolveSortParameters</code> <code>:1093-1105</code>,
+          <code>SaveCurrentState</code> <code>:1107-1144</code>, the <code>_ownRoutePath</code> field <code>:1187</code> and <code>IsOwnRouteCurrent</code>
+          <code>:1195-1196</code>.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="034-generic-entity-query-layer.html">ADR-034</a> (the server surface this contract calls, and the filter
           grammar the client constructs), <a href="017-request-idempotency.html">ADR-017</a> (the server-side filter whose
@@ -683,6 +757,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-19">Revision (2026-10-19)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

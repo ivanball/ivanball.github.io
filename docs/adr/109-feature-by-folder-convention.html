@@ -240,7 +240,9 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-109-feature-by-folder-layout-as-an-enforced-convention">ADR-109: Feature-by-Folder Layout as an Enforced Convention</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-09-03; folder inventory and IDE0130 exception list refreshed 2026-09-19). Revised 2026-10-01: citations re-anchored. Revised 2026-10-06: module-name consumers moved to the per-engine data-source engines, PostgreSQL added. Revised 2026-10-07: Decision 8 narrowed to the sub-folder names that actually shift the derived module, the stale exemption-prose trade-off dropped, anchors refreshed after the v1.233.0 release.</p>
+          <p>Accepted (2026-09-03; folder inventory and IDE0130 exception list refreshed 2026-09-19). Revised 2026-10-01: citations re-anchored. Revised 2026-10-06: module-name consumers moved to the per-engine data-source engines, PostgreSQL added. Revised 2026-10-07: Decision 8 narrowed to the sub-folder names that actually shift the derived module, the stale exemption-prose trade-off dropped, anchors refreshed after the v1.233.0 release. Revised 2026-10-21: Decision 1 now lists the
+          <code>Exports</code> folder that ADC Conference&#39;s Application and Shared carry without a Domain twin, anchors
+          refreshed after the v1.250.0 release.</p>
           <h2 id="context">Context</h2>
           <p>The rubric&#39;s section 5 asks that &quot;code is organized by feature/capability, so a change touches one
           cohesive slice&quot;, with features &quot;grouped by use case ..., not by horizontal technical folders&quot;
@@ -249,12 +251,12 @@
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Cqrs/SliceCohesionTestsBase.cs</code>)
           fails a build when a handler is stranded from its command or query contract.</p>
           <p>Nothing gated the <em>shape of the tree</em> until 2026-09-02, when a folder-width fitness function and a
-          repo-wide reorganization shipped together (<code>MMCA.Common/CHANGELOG.md:2009-2012</code>, <code>:2042-2046</code>). That
-          reorganization, and a second pass the next day (<code>:1950-1956</code>), were both marked <strong>Breaking</strong>, because in
+          repo-wide reorganization shipped together (<code>MMCA.Common/CHANGELOG.md:2328-2331</code>, <code>:2361-2365</code>). That
+          reorganization, and a second pass the next day (<code>:2269-2275</code>), were both marked <strong>Breaking</strong>, because in
           this workspace namespaces follow folders: moving a file renames a namespace, and a namespace is
           public API on a package family released in lockstep (ADR-016). Two consecutive MMCA.Common
           releases (v1.183.0 and v1.184.0) were therefore layout releases, and they are what forced
-          <code>UPGRADING.md</code> into existence (<code>MMCA.Common/CHANGELOG.md:1997-1998</code>).</p>
+          <code>UPGRADING.md</code> into existence (<code>MMCA.Common/CHANGELOG.md:2316-2317</code>).</p>
           <p>The convention itself is written down only in the workspace <code>CLAUDE.md</code> and in the rubric text
           above. The bill it produces (public namespace renames, a scripted consumer sweep, an UPGRADING
           protocol, and doc citations that rot underneath it) is recorded nowhere as a decision. This record
@@ -269,8 +271,8 @@
           <code>SessionAssets</code>, <code>Sessions</code>, <code>Speakers</code> and <code>Sponsors</code> directly under
           <code>Source/Modules/Conference/MMCA.ADC.Conference.Domain/</code>, and all nine names recur under
           <code>.Application/</code> and <code>.Shared/</code>. The match is not exact in the other direction: <code>.Application/</code>
-          also carries <code>Common</code> and <code>Users</code>, and <code>.Shared/</code> also carries <code>Rooms</code> and <code>Authorization</code>, none
-          of which has a Domain folder, so the rule is that an aggregate names a folder in every layer that
+          also carries <code>Common</code>, <code>Exports</code> and <code>Users</code>, and <code>.Shared/</code> also carries <code>Authorization</code>,
+          <code>Exports</code> and <code>Rooms</code>, none of which has a Domain folder, so the rule is that an aggregate names a folder in every layer that
           has code for it, not that the three layers hold identical folder sets. MMCA.Helpdesk&#39;s
           single-module seed shows the minimal case: one
           <code>Tickets</code> folder under <code>Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/</code>, <code>.Application/</code>
@@ -320,8 +322,8 @@
           one-concept folders: <code>MMCA.Common.Application/UseCases/Decorators</code>, its test twin, and
           <code>MMCA.Common.Domain/Interfaces</code> (<code>FolderWidthTests.cs:26-31</code>). ADC, Store and Helpdesk run
           against the empty default (<code>FolderWidthTestsBase.cs:29</code>). The base is public API and is baselined
-          under the ADR-015 gate (<code>Testing.Architecture/PublicAPI.Shipped.txt:127-129</code>, <code>:363</code>,
-          <code>:584-585</code>).</p>
+          under the ADR-015 gate (<code>Testing.Architecture/PublicAPI.Shipped.txt:128-130</code>, <code>:373</code>,
+          <code>:605-606</code>).</p>
           </li>
           <li><p><strong>Namespaces follow folders, so a folder move is a compile error until every namespace moves with
           it.</strong> The shared analyzer baseline sets <code>dotnet_style_namespace_match_folder = true:warning</code>
@@ -334,7 +336,7 @@
           <code>:881</code>), and the sixth a test fake that carries a consumer-shaped namespace because the
           convention under test keys on namespace shape (<code>Tests/Presentation/MMCA.Common.API.Tests/Fakes/</code>
           at <code>:884</code>), and one each in ADC and Store for the MAUI head&#39;s per-TFM <code>Platforms/</code> bootstrap
-          files (<code>MMCA.ADC/.editorconfig:848-857</code>, <code>MMCA.Store/.editorconfig:837-846</code>).</p>
+          files (<code>MMCA.ADC/.editorconfig:848-858</code>, <code>MMCA.Store/.editorconfig:837-846</code>).</p>
           </li>
           <li><p><strong>A folder inside a module project is never named <code>Domain</code>, <code>Application</code>, <code>Infrastructure</code>,
           <code>API</code> or <code>UI</code>.</strong> <code>ModuleNameConventions.GetModuleName</code> derives the owning module from the
@@ -360,14 +362,14 @@
           <li><p><strong>The move is scripted, not hand-edited.</strong> <code>Tools/Scripts/move-namespace.ps1</code> rewrites namespaces
           and usings repo-wide and across the consumers, and <code>Tools/Scripts/auto-add-usings.py</code> plus
           <code>Tools/Scripts/fix-build-usings.py</code> settle the usings the compiler then reports. The framework&#39;s
-          own changelog names the script as the consumer sweep (<code>MMCA.Common/CHANGELOG.md:1953-1955</code>,
-          <code>:2010-2012</code>).</p>
+          own changelog names the script as the consumer sweep (<code>MMCA.Common/CHANGELOG.md:2272-2274</code>,
+          <code>:2329-2331</code>).</p>
           </li>
           <li><p><strong>A layout change ships as a breaking minor release with an old-to-new map.</strong> v1.183.0 dissolved
           <code>MMCA.Common.Infrastructure.Services</code> and <code>.Settings</code> into the features they implement and split
-          the UI capability, service and component grab-bags (<code>CHANGELOG.md:2016-2034</code>), and added the
-          folder-width rule (<code>:2042-2046</code>). v1.184.0 split the eight remaining flat public namespaces
-          (<code>:1950-1956</code>, <code>:1960-1991</code>) and added <code>UPGRADING.md</code> (<code>:1997-1998</code>). There is no dual-namespace grace
+          the UI capability, service and component grab-bags (<code>CHANGELOG.md:2335-2353</code>), and added the
+          folder-width rule (<code>:2361-2365</code>). v1.184.0 split the eight remaining flat public namespaces
+          (<code>:2269-2275</code>, <code>:2279-2310</code>) and added <code>UPGRADING.md</code> (<code>:2316-2317</code>). There is no dual-namespace grace
           release and no <code>[Obsolete]</code> shim, because C# cannot forward a type across namespaces inside one
           assembly (<code>MMCA.Common/UPGRADING.md:10-12</code>); the first-party consumers are swept in the same
           release (<code>UPGRADING.md:32-33</code>).</p>
@@ -421,7 +423,7 @@
           (<code>:78-82</code>), so a localization or asset folder can grow without bound even when its shape is
           authored rather than generated.</li>
           <li><strong>Namespace-follows-folder is not universal.</strong> Eight documented IDE0130 exclusions
-          (<code>MMCA.Common/.editorconfig:869-885</code>, <code>MMCA.ADC/.editorconfig:856-857</code>,
+          (<code>MMCA.Common/.editorconfig:869-885</code>, <code>MMCA.ADC/.editorconfig:857-858</code>,
           <code>MMCA.Store/.editorconfig:845-846</code>) mean that in those trees a folder move renames nothing, so the
           property a reader relies on holds almost everywhere rather than everywhere.</li>
           </ul>
@@ -476,6 +478,27 @@
           folder-width rule <code>:2042-2046</code>), with the script named at <code>:1953-1955</code> and <code>:2010-2012</code>
           (MMCA.Common v1.233.0, <code>CHANGELOG.md:7</code>).</li>
           </ol>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. The twelve-file cap, the counting rules, the three Common
+          exemptions, the six Common IDE0130 exceptions, the Store IDE0130 exception and the scripted move are
+          unchanged; one Decision folder inventory was incomplete, and the changelog, PublicAPI and ADC
+          <code>.editorconfig</code> anchors moved.</p>
+          <ol>
+          <li>Decision 1: ADC Conference&#39;s <code>.Application/</code> and <code>.Shared/</code> both carry an <code>Exports</code> folder with
+          no Domain twin (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Exports/</code>,
+          <code>MMCA.ADC.Conference.Shared/Exports/</code>), so it joins the list of layer-only folders beside
+          <code>Common</code>, <code>Users</code>, <code>Authorization</code> and <code>Rooms</code>. The nine Domain aggregate folders still recur in
+          both layers, and the rule (an aggregate names a folder in every layer that has code for it) holds.</li>
+          <li>Anchors re-verified against current source: the <code>FolderWidthTestsBase</code> baseline is still six
+          entries at <code>Testing.Architecture/PublicAPI.Shipped.txt:128-130</code>, <code>:373</code>, <code>:605-606</code>; the ADC MAUI
+          <code>Platforms/</code> IDE0130 exception is <code>MMCA.ADC/.editorconfig:848-858</code> (section header and severity
+          at <code>:857-858</code>); <code>MMCA.Store/.editorconfig:837-846</code> and <code>:845-846</code> and
+          <code>MMCA.Common/.editorconfig:860-868</code>, <code>:869-885</code> hold; the v1.184.0 and v1.183.0 entries now span
+          <code>MMCA.Common/CHANGELOG.md:2267-2370</code> (v1.184.0 Breaking <code>:2269-2275</code>, splits <code>:2279-2310</code>,
+          UPGRADING.md <code>:2316-2317</code>; v1.183.0 Breaking <code>:2328-2331</code>, dissolutions <code>:2335-2353</code>,
+          folder-width rule <code>:2361-2365</code>), with the script named at <code>:2272-2274</code> and <code>:2329-2331</code>
+          (MMCA.Common v1.250.0, <code>CHANGELOG.md:7</code>).</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="015-architecture-fitness-functions.html">ADR-015</a> (the fitness-function tier this rule joins, and the
           public-API baseline that records <code>FolderWidthTestsBase</code>),
@@ -505,6 +528,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

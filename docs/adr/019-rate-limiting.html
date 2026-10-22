@@ -270,7 +270,10 @@
           namespace (MMCA.Common v1.232.0), so by default two MMCA applications sharing one Redis no longer
           share counters.
           Revised 2026-10-19: Store&#39;s three services bind the <code>RateLimiting</code> section too, so both apps call the
-          configuration overload in every service.</p>
+          configuration overload in every service.
+          Revised 2026-10-21: the distributed limiter&#39;s increment and expiry run as one atomic Lua script, so
+          no fault between them can leave a counter key without a TTL, and the forwarded-header trade-off
+          records that both Bicep templates declare service ingress internal-only.</p>
           <h2 id="context">Context</h2>
           <p>Every service exposes read and write endpoints to the public internet through the gateway (ADR-008).
           Abusive or runaway clients (scrapers, credential stuffing, retry storms, a buggy SPA stuck in a loop)
@@ -309,7 +312,7 @@
           are served from the output cache (<code>UseOutputCache</code>; ADC&#39;s Conference service defines one
           public-endpoint policy per public aggregate, among them <code>EventsCache</code> / <code>CategoriesCache</code> /
           <code>QuestionsCache</code> / <code>RoomsCache</code>,
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:269-300</code>), and login/registration brute-force is handled by <code>LoginProtectionService</code>
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:270-301</code>), and login/registration brute-force is handled by <code>LoginProtectionService</code>
           (exponential-backoff account lockout after <code>MaxFailedAttempts</code> failed logins, plus per-IP
           registration throttling).</li>
           <li><strong>A per-IP cap on the anonymous authentication endpoints, on by default.</strong> <code>AddCommonRateLimiting</code>
@@ -394,15 +397,31 @@
           <code>auth-ip</code> bucket per request, leaving the per-email lockout (ADR-029, not IP-keyed) as the control
           still standing in front of a spray. Containing this is a deployment concern, not a limiter one:
           either the gateway is the only reachable ingress, or the allow-lists carry the real proxy ranges.
-          Neither is enforced in code today.</li>
+          Neither is enforced in code: no source in Common, ADC or Store sets <code>ForwardLimit</code> or populates
+          <code>KnownProxies</code> (the shared options only clear them,
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/CommonForwardedHeaders.cs:49</code>). The first
+          is declared in infrastructure instead: both Bicep templates give every service container app
+          internal-only ingress (<code>external: false</code>, <code>MMCA.ADC/infra/main.bicep:1840</code>, <code>:2093</code>, <code>:2246</code>,
+          <code>:2381</code>; <code>MMCA.Store/infra/main.bicep:1523</code>, <code>:1705</code>, <code>:1829</code>) and expose only the gateway and the
+          UI host (ADC <code>:2571</code>, <code>:2734</code>; Store <code>:1981</code>, <code>:2110</code>), so traffic from outside the environment
+          reaches a service only through the gateway. A caller already inside the container-apps
+          environment can still reach a service directly.</li>
           <li><strong>Per-user partitioning depends on the authenticated principal being populated</strong> when the limiter
           partitions the request, so the limiter&#39;s placement relative to authentication in the request
           pipeline is load-bearing: move it and the partition sees a different (or empty) principal.</li>
           <li><strong>Defaults are deployment-agnostic.</strong> 300 requests/min/user is a coarse backstop, not a tuned SLO;
           a service with heavier legitimate per-user traffic must raise it, and a stricter endpoint must opt
           into a named policy.</li>
-          <li><strong>In-process counters.</strong> Limiter state is per-instance, so across N replicas the effective ceiling
-          is roughly N times the configured limit. This is an accepted backstop, not a distributed quota.</li>
+          <li><strong>In-process counters, where a limiter is not distributed.</strong> A local limiter&#39;s state is
+          per-instance, so across N replicas its effective ceiling is roughly N times the configured limit.
+          This holds for <code>auth-ip</code> and <code>FixedPolicy</code> (always in-memory), for the gateway limiters, and for
+          the global, per-user and hub windows in any host that leaves <code>Distributed</code> unset (see the Revision
+          (2026-08-18)). ADC production sets <code>RateLimiting__Distributed=true</code> on all four services
+          (<code>MMCA.ADC/infra/main.bicep:1916</code>, <code>:2157</code>, <code>:2294</code>, <code>:2448</code>; the AppHost does the same,
+          <code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:476</code>), so there those three windows share one
+          Redis budget across replicas and only <code>auth-ip</code> and the gateway limiters scale with replica count
+          (<code>MMCA.ADC/infra/main.bicep:1910-1915</code>). Store sets no <code>Distributed</code> value, so every Store limiter
+          stays per-instance.</li>
           </ul>
           <h2 id="revision-2026-08-18">Revision (2026-08-18)</h2>
           <p>The layering above is unchanged: the global limiter is still authenticated-only, infrastructure and
@@ -638,14 +657,56 @@
           configuration today, so the bound settings fall back to their defaults and its limits are
           unchanged; what changes is that per-environment tuning and the distributed Redis limiter
           (Revision 2026-08-18) are reachable in Store by configuration alone.</p>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. The layering, every default, the <code>auth-ip</code> surface, the
+          fail-open posture, the 65-second TTL and both gateways&#39; <code>auth-tight</code> scoping are unchanged. One
+          storage detail of the distributed limiter moved, one trade-off gained its infrastructure context,
+          and the anchors that drifted since the 2026-10-19 revision are re-pointed.</p>
+          <ol>
+          <li><strong>Increment and expiry are one atomic Lua script.</strong> <code>RedisFixedWindowRateLimiter</code> no longer issues
+          a <code>StringIncrementAsync</code> followed by a separate <code>KeyExpireAsync</code> (the shape Revision 2026-08-18
+          records). <code>IncrementScript</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/RateLimiting/RedisFixedWindowRateLimiter.cs:50-53</code>)
+          runs <code>INCRBY</code> and then <code>EXPIRE</code> only when the returned count is no greater than the permits
+          requested, which is the increment that created the key, with <code>KeyTtlSeconds</code> 65 (<code>:60</code>); it is
+          sent through <code>ScriptEvaluateAsync</code> (<code>:166</code>), and the type documents why: no failure between the two
+          commands can leave a key with no expiry (<code>:29-30</code>). The increment and the permit comparison
+          (<code>:172</code>) are still not transactional, so the slight concurrent overshoot accepted in Revision
+          2026-08-18 stands (<code>:31-33</code>). The fail-open <code>catch</code> (<code>:174</code>) and its warn-once
+          <code>Interlocked.Exchange</code> guard (<code>:176</code>, on the static field at <code>:67</code>) are unchanged. The Related
+          section now names the <code>INCRBY</code> script rather than a raw <code>INCR</code>.</li>
+          <li><strong>The forwarded-header trade-off records the declared ingress.</strong> Its closing statement said
+          neither containment option was enforced. That holds for code (nothing in Common, ADC or Store sets
+          <code>ForwardLimit</code> or populates <code>KnownProxies</code>,
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/CommonForwardedHeaders.cs:49</code>, and the
+          gateway copy only clears too,
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Gateway/ForwardedHeadersExtensions.cs:62</code>), but both Bicep
+          templates declare every service&#39;s ingress internal-only and expose only the gateway and UI host,
+          so the trade-off now says so and names the residual in-environment path.</li>
+          <li>Anchors re-verified against current source: the Conference output-cache policies run from
+          <code>ConferencePublicCache</code> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:270</code>)
+          to <code>BookmarkCountsCache</code> (<code>:301</code>), with <code>EventsCache</code> <code>:271</code>, <code>RoomsCache</code> <code>:279</code>,
+          <code>CategoriesCache</code> <code>:280</code> and <code>QuestionsCache</code> <code>:281</code>, and Decision item 2 now cites <code>:270-301</code>.
+          ADC Identity calls <code>AddCommonRateLimiting(builder.Configuration)</code> at
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:166</code> (Conference <code>:221</code>,
+          Engagement <code>:151</code>, Notification <code>:144</code>, and Store&#39;s three services unchanged). The Redis key is
+          built at <code>RedisFixedWindowRateLimiter.cs:161</code> (documented at <code>:24-28</code>). ADC&#39;s gateway attaches
+          <code>auth-tight</code> (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:63</code>) to
+          <code>identity-auth-login</code> (<code>:90-96</code>, the policy at <code>:95</code>) and <code>identity-auth-register</code> (<code>:97-103</code>, the
+          policy at <code>:102</code>), and the <code>identity-auth</code> catch-all (<code>:106</code>) carries none, so the Revision
+          (2026-09-07) item 4 anchors are historical. <code>RateLimiting__AuthIpPermitLimit</code> is at
+          <code>MMCA.ADC/infra/main.bicep:2024</code> (value <code>&#39;300&#39;</code> inside the <code>conferenceMode</code> block, rationale at
+          <code>:2016-2021</code>); the ADC <code>GatewayRateLimiting__TrustedCallerSecret</code> injections are at <code>:2647</code> and
+          <code>:2806</code>, and Store&#39;s at <code>MMCA.Store/infra/main.bicep:2053</code> and <code>:2178</code>.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-004 (the JWKS/discovery traffic the limiter exempts, and the authenticated principal it keys on),
           ADR-008 (the gateway edge this protects), ADR-017 (request idempotency, the other inbound-edge
           safeguard against client retries), ADR-029 (the per-email lockout and registration throttle that sit
           on the login and register endpoints the <code>auth-ip</code> cap also covers, and the reason <code>auth-ip</code> stays
           local), ADR-026 (the
-          Redis the distributed limiter reuses, and the <code>IncrementAsync</code> storage-format lesson the raw <code>INCR</code>
-          here avoids by owning its own <code>rl:</code> keyspace, qualified per application), ADR-070 (the fail-fast configuration contract
+          Redis the distributed limiter reuses, and the <code>IncrementAsync</code> storage-format lesson the <code>INCRBY</code>
+          Lua script here avoids by owning its own <code>rl:</code> keyspace, qualified per application), ADR-070 (the fail-fast configuration contract
           <code>RateLimitingSettings</code> binds into, and the <code>Distributed</code> degradation that sits outside it), ADR-079
           (the shared middleware pipeline that places <code>UseRateLimiter</code> after authentication and after forwarded
           headers, which is what makes both partition keys resolvable).</p>
@@ -671,6 +732,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-19">Revision (2026-10-19)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

@@ -13,6 +13,7 @@ those paths now retry and dead-letter; `IEmailSender` itself is unchanged).
 Revised 2026-10-01 (the opt-in dedup key is scoped to the sender; see Revision below).
 Revised 2026-10-06: the dedup race is recorded as propagate-and-roll-back under the `ITransactional` send, not catch-and-requery.
 Revised 2026-10-07: the hub client connects WebSockets-only with negotiation skipped, in both connection modes, so a multi-replica hub needs no session affinity and there is no SSE or long-polling fallback.
+Revised 2026-10-21: the ADC Notification scale block is read correctly (its two preconditions make more than one replica safe, and `maxReplicas: 2` is right-sizing for measured load, not a backplane limit); anchors refreshed.
 ## Context
 The framework needs to deliver user-facing notifications (an organizer broadcasting a schedule change,
 a per-user alert). Two delivery models each fail on their own. A pure real-time push over a WebSocket
@@ -80,7 +81,7 @@ recipient policy both behind abstractions.
   (`SendPushNotificationHandler.cs:137-154`), an OS-level native-push channel that reaches devices the
   SignalR hub cannot (the app backgrounded or killed). It is best-effort by the same logic as the live
   push (a throw is logged, never fatal, and the SignalR leg has already decided the audit status), and it
-  defaults to `NullNativePushSender` (`MMCA.Common.Infrastructure`, `DependencyInjection.cs:330`), so it
+  defaults to `NullNativePushSender` (`MMCA.Common.Infrastructure`, `DependencyInjection.cs:336`), so it
   stays inert until a native hub is configured. The design of that channel is ADR-044's scope; this ADR
   keeps its own on the inbox and SignalR channels, so the "Two-Channel" title names the durable and
   transient channels this record governs, not a hard cap on the number of delivery legs.
@@ -328,3 +329,27 @@ the backplane are unchanged; what moved is the hub client's transport, released 
    `NotificationHubService.cs:510-516`, `:537-538` and `:540-543`. All other `path:line` anchors in
    the live sections are as recorded on 2026-10-06; anchors inside earlier Revision sections are left
    as recorded.
+
+## Revision (2026-10-21)
+Re-verified against current source. The two-channel model, the dedup and transactional posture, the
+WebSockets-only hub client and the backplane are unchanged; what moved is one live anchor and the
+reading of the ADC Notification scale block recorded on 2026-10-07.
+
+1. **The ADC scale block's preconditions gate scale-out, not the value 2.** The Notification container
+   app's comment says the negotiate-free client and the two-replica backplane proof together make
+   "more than one replica" safe, and that if the proof is removed or the client negotiates again the
+   cap goes back to 1 (`MMCA.ADC/infra/main.bicep:2525-2538`). It separately states that
+   `maxReplicas: 2` is right-sizing for the measured peak concurrency, not a backplane limit
+   (`:2541`), with the scale rule at `:2544`. The 2026-10-07 phrasing that the two preconditions are
+   for `maxReplicas: 2` is read in that sense. The backplane proof is `TwoReplicaHubFanOutTests`
+   (`MMCA.ADC/Tests/Integration/MMCA.ADC.CrossService.IntegrationTests/CrossService/TwoReplicaHubFanOutTests.cs:35`),
+   and the `signalr-backplane-errors` alert entry is at `MMCA.ADC/infra/main.bicep:627-632` (key at
+   `:628`).
+2. Anchors re-verified against current source: the `NullNativePushSender` default in the Decision moves
+   to `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:336`. The other live
+   anchors (`SendPushNotificationHandler.cs`, `SendPushNotificationCommand.cs:23`,
+   `PushNotificationConfiguration.cs:69-73`, `PushNotificationSettings.cs:11,14`,
+   `SignalRExtensions.cs:25`, `DependencyInjection.Notifications.cs:41-70`, `NotificationHub.cs`,
+   `NotificationHubService.cs` and `WebApplicationBuilderExtensions.Authentication.cs:151`, `:179`)
+   are as recorded. The 2026-10-06 and 2026-10-07 statements that the live anchors were current are
+   superseded by this one; anchors inside earlier Revision sections are left as recorded.
