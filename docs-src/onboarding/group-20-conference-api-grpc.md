@@ -11,8 +11,8 @@ concrete instances of the transport boundary taught in
 [G13 (gRPC & Inter-Service Contracts)](group-13-grpc-contracts.md), and the module entry point is one
 implementation of the [`IModule`](group-14-module-system-composition.md#imodule) contract from
 [G14 (Module System & Composition)](group-14-module-system-composition.md). What this chapter teaches
-is *how the Conference module wires those reusable pieces into a real, twenty-three-controller,
-twice-gRPC-edged conference API*, and the handful of places where it deviates from the generic shape
+is *how the Conference module wires those reusable pieces into a real, twenty-three-controller
+conference API that serves three gRPC contracts*, and the handful of places where it deviates from the generic shape
 for a business reason. The headline rubric lenses are `[Rubric §9, API & Contract Design]` (a
 consistent, versioned REST + gRPC contract), `[Rubric §5, Vertical Slice]` and `[Rubric §6, CQRS &
 Event-Driven]` (each action dispatches to a single command or query handler), and `[Rubric §7,
@@ -37,8 +37,8 @@ from
 [`AggregateRootEntityControllerBase<TEntity, TEntityDTO, TIdentifierType, TCreateRequest>`](group-12-api-hosting-mapping.md#aggregaterootentitycontrollerbasetentity-tentitydto-tidentifiertype-tcreaterequest)
 and inherit the full read + create + delete surface, overriding actions only to add
 `[AllowAnonymous]`, an `[OutputCache]` policy, or a business rule
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionsController.cs:55`,
-`SpeakersController.cs:54`, `EventsController.cs:57`, `QuestionsController.cs:42`,
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionsController.cs:56`,
+`SpeakersController.cs:55`, `EventsController.cs:57`, `QuestionsController.cs:42`,
 `ConferenceCategoriesController.cs:43`, `SponsorsController.cs:49`, `PartnersController.cs:50`,
 `ActivitiesController.cs:49`).
 **Child-and-join controllers** (eight: [`RoomsController`](#roomscontroller),
@@ -71,7 +71,7 @@ structural reason rather than a business one: ADC's architecture tests cap a con
 constructor at ten dependencies
 (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Cqrs/ConstructorDependencyCountTests.cs:59`),
 and [`SessionsController`](#sessionscontroller) already sits exactly at that ceiling
-(`SessionsController.cs:44-54`), so the non-CRUD sub-resources of the three busiest aggregates moved
+(`SessionsController.cs:45-55`), so the non-CRUD sub-resources of the three busiest aggregates moved
 into siblings. [`EventLifecycleController`](#eventlifecyclecontroller) holds the event publication
 transitions and the Sessionize refresh
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Events/EventLifecycleController.cs:32-37`),
@@ -99,7 +99,7 @@ controller's constructor injects the
 for reads plus the specific
 [`ICommandHandler<in TCommand, TResult>`](group-05-cqrs-pipeline.md#icommandhandlerin-tcommand-tresult)
 and [`IQueryHandler<in TQuery, TResult>`](group-05-cqrs-pipeline.md#iqueryhandlerin-tquery-tresult)
-instances for its writes and bespoke reads (`SessionsController.cs:44-56`), then folds any
+instances for its writes and bespoke reads (`SessionsController.cs:45-57`), then folds any
 `Result.Failure` back through the inherited `HandleFailure`. That is the `[Rubric §1, SOLID]` and
 `[Rubric §15, Best Practices & Code Quality]` payoff the generic base exists for (the generic-controller and
 dynamic-query contract of
@@ -117,8 +117,8 @@ every read action (both list overloads, the lookup, the by-id read and the CSV e
 `GetExportSpecification` (`EntityControllerBase.cs:601`), itself `null`, so a controller that
 overrides neither reads unscoped. Thirteen of the twenty-three Conference controllers override one of the
 two. Ten override the asynchronous hook because their rule is resolved through a query handler:
-[`SessionsController`](#sessionscontroller) (`SessionsController.cs:75`),
-[`SpeakersController`](#speakerscontroller) (`SpeakersController.cs:109`),
+[`SessionsController`](#sessionscontroller) (`SessionsController.cs:76`),
+[`SpeakersController`](#speakerscontroller) (`SpeakersController.cs:110`),
 [`RoomsController`](#roomscontroller) (`RoomsController.cs:120`),
 [`SponsorsController`](#sponsorscontroller) (`SponsorsController.cs:69`),
 [`PartnersController`](#partnerscontroller) (`PartnersController.cs:66`),
@@ -139,16 +139,16 @@ than a hand-rolled bypass ternary. Consequences worth memorizing: a row the spec
 excludes is a **404, not a 403** (a "forbidden" answer would confirm the id exists), the lookup
 endpoint receives the same scope as the specification's `Criteria` predicate, and the read actions in
 these files are attribute-plus-guard passthroughs whose bodies call `base` behind one fail-closed
-check (for example `EventQuestionAnswersController.cs:147-157`, `SessionsController.cs:218-245`),
+check (for example `EventQuestionAnswersController.cs:147-157`, `SessionsController.cs:219-240`),
 kept only because the route attributes must sit on the derived action. That guard is worth reading
 once: because the hook answers `null` for two different reasons (an Organizer whose scoping is
 deliberately skipped, and a non-Organizer whose owner claim cannot be resolved), each answer-controller
 read first calls `RequireResolvableOwner()`, which admits the first case and returns a 403 for the
 second (`EventQuestionAnswersController.cs:137-145`, `SessionQuestionAnswersController.cs:137-145`),
-so a missing claim is an authorization answer instead of a dereference. The private method is now a
+so a missing claim is an authorization answer instead of a dereference. The private method is a
 one-expression delegation to Common's `OwnershipHelper.RequireResolvableOwner<TId>`, which reads the
 bypass role the same way `GetOwnershipSpecification` does, so the gate and the scope cannot disagree
-about who is privileged (`EventQuestionAnswersController.cs:131-133`). `[Rubric §11, Security]` is the lens, and
+about who is privileged (`EventQuestionAnswersController.cs:131-133,137-145`). `[Rubric §11, Security]` is the lens, and
 [ADR-078](https://ivanball.github.io/docs/adr/078-csv-export-endpoint.html) is the record: the hook
 exists so an export can no longer drift wider than the list it mirrors.
 
@@ -159,7 +159,7 @@ error rather than streaming the whole table unless the controller opts in throug
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:272-274,508,608-613`).
 Sixteen Conference controllers opt in, each naming exactly the audience whose `null` is deliberate.
 The ten async-hook controllers answer with their own `IsPrivileged` read-audience check (for example
-`SessionsController.cs:93`, `RoomsController.cs:138`, `SpeakerCategoryItemsController.cs:91`), and
+`SessionsController.cs:94`, `RoomsController.cs:138`, `SpeakerCategoryItemsController.cs:91`), and
 [`EventsController`](#eventscontroller) with the same check inline (`EventsController.cs:80`), because
 the hook returns `null` precisely for a privileged reader who already lists every row. The two answer
 controllers opt in through `OwnershipHelper.IsAdmin(currentUserService, RoleNames.Organizer)`, the
@@ -193,7 +193,7 @@ interesting part. Most write-bearing controllers carry a class-level
 [`HasPermissionAttribute`](group-08-auth.md#haspermissionattribute) gate naming one
 [`ConferencePermissions`](group-17-conference-domain.md#conferencepermissions) capability rather than
 a role policy: `SessionsManage` on [`SessionsController`](#sessionscontroller)
-(`SessionsController.cs:43`), on the two session-join controllers
+(`SessionsController.cs:44`), on the two session-join controllers
 (`SessionSpeakersController.cs:47`, `SessionCategoryItemsController.cs:47`) and on
 [`SessionCalendarController`](#sessioncalendarcontroller) (`SessionCalendarController.cs:25`, whose one
 `GET /{id}/ics` action is re-opened with `[AllowAnonymous]` under `SessionsCache` at `:35-36`),
@@ -203,27 +203,27 @@ a role policy: `SessionsManage` on [`SessionsController`](#sessionscontroller)
 `QuestionsManage` (`QuestionsController.cs:34`), `SpeakersManage`
 (`SpeakerCategoryItemsController.cs:47`) and `SessionSelectionManage`
 (`SessionSelectionController.cs:34`). Reads are then re-opened action by action with
-`[AllowAnonymous]` (BR-43 public browse, for example `SessionsController.cs:144`,
+`[AllowAnonymous]` (BR-43 public browse, for example `SessionsController.cs:145`,
 `RoomsController.cs:145`). Twelve capability constants exist in total, declared once in
 `ConferencePermissions.All`
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferencePermissions.cs:58-72`).
 
 Four shapes break that pattern, and knowing why saves you from "fixing" them.
 [`SpeakersController`](#speakerscontroller) carries only a plain `[Authorize]` at class level
-(`SpeakersController.cs:42`) and pushes `[HasPermission(ConferencePermissions.SpeakersManage)]` down
-onto the individual organizer actions (export, create and delete at `SpeakersController.cs:324,343,407`;
+(`SpeakersController.cs:43`) and pushes `[HasPermission(ConferencePermissions.SpeakersManage)]` down
+onto the individual organizer actions (export, create and delete at `SpeakersController.cs:325,344,408`;
 [`SpeakerLinksController`](#speakerlinkscontroller) repeats the shape for the BR-209 link and unlink,
 class-level `[Authorize]` at `SpeakerLinksController.cs:34` with its own Organizer-only `SpeakersLink`
 capability at `:43,62`, kept out of the ContentEditor subset because a link grants a speaker identity,
 `ConferencePermissions.cs:49-55`), because one
 of its writes is an authenticated self-service surface: the BR-214 profile update re-declares plain
-`[Authorize]` (`SpeakersController.cs:370`) and decides inside the action whether the caller holds
+`[Authorize]` (`SpeakersController.cs:371`) and decides inside the action whether the caller holds
 `SpeakersManage` (asked of `IPermissionRegistry`, so Organizer and ContentEditor alike,
-`SpeakersController.cs:382`) or is the speaker themselves, comparing the `speaker_id` JWT claim to the
-route id (`SpeakersController.cs:383`), and answers `403` for neither (`:384-385`). It passes the
+`SpeakersController.cs:383`) or is the speaker themselves, comparing the `speaker_id` JWT claim to the
+route id (`SpeakersController.cs:384`), and answers `403` for neither (`:384-385`). It passes the
 answer down as `CallerCanManageSpeakers`, so the handler can refuse a self-edit of the curation-only
 `IsTopSpeaker` field, alongside `CallerCanSeeEmail`, so a caller who cannot read the speaker email
-(BR-66) cannot overwrite it either (`SpeakersController.cs:357-360,393-394`).
+(BR-66) cannot overwrite it either (`SpeakersController.cs:358-361,394-395`).
 [`EventsController`](#eventscontroller), [`SponsorsController`](#sponsorscontroller),
 [`PartnersController`](#partnerscontroller) and [`ActivitiesController`](#activitiescontroller) copy
 the class-level-`[Authorize]`-plus-per-action-capability shape (`EventsController.cs:46` with
@@ -277,8 +277,8 @@ Orthogonal to all three shapes is the **read audience**, which no attribute can 
 changes the *rows* rather than the verdict. Eleven controllers ask
 [`CurrentUserServiceExtensions`](#currentuserserviceextensions)`.IsPrivilegedConferenceReader()`
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Authorization/CurrentUserServiceExtensions.cs:24-25`)
-and turn the answer into a specification or `null`: `SessionsController.cs:59`,
-`SpeakersController.cs:70`, `EventsController.cs:73`, `SponsorsController.cs:53`,
+and turn the answer into a specification or `null`: `SessionsController.cs:60`,
+`SpeakersController.cs:71`, `EventsController.cs:73`, `SponsorsController.cs:53`,
 `PartnersController.cs:57`,
 `ActivitiesController.cs:53`, `RoomsController.cs:104`, `EventSpeakersController.cs:58`,
 `SessionSpeakersController.cs:59`, `SessionCategoryItemsController.cs:59` and
@@ -309,14 +309,14 @@ the generic base cannot model: each carries the parent identifier (`EventId` at
 (`RoomsController.cs:30-55`), and the action unpacks the record into the matching `Add*Command` or
 `Update*Command` from [G18](group-18-conference-application.md)
 ([`AddRoomCommand`](group-18-conference-application.md#addroomcommand) at `RoomsController.cs:219`,
-[`UpdateRoomCommand`](group-18-conference-application.md#updateroomcommand) at `:248`,
-[`RemoveRoomCommand`](group-18-conference-application.md#removeroomcommand) at `:274`). They are
+[`UpdateRoomCommand`](group-18-conference-application.md#updateroomcommand) at `:250`,
+[`RemoveRoomCommand`](group-18-conference-application.md#removeroomcommand) at `:278`). They are
 deliberately separate from the application-layer command types and from the outbound DTOs (the §9
 "DTOs decoupled from entities" discipline), so the HTTP contract can evolve independently of the
 command's parameter list. The aggregate-root controllers, by contrast, bind the application layer's
 create request directly as their `TCreateRequest` (for example
 [`SessionCreateRequest`](group-18-conference-application.md#sessioncreaterequest) at
-`SessionsController.cs:55`), so they need no per-controller record.
+`SessionsController.cs:56`), so they need no per-controller record.
 
 Both feedback families have four records instead of two, and the extra pair is the interesting
 one. On the event side, alongside the single-answer pair, the controller declares
@@ -327,7 +327,7 @@ them onto
 [`BatchAddEventQuestionAnswersCommand`](group-18-conference-application.md#batchaddeventquestionanswerscommand)
 so the whole event feedback form is upserted under one transaction and a refusal leaves nothing
 written (`EventQuestionAnswersController.cs:298,306`), and both creates declare
-[`Idempotent`](group-12-api-hosting-mapping.md#idempotentattribute) (`:232,259`). The session side
+[`Idempotent`](group-12-api-hosting-mapping.md#idempotentattribute) (`:272,299`). The session side
 mirrors it exactly. Alongside [`AddSessionQuestionAnswerRequest`](#addsessionquestionanswerrequest) and
 [`UpdateSessionQuestionAnswerRequest`](#updatesessionquestionanswerrequest)
 (`SessionQuestionAnswersController.cs:30,63`), the controller declares
@@ -346,18 +346,18 @@ response rather than re-applying the form
 
 [`SessionsController`](#sessionscontroller) shows best *how* a controller earns its overrides. Every
 read action is `[AllowAnonymous]` and `[OutputCache(PolicyName = "SessionsCache")]`
-(`SessionsController.cs:144-145,170-171,219-220,231-232`, plus the split-out calendar read at
+(`SessionsController.cs:145-146,171-172,220-221,232-233`, plus the split-out calendar read at
 `SessionCalendarController.cs:35-36`). Its read hook dispatches
 [`GetPublicSessionFilterQuery`](group-18-conference-application.md#getpublicsessionfilterquery) so a
 non-organizer never sees declined sessions (BR-132/BR-49), and because `Session` and `Event` can live
 in different data sources the published-event check is resolved by that handler through the
-framework's cross-source specification helper rather than by a join (`SessionsController.cs:61-85`;
+framework's cross-source specification helper rather than by a join (`SessionsController.cs:62-86`;
 [ADR-018](https://ivanball.github.io/docs/adr/018-polyglot-persistence.html)). The paged read adds a
-second layer in `BuildPagedSessionSpecificationAsync` (`SessionsController.cs:113`): `Session` has no
+second layer in `BuildPagedSessionSpecificationAsync` (`SessionsController.cs:114`): `Session` has no
 `SpeakerId` column, so that filter key is intercepted and `Remove`d before the generic filter pipeline
 can reject it, resolved to an id list through
 [`GetSessionsBySpeakerFilterQuery`](group-18-conference-application.md#getsessionsbyspeakerfilterquery),
-and **ANDed** with the public filter rather than substituted for it (`SessionsController.cs:113-136`),
+and **ANDed** with the public filter rather than substituted for it (`SessionsController.cs:114-137`),
 because substituting would leak non-accepted sessions to anonymous callers; an unparseable value
 simply ignores the key (`:119-124`). The Sessions surface adds three things the base has no notion of:
 a `GET /{id}/ics` action that streams one public session as `text/calendar` for the add-to-calendar
@@ -366,22 +366,22 @@ affordance via
 lives on the split-out [`SessionCalendarController`](#sessioncalendarcontroller)
 (`SessionCalendarController.cs:34-45`), a BR-86 `X-Warning` header raised on create by comparing the
 request times against the event's `StartDate`/`EndDate` and on update from the handler's
-`HasDateRangeWarning` flag (`SessionsController.cs:283-297`, `:328-332`), and an explicit
+`HasDateRangeWarning` flag (`SessionsController.cs:284-298`, `:328-332`), and an explicit
 [`Idempotent`](group-12-api-hosting-mapping.md#idempotentattribute) declaration on the create override
-so the contract is visible at the ADC endpoint rather than only inherited (`:270`). Every mutating
+so the contract is visible at the ADC endpoint rather than only inherited (`:273`). Every mutating
 action ends by evicting the `conference:sessions` and `conference` output-cache tags
-(`SessionsController.cs:299,336,347`), the write-side half of the caching contract.
+(`SessionsController.cs:300,337,348`), the write-side half of the caching contract.
 
 Conditional writes are now uniform: an update states its precondition in the HTTP `If-Match` header
 and nowhere else. [`SupportsIfMatch`](group-12-api-hosting-mapping.md#supportsifmatchattribute) sits
-on the session update (`SessionsController.cs:312`), the event update (`EventsController.cs:228`),
-the event publish and unpublish (`EventLifecycleController.cs:53,86`), the speaker update (`SpeakersController.cs:371`), the category
+on the session update (`SessionsController.cs:313`), the event update (`EventsController.cs:228`),
+the event publish and unpublish (`EventLifecycleController.cs:53,86`), the speaker update (`SpeakersController.cs:372`), the category
 update (`ConferenceCategoriesController.cs:118`), the question update (`QuestionsController.cs:117`)
 and the sponsor, partner and activity updates (`SponsorsController.cs:192`,
 `PartnersController.cs:181`, `ActivitiesController.cs:191`), and
 each action pulls the token with `SupportsIfMatchAttribute.RequiredToken(HttpContext)`
-(`SessionsController.cs:321`, `EventsController.cs:237`, `EventLifecycleController.cs:61,94`,
-`SpeakersController.cs:387`,
+(`SessionsController.cs:322`, `EventsController.cs:237`, `EventLifecycleController.cs:61,94`,
+`SpeakersController.cs:388`,
 `SponsorsController.cs:201`, `PartnersController.cs:190`): a request with no header answers
 **428 Precondition Required** and a
 stale token answers **412 Precondition Failed**
@@ -395,13 +395,13 @@ update path is generic end to end.
 Three more read-path carve-outs are worth internalizing before you touch these files. First,
 [`SpeakersController`](#speakerscontroller)`.GetAllForLookupAsync` constrains the *label* as well as
 the rows: only `FirstName` and `LastName` may be requested by a non-privileged caller
-(`SpeakersController.cs:73,247-256`), because `nameProperty=Email` would project the speaker email
+(`SpeakersController.cs:74,248-257`), because `nameProperty=Email` would project the speaker email
 straight into the lookup label and go around the DTO mapper that redacts it (BR-66). Second, that
 controller's `GetByIdAsync` drops the public specification when the caller's `speaker_id` claim equals
 the route id (the self-edit form cannot load without reading the profile it edits), and because the
 output-cache key does not vary by caller it turns storage off for that response through
 `IOutputCacheFeature` so a private profile can never land in the shared entry
-(`SpeakersController.cs:284-294`). The per-session reads live on
+(`SpeakersController.cs:285-295`). The per-session reads live on
 [`SpeakerSessionsController`](#speakersessionscontroller), which pairs a class-level `[Authorize]`
 (`SpeakerSessionsController.cs:28`) with per-action choices: the feedback read is gated
 self-or-organizer in code and deliberately left uncached, since every response is
@@ -473,7 +473,7 @@ act on.
 [`ConferenceModule`](#conferencemodule) is the Conference implementation of
 [`IModule`](group-14-module-system-composition.md#imodule). It is tiny by design: `Register(...)`
 calls the [`DependencyInjection`](#dependencyinjection) extension's `AddConferenceModule(...)`
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/ConferenceModule.cs:28-29`), which chains
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/ConferenceModule.cs:30-31`), which chains
 the Application, Infrastructure and API registrations in dependency order into one call
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/DependencyInjection.cs:24-26`). The API
 layer's `AddModuleConferenceAPI` is not a no-op: it calls
@@ -492,12 +492,14 @@ the subset itself is `ConferencePermissions.cs:79-88`). Attendees are granted no
 attendee-facing endpoints stay on a plain `[Authorize]` that carries no capability
 (`ConferencePermissionGrants.cs:30-32`), and a speaker needs no grant at all to manage their own
 session's materials (`ConferencePermissionGrants.cs:38-40`). And
-`RegisterDisabledStubs(...)` registers **both** a
-[`DisabledSessionBookmarkValidationService`](group-17-conference-domain.md#disabledsessionbookmarkvalidationservice)
-and a [`DisabledEventLiveValidationService`](group-17-conference-domain.md#disabledeventlivevalidationservice)
-as singletons (`ConferenceModule.cs:21-25`) so that *other* hosts which depend on Conference's
-[`ISessionBookmarkValidationService`](group-17-conference-domain.md#isessionbookmarkvalidationservice)
-or [`IEventLiveValidationService`](group-17-conference-domain.md#ieventlivevalidationservice) but do
+`RegisterDisabledStubs(...)` registers **three** singletons, a
+[`DisabledSessionBookmarkValidationService`](group-17-conference-domain.md#disabledsessionbookmarkvalidationservice),
+a [`DisabledEventLiveValidationService`](group-17-conference-domain.md#disabledeventlivevalidationservice)
+and a [`DisabledUserConferenceExportService`](group-17-conference-domain.md#disableduserconferenceexportservice)
+(`ConferenceModule.cs:22-27`), so that *other* hosts which depend on Conference's
+[`ISessionBookmarkValidationService`](group-17-conference-domain.md#isessionbookmarkvalidationservice),
+[`IEventLiveValidationService`](group-17-conference-domain.md#ieventlivevalidationservice) or
+[`IUserConferenceExportService`](group-17-conference-domain.md#iuserconferenceexportservice) but do
 **not** host Conference still resolve those interfaces (they no-op, or are later `Replace`d by the
 gRPC adapters). The [`ModuleLoader`](group-14-module-system-composition.md#moduleloader)
 ([G14](group-14-module-system-composition.md)) discovers `ConferenceModule` by reflection and registers
@@ -523,17 +525,17 @@ with the interpolated value intact (`ConferenceErrorResources.cs:3-10`).
 
 ## The gRPC edge, Conference as both server and client
 
-When Conference runs in its own process, two of its in-process collaborations must cross a network
-boundary, and both are handled by the [G13](group-13-grpc-contracts.md) transport boundary (`Result`
+When Conference runs in its own process, three of its in-process collaborations must cross a network
+boundary, and all three are handled by the [G13](group-13-grpc-contracts.md) transport boundary (`Result`
 over the wire, transport at the edge,
 [ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html)). Conference is the **server**
-for two contracts. [`SessionBookmarksGrpcService`](#sessionbookmarksgrpcservice) exposes Conference's
+for three contracts. [`SessionBookmarksGrpcService`](#sessionbookmarksgrpcservice) exposes Conference's
 `ISessionBookmarkValidationService` to Engagement, answering "is this session valid to bookmark?"
 (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Grpc/SessionBookmarksGrpcService.cs:27`) and
 "give me the session ids for this event" (`SessionBookmarksGrpcService.cs:45`).
 [`EventLiveValidationGrpcService`](#eventlivevalidationgrpcservice) exposes
 `IEventLiveValidationService` to Engagement's conference-day live layer and to Notification's
-live-channel join check (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:460-462`)
+live-channel join check (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:460-463`)
 across **four** methods, each
 projecting a domain record onto the wire shape: `GetEventLiveInfo` returns an
 [`EventLiveInfo`](group-17-conference-domain.md#eventliveinfo) as publish state plus live-window
@@ -544,14 +546,25 @@ stringified speaker ids, plenum flag and moderation default (`:50`), `GetSponsor
 [`SponsorLiveInfo`](group-17-conference-domain.md#sponsorliveinfo) (`:79`), and
 `GetCurrentRoomSessionInfo` resolves the room's currently-running session within a caller-supplied
 grace window as a [`RoomSessionInfo`](group-17-conference-domain.md#roomsessioninfo) (`:103`). Each
-server method is a constructor-injected wrapper over the inner C# service: it null-guards request and
-context, awaits the inner call, and on a failed `Result` calls `result.ThrowIfFailure()`
+server method on those two is a constructor-injected wrapper over the inner C# service: it null-guards
+request and context, awaits the inner call, and on a failed `Result` calls `result.ThrowIfFailure()`
 (`SessionBookmarksGrpcService.cs:39,57`, `EventLiveValidationGrpcService.cs:38,62,91,115`) so the
 [`GrpcResultExceptionInterceptor`](group-13-grpc-contracts.md#grpcresultexceptioninterceptor) can
-translate the failure into an `RpcException` carrying structured `error-{i}-*` trailers.
+translate the failure into an `RpcException` carrying structured `error-{i}-*` trailers. The third,
+[`UserConferenceExportGrpcService`](#userconferenceexportgrpcservice), serves Identity rather than
+Engagement: it exposes
+[`IUserConferenceExportService`](group-17-conference-domain.md#iuserconferenceexportservice) so the
+data-subject export can include the session and event feedback answers a user authored
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Grpc/UserConferenceExportGrpcService.cs:8-13,20`).
+Its one method, `GetUserConferenceExport`, has no `Result` to unwrap: it null-guards, awaits the inner
+export and copies both answer lists onto the response (`UserConferenceExportGrpcService.cs:24-51`),
+writing each `CreatedOn` through
+[`GrpcWireFormat`](group-13-grpc-contracts.md#grpcwireformat)`.FormatUtc` as a round-trip UTC string,
+because SQL Server hands the stored UTC values back as `DateTimeKind.Unspecified` (`:15-17,41,48`).
 
-On the **client** side, each contract has a hand-written adapter in `MMCA.ADC.Conference.Contracts`
-that Engagement uses. [`SessionBookmarkValidationServiceGrpcAdapter`](#sessionbookmarkvalidationservicegrpcadapter)
+On the **client** side, each contract has a hand-written adapter in `MMCA.ADC.Conference.Contracts`.
+The two validation adapters serve Engagement (and, for live validation, Notification).
+[`SessionBookmarkValidationServiceGrpcAdapter`](#sessionbookmarkvalidationservicegrpcadapter)
 implements the *identical* `ISessionBookmarkValidationService` interface on top of the generated gRPC
 client
 (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Contracts/SessionBookmarkValidationServiceGrpcAdapter.cs:27-29`),
@@ -574,26 +587,38 @@ with the calling method's name (`SessionBookmarkValidationServiceGrpcAdapter.cs:
 wire data it cannot map: a speaker id that is not a GUID or an undefined moderation-default value
 returns a `Grpc.MalformedResponse` failure built the way the decoder builds a transport fault, never an
 exception that would escape the `RpcException` catch
-(`EventLiveValidationServiceGrpcAdapter.cs:80-101,187-188`). Because both the in-process implementation and each
-adapter satisfy the same interface, swapping a co-located module for a remote service is a
+(`EventLiveValidationServiceGrpcAdapter.cs:80-101,219-220`). The third adapter,
+[`UserConferenceExportServiceGrpcAdapter`](#userconferenceexportservicegrpcadapter), is Identity's
+client for the export contract and reverses the server's mapping, parsing each `CreatedOn` back with
+`GrpcWireFormat.ParseUtc` into a
+[`UserConferenceExportDTO`](group-17-conference-domain.md#userconferenceexportdto)
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Contracts/UserConferenceExportServiceGrpcAdapter.cs:16-17,37-53`).
+It pins the same 5-second deadline (`:22,34`), for a different reason: the export aggregates one
+section per peer on a best-effort basis, so a hung Conference peer should degrade its section quickly
+rather than stall the whole export request (`:19-21`). Unlike the validation adapters it does **not**
+catch `RpcException`: a transport failure propagates to Identity's export handler, which marks the
+Conference section `Available = false` instead of failing the export (`:12-14`). Because both the
+in-process implementation and each adapter satisfy the same interface, swapping a co-located module for a remote service is a
 registration change, not a rewrite
 ([ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html); `[Rubric §7, Microservices
 Readiness]`).
 
 Those registration swaps are performed by the contract package's `DependencyInjection` extension, one
 method per contract: `AddConferenceSessionValidationClient(serviceName = "conference")`
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Contracts/DependencyInjection.cs:43`) and
-`AddConferenceEventLiveValidationClient(...)` (`DependencyInjection.cs:73`). Each does exactly two
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Contracts/DependencyInjection.cs:44`),
+`AddConferenceEventLiveValidationClient(...)` (`DependencyInjection.cs:74`) and
+`AddConferenceUserExportClient(...)` (`DependencyInjection.cs:102`), the last one called by the
+Identity host (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:332`). Each does exactly two
 things: registers a typed gRPC client through Common's `AddTypedGrpcClient<TClient>(serviceName)`
-(`:45,75`, which resolves `http://conference` through Aspire service discovery and attaches the
+(`:46,76,104`, which resolves `http://conference` through Aspire service discovery and attaches the
 JWT-forwarding interceptor plus the Polly resilience handler), then calls `services.Replace(...)` with
-a *scoped* descriptor rather than `TryAdd` (`:49,79`) to overwrite whatever implementation is already
+a *scoped* descriptor rather than `TryAdd` (`:50,80,108`) to overwrite whatever implementation is already
 in the container (the real in-process service if Conference is co-hosted, or the `Disabled...` stub if
 not) with the gRPC adapter. The `Replace` is deliberate so the adapter wins in either case, and it
 must be called from the consumer's `Program.cs` *after* `ModuleLoader.DiscoverAndRegister(...)` so the
 in-process or stub registration is already present for `Replace` to find (`:36-39`). Note the
-**bidirectional** Conference-to-Engagement relationship: Conference serves these two contracts and
-also consumes Engagement's
+**bidirectional** Conference-to-Engagement relationship: Conference serves the two validation
+contracts to Engagement and also consumes Engagement's
 [`IBookmarkCountService`](group-22-engagement-module.md#ibookmarkcountservice), so the Conference host
 registers `AddEngagementBookmarkCountClient()`
 (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:420`) and the AppHost deliberately
@@ -717,30 +742,33 @@ competing consumers of one queue and each erasure would reach only one of them
 (`ConferenceBrokerConsumers.cs:14-27`). The host then adds `AddGrpcServiceDefaults()`
 (`Program.cs:430`) and the per-module health checks (`:433`), initializes the database before serving
 traffic unless this is the design-time OpenAPI run (`:447`), maps the shared health endpoints (`:449`),
-and publishes **both** gRPC endpoints over the same Kestrel HTTP/2 channel the REST controllers serve
-through [`ConferenceGrpcEndpoints`](#conferencegrpcendpoints)`.Map` (`:463`), adding gRPC reflection in
-Development only, declared `AllowAnonymous` (`:465-470`).
+and publishes **all three** gRPC services over the same Kestrel HTTP/2 channel the REST controllers serve
+through [`ConferenceGrpcEndpoints`](#conferencegrpcendpoints)`.Map` (`:464`), adding gRPC reflection in
+Development only, declared `AllowAnonymous` (`:466-471`).
 
 [`ConferenceGrpcEndpoints`](#conferencegrpcendpoints) exists, like the consumer class, so the
 authorization posture of each gRPC service can be asserted against endpoint metadata without booting
 the host (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/ConferenceGrpcEndpoints.cs:5-10`), and
-the two postures differ on purpose. `SessionBookmarksGrpcService` is mapped with
+the postures differ on purpose. `SessionBookmarksGrpcService` is mapped with
 `RequireAuthorization()` (`ConferenceGrpcEndpoints.cs:20`): it answers per-user bookmark questions on
 behalf of a specific end user, its caller is Engagement's authenticated bookmarks controller, and the
 inbound bearer is always present for the JWT-forwarding interceptor to carry across (`:16-19`).
+`UserConferenceExportGrpcService` takes the same posture (`:27`) for the same reason: it returns one
+user's own feedback answers, and its caller is Identity's export endpoint, which already runs behind
+`[Authorize]` for the account owner or an Organizer, so a bearer is always there to forward (`:22-26`).
 `EventLiveValidationGrpcService` is mapped `AllowAnonymous()`, stated explicitly rather than left to the
-framework fallback policy (`:32`): its lookups return conference state and nothing per-user, and one of
+framework fallback policy (`:39`): its lookups return conference state and nothing per-user, and one of
 its callers, Notification's live-channel join authorizer, forwards the token the SignalR connection was
 opened with, which expires while the connection stays open, so a required bearer silently broke live
 push on every long-lived connection. Its boundary is the internal (`external: false`) ACA ingress, and a
-fresh token at join is the recorded follow-up (`:22-31`, `[Rubric §11, Security]`).
+fresh token at join is the recorded follow-up (`:29-38`, `[Rubric §11, Security]`).
 
 A browser request to `GET /Sessions` enters the Gateway, is forwarded as HTTP/2 to this host, flows
 through the shared middleware pipeline, hits an output-cached
 [`SessionsController`](#sessionscontroller) action whose read hook excludes declined sessions for
 non-privileged readers, runs the query handler's CQRS pipeline, and returns a `CollectionResult<`[`SessionDTO`](group-17-conference-domain.md#sessiondto)`>`.
 Meanwhile Engagement can simultaneously call `ValidateSessionForBookmark`, and Engagement or
-Notification `GetSessionLiveInfo`, over gRPC against the very same process, and a `UserRegistered` message from
+Notification `GetSessionLiveInfo`, and Identity `GetUserConferenceExport`, over gRPC against the very same process, and a `UserRegistered` message from
 Identity can arrive over the broker and auto-link a speaker, without any of the three paths knowing
 about the others. That *one module, three ingress paths, identical whether co-hosted or standalone*
 property is the whole point of this chapter, and the reason the Conference edge is mostly thin glue
@@ -1098,18 +1126,20 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   Conference service host (and in integration-test hosts).
 
 ### ConferenceModule
-> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/ConferenceModule.cs:15` · Level 5 · class (sealed)
+> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/ConferenceModule.cs:16` · Level 5 · class (sealed)
 
 - **What it is**: the [`IModule`](group-14-module-system-composition.md#imodule) entry point for the
   Conference bounded context. `ModuleLoader` discovers it reflectively at startup and registers it in
   topological dependency order.
 - **Depends on**: [`IModule`](group-14-module-system-composition.md#imodule) (the contract it
   implements), [`ApplicationSettings`](group-14-module-system-composition.md#applicationsettings)
-  (passed to `Register`), and the two cross-module contracts it stubs:
+  (passed to `Register`), and the three cross-module contracts it stubs:
   [`ISessionBookmarkValidationService`](group-17-conference-domain.md#isessionbookmarkvalidationservice)
   with [`DisabledSessionBookmarkValidationService`](group-17-conference-domain.md#disabledsessionbookmarkvalidationservice),
   and [`IEventLiveValidationService`](group-17-conference-domain.md#ieventlivevalidationservice)
-  with [`DisabledEventLiveValidationService`](group-17-conference-domain.md#disabledeventlivevalidationservice).
+  with [`DisabledEventLiveValidationService`](group-17-conference-domain.md#disabledeventlivevalidationservice),
+  and [`IUserConferenceExportService`](group-17-conference-domain.md#iuserconferenceexportservice)
+  with [`DisabledUserConferenceExportService`](group-17-conference-domain.md#disableduserconferenceexportservice).
   It delegates the real registration to [`DependencyInjection`](#dependencyinjection)`.AddConferenceModule`.
 - **Concept introduced, the module entry-point pattern and disabled-module stubs.** Every bounded
   context ships one `IModule` so the host `Program.cs` stays context-unaware and lets
@@ -1122,19 +1152,21 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   (assesses dependency inversion): the API layer never references Infrastructure or Domain types
   directly; registration indirects entirely through the module interface and the DI facade.
 - **Walkthrough**: one property and two methods.
-  - `Name => "Conference"` (`ConferenceModule.cs:18`) is the module's identity used by the loader and
+  - `Name => "Conference"` (`ConferenceModule.cs:19`) is the module's identity used by the loader and
     by config keys such as `Modules:Conference:Enabled`.
-  - `RegisterDisabledStubs(IServiceCollection services)` (`ConferenceModule.cs:21`) registers
-    **two** no-op singletons so that when Conference is *disabled* in some other service host (for
+  - `RegisterDisabledStubs(IServiceCollection services)` (`ConferenceModule.cs:22`) registers
+    **three** no-op singletons so that when Conference is *disabled* in some other service host (for
     example the Engagement service), the cross-module contracts still resolve:
     `DisabledSessionBookmarkValidationService` for
     [`ISessionBookmarkValidationService`](group-17-conference-domain.md#isessionbookmarkvalidationservice)
-    (`ConferenceModule.cs:23`) and `DisabledEventLiveValidationService` for
+    (`ConferenceModule.cs:24`), `DisabledEventLiveValidationService` for
     [`IEventLiveValidationService`](group-17-conference-domain.md#ieventlivevalidationservice)
-    (`ConferenceModule.cs:24`). Callers never hit an unresolved-service failure.
+    (`ConferenceModule.cs:25`), and `DisabledUserConferenceExportService` for
+    [`IUserConferenceExportService`](group-17-conference-domain.md#iuserconferenceexportservice)
+    (`ConferenceModule.cs:26`). Callers never hit an unresolved-service failure.
   - `Register(IServiceCollection services, IConfigurationBuilder configuration, ApplicationSettings applicationSettings)`
-    (`ConferenceModule.cs:28`), when Conference is enabled, is expression-bodied delegation straight to
-    `services.AddConferenceModule(applicationSettings)` (`ConferenceModule.cs:29`).
+    (`ConferenceModule.cs:30`), when Conference is enabled, is expression-bodied delegation straight to
+    `services.AddConferenceModule(applicationSettings)` (`ConferenceModule.cs:31`).
 - **Why it's built this way**: centralizing per-context DI behind `IModule` keeps the host generic
   (it only calls the loader), and `RegisterDisabledStubs` keeps cross-module contracts resolvable
   even when Conference is offline in a given service. That disabled-stub arrangement is the concrete
@@ -1146,7 +1178,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   `Program.cs` and in integration-test hosts.
 
 ### ConferenceModuleSeeder
-> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/ConferenceModuleSeeder.cs:13` · Level 9 · class (sealed)
+> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/ConferenceModuleSeeder.cs:13` · Level 10 · class (sealed)
 
 - **What it is**: the module-level seeding entry point for Conference. It implements
   [`IModuleSeeder`](group-14-module-system-composition.md#imoduleseeder) and, at application startup,
@@ -1177,8 +1209,8 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
     `Seeding:IncludeSampleConferenceData` flag (defaulting to `false` when the key is absent,
     `ConferenceModuleSeeder.cs:26`), constructs a
     [`ConferenceModuleDbSeeder`](group-19-conference-infrastructure.md#conferencemoduledbseeder) with
-    that flag, and awaits its `SeedAsync` with `ConfigureAwait(false)`
-    (`ConferenceModuleSeeder.cs:28-29`). The comment (`ConferenceModuleSeeder.cs:24-25`) records the
+    that flag, and returns its `SeedAsync` task directly without awaiting (the method is not `async`,
+    `ConferenceModuleSeeder.cs:28-29`). The comment (`ConferenceModuleSeeder.cs:24-25`) records the
     intent: sample data is gated to non-production hosts (the local AppHost and E2E CI) so prod
     databases receive only the real event and questions.
 - **Why it's built this way**: splitting the module adapter from the DB seeder keeps the API layer
@@ -1387,13 +1419,13 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   [`UpdateRoomCommand`](group-18-conference-application.md#updateroomcommand).
 - **Concept**: the update half of the room contract (see [`AddRoomRequest`](#addroomrequest)); the room
   id comes from the route `{id}`. `UpdateAsync` spreads the seven body fields plus the route id into the
-  command (`RoomsController.cs:247-256`), then evicts the `conference:rooms` tag before returning
+  command (`RoomsController.cs:249-258`), then evicts the `conference:rooms` tag before returning
   `NoContent()` (`RoomsController.cs:262-263`).
 - **Walkthrough**: three `required` members plus four nullable optionals, no methods. Because every
   optional field is sent on every PUT, an omitted `Capacity` or `Floor` clears the stored value rather
   than leaving it untouched: this is a full replacement contract, not a patch.
 - **Where it's used**: `[FromBody]` on [`RoomsController`](#roomscontroller)'s `UpdateAsync`
-  (`RoomsController.cs:242-244`).
+  (`RoomsController.cs:244-246`).
 
 ---
 
@@ -1465,10 +1497,10 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   `RoleNames.Organizer` and the controller and entity names as the error source and target
   (`:138-143`). The helper succeeds when `IsAdmin(currentUserService, bypassRole)` holds or the claim
   parses, and otherwise fails with `Error.Forbidden` ("Access denied.")
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:91-104`); the
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:97-110`); the
   controller turns a failed result into `HandleFailure(gate.Errors)`, a 403, and a success into `null`
   so the read proceeds (`EventQuestionAnswersController.cs:144-145`). Because the helper checks the
-  bypass role with the same `IsAdmin` that `GetOwnershipSpecification` uses (`OwnershipHelper.cs:46,
+  bypass role with the same `IsAdmin` that `GetOwnershipSpecification` uses (`OwnershipHelper.cs:52,
   101`), the gate and the scope agree on who is privileged (doc `:131-133`). This is the same 2026-08-31
   resolvable-owner rule ADR-033 states as Store's `OrdersController.RequireResolvableOwner`.
 - **Concept introduced, closing the CSV export as a row-scoping bypass.** The base ships a streaming CSV
@@ -1524,8 +1556,8 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
     the hook on purpose, as described above. Note the absence of any `[OutputCache]` attribute anywhere
     in the file: a per-caller response must never land in a shared cache entry, and the controller simply
     never opts in.
-  - `ExportAsync` (`:247-262`): the organizer gate, `Forbid()` at `:258`, otherwise `base.ExportAsync(...)`
-    at `:261`. Its doc comment carries the reasoning (`:241-246`).
+  - `ExportAsync` (`:247-262`): the organizer gate, `Task.FromResult<IActionResult>(Forbid())` at `:258`, otherwise the
+    base task is returned directly from `base.ExportAsync(...)` at `:261` (the override is not `async`). Its doc comment carries the reasoning (`:241-246`).
   - `CreateAsync` (`:273`) carries `[HttpPost]` (`:271`) and `[Idempotent]` (`:272`), so a retried POST with
     the same `Idempotency-Key` replays the stored response instead of writing a second answer row; the doc
     comment records that the attribute is declared here because this create is hand-written rather than the
@@ -1679,7 +1711,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   Because that `null` is the base's signal for "no row scope", the controller also declares
   `AllowUnscopedExport => IsPrivileged` (`:90`, doc `:84-89`): the base's fail-closed CSV export refuses
   a null scope with 403 unless this opt-in holds
-  (`EntityControllerBase.cs:273-274, 508`), so only the privileged audience may export the whole table.
+  (`EntityControllerBase.cs:273-274,508`), so only the privileged audience may export the whole table.
   `[Rubric §12, Performance & Scalability]`: the reads are cached under the `EventsCache` policy (5-minute
   TTL, tags `conference` and `conference:events`,
   `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:271`), which is exactly why the writes
@@ -1700,8 +1732,8 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
     would enumerate the names the list endpoint hides. The base forwards the specification's `Criteria`
     predicate as the lookup filter, because the lookup query has no specification parameter
     (`EntityControllerBase.cs:554-560`).
-  - `ExportAsync` (`:146-161`) repeats the privileged-reader gate: `if (!IsPrivileged) return Forbid();`
-    (`:155-158`), then `base.ExportAsync(...)` (`:160`). The doc comment states the leak an unscoped CSV
+  - `ExportAsync` (`:146-161`) repeats the privileged-reader gate: `if (!IsPrivileged) return Task.FromResult<IActionResult>(Forbid());`
+    (`:155-158`, the override is not `async`), then returns `base.ExportAsync(...)` directly (`:160`). The doc comment states the leak an unscoped CSV
     would be: the junction rows of unpublished events, leaking exactly the existence the reads hide
     (`:140-145`).
   - `CreateAsync` (`:172`) is `[HttpPost]` (`:170`) and `[Idempotent]` (`:171`), dispatches
@@ -1771,10 +1803,10 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   tagged `conference` and `conference:rooms`
   (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:279`). The correctness half is
   eviction: each mutation ends by calling
-  `outputCacheStore.EvictTagsAsync(cancellationToken, "conference:rooms")` (`:233, 262`), invalidating
-  exactly the room reads and nothing else. The delete is the exception: removing a room also clears it on
-  the event's sessions (O-60), so it evicts `conference:rooms`, `conference:sessions` and the broad
-  `conference` tag together (`:282`) and the cached session reads go with the room reads. `[Rubric §3, Clean Architecture]`: the eviction
+  `outputCacheStore.EvictTagsAsync(cancellationToken, "conference:rooms", "conference:sessions", "conference")`
+  (`:235, 266, 286`). All three evict the same three tags, because cached session reads and the `.ics`
+  exports embed the room name (`SessionDTO.RoomName`), so a create, a rename or relocation, and a delete
+  (O-60) each take the cached session reads out together with the room reads (M242). `[Rubric §3, Clean Architecture]`: the eviction
   lives in the controller, not the command handler, because `IOutputCacheStore` is an ASP.NET concern the
   Application layer must not reference.
 - **Walkthrough**
@@ -1791,13 +1823,13 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
     event exists or that a venue has been booked for it" (`:189-193`).
   - `CreateAsync` (`:214`) is `[HttpPost]` (`:212`) and `[Idempotent]` (`:213`), maps `AddRoomRequest` onto
     `AddRoomCommand` positionally (`:218-228`, note the optional client-supplied `RoomId` in slot two),
-    returns `HandleFailure` on failure (`:230-231`), evicts (`:233`) and returns
-    `CreatedAtRoute("GetRoomById", ...)` (`:234-237`).
-  - `UpdateAsync` (`:242`) dispatches `UpdateRoomCommand` with the parent `EventId` from the body and the
-    child id from the route (`:247-257`), evicts (`:262`) and returns `NoContent()` (`:263`).
-  - `DeleteAsync` (`:268`) reads the parent `eventId` `[FromQuery]` (`:270`), dispatches
-    `RemoveRoomCommand(eventId, id)` (`:274`), evicts the three tags (`:282`) and returns `NoContent()`.
-  - All three mutations return `HandleFailure` *before* they evict (`:230, 259, 277`), so a failed command
+    returns `HandleFailure` on failure (`:230-231`), evicts (`:235`) and returns
+    `CreatedAtRoute("GetRoomById", ...)` (`:236-239`).
+  - `UpdateAsync` (`:244`) dispatches `UpdateRoomCommand` with the parent `EventId` from the body and the
+    child id from the route (`:249-259`), evicts (`:266`) and returns `NoContent()` (`:267`).
+  - `DeleteAsync` (`:272`) reads the parent `eventId` `[FromQuery]` (`:274`), dispatches
+    `RemoveRoomCommand(eventId, id)` (`:278`), evicts the three tags (`:286`) and returns `NoContent()`.
+  - All three mutations return `HandleFailure` *before* they evict (`:230, 261, 281`), so a failed command
     never disturbs the cache.
   - There is no `ExportAsync` override, and none is needed: the inherited action reads the same hook as the
     lists (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:270`), so
@@ -1854,10 +1886,11 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   authorization predicate is a data specification the query service composes into SQL, not imperative
   post-filtering. The lookup action's doc comment names the side channel that closes: a draft event
   listed by name. Because the base's CSV export refuses a `null` scope unless the controller opts in
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:273-274, 508`),
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:273-274,508`),
   the controller declares `AllowUnscopedExport => currentUserService.IsPrivilegedConferenceReader()`
   (`EventsController.cs:80`, doc `:75-79`), the same audience the hook exempts. `ExportAsync`
-  (`:138-153`) adds the imperative privileged-reader `Forbid()` on top (`:147-150`), so the download is
+  (`:138-153`, a non-`async` override that returns `Task.FromResult<IActionResult>(Forbid())` or the base
+  task directly, `:149,152`) adds the imperative privileged-reader `Forbid()` on top (`:147-150`), so the download is
   denied before any row is read, even the published subset, for everyone else (doc `:131-137`).
 - **Concept introduced, per-action capabilities under a bare `[Authorize]` class.** `[Rubric §11,
   Security]`: the class carries only `[Authorize]` (`:46`, doc `:35-42`), not a class-wide
@@ -2283,7 +2316,8 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
 - **Walkthrough**: four `[AllowAnonymous]` + `[OutputCache(PolicyName = "SessionsCache")]` read
   passthroughs (`SessionCategoryItemsController.cs:93,103,122,130`, the last carrying the named route
   `"GetSessionCategoryItemById"`), all scoped by the hook. `ExportAsync` (`[HttpGet("export")]` at `:147`)
-  returns `Forbid()` for a non-privileged caller (`:158`) and otherwise delegates to the base.
+  is not an `async` method: it returns `Task.FromResult<IActionResult>(Forbid())` for a non-privileged
+  caller (`:158`) and otherwise hands back the base's task directly, with no await.
   `CreateAsync` (`[HttpPost]` at `:171`, `[Idempotent]` at `:172`) dispatches
   `AddSessionCategoryItemCommand(request.SessionId, null, request.CategoryItemId)` (`:178`), evicts
   (`:186`) and returns `CreatedAtRoute("GetSessionCategoryItemById", ...)` (`:187-190`); `DeleteAsync`
@@ -2383,7 +2417,8 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
     [`OwnedByUserSpecification<TEntity, TIdentifierType>`](group-03-querying-specifications.md#ownedbyuserspecificationtentity-tidentifiertype)
     for the caller plus a `SessionId equals` filter, `pageNumber: 1` and `pageSize: MaxPageSize`
     (`:226-234`), and returns the page with `Ok(result.Value)` (`:236-238`).
-  - `ExportAsync` (`:241-263`) returns `Forbid()` unless the caller is an organizer (`:257-260`), the BR-9
+  - `ExportAsync` (`:241-263`) is a non-`async` override that returns `Task.FromResult<IActionResult>(Forbid())`
+    unless the caller is an organizer (`:257-260`), otherwise the base's task directly, the BR-9
     form of the row-scoping bypass gate. The doc comment (`:241-247`) now explains the layering: the
     inherited CSV export streams only the rows `GetExportSpecification` scopes and refuses an unscoped export
     unless `AllowUnscopedExport` opts in (for the organizer alone), and this override keeps the download
@@ -2413,7 +2448,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
 ---
 
 ### SessionsController
-> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers.Sessions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionsController.cs:44` · Level 10 · class (sealed)
+> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers.Sessions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionsController.cs:45` · Level 10 · class (sealed)
 
 - **What it is**: the REST controller for the [`Session`](group-17-conference-domain.md#session) aggregate
   root (`/Sessions`). Aggregate-root CRUD plus a cross-source visibility filter (BR-132 / BR-49), a virtual
@@ -2421,19 +2456,19 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   conditional update.
 - **Depends on**:
   [`AggregateRootEntityControllerBase`](group-12-api-hosting-mapping.md#aggregaterootentitycontrollerbasetentity-tentitydto-tidentifiertype-tcreaterequest)
-  (`SessionsController.cs:55-56`); **two**
+  (`SessionsController.cs:56-57`); **two**
   [`IEntityQueryService`](group-03-querying-specifications.md#ientityqueryservicetentity-tentitydto-tidentifiertype)s
-  (one for `Session`, one for `Event` so create can re-read the parent, `:45, 49`); the
+  (one for `Session`, one for `Event` so create can re-read the parent, `:46, 50`); the
   [`SessionCreateRequest`](group-18-conference-application.md#sessioncreaterequest) create handler, the
   [`UpdateSessionCommand`](group-18-conference-application.md#updatesessioncommand) update handler and a
   [`DeleteEntityCommand`](group-05-cqrs-pipeline.md#deleteentitycommandtentity-tidentifiertype) delete
-  handler (`:46-48`); two
+  handler (`:47-49`); two
   [`IQueryHandler`](group-05-cqrs-pipeline.md#iqueryhandlerin-tquery-tresult)s for
   [`GetPublicSessionFilterQuery`](group-18-conference-application.md#getpublicsessionfilterquery) and
   [`GetSessionsBySpeakerFilterQuery`](group-18-conference-application.md#getsessionsbyspeakerfilterquery)
-  (`:50-51`); [`ICurrentUserService`](group-08-auth.md#icurrentuserservice) with the
-  [`CurrentUserServiceExtensions`](#currentuserserviceextensions) helper (`:52, 59`); `IOutputCacheStore`
-  (`:53`); the [`SessionDTO`](group-17-conference-domain.md#sessiondto),
+  (`:51-52`); [`ICurrentUserService`](group-08-auth.md#icurrentuserservice) with the
+  [`CurrentUserServiceExtensions`](#currentuserserviceextensions) helper (`:53, 60`); `IOutputCacheStore`
+  (`:54`); the [`SessionDTO`](group-17-conference-domain.md#sessiondto),
   [`UpdateSessionResult`](group-18-conference-application.md#updatesessionresult),
   [`SessionUpdateRequest`](group-18-conference-application.md#sessionupdaterequest) and
   [`EventDTO`](group-17-conference-domain.md#eventdto) (the
@@ -2447,63 +2482,67 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
 - **Concept introduced, a cross-source visibility specification.** `[Rubric §8, Data Architecture]` and
   `[Rubric §7, Microservices Readiness]`: BR-132 / BR-49 hides non-accepted sessions and the sessions of
   unpublished events from non-privileged readers, but a `Session` can live in one data source while its
-  parent `Event`'s published flag lives in another (the doc comment at `SessionsController.cs:61-66` names
-  Session in Cosmos and Event in SQL Server at `:64`, the polyglot option of
+  parent `Event`'s published flag lives in another (the doc comment at `SessionsController.cs:62-67` names
+  Session in Cosmos and Event in SQL Server at `:65`, the polyglot option of
   [ADR-018](https://ivanball.github.io/docs/adr/018-polyglot-persistence.html)). Rather than a
-  cross-database join, `GetReadSpecificationAsync` (`:75-85`) delegates to the `GetPublicSessionFilterQuery`
+  cross-database join, `GetReadSpecificationAsync` (`:76-86`) delegates to the `GetPublicSessionFilterQuery`
   handler, which uses the framework's cross-source specification helper to produce a
   [`Specification<TEntity, TIdentifierType>`](group-03-querying-specifications.md#specificationtentity-tidentifiertype)
   the query service can apply; privileged readers get `null`. Because that `null` means "privileged", the
-  controller overrides `AllowUnscopedExport => IsPrivileged` (`:93`), opting exactly that audience in to
+  controller overrides `AllowUnscopedExport => IsPrivileged` (`:94`), opting exactly that audience in to
   the unscoped table under the framework's fail-closed export (default `false` at
   `MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:508`, refusal at
   `:273-274`).
   `[Rubric §12, Performance & Scalability]`: reads are `[OutputCache(PolicyName = "SessionsCache")]`
   (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:277`) and the default sort is the
-  single-column `nameof(SessionDTO.StartsAt)` constant (`:141`), sorting the schedule chronologically. The
-  comment above it (`:138-140`) records why it is one column rather than the earlier comma-joined string:
+  single-column `nameof(SessionDTO.StartsAt)` constant (`:142`), sorting the schedule chronologically. The
+  comment above it (`:139-141`) records why it is one column rather than the earlier comma-joined string:
   `QueryFieldService` resolves a sort column against the entity's own properties, so a comma-joined
   `"StartsAt,RoomId"` value matches none of them and silently falls back to the framework's `Id` tie-break
   instead of sorting by room; sessions that share a start time now fall through to that same `Id` tie-break
   rather than to a secondary room sort.
 - **Walkthrough**
-  - `BuildPagedSessionSpecificationAsync` (`SessionsController.cs:113-136`, doc and remarks `:95-112`) is
-    the paged read's specification builder: it starts from the hook (`:117`), then intercepts and removes
-    the virtual `SpeakerId` filter key (`Session` has no such column, `:119-124`), resolves it through
-    `GetSessionsBySpeakerFilterQuery` (`:126-128`) and **ANDs** the two with
-    `publicSpecification.And(...)` (`:133-135`). As in [`SpeakersController`](#speakerscontroller),
+  - `BuildPagedSessionSpecificationAsync` (`SessionsController.cs:114-137`, doc and remarks `:96-113`) is
+    the paged read's specification builder: it starts from the hook (`:118`), then intercepts and removes
+    the virtual `SpeakerId` filter key (`Session` has no such column, `:120-125`), resolves it through
+    `GetSessionsBySpeakerFilterQuery` (`:127-129`) and **ANDs** the two with
+    `publicSpecification.And(...)` (`:134-136`). As in [`SpeakersController`](#speakerscontroller),
     substitution would leak non-accepted sessions, and an unparseable value or a failed handler result
-    simply drops the scope (`:119-124, 130-131`).
-  - `GetAllAsync` (`:146-167`) keeps a body only to apply the default sort: it queries with the hook's
-    specification (`:156`), `DefaultSortColumn` (`:158`) and `pageSize: MaxPageSize` (`:162`). The paged
-    overload (`:172-210`) clamps the page size (`:183`), defaults the sort when none was supplied
-    (`:185-189`), calls the builder above (`:195`) and writes the `X-Pagination` header (`:208`).
-  - `GetAllForLookupAsync` (`:221-224`) and `GetByIdAsync` (`:233-239`) are attribute-only passthroughs;
-    the base applies the same hook, so a hidden session is a 404 there (doc `:212-217` and `:226-229`).
-  - `ExportAsync` (`:250-264`) is the same bypass gate the other row-scoped controllers use: `Forbid()` for
-    a non-privileged caller (`:258-261`), otherwise the base (`:263`). Its doc comment (`:241-248`) now
+    simply drops the scope (`:120-125, 131-132`).
+  - `GetAllAsync` (`:147-168`) keeps a body only to apply the default sort: it queries with the hook's
+    specification (`:157`), `DefaultSortColumn` (`:159`) and `pageSize: MaxPageSize` (`:163`). The paged
+    overload (`:173-211`) clamps the page size (`:184`), defaults the sort when none was supplied
+    (`:186-190`), calls the builder above (`:196`) and writes the `X-Pagination` header through the
+    `Response.AppendPaginationHeader(result.Value!.PaginationMetadata)` extension (`:209`) instead of
+    serializing the metadata inline.
+  - `GetAllForLookupAsync` (`:222-225`) and `GetByIdAsync` (`:234-240`) are attribute-only passthroughs;
+    the base applies the same hook, so a hidden session is a 404 there (doc `:213-218` and `:227-230`).
+  - `ExportAsync` (`:251-265`) is the same bypass gate the other row-scoped controllers use. It is no
+    longer an `async` method: it returns `Task.FromResult<IActionResult>(Forbid())` for a non-privileged
+    caller (`:259-262`), otherwise hands back the base's task directly (`:264`), with no await or
+    `ConfigureAwait`. Its doc comment (`:242-249`) now
     states the layering: the inherited CSV export streams only the rows the read hook scopes and refuses an
     unscoped export unless `AllowUnscopedExport` opts in, which it does for privileged readers
     (Organizer/ContentEditor) alone; this override keeps the download itself privileged, so everyone else is
     denied before any row is read rather than served even the public catalog in one file. Privileged
     readers see everything, "declined and draft-event sessions included". The single-session iCalendar export lives on its own controller,
     [`SessionCalendarController`](#sessioncalendarcontroller).
-  - `CreateAsync` (`:273-301`) is an override marked `[Idempotent]` (`:272`) that calls
-    `CreateHandler.HandleAsync` directly (`:277`) rather than `base.CreateAsync`, because it needs the
+  - `CreateAsync` (`:274-302`) is an override marked `[Idempotent]` (`:273`) that calls
+    `CreateHandler.HandleAsync` directly (`:278`) rather than `base.CreateAsync`, because it needs the
     typed [`Result`](group-01-result-error-handling.md#result) in order to run the BR-86 check: when the
     request set start or end times, it re-reads the parent event and appends a non-fatal `X-Warning` header
-    if the session falls outside the event's date range (`:284-297`). Note that the parent re-read
-    pattern-matches the widened query result with `eventResult.Value is EventDTO evt` (`:291`) rather than
+    if the session falls outside the event's date range (`:285-298`). Note that the parent re-read
+    pattern-matches the widened query result with `eventResult.Value is EventDTO evt` (`:292`) rather than
     a dynamic member access, because `IEntityQueryService` widens its return to `object` for field
     projection, so the controller narrows it back with a type pattern (the reason is written into the
-    comment at `:286-287`).
-  - `UpdateAsync` (`:316-338`) carries `[SupportsIfMatch]` (`:312`) with the 409/412/428
-    `[ProducesResponseType]` triple (`:313-315`), reads the required token (`:321`), dispatches
-    `new UpdateSessionCommand(id, request, rowVersion)` (`:324`), surfaces the same BR-86 warning from
-    `result.Value!.HasDateRangeWarning` (`:331`) and returns `Ok(result.Value.Session)` (`:337`).
-    `DeleteAsync` (`:342-348`) calls the base and evicts.
+    comment at `:287-288`).
+  - `UpdateAsync` (`:317-339`) carries `[SupportsIfMatch]` (`:313`) with the 409/412/428
+    `[ProducesResponseType]` triple (`:314-316`), reads the required token (`:322`), dispatches
+    `new UpdateSessionCommand(id, request, rowVersion)` (`:325`), surfaces the same BR-86 warning from
+    `result.Value!.HasDateRangeWarning` (`:332`) and returns `Ok(result.Value.Session)` (`:338`).
+    `DeleteAsync` (`:343-350`) calls the base and evicts.
   - Every mutation ends at
-    `EvictTagsAsync(cancellationToken, "conference:sessions", "conference")` (`:299, 336, 347`), the broad
+    `EvictTagsAsync(cancellationToken, "conference:sessions", "conference")` (`:300, 337, 348`), the broad
     tag included because cross-entity projections (the speaker bookmark-count endpoints) are cached under
     `conference:sessions` and `conference` rather than under a speakers tag.
 - **Why it's built this way**: pushing the cross-source published-event check into a query handler keeps
@@ -2884,11 +2923,11 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
 - **Where it's used**: nine Conference controllers expose it as a private `IsPrivileged` property, including
   [ActivitiesController](#activitiescontroller) (`ActivitiesController.cs:53`),
   [RoomsController](#roomscontroller) (`RoomsController.cs:104`),
-  [SessionsController](#sessionscontroller) (`SessionsController.cs:59`),
+  [SessionsController](#sessionscontroller) (`SessionsController.cs:60`),
   [SessionCategoryItemsController](#sessioncategoryitemscontroller) (`SessionCategoryItemsController.cs:59`),
   [SessionSpeakersController](#sessionspeakerscontroller) (`SessionSpeakersController.cs:59`),
   [SpeakerCategoryItemsController](#speakercategoryitemscontroller) (`SpeakerCategoryItemsController.cs:59`),
-  [SpeakersController](#speakerscontroller) (`SpeakersController.cs:70`),
+  [SpeakersController](#speakerscontroller) (`SpeakersController.cs:71`),
   [SponsorsController](#sponsorscontroller) (`SponsorsController.cs:53`) and
   [EventSpeakersController](#eventspeakerscontroller) (`EventSpeakersController.cs:58`), all under
   `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/`.
@@ -3122,7 +3161,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   `AllowUnscopedExport => IsPrivileged` (`SpeakerCategoryItemsController.cs:91`, doc `:85-90`) opts in to
   the unscoped table only for the privileged readers whose hook result is `null` by design. The
   `ExportAsync` override (`[HttpGet("export")]` at `:147`) still repeats the privileged-reader gate with
-  `Forbid()` at `:158` before delegating (`:161`). `CreateAsync` (`[HttpPost]` at `:171`, `[Idempotent]`
+  `Forbid()` at `:158` (wrapped in `Task.FromResult`, since the override is no longer `async`) before returning the base call directly (`:161`). `CreateAsync` (`[HttpPost]` at `:171`, `[Idempotent]`
   at `:172`) dispatches `AddSpeakerCategoryItemCommand(request.SpeakerId, null, request.CategoryItemId)`
   (`:178`), evicts (`:186`) and returns `CreatedAtRoute("GetSpeakerCategoryItemById", ...)` (`:187-190`);
   `DeleteAsync` (`[HttpDelete("{id}")]` at `:194`) reads the parent `speakerId` `[FromQuery]` (`:197`),
@@ -3190,7 +3229,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
 ---
 
 ### SpeakersController
-> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers.Speakers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Speakers/SpeakersController.cs:43` · Level 9 · class (sealed)
+> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers.Speakers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Speakers/SpeakersController.cs:44` · Level 9 · class (sealed)
 
 - **What it is**: the REST controller for the [`Speaker`](group-17-conference-domain.md#speaker) aggregate
   root (`/Speakers`), and the most authorization-dense controller in the group. On top of aggregate-root
@@ -3202,7 +3241,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   dependency ceiling.
 - **Depends on**:
   [`AggregateRootEntityControllerBase`](group-12-api-hosting-mapping.md#aggregaterootentitycontrollerbasetentity-tentitydto-tidentifiertype-tcreaterequest)
-  (`SpeakersController.cs:54-55`); the
+  (`SpeakersController.cs:55-56`); the
   [`IEntityQueryService`](group-03-querying-specifications.md#ientityqueryservicetentity-tentitydto-tidentifiertype)
   (`:43`); three [`ICommandHandler`](group-05-cqrs-pipeline.md#icommandhandlerin-tcommand-tresult)s for
   [`SpeakerCreateRequest`](group-18-conference-application.md#speakercreaterequest),
@@ -3226,22 +3265,22 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
 - **Concept introduced, per-action authorization plus row-level ownership checks.** `[Rubric §11,
   Security]`: unlike the other aggregate-root controllers (which gate the whole class with one
   `[HasPermission(...)]`), `SpeakersController` carries a bare class-level `[Authorize]`
-  (`SpeakersController.cs:42`) and then varies authorization per action. The catalog reads are
+  (`SpeakersController.cs:43`) and then varies authorization per action. The catalog reads are
   `[AllowAnonymous]`; export, create and delete each re-assert
-  `[HasPermission(ConferencePermissions.SpeakersManage)]` (`:324, 343, 407`); and `UpdateAsync`
-  performs a *resource-ownership* check in code (`:380-385`, BR-214). It computes `canManage` as
+  `[HasPermission(ConferencePermissions.SpeakersManage)]` (`:325, 344, 408`); and `UpdateAsync`
+  performs a *resource-ownership* check in code (`:381-386`, BR-214). It computes `canManage` as
   `permissionRegistry.HasPermission(currentUserService.Roles, ConferencePermissions.SpeakersManage)`
-  (`:382`), the same capability the sibling create and delete actions require, so ContentEditor qualifies
-  alongside Organizer (comment `:380-381`); it compares the caller's `speaker_id` JWT claim with the route
-  id (`:383`); and it returns `Forbid()` when the caller is neither (`:384-385`). That is authorization a
+  (`:383`), the same capability the sibling create and delete actions require, so ContentEditor qualifies
+  alongside Organizer (comment `:381-382`); it compares the caller's `speaker_id` JWT claim with the route
+  id (`:384`); and it returns `Forbid()` when the caller is neither (`:385-386`). That is authorization a
   policy attribute cannot express, because it depends on the specific row being edited; the management
   flag is then passed on to the handler as
   `new UpdateSpeakerCommand(id, request, CallerCanManageSpeakers: canManage, CallerCanSeeEmail:
-  SpeakerDTOMapper.CanSeeEmail(currentUserService), RowVersion: rowVersion)` (`:390-395`) so the handler
+  SpeakerDTOMapper.CanSeeEmail(currentUserService), RowVersion: rowVersion)` (`:391-396`) so the handler
   keeps the curation field `IsTopSpeaker` unchanged on a self-edit and writes the email only for a caller
   who can read it (BR-66, the same check the DTO mapper redacts with), meaning a self-edit or a
   ContentEditor PUT built from a redacted GET keeps the stored email (the rule is written out at
-  `:353-362`).
+  `:354-363`).
 - **Concept introduced, the virtual filter key.** `[Rubric §9, API & Contract Design]`: `EventId` is not a
   `Speaker` column, so the paged action removes it from the generic filter dictionary before the pipeline
   can reject it (`:149-159`), translates it into a specification via `GetSpeakersByEventFilterQuery`
@@ -3252,7 +3291,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   instead of failing the request. The remarks at `:126-132` add the reason the two are not redundant: the
   event filter answers "linked to this event", the public filter answers "accepted for this event".
 - **Walkthrough**
-  - `IsPrivileged` (`SpeakersController.cs:70`) is the shared read-audience check;
+  - `IsPrivileged` (`SpeakersController.cs:71`) is the shared read-audience check;
     `BuildPublicSpeakerSpecificationAsync` (`:76-87`, doc `:62-75`) is the BR-239 projection, parameterized
     by an optional `eventId` because a speaker accepted for one event is not thereby public on another.
     Privileged readers get `null`.
@@ -3267,48 +3306,51 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   - `GetAllAsync` (`:108-116`) is a plain passthrough. The paged overload (`:136-195`) clamps `pageSize` to
     `MaxPageSize` (`:147`), performs the `EventId` interception described above, then queries with the
     composed specification (`:177-188`) and appends the `X-Pagination` header carrying the result's
-    [`PaginationMetadata`](group-01-result-error-handling.md#paginationmetadata) (`:193`).
-  - `GetAllForLookupAsync` (`:224`) has three guards. First, a request labelled `Email` from a caller for
+    [`PaginationMetadata`](group-01-result-error-handling.md#paginationmetadata) through the
+    `Response.AppendPaginationHeader(...)` helper instead of hand-serializing the header (`:207`).
+  - `GetAllForLookupAsync` (`:225`) has three guards. First, a request labelled `Email` from a caller for
     whom `SpeakerDTOMapper.CanSeeEmail(currentUserService)` is false (Organizer only, BR-66, not the wider
     privileged-reader audience that also admits ContentEditor) is refused with an
     [`Error`](group-01-result-error-handling.md#error)`.Validation` carrying the code
-    `Speaker.Lookup.EmailNotAvailable` (`LookupEmailNotAvailableCode`, `:61`; check at `:230-241`). Its
+    `Speaker.Lookup.EmailNotAvailable` (`LookupEmailNotAvailableCode`, `:62`; check at `:231-242`). Its
     message names no runtime value, so the Conference error resources translate it. Second, privileged
-    readers (a `null` specification) fall through to the base action (`:245`). Third, everyone else must
+    readers (a `null` specification) fall through to the base action (`:246`). Third, everyone else must
     name the label column from the allow-list `PublicLookupNameProperties` (first or last name only) or
     receive an `Error.Validation` failure with the code `Speaker.Lookup.FieldNotAvailable`
-    (`LookupFieldNotAvailableCode`, `:67`; `:252`); that message names the requested field, so it carries no
+    (`LookupFieldNotAvailableCode`, `:68`; `:253`); that message names the requested field, so it carries no
     resource entry and reaches the client in English with the value intact. This closes a BR-66 side
     channel: `nameProperty=Email` would otherwise project the speaker email into the lookup label,
     bypassing the DTO mapper that redacts it. The checks run before the query service, so a rejected label
     is never queried; the scoped path then forwards `specification.Criteria` as the lookup `where`
-    (`:259`) and rewraps the rows into a
+    (`:260`) and rewraps the rows into a
     [`CollectionResult<T>`](group-01-result-error-handling.md#collectionresultt) of
     [`BaseLookup<TIdentifierType>`](group-12-api-hosting-mapping.md#baselookuptidentifiertype).
-  - `GetByIdAsync` (`:245-278`) carries the self-read carve-out: when the caller's `speaker_id` claim
+  - `GetByIdAsync` (`:274`) carries the self-read carve-out: when the caller's `speaker_id` claim
     matches the route id the specification is dropped so a speaker can always load their own profile
-    (`:256-266`), and because that response can contain data the public cannot see while the output-cache
+    (`:287`), and because that response can contain data the public cannot see while the output-cache
     key does not vary by caller, the action turns storage off for this response via
-    `HttpContext.Features.Get<IOutputCacheFeature>()?.Context.AllowCacheStorage = false` (`:265`). The
+    `HttpContext.Features.Get<IOutputCacheFeature>()?.Context.AllowCacheStorage = false` (`:294`). The
     policy only ever turns storage off, never back on, so the opt-out sticks. On success the override
-    calls `SetConcurrencyETag(result.Value)` (`:310`, O-38): the inherited GET emits the weak ETag a
+    calls `SetConcurrencyETag(result.Value)` (`:311`, O-38): the inherited GET emits the weak ETag a
     conditional write needs, and this override replaced that GET, so it emits the same token or a speaker
     could never be edited under `If-Match`.
-  - `ExportAsync` (`:325-339`) is the strongest form of the export gate taught at
+  - `ExportAsync` (`:326-340`, a non-`async` override that returns `Task.FromResult<IActionResult>(Forbid())`
+    for the denied path and the base call directly otherwise) is the strongest form of the export gate
+    taught at
     [`EventQuestionAnswersController`](#eventquestionanswerscontroller): a declarative
-    `[HasPermission(ConferencePermissions.SpeakersManage)]` (`:324`) **plus** the imperative
-    `if (!IsPrivileged) return Forbid();` (`:333-336`), on top of the base's fail-closed refusal. The doc
+    `[HasPermission(ConferencePermissions.SpeakersManage)]` (`:325`) **plus** the imperative
+    `if (!IsPrivileged) return Forbid();` (`:334-337`), on top of the base's fail-closed refusal. The doc
     comment records that the inherited export streams only the rows the read hook scopes and refuses an
     unscoped export unless `AllowUnscopedExport` opts in, and that this override keeps the download itself
     privileged so everyone else is denied before any row is read; it also records that the attribute is
     stated explicitly because the class carries only a bare `[Authorize]` for the inherited action to pick
-    up (`:314-322`).
+    up (`:315-323`).
     `[Rubric §30, Compliance/Privacy/Data Governance]`: a speaker roster is personal data, so bulk egress
     is a named capability rather than a side effect of reading the list.
-  - `CreateAsync` (`:344-351`) and `DeleteAsync` (`:408-415`) call the base and evict. `UpdateAsync`
-    (`:375-403`) runs the BR-214 check (`:380-385`), reads the required `If-Match` token (`:387`),
-    dispatches (`:389-396`) and evicts (`:401`). Every mutation ends at
-    `EvictTagsAsync(cancellationToken, "conference:speakers", "conference")` (`:349, 401, 413`).
+  - `CreateAsync` (`:345-352`) and `DeleteAsync` (`:409-416`) call the base and evict. `UpdateAsync`
+    (`:376-404`) runs the BR-214 check (`:381-386`), reads the required `If-Match` token (`:388`),
+    dispatches (`:390-397`) and evicts (`:402`). Every mutation ends at
+    `EvictTagsAsync(cancellationToken, "conference:speakers", "conference")` (`:350, 402, 414`).
   - The link/unlink actions (BR-209) and the three BR-210 session read projections (aggregated feedback,
     single and batched bookmark counts) are not on this class: they live on
     [`SpeakerLinksController`](#speakerlinkscontroller) and
@@ -3436,7 +3478,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
     been scheduled" (`:128-131`).
   - `ExportAsync` (`[HttpGet("export")]` at `:151`) pairs the declarative
     `[HasPermission(ConferencePermissions.ActivitiesManage)]` (`:152`) with the imperative
-    `if (!IsPrivileged) return Forbid();` (`:163`), then delegates to the base (`:166`). The doc
+    `if (!IsPrivileged) return Forbid();` (`:163`, wrapped as `Task.FromResult<IActionResult>(Forbid())` because the override is no longer `async`), then returns the base call directly without an `await` (`:166`). The doc
     comment names the leak an unscoped CSV would be, a social programme that has not been announced, and
     notes that the attribute is needed because the class carries only a bare `[Authorize]` (`:143-150`).
   - `CreateAsync` (`[HttpPost]` at `:170`) and `DeleteAsync` (`[HttpDelete("{id}")]` at `:214`) are thin
@@ -3509,7 +3551,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
     event is a 404 for a non-privileged caller.
   - `ExportAsync` (`[HttpGet("export")]` at `:142`) pairs the declarative
     `[HasPermission(ConferencePermissions.PartnersManage)]` (`:143`) with the imperative
-    `if (!IsPrivileged) return Forbid();` (`:154`), then delegates to the base (`:157`). The doc comment
+    `if (!IsPrivileged) return Forbid();` (`:154`, wrapped as `Task.FromResult<IActionResult>(Forbid())` because the override is no longer `async`), then returns the base call directly without an `await` (`:157`). The doc comment
     names the leak an unscoped CSV would be, a non-privileged caller receiving partners of unpublished
     events (`:137-141`).
   - `CreateAsync` (`[HttpPost]` at `:161`) and `DeleteAsync` (`[HttpDelete("{id}")]` at `:204`) are thin
@@ -3600,7 +3642,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   sponsorship was sold" (`:128-131`). `ExportAsync` (`[HttpGet("export")]` at `:151`) is the strongest
   export gate in this unit alongside [`SpeakersController`](#speakerscontroller)'s: the declarative
   `[HasPermission(ConferencePermissions.SponsorsManage)]` (`:152`) plus the imperative
-  `if (!IsPrivileged) return Forbid();` (`:163-164`), with the doc comment recording that the inherited
+  `if (!IsPrivileged) return Forbid();` (`:163-164`, now `Task.FromResult<IActionResult>(Forbid())` because the override is no longer `async`), with the doc comment recording that the inherited
   export streams only the rows the read hook scopes (sponsors of published events) and refuses an unscoped
   export unless `AllowUnscopedExport` opts in, which it does for privileged readers alone; the override
   keeps the download itself privileged, so everyone else is denied before any row is read rather than
@@ -3631,17 +3673,22 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
 ### ConferenceGrpcEndpoints
 > MMCA.ADC.Conference.Service · `MMCA.ADC.Conference.Service` · `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/ConferenceGrpcEndpoints.cs:10` · Level 12 · class (internal static)
 
-- **What it is**: the one place the Conference host maps the two gRPC services its peers call. Its `Map`
-  method (`:15-33`) takes the host's `IEndpointRouteBuilder` and maps
-  [`SessionBookmarksGrpcService`](#sessionbookmarksgrpcservice) with `.RequireAuthorization()` (`:21`) and
-  [`EventLiveValidationGrpcService`](#eventlivevalidationgrpcservice) with `.AllowAnonymous()` (`:33`).
-- **Depends on**: `IEndpointRouteBuilder` and ASP.NET Core's `MapGrpcService<T>()`; the two gRPC service
+- **What it is**: the one place the Conference host maps the three gRPC services its peers call. Its `Map`
+  method (`:14-40`) takes the host's `IEndpointRouteBuilder` and maps
+  [`SessionBookmarksGrpcService`](#sessionbookmarksgrpcservice) with `.RequireAuthorization()` (`:20`),
+  [`UserConferenceExportGrpcService`](#userconferenceexportgrpcservice) with `.RequireAuthorization()` (`:27`)
+  and [`EventLiveValidationGrpcService`](#eventlivevalidationgrpcservice) with `.AllowAnonymous()` (`:39`).
+- **Depends on**: `IEndpointRouteBuilder` and ASP.NET Core's `MapGrpcService<T>()`; the three gRPC service
   classes above.
 - **Concept introduced, a different authorization posture per gRPC service, stated at the mapping.**
   `[Rubric §11, Security]`: `SessionBookmarksGrpcService` answers per-user bookmark questions on behalf of a
   specific end user, so internal-only ingress is not enough; its caller is Engagement's
   `BookmarksController` behind `[Authorize(RequireAuthenticated)]`, and the inbound bearer is always
-  present for `JwtForwardingClientInterceptor` to forward (comment `:17-20`).
+  present for `JwtForwardingClientInterceptor` to forward (comment `:16-19`).
+  `UserConferenceExportGrpcService` returns one user's own feedback answers (M244), so it takes the same
+  posture: its caller is Identity's export endpoint, which runs behind `[Authorize]` for the account owner
+  or an Organizer, and the inbound bearer is always present to forward, matching what Engagement gives
+  `UserEngagementExportGrpcService` (comment `:22-26`).
   `EventLiveValidationGrpcService` is `AllowAnonymous` (M210), stated rather than implied for the framework
   fallback policy (SEC-Common-16). Its two lookups return conference state, nothing per-user (published
   flag, live window, speaker ids, plenum flag, moderation default), and one caller cannot present a live
@@ -3650,10 +3697,11 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   bearer silently broke live push on every long-lived connection. The boundary is the `external:false` ACA
   ingress, the same justification Notification states for `LiveChannelGrpcService` and Engagement for
   `BookmarkCountsGrpcService`; a fresh token at join is the recorded follow-up if this read must stay
-  untrusted on the internal ingress (comment `:23-32`).
-- **Walkthrough**: two statements. `endpoints.MapGrpcService<SessionBookmarksGrpcService>().RequireAuthorization()`
+  untrusted on the internal ingress (comment `:29-38`).
+- **Walkthrough**: three statements. `endpoints.MapGrpcService<SessionBookmarksGrpcService>().RequireAuthorization()`,
+  `endpoints.MapGrpcService<UserConferenceExportGrpcService>().RequireAuthorization()`
   and `endpoints.MapGrpcService<EventLiveValidationGrpcService>().AllowAnonymous()`.
-- **Why it's built this way**: keeping the mapping in a named static class makes the two postures testable
+- **Why it's built this way**: keeping the mapping in a named static class makes the postures testable
   without booting the host
   (`MMCA.ADC/Tests/Services/MMCA.ADC.Services.Tests/Live/ConferenceGrpcEndpointsTests.cs`).
 - **Where it's used**: `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs` (2 references).
@@ -3720,7 +3768,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   glance.
 - **Where it's used**: mapped in the Conference host as
   `app.MapGrpcService<SessionBookmarksGrpcService>().RequireAuthorization()`
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:461`). The `RequireAuthorization()` is
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:462`). The `RequireAuthorization()` is
   deliberate and explained inline (`Program.cs:454-460`): these RPCs answer conference-state questions
   raised on behalf of a specific end user, so internal-only ingress is not considered sufficient. Every
   caller is an Engagement handler sitting behind an authenticated controller, so an inbound bearer token is
@@ -3796,6 +3844,70 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   [BookmarksController](group-22-engagement-module.md#bookmarkscontroller)
   (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:234-240`).
 
+### UserConferenceExportGrpcService
+> MMCA.ADC.Conference.Service · `MMCA.ADC.Conference.Service.Grpc` · `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Grpc/UserConferenceExportGrpcService.cs:20` · Level 10 · class (sealed)
+
+- **What it is**: the server half of Conference's data-subject export boundary. It exposes the in-process
+  [IUserConferenceExportService](group-17-conference-domain.md#iuserconferenceexportservice) over gRPC so
+  the Identity service can aggregate the session and event feedback answers a user authored into the
+  `GET /users/{userId}/export` document (class doc, `UserConferenceExportGrpcService.cs:8-19`).
+- **Depends on**: [IUserConferenceExportService](group-17-conference-domain.md#iuserconferenceexportservice)
+  as `inner` (`:20`); the generated `UserConferenceExportService.UserConferenceExportServiceBase` (`:21`);
+  the [UserConferenceExportDTO](group-17-conference-domain.md#userconferenceexportdto) it projects into
+  `GetUserConferenceExportResponse`; and `GrpcWireFormat.FormatUtc` from MMCA.Common.Grpc. The in-process
+  implementation behind `inner` is
+  [UserConferenceExportService](group-18-conference-application.md#userconferenceexportservice).
+- **Concept introduced, timestamps as round-trip UTC strings.** The sibling
+  [EventLiveValidationGrpcService](#eventlivevalidationgrpcservice) sends Unix seconds; this one sends the
+  `CreatedOn` of each answer as a round-trip ("O") UTC string via `GrpcWireFormat.FormatUtc(a.CreatedOn)`
+  (`:41`, `:48`). The class doc (`:14-18`) gives the reason: SQL Server returns
+  `DateTimeKind.Unspecified`, so `FormatUtc` stamps `DateTimeKind.Utc` before formatting, which is safe
+  because the stored values are already UTC. An export needs the full-precision instant, which seconds
+  would truncate. `[Rubric §9, API & Contract Design]`: the encoding choice is explicit and paired with a
+  parse on the client.
+- **Walkthrough**: one override, `GetUserConferenceExport` (`:24-52`). It null-checks both parameters
+  (`:28-29`), awaits `inner.GetUserConferenceExportAsync(request.UserId, context.CancellationToken)`
+  (`:31-33`), then fills `response.SessionAnswers` with `ConferenceSessionAnswerExportItem` rows (`:36-42`)
+  and `response.EventAnswers` with `ConferenceEventAnswerExportItem` rows (`:43-49`). Unlike the
+  live-validation service there is no `Result` and no `ThrowIfFailure()`: the interface returns the DTO
+  directly, so a fault surfaces as an ordinary exception.
+- **Why it's built this way**: ADR-012 (`Website/docs-src/adr/012-grpc-host-transport.md`) for the gRPC host
+  transport, and ADR-076 for the data-subject export it feeds. The RPC is declared at
+  `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Contracts/Protos/user_conference_export.proto:18`.
+- **Where it's used**: mapped with `.RequireAuthorization()` at
+  `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/ConferenceGrpcEndpoints.cs:27`. Unlike the
+  anonymous live-validation service, it returns one user's own answers, so the comment at `:22-26` requires
+  the forwarded bearer, as for `SessionBookmarksGrpcService`. The caller is Identity's export section.
+
+### UserConferenceExportServiceGrpcAdapter
+> MMCA.ADC.Conference.Contracts · `MMCA.ADC.Conference.Contracts` · `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Contracts/UserConferenceExportServiceGrpcAdapter.cs:16` · Level 10 · class (internal, sealed)
+
+- **What it is**: the client half of the export boundary. It implements
+  [IUserConferenceExportService](group-17-conference-domain.md#iuserconferenceexportservice) over the
+  generated gRPC client, so Identity's Conference export section keeps depending on the C# interface
+  (class doc, `UserConferenceExportServiceGrpcAdapter.cs:7-15`).
+- **Depends on**: the generated `UserConferenceExportService.UserConferenceExportServiceClient`
+  (`:16-17`); the interface it implements (`:17`); the
+  [UserConferenceExportDTO](group-17-conference-domain.md#userconferenceexportdto) it rebuilds; and
+  `GrpcWireFormat.ParseUtc` from MMCA.Common.Grpc, the inverse of the server's `FormatUtc`.
+- **Concept introduced**: none new; it mirrors
+  [SessionBookmarkValidationServiceGrpcAdapter](#sessionbookmarkvalidationservicegrpcadapter) with one
+  deliberate difference. The 5 second `CallDeadline` (`:22`, rationale at `:19-21`) exists so a hung
+  Conference peer degrades the export section quickly instead of stalling the export request. But there is
+  **no `try` / `catch (RpcException)`**: transport failures propagate to the caller (class doc `:12-14`),
+  which marks the section `Available = false`, so one peer outage never fails the whole export. The
+  best-effort policy lives in the consumer, not in a `Result` decode.
+- **Walkthrough**: `GetUserConferenceExportAsync(userId, ct)` (`:25-54`) calls the client with the
+  deadline and token (`:29-35`), then builds a `UserConferenceExportDTO` whose `SessionFeedbackAnswers`
+  (`:39-45`) and `EventFeedbackAnswers` (`:46-52`) are collection expressions over the response rows, each
+  with `CreatedOn = GrpcWireFormat.ParseUtc(a.CreatedOn)` (`:44`, `:51`).
+- **Why it's built this way**: ADR-007 for the extraction pattern: the in-process implementation or the
+  disabled stub is replaced by this adapter at the composition root, and the consumer never learns which
+  one it got.
+- **Where it's used**: registered by `AddConferenceUserExportClient()` (see
+  [DependencyInjection](#dependencyinjection-1)), called from the Identity host
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:332`).
+
 ### EventLiveValidationGrpcService
 > MMCA.ADC.Conference.Service · `MMCA.ADC.Conference.Service.Grpc` · `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Grpc/EventLiveValidationGrpcService.cs:22` · Level 11 · class (sealed)
 
@@ -3832,7 +3944,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   self-describing encodings are the reason a schema change here is a reviewable diff.
   `[Rubric §8, Data Architecture]`: the boundary carries a purpose-built read model, never an entity, so
   Conference's storage shape stays private to Conference.
-- **Walkthrough**: four overrides, all with the identical prologue (null-check both parameters, await
+- **Walkthrough**: five overrides, all with the identical prologue (null-check both parameters, await
   `inner`, `ThrowIfFailure()`, then project).
   - `GetEventLiveInfo` (`:26-47`): returns `IsPublished` plus the two window boundaries as Unix seconds.
   - `GetSessionLiveInfo` (`:50-76`): the richest response. Carries `EventId`, `IsPublished`, both window
@@ -3845,20 +3957,27 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
     `inner.GetCurrentRoomSessionInfoAsync(request.RoomId, request.GraceMinutes, ...)` (`:111`). The grace
     window is therefore a **caller** decision, not a Conference policy: the transport forwards it rather
     than defaulting it, which keeps the knob where the feature that needs it lives.
-  - After `ThrowIfFailure()` each method reads `result.Value!` (`:40`, `:64`, `:93`, `:117`); the
-    null-forgiving operator is the acknowledgement that a failure has already thrown.
-  - The four RPCs are declared at
+  - `GetOverlappingSessionIds` (`:128-146`): takes a `SessionId` plus a repeated `CandidateSessionIds`,
+    forwarded as `[.. request.CandidateSessionIds]` to `inner.GetOverlappingSessionIdsAsync` (`:136`), and
+    returns the overlapping ids through `response.OverlappingSessionIds.AddRange(result.Value)` (`:143`).
+    Unlike the other four there is no `Value!` read: the value is a collection, so it goes straight into
+    the repeated field after `ThrowIfFailure()`.
+  - After `ThrowIfFailure()` the four single-object methods read `result.Value!` (`:40`, `:64`, `:93`,
+    `:117`); the null-forgiving operator is the acknowledgement that a failure has already thrown.
+  - The five RPCs are declared at
     `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Contracts/Protos/event_live_validation.proto:26`, `:34`,
-    `:40` and `:47`.
+    `:40`, `:47` and `:55`.
 - **Why it's built this way**: ADR-007 for the extraction pattern, ADR-008
   (`Website/docs-src/adr/008-service-extraction-topology.md`) for why an east-west call between two ADC
   services goes over gRPC rather than through the YARP Gateway. Projecting into flat proto messages inside
   the transport class keeps the domain read models free of any serialization concern.
-- **Where it's used**: mapped as `app.MapGrpcService<EventLiveValidationGrpcService>().RequireAuthorization()`
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:462`). The named callers are
-  Engagement's [LivePollsController](group-23-engagement-live-layer.md#livepollscontroller) and
-  [SessionQuestionsController](group-23-engagement-live-layer.md#sessionquestionscontroller) handlers
-  (`Program.cs:457-459`).
+- **Where it's used**: mapped as `endpoints.MapGrpcService<EventLiveValidationGrpcService>().AllowAnonymous()`
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/ConferenceGrpcEndpoints.cs:39`), the one anonymous
+  service of the three in `ConferenceGrpcEndpoints`. The comment above it (`:29-38`) states why: the lookups
+  return conference state with nothing per-user, and Notification's live-channel join authorizer cannot
+  present a live token on a long-lived connection; the boundary is the internal-only ingress. The named
+  callers are Engagement's [LivePollsController](group-23-engagement-live-layer.md#livepollscontroller) and
+  [SessionQuestionsController](group-23-engagement-live-layer.md#sessionquestionscontroller) handlers.
 
 ### EventLiveValidationServiceGrpcAdapter
 > MMCA.ADC.Conference.Contracts · `MMCA.ADC.Conference.Contracts` · `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Contracts/EventLiveValidationServiceGrpcAdapter.cs:27` · Level 11 · class (internal, sealed)
@@ -3900,14 +4019,14 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
     enum, the half of the enum contract that depends on the two assemblies agreeing on ordering, and
     `Enum.IsDefined` (`:96-101`) turns an out-of-range value into the same malformed-response failure
     rather than letting an undefined enum value reach Engagement.
-  - `MalformedResponse<T>(message, source)` (`:182-188`) builds that failure the way the framework's
+  - `MalformedResponse<T>(message, source)` (`:213-220`) builds that failure the way the framework's
     `RpcException.ToResult` builds a transport fault: one `ErrorType.Failure` error with code
-    `Grpc.MalformedResponse`, sourced with the calling method's name (`:188`). A caller cannot tell a
+    `Grpc.MalformedResponse`, sourced with the calling method's name (`:219-220`). A caller cannot tell a
     garbled reply from a refused one by shape, only by code.
 
   `[Rubric §9, API & Contract Design]` and `[Rubric §29, Resilience & Business Continuity]` apply as in the
   sibling adapter.
-- **Walkthrough**: four methods, one per RPC, each identical in shape (build request, call with deadline and
+- **Walkthrough**: five methods, one per RPC, each identical in shape (build request, call with deadline and
   token, project the response into the read model, catch `RpcException` and decode).
   - `GetEventLiveInfoAsync(eventId, ct)` (`:36-63`): returns
     `Result.Success(new EventLiveInfo(response.IsPublished, start, end))` (`:51-54`).
@@ -3920,8 +4039,12 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
     request (`:159-163`) and rebuilds
     `new RoomSessionInfo(response.SessionId, response.SessionTitle, response.EventId, response.IsPublished)`
     (`:167-171`).
-  - Every catch block returns `ex.ToResult<T>()` for the matching `T` (`:61`, `:117`, `:146`, `:178`), so a
-    Conference outage is uniformly a `Result` failure across all four lookups rather than an exception on
+  - `GetOverlappingSessionIdsAsync(sessionId, candidateSessionIds, ct)` (`:183-212`): null-checks the
+    candidate collection, copies it into the request's repeated `CandidateSessionIds` (`:192-196`), and
+    returns the response ids as `Result.Success<IReadOnlyCollection<SessionIdentifierType>>([.. response.OverlappingSessionIds])`
+    (`:203`). No decoding step can fail here, so `MalformedResponse` is not used.
+  - Every catch block returns `ex.ToResult<T>()` for the matching `T` (`:61`, `:117`, `:146`, `:178`,
+    `:210`), so a Conference outage is uniformly a `Result` failure across all five lookups rather than an exception on
     some paths and a failure on others; with `MalformedResponse` the same holds for a reply that arrives
     but cannot be mapped.
 - **Why it's built this way**: ADR-007. The class doc notes the specific consequence for this pair
@@ -3936,84 +4059,94 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   live-poll and session-question handlers (`Program.cs:241-242`).
 
 ### DependencyInjection
-> MMCA.ADC.Conference.Contracts · `MMCA.ADC.Conference.Contracts` · `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Contracts/DependencyInjection.cs:15` · Level 12 · class (static)
+> MMCA.ADC.Conference.Contracts · `MMCA.ADC.Conference.Contracts` · `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Contracts/DependencyInjection.cs:16` · Level 12 · class (static)
 
-- **What it is**: the two-method registration surface of the Contracts assembly. A consumer service calls
+- **What it is**: the three-method registration surface of the Contracts assembly. A consumer service calls
   these to swap Conference's in-process service registrations for the gRPC-backed adapters pointing at the
   extracted Conference service. This is the composition-root edit that ADR-007 promises is the *only* thing
   extraction costs. (Note that this group also documents a different `DependencyInjection`, the Conference
   module's own API-layer facade; this one belongs to the Contracts assembly.)
 - **Depends on**:
   [SessionBookmarkValidationServiceGrpcAdapter](#sessionbookmarkvalidationservicegrpcadapter) and
-  [EventLiveValidationServiceGrpcAdapter](#eventlivevalidationservicegrpcadapter) (the implementations it
+  [EventLiveValidationServiceGrpcAdapter](#eventlivevalidationservicegrpcadapter) and
+  [UserConferenceExportServiceGrpcAdapter](#userconferenceexportservicegrpcadapter) (the implementations it
   installs); the interfaces
-  [ISessionBookmarkValidationService](group-17-conference-domain.md#isessionbookmarkvalidationservice) and
-  [IEventLiveValidationService](group-17-conference-domain.md#ieventlivevalidationservice) (the service keys
+  [ISessionBookmarkValidationService](group-17-conference-domain.md#isessionbookmarkvalidationservice),
+  [IEventLiveValidationService](group-17-conference-domain.md#ieventlivevalidationservice) and
+  [IUserConferenceExportService](group-17-conference-domain.md#iuserconferenceexportservice) (the service keys
   it replaces); the generated client types; and `AddTypedGrpcClient<TClient>` from MMCA.Common.Grpc's own
   [DependencyInjection](group-13-grpc-contracts.md#dependencyinjection)
-  (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:87`). Externals:
+  (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:89`). Externals:
   `Microsoft.Extensions.DependencyInjection` and its `ServiceCollectionDescriptorExtensions.Replace`.
 - **Concept introduced, `Replace` rather than `TryAdd`, and why the call order is load-bearing.** Most
   registration helpers in this codebase use `TryAdd` so a host can pre-empt a default. These two do the
   opposite: they call `services.Replace(ServiceDescriptor.Scoped<TInterface, TAdapter>())`
-  (`DependencyInjection.cs:49`, `:79`). The reason is that by the time these run something is already
-  registered for the interface, and it could be either of two things (`DependencyInjection.cs:26-34`,
+  (`DependencyInjection.cs:50`, `:80`, `:108`). The reason is that by the time these run something is already
+  registered for the interface, and it could be either of two things (`DependencyInjection.cs:27-35`,
   `:60-67`): the real in-process implementation
   ([SessionBookmarkValidationService](group-18-conference-application.md#sessionbookmarkvalidationservice) /
-  [EventLiveValidationService](group-18-conference-application.md#eventlivevalidationservice)) when the
+  [EventLiveValidationService](group-18-conference-application.md#eventlivevalidationservice) /
+  [UserConferenceExportService](group-18-conference-application.md#userconferenceexportservice)) when the
   Conference module is enabled in this host, or the fallback stubs
   ([DisabledSessionBookmarkValidationService](group-17-conference-domain.md#disabledsessionbookmarkvalidationservice) /
-  [DisabledEventLiveValidationService](group-17-conference-domain.md#disabledeventlivevalidationservice))
+  [DisabledEventLiveValidationService](group-17-conference-domain.md#disabledeventlivevalidationservice) /
+  [DisabledUserConferenceExportService](group-17-conference-domain.md#disableduserconferenceexportservice))
   that `ConferenceModule.RegisterDisabledStubs` installs when it is not. `TryAdd` would silently lose to
   both. `Replace` wins over both, so the resolved service is the gRPC adapter regardless of how the host was
   composed.
   That in turn makes **ordering** part of the contract, which both doc comments state explicitly
-  (`DependencyInjection.cs:35-39`, `:66-68`): call these *after*
+  (`DependencyInjection.cs:36-40`, `:66-68`): call these *after*
   [ModuleLoader](group-14-module-system-composition.md#moduleloader)`.DiscoverAndRegister(...)`, because
   `Replace` needs the descriptor it is replacing to already be in the collection. Register too early and the
   call is a no-op that the module registration then overwrites, with no error at build or startup.
   `[Rubric §7, Microservices Readiness]` assesses whether topology is a configuration decision: here it is
-  literally two lines in one file.
+  literally one `Replace` line per boundary in one file.
   `[Rubric §2, Design Patterns]`: this is the Adapter pattern completed at the composition root, where the
   choice of adapter versus direct implementation is made once and nowhere else.
-- **Walkthrough**: a `public static class` (`DependencyInjection.cs:15`) whose body is an
-  `extension(IServiceCollection services)` block (`:17`), the workspace DI idiom (see
-  [primer §4](00-primer.md#4-c-build-and-code-style-conventions)). Both methods are the same three steps.
-  - `AddConferenceSessionValidationClient(string serviceName = "conference")` (`:43-52`):
+- **Walkthrough**: a `public static class` (`DependencyInjection.cs:16`) whose body is an
+  `extension(IServiceCollection services)` block (`:18`), the workspace DI idiom (see
+  [primer §4](00-primer.md#4-c-build-and-code-style-conventions)). All three methods are the same three steps.
+  - `AddConferenceSessionValidationClient(string serviceName = "conference")` (`:44-53`):
     `services.AddTypedGrpcClient<SessionBookmarkValidationService.SessionBookmarkValidationServiceClient>(serviceName)`
-    (`:45`), then
+    (`:46`), then
     `services.Replace(ServiceDescriptor.Scoped<ISessionBookmarkValidationService, SessionBookmarkValidationServiceGrpcAdapter>())`
-    (`:49`), then `return services` for chaining (`:51`).
-  - `AddConferenceEventLiveValidationClient(string serviceName = "conference")` (`:73-82`): identical, for
-    the live-validation client and adapter (`:75`, `:79`).
+    (`:50`), then `return services` for chaining (`:52`).
+  - `AddConferenceEventLiveValidationClient(string serviceName = "conference")` (`:74-83`): identical, for
+    the live-validation client and adapter (`:76`, `:80`).
+  - `AddConferenceUserExportClient(string serviceName = "conference")` (`:102-111`): identical, for the
+    export client and adapter (`:104`, `:108`). Its doc comment (`:85-99`) records the consumer: Identity's
+    Conference export section, whose aggregation is best-effort per section.
   - The `serviceName` default is `"conference"`, chosen to match the AppHost resource name (`:41-42`,
-    `:71-72`). `AddTypedGrpcClient` turns that name into the address `http://{serviceName}`
-    (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:96-97`), which Aspire service
+    `:71-72`, `:97-98`). `AddTypedGrpcClient` turns that name into the address `http://{serviceName}`
+    (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:98-99`), which Aspire service
     discovery resolves. A typo in the name is a runtime resolution failure, not a compile error, which is
     why the default exists at all.
   - Everything else the client needs comes from `AddTypedGrpcClient`, not from here: the
     [JwtForwardingClientInterceptor](group-13-grpc-contracts.md#jwtforwardingclientinterceptor) that
     forwards the caller's bearer token
-    (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:93`, `:77`), an explicit
+    (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:95`, `:77`), an explicit
     `SocketsHttpHandler` that opts into HTTP/2 with the connection-hygiene values from
     [HttpResilienceDefaults](group-16-aspire-orchestration.md#httpresiliencedefaults) (`:89-98`), and a
     standard resilience handler configured from
     [GrpcResilienceDefaults](group-16-aspire-orchestration.md#grpcresiliencedefaults) (`:100-108`). This is
-    why the per-call deadlines in the two adapters are a *separate* budget: the pipeline owns retries and
+    why the per-call deadlines in the adapters are a *separate* budget: the pipeline owns retries and
     the circuit breaker, the deadline owns a hung peer.
-  - Both adapters register as `Scoped` (`:49`, `:79`), matching the lifetime the in-process implementations
+  - All three adapters register as `Scoped` (`:50`, `:80`, `:108`), matching the lifetime the in-process implementations
     use, so consumers see no behavioral difference in lifetime either.
 - **Why it's built this way**: ADR-007 (`Website/docs-src/adr/007-grpc-extraction.md`) and ADR-008
   (`Website/docs-src/adr/008-service-extraction-topology.md`). Shipping the registration helpers in the same
   assembly as the `.proto` files and the adapters means a consumer takes one reference and gets the whole
   client story; the adapters can stay `internal` because this class is the sanctioned entry point.
   `[Rubric §15, Best Practices & Code Quality]`: a reader who wants to know how Engagement reaches Conference finds the
-  whole answer in one 84-line file.
-- **Where it's used**: the Engagement service host calls both inside its application-pipeline registration,
-  in the documented order after `moduleHost.RegisterModules`
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:288-290`), with the rationale for each
-  written out immediately above (`Program.cs:234-242`). The AppHost declares the matching Engagement to
-  Conference reference (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:265`).
+  whole answer in one 114-line file.
+- **Where it's used**: the Engagement service host calls the first two inside its application-pipeline
+  registration, in the documented order after `moduleHost.RegisterModules`
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:289-290`), with the rationale for each
+  written out immediately above (`Program.cs:234-242`). The Identity host calls
+  `AddConferenceUserExportClient()` (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:332`,
+  rationale at `:315`). The AppHost declares the matching Engagement to Conference reference
+  (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:265`) and the Identity to Conference one
+  (`Program.cs:289`).
 - **Caveats / not-in-source**: the "call this after `DiscoverAndRegister`" requirement is carried by
   convention and by the doc comments only. Nothing in this file detects a too-early call.
 

@@ -1582,6 +1582,59 @@
           <li><strong>Governance events:</strong> none (no new group, no classifier rule).</li>
           </ul>
           </blockquote>
+          <blockquote>
+          <p><strong>Regeneration note (re-verified against current source, 2026-10-22 full drift sweep).</strong> Regenerated
+          at MMCA.Common <code>51c321fe</code> + MMCA.ADC <code>4a273123</code> (both clean; prior pass <code>55e427b3</code> /
+          <code>bac50ead</code>, nineteen Common releases in between, v1.234.0 to v1.250.0). Net change: <strong>+267</strong> distinct nodes (5,520 to <strong>5,787</strong>),
+          281 added and 14 removed by name, <strong>126</strong> relocated (same type, new <code>file:line</code>),
+          676 body-only, 0 regrouped; <code>classify.ps1</code> reports 0 unmapped and the per-group counts
+          sum to 5,787. Individually-sectioned types 2,874 to <strong>2,975</strong>, roll-ups 2,638 to <strong>2,812</strong>,
+          <code>###</code> sections 2,817 to <strong>2,917</strong>, cycles 49 to <strong>51</strong>,
+          edges 21,400 by namespace / 912 by unique-name fallback / 114 dropped.</p>
+          <ul>
+          <li><strong>Per-group movement</strong> (24 of 28 groups moved; the rest are unchanged):<ul>
+          <li><strong>G02 Domain Building Blocks</strong> (members 37): added 1. <code>SensitiveAttribute</code>, the non-PII credential marker the audit-trail interceptor now redacts alongside the <code>IAuthUser</code> hash and salt (v1.242.0 audit credential redaction).</li>
+          <li><strong>G03 Querying</strong> (members 44): added 2, body 3. <code>EmailFilterStrategy</code> (and its private <code>Needle</code>) give <code>Email</code> value-object columns a case-folded string filter; the grid filter operators and the is-empty filter fix (v1.236.0, v1.249.0) reworked <code>QueryFilterService</code> and <code>EntityQueryService</code>.</li>
+          <li><strong>G04 Events + Outbox</strong> (members 39): added 1, body 9. <code>ClaimedBatch</code> and the batched processed stamps with lazy lease renewal in <code>OutboxProcessor</code> (v1.240.0, #550); <code>OutboxOrigin</code>/<code>OutboxMessage</code> carry the captured permissions.</li>
+          <li><strong>G05 CQRS pipeline</strong> (members 61): body 1, lineShift 1. <code>CreateEntityHandlerBase</code> (the create handler base the inherited POST Location fix touched, v1.234.0).</li>
+          <li><strong>G07 Persistence &amp; EF Core</strong> (members 181): body 23, lineShift 7. The audit trail (<code>AuditTrailSaveChangesInterceptor</code>, <code>AuditTrailEntry</code>: credential redaction, v1.242.0), <code>IdentityModuleDbSeederBase&lt;TUser&gt;</code> (replica race, v1.235.0), the internal-command family, the refresh-session and permission-grant stores, <code>EncryptedStringConverter</code>, and <code>TenancySettings</code>/<code>TenantResolutionStrategy</code> (claim-only tenancy, v1.243.0).</li>
+          <li><strong>G08 Auth</strong> (members 174): added 3, removed 1, body 15, lineShift 4. The admin signed-in-devices surface (<code>IUserSessionsAdministrationService</code>, <code>UserSessionsAdministrationService</code>, v1.236.0) and the shared <code>QueryFilterKeys</code>; <code>UserAdministrationQuery</code> retired when the Users list moved onto the generic query path.</li>
+          <li><strong>G09 Caching</strong> (members 9): body 3. The hybrid <code>TryGet</code> presence probe and the shared-store read (v1.234.0).</li>
+          <li><strong>G10 Notifications</strong> (members 59): body 5. <code>NotificationHub</code>, the SignalR push sender and live-channel publisher, <code>DevicesController</code> and <code>AttendeeNotificationRecipientProvider</code>.</li>
+          <li><strong>G12 API hosting</strong> (members 94): added 2, body 16. <code>AppleUserNameClaims</code> keeps the name from the first Sign in with Apple authorization (v1.234.2); <code>PaginationHeaderExtensions</code>; the output-cache coalescing fix on public endpoints (v1.238.0).</li>
+          <li><strong>G13 gRPC contracts</strong> (members 16): added 9, body 2. The service-token family (<code>IServiceTokenProvider</code>, <code>ServiceTokenProvider</code>, <code>ServiceTokenClientInterceptor</code>, <code>ServiceTokenSettings</code> and helpers), opt-in per typed client (v1.243.0, v1.244.0).</li>
+          <li><strong>G14 Module system</strong> (members 92): added 2, body 15, lineShift 2. <code>TwoFactorAttemptKey</code> and <code>UserEmailResources</code>; the shared identity handler bases (password, two-factor, delete-user, email confirmation), <code>SoftDeletedUserValidator&lt;TUser&gt;</code>, the origin snapshot/restore pair, and the native-push registrar and payloads.</li>
+          <li><strong>G15 Common UI</strong> (members 202): added 7, body 39, lineShift 5. The app device label (<code>AppUserAgent</code>), <code>UserSessionsTable</code>, the pending-toast service family (v1.249.0), <code>InfiniteScrollObserver&lt;TOwner&gt;</code>, <code>FieldRefusal</code>; WCAG 2.5.3 label-in-name and contrast fixes (v1.236.0 to v1.250.0).</li>
+          <li><strong>G16 Aspire</strong> (members 64): added 1, body 4, lineShift 1. <code>GatewaySettingsValidator</code>; the Gateway correlation, reverse-proxy and security-headers middleware.</li>
+          <li><strong>G17 Conference domain</strong> (members 117): added 5, body 5. The cross-service user-conference export contract (<code>IUserConferenceExportService</code> plus its DTOs and a disabled fallback) for the GDPR export.</li>
+          <li><strong>G18 Conference application</strong> (members 365): added 2, removed 1, body 7. <code>UserConferenceExportService</code>; <code>UserDeletedSpeakerErasureHandler</code> replaces <code>UserDeletedSpeakerUnlinkHandler</code> and anonymizes a linked speaker&#39;s email on user erasure (ADC #282).</li>
+          <li><strong>G20 Conference API/gRPC</strong> (members 56): added 2, body 19. The export over gRPC (<code>UserConferenceExportGrpcService</code>, <code>UserConferenceExportServiceGrpcAdapter</code>).</li>
+          <li><strong>G21 Conference UI</strong> (members 168): added 1, body 51, lineShift 3. <code>CommittedWriteReload</code>; the run 8 to run 12 manual-test fixes and the Sessionize missing-session warning (ADC #266 to #284).</li>
+          <li><strong>G22 Engagement module</strong> (members 206): added 6, body 41, lineShift 6. The erased-account guard on bookmark, badge and check-in writes (<code>ErasedUser</code>, <code>ErasedUserConfiguration</code>, <code>ErasedUserGuard</code>, ADC #286), points once per time slot (<code>SessionTimeSlotPoints</code>, ADC #276), <code>OrganizerEventPicker</code>, <code>SessionFeedbackAnswers</code>.</li>
+          <li><strong>G26 Engagement live layer</strong> (members 88): added 1, body 14, lineShift 1. Speaker poll prep and delete (<code>DeleteLivePollCommand</code>, ADC #274).</li>
+          <li><strong>G23 Identity module</strong> (members 117): added 6, removed 2, body 22, lineShift 2. The Users list on the generic path (<code>UserListEntityQueryService</code>, <code>UserListService</code>, <code>UserListDTOMapper</code>) retires <code>GetUsersQuery</code>/<code>GetUsersHandler</code>; the conference section of the GDPR export (<code>ConferenceUserDataExportSection</code> and DTOs).</li>
+          <li><strong>G24 ADC host composition</strong> (members 17): body 1. <code>MauiProgram</code> (the MAUI head composition).</li>
+          <li><strong>G27 Device capability layer</strong> (members 106): added 1, body 5, lineShift 1. <code>MauiAppUserAgentHandler</code> stamps the app device label on MAUI requests.</li>
+          <li><strong>G28 Common AI</strong> (members 32): body 5. <code>UsageRecordingChatClient</code>, <code>AiUsageMeter</code>, and the content-policy and PII-redaction guardrails with <code>ContentPolicySettings</code>.</li>
+          <li><strong>G25 Testing &amp; Quality</strong> (members 3364): added 229, removed 10, body 371, lineShift 93, relocate 1. The v1.243.0/v1.244.0 fitness bases (<code>SubstitutabilityTestsBase</code>, <code>PiiInventoryTestsBase</code>, <code>KeyboardOperabilityTestsBase</code>, <code>TenantResolutionTestsBase</code>, <code>OpenApiBreakingChangeDetector</code>) and their ADC adoptions, the nav-guard contract tests, and the drift-analysis shared pieces lifted into Common (v1.246.0); the removed names are retired fixtures and the deleted <code>GetUsersHandlerTests</code>/<code>UserDeletedSpeakerUnlinkHandlerTests</code>.</li>
+          </ul>
+          </li>
+          <li><strong>Handled mechanically (no re-authoring):</strong> citation remaps 2,776 over 217 part file(s), 353 flagged for an author (10 resolved by the baseline-text residual pass); repack moves 634, 4 flagged (the four orphan headings of removed types, deleted by their authors).<ul>
+          <li>The one relocation (<code>UserAgentSummaryTests</code>, moved under <code>Services/Auth/Devices/</code>) was rewritten by the citation remap; <code>_citation-remap.json</code> counts it as a remap, not a blockquote relocation.</li>
+          </ul>
+          </li>
+          <li><strong>Authoring pass:</strong> 178 units re-authored (19 overview, 1 rollup, 158 sections on sonnet) across 24 groups, all against real source
+          with <code>path:line</code> citations. Adversarial spot-checks: 6 of 6 CONFIRMED (g02, g03, g04, g08, g09, g12 overviews). A post-assembly fix pass cleared 38 verify failures the authors left (cites to the deleted <code>GetUsersHandler.cs</code> and the moved <code>PiiConventionTests.cs</code>, links to removed headings, and short cites past the end of shrunken files such as <code>IPushDeviceRegistrar.cs</code> and <code>LivePollResultsDTO.cs</code>).</li>
+          <li><strong>Outside the type pipeline:</strong> 5 of 5 <code>devops-*</code> chapters refreshed (devops-aspire, devops-cicd, devops-iac, devops-runbooks, devops-testing),
+          each because a file it cites has newer commits than the chapter: ADC <code>deploy.yml</code> (#281), <code>cost-guard.yml</code> and <code>maui-audit.yml</code> (#280), <code>infra/main.bicep</code> (#283 to #286), the Gateway <code>Dockerfile</code> (#286); Common <code>ci.yml</code> (#558, #563), <code>release.yml</code> (#558), <code>load-tests.yml</code> (#558) and the NuGet audit action (#587). <code>devops-testing</code> also reconciled 30 per-project test counts to the inventory.<ul>
+          <li>Coverage gaps (operational files no chapter mentions): the three <code>.bicep</code> files under <code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Fixtures/</code> are test fixtures, not deployed templates, and stay logged as an exception as in the 2026-10-08 pass.</li>
+          </ul>
+          </li>
+          <li><strong>CONCEPT-MAPS.md:</strong> unchanged; 305 mechanical checks, 0 mismatches, and no relationship-level drift in the delta (no regroup, no new group).</li>
+          <li><strong>Verification:</strong> <code>verify.ps1</code>: <strong>0 missing</strong>, rubric <strong>34/34</strong>, 0 rollup, 0 citation (8,856 full-path cites), 0 anchor (26,443 links), 0 short-cite (15,901 cites); exit 0.</li>
+          <li><strong>Governance events:</strong> none (no new group, no classifier rule).</li>
+          </ul>
+          </blockquote>
           <hr>
           <h2 id="2-exceptions-log-every-deliberate-omission-with-reason">2. Exceptions log (every deliberate omission, with reason)</h2>
           <h3 id="21-generated--scaffolded-code-not-sectioned-134-files">2.1 Generated / scaffolded code, not sectioned (134 files)</h3>

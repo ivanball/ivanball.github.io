@@ -751,7 +751,11 @@ clients, policies, validator and provider factories, then the Level 3 registrati
   private `RecordUsageIn`, yields the update, and in a `finally`
   records the duration under whichever outcome the loop settled
   on, stopping the clock only once the stream itself ends, which is the number a caller of a streaming API
-  actually feels. The private `RecordDuration` is the shared
+  actually feels. The outcome starts as `CanceledOutcome` (`UsageRecordingChatClient.cs:196`) and flips to
+  `SuccessOutcome` only when `MoveNextAsync` returns false (`UsageRecordingChatClient.cs:161-165`), so a
+  consumer that stops enumerating early (a guardrail blocking an update, a caller breaking out of its
+  loop) reaches the `finally` with neither `catch` having run and is recorded as canceled, not as a
+  success; usage already delivered update by update stays recorded. The private `RecordDuration` is the shared
   helper both paths call, and both paths tag every measurement with the resolved `Provider` property
   rather than a constructor field.
 - **Why it's built this way**: usage recording happens after the base call returns (or per streamed
@@ -1001,16 +1005,16 @@ clients, policies, validator and provider factories, then the Level 3 registrati
 
 - **What it is**: the `System.Diagnostics.Metrics` wrapper that records token usage and call latency for
   the AI dependency: two `Counter<long>` instruments (input and output tokens) plus a `Histogram<double>`
-  for end-to-end call duration in seconds (`AiUsageMeter.cs:56-58`).
+  for end-to-end call duration in seconds (`AiUsageMeter.cs:59-61`).
 - **Depends on**: `System.Diagnostics.Metrics` (`Meter`, `Counter<long>`, `Histogram<double>`, `TagList`),
   `IMeterFactory` (Microsoft.Extensions.Diagnostics.Metrics), and `Microsoft.Extensions.AI.UsageDetails`.
 - **Concept introduced, factory-owned meter lifetime.** `[Rubric §13, Observability & Operability]`
   (assesses whether a dependency's cost/usage is measurable in production): the constructor takes
   `IMeterFactory` and creates its `Meter` through it, but deliberately does NOT retain or dispose that
-  meter itself (`AiUsageMeter.cs:72-89`); the factory owns the meter's lifetime, and disposing a
+  meter itself (`AiUsageMeter.cs:75-92`); the factory owns the meter's lifetime, and disposing a
   factory-owned meter from a consumer would silently kill the instrument for every other holder of the
   same name, so this type is not `IDisposable`, matching how the rest of the framework's meters work
-  (`AiUsageMeter.cs:60-66`, `[SuppressMessage("CA2000", ...)]` at `AiUsageMeter.cs:68-71` documents
+  (`AiUsageMeter.cs:63-69`, `[SuppressMessage("CA2000", ...)]` at `AiUsageMeter.cs:71-74` documents
   the deliberate suppression).
 - **Walkthrough**: `MeterName = "MMCA.Common.AI"` (`AiUsageMeter.cs:26`) is shared with the
   `ActivitySource` name the pipeline's OpenTelemetry layer publishes under
@@ -1023,14 +1027,14 @@ clients, policies, validator and provider factories, then the Level 3 registrati
   `gen_ai.client.operation.duration` on the same meter, and this instrument does not replace it, it adds
   the `prompt_name`/`prompt_version`/`outcome` dimensions that let a latency regression be attributed to
   the prompt that caused it (`AiUsageMeter.cs:34-44`). `Record`
-  (`AiUsageMeter.cs:101-124`) takes a possibly-`null` `UsageDetails`, model, prompt name/version, and
+  (`AiUsageMeter.cs:104-127`) takes a possibly-`null` `UsageDetails`, model, prompt name/version, and
   provider; a `null` usage, or one whose counts the provider did not report, records nothing (an absent
-  number must not read as a zero on a spend dashboard, `AiUsageMeter.cs:108-111,115-122`). `RecordDuration`
-  (`AiUsageMeter.cs:137-149`) records the elapsed seconds on every call, including one that threw, tagged
+  number must not read as a zero on a spend dashboard, `AiUsageMeter.cs:111-114,118-125`). `RecordDuration`
+  (`AiUsageMeter.cs:140-152`) records the elapsed seconds on every call, including one that threw, tagged
   with the same attribution dimensions plus an `outcome` of `SuccessOutcome`, `ErrorOutcome`, or
-  `CanceledOutcome` (`AiUsageMeter.cs:48,51,54`), so a failure rate and a latency distribution come off one
+  `CanceledOutcome` (`AiUsageMeter.cs:48,51,57`; the canceled value also covers a streamed call whose consumer stopped enumerating before the stream ended, `AiUsageMeter.cs:53-56`), so a failure rate and a latency distribution come off one
   series. Both methods share their tagging through the private `AttributionTags`
-  (`AiUsageMeter.cs:155-165`, `model`/`prompt_name`/`prompt_version`/`provider` each falling back to
+  (`AiUsageMeter.cs:158-168`, `model`/`prompt_name`/`prompt_version`/`provider` each falling back to
   `"unknown"` when absent or blank), so a dashboard can join the cost series and the latency series on
   the same tags. `provider` is a plain `string?` here, not the `AiProvider` enum: the caller (the
   resolved chat client's `ChatClientMetadata`) may name a provider the framework does not enumerate, so
@@ -1335,9 +1339,12 @@ clients, policies, validator and provider factories, then the Level 3 registrati
   `InspectAnswerText`, which matches against `BlockedResponsePatterns` and returns a block reason
   naming the pattern's INDEX, never the matched text: the reason reaches the caller, and the point of
   the rule was that the text should not. `RedactMessage`/`RedactText`
-  (`ContentPolicyGuardrail.cs:328-363`) rewrite only `TextContent`, passing images, function calls,
+  (`ContentPolicyGuardrail.cs:328-366`) rewrite only `TextContent`, passing images, function calls,
   and provider-specific content through untouched: a guardrail that silently dropped content it does
-  not understand would be a far worse failure than leaving it alone.
+  not understand would be a far worse failure than leaving it alone. `RedactText`
+  (`ContentPolicyGuardrail.cs:354`) replaces each marker with a `MatchEvaluator` that returns the
+  placeholder, not the replacement-string overload: the placeholder is literal text, and as a
+  replacement pattern `$&` or `$0` would put the matched marker straight back.
 - **Why it's built this way**: matches the ADR-120 governed pipeline's split between redaction (silent,
   changes the request shape) and blocking (visible, a refusal). See
   [`ADR-120`](https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html).
@@ -1363,15 +1370,15 @@ clients, policies, validator and provider factories, then the Level 3 registrati
   pattern, not the first user who trips it, is the one who sees it.
 - **Walkthrough**: `SectionName = "Ai:ContentPolicy"` (`ContentPolicySettings.cs:26`);
   `DefaultRedactionPlaceholder = "[redacted-instruction]"` (`ContentPolicySettings.cs:29`), a VISIBLE
-  placeholder on purpose (`ContentPolicySettings.cs:63-67` remark) so the model can tell something
+  placeholder on purpose (`ContentPolicySettings.cs:64-68` remark) so the model can tell something
   was removed and a trace reviewer can tell a redaction from a sentence the user never wrote.
   `InjectionMode` defaults `Redact` (`ContentPolicySettings.cs:35`).
   `AdditionalRequestPatterns`/`BlockedResponsePatterns` (`ContentPolicySettings.cs:45,57`) default
   to empty; an empty `BlockedResponsePatterns` switches the response half of the policy off entirely,
   because a model that has already said the thing cannot unsay it, so the only available response-side
-  answer is a refusal. `RedactionPlaceholder` is `[Required]` (`ContentPolicySettings.cs:68`).
-  `Validate` (`ContentPolicySettings.cs:82-93`) runs `ValidatePatterns` over both lists, which calls
-  `DescribeFailure` (`ContentPolicySettings.cs:116-132`) per pattern: an empty-or-whitespace pattern
+  answer is a refusal. `RedactionPlaceholder` is `[Required]` (`ContentPolicySettings.cs:69-70`) and is inserted as literal text, so a `$` sequence in it is not a regex substitution (`ContentPolicySettings.cs:59-62`).
+  `Validate` (`ContentPolicySettings.cs:83-94`) runs `ValidatePatterns` over both lists, which calls
+  `DescribeFailure` (`ContentPolicySettings.cs:117-133`) per pattern: an empty-or-whitespace pattern
   is rejected outright (it would match everything, "never what a policy meant"), otherwise the pattern
   is compiled with `ContentPolicyGuardrail.ConfiguredPatternOptions`/`MatchTimeout` and any
   `ArgumentException` message is surfaced against `SectionName:memberName[index]`.
@@ -1403,16 +1410,28 @@ clients, policies, validator and provider factories, then the Level 3 registrati
   `ContentPolicyGuardrail`), via the private `RedactMessage`
   (`PiiRedactionGuardrail.cs:83-99`), which rebuilds each message (keeping role, `AuthorName`,
   `MessageId` and `AdditionalProperties`) and hands every content item to `RedactContent`
-  (`PiiRedactionGuardrail.cs:108-127`). That switch rewrites non-empty `TextContent` and
-  `TextReasoningContent`, a `FunctionResultContent` whose result is a `JsonElement` or a `string`,
-  and the argument values of a `FunctionCallContent` that are a `string` or a `JsonElement` (routed
-  through `RedactArgument`, `PiiRedactionGuardrail.cs:129-134`; other argument values kept as-is).
+  (`PiiRedactionGuardrail.cs:122-156`). That switch rebuilds an item only when it actually holds
+  contact details: non-empty `TextContent` and `TextReasoningContent`, a `FunctionResultContent`
+  whose result is a `JsonElement` or a `string`, and a `FunctionCallContent` with an argument value
+  that is a `string` or a `JsonElement` (routed through `RedactArgument`,
+  `PiiRedactionGuardrail.cs:170-175`; other argument values kept as-is). The "holds contact
+  details" test is `HasContactDetails`/`ArgumentHasContactDetails`/`JsonHasContactDetails`
+  (`PiiRedactionGuardrail.cs:177-201`), which compares `RedactText` output with the input; an item
+  with nothing to redact passes through by reference. A rebuilt item keeps its metadata through
+  `WithMetadataOf` (`PiiRedactionGuardrail.cs:162-168`: `AdditionalProperties` and `Annotations`,
+  plus a tool call's `InformationalOnly` and `Exception` and a tool result's `Exception`), but NOT
+  `RawRepresentation`: the provider's original object still holds the unredacted text, and the
+  OpenAI adapters send a raw representation verbatim in place of the item, which would undo the
+  redaction (`PiiRedactionGuardrail.cs:101-121`). A `TextReasoningContent` carrying `ProtectedData`
+  is never rebuilt (`PiiRedactionGuardrail.cs:124`): that data is the provider's signature over
+  the text (Anthropic's thinking signature), and an edited signed block is rejected when the
+  conversation is sent back.
   Both shapes matter because Microsoft.Extensions.AI's function-invoking client marshals a tool's
   return value and the model's arguments into `JsonElement`, and a tool's output is exactly where
   contact details turn up (a customer lookup, a directory search). Plain text goes through
-  `RedactText` (`PiiRedactionGuardrail.cs:136-137`), which replaces email matches then phone
-  matches. A `JsonElement` goes through `RedactJson` (`PiiRedactionGuardrail.cs:144-154`) and the
-  recursive `WriteRedacted` (`PiiRedactionGuardrail.cs:156-188`), which rebuilds the document with
+  `RedactText` (`PiiRedactionGuardrail.cs:203-204`), which replaces email matches then phone
+  matches. A `JsonElement` goes through `RedactJson` (`PiiRedactionGuardrail.cs:211-221`) and the
+  recursive `WriteRedacted` (`PiiRedactionGuardrail.cs:223-255`), which rebuilds the document with
   a `Utf8JsonWriter`, redacting only string VALUES and copying property names, numbers, booleans and
   nulls verbatim: running the patterns over the raw JSON text would turn a bare 10-digit number (a
   Unix timestamp) into a phone placeholder and break the document. Binary and other non-text

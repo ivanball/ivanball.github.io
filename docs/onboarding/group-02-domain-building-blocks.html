@@ -176,7 +176,8 @@
           <li><strong>The governance markers and helpers</strong>, the attributes and small utilities that drive
           metadata-based behavior across the stack: <a href="#piiattribute"><code>PiiAttribute</code></a> (erasure, log masking, and
           audit-trail redaction) with its redaction half <a href="#piiredactor"><code>PiiRedactor</code></a> and that helper&#39;s cached
-          <a href="#redactableproperty"><code>RedactableProperty</code></a> descriptor,
+          <a href="#redactableproperty"><code>RedactableProperty</code></a> descriptor, its non-PII sibling
+          <a href="#sensitiveattribute"><code>SensitiveAttribute</code></a> (secrets kept out of the audit trail),
           <a href="#idvaluegeneratedattribute"><code>IdValueGeneratedAttribute</code></a> + <a href="#entitytypeextensions"><code>EntityTypeExtensions</code></a>
           (database-generated IDs), <a href="#ianonymizable"><code>IAnonymizable</code></a> (GDPR/CCPA erasure), the
           <a href="#domainentitystate"><code>DomainEntityState</code></a> enum (state-change classification for domain events),
@@ -302,7 +303,7 @@
           64-character <code>string</code> on purpose, because it arrives from a claim, a header, or configuration, all of
           which are strings<span class="cite"><span> (<code>ITenantEntity.cs:22-25</code>)</span></span>. Adopting tenancy is three things together: marking
           entities, calling <code>AddMultiTenancy(configuration)</code><span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:277</code>)</span></span>, and setting
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:282</code>)</span></span>, and setting
           <code>Tenancy:Enabled</code><span class="cite"><span> (<code>ITenantEntity.cs:26-31</code>)</span></span>; a host that never resolves a tenant behaves exactly as it
           did before (<a href="https://ivanball.github.io/docs/adr/073-multi-tenancy-model.html" target="_blank" rel="noopener">ADR-073</a>).</p>
           <p><a href="#iauditedentity"><code>IAuditedEntity</code></a><span class="cite"><span>
@@ -382,10 +383,10 @@
           contract: an event returns a key naming the entity whose stream must stay sequential, typically the
           aggregate id, or <code>null</code> to opt that individual instance out<span class="cite"><span> (<code>IHasOrderingKey.cs:33-37</code>)</span></span>. The outbox
           copies the value onto the row it writes<span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:154</code>)</span></span> and the
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:162</code>)</span></span> and the
           processor refuses to claim a row while an earlier unprocessed, non-dead-lettered row carries the same
           key in the same data source
-          (<span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:433-434</code></span></span>,
+          (<span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:445-446</code></span></span>,
           with an in-batch guard at <span class="cite"><span><code>:516</code></span></span>), so ordering holds across batches and across scaled-out replicas
           rather than only within one batch. Read the doc comment before adopting it, because the trade-off is
           explicit: this is head-of-line blocking by design, so keys must be as NARROW as the requirement really
@@ -516,11 +517,11 @@
           <p>The last family is tiny attributes and helpers that carry <em>intent</em> the rest of the stack reads
           reflectively. <a href="#piiattribute"><code>PiiAttribute</code></a><span class="cite"><span>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Attributes/PiiAttribute.cs:19</code>)</span></span> tags a property as
-          data-subject PII, and it is a property-only, non-inherited, single-use attribute<span class="cite"><span> (<code>PiiAttribute.cs:18</code>)</span></span>.
+          data-subject PII, and it is a property-only, inherited, single-use attribute<span class="cite"><span> (<code>PiiAttribute.cs:18</code>)</span></span>.
           Three mechanisms rely on the marker today. First, an architecture fitness test asserts that any entity
           declaring a <code>[Pii]</code> property also implements <a href="#ianonymizable"><code>IAnonymizable</code></a>, so every piece of
           personal data has an erasure path (<code>PiiConventionTests</code>, driven by the shared <code>PiiConventionTestsBase</code>,
-          at <span class="cite"><span><code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/PiiConventionTests.cs:20</code></span></span> over the rule
+          at <span class="cite"><span><code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/PiiConventionTests.cs:25</code></span></span> over the rule
           body at
           <span class="cite"><span><code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Governance/ArchitectureRules.Governance.cs:11-17</code></span></span>; the
           scan is structurally vacuous inside the framework itself because no data-subject type lives in
@@ -537,11 +538,27 @@
           <a href="group-07-persistence-ef-core.html#audittrailsavechangesinterceptor"><code>AuditTrailSaveChangesInterceptor</code></a>
           calls <code>PiiRedactor.HasPii</code> per entity type and writes <code>PiiRedactor.RedactedToken</code> on <em>both</em> sides of a
           change for a <code>[Pii]</code> property<span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:301</code>,
-          <code>:309-310</code>)</span></span>, so the trail never becomes a second, unerasable copy of a data subject&#39;s personal data.
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:323</code>,
+          <code>:347-348</code>)</span></span>, so the trail never becomes a second, unerasable copy of a data subject&#39;s personal data.
           Scope note worth keeping: redaction of <em>logs</em> is still an opt-in helper you call, not an automatic
           logging pipeline; the framework&#39;s stated posture is to log scalar identifiers rather than whole
           entities, and to route an entity through the redactor when one must be logged<span class="cite"><span> (<code>PiiRedactor.cs:13-16</code>)</span></span>.</p>
+          <p><a href="#sensitiveattribute"><code>SensitiveAttribute</code></a><span class="cite"><span>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Attributes/SensitiveAttribute.cs:20</code>)</span></span> is the deliberate
+          counterpart for values that are secret but are <em>not</em> personal data: a hash, a salt, an API key, a
+          signing secret<span class="cite"><span> (<code>SensitiveAttribute.cs:3-5</code>)</span></span>. It shares <code>[Pii]</code>&#39;s shape exactly, a sealed,
+          property-only, inherited, single-use attribute<span class="cite"><span> (<code>SensitiveAttribute.cs:19</code>)</span></span>. Keeping the two
+          markers separate is the point: a <code>[Sensitive]</code> property does not make <code>PiiRedactor.HasPii</code> true, is not
+          masked by <code>PiiRedactor.Redact</code>, and does not oblige the entity to implement
+          <a href="#ianonymizable"><code>IAnonymizable</code></a><span class="cite"><span> (<code>SensitiveAttribute.cs:7-10</code>)</span></span>, so tagging a credential never drags a
+          non-personal entity into the erasure convention. Its one consumer is the audit trail: the interceptor
+          folds every <code>[Sensitive]</code> property into a per-type cached set of credential names
+          (<span class="cite"><span><code>AuditTrailSaveChangesInterceptor.cs:669-692</code></span></span>, the attribute probe at <span class="cite"><span><code>:688</code></span></span>), and a property in that
+          set is written as the same <code>RedactedToken</code> on both sides of the change regardless of whether the type
+          carries any PII<span class="cite"><span> (<code>AuditTrailSaveChangesInterceptor.cs:637-640</code>)</span></span>. The password hash and salt of an
+          <code>IAuthUser</code> entity land in that set without any marker, so the attribute is for the secrets the
+          framework cannot recognize on its own<span class="cite"><span> (<code>SensitiveAttribute.cs:15-16</code>,
+          <code>AuditTrailSaveChangesInterceptor.cs:675-685</code>)</span></span>.</p>
           <p><a href="#ianonymizable"><code>IAnonymizable</code></a><span class="cite"><span>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IAnonymizable.cs:22</code>)</span></span> defines the erasure
           contract itself: an idempotent <code>Anonymize()</code> returning
@@ -622,65 +639,6 @@
           and
           <span class="cite"><span><code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/Points/DomainEventHandlers/SessionQuestionSubmittedPointsHandler.cs:66</code></span></span>).</li>
           </ul>
-          <h3 id="domainhelper">DomainHelper</h3>
-          <blockquote>
-          <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.Extensions</code> · <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Shared/Extensions/DomainHelper.cs:8</code></span></span> · Level 0 · class (static)</p>
-          </blockquote>
-          <ul>
-          <li><strong>What it is</strong>: a static class that adds two generic <strong>extension members</strong> to <code>string?</code>,
-          <code>Parse&lt;TIdentifier&gt;()</code> and <code>TryParse&lt;TIdentifier&gt;(out TIdentifier)</code>, converting a route-parameter
-          string into a strongly-typed identifier.</li>
-          <li><strong>Depends on</strong>: BCL only (<code>System.Globalization</code>).</li>
-          <li><strong>Concept introduced, C# <code>extension(T)</code> members.</strong> <code>[Rubric §15, Best Practices &amp; Code Quality]</code>
-          (assesses idiomatic, modern-language use). This is the first concrete sighting of the C# preview
-          feature described in
-          <a href="00-primer.html#c-extensiont-types-read-this-once">primer §4</a>. The block
-          <code>extension(string? id) { … }</code><span class="cite"><span> (<code>DomainHelper.cs:13</code>)</span></span> means any nullable string can call
-          <code>someId.Parse&lt;int&gt;()</code>. The receiver <code>id</code> is the &quot;this&quot; value.</li>
-          <li><strong>Walkthrough</strong><ul>
-          <li><code>Parse&lt;TIdentifier&gt;()</code><span class="cite"><span> (<code>DomainHelper.cs:30</code>)</span></span>: special-cases <code>string</code> (returns the value or
-          empty, lines 34-35), short-circuits null/whitespace to <code>default</code> (lines 37-38), then delegates to
-          <code>ParseNonEmpty</code> (line 40).</li>
-          <li><code>TryParse&lt;TIdentifier&gt;(out TIdentifier)</code><span class="cite"><span> (<code>DomainHelper.cs:58</code>)</span></span> is the reporting sibling: the
-          <code>string</code> case returns <code>id is not null</code> (lines 62-66), null/whitespace returns <code>false</code> with the
-          type default (lines 68-72), and anything else delegates to <code>TryParseNonEmpty</code> (line 74). The two
-          exist because <code>Parse</code> <strong>coerces by design</strong> and the doc comment says so (lines 21-29): <code>&quot;maybe&quot;</code>
-          and <code>&quot;false&quot;</code> both yield <code>false</code>, an unrecognized enum name yields the enum default, <code>&quot;abc&quot;</code>
-          yields <code>0</code>. That is fine for a route id (an unparsable value degrades into a not-found lookup) and
-          wrong when malformed input must be told apart from a legitimate default, which is exactly when a
-          caller reaches for <code>TryParse</code>.</li>
-          <li><code>ParseNonEmpty&lt;TIdentifier&gt;</code> (line 80) and <code>ParseOtherTypes&lt;TIdentifier&gt;</code> (line 95): a chain of
-          <code>typeof(TIdentifier) == typeof(Guid|int|long|ulong|bool)</code> plus <code>type.IsEnum</code> checks (lines 83-104)
-          using culture-invariant <code>TryParse</code>; an unsupported type throws <code>FormatException</code> (line 106). Each
-          failed <code>TryParse</code> falls back to the type&#39;s zero/empty value rather than throwing.
-          <code>TryParseNonEmpty</code> (line 111) and <code>TryParseOtherTypes</code> (line 138) mirror that chain over the same
-          six shapes and return the parse verdict instead of swallowing it, with the same <code>FormatException</code>
-          on an unsupported type (line 166). Splitting each path into two private methods keeps every method
-          within the analyzers&#39; cyclomatic-complexity budget.</li>
-          <li>Note the two scoped <code>#pragma warning disable IDE0051</code> blocks around <code>ParseNonEmpty</code> (lines 79-81)
-          and <code>TryParseNonEmpty</code> (lines 110-112), each with a comment (lines 78 and 109) explaining it is a
-          false positive: the analyzer cannot see that the method is called from inside the <code>extension</code>
-          block. A justified, narrow suppression.</li>
-          </ul>
-          </li>
-          <li><strong>Why it&#39;s built this way</strong>: a page or endpoint receives ids as <code>string</code> route values; this converts
-          them to the entity&#39;s id alias type <strong>without</strong> the caller coupling to a specific id type, generic
-          over <code>TIdentifier</code> (the alias policy itself is
-          <a href="https://ivanball.github.io/docs/adr/048-primitive-identifier-type-aliases.html" target="_blank" rel="noopener">ADR-048</a>).
-          Culture-invariant parsing avoids locale-dependent bugs and is one of the few places §27 (i18n)
-          bites, see <a href="00-primer.html#6-the-34-category-architecture-evaluation-lens">primer §6</a>.</li>
-          <li><strong>Where it&#39;s used</strong>: the call sites in shipped code are Blazor detail pages turning their
-          <code>[Parameter] string</code> route value into the module&#39;s identifier alias, for example
-          <span class="cite"><span><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Speakers/SpeakerDetail.razor.cs:101</code></span></span>,
-          <span class="cite"><span><code>.../Pages/Session/SessionDetail.razor.cs:104</code></span></span>, <span class="cite"><span><code>.../Pages/Event/EventDetail.razor.cs:86</code></span></span>, and
-          <span class="cite"><span><code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/Feedback/EventFeedback.razor.cs:318</code></span></span>;
-          Store&#39;s detail pages import the same namespace (for example
-          <span class="cite"><span><code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.UI/Pages/Products/ProductDetail.razor.cs:4</code></span></span>).
-          Unit-covered by <code>DomainHelperTests</code>
-          (<code>MMCA.Common/Tests/Core/MMCA.Common.Shared.Tests/Extensions/DomainHelperTests.cs</code>, G25).</li>
-          <li><strong>Caveats / not-in-source</strong>: supported target types are exactly those enumerated; anything else
-          throws at runtime (there is no compile-time constraint preventing an unsupported <code>TIdentifier</code>).</li>
-          </ul>
           <h3 id="eventnameattribute">EventNameAttribute</h3>
           <blockquote>
           <p>MMCA.Common.Domain · <code>MMCA.Common.Domain.Attributes</code> · <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Domain/Attributes/EventNameAttribute.cs:32</code></span></span> · Level 0 · class (sealed attribute)</p>
@@ -732,14 +690,14 @@
           attribute&quot; answer<span class="cite"><span> (<code>EventNameResolver.cs:26,35-38</code>)</span></span> and exposes three views: <code>GetStorageName</code>
           (declared name, else assembly-qualified name, <span class="cite"><span><code>:47-51</code></span></span>) written into
           <a href="group-04-events-outbox.html#outboxmessage"><code>OutboxMessage</code></a><code>.EventType</code><span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:141</code>)</span></span>;
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:148</code>)</span></span>;
           <code>GetInboxName</code> (declared name, else short type name, <span class="cite"><span><code>:59-60</code></span></span>) used as the inbox dedup key by
           <code>IntegrationEventConsumer</code><span class="cite"><span>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Consumers/IntegrationEventConsumer.cs:71</code>)</span></span> and
           <code>UpcastingIntegrationEventConsumer</code><span class="cite"><span> (<code>.../UpcastingIntegrationEventConsumer.cs:62</code>)</span></span>; and
           <code>FindTypeByDeclaredName</code><span class="cite"><span> (<code>:75-81</code>)</span></span>, the reverse lookup that scans loaded assemblies when a stored
           name is not a CLR type name, reached from <code>OutboxMessage</code>&#39;s cached type resolution<span class="cite"><span>
-          (<code>OutboxMessage.cs:189</code>)</span></span> and degrading gracefully past an unloadable assembly<span class="cite"><span> (<code>:90-100</code>)</span></span>.
+          (<code>OutboxMessage.cs:197</code>)</span></span> and degrading gracefully past an unloadable assembly<span class="cite"><span> (<code>:90-100</code>)</span></span>.
           Applied today to the framework&#39;s own
           <a href="group-04-events-outbox.html#outputcacheevictionrequested"><code>OutputCacheEvictionRequested</code></a><span class="cite"><span>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/IntegrationEvents/OutputCacheEvictionRequested.cs:28</code>)</span></span>
@@ -846,13 +804,13 @@
           <a href="https://ivanball.github.io/docs/adr/075-audit-trail.html" target="_blank" rel="noopener">ADR-075</a>.</li>
           <li><strong>Where it&#39;s used</strong>: the recognizer is
           <a href="group-07-persistence-ef-core.html#audittrailsavechangesinterceptor"><code>AuditTrailSaveChangesInterceptor</code></a><span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:64</code>)</span></span>,
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:79</code>)</span></span>,
           whose <code>ShouldAudit</code> predicate is <code>entry.Entity is IAuditedEntity</code> plus a framework-entity exclusion
-          and a &quot;being written&quot; state check (<span class="cite"><span><code>AuditTrailSaveChangesInterceptor.cs:226-229</code></span></span>, applied to the
+          and a &quot;being written&quot; state check (<span class="cite"><span><code>AuditTrailSaveChangesInterceptor.cs:248-251</code></span></span>, applied to the
           change-tracker entries at <span class="cite"><span><code>:197</code></span></span>); it writes
           <a href="group-07-persistence-ef-core.html#audittrailentry"><code>AuditTrailEntry</code></a> rows and is registered last,
           after the audit and domain-event interceptors, so it diffs final values<span class="cite"><span>
-          (<code>AuditTrailSaveChangesInterceptor.cs:28-31</code>)</span></span>. The host gate is <code>AddAuditTrail</code><span class="cite"><span>
+          (<code>AuditTrailSaveChangesInterceptor.cs:31-34</code>)</span></span>. The host gate is <code>AddAuditTrail</code><span class="cite"><span>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Jobs.cs:108</code>)</span></span> plus
           <a href="group-07-persistence-ef-core.html#audittrailsettings"><code>AuditTrailSettings</code></a><code>.Enabled</code>
           (<span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSettings.cs:26</code></span></span>, an
@@ -868,9 +826,9 @@
           <code>TicketComment</code> deliberately does NOT carry it, and says so<span class="cite"><span>
           (<code>MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/Tickets/TicketComment.cs:12,16</code>)</span></span>.
           The opting-in hosts are the three ADC services<span class="cite"><span>
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:249</code>,
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:250</code>,
           <code>MMCA.ADC.Conference.Service/Program.cs:356</code>, <code>MMCA.ADC.Engagement.Service/Program.cs:202</code>)</span></span> and the
-          Helpdesk web host<span class="cite"><span> (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:88</code>)</span></span>.</li>
+          Helpdesk web host<span class="cite"><span> (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:78</code>)</span></span>.</li>
           <li><strong>Caveats / not-in-source</strong>: retention is not automatic. <code>AuditTrailSettings.RetentionDays</code> defaults
           to 90<span class="cite"><span> (<code>AuditTrailSettings.cs:38</code>)</span></span>, but the doc comment states the purge only happens if the host
           also runs the scheduler; without it the trail still records and the table grows until an operator
@@ -966,21 +924,21 @@
           individual event instance out of ordered delivery even though its type implements the interface.
           That is why the framework does an instance-level interface test rather than a type-level flag, and
           the code comment at the copy site says so<span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:151-154</code>)</span></span>.</li>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:159-162</code>)</span></span>.</li>
           </ul>
           </li>
           <li><strong>Why it&#39;s built this way</strong>: ordering is enforced at <strong>claim</strong> time rather than at fetch time, which
           is what makes it survive batching and scale-out<span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:318-325</code>)</span></span>.
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:330-337</code>)</span></span>.
           Making it opt-in per event keeps the unordered fast path free: a batch containing no keyed row runs
           exactly the query it always ran, with no subquery for the optimizer to prove away<span class="cite"><span>
-          (<code>OutboxProcessor.cs:353-358</code>)</span></span>. The decision is recorded in
+          (<code>OutboxProcessor.cs:365-370</code>)</span></span>. The decision is recorded in
           <a href="https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html" target="_blank" rel="noopener">ADR-003</a><span class="cite"><span> (<code>003-outbox-dual-dispatch.md:142-157</code>)</span></span>.</li>
           <li><strong>Where it&#39;s used</strong>: <a href="group-04-events-outbox.html#outboxmessage"><code>OutboxMessage</code></a> copies the key onto
           the row it writes (<span class="cite"><span><code>OutboxMessage.cs:88</code></span></span> for the column, <span class="cite"><span><code>:115</code></span></span> inside <code>FromDomainEvent</code> at <span class="cite"><span><code>:98</code></span></span>).
           <a href="group-04-events-outbox.html#outboxprocessor"><code>OutboxProcessor</code></a> enforces it in two places:
-          <code>SelectOrderedCandidates</code><span class="cite"><span> (<code>OutboxProcessor.cs:390-407</code>)</span></span> keeps at most one row per key in this
-          cycle&#39;s candidate set<span class="cite"><span> (<code>:516</code>)</span></span>, and <code>FilterUnblocked</code><span class="cite"><span> (<code>OutboxProcessor.cs:427-437</code>)</span></span> adds the
+          <code>SelectOrderedCandidates</code><span class="cite"><span> (<code>OutboxProcessor.cs:402-419</code>)</span></span> keeps at most one row per key in this
+          cycle&#39;s candidate set<span class="cite"><span> (<code>:516</code>)</span></span>, and <code>FilterUnblocked</code><span class="cite"><span> (<code>OutboxProcessor.cs:439-449</code>)</span></span> adds the
           <code>NOT EXISTS</code> predicate to the claim update itself, so a second replica racing the same key loses on
           the row rather than on a check made before the race (<span class="cite"><span><code>:550-554</code></span></span>; the retry-count conjunct at <span class="cite"><span><code>:552</code></span></span>
           is what lets a dead-lettered predecessor stop blocking). The storage side is configured on
@@ -997,7 +955,7 @@
           tested, not exercised by an application event. Ordering is also <strong>not</strong> total under a timestamp tie:
           the predecessor test is on <code>OccurredOn</code> alone, so two rows sharing a key and an exact timestamp are
           ordered within a cycle by <code>Id</code> but neither blocks the other in SQL, which the code states as a
-          deliberate non-guarantee<span class="cite"><span> (<code>OutboxProcessor.cs:327-332</code>)</span></span>.</li>
+          deliberate non-guarantee<span class="cite"><span> (<code>OutboxProcessor.cs:339-344</code>)</span></span>.</li>
           </ul>
           <h3 id="irowversioned">IRowVersioned</h3>
           <blockquote>
@@ -1108,18 +1066,18 @@
           <a href="group-07-persistence-ef-core.html#crosstenantwriteexception"><code>CrossTenantWriteException</code></a> rather than
           writing a row nobody can read<span class="cite"><span> (<code>:101-110</code>)</span></span>, and a declared-versus-current mismatch is rejected the
           same way<span class="cite"><span> (<code>:123</code>)</span></span>. The host gate is <code>AddMultiTenancy</code><span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:277</code>)</span></span> plus
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:282</code>)</span></span> plus
           <a href="group-07-persistence-ef-core.html#tenancysettings"><code>TenancySettings</code></a> (<code>Tenancy:Enabled</code> at
-          <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettings.cs:67</code></span></span>, claim-then-header
+          <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettings.cs:72</code></span></span>, claim-then-header
           resolution order at <span class="cite"><span><code>TenancySettings.cs:57</code></span></span>). The only entities marked in the workspace apps today
           are Helpdesk&#39;s <code>Ticket</code> and its child <code>TicketComment</code><span class="cite"><span>
           (<code>MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/Tickets/Ticket.cs:26</code> and
           <code>.../TicketComment.cs:16</code>)</span></span>, opted in at
-          <span class="cite"><span><code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:90</code></span></span>; ADC and Store carry no <code>ITenantEntity</code>
+          <span class="cite"><span><code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:80</code></span></span>; ADC and Store carry no <code>ITenantEntity</code>
           today.</li>
           <li><strong>Caveats / not-in-source</strong>: <code>Tenancy:Enabled</code> gates <strong>resolution</strong>, not isolation. The filter and the
           interceptor are always registered and are inert whenever no tenant is resolved
-          (<span class="cite"><span><code>TenancySettings.cs:37-39</code></span></span>, and the registration note at <span class="cite"><span><code>DependencyInjection.cs:301</code></span></span>), so an
+          (<span class="cite"><span><code>TenancySettings.cs:38-40</code></span></span>, and the registration note at <span class="cite"><span><code>DependencyInjection.cs:306</code></span></span>), so an
           untenanted code path (a job, a seeder) reads every tenant&#39;s rows by design. That is the documented
           behavior, not an oversight, but it means &quot;tenant safety&quot; is a property of the request pipeline
           resolving a tenant, not of the entity marker alone.</li>
@@ -1158,7 +1116,7 @@
           alternative (a hand-maintained list of which fields are personal) drifts out of sync with the model.</li>
           <li><strong>Where it&#39;s used</strong>: applied to four properties of the ADC Identity
           <a href="group-24-identity-module.html#user"><code>User</code></a> aggregate: <code>Email</code>, <code>FirstName</code>, <code>LastName</code> and
-          <code>AvatarUrl</code><span class="cite"><span> (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:51,55,59,118</code>)</span></span>;
+          <code>AvatarUrl</code><span class="cite"><span> (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:51,55,59,127</code>)</span></span>;
           <code>User</code> reaches <a href="#ianonymizable"><code>IAnonymizable</code></a> through
           <a href="group-08-auth.html#ierasableuser"><code>IErasableUser</code></a>, which extends it<span class="cite"><span>
           (<code>User.cs:35</code> and
@@ -1173,12 +1131,12 @@
           <code>MMCA.Common.Domain.Interfaces.IAnonymizable</code><span class="cite"><span> (<code>ArchitectureRules.Governance.cs:7,16</code>)</span></span> so a
           same-named local interface cannot satisfy the rule. Each repo then supplies a thin sealed subclass of
           <code>PiiConventionTestsBase</code><span class="cite"><span>
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/PiiConventionTestsBase.cs:7</code>)</span></span>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/PiiConventionTestsBase.cs:19</code>)</span></span>
           that just passes its <code>IArchitectureMap</code>:
-          <span class="cite"><span><code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/PiiConventionTests.cs:20</code></span></span> (the <em>scan</em>
+          <span class="cite"><span><code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/PiiConventionTests.cs:25</code></span></span> (the <em>scan</em>
           is structurally vacuous today, the framework Domain ships no data-subject type),
-          <span class="cite"><span><code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Governance/PiiConventionTests.cs:3</code></span></span>, and
-          <span class="cite"><span><code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Governance/PiiConventionTests.cs:29</code></span></span>. The framework
+          <span class="cite"><span><code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Privacy/PiiConventionTests.cs:18</code></span></span>, and
+          <span class="cite"><span><code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Privacy/PiiConventionTests.cs:25</code></span></span>. The framework
           closes that vacuity gap with a non-vacuous companion, <code>PiiErasureContractFitnessTests</code><span class="cite"><span>
           (<code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/PiiErasureContractFitnessTests.cs:19</code>)</span></span>,
           which forces a representative <code>[Pii]</code>-carrying sample through both halves end to end (recognized and
@@ -1188,12 +1146,12 @@
           <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Domain/Privacy/PiiRedactor.cs:119</code></span></span>) and
           <a href="group-07-persistence-ef-core.html#audittrailsavechangesinterceptor"><code>AuditTrailSaveChangesInterceptor</code></a>,
           which short-circuits per type with <code>PiiRedactor.HasPii</code><span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:301</code>)</span></span>,
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:323</code>)</span></span>,
           caches the per-property verdict<span class="cite"><span> (<code>:492-504</code>)</span></span>, and writes <code>PiiRedactor.RedactedToken</code> into <strong>both</strong> the
           old and new value columns of a change row<span class="cite"><span> (<code>:309-310</code>)</span></span>.</li>
           <li><strong>Caveats / not-in-source</strong>: the interceptor&#39;s per-property check only sees properties EF maps to a
           real CLR member. A shadow property has no <code>PropertyInfo</code> and therefore cannot carry the attribute, so
-          it is never treated as personal data<span class="cite"><span> (<code>AuditTrailSaveChangesInterceptor.cs:606-613</code>)</span></span>.</li>
+          it is never treated as personal data<span class="cite"><span> (<code>AuditTrailSaveChangesInterceptor.cs:643-650</code>)</span></span>.</li>
           </ul>
           <h3 id="redactableproperty">RedactableProperty</h3>
           <blockquote>
@@ -1216,6 +1174,37 @@
           on the hot path, it just reads the cached flag and (for non-PII members) invokes the captured getter.</li>
           <li><strong>Where it&#39;s used</strong>: produced and consumed entirely within <a href="#piiredactor"><code>PiiRedactor</code></a>
           (<code>GetProperties</code>, <span class="cite"><span><code>PiiRedactor.cs:112-124</code></span></span>); it has no independent consumers.</li>
+          </ul>
+          <h3 id="sensitiveattribute">SensitiveAttribute</h3>
+          <blockquote>
+          <p>MMCA.Common.Domain · <code>MMCA.Common.Domain.Attributes</code> · <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Domain/Attributes/SensitiveAttribute.cs:20</code></span></span> · Level 0 · class (sealed attribute)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: marks a property as a <strong>secret or credential</strong> (a hash, a salt, an API key, a
+          signing secret) whose value must never be written in readable form to a persisted history such as
+          the audit trail.</li>
+          <li><strong>Depends on</strong>: <code>System.Attribute</code> (BCL) only.</li>
+          <li><strong>Concept introduced, secrets are not personal data.</strong> <code>[Rubric §30, Compliance, Privacy &amp; Data Governance]</code> and <code>[Rubric §13, Observability &amp; Operability]</code>. The doc comment is explicit that this
+          is deliberately NOT a PII marker<span class="cite"><span> (<code>SensitiveAttribute.cs:7-12</code>)</span></span>: a <code>[Sensitive]</code> property is not
+          data-subject PII, so it does not feed the mechanisms <a href="#piiattribute"><code>PiiAttribute</code></a> drives. It
+          does not make <code>PiiRedactor.HasPii</code> true, it is not masked by <a href="#piiredactor"><code>PiiRedactor</code></a>&#39;s
+          <code>Redact</code>, and it does not oblige the entity to implement <a href="#ianonymizable"><code>IAnonymizable</code></a>. The
+          audit trail records the redaction placeholder in place of the old and new values instead.</li>
+          <li><strong>Walkthrough</strong>: <code>[AttributeUsage(AttributeTargets.Property, Inherited = true, AllowMultiple = false)]</code> (line 19); empty body (<code>sealed class SensitiveAttribute : Attribute;</code>, line 20). Note
+          <code>Inherited = true</code>, unlike <code>PiiAttribute</code>&#39;s <code>false</code>. The password hash and salt of an entity
+          implementing <code>IAuthUser</code> are treated this way without any marker; the attribute is for other
+          secrets the framework cannot recognize<span class="cite"><span> (<code>SensitiveAttribute.cs:14-17</code>)</span></span>.</li>
+          <li><strong>Why it&#39;s built this way</strong>: keeping secrets and personal data on separate markers means the
+          erasure fitness test does not demand an anonymize path for a signing key, and the audit trail can
+          still refuse to persist the secret.</li>
+          <li><strong>Where it&#39;s used</strong>: read reflectively by
+          <a href="group-07-persistence-ef-core.html#audittrailsavechangesinterceptor"><code>AuditTrailSaveChangesInterceptor</code></a>,
+          which collects the per-type set of redacted property names with
+          <code>Attribute.IsDefined(property, typeof(SensitiveAttribute), inherit: true)</code>
+          (<span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:688</code></span></span>,
+          computed once per type, <span class="cite"><span><code>:667</code></span></span>). The same redaction rule is documented on <code>AuditTrailEntry</code><span class="cite"><span>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailEntry.cs:59,68</code>)</span></span>
+          and exercised in <code>AuditTrailSaveChangesInterceptorTests</code>.</li>
           </ul>
           <h3 id="iaggregateroot">IAggregateRoot</h3>
           <blockquote>
@@ -1318,7 +1307,7 @@
           <code>[Pii]</code> property without repeating the marker stays redacted (asserted at <span class="cite"><span><code>PiiRedactorTests.cs:51</code></span></span>).
           This matches <a href="#piiattribute"><code>PiiAttribute</code></a>&#39;s <code>Inherited = true</code><span class="cite"><span>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Attributes/PiiAttribute.cs:18</code>)</span></span>, and
-          <code>AuditTrailSaveChangesInterceptor</code> resolves the marker the same way<span class="cite"><span> (<code>AuditTrailSaveChangesInterceptor.cs:621</code>)</span></span>.</li>
+          <code>AuditTrailSaveChangesInterceptor</code> resolves the marker the same way<span class="cite"><span> (<code>AuditTrailSaveChangesInterceptor.cs:658</code>)</span></span>.</li>
           </ul>
           </li>
           <li><strong>Why it&#39;s built this way</strong>: a <code>static</code> pure helper has no DI dependency, so it can be called from
@@ -1328,12 +1317,12 @@
           <li><strong>Where it&#39;s used</strong>: two of its members have a production consumer.
           <a href="group-07-persistence-ef-core.html#audittrailsavechangesinterceptor"><code>AuditTrailSaveChangesInterceptor</code></a>
           calls <code>HasPii</code> once per changed entity type<span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:301</code>)</span></span>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:323</code>)</span></span>
           and writes <code>RedactedToken</code> into both the <code>OldValue</code> and <code>NewValue</code> columns of a <code>[Pii]</code> property&#39;s
           change row<span class="cite"><span> (<code>:310-311</code>)</span></span>, which is how the change history avoids becoming a second copy of personal
           data (<a href="https://ivanball.github.io/docs/adr/075-audit-trail.html" target="_blank" rel="noopener">ADR-075</a>); that behavior is asserted
           in <code>AuditTrailSaveChangesInterceptorTests</code><span class="cite"><span>
-          (<code>MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/AuditTrail/AuditTrailSaveChangesInterceptorTests.cs:180-181</code>)</span></span>.
+          (<code>MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/AuditTrail/AuditTrailSaveChangesInterceptorTests.cs:181-182</code>)</span></span>.
           It is unit-verified by <code>PiiRedactorTests</code>
           (<code>MMCA.Common/Tests/Core/MMCA.Common.Domain.Tests/Privacy/PiiRedactorTests.cs</code>, G25) and exercised
           end to end (composed with <a href="#ianonymizable"><code>IAnonymizable</code></a>) by <code>PiiErasureContractFitnessTests</code><span class="cite"><span>
@@ -1383,12 +1372,12 @@
           entity silently lacks an erasure path (<a href="https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html" target="_blank" rel="noopener">ADR-005</a>).</li>
           <li><strong>Where it&#39;s used</strong>: satisfied by the ADC Identity <a href="group-24-identity-module.html#user"><code>User</code></a>
           aggregate, which holds the four <code>[Pii]</code> fields <code>Email</code>/<code>FirstName</code>/<code>LastName</code>/<code>AvatarUrl</code><span class="cite"><span>
-          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:51,55,59,118</code>)</span></span> and declares
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:51,55,59,127</code>)</span></span> and declares
           <a href="group-08-auth.html#ierasableuser"><code>IErasableUser</code></a><span class="cite"><span> (<code>User.cs:35</code>)</span></span>, which extends <code>IAnonymizable</code><span class="cite"><span>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/IErasableUser.cs:30</code>)</span></span>; the placement of that
           interface on <code>User</code> itself is load-bearing, because <code>User.Delete</code> hides the base soft-delete with
-          <code>new</code> (<span class="cite"><span><code>User.cs:485</code></span></span>, rationale at <span class="cite"><span><code>User.cs:22-25</code></span></span>), and the implementation is <code>User.Anonymize</code> at
-          <span class="cite"><span><code>User.cs:507</code></span></span>. Enforced by <code>PiiConventionTests</code> (G25), and exercised together with
+          <code>new</code> (<span class="cite"><span><code>User.cs:497</code></span></span>, rationale at <span class="cite"><span><code>User.cs:22-25</code></span></span>), and the implementation is <code>User.Anonymize</code> at
+          <span class="cite"><span><code>User.cs:519</code></span></span>. Enforced by <code>PiiConventionTests</code> (G25), and exercised together with
           <a href="#piiredactor"><code>PiiRedactor</code></a> by <code>PiiErasureContractFitnessTests</code><span class="cite"><span>
           (<code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/PiiErasureContractFitnessTests.cs:19</code>)</span></span>.</li>
           </ul>
@@ -1440,7 +1429,7 @@
           <li><strong>Where it&#39;s used</strong>: five ADC Conference child entities implement it, each as the one-line delegation
           to <code>Undelete()</code>: <a href="group-17-conference-domain.html#room"><code>Room</code></a>
           (<span class="cite"><span><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/Room.cs:13</code></span></span>, implementation at
-          <span class="cite"><span><code>Room.cs:141</code></span></span>), <a href="group-17-conference-domain.html#eventspeaker"><code>EventSpeaker</code></a><span class="cite"><span> (<code>.../Events/EventSpeaker.cs:14</code>)</span></span>,
+          <span class="cite"><span><code>Room.cs:145</code></span></span>), <a href="group-17-conference-domain.html#eventspeaker"><code>EventSpeaker</code></a><span class="cite"><span> (<code>.../Events/EventSpeaker.cs:14</code>)</span></span>,
           <a href="group-17-conference-domain.html#sessionspeaker"><code>SessionSpeaker</code></a>
           (<span class="cite"><span><code>.../Sessions/SessionSpeaker.cs:14</code></span></span>, implementation at <span class="cite"><span><code>SessionSpeaker.cs:57</code></span></span>),
           <a href="group-17-conference-domain.html#sessioncategoryitem"><code>SessionCategoryItem</code></a><span class="cite"><span> (<code>.../Sessions/SessionCategoryItem.cs:14</code>)</span></span>,
@@ -1489,6 +1478,65 @@
           sealed-record rule above would forbid the static-member idiom that type exists for.</li>
           <li><strong>Caveats / not-in-source</strong>: equality is purely structural; if a future value object held a mutable
           collection, record equality would compare references, not contents. None of the current ones do.</li>
+          </ul>
+          <h3 id="domainhelper">DomainHelper</h3>
+          <blockquote>
+          <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.Extensions</code> · <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Shared/Extensions/DomainHelper.cs:8</code></span></span> · Level 0 · class (static)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: a static class that adds two generic <strong>extension members</strong> to <code>string?</code>,
+          <code>Parse&lt;TIdentifier&gt;()</code> and <code>TryParse&lt;TIdentifier&gt;(out TIdentifier)</code>, converting a route-parameter
+          string into a strongly-typed identifier.</li>
+          <li><strong>Depends on</strong>: BCL only (<code>System.Globalization</code>).</li>
+          <li><strong>Concept introduced, C# <code>extension(T)</code> members.</strong> <code>[Rubric §15, Best Practices &amp; Code Quality]</code>
+          (assesses idiomatic, modern-language use). This is the first concrete sighting of the C# preview
+          feature described in
+          <a href="00-primer.html#c-extensiont-types-read-this-once">primer §4</a>. The block
+          <code>extension(string? id) { … }</code><span class="cite"><span> (<code>DomainHelper.cs:13</code>)</span></span> means any nullable string can call
+          <code>someId.Parse&lt;int&gt;()</code>. The receiver <code>id</code> is the &quot;this&quot; value.</li>
+          <li><strong>Walkthrough</strong><ul>
+          <li><code>Parse&lt;TIdentifier&gt;()</code><span class="cite"><span> (<code>DomainHelper.cs:30</code>)</span></span>: special-cases <code>string</code> (returns the value or
+          empty, lines 34-35), short-circuits null/whitespace to <code>default</code> (lines 37-38), then delegates to
+          <code>ParseNonEmpty</code> (line 40).</li>
+          <li><code>TryParse&lt;TIdentifier&gt;(out TIdentifier)</code><span class="cite"><span> (<code>DomainHelper.cs:58</code>)</span></span> is the reporting sibling: the
+          <code>string</code> case returns <code>id is not null</code> (lines 62-66), null/whitespace returns <code>false</code> with the
+          type default (lines 68-72), and anything else delegates to <code>TryParseNonEmpty</code> (line 74). The two
+          exist because <code>Parse</code> <strong>coerces by design</strong> and the doc comment says so (lines 21-29): <code>&quot;maybe&quot;</code>
+          and <code>&quot;false&quot;</code> both yield <code>false</code>, an unrecognized enum name yields the enum default, <code>&quot;abc&quot;</code>
+          yields <code>0</code>. That is fine for a route id (an unparsable value degrades into a not-found lookup) and
+          wrong when malformed input must be told apart from a legitimate default, which is exactly when a
+          caller reaches for <code>TryParse</code>.</li>
+          <li><code>ParseNonEmpty&lt;TIdentifier&gt;</code> (line 80) and <code>ParseOtherTypes&lt;TIdentifier&gt;</code> (line 95): a chain of
+          <code>typeof(TIdentifier) == typeof(Guid|int|long|ulong|bool)</code> plus <code>type.IsEnum</code> checks (lines 83-104)
+          using culture-invariant <code>TryParse</code>; an unsupported type throws <code>FormatException</code> (line 106). Each
+          failed <code>TryParse</code> falls back to the type&#39;s zero/empty value rather than throwing.
+          <code>TryParseNonEmpty</code> (line 111) and <code>TryParseOtherTypes</code> (line 138) mirror that chain over the same
+          six shapes and return the parse verdict instead of swallowing it, with the same <code>FormatException</code>
+          on an unsupported type (line 166). Splitting each path into two private methods keeps every method
+          within the analyzers&#39; cyclomatic-complexity budget.</li>
+          <li>Note the two scoped <code>#pragma warning disable IDE0051</code> blocks around <code>ParseNonEmpty</code> (lines 79-81)
+          and <code>TryParseNonEmpty</code> (lines 110-112), each with a comment (lines 78 and 109) explaining it is a
+          false positive: the analyzer cannot see that the method is called from inside the <code>extension</code>
+          block. A justified, narrow suppression.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: a page or endpoint receives ids as <code>string</code> route values; this converts
+          them to the entity&#39;s id alias type <strong>without</strong> the caller coupling to a specific id type, generic
+          over <code>TIdentifier</code> (the alias policy itself is
+          <a href="https://ivanball.github.io/docs/adr/048-primitive-identifier-type-aliases.html" target="_blank" rel="noopener">ADR-048</a>).
+          Culture-invariant parsing avoids locale-dependent bugs and is one of the few places §27 (i18n)
+          bites, see <a href="00-primer.html#6-the-34-category-architecture-evaluation-lens">primer §6</a>.</li>
+          <li><strong>Where it&#39;s used</strong>: the call sites in shipped code are Blazor detail pages turning their
+          <code>[Parameter] string</code> route value into the module&#39;s identifier alias, for example
+          <span class="cite"><span><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Speakers/SpeakerDetail.razor.cs:101</code></span></span>,
+          <span class="cite"><span><code>.../Pages/Session/SessionDetail.razor.cs:104</code></span></span>, <span class="cite"><span><code>.../Pages/Event/EventDetail.razor.cs:86</code></span></span>, and
+          <span class="cite"><span><code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/Feedback/EventFeedback.razor.cs:318</code></span></span>;
+          Store&#39;s detail pages import the same namespace (for example
+          <span class="cite"><span><code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.UI/Pages/Products/ProductDetail.razor.cs:4</code></span></span>).
+          Unit-covered by <code>DomainHelperTests</code>
+          (<code>MMCA.Common/Tests/Core/MMCA.Common.Shared.Tests/Extensions/DomainHelperTests.cs</code>, G25).</li>
+          <li><strong>Caveats / not-in-source</strong>: supported target types are exactly those enumerated; anything else
+          throws at runtime (there is no compile-time constraint preventing an unsupported <code>TIdentifier</code>).</li>
           </ul>
           <h3 id="baseentitytidentifiertype">BaseEntity&lt;TIdentifierType&gt;</h3>
           <blockquote>
@@ -1645,7 +1693,7 @@
           child table. Owned types have value semantics at the persistence level, which is exactly the
           domain semantic.</li>
           <li><strong>Where it&#39;s used</strong>: the Store Identity <code>Customer</code> aggregate owns one (configuration cited above,
-          through Common&#39;s <code>OwnsAddress</code>, where every <code>HasMaxLength</code> reads an <code>AddressInvariants</code> constant, <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeBuilderExtensions.cs:144-170</code></span></span>, with a second <code>OwnsOne</code> overriding only the unicode facet, <span class="cite"><span><code>CustomerConfiguration.cs:42-55</code></span></span>);
+          through Common&#39;s <code>OwnsAddress</code>, where every <code>HasMaxLength</code> reads an <code>AddressInvariants</code> constant, <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeBuilderExtensions.cs:144-170</code></span></span>, adopted as a single <code>OwnsAddress</code> call with no per-column overrides, <span class="cite"><span><code>CustomerConfiguration.cs:42</code></span></span>);
           <a href="group-08-auth.html#registerrequest"><code>RegisterRequest</code></a> carries an optional <code>Address? Address = null</code><span class="cite"><span>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/Requests/RegisterRequest.cs:18</code>)</span></span>; the
           <a href="group-06-validation.html#addressline1rulest-addressline2rulest-cityrulest-countryrulest"><code>AddressLine1Rules&lt;T&gt;</code></a> family and
@@ -2156,8 +2204,8 @@
           <li><strong>Where it&#39;s used</strong>: base class for every aggregate root in the consumers. ADC&#39;s <code>Event</code> uses
           three <code>DeleteChildren</code> calls in one <code>Result.Combine</code><span class="cite"><span>
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/Event.cs:365-367</code>)</span></span>,
-          <code>RestoreChild</code> for room reinstatement<span class="cite"><span> (<code>Event.cs:500</code>)</span></span> and <code>RemoveChildOrNotFound</code> for room
-          removal<span class="cite"><span> (<code>Event.cs:517</code>)</span></span>; <code>Session</code> cascades to its speakers, question answers and category items<span class="cite"><span>
+          <code>RestoreChild</code> for room reinstatement<span class="cite"><span> (<code>Event.cs:511</code>)</span></span> and <code>RemoveChildOrNotFound</code> for room
+          removal<span class="cite"><span> (<code>Event.cs:528</code>)</span></span>; <code>Session</code> cascades to its speakers, question answers and category items<span class="cite"><span>
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/Session.cs:339-341</code>)</span></span> and
           <code>Category</code> to its items<span class="cite"><span>
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Categories/Category.cs:109</code>)</span></span>. The

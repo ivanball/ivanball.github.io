@@ -101,7 +101,7 @@ Null Object whose `PopulateAsync` is a single `Task.CompletedTask`
 branches on null (`[Rubric §2, Design Patterns]`). It is registered exactly that way for entities
 with nothing to hand-load, for example
 `services.TryAddScoped<INavigationPopulator<Question>, NullNavigationPopulator<Question>>()`
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:92`) and
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:94`) and
 the framework's own push-notification entity
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/DependencyInjection.cs:39`).
 
@@ -168,7 +168,7 @@ supported/unsupported split
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:317`); it hands that
 split plus its module's injected `INavigationPopulator<TEntity>` (as the method-group delegate
 `NavigationPopulator.PopulateAsync`) to `EntityQueryPipeline.ExecuteAsync`
-(`EntityQueryService.cs:352-357`); the pipeline JOINs the supported navigations and, if any are
+(`EntityQueryService.cs:353-358`); the pipeline JOINs the supported navigations and, if any are
 unsupported, materializes the page and calls the populator; the populator (almost always a
 `DeclarativeNavigationPopulator` built from descriptors) iterates its descriptors and calls
 `NavigationLoader` once per cross-source navigation. The same metadata also gates the service's keyed
@@ -184,8 +184,8 @@ imperative loading code at all, and
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/SessionNavigationPopulator.cs:13`)
 mixes two `FKNavigationDescriptor`s (`Event`, `Room`) with three `ChildNavigationDescriptor`s. Each is
 registered per entity as a scoped service
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:75`,
-`DependencyInjection.cs:79`), and those module-level populators are taught in
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:77`,
+`DependencyInjection.cs:81`), and those module-level populators are taught in
 [Group 18](group-18-conference-application.md).
 
 Two architectural threads are worth holding onto as you read the per-type sections. First, this
@@ -243,7 +243,7 @@ no-ops.
   `IsCollection` boolean is the same FK-versus-collection axis that
   [`NavigationType`](#navigationtype) names one level up.
 - **Where it's used**: applied on domain entity properties (for example
-  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:66` and `:72`
+  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:76` and `:72`
   tag `SpeakerCategoryItems` and `SpeakerQuestionAnswers` with `[Navigation(IsCollection = true)]`,
   and `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sponsors/Sponsor.cs:48` tags the
   `Event` reference with a bare `[Navigation]`). Read by

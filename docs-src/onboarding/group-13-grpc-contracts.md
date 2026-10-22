@@ -25,7 +25,7 @@ an in-process object or a wire hop.
 **The cast of types in this group is small, and all but one lives in `MMCA.Common.Grpc`**: a
 *transport-only* package that, per Clean Architecture, depends on **`Shared` only** (it must never
 couple to Domain, Application, or Infrastructure; see [primer §1](00-primer.md#1-the-big-picture)).
-There are seven: [`DependencyInjection`](#dependencyinjection) (the registration surface,
+There are sixteen, and seven of them carry the core transport: [`DependencyInjection`](#dependencyinjection) (the registration surface,
 `AddGrpcServiceDefaults()` server-side and `AddTypedGrpcClient<TClient>(serviceName)` client-side, at
 `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:25`),
 [`GrpcResultExceptionInterceptor`](#grpcresultexceptioninterceptor) (server-side: turns a failed
@@ -39,7 +39,15 @@ and money, at `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/GrpcWireFormat.c
 `MMCA.Common.Shared` marker
 [`ServiceContractAttribute`](#servicecontractattribute)
 (`MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/ServiceContractAttribute.cs:23`), which tags
-the wire surface of an extracted service. The concrete `.proto` definitions and the typed clients they
+the wire surface of an extracted service. The other nine form the **service-token** family for calls
+that have no user token to forward, eight in `MMCA.Common.Grpc.Authentication` plus one client
+interceptor: [`IServiceTokenProvider`](#iservicetokenprovider) and its
+[`ServiceTokenProvider`](#servicetokenprovider) (with the private [`CachedToken`](#cachedtoken)
+record), [`ServiceTokenSettings`](#servicetokensettings), [`ServiceTokenDefaults`](#servicetokendefaults),
+the two registration surfaces [`ServiceTokenServiceCollectionExtensions`](#servicetokenservicecollectionextensions)
+(with the private [`DefaultSchemeGuard`](#defaultschemeguard) marker) and
+[`ServiceTokenHttpClientBuilderExtensions`](#servicetokenhttpclientbuilderextensions), and
+[`ServiceTokenClientInterceptor`](#servicetokenclientinterceptor). The concrete `.proto` definitions and the typed clients they
 generate do *not* live here: they live in each consumer's `*.Contracts` project (ADC's
 `MMCA.ADC.Conference.Contracts`, `.Engagement.Contracts`, `.Identity.Contracts`,
 `.Notification.Contracts`), which this package exists to wire up.
@@ -69,13 +77,13 @@ one) fails fast instead of stalling the caller's inline request.
 
 **How the swap actually happens at the composition root.** Each `.Contracts` project also ships an
 `extension(IServiceCollection)` DI helper, for example `AddConferenceSessionValidationClient()`
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Contracts/DependencyInjection.cs:43`), that does two
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Contracts/DependencyInjection.cs:44`), that does two
 things: (1) calls Common's `AddTypedGrpcClient<TClient>(serviceName)` to register the generated gRPC
-client against the named service (`DependencyInjection.cs:45`), and (2) calls
+client against the named service (`DependencyInjection.cs:46`), and (2) calls
 `services.Replace(ServiceDescriptor.Scoped<...>())`, *not* `TryAdd`, to overwrite whatever
 `ISessionBookmarkValidationService` is already in the container with the gRPC adapter
-(`DependencyInjection.cs:49`). The `Replace` is deliberate and documented in place
-(`DependencyInjection.cs:47-48`): by the time the host calls this, the container holds *either* the
+(`DependencyInjection.cs:50`). The `Replace` is deliberate and documented in place
+(`DependencyInjection.cs:48-49`): by the time the host calls this, the container holds *either* the
 real in-process implementation (if that peer module is enabled in this host) *or* a `Disabled*` stub
 registered by the module when the peer is disabled. `Replace` wins over both, so after the call the
 resolved interface is always the gRPC adapter pointing at the extracted peer. Ordering is not left to
@@ -161,18 +169,20 @@ and Notification pairs `FormatUtcOrEmpty` with `ParseUtcOrNull` for a notificati
 `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Contracts/UserNotificationExportServiceGrpcAdapter.cs:44`).
 
 **Auth and the network shape.** Every typed client wired by `AddTypedGrpcClient<TClient>`
-(`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:87`) gets a
-[`JwtForwardingClientInterceptor`](#jwtforwardingclientinterceptor) (`DependencyInjection.cs:93-98`)
+(`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:89`) gets a
+[`JwtForwardingClientInterceptor`](#jwtforwardingclientinterceptor) (`DependencyInjection.cs:95-100`)
 that copies the inbound `Authorization` header off the current `HttpContext` onto the outgoing call's
 metadata, so the caller's JWT rides along to the downstream service and distributed authorization
 works without each handler threading a token by hand. When the inbound request authenticated without
 an `Authorization` header (a SignalR hub connection passes its token as `?access_token=`), it
 forwards the token saved on the authentication ticket instead, read as `access_token` and rebuilt as
 a `Bearer` value, while a header that is present always wins
-(`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Interceptors/JwtForwardingClientInterceptor.cs:124-132`).
-It is a no-op outside an HTTP request, for example in a background processor
-(`JwtForwardingClientInterceptor.cs:91-95`, `:119-122`), and it refuses to duplicate a header a prior
-interceptor already set (`JwtForwardingClientInterceptor.cs:100-104`). It is the gRPC counterpart of the HTTP
+(`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Interceptors/JwtForwardingClientInterceptor.cs:151-159`).
+It forwards nothing outside an HTTP request, for example in a background processor
+(`JwtForwardingClientInterceptor.cs:146-149`), and it refuses to overwrite or duplicate an
+`Authorization` entry a caller or prior interceptor already set (`JwtForwardingClientInterceptor.cs:114-117`,
+`:133-136`). It forwards only the user's token (`JwtForwardingClientInterceptor.cs:28-31`); the
+service-token path below covers a call that has none. It is the gRPC counterpart of the HTTP
 [`JwtForwardingDelegatingHandler`](group-12-api-hosting-mapping.md#jwtforwardingdelegatinghandler). The
 downstream service validates that forwarded token against the issuer's **JWKS**, not a shared secret
 ([ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html); see
@@ -180,25 +190,95 @@ downstream service validates that forwarded token against the issuer's **JWKS**,
 The server half also sets `EnableDetailedErrors = false` and adds server reflection
 (`DependencyInjection.cs:43`, `:46`), so tools like grpcurl can introspect the schema without exception
 detail leaking to callers. `[Rubric §11, Security]` is touched three times over here: federated JWT
-validation rather than a shared secret, token forwarding that never widens the caller's authority, and
-detailed errors kept off.
+validation of user tokens rather than a shared secret, token forwarding that never widens the caller's
+authority, and detailed errors kept off.
+
+**Calls with no user token: service tokens, the calling side.** Forwarding covers a call made inside a
+user's request; a background processor, or an anonymous request that fans out internally, has no user
+token, and its call would otherwise arrive unauthenticated
+(`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Authentication/IServiceTokenProvider.cs:3-8`). The
+answer is a self-minted service token configured by [`ServiceTokenSettings`](#servicetokensettings)
+(`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Authentication/ServiceTokenSettings.cs:18`), bound
+from the one `Grpc:ServiceToken` section (`ServiceTokenSettings.cs:21`) by both halves, so the key,
+issuer, and audience cannot drift between caller and receiver within a deployment. Its `Validate`
+fails the host on start unless the Base64 `SigningKey` decodes to at least 32 bytes, `ServiceName` is
+set, and `LifetimeMinutes` lies between 1 and 60 (`ServiceTokenSettings.cs:24`, `:27`, `:59-93`);
+`Issuer` defaults to `mmca-service`, `Audience` to `internal-grpc` (which must differ from the user
+tokens' audience, since the audience is what keeps a service token out of the user scheme), and the
+lifetime to 5 minutes (`ServiceTokenSettings.cs:42-51`). `AddServiceTokenClient(configuration)`
+(`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Authentication/ServiceTokenServiceCollectionExtensions.cs:35`)
+registers [`ServiceTokenProvider`](#servicetokenprovider) as the singleton
+[`IServiceTokenProvider`](#iservicetokenprovider) (`ServiceTokenServiceCollectionExtensions.cs:40-41`),
+whose `GetToken()` (`IServiceTokenProvider.cs:15`) returns an HS256 JWT with `sub` and `svc` naming this
+service and a fresh `jti` (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Authentication/ServiceTokenProvider.cs:85-91`).
+The provider caches it as a private [`CachedToken`](#cachedtoken) record (`ServiceTokenProvider.cs:105`)
+and replaces it once 60 seconds or less remain (`ServiceTokenProvider.cs:26`, `:76-77`), so a token that
+could expire mid-call is never handed out: readers take the published token without locking, and only
+a caller inside that refresh window takes the lock and mints, once for everyone waiting
+(`ServiceTokenProvider.cs:52-74`). Registering the provider sends nothing by itself. A typed client opts
+in by chaining `.WithServiceToken()` from
+[`ServiceTokenHttpClientBuilderExtensions`](#servicetokenhttpclientbuilderextensions) onto
+`AddTypedGrpcClient<TClient>`
+(`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Authentication/ServiceTokenHttpClientBuilderExtensions.cs:28`),
+which adds the [`ServiceTokenClientInterceptor`](#servicetokenclientinterceptor) to that client alone
+(`ServiceTokenHttpClientBuilderExtensions.cs:34`). Precedence is the user's token, then the service
+token: the interceptor attaches nothing when the call already carries `Authorization` or the ambient
+request holds a user token, and it decides that with the forwarding interceptor's own helpers, so the
+result does not depend on which of the two runs first
+(`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Interceptors/ServiceTokenClientInterceptor.cs:85-94`,
+`JwtForwardingClientInterceptor.cs:108`, `:133`, `:144`). It is per client and never global because a
+server that does not validate service tokens would have to reject one, and a default JwtBearer scheme
+first fetches its OIDC metadata to do so, which can stall a call while that endpoint is still starting
+(`ServiceTokenClientInterceptor.cs:13-17`).
+
+**Service tokens, the receiving side.** `AddServiceTokenAuthentication(configuration)`
+(`ServiceTokenServiceCollectionExtensions.cs:63`) adds a JwtBearer scheme named by
+[`ServiceTokenDefaults`](#servicetokendefaults)`.AuthenticationScheme`, `"ServiceToken"`
+(`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Authentication/ServiceTokenDefaults.cs:15`;
+`ServiceTokenServiceCollectionExtensions.cs:70-72`). It validates issuer, audience, lifetime, and
+signature against the shared key, pins the algorithm to HS256 so an algorithm-confusion swap cannot
+pass (`ServiceTokenServiceCollectionExtensions.cs:133-145`), and fails any token that validates without
+the `svc` claim (`ServiceTokenDefaults.cs:27`; `ServiceTokenServiceCollectionExtensions.cs:151-157`). It
+also adds the `InternalCaller` policy (`ServiceTokenDefaults.cs:21`), which admits an authenticated
+caller from either the user scheme or the service scheme
+(`ServiceTokenServiceCollectionExtensions.cs:84-87`). The service scheme is never made the default, so a
+service token satisfies only an endpoint that names that policy, and a plain `[Authorize]` endpoint
+still authenticates users alone. Rather than document the trap, the registration fails the host at
+startup when the service scheme would end up the default, explicitly or as the lone registered scheme
+ASP.NET Core promotes, through the start-time validation of the private
+[`DefaultSchemeGuard`](#defaultschemeguard) marker options type
+(`ServiceTokenServiceCollectionExtensions.cs:78-82`, `:110-129`, `:165`). The settings bind and validate
+once however many of the two halves a host calls (`ServiceTokenServiceCollectionExtensions.cs:96-107`).
+The shared symmetric key is a deliberate choice for east-west traffic inside one deployment, with no
+issuer service to call and a key rotation that is one configuration change on every service
+(`ServiceTokenSettings.cs:12-17`), in contrast to the JWKS validation of forwarded user tokens. In the
+repos today the adopter is Store: Sales registers the calling half
+(`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:289`) and opts its
+`CustomerServiceClient` in
+(`MMCA.Store/Source/Services/MMCA.Store.Identity.Contracts/DependencyInjection.cs:46`), and Identity
+registers the receiving half and maps `CustomersGrpcService` under the `InternalCaller` policy
+(`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:173`, `:343`). ADC wires neither
+half. `[Rubric §11, Security]` again: a service identity that is minted, scoped by audience, and
+admitted only where an endpoint asks for it.
 
 **The transport is HTTP/2 cleartext (h2c) with prior knowledge.** The client addresses
-`http://{serviceName}` (`DependencyInjection.cs:96-97`), resolved by **Aspire service discovery**,
+`http://{serviceName}` (`DependencyInjection.cs:98-99`), resolved by **Aspire service discovery**,
 because Aspire's project-resource discovery does not reliably expose an `https` key for these peers;
-the Sonar cleartext warning is suppressed in place with that rationale (`DependencyInjection.cs:95`). A
-deliberate `SocketsHttpHandler` override (`DependencyInjection.cs:110-118`) forces
+the Sonar cleartext warning is suppressed in place with that rationale (`DependencyInjection.cs:97`). A
+deliberate `SocketsHttpHandler` override (`DependencyInjection.cs:112-120`) forces
 `EnableMultipleHttp2Connections` and re-applies the pooled-lifetime and keep-alive values from
 [`HttpResilienceDefaults`](group-16-aspire-orchestration.md#httpresiliencedefaults), because the global
 `ConfigureHttpClientDefaults` from `MMCA.Common.Aspire` applies to *all* `HttpClient`s and its wrapper
 can defeat HTTP/2 negotiation. On top of that, `AddStandardResilienceHandler` gives every gRPC client
 an explicit Polly pipeline sourced entirely from
 [`GrpcResilienceDefaults`](group-16-aspire-orchestration.md#grpcresiliencedefaults)
-(`DependencyInjection.cs:127-142`): the attempt timeout, total timeout, and retry budget are the same
+(`DependencyInjection.cs:129-152`): the attempt timeout, total timeout, and retry budget are the same
 values the HTTP defaults use, but the retry is narrowed: every gRPC call is a POST, so only a failure
-to reach the peer at all (an `HttpRequestException`, such as DNS or connect during a replica
-rollover) is retried, never a status or an attempt timeout that may already have reached the handler
-and could run the call twice (`DependencyInjection.cs:133-137`). The circuit-breaker values are
+to reach the peer before the request was sent is retried, an `HttpRequestException` whose
+`HttpRequestError` is `NameResolutionError`, `ConnectionError`, or `SecureConnectionError` (DNS, the TCP
+connect, or the TLS handshake during a replica rollover). A status, an attempt timeout, or an
+`HttpRequestException` raised after the request frames were written may already have reached the
+handler and could run the call twice, so none of those is retried (`DependencyInjection.cs:135-147`). The circuit-breaker values are
 spelled out (`FailureRatio` 0.5,
 `MinimumThroughput` 10, `BreakDuration` 10 seconds, at
 `MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/GrpcResilienceDefaults.cs:27-33`) precisely
@@ -233,7 +313,7 @@ for `IBookmarkCountService` on the speaker dashboard
 (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:420`), Notification to Identity for
 attendee user ids (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:230`), and
 Identity to Engagement plus Identity to Notification for the cross-service data-subject export
-aggregation (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:326-327`). Server sides are
+aggregation (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:330-331`). Server sides are
 mapped in each host with `AddGrpcServiceDefaults()` plus `app.MapGrpcService<...>()`, mostly behind
 `.RequireAuthorization()`
 (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:430`, `:396-397`).
@@ -275,6 +355,41 @@ executable governance keeping this transport genuinely at the edge
 `[Rubric §34, Architecture Governance & Documentation]` and `[Rubric §15, Best Practices & Code
 Quality]`. Generated gRPC client classes need no attribute: they are part of the contract surface by
 virtue of their `.proto`.
+
+### CachedToken
+> MMCA.Common.Grpc · `MMCA.Common.Grpc.Authentication` · `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Authentication/ServiceTokenProvider.cs:105` · Level 0 · record (private, sealed)
+
+- **What it is**: a private nested record inside [`ServiceTokenProvider`](#servicetokenprovider) holding a
+  minted token and the instant it expires: `CachedToken(string Value, DateTimeOffset ExpiresAt)`
+  (`ServiceTokenProvider.cs:105`).
+- **Depends on**: BCL only.
+- **Concept reinforced, immutable value published across threads.** Being a record (reference type), the
+  provider can publish it with a single `Volatile.Write` and readers see either the old or the new token,
+  never a torn pair (`ServiceTokenProvider.cs:52-70`).
+- **Walkthrough**: `IsFresh` compares `ExpiresAt - now` to the 60-second window (line 76); `Mint` builds it
+  from the written token string and the `exp` actually serialized (line 101).
+- **Why it's built this way**: carrying `ExpiresAt` next to `Value` lets the cache age a token without
+  re-parsing the JWT.
+- **Where it's used**: only inside `ServiceTokenProvider.cs`.
+
+### DefaultSchemeGuard
+> MMCA.Common.Grpc · `MMCA.Common.Grpc.Authentication` · `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Authentication/ServiceTokenServiceCollectionExtensions.cs:165` · Level 0 · class (private, sealed)
+
+- **What it is**: an empty marker class nested in
+  [`ServiceTokenServiceCollectionExtensions`](#servicetokenservicecollectionextensions)
+  (`ServiceTokenServiceCollectionExtensions.cs:165`), declared `private sealed class DefaultSchemeGuard;`.
+  Its doc comment calls it "marker options whose start-time validation runs the default-scheme guard"
+  (line 164).
+- **Depends on**: nothing; it carries no members.
+- **Concept reinforced, fail-fast configuration contract.** [ADR-070](https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html)
+  `[Rubric §11, Security]`: the options system runs `Validate` plus `ValidateOnStart` against it, so the check
+  executes once at host startup (`ServiceTokenServiceCollectionExtensions.cs:78-82`).
+- **Walkthrough**: `AddOptions<DefaultSchemeGuard>().Validate<IOptions<AuthenticationOptions>>(...)` calls
+  `ServiceTokenIsNotTheDefaultScheme` and, on failure, reports that the `ServiceToken` scheme must not be the
+  default (lines 78-82).
+- **Why it's built this way**: a marker type keeps the validation off `AuthenticationOptions` itself, so reading
+  those options stays free of side effects (comment, lines 76-77).
+- **Where it's used**: only in `AddServiceTokenAuthentication`; exercised by `ServiceTokenDefaultSchemeGuardTests`.
 
 ### GrpcWireFormat
 > MMCA.Common.Grpc · `MMCA.Common.Grpc` · `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/GrpcWireFormat.cs:30` · Level 0 · class (static)
@@ -334,20 +449,44 @@ virtue of their `.proto`.
 - **Caveats / not-in-source**: none of the usage sites read for this section calls the decimal
   helpers; their consumers (if any outside ADC) are not determinable from the usage list in hand.
 
+### IServiceTokenProvider
+> MMCA.Common.Grpc · `MMCA.Common.Grpc.Authentication` · `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Authentication/IServiceTokenProvider.cs:8` · Level 0 · interface
+
+- **What it is**: the one-method contract for "give me a token naming this service":
+  `string GetToken()` (`IServiceTokenProvider.cs:15`). The doc comment promises a compact JWT valid for
+  at least the next 60 seconds, returned as the token only, without the `Bearer` prefix (lines 10-14).
+- **Depends on**: nothing.
+- **Concept introduced, a narrow abstraction in front of credential minting.** `[Rubric §7,
+  Microservices Readiness]` (assesses transport concerns behind abstractions) and `[Rubric §11,
+  Security]`.
+- **Walkthrough**: a single member, `GetToken`. The caller adds `Bearer ` itself, as
+  [`ServiceTokenClientInterceptor`](#servicetokenclientinterceptor) does.
+- **Why it's built this way**: the interceptor depends on the interface, so tests substitute a fake
+  without keys or clocks (`ServiceTokenClientInterceptorTests`).
+- **Where it's used**: implemented by [`ServiceTokenProvider`](#servicetokenprovider), consumed by
+  [`ServiceTokenClientInterceptor`](#servicetokenclientinterceptor), registered by
+  `AddServiceTokenClient` (`ServiceTokenServiceCollectionExtensions.cs:41`) and referenced in
+  `DependencyInjection.cs` (the `AddTypedGrpcClient` doc comment, line 64).
+
 ### JwtForwardingClientInterceptor
-> MMCA.Common.Grpc · `MMCA.Common.Grpc.Interceptors` · `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Interceptors/JwtForwardingClientInterceptor.cs:27` · Level 0 · class (sealed)
+> MMCA.Common.Grpc · `MMCA.Common.Grpc.Interceptors` · `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Interceptors/JwtForwardingClientInterceptor.cs:39` · Level 0 · class (sealed)
 
 - **What it is**: a gRPC **client-side** interceptor that copies the inbound `Authorization` header
   from the current `HttpContext` onto every outgoing gRPC call's metadata, so the caller's JWT bearer
   token rides along to downstream services. When the request authenticated without that header (a
   SignalR hub connection passes its token as `?access_token=`), it forwards the token saved on the
-  authentication ticket instead (class remarks, `JwtForwardingClientInterceptor.cs:19-25`). It is the gRPC counterpart of the HTTP
+  authentication ticket instead (class remarks, `JwtForwardingClientInterceptor.cs:24-25`). It is the gRPC counterpart of the HTTP
   [`JwtForwardingDelegatingHandler`](group-12-api-hosting-mapping.md#jwtforwardingdelegatinghandler) in
-  the API/Infrastructure layer.
+  the API/Infrastructure layer. It forwards only the **user's** token: a call with no user token goes
+  out with no `Authorization` entry unless its client opted into service tokens with
+  [`ServiceTokenHttpClientBuilderExtensions`](#servicetokenhttpclientbuilderextensions)' `WithServiceToken()`,
+  which adds [`ServiceTokenClientInterceptor`](#servicetokenclientinterceptor) for that client alone
+  (class remarks, lines 27-36). An `Authorization` entry the caller already set is never overwritten
+  or duplicated.
 - **Depends on**: `Grpc.Core.Interceptors.Interceptor` (the base class) and `Grpc.Core` call types
   (NuGet, see [primer §3, "Transport"](00-primer.md#3-the-external-stack-bcl--nuget--external-level-0));
   `Microsoft.AspNetCore.Http.IHttpContextAccessor` (ASP.NET Core, injected as a primary-constructor
-  parameter, `JwtForwardingClientInterceptor.cs:27`); `IAuthenticateResultFeature` and the
+  parameter, `JwtForwardingClientInterceptor.cs:39`); `IAuthenticateResultFeature` and the
   `AuthenticationProperties.GetTokenValue` helper (`using Microsoft.AspNetCore.Authentication`,
   line 3) for the saved-token fallback. Nothing first-party: it lives in
   `MMCA.Common.Grpc`, which by the layer rules depends on **`Shared` only** and is pure transport (see
@@ -365,32 +504,38 @@ virtue of their `.proto`.
   ([ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html), see
   [`RsaJwksProvider`](group-08-auth.md#rsajwksprovider)).
 - **Walkthrough**: members in execution order.
-  - `private const string AuthorizationHeader = "Authorization"`
-    (`JwtForwardingClientInterceptor.cs:29`), the single header name, and
-    `private const string AccessTokenName = "access_token"` (line 31), the name under which
+  - `internal const string AuthorizationHeader = "Authorization"`
+    (`JwtForwardingClientInterceptor.cs:41`), the single header name (internal so
+    [`ServiceTokenClientInterceptor`](#servicetokenclientinterceptor) shares it), and
+    `private const string AccessTokenName = "access_token"` (line 43), the name under which
     `JwtBearerOptions.SaveToken` stores the token on the authentication ticket.
-  - The five overrides (`AsyncUnaryCall` line 34, `BlockingUnaryCall` line 45,
-    `AsyncServerStreamingCall` line 56, `AsyncClientStreamingCall` line 67, `AsyncDuplexStreamingCall`
-    line 77) each follow the same three-step shape:
+  - The five overrides (`AsyncUnaryCall` line 46, `BlockingUnaryCall` line 57,
+    `AsyncServerStreamingCall` line 68, `AsyncClientStreamingCall` line 79, `AsyncDuplexStreamingCall`
+    line 89) each follow the same three-step shape:
     `ArgumentNullException.ThrowIfNull(continuation)`, build a new context via
     `WithForwardedAuthorization(context)`, then invoke `continuation(...)`. The two streaming variants
-    whose continuation takes no `request` argument call `continuation(newContext)` (lines 73 and 83);
+    whose continuation takes no `request` argument call `continuation(newContext)` (lines 85 and 95);
     the other three pass `(request, newContext)`.
-  - `WithForwardedAuthorization<TRequest, TResponse>` (`JwtForwardingClientInterceptor.cs:86-109`) is the
-    shared helper. It asks `ResolveAuthorization(httpContextAccessor.HttpContext)` for the value to
-    forward (line 91); if that is null or empty it returns the context **unchanged** (lines 92-95), the
-    deliberate **no-op when there is no HTTP request**, for example a background processor or hosted
-    service invoking a gRPC client outside a request. Otherwise it takes the call's existing
-    `Options.Headers` (or a fresh `Metadata` via the collection expression `[]`, line 97), then **checks
-    whether `Authorization` is already present** (lines 100-104) and bails out if a prior interceptor or
-    the caller already set it, so the header is never duplicated. Only then does it `headers.Add(...)`
-    (line 106), rebuild the call options with `WithHeaders` (line 107), and return a new
-    `ClientInterceptorContext` carrying `context.Method`, `context.Host`, and the new options (line 108).
-  - `ResolveAuthorization(HttpContext?)` (`JwtForwardingClientInterceptor.cs:117-133`) picks the value.
-    No `HttpContext` answers `null` (lines 119-122). A non-empty inbound `Authorization` header is
-    returned as-is and **always wins** (lines 124-128). Otherwise it reads
+  - `WithForwardedAuthorization<TRequest, TResponse>` (`JwtForwardingClientInterceptor.cs:162-168`) is now a
+    thin private wrapper: if `HasAuthorization(context)` is true it returns the context unchanged,
+    otherwise it calls `WithAuthorization(context, ResolveUserAuthorization(httpContextAccessor.HttpContext))`.
+  - `WithAuthorization<TRequest, TResponse>(context, authHeader)` (`JwtForwardingClientInterceptor.cs:108-123`)
+    is the shared `internal static` helper. If `authHeader` is null or empty, **or** the call already
+    carries an `Authorization` entry, it returns the context **unchanged** (line 114): the deliberate
+    **no-op when there is no HTTP request**, for example a background processor or hosted service
+    invoking a gRPC client outside a request. Otherwise it takes the call's existing `Options.Headers`
+    (or a fresh `Metadata` via the collection expression `[]`, line 119), does `headers.Add(...)`
+    (line 120), rebuilds the call options with `WithHeaders` (line 121), and returns a new
+    `ClientInterceptorContext` carrying `context.Method`, `context.Host`, and the new options (line 122).
+  - `HasAuthorization<TRequest, TResponse>(context)` (`JwtForwardingClientInterceptor.cs:133-136`) answers
+    whether `Options.Headers?.GetValue("Authorization")` is non-null, so a prior interceptor or the caller
+    that already set it is never overwritten or duplicated.
+  - `ResolveUserAuthorization(HttpContext?)` (`JwtForwardingClientInterceptor.cs:144-160`, `internal static`)
+    picks the value.
+    No `HttpContext` answers `null` (lines 146-149). A non-empty inbound `Authorization` header is
+    returned as-is and **always wins** (lines 151-155). Otherwise it reads
     `httpContext.Features.Get<IAuthenticateResultFeature>()?.AuthenticateResult?.Properties?.GetTokenValue("access_token")`
-    and, when that is non-empty, answers `$"Bearer {savedToken}"` (lines 130-132). This is what lets a
+    and, when that is non-empty, answers `$"Bearer {savedToken}"` (lines 157-159). This is what lets a
     call made from inside a SignalR hub, where the token arrived on the query string rather than in a
     header, still carry the caller's identity downstream.
 - **Why it's built this way**: sealing the class and overriding all five call shapes makes token
@@ -398,12 +543,14 @@ virtue of their `.proto`.
   interceptor rather than at each call site keeps consumer code transport-agnostic, which is exactly the
   extraction boundary [ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html) and
   [ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html) want. The
-  duplicate-header guard means it composes safely with other interceptors. The saved-token fallback
+  duplicate-header guard means it composes safely with other interceptors, and the helpers being
+  `internal static` lets [`ServiceTokenClientInterceptor`](#servicetokenclientinterceptor) reuse the same
+  guard and header write instead of copying them. The saved-token fallback
   forwards the token the request actually authenticated with, and only when no header is present, so
   it never overrides an explicit `Authorization` value.
 - **Where it's used**: registered automatically by `AddTypedGrpcClient<TClient>` in this group's
   [`DependencyInjection`](#dependencyinjection)
-  (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:93,98`), so every typed gRPC
+  (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:95,100`), so every typed gRPC
   client an ADC or Store service host builds gets it without explicit wiring.
 
 ### ServiceContractAttribute
@@ -481,6 +628,113 @@ virtue of their `.proto`.
   metadata only: no source read in this group consumes it, so it does not participate in any wire-level
   version negotiation.
 
+### ServiceTokenDefaults
+> MMCA.Common.Grpc · `MMCA.Common.Grpc.Authentication` · `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Authentication/ServiceTokenDefaults.cs:8` · Level 0 · class (static)
+
+- **What it is**: the three well-known names of the service-token scheme, held as constants so the minting
+  side and the validating side cannot drift: the authentication scheme `"ServiceToken"`
+  (`ServiceTokenDefaults.cs:15`), the authorization policy `"InternalCaller"` (line 21), and the claim
+  type `"svc"` that carries the calling service's name (line 27).
+- **Depends on**: nothing; it is three `const string` members in `MMCA.Common.Grpc`.
+- **Concept introduced, a service-to-service credential kept separate from the user credential.**
+  `[Rubric §11, Security]` (assesses how callers are told apart and how far a credential reaches). The
+  doc comment on the scheme states the key rule: it is **never the default scheme**, so a service token
+  only authenticates an endpoint that names the scheme, in practice one under `InternalCallerPolicy`
+  (lines 10-14). The policy accepts an authenticated caller from either the user JwtBearer scheme or the
+  service scheme (lines 17-20). A token without the `svc` claim is not a service token and is refused
+  (lines 23-26).
+- **Walkthrough**: no behavior, only the three constants above.
+- **Why it's built this way**: the scheme name is shared by `AddServiceTokenAuthentication`, the default
+  scheme guard, and the policy registration, and the claim type is shared by the minting side and the
+  validation event, so one definition removes string drift between them.
+- **Where it's used**: [`ServiceTokenServiceCollectionExtensions`](#servicetokenservicecollectionextensions)
+  (13 references, `ServiceTokenServiceCollectionExtensions.cs`), [`ServiceTokenProvider`](#servicetokenprovider)
+  (writes the claim, `ServiceTokenProvider.cs:88`), and the tests
+  `MMCA.Common/Tests/Presentation/MMCA.Common.Grpc.Tests/Authentication/ServiceTokenAuthenticationTests.cs`.
+
+### ServiceTokenSettings
+> MMCA.Common.Grpc · `MMCA.Common.Grpc.Authentication` · `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Authentication/ServiceTokenSettings.cs:18` · Level 0 · class (sealed)
+
+- **What it is**: the options class bound from the `Grpc:ServiceToken` section
+  (`SectionName`, `ServiceTokenSettings.cs:21`). It carries `SigningKey` (line 33, Base64 HMAC key shared
+  by every service in the deployment), `ServiceName` (line 39, the `sub` and `svc` claims), `Issuer`
+  (line 42, default `"mmca-service"`), `Audience` (line 48, default `"internal-grpc"`), and
+  `LifetimeMinutes` (line 51, default 5). It implements `IValidatableObject`.
+- **Depends on**: `System.ComponentModel.DataAnnotations` (BCL) only.
+- **Concept introduced, fail-fast configuration contract.** `[Rubric §11, Security]` (assesses secret
+  and key handling) and the project's fail-fast option pattern
+  ([ADR-070](https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html);
+  key sourcing: [ADR-061](https://ivanball.github.io/docs/adr/061-runtime-secret-management.html)).
+  `Validate` (line 59) yields one `ValidationResult` per defect, so a misconfigured host fails on start
+  with a message naming the exact problem rather than minting tokens a receiver cannot validate.
+- **Walkthrough**: `SigningKey` is checked in three steps: blank (required), not valid Base64
+  (`DecodedLength` returns `null`, line 96), or fewer than the HS256 minimum of 32 bytes
+  (`MinimumSigningKeyBytes`, line 24). `ServiceName` must be non-blank. `LifetimeMinutes` must lie in
+  1 to 60 (`MaximumLifetimeMinutes`, line 27). `DecodedLength` allocates a buffer sized
+  `(length + 3) / 4 * 3` and uses `Convert.TryFromBase64String` (lines 96-100).
+- **Why it's built this way**: the audience default differs from the user tokens' audience on purpose,
+  because the audience is what keeps a service token out of the user scheme (doc comment, lines 44-47).
+  The five-minute default and 60-minute cap bound the damage of a leaked token.
+- **Where it's used**: bound and validated once by `AddServiceTokenSettings`
+  (`ServiceTokenServiceCollectionExtensions.cs:96-106`), read by [`ServiceTokenProvider`](#servicetokenprovider)
+  to mint, and covered by `ServiceTokenSettingsTests`
+  (`MMCA.Common/Tests/Presentation/MMCA.Common.Grpc.Tests/Authentication/ServiceTokenSettingsTests.cs`).
+
+### ServiceTokenClientInterceptor
+> MMCA.Common.Grpc · `MMCA.Common.Grpc.Interceptors` · `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Interceptors/ServiceTokenClientInterceptor.cs:28` · Level 1 · class (sealed)
+
+- **What it is**: a gRPC client interceptor that, for a call carrying no user token, attaches this
+  service's own token as `Authorization: Bearer {token}`. It is added per client by
+  [`WithServiceToken()`](#servicetokenhttpclientbuilderextensions), never globally.
+- **Depends on**: [`JwtForwardingClientInterceptor`](#jwtforwardingclientinterceptor) (reuses its
+  `internal static` `HasAuthorization`, `ResolveUserAuthorization` and `WithAuthorization`),
+  [`IServiceTokenProvider`](#iservicetokenprovider) (the token source), and `IHttpContextAccessor`; both
+  injected through the primary constructor (`ServiceTokenClientInterceptor.cs:28-30`).
+- **Concept reinforced, interceptors for cross-service auth.** `[Rubric §11, Security]` (assesses how a
+  call proves who is making it when no user is involved, such as a background job).
+- **Walkthrough**: the five call-shape overrides (`AsyncUnaryCall` line 33, `BlockingUnaryCall` line 43,
+  `AsyncServerStreamingCall` line 53, `AsyncClientStreamingCall` line 63, `AsyncDuplexStreamingCall`
+  line 72) each null-check the continuation and pass `WithServiceAuthorization(context)`. That helper
+  (line 80) returns the context unchanged when the call already has an `Authorization` entry **or** a user
+  token resolves from the ambient request (lines 85-89). Otherwise it calls
+  `serviceTokenProvider.GetToken()` (line 91) and hands `Bearer {token}`, or `null` for an empty token, to
+  `JwtForwardingClientInterceptor.WithAuthorization` (lines 92-94).
+- **Why it's built this way**: the user's identity always wins over the service's, so a user-initiated
+  call is never silently escalated to a service call. Reusing the jwt interceptor's helpers keeps one
+  definition of "already has an `Authorization` entry".
+- **Where it's used**: added by `WithServiceToken()`
+  (`ServiceTokenHttpClientBuilderExtensions.cs:34`); tested in
+  `MMCA.Common/Tests/Presentation/MMCA.Common.Grpc.Tests/ServiceTokenClientInterceptorTests.cs`.
+
+### ServiceTokenProvider
+> MMCA.Common.Grpc · `MMCA.Common.Grpc.Authentication` · `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Authentication/ServiceTokenProvider.cs:23` · Level 1 · class (sealed)
+
+- **What it is**: the [`IServiceTokenProvider`](#iservicetokenprovider) implementation. It mints an HS256
+  JWT naming this service and caches it, handing out the same token until its last 60 seconds
+  (`RefreshWindow`, `ServiceTokenProvider.cs:26`).
+- **Depends on**: [`ServiceTokenSettings`](#servicetokensettings) (via `IOptions`), `TimeProvider` (the
+  clock), [`ServiceTokenDefaults`](#servicetokendefaults) (the `svc` claim type), and
+  `System.IdentityModel.Tokens.Jwt` (NuGet). The constructor builds `SigningCredentials` once from the
+  Base64 key with `SecurityAlgorithms.HmacSha256` (lines 39-48).
+- **Concept introduced, a double-checked token cache.** `[Rubric §11, Security]` (assesses short-lived
+  credentials) and `[Rubric §29, Resilience & Business Continuity]` (a token that could expire mid-call
+  is never handed out).
+- **Walkthrough**: `GetToken()` (line 52) reads the published `_cached` with `Volatile.Read`; if
+  `IsFresh` (line 76: `ExpiresAt - now > RefreshWindow`) it returns without locking. Otherwise it takes
+  the `Lock _gate` (line 61), re-checks in case another caller minted while it waited, and only then
+  `Mint`s and publishes with `Volatile.Write`. `Mint` (line 79) truncates now to whole seconds, because JWT
+  times are whole seconds and the cache must age the token by the `exp` actually written, then adds
+  `LifetimeMinutes`. The claims are `sub`, `svc`, a fresh `jti`, and `iat` (lines 85-91); the token carries
+  the issuer, audience, `notBefore` and `expires` from the settings (lines 93-99), and the result is stored as a
+  [`CachedToken`](#cachedtoken) (line 101).
+- **Why it's built this way**: registered as a singleton, so one cache per process serves every
+  outgoing call; readers never contend, and only a caller inside the refresh window takes the lock, once
+  for everyone waiting (class remarks, lines 16-22).
+- **Where it's used**: registered by `AddServiceTokenClient`
+  (`ServiceTokenServiceCollectionExtensions.cs:41`) and consumed by
+  [`ServiceTokenClientInterceptor`](#servicetokenclientinterceptor); tested in `ServiceTokenProviderTests`
+  (`MMCA.Common/Tests/Presentation/MMCA.Common.Grpc.Tests/Authentication/ServiceTokenProviderTests.cs`).
+
 ### ResultFailureException
 > MMCA.Common.Grpc · `MMCA.Common.Grpc.Exceptions` · `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Exceptions/ResultFailureException.cs:16` · Level 2 · class (sealed)
 
@@ -524,6 +778,69 @@ virtue of their `.proto`.
   that case is not free downstream. The interceptor treats it specially (see
   `GrpcResultExceptionInterceptor.cs:126-138`) because the normal encoder would otherwise flatten the
   message away; prefer the `IReadOnlyList<Error>` constructor, which is what `ThrowIfFailure` uses.
+
+### ServiceTokenHttpClientBuilderExtensions
+> MMCA.Common.Grpc · `MMCA.Common.Grpc.Authentication` · `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Authentication/ServiceTokenHttpClientBuilderExtensions.cs:11` · Level 2 · class (static)
+
+- **What it is**: a C# `extension(IHttpClientBuilder)` block (see
+  [primer §4](00-primer.md#4-c-build-and-code-style-conventions)) with one method, `WithServiceToken()`
+  (`ServiceTokenHttpClientBuilderExtensions.cs:28`), that opts a single typed gRPC client into service
+  tokens.
+- **Depends on**: [`ServiceTokenClientInterceptor`](#servicetokenclientinterceptor) and
+  `Grpc.Net.ClientFactory` (`AddInterceptor`, `InterceptorScope.Client`).
+- **Concept introduced, per-client opt-in.** `[Rubric §11, Security]` (assesses least privilege). Chain it
+  onto `AddTypedGrpcClient<TClient>` ([`DependencyInjection`](#dependencyinjection)) only for a client
+  whose server validates service tokens (`AddServiceTokenAuthentication`); leave it off every other
+  client, since a server that does not validate them would have to reject the token (doc comment,
+  lines 14-19).
+- **Walkthrough**: null-checks the builder (line 30), calls `AddHttpContextAccessor()` (line 32), registers
+  `TryAddTransient<ServiceTokenClientInterceptor>()` (line 33), and returns
+  `builder.AddInterceptor<ServiceTokenClientInterceptor>(InterceptorScope.Client)` (line 34), so the
+  builder chains on.
+- **Why it's built this way**: the interceptor attaches to that client alone (see
+  [ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html)). The host must also call
+  [`AddServiceTokenClient`](#servicetokenservicecollectionextensions); without it the client fails to
+  resolve on first use, naming the missing `IServiceTokenProvider` (remarks, lines 21-24).
+- **Where it's used**: tested in `ServiceTokenHttpClientBuilderExtensionsTests`
+  (`MMCA.Common/Tests/Presentation/MMCA.Common.Grpc.Tests/Authentication/ServiceTokenHttpClientBuilderExtensionsTests.cs`).
+
+### ServiceTokenServiceCollectionExtensions
+> MMCA.Common.Grpc · `MMCA.Common.Grpc.Authentication` · `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Authentication/ServiceTokenServiceCollectionExtensions.cs:23` · Level 2 · class (static)
+
+- **What it is**: the registration surface for both ends of service tokens, as an
+  `extension(IServiceCollection)` block ([ADR-106](https://ivanball.github.io/docs/adr/106-extension-members-as-public-di-surface.html)):
+  `AddServiceTokenClient(IConfiguration)` (`ServiceTokenServiceCollectionExtensions.cs:35`) for a caller, and
+  `AddServiceTokenAuthentication(IConfiguration)` (line 63) for a receiver.
+- **Depends on**: [`ServiceTokenSettings`](#servicetokensettings),
+  [`ServiceTokenDefaults`](#servicetokendefaults), [`IServiceTokenProvider`](#iservicetokenprovider) /
+  [`ServiceTokenProvider`](#servicetokenprovider), [`DefaultSchemeGuard`](#defaultschemeguard), and
+  ASP.NET Core JwtBearer, authorization and options.
+- **Concept introduced, fail-fast hosting for a security rule.** `[Rubric §11, Security]` (assesses
+  whether an unsafe configuration can start) and
+  [ADR-070](https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html).
+- **Walkthrough**: `AddServiceTokenClient` binds the settings, `TryAddSingleton(TimeProvider.System)` and
+  `TryAddSingleton<IServiceTokenProvider, ServiceTokenProvider>()` (lines 39-41).
+  `AddServiceTokenAuthentication` binds the settings (line 67), adds the `ServiceToken` JwtBearer scheme
+  (line 70), configures it from the validated settings (lines 71-72), registers the default-scheme guard
+  with `ValidateOnStart` (lines 78-82), and adds the `InternalCaller` policy over the user scheme plus the
+  service scheme with `RequireAuthenticatedUser` (lines 84-87). The private `AddServiceTokenSettings`
+  (line 96) returns early when a `DataAnnotationValidateOptions<ServiceTokenSettings>` is already
+  registered (line 98), then binds `Grpc:ServiceToken` with `ValidateDataAnnotations().ValidateOnStart()`
+  (lines 103-106), so a bad section reports each problem once. `ServiceTokenIsNotTheDefaultScheme`
+  (line 110) is false if any of the four default-scheme slots is `ServiceToken`, or if no default is set and
+  `ServiceToken` is the lone registered scheme (ASP.NET Core promotes a lone scheme to default).
+  `ConfigureServiceTokenBearer` (line 131) validates issuer, audience, lifetime and signing key, pins
+  `ValidAlgorithms` to HS256 against algorithm-confusion (lines 133-145), and its `OnTokenValidated` event
+  fails the context when the `svc` claim is missing or blank (lines 147-161).
+- **Why it's built this way**: the guard exists because a service token that became the default scheme
+  would satisfy every plain `[Authorize]` endpoint. The check runs once at startup via a marker options type,
+  so reading `AuthenticationOptions` stays free of side effects. See
+  [ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html).
+- **Where it's used**: not referenced outside its defining file in source; the tests
+  `ServiceTokenAuthenticationTests` and `ServiceTokenDefaultSchemeGuardTests`
+  (`MMCA.Common/Tests/Presentation/MMCA.Common.Grpc.Tests/Authentication/`) exercise it.
+- **Caveats / not-in-source**: ADC and Store host usage of these two methods was not found in the usage
+  list for this section (Not determinable from source here).
 
 ### GrpcResultExceptionInterceptor
 > MMCA.Common.Grpc · `MMCA.Common.Grpc.Interceptors` · `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Interceptors/GrpcResultExceptionInterceptor.cs:19` · Level 3 · class (sealed, partial)
@@ -700,7 +1017,10 @@ virtue of their `.proto`.
   the generated protobuf types out of their application and domain code behind a hand-written adapter
   that is the module's Anti-Corruption Layer.
 - **Depends on**: [`GrpcResultExceptionInterceptor`](#grpcresultexceptioninterceptor) (Level 3),
-  [`JwtForwardingClientInterceptor`](#jwtforwardingclientinterceptor) (Level 0), and
+  [`JwtForwardingClientInterceptor`](#jwtforwardingclientinterceptor) (Level 0; it forwards only the user's
+  token, and a client that opts in with `WithServiceToken()` gets this service's own token from
+  [`ServiceTokenClientInterceptor`](#servicetokenclientinterceptor) when there is none, see the doc
+  comment at `DependencyInjection.cs:63-65`), and
   [`GrpcResilienceDefaults`](group-16-aspire-orchestration.md#grpcresiliencedefaults) /
   [`HttpResilienceDefaults`](group-16-aspire-orchestration.md#httpresiliencedefaults) (via
   `using MMCA.Common.Shared.Resilience`, `DependencyInjection.cs:5`); `Grpc.Net.ClientFactory`,
@@ -715,34 +1035,35 @@ virtue of their `.proto`.
   Security]` appears twice here in a form worth noticing: detailed errors are switched off so internal
   exception text never leaks over the wire, and the transport is cleartext h2c *by design* for in-cluster
   east-west calls, which is why the S5332 analyzer is suppressed with an explicit justification
-  (lines 95 and 99, its justification text pointing back at the class-level extraction boundary
+  (lines 97 and 101, its justification text pointing back at the class-level extraction boundary
   remarks) rather than silently.
 - **Walkthrough**
   - `AddGrpcServiceDefaults()` (line 36): `TryAddSingleton<GrpcResultExceptionInterceptor>()` (line 38),
     then `AddGrpc(options => { options.Interceptors.Add<GrpcResultExceptionInterceptor>(); options.EnableDetailedErrors = false; })`
     (lines 40-44), then `AddGrpcReflection()` (line 46) so tools such as `grpcurl` can introspect the
     schema. Returns `services` for chaining.
-  - `AddTypedGrpcClient<TClient>(string serviceName)` (line 87) does four things in order. First it
-    validates the name (`ArgumentException.ThrowIfNullOrWhiteSpace`, line 90) and registers
-    `AddHttpContextAccessor()` plus `TryAddTransient<JwtForwardingClientInterceptor>()` (lines 92-93).
+  - `AddTypedGrpcClient<TClient>(string serviceName)` (line 89) does four things in order. First it
+    validates the name (`ArgumentException.ThrowIfNullOrWhiteSpace`, line 92) and registers
+    `AddHttpContextAccessor()` plus `TryAddTransient<JwtForwardingClientInterceptor>()` (lines 94-95).
     Second it calls `AddGrpcClient<TClient>` with the address `new Uri($"http://{serviceName}")`
-    (lines 96-97), resolved by Aspire service discovery, and attaches
-    `.AddInterceptor<JwtForwardingClientInterceptor>(InterceptorScope.Client)` (line 98). Third it
-    **forces the primary handler** to a `SocketsHttpHandler` (lines 110-118) with
+    (lines 98-99), resolved by Aspire service discovery, and attaches
+    `.AddInterceptor<JwtForwardingClientInterceptor>(InterceptorScope.Client)` (line 100). Third it
+    **forces the primary handler** to a `SocketsHttpHandler` (lines 112-120) with
     `EnableMultipleHttp2Connections = true` and the connection-hygiene values re-applied from
     `HttpResilienceDefaults`: `PooledConnectionLifetime` (10 minutes), `PooledConnectionIdleTimeout`
     (5 minutes), `KeepAlivePingDelay` (60 seconds), `KeepAlivePingTimeout` (30 seconds), and
     `KeepAlivePingPolicy = WithActiveRequests`
     (`MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:36,39,42,45`).
-    Fourth it layers `AddStandardResilienceHandler` back on (lines 127-142), setting every knob from
+    Fourth it layers `AddStandardResilienceHandler` back on (lines 129-152), setting every knob from
     [`GrpcResilienceDefaults`](group-16-aspire-orchestration.md#grpcresiliencedefaults): a 30-second
     attempt timeout and 90-second total request timeout re-exposed from the outbound-HTTP path, one
     retry beyond the initial attempt, and an explicit circuit breaker (60-second sampling window,
     `FailureRatio` 0.5, `MinimumThroughput` 10, `BreakDuration` 10 seconds)
     (`MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/GrpcResilienceDefaults.cs:15-33`). The retry
-    is narrowed by `options.Retry.ShouldHandle = args => ValueTask.FromResult(args.Outcome.Exception is HttpRequestException)`
-    (line 137): only a failure to reach the service is retried. It returns the original
-    `IHttpClientBuilder` (line 143), not the resilience-pipeline builder, so callers can keep chaining.
+    is narrowed by `options.Retry.ShouldHandle` (lines 142-147) to an `HttpRequestException` whose
+    `HttpRequestError` is `NameResolutionError`, `ConnectionError`, or `SecureConnectionError`: only a
+    failure to reach the service before the request was sent is retried. It returns the original
+    `IHttpClientBuilder` (line 153), not the resilience-pipeline builder, so callers can keep chaining.
 - **Why it's built this way**: four deliberate decisions live here, each documented inline and each
   worth reading before changing anything.
   1. **h2c (HTTP/2 cleartext) over `http://{serviceName}`, not HTTPS** (lines 54-62). Aspire's
@@ -752,32 +1073,35 @@ virtue of their `.proto`.
      endpoint (`Kestrel:EndpointDefaults:Protocols = "Http2"`) or Kestrel rejects the frames with
      `HTTP_1_1_REQUIRED`. The per-host transport choices are
      [ADR-012](https://ivanball.github.io/docs/adr/012-grpc-host-transport.html).
-  2. **The explicit `SocketsHttpHandler`** (lines 101-109). The global `ConfigureHttpClientDefaults` from
+  2. **The explicit `SocketsHttpHandler`** (lines 103-111). The global `ConfigureHttpClientDefaults` from
      `MMCA.Common.Aspire` applies to *all* `HttpClient` instances including this gRPC one, and its
      standard resilience pipeline can wrap the primary handler in a way that defeats HTTP/2 negotiation.
      Setting `SocketsHttpHandler` explicitly bypasses that wrapper for the gRPC client only, which is
      precisely why the pooled-lifetime and keep-alive values have to be re-applied from the same
      `HttpResilienceDefaults` source of truth: the override drops whatever the global default had set.
   3. **The circuit breaker is stated explicitly, not left at the library defaults** (comment at
-     lines 120-126, values at `GrpcResilienceDefaults.cs:26-33`). An east-west gRPC call addresses a peer
+     lines 122-128, values at `GrpcResilienceDefaults.cs:26-33`). An east-west gRPC call addresses a peer
      directly and bypasses the Gateway's active health checks, so the breaker is the only thing that
      notices a peer going bad. Timeouts and the retry budget, by contrast, are re-exposed from
      `HttpResilienceDefaults` so the two paths cannot drift.
-  4. **The retry predicate is replaced, not left at the default** (comment at lines 133-136). Every gRPC
+  4. **The retry predicate is replaced, not left at the default** (comment at lines 135-141). Every gRPC
      call is an HTTP POST, so the standard handler's unsafe-method opt-out would switch the retry off
-     entirely. Instead only an `HttpRequestException` (a DNS or connect failure, for example during an
-     ACA replica rollover) is retried; a returned status or an attempt timeout may already have reached
-     the handler, and replaying it could run the call twice. That keeps the single retry safe for
+     entirely. Instead only an `HttpRequestException` whose `HttpRequestError` is `NameResolutionError`,
+     `ConnectionError`, or `SecureConnectionError` (failures before the request was sent, for example
+     during an ACA replica rollover) is retried. A returned status, an attempt timeout, or an
+     `HttpRequestException` raised after the request frames were written (`ResponseEnded`, a protocol
+     error, or `Unknown` wrapping a connection reset) may already have reached the handler, and
+     replaying it could run the call twice. That keeps the single retry safe for
      non-idempotent calls `[Rubric §29, Resilience & Business Continuity]`.
 
   The doc comment is explicit that application code should **not** consume the generated client
-  directly (lines 66-76): register a hand-written adapter implementing the consuming module's own C#
+  directly (lines 68-78): register a hand-written adapter implementing the consuming module's own C#
   interface contract (for example `ISessionBookmarkValidationService`) that delegates to the typed
   gRPC client. That adapter *is* the module's Anti-Corruption Layer: the one place where the peer's
   wire model (the generated protobuf types) is translated into the module's own interface contract and
   domain types, so the peer's contract never leaks inward past it. The source names the pattern and
-  cites [ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html) (line 75). Extraction
-  itself follows the Strangler Fig route (lines 77-82,
+  cites [ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html) (line 76). Extraction
+  itself follows the Strangler Fig route (lines 79-84,
   [ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html)): the new service
   host is stood up beside the modular monolith, the typed client and its Anti-Corruption Layer adapter
   move traffic to it, and the in-process path is retired last.
@@ -785,7 +1109,7 @@ virtue of their `.proto`.
   Conference, Engagement, Identity, and Notification `Program.cs`, and Store's Catalog, Identity, and
   Sales `Program.cs`); each consumer wires `AddTypedGrpcClient<TClient>("<servicename>")` indirectly
   through the per-contract DI helper in the matching `*.Contracts` project, for example
-  `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Contracts/DependencyInjection.cs:45,75`.
+  `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Contracts/DependencyInjection.cs:46,76`.
 - **Caveats / not-in-source**: many classes across the framework and the modules are named
   `DependencyInjection` (one per package or module); this section is specifically the
   `MMCA.Common.Grpc` one. The `_typemap.tsv` anchor for the bare name is owned by another group, so
