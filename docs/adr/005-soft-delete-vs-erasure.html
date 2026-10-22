@@ -278,7 +278,7 @@
           <ul>
           <li>Erasure is opt-in per entity, but the opt-in is <strong>guarded</strong>: an aggregate exposing a <code>[Pii]</code>-marked property that does not implement <code>IAnonymizable</code> fails the architecture fitness test, so the &quot;holds personal data but is not erasable&quot; gap surfaces at build time rather than in a manual personal-data inventory. The residual risk shifts to <em>marking</em>: an entity that holds personal data on an <strong>unmarked</strong> property is invisible to the guard, so consumers still own the discipline of applying <code>[Pii]</code> to genuine data-subject fields.</li>
           <li>Anonymization is irreversible by design and is not the same operation as undelete.</li>
-          <li>The late-write guard is per write path, not per account: ADC Engagement refuses only in the three handlers that call <code>ErasedUserGuard</code> (question, vote, upvote), so any other write that takes the caller&#39;s user id stays open to a token that outlives its account until it calls the guard too (Revision 2026-10-21).</li>
+          <li>The late-write guard is per write path, not per account: ADC Engagement refuses only in the three handlers that call <code>ErasedUserGuard</code> (question, vote, upvote), so any other write that takes the caller&#39;s user id stays open to a token that outlives its account until it calls the guard too. The exposure is a residual, not the normal path: the shared deleted-user marker already answers 401 on every host while it is readable (ADR-047), so such a write lands only when the best-effort marker write failed or the shared cache read failed open within the access token&#39;s remaining lifetime (Revision 2026-10-21).</li>
           <li>The framework cannot, on its own, make a consumer compliant: the consumer must still wire the erasure handler, the data-subject request flow, and access/export. This ADR provides the extension points, not the policy.</li>
           <li>The default 7-day outbox retention is a <strong>behavior change</strong>: consumers upgrading the framework begin purging processed outbox rows older than 7 days unless they set <code>Outbox:RetentionDays = 0</code>.</li>
           <li>The <code>DeletedOn</code>/<code>DeletedBy</code> stamps are <strong>two new nullable columns on every auditable table</strong>, so adopting the framework version that introduced them costs one scaffolded migration per consumer database. They are additive (expand only, no ADR-057 override needed) and they are not backfilled: rows soft-deleted before the migration keep null stamps forever, so the pair answers &quot;who deleted this&quot; only from that point on.</li>
@@ -424,8 +424,18 @@
           (<code>.../CheckIns/UseCases/GetOrCreateMyBadge/GetOrCreateMyBadgeHandler.cs:29</code>, <code>:41</code>). The room
           check-in and sponsor-visit handlers also write under the caller&#39;s id
           (<code>.../CheckIns/UseCases/RecordRoomCheckIn/RecordRoomCheckInHandler.cs:58</code>,
-          <code>.../CheckIns/UseCases/RecordSponsorVisit/RecordSponsorVisitHandler.cs:50</code>). So a still-valid
-          token can bring back an erased bookmark or badge row for the erased id.
+          <code>.../CheckIns/UseCases/RecordSponsorVisit/RecordSponsorVisitHandler.cs:50</code>). These paths are
+          reachable only behind the first line of defence failing: the erasure writes the shared
+          deleted-user marker, best effort, for the 15-minute access-token lifetime
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/DeleteUser/DeleteUserHandlerBase.cs:166</code>,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/SoftDeletedUserCache.cs:32</code>), and
+          <code>SoftDeletedUserMiddleware</code> answers 401 on every host, Engagement included, while it reads
+          that marker
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/SoftDeletedUserMiddleware.cs:105-111</code>),
+          failing open when the shared cache read throws (<code>:95-103</code>). So a still-valid token can bring
+          back an erased bookmark or badge row for the erased id only when the marker write failed or the
+          cache read failed open before that token lapsed; the <code>ErasedUser</code> guard exists to close that
+          same residual for questions, votes and upvotes.
           Store has no equivalent record or guard (no match in <code>MMCA.Store/Source</code>).</li>
           </ol>
           

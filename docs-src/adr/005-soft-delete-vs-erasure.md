@@ -39,7 +39,7 @@ The framework provides the **extension points** (`IAnonymizable`, `OutboxCleanup
 ## Trade-offs
 - Erasure is opt-in per entity, but the opt-in is **guarded**: an aggregate exposing a `[Pii]`-marked property that does not implement `IAnonymizable` fails the architecture fitness test, so the "holds personal data but is not erasable" gap surfaces at build time rather than in a manual personal-data inventory. The residual risk shifts to *marking*: an entity that holds personal data on an **unmarked** property is invisible to the guard, so consumers still own the discipline of applying `[Pii]` to genuine data-subject fields.
 - Anonymization is irreversible by design and is not the same operation as undelete.
-- The late-write guard is per write path, not per account: ADC Engagement refuses only in the three handlers that call `ErasedUserGuard` (question, vote, upvote), so any other write that takes the caller's user id stays open to a token that outlives its account until it calls the guard too (Revision 2026-10-21).
+- The late-write guard is per write path, not per account: ADC Engagement refuses only in the three handlers that call `ErasedUserGuard` (question, vote, upvote), so any other write that takes the caller's user id stays open to a token that outlives its account until it calls the guard too. The exposure is a residual, not the normal path: the shared deleted-user marker already answers 401 on every host while it is readable (ADR-047), so such a write lands only when the best-effort marker write failed or the shared cache read failed open within the access token's remaining lifetime (Revision 2026-10-21).
 - The framework cannot, on its own, make a consumer compliant: the consumer must still wire the erasure handler, the data-subject request flow, and access/export. This ADR provides the extension points, not the policy.
 - The default 7-day outbox retention is a **behavior change**: consumers upgrading the framework begin purging processed outbox rows older than 7 days unless they set `Outbox:RetentionDays = 0`.
 - The `DeletedOn`/`DeletedBy` stamps are **two new nullable columns on every auditable table**, so adopting the framework version that introduced them costs one scaffolded migration per consumer database. They are additive (expand only, no ADR-057 override needed) and they are not backfilled: rows soft-deleted before the migration keep null stamps forever, so the pair answers "who deleted this" only from that point on.
@@ -191,6 +191,16 @@ of the `UserDeleted` erasure in ADC and its limits.
    (`.../CheckIns/UseCases/GetOrCreateMyBadge/GetOrCreateMyBadgeHandler.cs:29`, `:41`). The room
    check-in and sponsor-visit handlers also write under the caller's id
    (`.../CheckIns/UseCases/RecordRoomCheckIn/RecordRoomCheckInHandler.cs:58`,
-   `.../CheckIns/UseCases/RecordSponsorVisit/RecordSponsorVisitHandler.cs:50`). So a still-valid
-   token can bring back an erased bookmark or badge row for the erased id.
+   `.../CheckIns/UseCases/RecordSponsorVisit/RecordSponsorVisitHandler.cs:50`). These paths are
+   reachable only behind the first line of defence failing: the erasure writes the shared
+   deleted-user marker, best effort, for the 15-minute access-token lifetime
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/DeleteUser/DeleteUserHandlerBase.cs:166`,
+   `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/SoftDeletedUserCache.cs:32`), and
+   `SoftDeletedUserMiddleware` answers 401 on every host, Engagement included, while it reads
+   that marker
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/SoftDeletedUserMiddleware.cs:105-111`),
+   failing open when the shared cache read throws (`:95-103`). So a still-valid token can bring
+   back an erased bookmark or badge row for the erased id only when the marker write failed or the
+   cache read failed open before that token lapsed; the `ErasedUser` guard exists to close that
+   same residual for questions, votes and upvotes.
    Store has no equivalent record or guard (no match in `MMCA.Store/Source`).
