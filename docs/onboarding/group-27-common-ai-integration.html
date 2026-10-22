@@ -863,7 +863,11 @@
           private <code>RecordUsageIn</code>, yields the update, and in a <code>finally</code>
           records the duration under whichever outcome the loop settled
           on, stopping the clock only once the stream itself ends, which is the number a caller of a streaming API
-          actually feels. The private <code>RecordDuration</code> is the shared
+          actually feels. The outcome starts as <code>CanceledOutcome</code><span class="cite"><span> (<code>UsageRecordingChatClient.cs:196</code>)</span></span> and flips to
+          <code>SuccessOutcome</code> only when <code>MoveNextAsync</code> returns false<span class="cite"><span> (<code>UsageRecordingChatClient.cs:161-165</code>)</span></span>, so a
+          consumer that stops enumerating early (a guardrail blocking an update, a caller breaking out of its
+          loop) reaches the <code>finally</code> with neither <code>catch</code> having run and is recorded as canceled, not as a
+          success; usage already delivered update by update stays recorded. The private <code>RecordDuration</code> is the shared
           helper both paths call, and both paths tag every measurement with the resolved <code>Provider</code> property
           rather than a constructor field.</li>
           <li><strong>Why it&#39;s built this way</strong>: usage recording happens after the base call returns (or per streamed
@@ -1115,16 +1119,16 @@
           <ul>
           <li><strong>What it is</strong>: the <code>System.Diagnostics.Metrics</code> wrapper that records token usage and call latency for
           the AI dependency: two <code>Counter&lt;long&gt;</code> instruments (input and output tokens) plus a <code>Histogram&lt;double&gt;</code>
-          for end-to-end call duration in seconds<span class="cite"><span> (<code>AiUsageMeter.cs:56-58</code>)</span></span>.</li>
+          for end-to-end call duration in seconds<span class="cite"><span> (<code>AiUsageMeter.cs:59-61</code>)</span></span>.</li>
           <li><strong>Depends on</strong>: <code>System.Diagnostics.Metrics</code> (<code>Meter</code>, <code>Counter&lt;long&gt;</code>, <code>Histogram&lt;double&gt;</code>, <code>TagList</code>),
           <code>IMeterFactory</code> (Microsoft.Extensions.Diagnostics.Metrics), and <code>Microsoft.Extensions.AI.UsageDetails</code>.</li>
           <li><strong>Concept introduced, factory-owned meter lifetime.</strong> <code>[Rubric §13, Observability &amp; Operability]</code>
           (assesses whether a dependency&#39;s cost/usage is measurable in production): the constructor takes
           <code>IMeterFactory</code> and creates its <code>Meter</code> through it, but deliberately does NOT retain or dispose that
-          meter itself<span class="cite"><span> (<code>AiUsageMeter.cs:72-89</code>)</span></span>; the factory owns the meter&#39;s lifetime, and disposing a
+          meter itself<span class="cite"><span> (<code>AiUsageMeter.cs:75-92</code>)</span></span>; the factory owns the meter&#39;s lifetime, and disposing a
           factory-owned meter from a consumer would silently kill the instrument for every other holder of the
           same name, so this type is not <code>IDisposable</code>, matching how the rest of the framework&#39;s meters work
-          (<span class="cite"><span><code>AiUsageMeter.cs:60-66</code></span></span>, <code>[SuppressMessage(&quot;CA2000&quot;, ...)]</code> at <span class="cite"><span><code>AiUsageMeter.cs:68-71</code></span></span> documents
+          (<span class="cite"><span><code>AiUsageMeter.cs:63-69</code></span></span>, <code>[SuppressMessage(&quot;CA2000&quot;, ...)]</code> at <span class="cite"><span><code>AiUsageMeter.cs:71-74</code></span></span> documents
           the deliberate suppression).</li>
           <li><strong>Walkthrough</strong>: <code>MeterName = &quot;MMCA.Common.AI&quot;</code><span class="cite"><span> (<code>AiUsageMeter.cs:26</code>)</span></span> is shared with the
           <code>ActivitySource</code> name the pipeline&#39;s OpenTelemetry layer publishes under
@@ -1137,14 +1141,14 @@
           <code>gen_ai.client.operation.duration</code> on the same meter, and this instrument does not replace it, it adds
           the <code>prompt_name</code>/<code>prompt_version</code>/<code>outcome</code> dimensions that let a latency regression be attributed to
           the prompt that caused it<span class="cite"><span> (<code>AiUsageMeter.cs:34-44</code>)</span></span>. <code>Record</code><span class="cite"><span>
-          (<code>AiUsageMeter.cs:101-124</code>)</span></span> takes a possibly-<code>null</code> <code>UsageDetails</code>, model, prompt name/version, and
+          (<code>AiUsageMeter.cs:104-127</code>)</span></span> takes a possibly-<code>null</code> <code>UsageDetails</code>, model, prompt name/version, and
           provider; a <code>null</code> usage, or one whose counts the provider did not report, records nothing (an absent
-          number must not read as a zero on a spend dashboard, <span class="cite"><span><code>AiUsageMeter.cs:108-111,115-122</code></span></span>). <code>RecordDuration</code><span class="cite"><span>
-          (<code>AiUsageMeter.cs:137-149</code>)</span></span> records the elapsed seconds on every call, including one that threw, tagged
+          number must not read as a zero on a spend dashboard, <span class="cite"><span><code>AiUsageMeter.cs:111-114,118-125</code></span></span>). <code>RecordDuration</code><span class="cite"><span>
+          (<code>AiUsageMeter.cs:140-152</code>)</span></span> records the elapsed seconds on every call, including one that threw, tagged
           with the same attribution dimensions plus an <code>outcome</code> of <code>SuccessOutcome</code>, <code>ErrorOutcome</code>, or
-          <code>CanceledOutcome</code><span class="cite"><span> (<code>AiUsageMeter.cs:48,51,54</code>)</span></span>, so a failure rate and a latency distribution come off one
+          <code>CanceledOutcome</code> (<span class="cite"><span><code>AiUsageMeter.cs:48,51,57</code></span></span>; the canceled value also covers a streamed call whose consumer stopped enumerating before the stream ended, <span class="cite"><span><code>AiUsageMeter.cs:53-56</code></span></span>), so a failure rate and a latency distribution come off one
           series. Both methods share their tagging through the private <code>AttributionTags</code>
-          (<span class="cite"><span><code>AiUsageMeter.cs:155-165</code></span></span>, <code>model</code>/<code>prompt_name</code>/<code>prompt_version</code>/<code>provider</code> each falling back to
+          (<span class="cite"><span><code>AiUsageMeter.cs:158-168</code></span></span>, <code>model</code>/<code>prompt_name</code>/<code>prompt_version</code>/<code>provider</code> each falling back to
           <code>&quot;unknown&quot;</code> when absent or blank), so a dashboard can join the cost series and the latency series on
           the same tags. <code>provider</code> is a plain <code>string?</code> here, not the <code>AiProvider</code> enum: the caller (the
           resolved chat client&#39;s <code>ChatClientMetadata</code>) may name a provider the framework does not enumerate, so
@@ -1459,9 +1463,12 @@
           <code>InspectAnswerText</code>, which matches against <code>BlockedResponsePatterns</code> and returns a block reason
           naming the pattern&#39;s INDEX, never the matched text: the reason reaches the caller, and the point of
           the rule was that the text should not. <code>RedactMessage</code>/<code>RedactText</code><span class="cite"><span>
-          (<code>ContentPolicyGuardrail.cs:328-363</code>)</span></span> rewrite only <code>TextContent</code>, passing images, function calls,
+          (<code>ContentPolicyGuardrail.cs:328-366</code>)</span></span> rewrite only <code>TextContent</code>, passing images, function calls,
           and provider-specific content through untouched: a guardrail that silently dropped content it does
-          not understand would be a far worse failure than leaving it alone.</li>
+          not understand would be a far worse failure than leaving it alone. <code>RedactText</code><span class="cite"><span>
+          (<code>ContentPolicyGuardrail.cs:354</code>)</span></span> replaces each marker with a <code>MatchEvaluator</code> that returns the
+          placeholder, not the replacement-string overload: the placeholder is literal text, and as a
+          replacement pattern <code>$&amp;</code> or <code>$0</code> would put the matched marker straight back.</li>
           <li><strong>Why it&#39;s built this way</strong>: matches the ADR-120 governed pipeline&#39;s split between redaction (silent,
           changes the request shape) and blocking (visible, a refusal). See
           <a href="https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html" target="_blank" rel="noopener"><code>ADR-120</code></a>.</li>
@@ -1488,15 +1495,15 @@
           pattern, not the first user who trips it, is the one who sees it.</li>
           <li><strong>Walkthrough</strong>: <code>SectionName = &quot;Ai:ContentPolicy&quot;</code><span class="cite"><span> (<code>ContentPolicySettings.cs:26</code>)</span></span>;
           <code>DefaultRedactionPlaceholder = &quot;[redacted-instruction]&quot;</code><span class="cite"><span> (<code>ContentPolicySettings.cs:29</code>)</span></span>, a VISIBLE
-          placeholder on purpose (<span class="cite"><span><code>ContentPolicySettings.cs:63-67</code></span></span> remark) so the model can tell something
+          placeholder on purpose (<span class="cite"><span><code>ContentPolicySettings.cs:64-68</code></span></span> remark) so the model can tell something
           was removed and a trace reviewer can tell a redaction from a sentence the user never wrote.
           <code>InjectionMode</code> defaults <code>Redact</code><span class="cite"><span> (<code>ContentPolicySettings.cs:35</code>)</span></span>.
           <code>AdditionalRequestPatterns</code>/<code>BlockedResponsePatterns</code><span class="cite"><span> (<code>ContentPolicySettings.cs:45,57</code>)</span></span> default
           to empty; an empty <code>BlockedResponsePatterns</code> switches the response half of the policy off entirely,
           because a model that has already said the thing cannot unsay it, so the only available response-side
-          answer is a refusal. <code>RedactionPlaceholder</code> is <code>[Required]</code><span class="cite"><span> (<code>ContentPolicySettings.cs:68</code>)</span></span>.
-          <code>Validate</code><span class="cite"><span> (<code>ContentPolicySettings.cs:82-93</code>)</span></span> runs <code>ValidatePatterns</code> over both lists, which calls
-          <code>DescribeFailure</code><span class="cite"><span> (<code>ContentPolicySettings.cs:116-132</code>)</span></span> per pattern: an empty-or-whitespace pattern
+          answer is a refusal. <code>RedactionPlaceholder</code> is <code>[Required]</code><span class="cite"><span> (<code>ContentPolicySettings.cs:69-70</code>)</span></span> and is inserted as literal text, so a <code>$</code> sequence in it is not a regex substitution<span class="cite"><span> (<code>ContentPolicySettings.cs:59-62</code>)</span></span>.
+          <code>Validate</code><span class="cite"><span> (<code>ContentPolicySettings.cs:83-94</code>)</span></span> runs <code>ValidatePatterns</code> over both lists, which calls
+          <code>DescribeFailure</code><span class="cite"><span> (<code>ContentPolicySettings.cs:117-133</code>)</span></span> per pattern: an empty-or-whitespace pattern
           is rejected outright (it would match everything, &quot;never what a policy meant&quot;), otherwise the pattern
           is compiled with <code>ContentPolicyGuardrail.ConfiguredPatternOptions</code>/<code>MatchTimeout</code> and any
           <code>ArgumentException</code> message is surfaced against <code>SectionName:memberName[index]</code>.</li>
@@ -1529,16 +1536,28 @@
           <code>ContentPolicyGuardrail</code>), via the private <code>RedactMessage</code><span class="cite"><span>
           (<code>PiiRedactionGuardrail.cs:83-99</code>)</span></span>, which rebuilds each message (keeping role, <code>AuthorName</code>,
           <code>MessageId</code> and <code>AdditionalProperties</code>) and hands every content item to <code>RedactContent</code><span class="cite"><span>
-          (<code>PiiRedactionGuardrail.cs:108-127</code>)</span></span>. That switch rewrites non-empty <code>TextContent</code> and
-          <code>TextReasoningContent</code>, a <code>FunctionResultContent</code> whose result is a <code>JsonElement</code> or a <code>string</code>,
-          and the argument values of a <code>FunctionCallContent</code> that are a <code>string</code> or a <code>JsonElement</code> (routed
-          through <code>RedactArgument</code>, <span class="cite"><span><code>PiiRedactionGuardrail.cs:129-134</code></span></span>; other argument values kept as-is).
+          (<code>PiiRedactionGuardrail.cs:122-156</code>)</span></span>. That switch rebuilds an item only when it actually holds
+          contact details: non-empty <code>TextContent</code> and <code>TextReasoningContent</code>, a <code>FunctionResultContent</code>
+          whose result is a <code>JsonElement</code> or a <code>string</code>, and a <code>FunctionCallContent</code> with an argument value
+          that is a <code>string</code> or a <code>JsonElement</code> (routed through <code>RedactArgument</code>,
+          <span class="cite"><span><code>PiiRedactionGuardrail.cs:170-175</code></span></span>; other argument values kept as-is). The &quot;holds contact
+          details&quot; test is <code>HasContactDetails</code>/<code>ArgumentHasContactDetails</code>/<code>JsonHasContactDetails</code><span class="cite"><span>
+          (<code>PiiRedactionGuardrail.cs:177-201</code>)</span></span>, which compares <code>RedactText</code> output with the input; an item
+          with nothing to redact passes through by reference. A rebuilt item keeps its metadata through
+          <code>WithMetadataOf</code> (<span class="cite"><span><code>PiiRedactionGuardrail.cs:162-168</code></span></span>: <code>AdditionalProperties</code> and <code>Annotations</code>,
+          plus a tool call&#39;s <code>InformationalOnly</code> and <code>Exception</code> and a tool result&#39;s <code>Exception</code>), but NOT
+          <code>RawRepresentation</code>: the provider&#39;s original object still holds the unredacted text, and the
+          OpenAI adapters send a raw representation verbatim in place of the item, which would undo the
+          redaction<span class="cite"><span> (<code>PiiRedactionGuardrail.cs:101-121</code>)</span></span>. A <code>TextReasoningContent</code> carrying <code>ProtectedData</code>
+          is never rebuilt<span class="cite"><span> (<code>PiiRedactionGuardrail.cs:124</code>)</span></span>: that data is the provider&#39;s signature over
+          the text (Anthropic&#39;s thinking signature), and an edited signed block is rejected when the
+          conversation is sent back.
           Both shapes matter because Microsoft.Extensions.AI&#39;s function-invoking client marshals a tool&#39;s
           return value and the model&#39;s arguments into <code>JsonElement</code>, and a tool&#39;s output is exactly where
           contact details turn up (a customer lookup, a directory search). Plain text goes through
-          <code>RedactText</code><span class="cite"><span> (<code>PiiRedactionGuardrail.cs:136-137</code>)</span></span>, which replaces email matches then phone
-          matches. A <code>JsonElement</code> goes through <code>RedactJson</code><span class="cite"><span> (<code>PiiRedactionGuardrail.cs:144-154</code>)</span></span> and the
-          recursive <code>WriteRedacted</code><span class="cite"><span> (<code>PiiRedactionGuardrail.cs:156-188</code>)</span></span>, which rebuilds the document with
+          <code>RedactText</code><span class="cite"><span> (<code>PiiRedactionGuardrail.cs:203-204</code>)</span></span>, which replaces email matches then phone
+          matches. A <code>JsonElement</code> goes through <code>RedactJson</code><span class="cite"><span> (<code>PiiRedactionGuardrail.cs:211-221</code>)</span></span> and the
+          recursive <code>WriteRedacted</code><span class="cite"><span> (<code>PiiRedactionGuardrail.cs:223-255</code>)</span></span>, which rebuilds the document with
           a <code>Utf8JsonWriter</code>, redacting only string VALUES and copying property names, numbers, booleans and
           nulls verbatim: running the patterns over the raw JSON text would turn a bare 10-digit number (a
           Unix timestamp) into a phone placeholder and break the document. Binary and other non-text

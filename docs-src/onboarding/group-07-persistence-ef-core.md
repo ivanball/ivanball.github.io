@@ -419,7 +419,7 @@ set-once-per-scope and idempotent for the same value, and throws rather than swi
 mid-scope (`:20-44`).
 
 What a host declares about tenancy is bound into [`TenancySettings`](#tenancysettings)
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettings.cs:50`) from the
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettings.cs:51`) from the
 `Tenancy` section (`:53`), and the settings themselves carry the shape of the feature. `Enabled` gates
 **resolution**, not isolation, so the query filter and the save interceptor are always present and simply
 inert while no tenant is resolved, which is why a host that never opts in keeps exactly the behavior it had
@@ -440,7 +440,7 @@ names `Host` (`:54-65`) and checks each tenant's overrides against the resolved 
 [`IDataSourceResolver`](#idatasourceresolver) is registered (`:14-18`, `:39-42`), on the reasoning that
 every failure here would otherwise surface as silent cross-tenant behavior, which is the exact bug class
 tenancy exists to prevent (`:8-13`). Declaring a tenant is only required for the database-per-tenant case:
-a [`TenantEntrySettings`](#tenantentrysettings) (`TenancySettings.cs:121`) entry holds per-source overrides
+a [`TenantEntrySettings`](#tenantentrysettings) (`TenancySettings.cs:127`) entry holds per-source overrides
 keyed by **physical** source name, and each
 [`TenantDataSourceOverrideSettings`](#tenantdatasourceoverridesettings) (`:138`) carries connection
 information only, because a tenant database has the same schema as the shared one and the migrations
@@ -466,7 +466,7 @@ of those tables (`:21-22`).
 ## Recording what changed, the audit trail
 
 [`AuditTrailSaveChangesInterceptor`](#audittrailsavechangesinterceptor)
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:64`)
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:79`)
 is the fourth interceptor ([ADR-075](https://ivanball.github.io/docs/adr/075-audit-trail.html)).
 It records a field-level history for entities marked
 [`IAuditedEntity`](group-02-domain-building-blocks.md#iauditedentity), writing
@@ -477,7 +477,7 @@ produce a single summary row with a null `PropertyName`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailEntry.cs:17-23`,
 class at `:23`). An owner left `Unchanged` whose owned value object changed is recorded too, through
 the same [`OwnedDependents`](#owneddependents) check the audit interceptor uses
-(`AuditTrailSaveChangesInterceptor.cs:233-240`), with the owned property named `navigation.property`
+(`AuditTrailSaveChangesInterceptor.cs:255-262`), with the owned property named `navigation.property`
 (`:394`). Four things are worth knowing about it. It is opt-in twice over, once through
 `AddAuditTrail` (the interceptor is resolved with `GetService`) and once through `AuditTrail:Enabled`
 (which maps the table), and both are checked cheaply per save by asking the model whether the entity
@@ -509,7 +509,7 @@ read back after the save at `:491`).
 Every free-text value a row carries (entity type, key, property name, trace id, tenant) is cut to its
 column width through [`ColumnWidth`](#columnwidth)`.Truncate`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Conversions/ColumnWidth.cs:4`, body at
-`:10-11`), an internal helper that truncates and preserves null (`AuditTrailSaveChangesInterceptor.cs:194-195`,
+`:10-11`), an internal helper that truncates and preserves null (`AuditTrailSaveChangesInterceptor.cs:216-217`,
 `:255`, `:323`, `:602`); the internal-command processor and the scheduled-job runner reuse it for their
 error columns (`InternalCommandProcessor.cs:549`, `:573`).
 Two more types close the feature: [`AuditTrailReader`](#audittrailreader)
@@ -654,17 +654,17 @@ run principals first: [`ExplicitKeyInsertRoundOrder`](#explicitkeyinsertroundord
 (`.../Factory/ExplicitKeyInsertRoundOrder.cs:17`) derives the order from the EF model's foreign keys
 rather than from the order entities were added to the change tracker, because each round hides every
 other round's added rows, so EF's own per-command ordering cannot help across rounds and a dependent
-table written first would fail its foreign key (`:6-15`, applied at `DbContextFactory.cs:340-344`). Its
+table written first would fail its foreign key (`:6-15`, applied at `DbContextFactory.cs:343-347`). Its
 `Order` is Kahn's algorithm over the table dependency graph: lowest ready index first so independent
 rounds keep their original order, a self-reference is no edge because EF orders rows within one round
 itself, and a cycle is broken deterministically at the lowest remaining index
 (`ExplicitKeyInsertRoundOrder.cs:19-34`, `:70-99`). The factory also pins one connection for the whole
 sequence, because the toggle is session state and EF would otherwise hand the connection back to the
-pool between commands (`DbContextFactory.cs:349-359`). It also runs the
+pool between commands (`DbContextFactory.cs:352-362`). It also runs the
 `MigrateAsync` / `HasPendingMigrationsAsync` sweeps (`:784`, `:820`) over every source whose resolved
 [`PhysicalDataSource`](#physicaldatasource)`.IsMigrationTarget` holds: the source `UsesMigrations` under
 its engine's [`MigrationPolicy`](#migrationpolicy), and it is not an optional source left without a
-connection string (`PhysicalDataSource.cs:42-60`, target selection at `DbContextFactory.cs:804-817`).
+connection string (`PhysicalDataSource.cs:42-60`, target selection at `DbContextFactory.cs:836-849`).
 
 [`UnitOfWork`](#unitofwork) sits on top, resolving an entity's physical source through
 [`IDataSourceService`](#idatasourceservice), handing the matching context to the factory, and caching the
@@ -682,8 +682,8 @@ section below, including the type that exists only because of what the coordinat
 (`.../Factory/TransactionCommitAmbiguousException.cs:22`), which the commit path raises when the commit
 itself fails with an outcome nobody can vouch for, naming each physical source's outcome (committed,
 ambiguous, or rolled back) so the partial state is observable rather than inferred (`:57-70`,
-`DbContextFactory.cs:719-744`). That exception is thrown **outside** the execution strategy on purpose
-(`DbContextFactory.cs:592-593`), because the strategy walks an exception's whole inner chain to decide
+`DbContextFactory.cs:751-776`). That exception is thrown **outside** the execution strategy on purpose
+(`DbContextFactory.cs:618-619`), because the strategy walks an exception's whole inner chain to decide
 retriability and would otherwise re-run the operation on top of a possibly-durable commit.
 
 ## Routing an entity to its database
@@ -810,7 +810,7 @@ is the single `IsRelational` flag: same-source `.Include()`, transactions, raw p
 indexes, foreign keys whose delete behavior matters, `Any(predicate)` translation and the framework's
 own relational tables (`:3-20`). That one flag is what the outbox capture, the transaction coordinator,
 the conventions and the `.Include()` check read (`DomainEventSaveChangesInterceptor.cs:257`,
-`DbContextFactory.cs:860-861`, `SoftDeleteUniqueIndexConvention.cs:43`, `DataSourceService.cs:32`).
+`DbContextFactory.cs:892-893`, `SoftDeleteUniqueIndexConvention.cs:43`, `DataSourceService.cs:32`).
 [`MigrationPolicy`](#migrationpolicy) (`.../Engines/MigrationPolicy.cs:8`) decides whether a source is
 migrated or created outright: `Never` for Cosmos, `WhenAssemblyConfigured` for SQLite and PostgreSQL,
 and `Always` for SQL Server, where a named source with no assembly falls back to the Default source's
@@ -990,7 +990,7 @@ is not a schema change.
 Discovery runs through [`ModelBuilderExtensions`](#modelbuilderextensions)`.ApplyAllConfigurations`
 (`.../DbContexts/ModelBuilderExtensions.cs:10`, an `extension(ModelBuilder)` block at `:12`), which the
 base calls with an entity filter so each database's model receives only its own entities
-(`ApplicationDbContext.cs:954-988`, filter application at `ModelBuilderExtensions.cs:57-60`), over the
+(`ApplicationDbContext.cs:960-994`, filter application at `ModelBuilderExtensions.cs:57-60`), over the
 assemblies supplied by [`IEntityConfigurationAssemblyProvider`](#ientityconfigurationassemblyprovider) and
 its [`DefaultEntityConfigurationAssemblyProvider`](#defaultentityconfigurationassemblyprovider)
 implementation (`.../Persistence/DefaultEntityConfigurationAssemblyProvider.cs:12`), which scans loaded
@@ -1051,7 +1051,7 @@ token hash as a fixed-width non-Unicode column, uniquely indexed because that is
 answers and because a collision across users would let one account's token validate against another's
 session (`:44-49`, `:60-66`), plus a `(UserId, RevokedAt)` index for the per-user family questions the
 session cap, reuse detection and sign-out-everywhere all ask (`:68-71`). The base context calls it from
-the gated `ConfigureRefreshSessions` (`ApplicationDbContext.cs:893-901`) precisely because a downstream
+the gated `ConfigureRefreshSessions` (`ApplicationDbContext.cs:899-907`) precisely because a downstream
 app runs on the sealed engine contexts and has no `OnModelCreating` of its own to override.
 [`EFRefreshSessionStore`](#efrefreshsessionstore) (`.../Auth/EFRefreshSessionStore.cs:31`) is the
 [`IRefreshSessionStore`](group-08-auth.md#irefreshsessionstore) implementation over that table; it
@@ -1072,7 +1072,7 @@ than in an interceptor.
 ## Encryption, seeding, design time, and the shared helpers
 
 A handful of supporting pieces round out the EF side. [`EncryptedStringConverter`](#encryptedstringconverter)
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Encryption/EncryptedStringConverter.cs:72`)
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Encryption/EncryptedStringConverter.cs:76`)
 is a value converter that transparently encrypts a string column with authenticated AES-256-GCM. The stored
 value is a versioned Base64 envelope, a one-byte key version, a random 12-byte nonce, the ciphertext, then a
 16-byte tag, with the version byte passed to AES-GCM as associated data so it is covered by the
@@ -1246,7 +1246,7 @@ survives a module being pulled out into its own service.
 - **Where it's used**: injected as the optional `joinAuthorizer` parameter of
   [`NotificationHub`](group-10-notifications.md#notificationhub)
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/NotificationHub.cs:27`), consulted before
-  admitting a join (`NotificationHub.cs:160-165`). MMCA.ADC is the first registered implementation:
+  admitting a join (`NotificationHub.cs:159-164`). MMCA.ADC is the first registered implementation:
   `LiveChannelJoinAuthorizer`
   (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Live/LiveChannelJoinAuthorizer.cs:43-45`) is wired
   with `AddScoped<IChannelJoinAuthorizer, LiveChannelJoinAuthorizer>()`
@@ -1286,9 +1286,9 @@ survives a module being pulled out into its own service.
   [`SendPushNotificationHandler`](group-10-notifications.md#sendpushnotificationhandler)
   (`MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/PushNotifications/UseCases/Send/SendPushNotificationHandler.cs:47`)
   alongside the SignalR sender. [`NullNativePushSender`](group-14-module-system-composition.md#nullnativepushsender) is registered by default with
-  `TryAddTransient` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:331`) and
+  `TryAddTransient` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:336`) and
   [`AzureNotificationHubNativePushSender`](group-14-module-system-composition.md#azurenotificationhubnativepushsender) replaces it when a hub is
-  configured (`DependencyInjection.Notifications.cs:98`).
+  configured (`DependencyInjection.Notifications.cs:101`).
 
 ### IPushDeviceRegistrar
 > MMCA.Common.Application · `MMCA.Common.Application.Interfaces.Infrastructure.Notifications` · `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Notifications/IPushDeviceRegistrar.cs:11` · Level 3 · interface
@@ -1298,7 +1298,7 @@ survives a module being pulled out into its own service.
 - **Depends on**: [`Result`](group-01-result-error-handling.md#result) (via `MMCA.Common.Shared.Abstractions`,
   `IPushDeviceRegistrar.cs:1`), [`DeviceInstallationRequest`](group-10-notifications.md#deviceinstallationrequest)
   (from `MMCA.Common.Shared.Notifications.PushNotifications`, `IPushDeviceRegistrar.cs:2`), and the
-  `UserIdentifierType` alias (`IPushDeviceRegistrar.cs:18`).
+  `UserIdentifierType` alias (`IPushDeviceRegistrar.cs:29`).
 - **Concept introduced, ownership scoping on a client-supplied identifier, and the existence-oracle problem.**
   `[Rubric §11, Security]` assesses whether a resource identifier supplied by a caller is authorized against
   that caller before it is acted on, and whether error responses leak the existence of other users' resources.
@@ -1306,32 +1306,38 @@ survives a module being pulled out into its own service.
   verifies the `user:{id}` tag stamped by `UpsertAsync` before deleting, and reports a mismatch as **success
   rather than not-found**, because answering differently for "no such installation" and "not yours" would turn
   the endpoint into an existence oracle for other users' installation ids, and the caller has nothing to do with
-  either answer (`IPushDeviceRegistrar.cs:28-36`). The stronger property is structural: **every delete is scoped
+  either answer (`IPushDeviceRegistrar.cs:39-47`). The stronger property is structural: **every delete is scoped
   to an owner, there is no unscoped form**, so an implementation cannot skip the check by accident
-  (`IPushDeviceRegistrar.cs:31-32`). `[Rubric §6, CQRS & Event-Driven Design]` also applies: the type doc
+  (`IPushDeviceRegistrar.cs:42-43`). `[Rubric §6, CQRS & Event-Driven Design]` also applies: the type doc
   (`IPushDeviceRegistrar.cs:6-10`,
   [ADR-044](https://ivanball.github.io/docs/adr/044-native-push-delivery.html)) explains the split, where this
   type owns the installation registry, tagged by user, so [`INativePushSender`](#inativepushsender) can send to
   users, and the default implementation is a no-op until a notification hub is configured.
 - **Walkthrough**: two methods, both returning [`Result`](group-01-result-error-handling.md#result).
   - `UpsertAsync(UserIdentifierType userId, DeviceInstallationRequest request, CancellationToken cancellationToken = default)`
-    (`IPushDeviceRegistrar.cs:18`): creates or refreshes an installation, tagging it with the authenticated
-    owner (`IPushDeviceRegistrar.cs:13-14`).
+    (`IPushDeviceRegistrar.cs:29`): creates or refreshes an installation, tagging it with the authenticated
+    owner (`IPushDeviceRegistrar.cs:13-16`).
+    The installation id is per device: an id already owned by another user is handed over to the caller when the
+    request presents the installation's current push channel (the same device changing hands). Without the
+    channel the upsert does not overwrite and returns an `ErrorType.Conflict` error, and the client mints a new
+    installation id and retries (`IPushDeviceRegistrar.cs:17-28`). Unlike the delete, a conflict is not an
+    existence oracle worth hiding, because ids are random client-generated GUIDs, not enumerable values
+    (`IPushDeviceRegistrar.cs:26-27`).
   - `DeleteAsync(UserIdentifierType userId, string installationId, CancellationToken cancellationToken = default)`
-    (`IPushDeviceRegistrar.cs:37`): the ownership-scoped delete, and the only delete. Unknown installation ids
+    (`IPushDeviceRegistrar.cs:48`): the ownership-scoped delete, and the only delete. Unknown installation ids
     and installations owned by another user both succeed without deleting anything
-    (`IPushDeviceRegistrar.cs:20-23`).
+    (`IPushDeviceRegistrar.cs:31-34`).
 - **Why it's built this way**: separating the *registry* (this type) from the *send*
   ([`INativePushSender`](#inativepushsender)) means the send API can target users while token bookkeeping stays
   in one place. Making the owner a required parameter of the only delete member is what removes the class of
   bug where a caller passes a raw client-supplied id straight through: there is no overload to pass it to.
 - **Where it's used**: [`DevicesController`](group-10-notifications.md#devicescontroller) injects it
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Notifications/DevicesController.cs:27`) and
-  passes the authenticated user id on both calls, `UpsertAsync` at `DevicesController.cs:44` and `DeleteAsync`
-  at `DevicesController.cs:68`. [`NullPushDeviceRegistrar`](group-14-module-system-composition.md#nullpushdeviceregistrar) is the default
-  registration (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:332`);
+  passes the authenticated user id on both calls, `UpsertAsync` at `DevicesController.cs:49` and `DeleteAsync`
+  at `DevicesController.cs:73`. [`NullPushDeviceRegistrar`](group-14-module-system-composition.md#nullpushdeviceregistrar) is the default
+  registration (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:337`);
   [`AzureNotificationHubDeviceRegistrar`](group-14-module-system-composition.md#azurenotificationhubdeviceregistrar) replaces it when a hub is
-  configured (`DependencyInjection.Notifications.cs:99`).
+  configured (`DependencyInjection.Notifications.cs:102`).
 
 ### DataSource
 > MMCA.Common.Application · `MMCA.Common.Application.Interfaces.Infrastructure.Persistence` · `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IDataSourceService.cs:6` · Level 0 · enum
@@ -1509,7 +1515,7 @@ survives a module being pulled out into its own service.
     (its own query language, no SQL command surface to parameterize) has no registration at all, and a
     service that injects this interface there fails when the container is validated. The gate is
     `DataSourceEngines.For(defaultEngine).Capabilities.IsRelational` in
-    `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:411-413`.
+    `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:416-418`.
 - **Why it's built this way**: an interpolated `FormattableString` parameter, rather than a plain `string`
   plus a parameter array, keeps the parameterization automatic at the call site: a developer writes
   ordinary string interpolation and the implementation is responsible for turning each hole into a
@@ -1517,7 +1523,7 @@ survives a module being pulled out into its own service.
 - **Where it's used**: implemented by
   [`EFRawSqlQueryExecutor`](#efrawsqlqueryexecutor)
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/EFRawSqlQueryExecutor.cs:2`), registered
-  conditionally as scoped in `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:413`
+  conditionally as scoped in `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:418`
   (covered by `MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/DependencyInjectionInfrastructureTests.cs`). Exercised by the
   architecture fitness base
   `MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Cqrs/RawSqlConventionTestsBase.cs` and
@@ -1564,12 +1570,12 @@ survives a module being pulled out into its own service.
   host on another engine can register its own implementation first and keep it
   (`DependencyInjection.cs:118-120`). Consumers inject it into the `when` clause of a catch:
   [`GetOrCreateMyBadgeHandler`](group-22-engagement-module.md#getorcreatemybadgehandler)
-  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/CheckIns/UseCases/GetOrCreateMyBadge/GetOrCreateMyBadgeHandler.cs:21`
+  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/CheckIns/UseCases/GetOrCreateMyBadge/GetOrCreateMyBadgeHandler.cs:22`
   and `:53`),
   [`CreateSessionHandler`](group-18-conference-application.md#createsessionhandler)
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/Create/CreateSessionHandler.cs:27`
   and `:60`, where the catch drives a bounded manual-id retry),
-  [`CreateBookmarkHandler`](group-22-engagement-module.md#createbookmarkhandler) (`CreateBookmarkHandler.cs:20`),
+  [`CreateBookmarkHandler`](group-22-engagement-module.md#createbookmarkhandler) (`CreateBookmarkHandler.cs:22`),
   [`SetLeaderboardParticipationHandler`](group-22-engagement-module.md#setleaderboardparticipationhandler)
   (`SetLeaderboardParticipationHandler.cs:35`), and
   [`PointsAwarder`](group-22-engagement-module.md#pointsawarder) (`PointsAwarder.cs:32`). The framework-level
@@ -1643,10 +1649,10 @@ survives a module being pulled out into its own service.
   free, and keeping it in the Application layer beside its interface means an admin surface can render dead
   letters without referencing the EF entity or the Infrastructure assembly.
 - **Where it's used**: built by the Infrastructure implementation's projection
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxAdministration.cs:86`), from
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxAdministration.cs:91`), from
   rows matching the dead-letter predicate `ProcessedOn == null && RetryCount >= maxRetries`
-  (`OutboxAdministration.cs:82`), collected across sources and returned oldest first
-  (`OutboxAdministration.cs:101`).
+  (`OutboxAdministration.cs:87`), collected across sources and returned oldest first
+  (`OutboxAdministration.cs:106`).
 
 ### DataSourceKey
 > MMCA.Common.Application · `MMCA.Common.Application.Interfaces.Infrastructure.Persistence` · `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/DataSourceKey.cs:15` · Level 1 · record struct (readonly)
@@ -1765,12 +1771,12 @@ survives a module being pulled out into its own service.
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxCleanupService.cs:142`).
 - **Where it's used**: implemented by [`OutboxAdministration`](group-04-events-outbox.md#outboxadministration)
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxAdministration.cs:35-42`),
-  registered with `TryAddScoped` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:216-217`),
+  registered with `TryAddScoped` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:220-221`),
   scoped because it creates one child scope per data source it visits and holds no state of its own
-  (`DependencyInjection.cs:228-229`). The implementation caps one page at 500 rows so an admin call cannot ask
+  (`DependencyInjection.cs:232-233`). The implementation caps one page at 500 rows so an admin call cannot ask
   for the whole table at once (`OutboxAdministration.cs:40`), rejects a negative `skip` or an out-of-range
   `take` as validation errors (`OutboxAdministration.cs:42-46`), and expresses replay as one set-based
-  `UPDATE` per target (`OutboxAdministration.cs:143-144`) rather than as loaded entities.
+  `UPDATE` per target (`OutboxAdministration.cs:148-149`) rather than as loaded entities.
 - **Caveats / not-in-source**: the framework registers the service but ships no controller over it. No
   `MMCA.Common.API` endpoint and no ADC or Store call site references `ListDeadLettersAsync`,
   `ReplayDeadLettersAsync`, or `CountPendingAsync` today; outside the registration the only callers in the
@@ -1969,10 +1975,10 @@ survives a module being pulled out into its own service.
 
   `[Rubric §12, Performance & Scalability]` assesses whether expensive query behavior is a deliberate choice. The four properties turn EF's tracking mode and query-splitting mode into a named decision at the call site: asking for `TableNoTrackingSplitQuery` is visible in review, where a plain `DbSet` would silently track every row and emit one cartesian join.
 - **Walkthrough**: this interface declares no methods of its own. Its whole body is four get-only `IQueryable<TEntity>` properties.
-  - `Table` (`IRepository.cs:338`): the base queryable with change tracking enabled, the shape a mutation path composes over. Implemented as the raw `DbSet` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:526`).
-  - `TableNoTracking` (`IRepository.cs:341`): the no-tracking queryable, documented as best for read-only queries and implemented as `Entities.AsNoTracking()` (`EFReadRepository.cs:529`).
-  - `TableNoTrackingSingleQuery` (`IRepository.cs:344`): no-tracking, pinned to a single SQL statement through `AsSingleQuery()` (`EFReadRepository.cs:532`).
-  - `TableNoTrackingSplitQuery` (`IRepository.cs:347`): no-tracking in split-query mode, which avoids the cartesian explosion that collection includes cause, through `AsSplitQuery()` (`EFReadRepository.cs:535`). It is the same concern [`IQueryableExecutor`](#iqueryableexecutor) addresses for callers that hold an `IQueryable` rather than a repository.
+  - `Table` (`IRepository.cs:338`): the base queryable with change tracking enabled, the shape a mutation path composes over. Implemented as the raw `DbSet` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:524`).
+  - `TableNoTracking` (`IRepository.cs:341`): the no-tracking queryable, documented as best for read-only queries and implemented as `Entities.AsNoTracking()` (`EFReadRepository.cs:527`).
+  - `TableNoTrackingSingleQuery` (`IRepository.cs:344`): no-tracking, pinned to a single SQL statement through `AsSingleQuery()` (`EFReadRepository.cs:530`).
+  - `TableNoTrackingSplitQuery` (`IRepository.cs:347`): no-tracking in split-query mode, which avoids the cartesian explosion that collection includes cause, through `AsSplitQuery()` (`EFReadRepository.cs:533`). It is the same concern [`IQueryableExecutor`](#iqueryableexecutor) addresses for callers that hold an `IQueryable` rather than a repository.
   - The twenty inherited members come from the two base interfaces and are walked through on their own sections: five point-lookup members on [`IEntityReader`](#ientityreadertentity-tidentifiertype), fifteen set-returning members on [`IEntityQuerier`](#ientityqueriertentity-tidentifiertype).
 - **Why it's built this way**: the framework needed one interface a query handler can take when it genuinely uses the whole read surface, without forcing every handler to take it. Keeping the composition free of new methods means the two halves stay independently declarable and independently mockable, and it gives the profiling decorator one surface to wrap. Naming the four queryables separately, rather than exposing a `DbSet`, is what makes tracking and split-query opt-in rather than accidental. The ladder itself is [ADR-055](https://ivanball.github.io/docs/adr/055-repository-and-specification-contract.html).
 - **Where it's used**: obtained through [`IUnitOfWork.GetReadRepository<TEntity, TIdentifierType>()`](#iunitofwork) (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IUnitOfWork.cs:29`), which is the sanctioned way to get one; implemented by [`EFReadRepository<TEntity, TIdentifierType>`](#efreadrepositorytentity-tidentifiertype) (`EFReadRepository.cs:21-25`) and wrapped in [`EFReadRepositoryDecorator<TEntity, TIdentifierType>`](#efreadrepositorydecoratortentity-tidentifiertype) (`EFReadRepositoryDecorator.cs:17`) by [`RepositoryFactory`](#repositoryfactory) only when MiniProfiler is enabled (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/Factory/RepositoryFactory.cs:55-63`). [`EntityQueryService<TEntity, TEntityDTO, TIdentifierType>`](group-03-querying-specifications.md#entityqueryservicetentity-tentitydto-tidentifiertype) derives its `Repository` property from the unit of work at construction (`MMCA.Common/Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:88`). It is also the receiver of the `GetByIdOrFailAsync` extension on [`ReadRepositoryExtensions`](#readrepositoryextensions), which turns a miss into a [`Result`](group-01-result-error-handling.md#result) failure carrying `Error.NotFound` and is implemented over `GetAllAsync` rather than `GetByIdAsync` (`MMCA.Common/Source/Core/MMCA.Common.Application/Extensions/ReadRepositoryExtensions.cs:12`, `:27`, `:34-44`), so a handler that wants that convenience must take this wider interface rather than [`IEntityReader`](#ientityreadertentity-tidentifiertype).
@@ -2029,13 +2035,13 @@ survives a module being pulled out into its own service.
 - **Walkthrough**: five members, in three groups.
   - `GetRepository<TEntity, TIdentifierType>()` (`IUnitOfWork.cs:19-21`): the read-write repository. Its constraint is `where TEntity : AuditableAggregateRootEntity<TIdentifierType>` (`IUnitOfWork.cs:20`), so the DDD rule that the doc comment states in prose ("Only aggregate roots can be directly persisted", `IUnitOfWork.cs:14`) is enforced by the compiler. In the implementation the call resolves the entity's physical data source through [`IDataSourceService`](#idatasourceservice), fetches the matching context, builds the repository through [`IRepositoryFactory`](#irepositoryfactory), and caches it under the closed interface type (`UnitOfWork.cs:52-60`).
   - `GetReadRepository<TEntity, TIdentifierType>()` (`IUnitOfWork.cs:29-31`): the read-only repository, constrained only to [`AuditableBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype) (`IUnitOfWork.cs:30`), so child entities are readable even though they are not independently writable. Same resolution path, different factory method (`UnitOfWork.cs:72-80`).
-  - `SaveChangesAsync(CancellationToken cancellationToken = default)` (`IUnitOfWork.cs:36`): persists everything and returns the number of state entries written (`IUnitOfWork.cs:35`). The implementation is a straight delegation (`UnitOfWork.cs:84-85`) to [`DbContextFactory`](#dbcontextfactory), which saves **every** cached context, not just one: it snapshots the contexts and loops in bounded passes (three, `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:64`) so a context materialized by a domain event handler mid-save is still saved (`DbContextFactory.cs:283-297`), then throws if any tracked change is left behind rather than losing it silently (`DbContextFactory.cs:305-316`).
-  - `RequestExplicitKeyInsert()` (`IUnitOfWork.cs:45`): a one-shot flag saying the next save may insert rows that carry explicit values for store-generated keys, for example rows imported from an external system with their source ids intact (`IUnitOfWork.cs:38-44`). The contract is engine-neutral: on an engine that refuses such a value unless it is switched on per table, the save pipeline does that around those inserts, and on every other engine the save runs unchanged (`IUnitOfWork.cs:41-42`). The implementation sets a boolean (`UnitOfWork.cs:88`, `DbContextFactory.cs:322`); the next `SaveChangesAsync` reads and immediately clears it (`DbContextFactory.cs:273-274`, which is what "automatically cleared after the save completes" means) and, for a context whose engine exposes an [`IExplicitKeyInsertDialect`](#iexplicitkeyinsertdialect) through `IDataSourceEngine.ExplicitKeyInsert` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/Engines/IDataSourceEngine.cs:119`), routes the save through `SaveWithExplicitKeyInsertAsync` (`DbContextFactory.cs:293-295`). Only [`SQLServerDataSourceEngine`](#sqlserverdatasourceengine) supplies a dialect (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/Engines/SQLServerDataSourceEngine.cs:49`, the `SET IDENTITY_INSERT ON/OFF` toggle per `DbContextFactory.cs:264-267`); the SQLite, PostgreSQL and Cosmos engines return `null`, so their save is the plain one. With a dialect, the save asks it for the affected entries grouped by table as [`ExplicitKeyInsertGroup`](#explicitkeyinsertgroup) values (`DbContextFactory.cs:335`), pins one open connection for the whole save because the toggle is session state (`DbContextFactory.cs:349-359`, closed again at `:364-368`), and saves each group in its own round with the toggle on, because SQL Server allows only one table per session to have it on (`DbContextFactory.cs:324-329`, `SaveExplicitKeyGroupsAsync` at `:377`).
-  - `ExecuteInTransactionAsync<TResult>(Func<CancellationToken, Task<TResult>> operation, CancellationToken cancellationToken = default)` (`IUnitOfWork.cs:63-65`): the interface's only transaction-control member; the manual `Save()`, `BeginTransaction()`, `CommitTransaction()`, and `RollbackTransaction()` members it used to sit alongside are gone from the interface. Its doc comment (`IUnitOfWork.cs:47-59`) states the reason: the operation runs wrapped by the active execution strategy, so a retrying strategy such as `SqlServerRetryingExecutionStrategy` can retry the whole transaction as one retriable unit, committing on success and rolling back before an exception propagates. The same comment carries the save rule (`IUnitOfWork.cs:53-58`): the commit does **not** save the operation's work, so the operation must save before it returns; the one exception is an internal-command row scheduled after the last save, which is saved just before the commit, and any other change still tracked at that point throws `InvalidOperationException` and rolls the unit back rather than being silently discarded. The implementation adds six behaviors worth knowing (`DbContextFactory.cs:551-596`, with the attempt runner at `:589-647`): a nested call joins the ambient transaction instead of opening a second one (`DbContextFactory.cs:562-563`); a returned failed [`Result`](group-01-result-error-handling.md#result) rolls back exactly like an exception (`DbContextFactory.cs:615-622`); before committing, `FlushEnrolledCommandsBeforeCommitAsync` (`DbContextFactory.cs:625`, `:659-685`) saves the unit when every pending entry is an added [`InternalCommandMessage`](#internalcommandmessage) and otherwise throws the unsaved-changes exception (`DbContextFactory.cs:690-704`); each retry starts from a reset change tracker, so entities a failed attempt added are not inserted twice (`DbContextFactory.cs:580-581`, `ResetForRetry` at `:814-821`); deferred in-process domain events are flushed only after a successful commit (`DbContextFactory.cs:636-643`); and a failure of the **commit itself** is never retried, surfacing as [`TransactionCommitAmbiguousException`](#transactioncommitambiguousexception) thrown outside the strategy instead (`DbContextFactory.cs:588-593`).
+  - `SaveChangesAsync(CancellationToken cancellationToken = default)` (`IUnitOfWork.cs:36`): persists everything and returns the number of state entries written (`IUnitOfWork.cs:35`). The implementation is a straight delegation (`UnitOfWork.cs:84-85`) to [`DbContextFactory`](#dbcontextfactory), which saves **every** cached context, not just one: it snapshots the contexts and loops in bounded passes (three, `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:64`) so a context materialized by a domain event handler mid-save is still saved (`DbContextFactory.cs:286-300`), then throws if any tracked change is left behind rather than losing it silently (`DbContextFactory.cs:308-319`).
+  - `RequestExplicitKeyInsert()` (`IUnitOfWork.cs:45`): a one-shot flag saying the next save may insert rows that carry explicit values for store-generated keys, for example rows imported from an external system with their source ids intact (`IUnitOfWork.cs:38-44`). The contract is engine-neutral: on an engine that refuses such a value unless it is switched on per table, the save pipeline does that around those inserts, and on every other engine the save runs unchanged (`IUnitOfWork.cs:41-42`). The implementation sets a boolean (`UnitOfWork.cs:88`, `DbContextFactory.cs:325`); the next `SaveChangesAsync` reads and immediately clears it (`DbContextFactory.cs:276-277`, which is what "automatically cleared after the save completes" means) and, for a context whose engine exposes an [`IExplicitKeyInsertDialect`](#iexplicitkeyinsertdialect) through `IDataSourceEngine.ExplicitKeyInsert` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/Engines/IDataSourceEngine.cs:119`), routes the save through `SaveWithExplicitKeyInsertAsync` (`DbContextFactory.cs:296-298`). Only [`SQLServerDataSourceEngine`](#sqlserverdatasourceengine) supplies a dialect (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/Engines/SQLServerDataSourceEngine.cs:49`, the `SET IDENTITY_INSERT ON/OFF` toggle per `DbContextFactory.cs:267-270`); the SQLite, PostgreSQL and Cosmos engines return `null`, so their save is the plain one. With a dialect, the save asks it for the affected entries grouped by table as [`ExplicitKeyInsertGroup`](#explicitkeyinsertgroup) values (`DbContextFactory.cs:338`), pins one open connection for the whole save because the toggle is session state (`DbContextFactory.cs:352-362`, closed again at `:364-368`), and saves each group in its own round with the toggle on, because SQL Server allows only one table per session to have it on (`DbContextFactory.cs:327-332`, `SaveExplicitKeyGroupsAsync` at `:377`).
+  - `ExecuteInTransactionAsync<TResult>(Func<CancellationToken, Task<TResult>> operation, CancellationToken cancellationToken = default)` (`IUnitOfWork.cs:63-65`): the interface's only transaction-control member; the manual `Save()`, `BeginTransaction()`, `CommitTransaction()`, and `RollbackTransaction()` members it used to sit alongside are gone from the interface. Its doc comment (`IUnitOfWork.cs:47-59`) states the reason: the operation runs wrapped by the active execution strategy, so a retrying strategy such as `SqlServerRetryingExecutionStrategy` can retry the whole transaction as one retriable unit, committing on success and rolling back before an exception propagates. The same comment carries the save rule (`IUnitOfWork.cs:53-58`): the commit does **not** save the operation's work, so the operation must save before it returns; the one exception is an internal-command row scheduled after the last save, which is saved just before the commit, and any other change still tracked at that point throws `InvalidOperationException` and rolls the unit back rather than being silently discarded. The implementation adds six behaviors worth knowing (`DbContextFactory.cs:577-622`, with the attempt runner at `:589-647`): a nested call joins the ambient transaction instead of opening a second one (`DbContextFactory.cs:588-589`); a returned failed [`Result`](group-01-result-error-handling.md#result) rolls back exactly like an exception (`DbContextFactory.cs:641-648`); before committing, `FlushEnrolledCommandsBeforeCommitAsync` (`DbContextFactory.cs:651`, `:659-685`) saves the unit when every pending entry is an added [`InternalCommandMessage`](#internalcommandmessage) and otherwise throws the unsaved-changes exception (`DbContextFactory.cs:722-736`); each retry starts from a reset change tracker, so entities a failed attempt added are not inserted twice (`DbContextFactory.cs:606-607`, `ResetForRetry` at `:814-821`); deferred in-process domain events are flushed only after a successful commit (`DbContextFactory.cs:662-669`); and a failure of the **commit itself** is never retried, surfacing as [`TransactionCommitAmbiguousException`](#transactioncommitambiguousexception) thrown outside the strategy instead (`DbContextFactory.cs:614-619`).
   - The two base interfaces (`IUnitOfWork.cs:10`) matter at scope teardown: [`UnitOfWork`](#unitofwork) forwards both disposal paths to the context factory (`UnitOfWork.cs:96-122`), so the async path awaits `_dbContextFactory.DisposeAsync()` (`UnitOfWork.cs:106`) rather than blocking.
 - **Why it's built this way**: under [ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html) a single host may own several physical databases, so "save" cannot mean "call SaveChanges on the one context". Splitting the responsibility keeps that manageable: [`IDbContextFactory`](#idbcontextfactory) owns multi-source routing, saving, transactions and disposal, while `IUnitOfWork` is the narrow per-scope facade the Application layer is allowed to see, adding only repository resolution and caching on top (`UnitOfWork.cs:13`, `:23`). Exposing `ExecuteInTransactionAsync` as the interface's only transaction-control member, rather than the manual `BeginTransaction`/`CommitTransaction`/`RollbackTransaction`/`Save` set it replaced, is what makes the [ADR-014](https://ivanball.github.io/docs/adr/014-cqrs-decorator-pipeline.html) pipeline's transaction rules enforceable in one place: business failures roll back and post-commit event dispatch is deferred. Keeping the interface in Application rather than Infrastructure is the [ADR-013](https://ivanball.github.io/docs/adr/013-result-pattern.html) and Clean Architecture pairing, since a handler returns a `Result` and never sees an EF type on the way there.
 - **Where it's used**: injected into command handlers across the framework and both apps. In MMCA.Common: [`TransactionalCommandDecorator<TCommand, TResult>`](group-05-cqrs-pipeline.md#transactionalcommanddecoratortcommand-tresult) takes it in its primary constructor (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/TransactionalCommandDecorator.cs:24`) and calls `ExecuteInTransactionAsync` for any command marked [`ITransactional`](group-05-cqrs-pipeline.md#itransactional) (`TransactionalCommandDecorator.cs:33`); [`DeleteEntityHandler<TEntity, TIdentifierType>`](group-05-cqrs-pipeline.md#deleteentityhandlertentity-tidentifiertype) takes it and resolves its write repository from it (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Crud/DeleteEntityHandler.cs:37`, `:70`); [`EntityQueryService<TEntity, TEntityDTO, TIdentifierType>`](group-03-querying-specifications.md#entityqueryservicetentity-tentitydto-tidentifiertype) both holds it and derives its read repository from it (`MMCA.Common/Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:33`, `:43`, `:87`). In MMCA.ADC, [`RefreshFromSessionizeHandler`](group-18-conference-application.md#refreshfromsessionizehandler) is the live consumer of the explicit-key insert path, calling `RequestExplicitKeyInsert()` immediately before the save because Sessionize imports preserve external ids into tables with store-generated keys (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/UseCases/RefreshFromSessionize/RefreshFromSessionizeHandler.cs:192-193`). The single implementation is [`UnitOfWork`](#unitofwork) (`UnitOfWork.cs:13`), which is `internal sealed`, so consumers only ever see this interface.
-- **Caveats / not-in-source**: `ExecuteInTransactionAsync` is not a distributed transaction: with several physical sources each gets its own transaction and commits are sequential and best effort, so a commit failure on the second source leaves the first already committed. The doc comment names that limitation and records that the thrown [`TransactionCommitAmbiguousException`](#transactioncommitambiguousexception) names each source's outcome (committed, ambiguous, or rolled back) so the partial state is observable rather than inferred, and that the caller's replay is what reconciles it (`DbContextFactory.cs:539-549`). A witness row that would let a replay learn what landed is deliberately not built, since a single transactional source needs none (`DbContextFactory.cs:545-548`); the outbox delivers whatever the commit did make durable (`DbContextFactory.cs:536-537`).
+- **Caveats / not-in-source**: `ExecuteInTransactionAsync` is not a distributed transaction: with several physical sources each gets its own transaction and commits are sequential and best effort, so a commit failure on the second source leaves the first already committed. The doc comment names that limitation and records that the thrown [`TransactionCommitAmbiguousException`](#transactioncommitambiguousexception) names each source's outcome (committed, ambiguous, or rolled back) so the partial state is observable rather than inferred, and that the caller's replay is what reconciles it (`DbContextFactory.cs:565-575`). A witness row that would let a replay learn what landed is deliberately not built, since a single transactional source needs none (`DbContextFactory.cs:571-574`); the outbox delivers whatever the commit did make durable (`DbContextFactory.cs:562-563`).
 
 ### BlobNames
 > MMCA.Common.Application · `MMCA.Common.Application.Interfaces.Infrastructure.Storage` · `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Storage/BlobNames.cs:10` · Level 0 · class (public static)
@@ -2284,9 +2290,9 @@ survives a module being pulled out into its own service.
   on its cleanup side
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/SessionAssets/UseCases/DeleteSessionAssetBlob/DeleteSessionAssetBlobInternalCommandHandler.cs:20`).
   [`NullFileStorageService`](group-14-module-system-composition.md#nullfilestorageservice) is the default registration
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:336`);
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:341`);
   [`AzureBlobFileStorageService`](group-14-module-system-composition.md#azureblobfilestorageservice) replaces it when configured
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:139`).
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:142`).
 
 ### IImageProcessor
 > MMCA.Common.Application · `MMCA.Common.Application.Interfaces.Infrastructure.Storage` · `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Storage/IImageProcessor.cs:11` · Level 3 · interface
@@ -2316,7 +2322,7 @@ survives a module being pulled out into its own service.
 - **Where it's used**: called by [`SetUserAvatarHandler`](group-24-identity-module.md#setuseravatarhandler)
   between the sniffer and the upload (`SetUserAvatarHandler.cs:29` for the injection, `:71` for the call).
   Implemented by [`ImageSharpImageProcessor`](group-14-module-system-composition.md#imagesharpimageprocessor), registered with `TryAddSingleton`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:337`); note this is the one member
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:342`); note this is the one member
   of the avatar trio with a real default implementation rather than a null object.
 
 ### EntityConfigurationOptions
@@ -2343,9 +2349,9 @@ survives a module being pulled out into its own service.
   extension without the provider (or the context) taking a compile-time dependency on any specific
   module. The provider merges these with the name-scanned set and de-duplicates.
 - **Where it's used**: written through the `AddEntityConfigurationAssembly(Assembly)` extension
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:349-359`), which calls
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:354-364`), which calls
   `services.Configure<EntityConfigurationOptions>` with a contains-check so an assembly is added at
-  most once (`DependencyInjection.cs:351-357`); `AddNotificationInfrastructure()`
+  most once (`DependencyInjection.cs:356-362`); `AddNotificationInfrastructure()`
   (`DependencyInjection.Notifications.cs:26-31`) is the one in-framework caller. It is read by
   [`DefaultEntityConfigurationAssemblyProvider`](#defaultentityconfigurationassemblyprovider).
 
@@ -2465,7 +2471,7 @@ survives a module being pulled out into its own service.
   [`IEntityConfigurationAssemblyProvider`](#ientityconfigurationassemblyprovider) via `TryAddSingleton`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:59`) and resolved by
   [`ApplicationDbContext`](#applicationdbcontext), which iterates its assemblies inside
-  `ApplyConfigurationsForEntitiesInContext` (`ApplicationDbContext.cs:954,973`). Covered by
+  `ApplyConfigurationsForEntitiesInContext` (`ApplicationDbContext.cs:960,979`). Covered by
   `MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/DefaultEntityConfigurationAssemblyProviderTests.cs`.
 
 ### EfCoreConcurrencyConflictDetector
@@ -2537,9 +2543,8 @@ survives a module being pulled out into its own service.
   (`MMCA.Common/Source/Core/MMCA.Common.Application/Services/Query/EntityQueryPipeline.cs:13`), the
   Common notification handlers (`GetMyNotificationsHandler.cs:18`,
   `GetUnreadNotificationCountHandler.cs:15`, `GetNotificationHistoryHandler.cs:17`,
-  `MarkNotificationReadHandler.cs:14`, `MarkAllNotificationsReadHandler.cs:14`) and app handlers such
-  as `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/GetUsers/GetUsersHandler.cs:19`
-  and `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/SessionQuestions/Services/SessionQuestionViewBuilder.cs:12`.
+  `MarkNotificationReadHandler.cs:14`, `MarkAllNotificationsReadHandler.cs:14`) and app code such
+  as `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/SessionQuestions/Services/SessionQuestionViewBuilder.cs:12`.
   Covered by
   `MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/EFQueryableExecutorTests.cs`.
 
@@ -2677,7 +2682,7 @@ survives a module being pulled out into its own service.
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:28`).
   The consumers are the handlers whose uniqueness pre-check can lose a race:
   `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/Create/CreateSessionHandler.cs:27`,
-  `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/UserSessionBookmarks/UseCases/Create/CreateBookmarkHandler.cs:20`,
+  `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/UserSessionBookmarks/UseCases/Create/CreateBookmarkHandler.cs:22`,
   `.../CheckIns/UseCases/GetOrCreateMyBadge/GetOrCreateMyBadgeHandler.cs:20`,
   `.../Points/Services/PointsAwarder.cs:32` and
   `.../Points/UseCases/SetLeaderboardParticipation/SetLeaderboardParticipationHandler.cs:33`. Behavior
@@ -2762,7 +2767,7 @@ survives a module being pulled out into its own service.
   filter (`PushNotificationConfiguration.cs:73`) and by
   [`ApplicationDbContext`](#applicationdbcontext) through a private wrapper
   (`ApplicationDbContext.cs:619-620`) for the outbox and internal-command partial-index predicates
-  (`ApplicationDbContext.cs:665-666,755-756`).
+  (`ApplicationDbContext.cs:665-666,760-761`).
 - **Caveats / not-in-source**: a fifth engine would need its own
   [`IDataSourceEngine`](#idatasourceengine) implementation to answer `BuildSoftDeleteFilter` and
   `QuoteColumn`; how `DataSourceEngines.For` (`DataSourceEngines.cs:40`) treats an unmapped value is
@@ -2784,15 +2789,17 @@ survives a module being pulled out into its own service.
   never silently mis-executed on Cosmos): the class itself carries no engine check. The engine gate
   lives at registration: `AddRawSqlQueryExecutor` resolves the framework default engine and registers
   the executor only when `DataSourceEngines.For(defaultEngine).Capabilities.IsRelational`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:402-415`). A
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:407-420`). A
   Cosmos-default host therefore has no `IRawSqlQueryExecutor` at all, so a service that injects it
   fails when the container validates rather than on its first statement
   (`EFRawSqlQueryExecutor.cs:19-25`).
 - **Walkthrough**: a primary constructor takes [`IDbContextFactory`](#idbcontextfactory) and
   [`IDataSourceResolver`](#idatasourceresolver) (`EFRawSqlQueryExecutor.cs:29-31`).
   `QueryAsync<T>(FormattableString sql, CancellationToken)` (`:33-34`) and
-  `QuerySingleOrDefaultAsync<T>(...)` (`:37-38`) both call the private `SqlQueryable<T>(sql)` and
-  materialize it with `ToListAsync`/`SingleOrDefaultAsync`. `SqlQueryable<T>` (`:46-52`) null-guards
+  `QuerySingleOrDefaultAsync<T>(...)` (`:37-39`) both call the private `SqlQueryable<T>(sql)` and
+  materialize it with `ToListAsync`/`SingleOrDefaultAsync`; `QueryAsync` is an `async` method that
+  awaits with `ConfigureAwait(false)` (`:34-35`), while `QuerySingleOrDefaultAsync` is a non-async
+  expression body that returns EF's `SingleOrDefaultAsync` task directly (`:38-39`). `SqlQueryable<T>` (`:46-52`) null-guards
   `sql` (`:48`), resolves the default source with
   `dataSourceResolver.ResolveLogical(DataSource.SQLServer, DataSourceKey.DefaultName)` (`:50`), the
   same way the framework's own tables resolve theirs, letting the resolver substitute the engine a
@@ -2807,7 +2814,7 @@ survives a module being pulled out into its own service.
   parameterization guarantee: interpolated values become SQL parameters through EF's own handling,
   not string-concatenated SQL ([ADR-125](https://ivanball.github.io/docs/adr/125-parameterized-sql-only.html)).
 - **Where it's used**: registered as the scoped `IRawSqlQueryExecutor` via `TryAddScoped`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:413`), the helper being invoked from the
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:418`), the helper being invoked from the
   infrastructure registration at `DependencyInjection.cs:116`. Covered by
   `MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/EFRawSqlQueryExecutorTests.cs`,
   and named by `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/DataSourceBranchingFitnessTests.cs`.
@@ -2886,7 +2893,7 @@ survives a module being pulled out into its own service.
 - **What it is**: one recorded change to an entity that opted into change history, written in the same
   transaction as the change it describes. It is the row shape of the `AuditTrailEntries` table: what
   changed, on which entity, from what to what, by whom, when, under which trace and which tenant.
-- **Depends on**: the `UserIdentifierType` alias for `ChangedBy` (`AuditTrailEntry.cs:82`, the
+- **Depends on**: the `UserIdentifierType` alias for `ChangedBy` (`AuditTrailEntry.cs:85`, the
   solution-wide identifier alias described in the primer) and nothing else first-party. It is written
   by [`AuditTrailSaveChangesInterceptor`](#audittrailsavechangesinterceptor), purged by
   [`AuditTrailCleanupJob`](#audittrailcleanupjob), and projected by
@@ -2914,13 +2921,15 @@ survives a module being pulled out into its own service.
     on the class, and the comment at `AuditTrailEntry.cs:42-47` records why: an entity with a
     store-generated key has no key yet when the change is captured, so the interceptor rewrites this
     single column once the insert has assigned one.
-  - `PropertyName`, `OldValue`, `NewValue` (`AuditTrailEntry.cs:54,61,69`): all nullable. A property
-    carrying [`PiiAttribute`](group-02-domain-building-blocks.md#piiattribute) stores the redaction
-    placeholder on both sides instead of its value (`AuditTrailEntry.cs:59,67`).
-  - `Operation` (`AuditTrailEntry.cs:76`): `required`, one of `Added`, `Modified`, `Deleted`. The
+  - `PropertyName`, `OldValue`, `NewValue` (`AuditTrailEntry.cs:54,63,72`): all nullable. A property
+    carrying [`PiiAttribute`](group-02-domain-building-blocks.md#piiattribute) or `SensitiveAttribute`,
+    an `IAuthUser` credential, or a property stored through an `EncryptedStringConverter`, stores the
+    redaction placeholder on both sides instead of its value (`AuditTrailEntry.cs:56-61,65-70`;
+    the rules live in [`AuditTrailSaveChangesInterceptor`](#audittrailsavechangesinterceptor)).
+  - `Operation` (`AuditTrailEntry.cs:79`): `required`, one of `Added`, `Modified`, `Deleted`. The
     comment names the consequence that surprises people: a soft delete arrives as `Modified` on
     `IsDeleted`, which is exactly what it is at the database level.
-  - `ChangedBy`, `ChangedOn`, `CorrelationId`, `TenantId` (`AuditTrailEntry.cs:82,85,93,101`): the
+  - `ChangedBy`, `ChangedOn`, `CorrelationId`, `TenantId` (`AuditTrailEntry.cs:85,88,96,104`): the
     provenance block. `ChangedBy` is null for a save that carried no identity (a background service, a
     seeder), `CorrelationId` is the ambient trace id, and `TenantId` comes from
     `ApplicationDbContext.CurrentTenantId` at capture (`ApplicationDbContext.cs:154`).
@@ -2935,19 +2944,19 @@ survives a module being pulled out into its own service.
   keeps the trail from becoming a second copy of a data subject's data that erasure would have to
   chase ([ADR-005](https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html)).
 - **Where it's used**: mapped by `ApplicationDbContext.ConfigureAuditTrail`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:848-877`)
-  to `dbo.AuditTrailEntries` (`ApplicationDbContext.cs:857`) with `EntityType` at 256 non-unicode
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:854-883`)
+  to `dbo.AuditTrailEntries` (`ApplicationDbContext.cs:863`) with `EntityType` at 256 non-unicode
   characters, `EntityKey` at 128, `PropertyName` at 128 non-unicode, `Operation` at 16 non-unicode and
-  both `CorrelationId` and `TenantId` at 64 (`ApplicationDbContext.cs:859-865`), plus two indexes:
+  both `CorrelationId` and `TenantId` at 64 (`ApplicationDbContext.cs:865-871`), plus two indexes:
   `IX_AuditTrailEntries_Entity` over `(EntityType, EntityKey, ChangedOn)` for the read path and
-  `IX_AuditTrailEntries_ChangedOn` for the retention sweep (`ApplicationDbContext.cs:866-875`). The
+  `IX_AuditTrailEntries_ChangedOn` for the retention sweep (`ApplicationDbContext.cs:872-881`). The
   mapping only happens when `AuditTrail:Enabled` is true: the context resolves that flag once in
   `OnConfiguring` (`ApplicationDbContext.cs:332`) and `ConfigureAuditTrail` returns immediately when
-  it is false (`ApplicationDbContext.cs:850-853`), so a host that never opted in has exactly the model
+  it is false (`ApplicationDbContext.cs:856-859`), so a host that never opted in has exactly the model
   it had before the trail shipped (`ApplicationDbContext.cs:84-88`).
 
 ### CaptureContext
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.AuditTrail` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:663` · Level 0 · record struct (private readonly, nested)
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.AuditTrail` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:731` · Level 0 · record struct (private readonly, nested)
 
 - **What it is**: a four-field value carrying the provenance every trail row of one save shares:
   the acting user, the capture instant, the trace id, and the tenant.
@@ -2961,13 +2970,13 @@ survives a module being pulled out into its own service.
   identical `ChangedOn`, which is what lets a reader group a save back together.
 - **Walkthrough**: the positional members are `ChangedBy` (nullable user id), `ChangedOn` (UTC
   instant), `CorrelationId` (nullable trace id) and `TenantId` (nullable), declared at
-  `AuditTrailSaveChangesInterceptor.cs:663-667`. It is constructed exactly once per capture, in
-  `CaptureChanges` (`AuditTrailSaveChangesInterceptor.cs:191-195`), where the trace id and tenant are
+  `AuditTrailSaveChangesInterceptor.cs:731-735`. It is constructed exactly once per capture, in
+  `CaptureChanges` (`AuditTrailSaveChangesInterceptor.cs:213-217`), where the trace id and tenant are
   already truncated to their column widths through [`ColumnWidth.Truncate`](#columnwidth)
   (`MaxCorrelationIdLength` 64 and `MaxTenantIdLength` 64,
-  `AuditTrailSaveChangesInterceptor.cs:82,85`). It is then passed by value into `CaptureEntry` and
+  `AuditTrailSaveChangesInterceptor.cs:97,100`). It is then passed by value into `CaptureEntry` and
   `CaptureModifiedProperties`, which copy its fields straight onto each new
-  [`AuditTrailEntry`](#audittrailentry) (`AuditTrailSaveChangesInterceptor.cs:270-273,327-330`).
+  [`AuditTrailEntry`](#audittrailentry) (`AuditTrailSaveChangesInterceptor.cs:292-295,350-353`).
 - **Why it's built this way**: `readonly record struct` means no allocation and no defensive copying
   concerns for a value that exists only for the duration of one `SavingChanges` call; `private`
   keeps it invisible outside the interceptor. Positional syntax gives it structural equality and a
@@ -2988,10 +2997,10 @@ survives a module being pulled out into its own service.
   `[Rubric §11, Security]` (whether stored permission grants are an explicit choice rather than an
   always-on table). `ApplicationDbContext.ResolvePermissionGrantGate` reads
   `serviceProvider.GetService<PermissionGrantModelGate>() is not null`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:915`)
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:921`)
   and ANDs it with a check that this context's physical source name matches
   `Authentication:PermissionGrants:DataSourceName`
-  (`ApplicationDbContext.cs:916-919`). Registering the class IS the opt-in the context reads: no flag,
+  (`ApplicationDbContext.cs:922-925`). Registering the class IS the opt-in the context reads: no flag,
   no boolean setting, just whether the type was registered at all. This is the same mechanic
   [`RefreshSessionModelBuilderExtensions`](#refreshsessionmodelbuilderextensions)'s gate uses for the
   `RefreshSessions` table, applied to a second framework-owned table.
@@ -3006,7 +3015,7 @@ survives a module being pulled out into its own service.
   `AddStoredPermissionGrants`.
 - **Where it's used**: registered as a singleton by `AddStoredPermissionGrants`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Auth.cs:147`), read by
-  `ApplicationDbContext.ResolvePermissionGrantGate` (`ApplicationDbContext.cs:914-919`) and by
+  `ApplicationDbContext.ResolvePermissionGrantGate` (`ApplicationDbContext.cs:920-925`) and by
   `ConfigurePermissionGrants` which calls
   [`PermissionGrantModelBuilderExtensions`](#permissiongrantmodelbuilderextensions)`.ApplyPermissionGrantConfiguration`
   behind that gate. Covered by
@@ -3032,7 +3041,7 @@ survives a module being pulled out into its own service.
   also decides whether a table exists. `Enabled` is read in
   [`ApplicationDbContext`](#applicationdbcontext) with `GetService`, not `GetRequiredService`, and
   cached in a field (`ApplicationDbContext.cs:94`, `:291`) that the model builder consults before
-  mapping the entity (`ApplicationDbContext.cs:848-853`), so a host that leaves it false has exactly
+  mapping the entity (`ApplicationDbContext.cs:854-859`), so a host that leaves it false has exactly
   the model it had before the trail existed and its migrations never see an `AuditTrailEntries`
   table (`AuditTrailSettings.cs:10-15`). That is what makes an opt-in feature genuinely free for a
   host that does not want it: a mapped-but-empty table would still have to be migrated. The trail is
@@ -3079,7 +3088,7 @@ survives a module being pulled out into its own service.
   and `AddAuditTrailTests.cs`.
 
 ### PendingEntityKey
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.AuditTrail` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:672` · Level 1 · record (private sealed, nested)
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.AuditTrail` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:740` · Level 1 · record (private sealed, nested)
 
 - **What it is**: a two-field pairing of a staged trail row with the entity entry whose primary key
   the database has not assigned yet. It exists only between `SavingChanges` and `SavedChanges`.
@@ -3090,18 +3099,18 @@ survives a module being pulled out into its own service.
   whether key strategy and its consequences are handled deliberately): the trail is captured
   **before** the save, which is exactly what makes it transactional, but an entity whose key is an
   identity column has no key at that moment. EF holds a temporary sentinel value that would make the
-  row unfindable by key (`AuditTrailSaveChangesInterceptor.cs:276-279`). Remembering the pair, then
+  row unfindable by key (`AuditTrailSaveChangesInterceptor.cs:298-301`). Remembering the pair, then
   rewriting the one column after the insert, is the price of capturing early; the alternative
   (capturing after the save) would put the trail outside the transaction and lose the guarantee the
   whole design exists for.
 - **Walkthrough**: the positional members are `Row` (the tracked trail row whose `EntityKey` must be
   rewritten) and `Entry` (the audited entry whose key the database assigns), declared at
-  `AuditTrailSaveChangesInterceptor.cs:672`. Instances are produced by `CaptureEntry` only when the
+  `AuditTrailSaveChangesInterceptor.cs:740`. Instances are produced by `CaptureEntry` only when the
   entry is `Added` **and** `HasTemporaryKey(entry)` returns true
-  (`AuditTrailSaveChangesInterceptor.cs:280-282`, with the temporary-key test walking every primary
+  (`AuditTrailSaveChangesInterceptor.cs:302-304`, with the temporary-key test walking every primary
   key property at `:449-466`). They are accumulated into a list and parked in a
   `ConditionalWeakTable<DbContext, List<PendingEntityKey>>` keyed by the context
-  (`AuditTrailSaveChangesInterceptor.cs:94,215-218`), then drained in `ResolveGeneratedKeysAsync` or
+  (`AuditTrailSaveChangesInterceptor.cs:109,237-240`), then drained in `ResolveGeneratedKeysAsync` or
   `ResolveGeneratedKeys` (`:368-396,402-429`).
 - **Why it's built this way**: a `record` gives value semantics and a readable two-name shape for
   something that is pure bookkeeping; `private sealed` keeps it invisible. Holding the list in a
@@ -3170,8 +3179,8 @@ survives a module being pulled out into its own service.
   - The composite index on `(UserId, RevokedAt)` (`RefreshSessionModelBuilderExtensions.cs:70-71`) serves the family question, "every live session for this user", which is asked on the per-user session cap, on reuse detection and on sign-out-everywhere. Without it each of those scans the table (`:68-69`).
   - The builder is returned for chaining (`RefreshSessionModelBuilderExtensions.cs:74`).
 - **Why it's built this way**: hashing the token rather than storing it, and rotating per device, is [ADR-097](https://ivanball.github.io/docs/adr/097-multi-device-refresh-sessions.html), which supersedes the single-plaintext-column storage model of [ADR-050](https://ivanball.github.io/docs/adr/050-jwt-refresh-token-rotation.html) while keeping its rotation and reuse-detection policy. The column shapes here are what make that model cheap: a fixed-width non-Unicode digest keeps the unique index narrow, and the two indexes are exactly the two questions the auth service asks. Nothing here is soft-deletable and nothing is audit-stamped, which is deliberate and is why the table needs its own mapping method rather than riding the module entity-configuration mechanism.
-- **Where it's used**: called by [`ApplicationDbContext`](#applicationdbcontext) from `ConfigureRefreshSessions` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:893-901`) behind the two-part gate computed in the constructor: `RefreshSessions:Enabled` is true **and** this context's physical source name equals `RefreshSessions:DataSourceName` (`ApplicationDbContext.cs:336-339`). At design time the same gate is fed by [`DesignTimeDbContextOptions`](#designtimedbcontextoptions)`.EnableRefreshSessions`. Covered by `MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Auth/RefreshSessionModelBuilderExtensionsTests.cs` and, for the gate itself, `.../Persistence/DbContexts/RefreshSessionModelGateTests.cs:89`.
-- **Caveats / not-in-source**: the class doc says the consumer's Identity context calls this from its own `OnModelCreating` (`RefreshSessionModelBuilderExtensions.cs:12-13`), which describes an earlier arrangement. The base context now calls it directly behind the gate, and the doc on `ConfigureRefreshSessions` explains why (`ApplicationDbContext.cs:884-891`): downstream apps run on the sealed engine contexts and have no context class to override ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)). Calling it by hand remains supported for a host that does have its own context class; trust the context, not the older sentence.
+- **Where it's used**: called by [`ApplicationDbContext`](#applicationdbcontext) from `ConfigureRefreshSessions` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:899-907`) behind the two-part gate computed in the constructor: `RefreshSessions:Enabled` is true **and** this context's physical source name equals `RefreshSessions:DataSourceName` (`ApplicationDbContext.cs:336-339`). At design time the same gate is fed by [`DesignTimeDbContextOptions`](#designtimedbcontextoptions)`.EnableRefreshSessions`. Covered by `MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Auth/RefreshSessionModelBuilderExtensionsTests.cs` and, for the gate itself, `.../Persistence/DbContexts/RefreshSessionModelGateTests.cs:89`.
+- **Caveats / not-in-source**: the class doc says the consumer's Identity context calls this from its own `OnModelCreating` (`RefreshSessionModelBuilderExtensions.cs:12-13`), which describes an earlier arrangement. The base context now calls it directly behind the gate, and the doc on `ConfigureRefreshSessions` explains why (`ApplicationDbContext.cs:890-897`): downstream apps run on the sealed engine contexts and have no context class to override ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)). Calling it by hand remains supported for a host that does have its own context class; trust the context, not the older sentence.
 
 ### PermissionGrantModelBuilderExtensions
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Auth/PermissionGrantModelBuilderExtensions.cs:15` · Level 4 · class (public static)
@@ -3213,7 +3222,7 @@ survives a module being pulled out into its own service.
   a second lookup.
 - **Where it's used**: called by `ApplicationDbContext.ConfigurePermissionGrants` behind
   [`PermissionGrantModelGate`](#permissiongrantmodelgate)'s presence check plus the physical-source
-  match (`ApplicationDbContext.cs:914-929`). Covered by
+  match (`ApplicationDbContext.cs:920-935`). Covered by
   `MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Auth/PermissionGrantModelBuilderExtensionsTests.cs`
   and `.../Persistence/DbContexts/PermissionGrantModelGateTests.cs`, and consumed by
   [`EFPermissionGrantStore`](#efpermissiongrantstore) through the `DbSet<PermissionGrant>` the mapping
@@ -3276,7 +3285,7 @@ survives a module being pulled out into its own service.
   and the stored-grant administration surface.
 
 ### AuditTrailSaveChangesInterceptor
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.AuditTrail` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:64` · Level 11 · class (sealed)
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.AuditTrail` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:79` · Level 11 · class (sealed)
 
 - **What it is**: the EF Core save interceptor that records a field-level change history for every
   entity marked [`IAuditedEntity`](group-02-domain-building-blocks.md#iauditedentity), writing
@@ -3287,7 +3296,8 @@ survives a module being pulled out into its own service.
   [`ApplicationDbContext`](#applicationdbcontext), [`ColumnWidth`](#columnwidth) (the shared
   truncate-to-column-width helper), [`IAuditedEntity`](group-02-domain-building-blocks.md#iauditedentity),
   [`PiiAttribute`](group-02-domain-building-blocks.md#piiattribute),
-  [`PiiRedactor`](group-02-domain-building-blocks.md#piiredactor),
+  [`PiiRedactor`](group-02-domain-building-blocks.md#piiredactor), `SensitiveAttribute`, `IAuthUser`
+  and `EncryptedStringConverter` (the credential and encrypted-column redaction tests),
   [`OutboxMessage`](group-04-events-outbox.md#outboxmessage),
   [`InboxMessage`](group-04-events-outbox.md#inboxmessage),
   [`ScheduledJobEntry`](group-14-module-system-composition.md#scheduledjobentry), and the BCL
@@ -3297,73 +3307,76 @@ survives a module being pulled out into its own service.
   Data Architecture]`, `[Rubric §13, Observability & Operability]` (each row carries the ambient trace
   id, so a change ties back to the request or job that made it) and `[Rubric §30, Compliance, Privacy
   & Data Governance]` (personal data is redacted at capture, never at read). The class comment states
-  the guiding rule (`AuditTrailSaveChangesInterceptor.cs:20-25`): a trail that can be committed
+  the guiding rule (`AuditTrailSaveChangesInterceptor.cs:23-28`): a trail that can be committed
   without its data, or the other way round, is worse than no trail. Four mechanics are worth learning
   here as a set.
-  - **Opt in twice over** (`AuditTrailSaveChangesInterceptor.cs:34-38`): the host must call
+  - **Opt in twice over** (`AuditTrailSaveChangesInterceptor.cs:37-41`): the host must call
     `AddAuditTrail` (the context resolves this interceptor with `GetService`, so its absence is a
     silent no-op, `ApplicationDbContext.cs:316-321`) **and** set `AuditTrail:Enabled` so the table is
     mapped. Then the entity must carry the marker. Nothing about the feature is on by default.
-  - **Position in the pipeline** (`AuditTrailSaveChangesInterceptor.cs:27-33`): registered last, after
+  - **Position in the pipeline** (`AuditTrailSaveChangesInterceptor.cs:30-36`): registered last, after
     [`AuditSaveChangesInterceptor`](#auditsavechangesinterceptor), the optional
     [`TenantSaveChangesInterceptor`](#tenantsavechangesinterceptor) and
     [`DomainEventSaveChangesInterceptor`](#domaineventsavechangesinterceptor)
     (`ApplicationDbContext.cs:297-321`), so the values it diffs are final: the audit stamps are
     already written when it runs.
   - **Correlation is the trace id, not the scoped correlation context**
-    (`AuditTrailSaveChangesInterceptor.cs:45-56`): this interceptor is a singleton and the only
+    (`AuditTrailSaveChangesInterceptor.cs:48-71`): this interceptor is a singleton and the only
     service provider a context carries is the root one, so a scoped
     [`ICorrelationContext`](group-12-api-hosting-mapping.md#icorrelationcontext) is not reachable from
     here and capturing one would be a lifetime bug. The trace id is ambient and is the same value
     [`CorrelationIdMiddleware`](group-12-api-hosting-mapping.md#correlationidmiddleware) falls back to
     when a request carries no `X-Correlation-ID` header. A caller-supplied header value is therefore
     NOT recorded today.
-  - **Tenant is read off the context** (`AuditTrailSaveChangesInterceptor.cs:57-61`), through the live
+  - **Tenant is read off the context** (`AuditTrailSaveChangesInterceptor.cs:72-76`), through the live
     accessor the scoped context factory assigns (`ApplicationDbContext.cs:154`), so it does reach the
     interceptor where a scoped service would not.
 - **Walkthrough**:
-  - **Constants** (`AuditTrailSaveChangesInterceptor.cs:66-88`): the three operation names, the four
+  - **Constants** (`AuditTrailSaveChangesInterceptor.cs:81-103`): the three operation names, the four
     column widths (`MaxEntityTypeLength` 256, `MaxKeyLength` 128, `MaxCorrelationIdLength` 64,
     `MaxTenantIdLength` 64) and the `|` composite-key separator. They match the model mapping in
-    `ApplicationDbContext.ConfigureAuditTrail` exactly (`ApplicationDbContext.cs:859-865`).
-  - **Static state** (`AuditTrailSaveChangesInterceptor.cs:90-121`): two `ConditionalWeakTable`s keyed
+    `ApplicationDbContext.ConfigureAuditTrail` exactly (`ApplicationDbContext.cs:865-871`).
+  - **Static state** (`AuditTrailSaveChangesInterceptor.cs:105-143`): two `ConditionalWeakTable`s keyed
     by context (pending key fix-ups, and a marker for "a capture staged rows but the save has not
     finished"), a `ConcurrentDictionary` caching the PII verdict per (declaring type, property name),
-    and a `HashSet<Type>` of the framework's own bookkeeping entities. That last set is guarded **by
+    a second `ConcurrentDictionary` (`CredentialCache`, `:129`) caching each CLR type's credential
+    property names, and a `HashSet<Type>` of the framework's own bookkeeping entities. That last set is guarded **by
     CLR type**, not by the absence of the marker, which is what keeps the trail from recording its own
     rows in an unbounded feedback loop and keeps the outbox, inbox and job tables out of a history
-    nobody asked for (`AuditTrailSaveChangesInterceptor.cs:109-121`). `IsFrameworkEntity(Type)`
+    nobody asked for (`AuditTrailSaveChangesInterceptor.cs:131-143`). `IsFrameworkEntity(Type)`
     (`:172`) is the `internal` window onto that set, which is both how `ShouldAudit` consults it and
     how a test can assert the exclusion list directly.
-  - **The four overrides** (`AuditTrailSaveChangesInterceptor.cs:124-165`): `SavingChangesAsync` and
+  - **The four overrides** (`AuditTrailSaveChangesInterceptor.cs:146-187`): `SavingChangesAsync` and
     `SavingChanges` both call `CaptureChanges`; `SavedChangesAsync` and `SavedChanges` both run the
     key fix-up. Each pattern-matches `eventData.Context is ApplicationDbContext` first, so a foreign
     context passes straight through.
-  - **`CaptureChanges`** (`AuditTrailSaveChangesInterceptor.cs:179-221`): the first statement is the
+  - **`CaptureChanges`** (`AuditTrailSaveChangesInterceptor.cs:201-243`): the first statement is the
     cheap double gate, `context.Model.FindEntityType(typeof(AuditTrailEntry)) is null`
     (`:181-184`), which covers both a host that never opted in and Cosmos (which skips relational
     tables), because `Set<AuditTrailEntry>()` would throw for both. Then it discards an abandoned
     capture, builds one [`CaptureContext`](#capturecontext), snapshots
     `ChangeTracker.Entries().Where(ShouldAudit).ToArray()` (`:198`, materialized before adding,
     because enumerating the tracker lazily while adding to it would throw), and captures each entry.
-  - **`ShouldAudit` and `IsBeingWritten`** (`AuditTrailSaveChangesInterceptor.cs:228-240`): the entity
+  - **`ShouldAudit` and `IsBeingWritten`** (`AuditTrailSaveChangesInterceptor.cs:250-262`): the entity
     carries the marker, is not a framework bookkeeping type, and the save actually writes its row.
     `IsBeingWritten` is true for `Added`, `Modified` and `Deleted`, and also for an `Unchanged` owner
     whose owned value object changed (it asks `OwnedDependents.HaveChanges(entry)`, `:237`), because EF
     tracks an owned edit on the owned entry and leaves the owner itself `Unchanged`.
-  - **`CaptureEntry`** (`AuditTrailSaveChangesInterceptor.cs:250-283`): a `Modified` or `Unchanged`
+  - **`CaptureEntry`** (`AuditTrailSaveChangesInterceptor.cs:272-305`): a `Modified` or `Unchanged`
     entry (`:258`) delegates to the per-property diff and then to the owned-value diff; an `Added` or
     `Deleted` entry writes one summary row and then, only when the insert's key is still temporary,
     returns a [`PendingEntityKey`](#pendingentitykey).
-  - **`CaptureModifiedProperties`** (`AuditTrailSaveChangesInterceptor.cs:292-333`): one row per
+  - **`CaptureModifiedProperties`** (`AuditTrailSaveChangesInterceptor.cs:314-356`): one row per
     property that is `IsModified` **and** whose value actually differs. A property EF flagged as
     modified but whose value is unchanged (the whole-entity `Update` idiom) writes nothing
     (`:312-315`). A concurrency token is skipped outright (`:305`): on PostgreSQL and SQLite the audit
     interceptor writes a fresh `RowVersion` on every update, so it would otherwise add a bookkeeping row
     to every change. `PiiRedactor.HasPii(entry.Metadata.ClrType)` is checked once per entity so a type
-    with no personal data skips the per-property attribute lookup entirely (`:301`), and a PII
-    property records `PiiRedactor.RedactedToken` on both sides (`:324-325`).
-  - **`CaptureOwnedChanges` and `CaptureOwnedReference`** (`AuditTrailSaveChangesInterceptor.cs:346-361`,
+    with no personal data skips the per-property attribute lookup entirely (`:323`), and the entity's
+    credential names are resolved once beside it (`:324`). A redacted property records
+    `PiiRedactor.RedactedToken` on both sides (`:340,347-348`); what counts as redacted is
+    `IsRedacted`, described under Helpers.
+  - **`CaptureOwnedChanges` and `CaptureOwnedReference`** (`AuditTrailSaveChangesInterceptor.cs:369-384`,
     `:366-404`): one row per changed column of each owned value object the owner carries (an `OwnsOne`
     address, an `OwnsMoney` amount), named `Navigation.Property` (`:394`) and recorded under the owner's
     type and key. It walks `entry.References`, keeps owned targets in state `Added` or `Modified`
@@ -3373,40 +3386,55 @@ survives a module being pulled out into its own service.
     previous value is read from that `Deleted` entry. `IsOwnedValueColumn` (`:410`) excludes the shadow
     key, the foreign key to the owner and concurrency tokens. Clearing an optional owned reference to
     `null` leaves no owned entry and is not recorded (the remarks at `:343-345`).
-  - **`DiscardAbandonedCapture`** (`AuditTrailSaveChangesInterceptor.cs:457-478`): the retry-safety
+  - **`DiscardAbandonedCapture`** (`AuditTrailSaveChangesInterceptor.cs:481-502`): the retry-safety
     mechanic. An execution strategy that retries a failed save re-runs `SavingChanges` against a
     tracker that still holds the previous attempt's `Added` rows, so without this one transient SQL
     fault writes the trail twice. It only fires when the marker is present (a completed save leaves
     none `Added`), because discarding unconditionally would also throw away trail rows a caller added
     deliberately.
   - **`ResolveGeneratedKeysAsync` and `ResolveGeneratedKeys`**
-    (`AuditTrailSaveChangesInterceptor.cs:486-514,520-547`): rebuild the key now that the insert has
+    (`AuditTrailSaveChangesInterceptor.cs:511-539,545-572`): rebuild the key now that the insert has
     assigned one, skip rows whose key did not change, and rewrite the one column with a set-based
-    `ExecuteUpdate` per row, which bypasses the change tracker and the interceptor pipeline and joins
-    the ambient transaction when one is open (the same technique as
-    [`OutboxFinalizer`](group-04-events-outbox.md#outboxfinalizer)). `SyncTrackedKey` (`:555-561`)
+    `ExecuteUpdate` statement per row whose key changed (each row gets its own key value, unlike
+    [`OutboxFinalizer`](group-04-events-outbox.md#outboxfinalizer), which stamps all its ids in one
+    set-based statement). Like that finalizer it bypasses the change tracker and the interceptor
+    pipeline and joins the ambient transaction when one is open. `SyncTrackedKey` (`:580`)
     then brings the tracked instance and its snapshot in line so a later save does not re-issue the
     update, and the ordering there is load-bearing: writing `OriginalValue` must precede clearing
     `IsModified`, because clearing the flag reverts the current value to the original.
-  - **Helpers**: `AddRow` (`:443-449`, mutation is `Add` only, because the save runs with automatic
-    change detection off), `HasTemporaryKey` (`:567-584`), `BuildEntityKey` (`:591-603`, a keyless
-    entity yields an empty string rather than throwing), `IsPiiProperty` (`:610-624`, a shadow
+  - **Helpers**: `AddRow` (`:467`, mutation is `Add` only, because the save runs with automatic
+    change detection off), `HasTemporaryKey` (`:592-609`), `BuildEntityKey` (`:616-628`, a keyless
+    entity yields an empty string rather than throwing), `IsRedacted` (`:637-640`, see below),
+    `IsPiiProperty` (`:647-661`, a shadow
     property has no `PropertyInfo` so it can never be personal data; the verdict uses the static
-    `Attribute.IsDefined(propertyInfo, typeof(PiiAttribute), inherit: true)` at `:622`, because the
+    `Attribute.IsDefined(propertyInfo, typeof(PiiAttribute), inherit: true)` at `:659`, because the
     `PropertyInfo.IsDefined` instance method ignores `inherit` for properties, and only the static form
     walks an override back to its base declaration, matching how `PiiRedactor` decides, comment at
-    `:620-621`), `FormatValue` (`:632-637`,
+    `:657-658`), `CredentialPropertyNames` (`:669-692`), `FormatValue` (`:700-705`,
     `CultureInfo.InvariantCulture` on purpose, so a trail read years later or on a differently
     localized replica shows the value that was written; a `byte[]` such as a hash or salt renders as
-    hexadecimal via `Convert.ToHexString` at `:635`, because the invariant `Convert.ToString` would record
-    its type name on both sides and lose the change) and `ValuesEqual` (`:643-656`, byte arrays
+    hexadecimal via `Convert.ToHexString` at `:703`, because the invariant `Convert.ToString` would record
+    its type name on both sides and lose the change) and `ValuesEqual` (`:711-724`, byte arrays
     such as row versions are compared by content, since reference equality would report every save as
-    a change). Column-width truncation itself is no longer a private method on this type: every call
-    site (the correlation id and tenant id in `CaptureChanges` at `:194-195`, the entity type in
-    `CaptureEntry` at `:255`, the property name in `CaptureModifiedProperties` at `:323`, the
-    owned column name in `CaptureOwnedReference` at `:394`, and the
-    composite key in `BuildEntityKey` at `:602`) now goes through the shared
-    [`ColumnWidth.Truncate`](#columnwidth) helper instead.
+    a change).
+  - **`IsRedacted` and `CredentialPropertyNames`** (`:637-640`, `:669-692`): redaction is wider than the
+    `[Pii]` marker. A changed property records the redaction token when any of three tests holds: it is
+    personal data (`typeHasPii && IsPiiProperty`), its name is in the type's credential set, or its
+    value converter is an `EncryptedStringConverter` (`:640`). The last needs no marker, because the
+    change tracker hands the interceptor the model-side (decrypted) value of a column stored through
+    that converter, so recording it would put in clear text exactly what the column encrypts (remarks
+    `:630-636`). The credential set, computed once per CLR type and cached in `CredentialCache`
+    (`:129`), is the members implementing `IAuthUser` (resolved through `GetInterfaceMap`, so an
+    inherited implementation is found; an explicit implementation is a private, differently named
+    property EF does not map, so the interface member's own name is added too, `:682-684`) plus every
+    property carrying `SensitiveAttribute` (`:687-689`). An empty set is the cheap common case. The
+    same gate applies to owned columns (`CaptureOwnedReference` calls the same `IsRedacted`).
+  - **Column-width truncation** is not a private method on this type: every call
+    site (the correlation id and tenant id in `CaptureChanges`, the entity type in
+    `CaptureEntry`, the property name in `CaptureModifiedProperties` at `:346`, the
+    owned column name in `CaptureOwnedReference`, and the
+    composite key in `BuildEntityKey` at `:627`) goes through the shared
+    [`ColumnWidth.Truncate`](#columnwidth) helper.
 - **Why it's built this way**:
   [ADR-075](https://ivanball.github.io/docs/adr/075-audit-trail.html) chose the interceptor over a
   repository decorator (which sees intent, not the tracker's diff), an application handler (which sees
@@ -3427,14 +3455,14 @@ survives a module being pulled out into its own service.
   Behavior is pinned by
   `MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/AuditTrail/AuditTrailSaveChangesInterceptorTests.cs`
   and `AuditTrailModelGateTests.cs`. Hosts opting in today include MMCA.Helpdesk
-  (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:88`), all three MMCA.Store services
+  (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:78`), all three MMCA.Store services
   (`Identity.Service/Program.cs:188`, `Sales.Service/Program.cs:206`,
   `Catalog.Service/Program.cs:210`) and all three MMCA.ADC services
   (`Engagement.Service/Program.cs:197`, `Identity.Service/Program.cs:232`,
   `Conference.Service/Program.cs:296`).
 - **Caveats / not-in-source**: a caller-supplied `X-Correlation-ID` is not recorded; honoring it would
   need a live accessor on the context assigned by the scoped factory, the shape multi-tenancy
-  introduced for `TenantId` (`AuditTrailSaveChangesInterceptor.cs:53-55`). Whether that will be done
+  introduced for `TenantId` (`AuditTrailSaveChangesInterceptor.cs:68-70`). Whether that will be done
   is Not determinable from source.
 
 ### AuditTrailReader
@@ -3470,14 +3498,14 @@ survives a module being pulled out into its own service.
     environment, so "not enabled" must read as "no history", not as an exception.
   - **The query** (`AuditTrailReader.cs:60-80`): `AsNoTracking`, filtered on `EntityType` and
     `EntityKey` (exactly the leading columns of `IX_AuditTrailEntries_Entity`,
-    `ApplicationDbContext.cs:868-869`), ordered, skipped and taken, then projected column by column
+    `ApplicationDbContext.cs:874-875`), ordered, skipped and taken, then projected column by column
     into the DTO (`AuditTrailReader.cs:66-78`). `TenantId` is not projected, because the DTO has no
     such member: it declares `Id` through `CorrelationId` and stops there
     (`MMCA.Common/Source/Core/MMCA.Common.Application/Auditing/AuditTrailEntryDTO.cs:12-48`).
 - **Why it's built this way**: the DTO stops the persistence entity from leaking into the Application
   contract, and matching the query's predicate and sort to the shipped index is why that index carries
   the whole predicate plus the sort rather than just the key
-  (`ApplicationDbContext.cs:866-869`).
+  (`ApplicationDbContext.cs:872-875`).
 - **Where it's used**: registered as the scoped
   [`IAuditTrailReader`](group-05-cqrs-pipeline.md#iaudittrailreader) by `AddAuditTrail`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Jobs.cs:119`). Covered by
@@ -3495,30 +3523,33 @@ survives a module being pulled out into its own service.
 
 ### EFRefreshSessionStore
 
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Auth/EFRefreshSessionStore.cs:31` · Level 13 · class (internal sealed)
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Auth/EFRefreshSessionStore.cs:33` · Level 13 · class (internal sealed)
 
-- **What it is**: the EF Core implementation of [`IRefreshSessionStore`](group-08-auth.md#irefreshsessionstore), the persistence side of multi-device refresh tokens. It reads and writes [`RefreshSession`](group-08-auth.md#refreshsession) rows in whichever physical database holds them, and it owns the one operation the auth flow cannot express as a plain tracked mutation: the rotation claim (`EFRefreshSessionStore.cs:31-175`).
-- **Depends on**: [`IDbContextFactory`](#idbcontextfactory) (context access, saving and transactions), [`IEntityDataSourceRegistry`](#ientitydatasourceregistry) and [`IDataSourceResolver`](#idatasourceresolver) (source resolution), [`RefreshSessionSettings`](group-08-auth.md#refreshsessionsettings) via `IOptions<T>`, [`RefreshSession`](group-08-auth.md#refreshsession), and the `UserIdentifierType` alias. All four dependencies are primary-constructor parameters (`EFRefreshSessionStore.cs:31-35`).
-- **Concept introduced, letting the database arbitrate a race instead of the process.** `[Rubric §11, Security]` assesses whether credential handling is correct under concurrency, and `[Rubric §12, Performance and Scalability]` assesses whether the concurrency strategy holds with more than one instance running. Refresh-token rotation is a check-then-act: read the presented session, confirm it is live, revoke it, insert the successor. Two concurrent refreshes of the *same* token each read their own copy with `RevokedAt` null, and both would happily save, which is two valid successors from one token. The row deliberately carries no concurrency token, so the fix is to make the revocation itself the arbitration: a conditional `UPDATE ... WHERE Id = @id AND RevokedAt IS NULL`. Exactly one caller affects one row and wins; the loser affects zero rows and writes nothing. The remarks state this in full (`EFRefreshSessionStore.cs:105-112`).
+- **What it is**: the EF Core implementation of [`IRefreshSessionStore`](group-08-auth.md#irefreshsessionstore), the persistence side of multi-device refresh tokens. It reads and writes [`RefreshSession`](group-08-auth.md#refreshsession) rows in whichever physical database holds them, and it owns the one operation the auth flow cannot express as a plain tracked mutation: the rotation claim (`EFRefreshSessionStore.cs:33-228`).
+- **Depends on**: [`IDbContextFactory`](#idbcontextfactory) (context access, saving and transactions), [`IEntityDataSourceRegistry`](#ientitydatasourceregistry) and [`IDataSourceResolver`](#idatasourceresolver) (source resolution), [`RefreshSessionSettings`](group-08-auth.md#refreshsessionsettings) via `IOptions<T>`, [`RefreshSession`](group-08-auth.md#refreshsession), and the `UserIdentifierType` alias. All four dependencies are primary-constructor parameters (`EFRefreshSessionStore.cs:33-37`).
+- **Concept introduced, letting the database arbitrate a race instead of the process.** `[Rubric §11, Security]` assesses whether credential handling is correct under concurrency, and `[Rubric §12, Performance and Scalability]` assesses whether the concurrency strategy holds with more than one instance running. Refresh-token rotation is a check-then-act: read the presented session, confirm it is live, revoke it, insert the successor. Two concurrent refreshes of the *same* token each read their own copy with `RevokedAt` null, and both would happily save, which is two valid successors from one token. The row deliberately carries no concurrency token, so the fix is to make the revocation itself the arbitration: a conditional `UPDATE ... WHERE Id = @id AND RevokedAt IS NULL`. Exactly one caller affects one row and wins; the loser affects zero rows and writes nothing. The remarks state this in full (`EFRefreshSessionStore.cs:158-165`; the successor and claim share one transaction, `:166-172`).
 - **Walkthrough**
-  - `Context` (`EFRefreshSessionStore.cs:37`) resolves the context per access through the factory keyed on `ResolveDataSourceKey()`, and `Sessions` (`:38`) is the `DbSet<RefreshSession>` over it.
-  - `ResolveDataSourceKey` (`EFRefreshSessionStore.cs:169-174`) is the routing decision, and it has two legs. First the entity registry, so a consumer that ships a real entity configuration for [`RefreshSession`](group-08-auth.md#refreshsession) routes it like any other entity. Otherwise a key built from the resolver's engine for `Default` plus the configured `DataSourceName`. The comment at `:166-168` is precise about the split: the configured NAME is used verbatim, and only the ENGINE goes through the resolver, so a host that configures no SQL Server connection string gets the engine it does configure rather than a context over an empty connection string.
-  - `AddAsync` (`EFRefreshSessionStore.cs:42-46`) stages the insert; it does not save. `SaveChangesAsync` (`:100-101`) delegates to the factory, which is what lets a login and its session insert commit in the same unit of work.
-  - `FindByTokenHashAsync` (`EFRefreshSessionStore.cs:49-56`) is the validation lookup, backed by the unique `TokenHash` index.
-  - `GetUnrevokedByUserAsync` (`EFRefreshSessionStore.cs:63-71`) is the family query, ordered by `CreatedAt` then `Id`. The tie-break is not cosmetic: the per-user cap evicts "the oldest", and two sessions opened in the same clock tick would otherwise evict in an arbitrary order (`:58-61`).
-  - `FindByIdAsync` (`EFRefreshSessionStore.cs:79-85`) filters on both `Id` and `UserId`. The remarks make the security argument (`:75-78`): the id arrives from a client, so putting the user in the predicate is what makes another account's session **unreadable** rather than merely rejected after being read.
-  - `FindByIdUntrackedAsync` (`EFRefreshSessionStore.cs:93-97`) is the one no-tracking read in the store, via `AsNoTracking()`, and it filters on `Id` alone. It exists to see past the tracked copy (which the identity map would otherwise hand back unchanged) to the row the database holds after a concurrent rotation, so a rotation loser can re-read the winner's result. Nothing revokes through the instance it returns (remarks at `:88-92`). The caller is `AuthSessionIssuer` (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Sessions/AuthSessionIssuer.cs:428`).
-  - `TryRotateAsync` (`EFRefreshSessionStore.cs:121-164`) is the claim. The tracked entry for the presented session is captured *before* the transaction opens so this context is one of the contexts the factory enlists rather than a late arrival (`:130-132`). Inside `ExecuteInTransactionAsync` (`:134`) it issues the conditional `ExecuteUpdateAsync` setting `RevokedAt`, `ReasonRevoked = RefreshSession.ReasonRotated` and `ReplacedByTokenHash`, and treats "one row affected" as the claim (`:137-145`). Losing returns `false` and writes nothing (`:147-150`).
-  - Having won, it mirrors the claim onto the tracked instance with `presented.Revoke(...)` and then copies current values over original values (`EFRefreshSessionStore.cs:155-156`). That second line is easy to miss and load-bearing: without it, the next `SaveChanges` would re-issue the same `UPDATE` as a tracked modification. Then the successor is added and saved inside the same transaction (`:158-159`).
-  - Sharing one transaction between the claim and the successor insert is what stops a loser observing a half-finished rotation: its `UPDATE` blocks on the winner's row lock, re-evaluates the predicate after the winner commits, and the family revocation it then performs sees the committed successor. A nested call joins the ambient transaction, so an `ITransactional` caller is unaffected (`EFRefreshSessionStore.cs:113-119`).
-- **Why it's built this way**: every read here except one is tracked on purpose, and the class doc says why (`EFRefreshSessionStore.cs:24-29`): the caller revokes by mutating the instances this returns, so a no-tracking query would take those revocations and silently drop them at save time. That is the opposite of the usual read-path default in this codebase and worth remembering. The one exception, `FindByIdUntrackedAsync`, is named in the class doc (`:27-28`) and is read-only by contract. Resolving the database through the registry first and the setting second means a single-database host needs no configuration at all (`RefreshSessions:DataSourceName` defaults to `Default` at `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/RefreshSessionSettings.cs:52`) while a multi-database host names the Identity source once. Pointing it at a database that does not map the table fails loudly on the first query rather than reading the wrong rows (`EFRefreshSessionStore.cs:21-22`). The policy is [ADR-097](https://ivanball.github.io/docs/adr/097-multi-device-refresh-sessions.html), building on [ADR-050](https://ivanball.github.io/docs/adr/050-jwt-refresh-token-rotation.html).
+  - `Context` (`EFRefreshSessionStore.cs:39`) resolves the context per access through the factory keyed on `ResolveDataSourceKey()`, and `Sessions` (`:41`) is the `DbSet<RefreshSession>` over it.
+  - `ResolveDataSourceKey` (`EFRefreshSessionStore.cs:222-227`) is the routing decision, and it has two legs. First the entity registry, so a consumer that ships a real entity configuration for [`RefreshSession`](group-08-auth.md#refreshsession) routes it like any other entity. Otherwise a key built from the resolver's engine for `Default` plus the configured `DataSourceName`. The comment at `:219-221` is precise about the split: the configured NAME is used verbatim, and only the ENGINE goes through the resolver, so a host that configures no SQL Server connection string gets the engine it does configure rather than a context over an empty connection string.
+  - `AddAsync` (`EFRefreshSessionStore.cs:44-48`) stages the insert; it does not save. `SaveChangesAsync` (`:153-154`) delegates to the factory, which is what lets a login and its session insert commit in the same unit of work.
+  - `FindByTokenHashAsync` (`EFRefreshSessionStore.cs:51-57`) is the validation lookup, backed by the unique `TokenHash` index. It and the other single-row reads now return the `FirstOrDefaultAsync` task directly rather than awaiting it, since there is nothing to do after the await.
+  - `GetUnrevokedByUserAsync` (`EFRefreshSessionStore.cs:64-72`) is the family query, ordered by `CreatedAt` then `Id`. The tie-break is not cosmetic: the per-user cap evicts "the oldest", and two sessions opened in the same clock tick would otherwise evict in an arbitrary order (`:60-63`).
+  - `GetAllByUserAsync` (`EFRefreshSessionStore.cs:76-84`) returns every session of a user, revoked or not, in the same `CreatedAt` then `Id` order, and is tracked: erasure revokes and anonymizes the returned rows in place (`:75`).
+  - `GetUserIdsWithLiveSessionsAsync` (`EFRefreshSessionStore.cs:91-99`) is a scalar projection of the distinct `UserId`s with an unrevoked, unexpired session (`RevokedAt == null && ExpiresAt > now`, `RefreshSession.IsActiveAt` spelled out so it translates to SQL, remarks `:87-90`). It tracks nothing, because no caller revokes through these rows.
+  - `CountLiveSessionsByUserAsync` (`EFRefreshSessionStore.cs:106-125`) answers live-session counts per user in one grouped query over a `Contains` of the distinct requested ids, so a duplicate id cannot double a count; an empty request returns an empty dictionary without touching the database (`:113-117`, remarks `:102-105`).
+  - `FindByIdAsync` (`EFRefreshSessionStore.cs:133-138`) filters on both `Id` and `UserId`. The remarks make the security argument (`:128-132`): the id arrives from a client, so putting the user in the predicate is what makes another account's session **unreadable** rather than merely rejected after being read.
+  - `FindByIdUntrackedAsync` (`EFRefreshSessionStore.cs:147-150`) is the one no-tracking entity read in the store (the scalar projections track nothing either), via `AsNoTracking()`, and it filters on `Id` alone. It exists to see past the tracked copy (which the identity map would otherwise hand back unchanged) to the row the database holds after a concurrent rotation, so a rotation loser can re-read the winner's result. Nothing revokes through the instance it returns (remarks at `:141-146`). The caller is `AuthSessionIssuer` (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Sessions/AuthSessionIssuer.cs:428`).
+  - `TryRotateAsync` (`EFRefreshSessionStore.cs:174-217`) is the claim. The tracked entry for the presented session is captured *before* the transaction opens so this context is one of the contexts the factory enlists rather than a late arrival (`:183-185`). Inside `ExecuteInTransactionAsync` (`:187`) it issues the conditional `ExecuteUpdateAsync` setting `RevokedAt`, `ReasonRevoked = RefreshSession.ReasonRotated` and `ReplacedByTokenHash`, and treats "one row affected" as the claim (`:190-198`). Losing returns `false` and writes nothing (`:200-203`).
+  - Having won, it mirrors the claim onto the tracked instance with `presented.Revoke(...)` and then copies current values over original values (`EFRefreshSessionStore.cs:208-209`). That second line is easy to miss and load-bearing: without it, the next `SaveChanges` would re-issue the same `UPDATE` as a tracked modification. Then the successor is added and saved inside the same transaction (`:211-212`).
+  - Sharing one transaction between the claim and the successor insert is what stops a loser observing a half-finished rotation: its `UPDATE` blocks on the winner's row lock, re-evaluates the predicate after the winner commits, and the family revocation it then performs sees the committed successor. A nested call joins the ambient transaction, so an `ITransactional` caller is unaffected (`EFRefreshSessionStore.cs:166-172`).
+- **Why it's built this way**: every read that returns `RefreshSession` entities is tracked on purpose, and the class doc says why (`EFRefreshSessionStore.cs:25-30`): the caller revokes by mutating the instances this returns, so a no-tracking query would take those revocations and silently drop them at save time. That is the opposite of the usual read-path default in this codebase and worth remembering. The one entity exception, `FindByIdUntrackedAsync`, is named in the class doc (`:27-28`) and is read-only by contract; the two scalar projections return no entities, so nothing is tracked there either (`:28-30`). Resolving the database through the registry first and the setting second means a single-database host needs no configuration at all (`RefreshSessions:DataSourceName` defaults to `Default` at `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/RefreshSessionSettings.cs:52`) while a multi-database host names the Identity source once. Pointing it at a database that does not map the table fails loudly on the first query rather than reading the wrong rows (`EFRefreshSessionStore.cs:21-22`). The policy is [ADR-097](https://ivanball.github.io/docs/adr/097-multi-device-refresh-sessions.html), building on [ADR-050](https://ivanball.github.io/docs/adr/050-jwt-refresh-token-rotation.html).
 - **Where it's used**: registered as the scoped [`IRefreshSessionStore`](group-08-auth.md#irefreshsessionstore) (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:172`), scoped deliberately, like the unit of work it shares a `DbContext` with, so a login and its session insert commit together (`:143-144`). The consumer is [`AuthenticationServiceBase<TUser>`](group-08-auth.md#authenticationservicebasetuser), which holds it as `RefreshSessions` (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:82`, `:88`) and drives rotation, per-session revoke and sign-out-everywhere through it. [`DeleteUserHandlerBase<TUser, TCommand>`](group-14-module-system-composition.md#deleteuserhandlerbasetuser-tcommand) revokes a deleted user's sessions through the same store from its soft-delete tail (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/DeleteUser/DeleteUserHandlerBase.cs:110`).
 
 ### EFPermissionGrantStore
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Auth/EFPermissionGrantStore.cs:35` · Level 13 · class (internal sealed)
 
 - **What it is**: the EF Core implementation of `IPermissionGrantStore`, the persistence side of
-  stored permission grants (`EFPermissionGrantStore.cs:35-151`). It lists, grants and revokes rows in
+  stored permission grants (`EFPermissionGrantStore.cs:35-215`). It lists, grants and revokes rows in
   the `PermissionGrants` table.
 - **Depends on**: `IDbContextFactory` (context access and saving),
   [`IEntityDataSourceRegistry`](#ientitydatasourceregistry) and
@@ -3533,38 +3564,51 @@ survives a module being pulled out into its own service.
   [`EFRefreshSessionStore`](#efrefreshsessionstore)'s rotation claim, granting a permission is
   idempotent by nature (a role either has a permission or it does not), so `GrantAsync` uses an
   ordinary check-then-act: query for an existing row, and only insert when none is found
-  (`EFPermissionGrantStore.cs:96-117`). The comment names why that race is harmless here
-  (`:92-95`): the unique index on `(Role, Permission)` makes a concurrent duplicate insert fail at
+  (`EFPermissionGrantStore.cs:104-125`). The role it checks and writes is first folded to the spelling already stored (see `CanonicalRoleAsync` below). The comment names why that race is harmless here
+  (`:100-103`): the unique index on `(Role, Permission)` makes a concurrent duplicate insert fail at
   the database, the loser catches that failure and answers success, because the row the winner wrote
   says exactly what the loser was trying to say. The check exists to make the ordinary duplicate
   free, not to be the guarantee.
 - **Walkthrough**
   - `Context` (`EFPermissionGrantStore.cs:43`) resolves the context per access through the factory,
     keyed on `ResolveDataSourceKey()`; `Grants` (`:45`) is the `DbSet<PermissionGrant>` over it.
-  - `GetAllAsync` (`:48-54`) and `GetPermissionsAsync(role, ct)` (`:57-70`) are both `AsNoTracking`
+  - `GetAllAsync` (`:48-54`) and `GetPermissionsAsync(role, ct)` (`:57-73`) are both `AsNoTracking`
     reads, the first ordered by `Role` then `Permission` for the administration listing, the second
-    filtered to one role and projected to bare permission strings for
+    filtered to every stored spelling of one role (`storedRoles.Contains(g.Role)`, `:67`), projected to
+    bare permission strings, `Distinct()` and ordered (`:68-70`), for
     [`PermissionGrantCache`](#permissiongrantcache)'s rebuild.
-  - `GrantAsync(role, permission, grantedBy, ct)` (`:73-120`) constructs a `PermissionGrant` through
-    its `Create` factory, returns the factory's failure untouched on invalid input (`:85-88`), then
+  - `GrantAsync(role, permission, grantedBy, ct)` (`:76-128`) first resolves a valid role to the
+    spelling already stored through `CanonicalRoleAsync` (`:83-85`; an invalid role is left for
+    `Create` to refuse), constructs a `PermissionGrant` through its `Create` factory, returns the
+    factory's failure untouched on invalid input (`:93-96`), then
     runs the check-then-act described above: an existing row returns success without writing anything
-    (`:101-104`), otherwise the grant is added to the resolved context and saved (`:106-111`). A
+    (`:109-112`), otherwise the grant is added to the resolved context and saved (`:114-118`). A
     `DbUpdateException` that the detector classifies as a unique-constraint violation is caught
-    (`:112`): the insert lost the race to a concurrent duplicate, so its entry is set to
-    `EntityState.Detached` (`:116`, comment at `:114-115`) so the scoped context does not retry the
+    (`:120`): the insert lost the race to a concurrent duplicate, so its entry is set to
+    `EntityState.Detached` (`:124`, comment at `:122-123`) so the scoped context does not retry the
     failed insert on its next save, and the method still returns success. Any other database failure
     propagates.
-  - `RevokeAsync(role, permission, ct)` (`:123-140`) is a set-based `ExecuteDeleteAsync` filtered on
-    both columns (`:134-137`), never a load-then-remove: there is at most one row by the unique index,
-    nothing about it needs to be read, and removing zero rows is exactly the success an idempotent
-    revoke promises (comment at `:131-133`).
-  - `ResolveDataSourceKey` (`:145-150`) is the same two-leg routing shape as
+  - `RevokeAsync(role, permission, ct)` (`:131-151`) is a set-based `ExecuteDeleteAsync` filtered on
+    every stored spelling of the role and the permission (`:145-148`), never a load-then-remove: there
+    is at most one row per stored spelling by the unique index, nothing about them needs to be read,
+    and removing zero rows is exactly the success an idempotent revoke promises (comment at
+    `:141-144`). Every spelling goes, so a pre-existing duplicate casing cannot keep the grant alive.
+  - `CanonicalRoleAsync` and `StoredSpellingsAsync` (`:168-172`, `:187-204`) fold role casing. The
+    `Role` is compared case-insensitively everywhere it is read, but an equality predicate is only as
+    case-insensitive as the column collation (case-sensitive on PostgreSQL and SQLite), and folding
+    inside the predicate would defeat the unique index (remarks `:157-163`). So the fold happens in
+    memory over the distinct stored role names: `StoredSpellingsAsync` returns every stored spelling
+    matching the trimmed role under `OrdinalIgnoreCase`, ordinally sorted, or just the trimmed role when
+    none is stored (`:198-203`); `CanonicalRoleAsync` takes the first, which is the spelling a grant
+    writes. Reads and revokes use all of them (`Role IN (...)`, remarks `:178-182`), so a table that
+    already holds two casings of one role (written before that rule) is not kept apart.
+  - `ResolveDataSourceKey` (`:209-214`) is the same two-leg routing shape as
     [`EFRefreshSessionStore`](#efrefreshsessionstore)'s: the entity registry first (so a consumer
     entity configuration for `PermissionGrant` routes it like any other entity), otherwise a key built
     from the resolver's engine for `Default` plus the configured `DataSourceName`. Only the engine
     goes through the resolver; the configured name is used verbatim, so a host that configures no SQL
     Server connection string gets the engine it does configure rather than a context over an empty
-    connection string (comment at `:142-144`).
+    connection string (comment at `:206-208`).
 - **Why it's built this way**: the store is intentionally the thinnest possible layer over the model
   [`PermissionGrantModelBuilderExtensions`](#permissiongrantmodelbuilderextensions) maps: every method
   is a direct translation of one `IPermissionGrantStore` operation into one query or one set-based
@@ -3613,7 +3657,7 @@ survives a module being pulled out into its own service.
   - `ResolveDataSourceKey` (`RefreshSessionCleanupService.cs:140-145`) duplicates [`EFRefreshSessionStore`](#efrefreshsessionstore)'s resolution exactly, and the class doc says why (`:34-39`): the sweep must never visit a different database than the store reads.
   - The five log messages are source-generated `[LoggerMessage]` partials (`RefreshSessionCleanupService.cs:147-160`), which is why the class is `partial`.
 - **Why it's built this way**: retention bounds reuse detection, and the class doc is explicit about the trade (`RefreshSessionCleanupService.cs:24-32`). BR-206 catches a replayed refresh token by finding its revoked row and revoking the whole family; a rotation chain older than the window is gone, so a replay of a token that old reads as an unknown token and fails alone instead of signalling reuse. The default window of 30 days (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/RefreshSessionSettings.cs:72`) is far past the default refresh-token lifetime, so every token still capable of being replayed still has its row, and a host that shortens `RefreshSessions:RetentionDays` below `Jwt:RefreshTokenExpirationDays` is choosing to lose that signal. Unlike the outbox, sessions live in exactly one physical source, which is why the sweep resolves one database rather than iterating them (`:33-39`). The sweep is the retention half of the 2026-08-27 revision of [ADR-097](https://ivanball.github.io/docs/adr/097-multi-device-refresh-sessions.html).
-- **Where it's used**: registered as a hosted service only when `RefreshSessions:Enabled` is true, read straight off configuration at registration time (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:182-185`). The comment there gives the reason for the conditional (`:151-153`): registering it unconditionally would start a sweep in every service of a modular host, all but one of which has no `RefreshSessions` table to sweep. Covered by `MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Auth/RefreshSessionCleanupServiceTests.cs`, which exercises both disabled paths, the retention predicate, the unmapped-table warning and the registration gate (`:189`, `:201`, `:218`).
+- **Where it's used**: registered as a hosted service only when `RefreshSessions:Enabled` is true, read straight off configuration at registration time (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:186-189`). The comment there gives the reason for the conditional (`:151-153`): registering it unconditionally would start a sweep in every service of a modular host, all but one of which has no `RefreshSessions` table to sweep. Covered by `MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Auth/RefreshSessionCleanupServiceTests.cs`, which exercises both disabled paths, the retention predicate, the unmapped-table warning and the registration gate (`:189`, `:201`, `:218`).
 - **Caveats / not-in-source**: the default interval is 6 hours (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/RefreshSessionSettings.cs:80`, constrained to 1 through 168), and because the loop waits one full interval before its first sweep, a host that restarts more often than the configured interval never sweeps. Nothing in the service compensates for that.
 
 ### AuditTrailCleanupJob
@@ -3702,7 +3746,7 @@ survives a module being pulled out into its own service.
 - **Walkthrough**
   - **`Truncate`** (`ColumnWidth.cs:10-11`): a single expression-bodied method; no allocation happens when the value already fits.
 - **Why it's built this way**: the callers (an audit interceptor and internal command processing) run outside a validated domain type, so nothing upstream already guarantees the string fits its column; `ColumnWidth.Truncate` is the one place that guarantee is enforced before the row is written.
-- **Where it's used**: `AuditTrailSaveChangesInterceptor` truncates a correlation ID, tenant ID, entity type name, property name, and joined key string through it (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:194-195,255,323,602`); `ScheduledJobRunner` and `InternalCommandProcessor` call it for the same reason at their own persistence boundaries.
+- **Where it's used**: `AuditTrailSaveChangesInterceptor` truncates a correlation ID, tenant ID, entity type name, property name, and joined key string through it (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:216-217,277,346,627`); `ScheduledJobRunner` and `InternalCommandProcessor` call it for the same reason at their own persistence boundaries.
 
 ### StronglyTypedIdValueComparer<TSelf>
 
@@ -4198,7 +4242,7 @@ survives a module being pulled out into its own service.
   `TryGetDataSourceKey` is the non-throwing probe used where a miss is legitimate, for example when
   [`ApplicationDbContext`](#applicationdbcontext) decides whether an entity belongs in the model it is
   currently building
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:979-981`).
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:985-987`).
 - **Why it's built this way**: database-per-service
   ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)) needs every entity to
   resolve to exactly one physical source; deriving that map from configuration classes instead of from
@@ -4214,13 +4258,13 @@ survives a module being pulled out into its own service.
   [`DataSourceService`](#datasourceservice)
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/DataSourceService.cs:12`), the
   [`OutboxProcessor`](group-04-events-outbox.md#outboxprocessor)
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:64`), the
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:66`), the
   [`OutboxCleanupService`](group-04-events-outbox.md#outboxcleanupservice)
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxCleanupService.cs:50`),
   the [`AuditTrailCleanupJob`](#audittrailcleanupjob)
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailCleanupJob.cs:49`),
   both model-building passes of [`ApplicationDbContext`](#applicationdbcontext)
-  (`ApplicationDbContext.cs:386`, `ApplicationDbContext.cs:963`), and the startup
+  (`ApplicationDbContext.cs:386`, `ApplicationDbContext.cs:969`), and the startup
   database-initialization path
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:70`).
 
@@ -4302,7 +4346,7 @@ survives a module being pulled out into its own service.
 - **Where it's used**: produced by
   [`TenantDataSourceTargets.Expand`](#tenantdatasourcetargets) (via `ExpandRelational`) and consumed as
   the loop variable of every host-owned sweep: [`OutboxProcessor`](group-04-events-outbox.md#outboxprocessor)
-  (`OutboxProcessor.cs:150`, iterated at `OutboxProcessor.cs:160`),
+  (`OutboxProcessor.cs:160`, iterated at `OutboxProcessor.cs:170`),
   [`OutboxCleanupService`](group-04-events-outbox.md#outboxcleanupservice)
   (`OutboxCleanupService.cs:197-198`), [`AuditTrailCleanupJob`](#audittrailcleanupjob)
   (`AuditTrailCleanupJob.cs:78`, and as a parameter at `AuditTrailCleanupJob.cs:87` and
@@ -4339,11 +4383,11 @@ survives a module being pulled out into its own service.
     shared source with `shared with { ConnectionString = ..., CosmosDatabaseName = ... }` and keeps the
     original key, because the key is what EF's model cache is keyed on, so swapping only the connection
     string is what lets one compiled model serve every tenant's database
-    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:169-194`,
+    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:172-197`,
     [ADR-073](https://ivanball.github.io/docs/adr/073-multi-tenancy-model.html)).
   - `ConnectionString` may legitimately be empty. Both the startup initializer and `EnsureCreatedAsync`
     treat an empty connection string as "this source is not configured in this host" and skip it rather
-    than failing (`DatabaseInitializationExtensions.cs:94`, `DbContextFactory.cs:247-248`).
+    than failing (`DatabaseInitializationExtensions.cs:94`, `DbContextFactory.cs:250-251`).
   - `MigrationsAssembly` is a single positional parameter rather than three engine-scoped record-body
     properties, because at most one is ever populated: `BuildPhysicalSource` on
     [`DataSourceResolver`](#datasourceresolver) already reads it from the right engine's setting, and
@@ -4371,7 +4415,7 @@ survives a module being pulled out into its own service.
     target with an empty connection string, so that misconfiguration fails loudly at startup instead of
     being skipped, while an optional SQLite source a host leaves unconfigured stays silently absent. One
     rule, shared by the context factory's `GetMigrationTargets`
-    (`DbContextFactory.cs:804-810`) and the startup pending-migrations check
+    (`DbContextFactory.cs:836-842`) and the startup pending-migrations check
     (`DatabaseInitializationExtensions.cs:371`).
 - **Where it's used**: produced by [`DataSourceResolver`](#datasourceresolver) through
   `BuildPhysicalSource` (`DataSourceResolver.cs:442-452`) for both the Default source
@@ -4445,7 +4489,7 @@ survives a module being pulled out into its own service.
   [`DbContextFactory`](#dbcontextfactory) to open connections (`PhysicalDbContextFactory.cs:21`,
   `DbContextFactory.cs:52`), into the inbox store and both event buses so each can locate its own
   database ([`EfInboxStore`](group-04-events-outbox.md#efinboxstore)
-  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Inbox/EfInboxStore.cs:43`,
+  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Inbox/EfInboxStore.cs:45`,
   [`InProcessEventBus`](group-04-events-outbox.md#inprocesseventbus)
   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/InProcessEventBus.cs:36`,
   [`BrokerEventBus`](group-04-events-outbox.md#brokereventbus)
@@ -4530,7 +4574,7 @@ survives a module being pulled out into its own service.
     `FrameworkDefaultEngine` again when nothing is configured (`DataSourceResolver.cs:147-150`).
     Registration code reads it to decide which services the default engine can back, raw SQL being
     registered only where that engine is relational (`DataSourceResolver.cs:131-136`,
-    `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:409`). It shares
+    `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:414`). It shares
     `ConfiguredEngines` (`DataSourceResolver.cs:154-159`) and `PickSubstituteEngine`
     (`DataSourceResolver.cs:165-169`) with the constructor, so the two paths cannot disagree.
     `HasAnyConnectionString` (`DataSourceResolver.cs:175-180`) is what decides "configured", and it
@@ -4587,7 +4631,7 @@ survives a module being pulled out into its own service.
   ([ADR-130](https://ivanball.github.io/docs/adr/130-per-engine-data-source-strategy.html)).
 - **Where it's used**: registered as the singleton [`IDataSourceResolver`](#idatasourceresolver)
   (`DependencyInjection.cs:91`), with its static `ResolveFrameworkDefaultEngine` read during
-  registration (`DependencyInjection.cs:409`); consumed by
+  registration (`DependencyInjection.cs:414`); consumed by
   [`EntityDataSourceRegistry`](#entitydatasourceregistry), the context factories, and
   [`DesignTimeDbContextHelper`](#designtimedbcontexthelper), which constructs its own instance for
   `dotnet ef` commands and registers it in a hand-built container
@@ -4679,7 +4723,7 @@ survives a module being pulled out into its own service.
   (`EntityDataSourceRegistry.cs:168-170`): those entities land in the Default model but are not routable
   through the unit of work, which is the same fallback
   [`ApplicationDbContext`](#applicationdbcontext) applies when filtering configurations into a model
-  (`ApplicationDbContext.cs:962-977`).
+  (`ApplicationDbContext.cs:968-983`).
 - **Where it's used**: registered as the singleton
   [`IEntityDataSourceRegistry`](#ientitydatasourceregistry) (`DependencyInjection.cs:92`) and rebuilt by
   hand for design-time commands (`DesignTimeDbContextHelper.cs:135`,
@@ -4687,7 +4731,7 @@ survives a module being pulled out into its own service.
   [`CrossDataSourceDegradeConvention`](#crossdatasourcedegradeconvention),
   [`DataSourceService`](#datasourceservice), [`DbContextFactory`](#dbcontextfactory), both
   [`ApplicationDbContext`](#applicationdbcontext) model passes (`ApplicationDbContext.cs:386`,
-  `ApplicationDbContext.cs:963`), and the outbox, audit-trail and migrations enumerations. Its behavior
+  `ApplicationDbContext.cs:969`), and the outbox, audit-trail and migrations enumerations. Its behavior
   is pinned by
   `MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/DataSources/EntityDataSourceRegistryTests.cs:15`,
   covering the agreeing and conflicting duplicate cases (`EntityDataSourceRegistryTests.cs:94`,
@@ -4771,14 +4815,14 @@ survives a module being pulled out into its own service.
   which filters the expansion down to `t.TenantId is not null` because the shared sources were already
   initialized in the pass above it (`DatabaseInitializationExtensions.cs:209-210`). `CreateTenantScope`
   is the per-target scope call of the startup initializer (`DatabaseInitializationExtensions.cs:212`),
-  [`OutboxProcessor`](group-04-events-outbox.md#outboxprocessor) (`OutboxProcessor.cs:187`, and per row
-  at `OutboxProcessor.cs:509`), [`OutboxCleanupService`](group-04-events-outbox.md#outboxcleanupservice)
-  (`OutboxCleanupService.cs:98`), `OutboxAdministration` (`OutboxAdministration.cs:217`),
+  [`OutboxProcessor`](group-04-events-outbox.md#outboxprocessor) (`OutboxProcessor.cs:197`, and per row
+  at `OutboxProcessor.cs:566`), [`OutboxCleanupService`](group-04-events-outbox.md#outboxcleanupservice)
+  (`OutboxCleanupService.cs:98`), `OutboxAdministration` (`OutboxAdministration.cs:222`),
   [`InternalCommandProcessor`](#internalcommandprocessor) (`InternalCommandProcessor.cs:153`),
   [`InternalCommandCleanupService`](#internalcommandcleanupservice)
   (`InternalCommandCleanupService.cs:105`),
   [`InternalCommandAdministration`](#internalcommandadministration)
-  (`InternalCommandAdministration.cs:261`) and [`AuditTrailCleanupJob`](#audittrailcleanupjob)
+  (`InternalCommandAdministration.cs:266`) and [`AuditTrailCleanupJob`](#audittrailcleanupjob)
   (`AuditTrailCleanupJob.cs:97`). Two of the sweeps are pinned against the same expansion in tests
   (`TenantDataSourceTargetTests.cs:100`, `TenantDataSourceTargetTests.cs:116`).
 - **Caveats / not-in-source**: the expansion is driven purely by declared configuration. A tenant whose
@@ -4840,7 +4884,7 @@ survives a module being pulled out into its own service.
   `DataSourceEngines`
   ([ADR-130](https://ivanball.github.io/docs/adr/130-per-engine-data-source-strategy.html)).
 - **Where it's used**: injected into [`OutboxProcessor`](group-04-events-outbox.md#outboxprocessor)
-  (`OutboxProcessor.cs:61`, called at `OutboxProcessor.cs:148`),
+  (`OutboxProcessor.cs:63`, called at `OutboxProcessor.cs:158`),
   [`OutboxCleanupService`](group-04-events-outbox.md#outboxcleanupservice)
   (`OutboxCleanupService.cs:47`, called at `OutboxCleanupService.cs:193`),
   [`InternalCommandProcessor`](#internalcommandprocessor) (`InternalCommandProcessor.cs:48`, called at
@@ -4848,9 +4892,9 @@ survives a module being pulled out into its own service.
   (`InternalCommandCleanupService.cs:44`, called at `InternalCommandCleanupService.cs:161`), and
   [`AuditTrailCleanupJob`](#audittrailcleanupjob) (`AuditTrailCleanupJob.cs:47`, which uses the
   home-less `Relational()` at `AuditTrailCleanupJob.cs:75`). The two operator surfaces use `Named`:
-  `OutboxAdministration` (`OutboxAdministration.cs:36`, called at `OutboxAdministration.cs:203`) and
+  `OutboxAdministration` (`OutboxAdministration.cs:36`, called at `OutboxAdministration.cs:208`) and
   [`InternalCommandAdministration`](#internalcommandadministration)
-  (`InternalCommandAdministration.cs:38`, called at `InternalCommandAdministration.cs:247`). All paths
+  (`InternalCommandAdministration.cs:38`, called at `InternalCommandAdministration.cs:252`). All paths
   are under `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/`. Tests construct it in
   `TenantDataSourceTargetTests.cs`, `OutboxProcessorTests.cs`, `OutboxProcessorExecuteAsyncTests.cs`,
   `OutboxCleanupServiceTests.cs` and `AuditTrailCleanupJobTests.cs`.
@@ -4867,7 +4911,7 @@ survives a module being pulled out into its own service.
   (assesses whether persistence mechanics are deliberate): a store-generated key normally means the
   application never supplies the id, but an import from an external system must preserve the source's
   ids. SQL Server only accepts that with `SET IDENTITY_INSERT <table> ON`, one table at a time per
-  session (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:324-329`).
+  session (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:327-332`).
   Grouping the affected entries by table is what turns that constraint into a loop.
 - **Walkthrough**: no members beyond the positional ones. `Schema` and `Table` come from EF model
   metadata, never user input, which is what makes the raw toggle statement safe to build by
@@ -4879,11 +4923,11 @@ survives a module being pulled out into its own service.
 - **Where it's used**: returned by [`IExplicitKeyInsertDialect`](#iexplicitkeyinsertdialect)`.FindGroups`
   (`IExplicitKeyInsertDialect.cs:21`), built by the SQL Server engine
   (`SQLServerDataSourceEngine.cs:158`), and consumed by `DbContextFactory.SaveExplicitKeyGroupsAsync`
-  (`DbContextFactory.cs:384-434`), which saves each group in its own round with the toggle on, hiding
-  the other groups' `Added` entries as `Unchanged` (`DbContextFactory.cs:397-403`) and excluding their
+  (`DbContextFactory.cs:387-441`), which saves each group in its own round with the toggle on, hiding
+  the other groups' `Added` entries as `Unchanged` (`DbContextFactory.cs:400-406`) and excluding their
   domain events from capture through
   [`DomainEventSaveChangesInterceptor`](#domaineventsavechangesinterceptor)`.BeginCaptureExclusion`
-  (`DbContextFactory.cs:405-413`).
+  (`DbContextFactory.cs:408-416`).
 
 ### MigrationPolicy
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.DataSources.Engines` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/Engines/MigrationPolicy.cs:8` · Level 0 · enum (internal)
@@ -4972,7 +5016,7 @@ survives a module being pulled out into its own service.
   (`PhysicalDataSource.cs:59`), and `NullsSortFirstAscending` by
   [`EFReadRepository<TEntity, TIdentifierType>`](#efreadrepositorytentity-tidentifiertype), which defaults to
   `true` when no engine is known
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:523,721`).
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:521,719`).
 
 ### IExplicitKeyInsertDialect
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.DataSources.Engines` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/Engines/IExplicitKeyInsertDialect.cs:13` · Level 1 · interface (internal)
@@ -4998,11 +5042,11 @@ survives a module being pulled out into its own service.
   no toggle" without an engine check
   ([ADR-130](https://ivanball.github.io/docs/adr/130-per-engine-data-source-strategy.html)). The
   toggle is session state, so the factory pins one connection for the whole save
-  (`DbContextFactory.cs:349-359`).
+  (`DbContextFactory.cs:352-362`).
 - **Where it's used**: implemented by [`SQLServerDataSourceEngine`](#sqlserverdatasourceengine), which
   returns itself (`SQLServerDataSourceEngine.cs:19,49`). `DbContextFactory` takes the explicit-key path
-  only when a caller requested it and the context's engine has a dialect (`DbContextFactory.cs:293-295`),
-  then drives `FindGroups` and `BuildToggleSql` (`DbContextFactory.cs:335,421-434`). The request flag
+  only when a caller requested it and the context's engine has a dialect (`DbContextFactory.cs:296-298`),
+  then drives `FindGroups` and `BuildToggleSql` (`DbContextFactory.cs:338,424-441`). The request flag
   is set through [`IUnitOfWork`](#iunitofwork)`.RequestExplicitKeyInsert`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/UnitOfWork.cs:88`); the one
   first-party caller is ADC's Sessionize refresh
@@ -5075,7 +5119,7 @@ survives a module being pulled out into its own service.
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/SoftDeleteFilterSql.cs:36,71`),
   [`FrameworkTableTargets`](#frameworktabletargets)
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/FrameworkTableTargets.cs:58,86`),
-  and infrastructure registration (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:411`).
+  and infrastructure registration (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:416`).
 
 ### IDataSourceEngine
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.DataSources.Engines` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/Engines/IDataSourceEngine.cs:18` · Level 11 · interface (internal)
@@ -5210,7 +5254,7 @@ survives a module being pulled out into its own service.
     `(schema, table)` with `dbo` as the schema fallback (`:148-155`).
   - `BuildToggleSql` (`:162-163`) concatenates `SET IDENTITY_INSERT [schema].[table] ON|OFF`; the
     identifier cannot be parameterized, and the caller suppresses `S2077` with that justification
-    (`DbContextFactory.cs:420`).
+    (`DbContextFactory.cs:423`).
 - **Why it's built this way**: SQL Server is the default engine, so it alone requires a connection
   string and migrates even with no configured assembly (falling back to the Default source's assembly,
   `MigrationPolicy.cs:16-19`). Implementing the dialect on the engine itself keeps the identity-insert
@@ -5218,7 +5262,7 @@ survives a module being pulled out into its own service.
   ([ADR-130](https://ivanball.github.io/docs/adr/130-per-engine-data-source-strategy.html)).
 - **Where it's used**: registered in [`DataSourceEngines`](#datasourceengines) (`DataSourceEngines.cs:27`);
   allow-listed by `DataSourceBranchingFitnessTests.cs:29`; its dialect is driven by
-  [`DbContextFactory`](#dbcontextfactory) (`DbContextFactory.cs:293-295,335`).
+  [`DbContextFactory`](#dbcontextfactory) (`DbContextFactory.cs:296-298,338`).
 
 ### DetectChangesScope
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.DbContexts` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:284` · Level 0 · struct (private readonly, nested)
@@ -5269,7 +5313,7 @@ survives a module being pulled out into its own service.
   ([`TenantSaveChangesInterceptor`](#tenantsavechangesinterceptor) at
   `TenantSaveChangesInterceptor.cs:74` and
   [`AuditTrailSaveChangesInterceptor`](#audittrailsavechangesinterceptor) at
-  `AuditTrailSaveChangesInterceptor.cs:199`), so the suppression saves strictly more than the comment
+  `AuditTrailSaveChangesInterceptor.cs:221`), so the suppression saves strictly more than the comment
   claims; the comment is narrower than the code, not wrong about the mechanism.
 
 ### ModelBuilderExtensions
@@ -5310,7 +5354,7 @@ survives a module being pulled out into its own service.
   configurations depend on services without a parameterless-ctor constraint.
 - **Where it's used**: called from
   [`ApplicationDbContext.ApplyConfigurationsForEntitiesInContext`](#applicationdbcontext)
-  (`ApplicationDbContext.cs:975-981`), which passes the engine's configuration interface (for example
+  (`ApplicationDbContext.cs:981-987`), which passes the engine's configuration interface (for example
   [`IEntityTypeConfigurationSQLServer<TEntity, TIdentifierType>`](#ientitytypeconfigurationsqlservertentity-tidentifiertype))
   and a filter that matches each entity's registry-resolved [`DataSourceKey`](#datasourcekey).
 
@@ -5332,10 +5376,10 @@ survives a module being pulled out into its own service.
   connections) as transient, and EF decides retriability by walking an exception's **whole** inner
   chain, so any wrapper carrying the transient error would still be retried, re-running every write of
   an operation whose commit may already be durable, including its outbox rows
-  (`TransactionCommitAmbiguousException.cs:8-14`, `DbContextFactory.cs:588-591`). That is why the
+  (`TransactionCommitAmbiguousException.cs:8-14`, `DbContextFactory.cs:614-617`). That is why the
   commit failure is returned rather than thrown from `RunTransactionalAttemptAsync` and `TryCommit`
-  (`DbContextFactory.cs:601-605`, `:572-574`, `:617-620`) and only converted into this exception
-  **past** the strategy (`DbContextFactory.cs:592-593`). Second, semantically: "it failed" and "nobody
+  (`DbContextFactory.cs:627-631`, `:572-574`, `:617-620`) and only converted into this exception
+  **past** the strategy (`DbContextFactory.cs:618-619`). Second, semantically: "it failed" and "nobody
   can say whether it failed" call for different recovery, so the type itself is the signal.
 - **Concept introduced, naming the partial outcome.** `[Rubric §13, Observability & Operability]`
   (assesses whether an operator can tell what actually happened from what the system reports): commits
@@ -5349,7 +5393,7 @@ survives a module being pulled out into its own service.
     set; `(Exception innerException)` (`:45-46`), which pairs the provider's failure with the default
     message; and the four-argument diagnostic one (`:57-69`), which additionally takes the committed,
     ambiguous and rolled-back sources and composes them into the message. That last one is the one
-    [`DbContextFactory`](#dbcontextfactory) actually constructs (`DbContextFactory.cs:744`); it
+    [`DbContextFactory`](#dbcontextfactory) actually constructs (`DbContextFactory.cs:776`); it
     null-coalesces both lists to empty (`:63`, `:66-68`) so a caller passing `null` gets an empty group
     rather than a second exception.
   - **`CommittedSources`** (`:76`), **`AmbiguousSource`** (`:85`), **`RolledBackSources`** (`:93`): the
@@ -5371,11 +5415,11 @@ survives a module being pulled out into its own service.
   [`OutboxProcessor`](group-04-events-outbox.md#outboxprocessor) if the commit did land
   ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)); and the deferred
   in-process dispatch is dropped, so no handler acts on state that may not exist
-  (`DbContextFactory.cs:760-781`). The source comment records that a witness row (a marker written
+  (`DbContextFactory.cs:792-813`). The source comment records that a witness row (a marker written
   inside each source's transaction that a replay could read) would close the multi-source gap entirely,
   and that it is deliberately not built, because the single transactional source every host runs today
-  needs none (`DbContextFactory.cs:539-549`).
-- **Where it's used**: thrown at `DbContextFactory.cs:593`, constructed at `:646`; pinned by
+  needs none (`DbContextFactory.cs:565-575`).
+- **Where it's used**: thrown at `DbContextFactory.cs:619`, constructed at `:646`; pinned by
   `DbContextFactoryCommitAmbiguityTests`
   (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/DbContexts/DbContextFactoryCommitAmbiguityTests.cs:73`,
   `:105`, `:129`, `:149`, `:168`), which drives a context whose execution strategy retries on **any**
@@ -5414,7 +5458,7 @@ survives a module being pulled out into its own service.
 - **Why it's built this way**: determinism is the point. A stable tie-break (lowest index) means the same
   input always saves in the same order, and a cycle degrades to a defined order instead of an exception.
 - **Where it's used**: `DbContextFactory.SaveWithExplicitKeyInsertAsync` calls it once per explicit-key
-  save and reorders its groups by the result (`DbContextFactory.cs:342`). The ordering is pinned by
+  save and reorders its groups by the result (`DbContextFactory.cs:345`). The ordering is pinned by
   `MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/DbContexts/Factory/ExplicitKeyInsertRoundOrderTests.cs`.
 
 ### ApplicationDbContext
@@ -5619,8 +5663,13 @@ survives a module being pulled out into its own service.
     two deliberate choices: every engine other than PostgreSQL keeps the SQL Server annotation, SQLite
     included because its provider ignores it, and the helper takes property names rather than a
     selector so the scheduler table does not reflect as a `Persistence -> Scheduling` type reference.
-  - **`ConfigureOutbox`** (`:661`, taking `DataSource engine`): maps `OutboxMessages` in
-    `dbo` with length/unicode constraints, plus three purpose-built filtered indexes, built through
+  - **`ConfigureOutbox`** (`:662`, taking `DataSource engine`): maps `OutboxMessages` in
+    `dbo` with length/unicode constraints, including the captured ambient-context columns (user id,
+    roles, tenant, correlation id) and `UserPermissions` (`:689`), which is deliberately left unbounded
+    (`nvarchar(max)` on SQL Server) because a truncated permission list would deny deferred work the
+    inline request was allowed to run; the column is nullable, so adding it is expand-only and older
+    rows read back as "nothing captured". `ConfigureInternalCommands` (`:757`) maps the same column
+    the same way (`:772`) so the two hops carry identical values. The method also adds three purpose-built filtered indexes, built through
     `QuoteColumn`/`IncludeColumns` so the same method body produces valid filter and include syntax
     on every relational engine. `IX_OutboxMessages_Pending` covers the poll path over `(ProcessedOn,
     OccurredOn)` filtered to the processed column being null and includes `RetryCount` and
@@ -5630,7 +5679,7 @@ survives a module being pulled out into its own service.
     pending rows, answers the claim predicate's "is there an earlier unprocessed row with this key?"
     question with a seek instead of a scan per candidate row. `[Rubric §12, Performance &
     Scalability]`.
-  - **`ConfigureInbox`** (`:721`): maps `InboxMessages` in `dbo` with a unique
+  - **`ConfigureInbox`** (`:727`): maps `InboxMessages` in `dbo` with a unique
     `IX_InboxMessages_MessageId` (the consumer-side idempotency key) and an
     `IX_InboxMessages_ProcessedOn` index so the age-based purge has something to seek.
   - **`ConfigureScheduler`** (`:802`): the first **gated** table. It returns immediately unless
@@ -5982,7 +6031,7 @@ survives a module being pulled out into its own service.
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Design/DesignTimeDbContextHelper.cs:52`),
   which is what makes one migrations project per database possible. It is also the type
   [`DbContextFactory`](#dbcontextfactory) tests for on the identity-insert path
-  (`DbContextFactory.cs:267`). It is the primary production context in both MMCA.ADC and MMCA.Store,
+  (`DbContextFactory.cs:270`). It is the primary production context in both MMCA.ADC and MMCA.Store,
   and the context type every committed migration snapshot is generated against.
 - **Caveats / not-in-source**: whether any repository's CI actually runs the
   `has-pending-model-changes` gate the comment recommends is Not determinable from this file.
@@ -5996,8 +6045,8 @@ survives a module being pulled out into its own service.
   touched (`IDbContextFactory.cs:5-10`). It is deliberately **not** EF Core's
   `IDbContextFactory<TContext>`: the two names collide, which is why consumers that need both add a
   `using IDbContextFactory = ...DbContexts.Factory.IDbContextFactory;` alias
-  (`InProcessEventBus.cs:8`, `BrokerEventBus.cs:8`, `EfInboxStore.cs:8`) or fully qualify it
-  (`OutboxProcessor.cs:189`).
+  (`InProcessEventBus.cs:8`, `BrokerEventBus.cs:8`, `EfInboxStore.cs:10`) or fully qualify it
+  (`OutboxProcessor.cs:199`).
 - **Depends on**: [`ApplicationDbContext`](#applicationdbcontext), [`DataSourceKey`](#datasourcekey),
   and the BCL `IDisposable` plus `IAsyncDisposable` it extends (`IDbContextFactory.cs:10`).
 - **Concept introduced, addressing a context by physical source rather than by type.** `[Rubric §8,
@@ -6043,9 +6092,9 @@ survives a module being pulled out into its own service.
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:74`,
   `:242`, and per tenant at `:144`), and the background and messaging paths resolve it per scope to
   reach a specific source ([`OutboxProcessor`](group-04-events-outbox.md#outboxprocessor) at
-  `OutboxProcessor.cs:189`, `OutboxCleanupService.cs:100`, `OutboxAdministration.cs:219`,
-  `EfInboxStore.cs:42`, `InProcessEventBus.cs:34`, `BrokerEventBus.cs:32`, `ScheduledJobRunner.cs:222`,
-  `AuditTrailReader.cs:35`, `AuditTrailCleanupJob.cs:46`, `EFRefreshSessionStore.cs:32`, and
+  `OutboxProcessor.cs:199`, `OutboxCleanupService.cs:100`, `OutboxAdministration.cs:224`,
+  `EfInboxStore.cs:44`, `InProcessEventBus.cs:34`, `BrokerEventBus.cs:32`, `ScheduledJobRunner.cs:222`,
+  `AuditTrailReader.cs:35`, `AuditTrailCleanupJob.cs:46`, `EFRefreshSessionStore.cs:34`, and
   `RefreshSessionCleanupService.cs:112`).
 
 ### IPhysicalDbContextFactory
@@ -6156,7 +6205,7 @@ survives a module being pulled out into its own service.
   `internal static` members
   of [`DomainEventSaveChangesInterceptor`](#domaineventsavechangesinterceptor)
   (`BeginCaptureExclusion`, `EndCaptureExclusion`, `DropDeferred`, `FlushDeferredAsync`, at
-  `DbContextFactory.cs:411`, `:342`, `:447`, and `:581`).
+  `DbContextFactory.cs:414`, `:342`, `:447`, and `:581`).
 - **Concept introduced, coordinating one logical save across several physical databases.**
   `[Rubric §8, Data Architecture]` (transaction boundaries, unit-of-work scope, per-service isolation)
   and `[Rubric §12, Performance & Scalability]` (transactions handled once in a shared mechanism, never
@@ -6172,7 +6221,7 @@ survives a module being pulled out into its own service.
   own connection string for a source, and this class is where that declaration turns into a different
   database. The trick is that only the connection string changes: the
   [`DataSourceKey`](#datasourcekey) stays the same, which is what EF's model cache is keyed on, so one
-  compiled model serves every tenant (`DbContextFactory.cs:163-168`).
+  compiled model serves every tenant (`DbContextFactory.cs:166-171`).
 - **Walkthrough**:
   - **State** (`DbContextFactory.cs:59-96`): `MaxSavePasses` (3, `:52`); `_dbContexts`, the per-scope
     `Dictionary<DataSourceKey, ApplicationDbContext>` that guarantees every repository in a scope
@@ -6187,47 +6236,50 @@ survives a module being pulled out into its own service.
     the new context in an already-active transaction (`:107-108`), so a source first touched **inside**
     a transactional command still shares the boundary. On a cache **hit** it calls
     `GuardRoutedTenantUnchanged` (`:124`) and then `GuardSharedContextNotRoutable` (`:128`).
-  - **`AttachScopeAccessors`** (`DbContextFactory.cs:147-161`, renamed from `AttachTenantAccessor`):
+  - **`AttachScopeAccessors`** (`DbContextFactory.cs:147-164`, renamed from `AttachTenantAccessor`):
     hands the context two delegates rather than copied values, because a context can be created before
     the request's tenant or principal is resolved and both the query filter and the outbox capture must
     read the answer that holds at query and save time rather than at construction time. It sets
     `context.TenantIdAccessor = () => tenantContext.TenantId` as before, and now also
     `context.OutboxOriginAccessor = () => new OutboxOrigin(_currentUserService.UserId,
     AmbientOrigin.FlattenRoles(_currentUserService.Roles), tenantContext.TenantId,
-    correlationContext?.CorrelationId)` (`:149-153`), invoked once per save that writes outbox rows,
+    correlationContext?.CorrelationId) { UserPermissions =
+    AmbientOrigin.FlattenPermissions(_currentUserService.User) }` (`:147-164`, permissions at `:162`),
+    so the captured origin now carries the caller's flattened permission claims alongside the roles,
+    invoked once per save that writes outbox rows,
     not once per row, so flattening the role claims costs one pass per save. It null-guards inside
     rather than at the call site so the null tolerance a mocked physical factory needs does not leak a
     maybe-null flow state back into the caller.
-  - **`ResolveTenantOverride`** (`DbContextFactory.cs:169-194`): returns `null` (source stays shared)
+  - **`ResolveTenantOverride`** (`DbContextFactory.cs:172-197`): returns `null` (source stays shared)
     unless there is a tenant, bound settings, an entry for that tenant, and an entry for this source
     name (`:145-151`); otherwise it takes the engine-appropriate connection string through
     [`TenancySettingsValidator`](group-07-persistence-ef-core.md#tenancysettingsvalidator)`.ConnectionStringFor`
     (`:153`), still returning `null` when the tenant overrides only a different engine (`:154-158`),
     and finally clones the shared [`PhysicalDataSource`](#physicaldatasource) with the tenant's
     connection string and Cosmos database name (`:160-167`).
-  - **`GuardRoutedTenantUnchanged`** (`DbContextFactory.cs:202-219`): if the cached context was routed
+  - **`GuardRoutedTenantUnchanged`** (`DbContextFactory.cs:205-222`): if the cached context was routed
     for a tenant and the scope's tenant has since changed, it throws with both tenant ids named
     (`:185-192`). The comment states the stakes (`:170-175`): serving that context to a second tenant
     would read and write the first tenant's data under the second tenant's filter value.
-  - **`GuardSharedContextNotRoutable`** (`DbContextFactory.cs:227`): the mirror-image guard. A context
+  - **`GuardSharedContextNotRoutable`** (`DbContextFactory.cs:230`): the mirror-image guard. A context
     created **shared** (because a repository call ran before the tenant resolved) is refused once the
     scope's tenant turns out to override that source: unless the context was itself routed or
     `ResolveTenantOverride` now returns `null`, it throws an `InvalidOperationException` telling the
     caller to resolve the tenant before the first repository call or use a fresh scope. Serving it
     would read and write the shared database for a tenant that owns its own.
-  - **`GetSourcesInUse`** (`DbContextFactory.cs:258-259`): the union of every source backing a
+  - **`GetSourcesInUse`** (`DbContextFactory.cs:261-262`): the union of every source backing a
     registered entity (from [`IEntityDataSourceRegistry`](#ientitydatasourceregistry)) and every source
     already materialized in this scope, which is what `EnsureCreatedAsync` (`:196-207`) and
     `GetMigrationTargets` (`:705-723`) iterate. `EnsureCreatedAsync` skips sources with an empty
     connection string (`:200-203`).
-  - **`GetMigrationTargets`** (`DbContextFactory.cs:804-817`): the shared filter behind `MigrateAsync`
+  - **`GetMigrationTargets`** (`DbContextFactory.cs:836-849`): the shared filter behind `MigrateAsync`
     (`:686-690`) and `HasPendingMigrationsAsync` (`:726-735`). It keeps a source only when its resolved
     [`PhysicalDataSource`](#physicaldatasource)`.UsesMigrations` is true (`:713-714`), then skips a
     non-SQL-Server target whose connection string is empty (`:716-717`). The asymmetry is deliberate and
     documented (`:697-702`): an optional SQLite source a test host leaves unconfigured stays silently
     absent, while a SQL Server source with no connection string still fails loudly at startup, because
     for SQL Server that is a misconfiguration rather than an option.
-  - **`SaveChangesAsync`** (`DbContextFactory.cs:271-319`): reads and immediately clears the
+  - **`SaveChangesAsync`** (`DbContextFactory.cs:274-322`): reads and immediately clears the
     explicit-key-insert flag (`:272`), then loops at most `MaxSavePasses` times over the contexts it
     has not yet saved (`:237-251`), passing `_currentUserService.UserId` into each context's
     audit-aware `SaveChangesAsync` overload (`:247-249`). The re-loop exists because saving dispatches
@@ -6238,21 +6290,26 @@ survives a module being pulled out into its own service.
     silently lost. The comment at `:253-258` explains why the assertion reads the change tracker rather
     than the saved set: it must catch both a context materialized past the pass bound and a handler
     that dirtied an already-saved context.
-  - **`SaveChanges`** (`DbContextFactory.cs:450-458`): the synchronous path, a single pass over a
+  - **`SaveChanges`** (`DbContextFactory.cs:476-484`): the synchronous path, a single pass over a
     snapshot of the cached contexts with no re-loop.
-  - **Explicit-key insert path** (`DbContextFactory.cs:293-295`, `:329-440`): a context takes it only
+  - **Explicit-key insert path** (`DbContextFactory.cs:296-298`, `:329-440`): a context takes it only
     when the flag is set AND `context.Engine.ExplicitKeyInsert` returns an
     [`IExplicitKeyInsertDialect`](#iexplicitkeyinsertdialect) (SQL Server's `SET IDENTITY_INSERT`);
     every other engine saves normally. `SaveWithExplicitKeyInsertAsync` (`:329`) asks the dialect for
     the [`ExplicitKeyInsertGroup`](#explicitkeyinsertgroup)s and opens the connection itself when it is
     not already open, because the toggle is session state and without an ambient transaction EF would
     otherwise return the connection to the pool between the toggle and the `INSERT`; an
-    already-open connection is left as found. `SaveExplicitKeyGroupsAsync` (`:377`) then saves one
-    table per round with the toggle SQL built by `dialect.BuildToggleSql`. Before saving, the groups are
+    already-open connection is left as found. `SaveExplicitKeyGroupsAsync` (`:387`) then saves one
+    table per round with the toggle SQL built by `dialect.BuildToggleSql`. The toggle-off SQL is built
+    once per round; on a successful save it runs unconditionally with `CancellationToken.None`, but on
+    a failed save it goes through `TryToggleOffAsync` (`:439`, defined at `:463`), which is
+    best-effort, and the original exception is rethrown. The reason is that the session may already be
+    gone (the same fault that failed the save), and a throw from the toggle-off would replace the
+    save's real exception and hide a transient error from the execution strategy. Before saving, the groups are
     reordered by [`ExplicitKeyInsertRoundOrder`](#explicitkeyinsertroundorder)`.Order` (`:341-345`),
     because the change tracker's order is the order rows were added and says nothing about foreign keys;
     the result is one round per table, principals first.
-  - **`BeginTransaction` / `CommitTransaction` / `RollbackTransaction`** (`DbContextFactory.cs:460-495`):
+  - **`BeginTransaction` / `CommitTransaction` / `RollbackTransaction`** (`DbContextFactory.cs:486-521`):
     each filters to contexts that support transactions and, symmetrically, to those that do or do not
     already carry one (`:426`, `:433`, `:440`), because EF throws on a second `BeginTransaction` for
     the same connection and `GetDbContext` may already have enlisted a late-created context
@@ -6263,7 +6320,7 @@ survives a module being pulled out into its own service.
     (`DomainEventSaveChangesInterceptor.DropDeferred`) and the owed processor wake
     (`EnrolledCommandWake.Drop`, `:850-853`): the aggregate changes and their outbox rows just rolled
     back, so neither may run, and neither must survive into a retry.
-  - **`ExecuteInTransactionAsync<TResult>`** (`DbContextFactory.cs:551-596`): re-entrancy first, a
+  - **`ExecuteInTransactionAsync<TResult>`** (`DbContextFactory.cs:577-622`): re-entrancy first, a
     nested call simply runs the operation on the ambient transaction (`:510-511`), because an inner
     commit would make the outer scope's earlier work durable ahead of its own decision (`:503-509`).
     Otherwise it picks the execution strategy from the first transaction-capable context, materializing
@@ -6271,7 +6328,7 @@ survives a module being pulled out into its own service.
     rather than taken literally so a host with no SQL Server connection does not open a connection
     string that does not exist, `:513-518`), and runs the attempt under `strategy.ExecuteAsync`
     (`:526-534`), calling `ResetForRetry` before every attempt after the first (`:528-529`).
-  - **`RunTransactionalAttemptAsync`** (`DbContextFactory.cs:606-669`): one attempt, begin to commit.
+  - **`RunTransactionalAttemptAsync`** (`DbContextFactory.cs:632-701`): one attempt, begin to commit.
     A failed [`Result`](group-01-result-error-handling.md#result) rolls back and returns (`:563-570`),
     which is what makes
     [ADR-013](https://ivanball.github.io/docs/adr/013-result-pattern.html)'s Result-over-exceptions
@@ -6282,7 +6339,7 @@ survives a module being pulled out into its own service.
     the event flush so a throwing in-process handler cannot swallow it. A cancellation attempts a best-effort rollback and, if
     even that throws, clears the flag and drops every deferred dispatch by hand (`:587-603`); any other
     exception rolls back and rethrows (`:604-608`).
-  - **`TryCommit`** (`DbContextFactory.cs:719-751`) and **`AbandonAfterCommitFailure`** (`:662-683`): a
+  - **`TryCommit`** (`DbContextFactory.cs:751-783`) and **`AbandonAfterCommitFailure`** (`:662-683`): a
     commit failure is **returned, not thrown** (`:646`). `TryCommit` snapshots the enlisted contexts
     first, because that order *is* the commit order (`:625-630`), then commits them one by one,
     accumulating the successes; on a throw it names the failing source, treats everything past it in the
@@ -6291,13 +6348,13 @@ survives a module being pulled out into its own service.
     `AbandonAfterCommitFailure` rolls back whatever has not committed yet, drops every deferred
     dispatch and owed wake (`DropDeferredWork`, `:766`), and swallows secondary rollback failures so the commit ambiguity stays the reported
     failure (`:666-682`).
-  - **`ResetForRetry`** (`DbContextFactory.cs:836-843`): before the strategy re-runs the operation it
+  - **`ResetForRetry`** (`DbContextFactory.cs:868-875`): before the strategy re-runs the operation it
     drops deferred work (`DropDeferredWork`, `:840`: dispatch and the owed wake) and calls `ChangeTracker.Clear()` on every context, so entities the aborted
     attempt added are not inserted a second time (with a duplicate outbox row per event).
-  - **`SupportsTransactions`** (`DbContextFactory.cs:860-861`): `context.Engine.Capabilities.IsRelational`,
+  - **`SupportsTransactions`** (`DbContextFactory.cs:892-893`): `context.Engine.Capabilities.IsRelational`,
     so the Cosmos "no multi-document transactions" fact is read off the engine object rather than
     a type test; **`HasActiveTransaction`** (`:830-831`) is `Database.CurrentTransaction is not null`.
-  - **Disposal** (`DbContextFactory.cs:866-896`): `Dispose` and `DisposeAsync` both dispose every
+  - **Disposal** (`DbContextFactory.cs:898-928`): `Dispose` and `DisposeAsync` both dispose every
     cached context, clear the dictionary, set `_disposed`, and suppress finalization.
 - **Why it's built this way**: [ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)
   makes "one scope, several databases" the normal case, so somebody has to own the cross-context
@@ -6379,11 +6436,11 @@ survives a module being pulled out into its own service.
   and delete at `:73` and `:90`).
 
 ### EncryptedStringConverter
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Encryption` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Encryption/EncryptedStringConverter.cs:72` · Level 0 · class (sealed)
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Encryption` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Encryption/EncryptedStringConverter.cs:76` · Level 0 · class (sealed)
 
 - **What it is**: an EF Core `ValueConverter<string, string>` that encrypts a string property with
   AES-256-GCM on the way to the database and decrypts it on the way back, transparently to the entity
-  (`EncryptedStringConverter.cs:8-11`). It is applied per property in an entity configuration, not
+  (`EncryptedStringConverter.cs:9-12`). It is applied per property in an entity configuration, not
   globally (`:12-18`), and the value it stores is a **versioned envelope**: the key it decrypts with is
   named by a byte inside the stored value itself, not by whatever key the converter was built with.
 - **Depends on**: `System.Security.Cryptography` (`AesGcm`, `RandomNumberGenerator`,
@@ -6396,7 +6453,7 @@ survives a module being pulled out into its own service.
   and integrity in one pass, so tampering with a stored value makes decryption throw instead of
   silently yielding garbage, and no separate HMAC step is needed. The price is stated at length in the
   class comment (`:19-32`) and is the part worth internalizing: every write draws a fresh random nonce
-  (`:193`), so the same plaintext produces a different column value each time. A non-deterministic
+  (`:223`), so the same plaintext produces a different column value each time. A non-deterministic
   column cannot carry an equality or range predicate (the comparison is against a ciphertext that never
   matches, and the query returns no rows rather than failing), cannot carry a unique index, and cannot
   be sorted or grouped server side. Anything that must stay searchable needs a second, deterministic
@@ -6408,49 +6465,57 @@ survives a module being pulled out into its own service.
 - **Concept introduced, a self-describing envelope is what makes key rotation possible.** `[Rubric §8,
   Data Architecture]` (assesses whether persistence mechanics are deliberate) and again `[Rubric §11,
   Security]`. A stored value is Base64 of `[key version (1)] [nonce (12)] [ciphertext (N)] [tag (16)]`
-  (`:38-44`, laid out at `:203-208`), so the row carries everything needed to read it back except the
-  key material: 29 bytes of overhead before Base64 inflation (`:75`, `:78`, `:81`). Two properties fall
+  (`:38-44`, laid out at `:233-238`), so the row carries everything needed to read it back except the
+  key material: 29 bytes of overhead before Base64 inflation (`:79`, `:82`, `:85`). Two properties fall
   out of that one byte. First, a converter can hold a whole **key ring** keyed by version with one
-  version nominated as current (`:109`): writes stamp the current version (`:116`, `:205`), reads take
-  their key from the version byte in the data (`:223-224`), so a rotation is add the new key as current,
-  deploy, re-encrypt rows in the background, then retire the old version, with no maintenance window and
+  version nominated as current (`:113`): writes stamp the current version (`:120`, `:235`), reads take
+  their key from the version byte in the data (`:253-254`), so a rotation is add the new key as current,
+  deploy, re-encrypt rows in the background (`MarkForReEncryption`, `:143`), then retire the old version,
+  with no maintenance window and
   no rows left unreadable in between (`:45-61`). Second, the version byte is **authenticated, not merely
-  stored**: it is passed to AES-GCM as associated data on both sides (`:198`, `:231`), so rewriting it
+  stored**: it is passed to AES-GCM as associated data on both sides (`:228`, `:261`), so rewriting it
   fails the tag check rather than silently selecting another key, and it fails even when the substituted
   version happens to map to the same key. That last property is the one a "just prefix the version"
   design usually misses.
 - **Walkthrough**:
-  - **Sizes and the default version** (`EncryptedStringConverter.cs:75`, `:78`, `:81`, `:84`, `:87`):
+  - **Sizes and the default version** (`EncryptedStringConverter.cs:79`, `:82`, `:85`, `:88`, `:91`):
     `VersionSize = 1`, `NonceSize = 12` bytes (96 bits, the NIST recommendation for GCM),
     `TagSize = 16` bytes (128 bits), `KeySize = 32` bytes, and `DefaultKeyVersion = 1`, the version the
     single-key constructor stamps.
-  - **Two public constructors over one private one** (`:94-97`, `:109-112`, `:114-119`): the `byte[]`
-    constructor is sugar for a one-entry ring at version 1, built by `CreateSingleKeyRing` (`:95`,
-    `:127-138`), which null-guards the key (`:129`) and rejects anything that is not exactly 32 bytes
-    with a message naming the length it got (`:130-135`). The ring constructor takes an
+  - **Two public constructors over one private one** (`:98-101`, `:113-116`, `:118-123`): the `byte[]`
+    constructor is sugar for a one-entry ring at version 1, built by `CreateSingleKeyRing` (`:99`,
+    `:157-168`), which null-guards the key (`:159`) and rejects anything that is not exactly 32 bytes
+    with a message naming the length it got (`:160-165`). The ring constructor takes an
     `IReadOnlyDictionary<byte, byte[]>` plus the version to write with. Both funnel into the private
     constructor, which passes the two lambdas up to `ValueConverter`, `Encrypt` as the to-provider
-    direction bound to the current version and `Decrypt` as the from-provider direction (`:116-117`).
+    direction bound to the current version and `Decrypt` as the from-provider direction (`:120-121`).
     The frozen ring is captured by those lambdas.
-  - **`ValidateAndFreeze`** (`:146-182`): the ring is validated once, at construction. Not null
-    (`:150`), not empty (`:152-155`), no null entry (`:159-164`), every key exactly 32 bytes
-    (`:166-171`), and the nominated current version actually present (`:174-179`), which is what lets
-    `Encrypt` index the ring without a lookup guard (`:189-190`). Then `ToFrozenDictionary()` (`:181`)
+  - **`ValidateAndFreeze`** (`:176-212`): the ring is validated once, at construction. Not null
+    (`:180`), not empty (`:182-185`), no null entry (`:189-194`), every key exactly 32 bytes
+    (`:196-201`), and the nominated current version actually present (`:204-209`), which is what lets
+    `Encrypt` index the ring without a lookup guard (`:219-220`). Then `ToFrozenDictionary()` (`:211`)
     takes a defensive copy, so mutating the dictionary the caller passed in afterwards cannot change
-    which keys the converter uses (`:140-145`).
-  - **`GenerateKey()`** (`:125`): `RandomNumberGenerator.GetBytes(32)`, the convenience path for
+    which keys the converter uses (`:170-175`).
+  - **`GenerateKey()`** (`:129`): `RandomNumberGenerator.GetBytes(32)`, the convenience path for
     producing a valid key during setup.
-  - **`Encrypt`** (`:184-211`): empty and null pass through unchanged (`:186-187`), otherwise resolve
-    the current key (`:190`), UTF-8 encode (`:192`), draw a 12-byte nonce (`:193`), and encrypt into a
+  - **`MarkForReEncryption(EntityEntry)`** (`:143-155`): the rotation helper for the re-encrypt step.
+    A column whose value did not change is left out of the UPDATE and would keep its old version byte,
+    so this null-guards the entry (`:145`), walks its properties whose metadata converter is an
+    `EncryptedStringConverter` (`:148`), sets `IsModified = true` on each (`:150`), and returns how
+    many it marked. The next save then rewrites those columns under the current key version. Owned
+    types are tracked as entries of their own, so an encrypted property on an owned navigation needs
+    that owned entry passed separately (`:137-140`). The only caller is its own test, which marks one encrypted property, saves, and checks the column is rewritten under the new version (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Encryption/EncryptedStringConverterReEncryptionTests.cs:26`, `:43`).
+  - **`Encrypt`** (`:214-241`): empty and null pass through unchanged (`:216-217`), otherwise resolve
+    the current key (`:220`), UTF-8 encode (`:222`), draw a 12-byte nonce (`:223`), and encrypt into a
     same-length ciphertext buffer with a 16-byte tag, handing the single version byte over as associated
-    data (`:194-201`). The four regions are then laid into one buffer in envelope order (`:203-208`) and
-    Base64-encoded (`:210`). Storing the version and nonce alongside the ciphertext is what makes each
+    data (`:224-231`). The four regions are then laid into one buffer in envelope order (`:233-238`) and
+    Base64-encoded (`:240`). Storing the version and nonce alongside the ciphertext is what makes each
     row self-describing: no side table of nonces and no out-of-band record of which key wrote which row.
-  - **`Decrypt`** (`:213-239`): Base64 decode (`:218`), reject anything shorter than version plus nonce
-    plus tag with a `CryptographicException` (`:220-221`), read the version from position 0 and fail
+  - **`Decrypt`** (`:243-269`): Base64 decode (`:248`), reject anything shorter than version plus nonce
+    plus tag with a `CryptographicException` (`:250-251`), read the version from position 0 and fail
     with a message naming only the version number (never key material) when the ring has no key for it
-    (`:223-225`), then slice nonce, ciphertext, tag, and the associated-data byte by fixed offsets and
-    decrypt (`:227-236`). A wrong key, a tampered ciphertext byte, and a rewritten version byte all fail
+    (`:253-255`), then slice nonce, ciphertext, tag, and the associated-data byte by fixed offsets and
+    decrypt (`:257-266`). A wrong key, a tampered ciphertext byte, and a rewritten version byte all fail
     inside `AesGcm.Decrypt`, which is the integrity guarantee doing its job.
 - **Why it's built this way**: GCM over CBC removes the "encrypt then MAC" bookkeeping that is easy to
   get wrong, and putting the whole scheme behind a `ValueConverter` means an entity property stays a
@@ -6488,7 +6553,7 @@ survives a module being pulled out into its own service.
   path**, so a value written in the earlier un-versioned `[nonce] [ciphertext] [tag]` layout does not
   read back under the current converter (its first byte is a nonce byte, not a version), and the window
   in which the envelope is free to change closes at the first adopted column. Three further limits are
-  worth knowing before adopting it. The version space is a single byte (`:75`), ample for annual or
+  worth knowing before adopting it. The version space is a single byte (`:79`), ample for annual or
   quarterly rotation but wrapping rather than growing, and a reused version number is exactly the
   ambiguity the byte exists to prevent. The suite covers the short-value, unregistered-version, and
   rewritten-version failures but never flips a bit inside the ciphertext body or decrypts under a wrong
@@ -6558,7 +6623,7 @@ survives a module being pulled out into its own service.
 - **Walkthrough**:
   - **Creation** (`NewLocalLease`, `:315-316`): `Until` is the injected `TimeProvider` now plus
     `_localLeaseSeconds` (`:66`), read once from `Outbox:LeaseSeconds`
-    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxSettings.cs:85`,
+    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxSettings.cs:86`,
     default 300); `Token` is a fresh `Guid.NewGuid()`.
   - **Application** (`ApplyLocalLease`, `:305-312`): copies the pair onto `OutboxMessage.LockedUntil`
     and `LockToken`. A null lease returns without touching the row.
@@ -6595,7 +6660,7 @@ survives a module being pulled out into its own service.
   lists cited below).
 - **Where it's used**: the abstract `Accounts` property of
   [`IdentityModuleDbSeederBase<TUser>`](#identitymoduledbseederbasetuser)
-  (`IdentityModuleDbSeederBase.cs:51`); supplied by ADC's
+  (`IdentityModuleDbSeederBase.cs:83`); supplied by ADC's
   [`IdentityModuleDbSeeder`](group-24-identity-module.md#identitymoduledbseeder) as three accounts
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Infrastructure/Persistence/DbContexts/Seeding/IdentityModuleDbSeeder.cs:34-39`)
   and by Store's through a `StoreAccounts` array
@@ -6718,7 +6783,7 @@ survives a module being pulled out into its own service.
   Unchanged owner with owned changes to `Modified` before stamping
   (`AuditSaveChangesInterceptor.cs:73`), and
   [`AuditTrailSaveChangesInterceptor`](#audittrailsavechangesinterceptor) treats such an entry as
-  auditable (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:237`).
+  auditable (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:259`).
 
 ### CapturedState
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Interceptors` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:455` · Level 10 · record (private sealed, nested)
@@ -6908,8 +6973,8 @@ survives a module being pulled out into its own service.
 - **Where it's used**: enqueued by `DispatchAndFinalizeAsync` when
   `context.Database.CurrentTransaction is not null` (`:308-314`); drained by `FlushDeferredAsync`
   after a successful commit
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:641`);
-  discarded wholesale by `DropDeferred` on every rollback path (`DbContextFactory.cs:852`, `:599`,
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:667`);
+  discarded wholesale by `DropDeferred` on every rollback path (`DbContextFactory.cs:884`, `:599`,
   `:668`, `:746`).
 
 ### DomainEventSaveChangesInterceptor
@@ -7022,7 +7087,8 @@ survives a module being pulled out into its own service.
       either.
     - Finally it stores the `CapturedState`, including the lease token, under the context
       (`:300-301`).
-  - **`SavedChangesAsync`** (`:116-126`) calls `DispatchAndFinalizeAsync` (`:346-363`), which pulls
+  - **`SavedChangesAsync`** (`:116-126`) calls `DispatchAndFinalizeAsync` (`:346-363`, a non-async method returning `Task`, so it returns
+    `Task.CompletedTask` on its early exits and hands back `FlushStateAsync`'s task directly), which pulls
     the state, removes it from the table, and then forks. With an active transaction it clears the
     captured events **now** (so a second save in the same transaction cannot re-capture them) and
     queues a `DeferredDispatch` (`:353-359`). Without one it flushes immediately (`:362`).
@@ -7059,10 +7125,10 @@ survives a module being pulled out into its own service.
   - **`BeginCaptureExclusion` / `EndCaptureExclusion`** (`:194-203`, `:210`): the narrow hook for
     `IDENTITY_INSERT` batching. `DbContextFactory` splits a save into one round per identity table
     and temporarily marks the other tables' entries `Unchanged`
-    (`DbContextFactory.cs:395-413`); those rows are not written this round, so capturing their events
+    (`DbContextFactory.cs:398-416`); those rows are not written this round, so capturing their events
     now would persist and clear an event ahead of the insert that justifies it. The exclusion set is
     built with `ReferenceEqualityComparer.Instance` (`:202`) and cleared in a `finally`
-    (`DbContextFactory.cs:437-442`). The remarks explain why exclusion is by instance and not by
+    (`DbContextFactory.cs:447-452`). The remarks explain why exclusion is by instance and not by
     entity state (`:187-191`): skipping every `Unchanged` aggregate would also drop events raised on
     an already-saved aggregate, which is how the identity module publishes its registration events.
 - **Why it's built this way**:
@@ -7090,7 +7156,7 @@ survives a module being pulled out into its own service.
   an invariant a future outbox writer would have to respect. Also, a crash between commit and the
   processed stamp is not repaired by this type at all: recovery is the lease expiring and a poller
   taking the rows, so the worst-case delay is `Outbox:LeaseSeconds` (default 300,
-  `OutboxSettings.cs:85`).
+  `OutboxSettings.cs:86`).
 
 ### TenantSaveChangesInterceptor
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Interceptors` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/TenantSaveChangesInterceptor.cs:36` · Level 11 · class (sealed)
@@ -7165,20 +7231,23 @@ survives a module being pulled out into its own service.
   is inert until an entity implements `ITenantEntity`.
 
 ### IdentityModuleDbSeederBase<TUser>
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.DbContexts.Seeding` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Seeding/IdentityModuleDbSeederBase.cs:39` · Level 14 · class (abstract)
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.DbContexts.Seeding` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Seeding/IdentityModuleDbSeederBase.cs:57` · Level 14 · class (abstract, partial)
 
 - **What it is**: a [`DbSeeder`](#dbseeder) subclass that owns the whole per-account seeding idiom
   (normalize the email, skip if it exists, hash the password, build the aggregate, add, save) for an
   app-supplied list of development accounts. Its own summary records why it exists: that idiom was
   written out five times across the two apps' Identity modules and now lives here once
-  (`IdentityModuleDbSeederBase.cs:9-13`).
+  (`IdentityModuleDbSeederBase.cs:12-16`).
 - **Depends on**: [`IUnitOfWork`](#iunitofwork) and
-  [`IPasswordHasher`](group-08-auth.md#ipasswordhasher) through its primary constructor (`:38-40`),
+  [`IPasswordHasher`](group-08-auth.md#ipasswordhasher) and an `ILogger` through its primary constructor
+  (`:57-60`; a protected two-argument overload at `:71` supplies `NullLogger.Instance`, so a subclass that
+  passes no logger still compiles, and both in-repo subclasses do exactly that),
   [`SeedAccount`](#seedaccount) as the input record, [`Email`](group-02-domain-building-blocks.md#email)
   as the normalized value object, [`Result<T>`](group-01-result-error-handling.md#result) as the
   factory-hook return type, and
   [`AuditableAggregateRootEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditableaggregaterootentitytidentifiertype)
-  as the `TUser` constraint (`:41`).
+  as the `TUser` constraint (`:61`), plus `IUniqueConstraintViolationDetector` and
+  `SqlServerUniqueConstraintViolationDetector` for the lost-race check and EF Core's `DbUpdateException`.
 - **Concept introduced, the template method with app-specific hooks.** `[Rubric §1, SOLID]` (assesses
   whether abstractions are open for extension and closed for modification, and whether subclasses vary
   only what genuinely differs) and `[Rubric §15, Best Practices & Code Quality]`: the base fixes the invariant
@@ -7194,33 +7263,50 @@ survives a module being pulled out into its own service.
   not translatable, so hoisting shared persistence logic into a generic base means leaving the query
   itself behind in the subclass.
 - **Walkthrough**:
-  - **Constructor and protected state** (`IdentityModuleDbSeederBase.cs:39-48`): the primary
-    constructor's two parameters are null-guarded into protected `UnitOfWork` (`:44`) and
-    `PasswordHasher` (`:47`) properties, so subclasses can reach the unit of work for their existence
-    predicate without taking it again.
-  - **`Accounts`** (`:50`): abstract `IReadOnlyList<SeedAccount>`, the ordered list the app supplies.
-  - **`ShouldSeed`** (`:57`): `protected virtual`, defaulting to `true`. The gate is checked once at
-    the top of `SeedAsync` (`:62-65`).
-  - **`SeedAsync`** (`:60-71`): the public entry point. Return early when the gate is closed, otherwise
-    walk `Accounts` in order calling the private per-account routine (`:67-70`).
-  - **`EmailExistsAsync(Email?, CancellationToken)`** (`:81`) and
-    **`CreateUser(SeedAccount, byte[], byte[])`** (`:90`): the two abstract hooks. Their doc comments
+  - **Constructor and protected state** (`IdentityModuleDbSeederBase.cs:57-80`): the primary
+    constructor's parameters are null-guarded into protected `UnitOfWork` (`:77`) and
+    `PasswordHasher` (`:80`) properties, so subclasses can reach the unit of work for their existence
+    predicate without taking it again, and into a private `_logger` (`:63`). The two-argument
+    overload (`:71`) chains to the primary one with `NullLogger.Instance`.
+  - **`Accounts`** (`:83`): abstract `IReadOnlyList<SeedAccount>`, the ordered list the app supplies.
+  - **`ShouldSeed`** (`:90`): `protected virtual`, defaulting to `true`. The gate is checked once at
+    the top of `SeedAsync` (`:93-98`).
+  - **`SeedAsync`** (`:93-103`): the public entry point. Return early when the gate is closed, otherwise
+    walk `Accounts` in order calling the private per-account routine.
+  - **`EmailExistsAsync(Email?, CancellationToken)`** (`:114`) and
+    **`CreateUser(SeedAccount, byte[], byte[])`** (`:123`): the two abstract hooks. Their doc comments
     define the contract precisely, including that `email` is `null` when the seed address failed
-    validation, in which case no user can match it (`:77-78`), and that a failed `Result` skips the
-    account silently (`:89`).
-  - **`SeedAccountAsync`** (`:92-113`): the idiom itself. Normalize through
+    validation, in which case no user can match it, and that a failed `Result` skips the
+    account silently.
+  - **`SeedAccountAsync`** (`:125-158`): the idiom itself. Normalize through
     [`Email`](group-02-domain-building-blocks.md#email)`.Create(...).Value` so the EF predicate compares
-    same-typed converted values (`:94-95`), ask the hook whether the account exists and return if so
-    (`:97-101`), hash the plaintext password into a `(hash, salt)` pair (`:103`), call the app factory
-    and return silently on failure (`:104-108`), then resolve the repository through
-    [`IUnitOfWork`](#iunitofwork)`.GetRepository<TUser, UserIdentifierType>()`, add, and save
-    (`:110-112`).
+    same-typed converted values (`:128`), ask the hook whether the account exists and return if so,
+    hash the plaintext password into a `(hash, salt)` pair (`:136`), call the app factory
+    and return silently on failure, then resolve the repository through
+    [`IUnitOfWork`](#iunitofwork)`.GetRepository<TUser, UserIdentifierType>()` (`:143`), add, and save
+    inside a `try`. A save that fails with a unique or primary-key violation (`catch ... when
+    (IsUniqueConstraintViolation(exception))`, `:150`) is treated as a lost insert race, not a fault:
+    the failed save is discarded and one information line is logged (`:155`), and seeding moves on to the
+    next account. Any other failure still propagates.
+  - **`IsUniqueConstraintViolation`** (`:161`): classifies the exception with the unit of work's own
+    `IUniqueConstraintViolationDetector` when it implements one (the host's engine-aware choice), else a
+    `SqlServerUniqueConstraintViolationDetector` built on demand. It is not cached in a static because it
+    runs only on a failed save and a static in a generic type is one instance per closed `TUser`.
+  - **`DiscardFailedSave`** (`:171`): walks the exception chain to the first `DbUpdateException`, and for
+    each distinct context in its `Entries` detaches every `Added`, `Modified` or `Deleted` entry
+    (`:188`). A failed save rolls back as a whole, so everything pending belongs to it; left tracked, the
+    scoped context would replay the rejected insert on the next account's save and fail again.
+  - **`LogSeedAccountAlreadySeededConcurrently`** (`:199`): the source-generated `[LoggerMessage]`
+    method, which is why the type is now `partial`.
 - **Why it's built this way**: saving per account rather than once at the end is deliberate and is
   stated in the class comment (`:26-29`): one invalid account cannot roll back the others, which
-  matches the pre-hoist behavior each app had. Hashing goes through
+  matches the pre-hoist behavior each app had. The per-account idiom is check-then-insert, so two replicas
+  starting together on a database lacking an account both pass the existence check and both insert; the
+  unique index on the email rejects the slower save, and the winner wrote the very account this run meant
+  to write, which is why that rejection is absorbed rather than propagated (`:36-46`). Hashing goes through
   [`IPasswordHasher`](group-08-auth.md#ipasswordhasher) rather than any local scheme, per
-  [ADR-032](https://ivanball.github.io/docs/adr/032-password-hashing.html) (`:46`). `[Rubric §11,
-  Security]` applies through the notice at `:31-35`: seed credentials are deliberately weak plaintext
+  [ADR-032](https://ivanball.github.io/docs/adr/032-password-hashing.html) (`:79`). `[Rubric §11,
+  Security]` applies through the notice at `:48-52`: seed credentials are deliberately weak plaintext
   for local development, and a deployed environment must disable seeding or supply environment-sourced
   secrets.
 - **Where it's used**: subclassed once per app, by ADC's and Store's
@@ -7232,10 +7318,11 @@ survives a module being pulled out into its own service.
   [`IdentityModuleSeeder`](group-24-identity-module.md#identitymoduleseeder) at
   `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/IdentityModuleSeeder.cs:35-36`). Pinned by
   `IdentityModuleDbSeederBaseTests`
-  (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/DbContexts/Seeding/IdentityModuleDbSeederBaseTests.cs:18`,
+  (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/DbContexts/Seeding/IdentityModuleDbSeederBaseTests.cs:19`,
   `:26`, `:40`, `:57`, `:68`, `:82`, `:96`), which cover the closed gate, per-account add and save,
   normalization before the existence check, the skip-if-present path, the skip-on-factory-failure path,
-  and the hashed credential reaching the app factory.
+  and the hashed credential reaching the app factory, plus the lost-unique-index-race path that seeds the
+  next account (`:115`) and the other-failure path that still throws (`:146`).
 - **Caveats / not-in-source**: the class comment names ADC's `Seeding:IncludeSampleUsers` as an example
   of an app overriding `ShouldSeed` (`:25-30`), but no first-party seeder overrides it. ADC's subclass
   says so explicitly
@@ -7244,7 +7331,7 @@ survives a module being pulled out into its own service.
   configuration gate in the API-layer `IdentityModuleSeeder` instead
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/IdentityModuleSeeder.cs:29-31`); the only
   override of `ShouldSeed` in the workspace is the test double
-  (`IdentityModuleDbSeederBaseTests.cs:162`). So the gate exists in both places by design, and the
+  (`IdentityModuleDbSeederBaseTests.cs:232`). So the gate exists in both places by design, and the
   comment describes an available option rather than the wiring in force.
 
 ### IInternalCommandSignal
@@ -7255,7 +7342,7 @@ survives a module being pulled out into its own service.
 - **Concept introduced, the signal-based smart-wait pattern for the internal-commands job queue.** `[Rubric §12: Performance & Scalability]` (assesses whether the system avoids wasted work and unnecessary latency): a plain fixed-interval poll trades latency for idle cost either way, while a signal lets a processor sleep long and still react immediately when work shows up. The doc comment on `WaitAsync` (`IInternalCommandSignal.cs:14-17`) states its intended caller directly: `InternalCommandProcessor`, "in place of a plain polling delay."
 - **Walkthrough**: `Signal()` (`IInternalCommandSignal.cs:11-12`) marks that due work is available; `WaitAsync(timeout, cancellationToken)` (`IInternalCommandSignal.cs:21`) waits for a signal or until `timeout` elapses, whichever comes first.
 - **Why it's built this way**: an interface, not a concrete `SemaphoreSlim` dependency, so the processor, scheduler, and administration surface can share one wake mechanism through DI and a test harness can substitute a controllable fake.
-- **Where it's used**: implemented by [`InternalCommandSignal`](#internalcommandsignal); consumed by `InternalCommandProcessor` (the wait loop), `InternalCommandScheduler`, and [`InternalCommandAdministration`](#internalcommandadministration) (it signals after a successful requeue, `InternalCommandAdministration.cs:192`); registered in `DependencyInjection.cs`.
+- **Where it's used**: implemented by [`InternalCommandSignal`](#internalcommandsignal); consumed by `InternalCommandProcessor` (the wait loop), `InternalCommandScheduler`, and [`InternalCommandAdministration`](#internalcommandadministration) (it signals after a successful requeue, `InternalCommandAdministration.cs:197`); registered in `DependencyInjection.cs`.
 
 ### InternalCommandCycleResult
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.InternalCommands.Processing` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Processing/InternalCommandCycleResult.cs:17` · Level 0 · record struct
@@ -7278,27 +7365,26 @@ survives a module being pulled out into its own service.
 - **Where it's used**: registered in `DependencyInjection.cs` (1 site), presumably conditioned on `InternalCommandsSettings.Enabled` being `false`.
 
 ### InternalCommandOrigin
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.InternalCommands` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/InternalCommandOrigin.cs:16` · Level 0 · record struct (internal, readonly)
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.InternalCommands` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/InternalCommandOrigin.cs:17` · Level 0 · record struct (internal, readonly)
 
-- **What it is**: the six-field snapshot of the scheduling context a deferred
+- **What it is**: the seven-field snapshot of the scheduling context a deferred
   [`InternalCommandMessage`](#internalcommandmessage) needs to restore around its later execution: the
-  user id, a flattened roles string, the tenant id, and the correlation, trace and span ids
-  (`InternalCommandOrigin.cs:16-22`).
+  user id, a flattened roles string, a JSON array of permission claims, the tenant id, and the correlation, trace and span ids
+  (`InternalCommandOrigin.cs:17-24`).
 - **Depends on**: `UserIdentifierType`; every other member is a plain nullable `string`.
 - **Concept introduced**: none new. It plays the same role for the internal-command queue that the
   outbox's own ambient-context capture (`OutboxOrigin.cs`) plays for events: a value type that carries
   exactly what a disconnected, later execution needs to look like the scope that scheduled it.
-- **Walkthrough**: a plain positional `internal readonly record struct` with no members beyond its six
+- **Walkthrough**: a plain positional `internal readonly record struct` with no members beyond its seven
   constructor parameters. Value semantics are what let it be captured once by
   `InternalCommandOriginCapture.Capture` and copied cheaply onto the row.
 - **Why it's built this way**: a `record struct` rather than a `class` because it is a short-lived
   value with no identity of its own, constructed once per scheduled command and read once when the row
   is built; `internal` because only this project's scheduling and message types touch it.
 - **Where it's used**: built by [`InternalCommandOriginCapture`](#internalcommandorigincapture)`.Capture`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/InternalCommandOriginCapture.cs:28-39`),
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/InternalCommandOriginCapture.cs:28-40`),
   which [`InternalCommandScheduler`](#internalcommandscheduler) calls while building the row
-  (`InternalCommandScheduler.cs:88`), and consumed by [`InternalCommandMessage`](#internalcommandmessage)`.FromCommand`, which copies its
-  five restorable fields onto the row (`InternalCommandMessage.cs:152-157`).
+  (`InternalCommandScheduler.cs:85`), and consumed by [`InternalCommandMessage`](#internalcommandmessage)`.FromCommand`, which copies all seven fields onto the row (`InternalCommandMessage.cs:160-166`).
 
 ### InternalCommandMetrics
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.InternalCommands.Processing` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Processing/InternalCommandMetrics.cs:17` · Level 1 · class (static)
@@ -7339,7 +7425,7 @@ survives a module being pulled out into its own service.
 - **Concept introduced, a commit-gated wake.** `[Rubric §6, CQRS and Event-Driven]` assesses whether deferred work is delivered reliably: signalling the processor before the commit would only buy a query against a row that is not visible yet, and never signalling would leave the row waiting for the fallback poll. The ledger sits between the two: `Defer` records the debt, `Release` pays it after commit, `Drop` cancels it on rollback.
 - **Walkthrough**: `Owed` (`EnrolledCommandWake.cs:16`) is a `ConditionalWeakTable<DbContext, IInternalCommandSignal>`, so an entry never keeps an abandoned context alive; `Defer(context, signal)` (`EnrolledCommandWake.cs:21-22`) is an `AddOrUpdate` keyed by the context that holds the enrolled row; `Release(committedContexts)` (`EnrolledCommandWake.cs:30-49`) collects the signal owed by each committed context, removes the entry, de-duplicates by signal instance, then calls `Signal()` once per distinct signal, so many rows or contexts produce one wake; `Drop(context)` (`EnrolledCommandWake.cs:53`) forgets the entry because the transaction did not commit.
 - **Why it's built this way**: keying by context ties the debt to the exact transaction that holds the row, and the weak table means the rollback and abandoned-context paths cannot leak. The doc comment on `Release` says to call it only after every commit succeeded (`EnrolledCommandWake.cs:24-28`).
-- **Where it's used**: `InternalCommandScheduler` calls `Defer` when it enrolls a row in an open transaction (`InternalCommandScheduler.cs:113`, see [`InternalCommandScheduler`](#internalcommandscheduler)); `DbContextFactory` calls `Release` after commits (`DbContextFactory.cs:481`, `DbContextFactory.cs:634`) and `Drop` on the rollback path (`DbContextFactory.cs:853`).
+- **Where it's used**: `InternalCommandScheduler` calls `Defer` when it enrolls a row in an open transaction (`InternalCommandScheduler.cs:115`, see [`InternalCommandScheduler`](#internalcommandscheduler)); `DbContextFactory` calls `Release` after commits (`DbContextFactory.cs:507`, `DbContextFactory.cs:660`) and `Drop` on the rollback path (`DbContextFactory.cs:885`).
 - **ADRs**: [ADR-107](https://ivanball.github.io/docs/adr/107-transaction-execution-contract.html), [ADR-114](https://ivanball.github.io/docs/adr/114-internal-commands-durable-job-queue.html).
 
 ### InternalCommandsSettings
@@ -7359,7 +7445,7 @@ survives a module being pulled out into its own service.
 - **What it is**: a static dispatcher that resolves and invokes the decorated `ICommandHandler<TCommand, Result>` for a deserialized `IInternalCommand`, without the caller needing compile-time knowledge of the command's concrete type.
 - **Depends on**: `ICommandHandler<TCommand, Result>` and `IInternalCommand` (Application layer, not in this group), `IServiceProvider`, `System.Reflection.MethodInfo`, `ConcurrentDictionary<TKey,TValue>`.
 - **Concept introduced, a compiled-reflection invoker cache.** `[Rubric §12: Performance & Scalability]`: building one delegate per command type costs a single `MakeGenericMethod` + `CreateDelegate` (`InternalCommandDispatcher.cs:23-27`); every subsequent row of that type calls the cached delegate directly instead of paying `MakeGenericMethod` or `MethodInfo.Invoke` again.
-- **Walkthrough**: `Invokers` (`InternalCommandDispatcher.cs:28`) caches one `Func<IServiceProvider, IInternalCommand, CancellationToken, Task<Result?>>` per command `Type`; `InvokeDefinition` (`InternalCommandDispatcher.cs:31-33`) reflectively resolves the private static generic `InvokeAsync` by `nameof`, guarded by an inline `#pragma warning disable S3011` explaining the target is this same class's own private method, so a rename cannot silently break it (`InternalCommandDispatcher.cs:30`); `ExecuteAsync` (`InternalCommandDispatcher.cs:49-56`) is the public entry point: `Invokers.GetOrAdd(command.GetType(), BuildInvoker)` then invokes; `BuildInvoker` (`InternalCommandDispatcher.cs:58-62`) does the one-time `MakeGenericMethod(commandType).CreateDelegate<...>()`; `InvokeAsync<TCommand>` (`InternalCommandDispatcher.cs:69-82`) resolves the handler via `GetService`, NOT `GetRequiredService` (line 75), so a command with no registered handler on this host resolves to `null` rather than throwing.
+- **Walkthrough**: `Invokers` (`InternalCommandDispatcher.cs:28`) caches one `Func<IServiceProvider, IInternalCommand, CancellationToken, Task<Result?>>` per command `Type`; `InvokeDefinition` (`InternalCommandDispatcher.cs:31-33`) reflectively resolves the private static generic `InvokeAsync` by `nameof`, guarded by an inline `#pragma warning disable S3011` explaining the target is this same class's own private method, so a rename cannot silently break it (`InternalCommandDispatcher.cs:30`); `ExecuteAsync` (`InternalCommandDispatcher.cs:49-56`) is the public entry point: `Invokers.GetOrAdd(command.GetType(), BuildInvoker)` then invokes; `BuildInvoker` (`InternalCommandDispatcher.cs:58-62`) does the one-time `MakeGenericMethod(commandType).CreateDelegate<...>()`; `InvokeAsync<TCommand>` (`InternalCommandDispatcher.cs:69-84`) resolves the handler via `GetService`, NOT `GetRequiredService` (line 75), so a command with no registered handler on this host resolves to `null` rather than throwing. `InvokeAsync<TCommand>` is not `async`: the missing-handler path returns `Task.FromResult<Result?>(null)` (`InternalCommandDispatcher.cs:78`), and otherwise it returns the handler's own task directly with a null-forgiving `!` (`InternalCommandDispatcher.cs:83`), because `Task<T>` is not covariant in nullability, so no extra state machine wraps the call.
 - **Why it's built this way**: the doc comment on `ExecuteAsync` (`InternalCommandDispatcher.cs:43-48`) states the rationale for the null-not-throw choice directly: a missing handler is a deployment fact (the owning module is disabled here, or the row was written by a different service), and the caller records that fact on the row instead of treating it as an exception to classify.
 - **Where it's used**: [`InternalCommandProcessor`](#internalcommandprocessor) (`InternalCommandProcessor.cs`, 1 site) calls `ExecuteAsync` when it executes a claimed row.
 - **ADRs**: [ADR-114](https://ivanball.github.io/docs/adr/114-internal-commands-durable-job-queue.html).
@@ -7370,7 +7456,7 @@ survives a module being pulled out into its own service.
 - **What it is**: the durable row of the internal-command queue: one `InternalCommands` table entry per
   scheduled deferred command, carrying its serialized payload, its execution state (attempts, lease,
   dead-letter instant), and the scheduling context to restore when it finally runs
-  (`InternalCommandMessage.cs:21-210`).
+  (`InternalCommandMessage.cs:21-219`).
 - **Depends on**: [`InternalCommandOrigin`](#internalcommandorigin) (the constructor argument to
   `FromCommand`), `IInternalCommand` and `InternalCommandNameResolver` (both resolve/store the command
   identity), `InternalCommandNameAttribute` (named in the doc comments as the alternate identity a
@@ -7379,7 +7465,7 @@ survives a module being pulled out into its own service.
   `ConcurrentDictionary<string, Type?>`.
 - **Concept introduced, a job-queue row is the outbox's row shape, generalized.** `[Rubric §6, CQRS and
   Event-Driven]` assesses whether deferred and asynchronous work is delivered reliably, and this type
-  is why: the comment inside `ResolveCommandType` (`:199-201`) states the ordering is "load-bearing,
+  is why: the comment inside `ResolveCommandType` (`:208-210`) states the ordering is "load-bearing,
   exactly as in `OutboxMessage`", and the two rows share the same two-tier type-resolution idea (an
   explicit stored name first, a reflection scan second, a success cached) because both are the same
   problem: a JSON payload written under one deployed assembly must still resolve after a rename or a
@@ -7393,48 +7479,47 @@ survives a module being pulled out into its own service.
     `OutboxMessage` (`:29-35`); here that is defensive rather than load-bearing, because the processor
     dead-letters a row whose type it cannot resolve on its first attempt (`type_unresolvable`), so an
     unresolvable name costs one assembly scan per row and is never retried.
-  - **`Id`** (`:67`): `Guid`, defaulted with `Guid.NewGuid()` at declaration, so a caller never has to
+  - **`Id`** (`:39`): `Guid`, defaulted with `Guid.NewGuid()` at declaration, so a caller never has to
     supply one.
-  - **`CommandType`** (`:74`) and **`Payload`** (`:77`): both `required string`. `CommandType` is the
+  - **`CommandType`** (`:46`) and **`Payload`** (`:49`): both `required string`. `CommandType` is the
     stored identity used to resolve the CLR type back on deserialization, either the
-    `InternalCommandNameAttribute` name or the assembly-qualified type name (`:70-73`); `Payload` is the
+    `InternalCommandNameAttribute` name or the assembly-qualified type name (`:41-45`); `Payload` is the
     JSON body.
-  - **`ScheduledOn`** / **`CreatedOn`** (`:83`, `:86`): the earliest UTC instant the command may run,
+  - **`ScheduledOn`** / **`CreatedOn`** (`:55`, `:58`): the earliest UTC instant the command may run,
     and the UTC instant the row was written; equal for an immediate schedule.
   - **`ProcessedOn`**, **`Attempts`**, **`LastError`**, **`DeadLetteredOn`**, **`ClaimedBy`**,
-    **`ClaimedUntil`** (`:92`, `:95`, `:101`, `:108`, `:115`, `:123`): the processor's execution state.
+    **`ClaimedUntil`** (`:64`, `:67`, `:73`, `:80`, `:87`, `:95`): the processor's execution state.
     `ClaimedBy`/`ClaimedUntil` carry the lease: a claiming replica stamps the outcome only on a row
     still carrying its own token, so a replica whose lease expired mid-execution cannot overwrite the
-    row a different replica already took over (`:110-114`); the same `ClaimedUntil` column doubles as
-    the retry backoff, a failed attempt re-leasing the row for the computed wait (`:117-122`).
+    row a different replica already took over (`:82-86`); the same `ClaimedUntil` column doubles as
+    the retry backoff, a failed attempt re-leasing the row for the computed wait (`:89-94`).
     `DeadLetteredOn` marks a row abandoned after `InternalCommands:MaxAttempts`, requeued only through
-    `Application.InternalCommands.IInternalCommandAdministration` (`:103-107`).
-  - **`CorrelationId`, `TraceId`, `SpanId`, `UserId`, `UserRoles`, `TenantId`** (`:129`, `:132`, `:135`,
-    `:142`, `:149`, `:155`): the restorable half of [`InternalCommandOrigin`](#internalcommandorigin),
-    copied onto the row rather than referenced, so the scheduling context survives independently of the
+    `Application.InternalCommands.IInternalCommandAdministration` (`:75-79`).
+  - **`CorrelationId`, `TraceId`, `SpanId`, `UserId`, `UserRoles`, `UserPermissions`, `TenantId`** (`:101`, `:104`, `:107`, `:114`, `:121`, `:129`, `:135`): the restorable half of [`InternalCommandOrigin`](#internalcommandorigin),
+    copied onto the row rather than referenced (`UserPermissions` is a JSON array of strings, unbounded and never truncated, restored as `permission` claims so a command granted only through a claim passes the same gate deferred, `:123-129`), so the scheduling context survives independently of the
     struct that captured it.
-  - **`FromCommand(command, scheduledOn, createdOn, context)`** (`:165-187`, `internal static`):
-    null-guards the command (`:171`), resolves its stored identity via
-    `InternalCommandNameResolver.GetStorageName` and serializes it with `SerializerOptions` (`:176-177`),
+  - **`FromCommand(command, scheduledOn, createdOn, context)`** (`:145-168`, `internal static`):
+    null-guards the command (`:151`), resolves its stored identity via
+    `InternalCommandNameResolver.GetStorageName` and serializes it with `SerializerOptions` (`:156-157`),
     then copies every field of the passed-in [`InternalCommandOrigin`](#internalcommandorigin) onto the
-    new row (`:180-185`).
-  - **`DeserializeCommand()`** (`:199-206`, `internal`): resolves the type through
+    new row (`:160-166`, seven fields including `UserPermissions`).
+  - **`DeserializeCommand()`** (`:180-187`, `internal`): resolves the type through
     `ResolveCommandType`, returns `null` if unresolvable, otherwise deserializes `Payload` as that type.
-  - **`ResolveCommandType()`** (`:192-209`, `private`): returns a cache hit from `CommandTypeCache`
-    (`:194-197`); on a miss, `Type.GetType` is tried first and
+  - **`ResolveCommandType()`** (`:201-218`, `private`): returns a cache hit from `CommandTypeCache`
+    (`:203-206`); on a miss, `Type.GetType` is tried first and
     `InternalCommandNameResolver.FindTypeByDeclaredName` is the fallback, in that order on purpose
-    (`:199-202`), and only a non-null result is written back to the cache (`:203-206`).
-  - **`IsCommandTypeCached(storedName)`** (`:183`, `internal static`): a test hook reporting whether a
+    (`:208-211`), and only a non-null result is written back to the cache (`:212-215`).
+  - **`IsCommandTypeCached(storedName)`** (`:192`, `internal static`): a test hook reporting whether a
     stored name currently has a cached resolution.
 - **Why it's built this way**: `ReferenceHandler.IgnoreCycles` on the shared serializer options
   (`:23-26`) means a command carrying a cyclic object graph serializes without a hand-written converter,
   at the cost of any cycle round-tripping as a broken reference on the way back; commands are expected
   to be flat DTOs, so that tradeoff is accepted rather than guarded against. The two-tier name
-  resolution mirrors `OutboxMessage` deliberately (`:199-201`), so a reviewer who has read one already
+  resolution mirrors `OutboxMessage` deliberately (`:208-210`), so a reviewer who has read one already
   understands the other.
 - **Where it's used**: added to the caller's `IDbContextFactory` context by
   [`InternalCommandScheduler`](#internalcommandscheduler)`.ScheduleAsync`
-  (`InternalCommandScheduler.cs:99-104`), so it commits atomically with the caller's aggregate change
+  (`InternalCommandScheduler.cs:104-106`), so it commits atomically with the caller's aggregate change
   inside a transaction, or saves immediately outside one; claimed, executed and stamped by
   `InternalCommandProcessor`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Processing/InternalCommandProcessor.cs`,
@@ -7447,19 +7532,18 @@ survives a module being pulled out into its own service.
 - **Caveats / not-in-source**: the mapped `UserRoles` column has a documented width
   (`MaxRolesLength`, defined on [`InternalCommandScheduler`](#internalcommandscheduler) and shared with
   the outbox's own column of the same name through `AmbientOrigin.MaxRolesLength`); this type itself
-  does not truncate, so an over-length role list is truncated by the caller before `FromCommand` sees it.
+  does not truncate, so an over-length role list is cut by the caller, keeping only the whole roles that fit, before `FromCommand` sees it. `UserPermissions` has no width limit and is never truncated (`:123-129`).
 
 ### InternalCommandOriginCapture
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.InternalCommands` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/InternalCommandOriginCapture.cs:21` · Level 9 · class (internal sealed)
 
 - **What it is**: the snapshot step of the internal-command queue: one method, `Capture()`, that reads
-  the ambient request context a scheduled command must carry onto its row (the scheduling principal and
-  roles, the tenant, the correlation id, the trace and span ids) and returns it as an
-  [`InternalCommandOrigin`](#internalcommandorigin) (`InternalCommandOriginCapture.cs:8-12`, `:21-44`).
+  the ambient request context a scheduled command must carry onto its row (the scheduling principal, roles and permission claims, the tenant, the correlation id, the trace and span ids) and returns it as an
+  [`InternalCommandOrigin`](#internalcommandorigin) (`InternalCommandOriginCapture.cs:8-12`, `:21-41`).
   The `InternalCommandProcessor` restores those values around the deferred execution.
 - **Depends on**: `ICurrentUserService`, `ITenantContext` and `ICorrelationContext` through the primary
   constructor (`:21-24`); [`InternalCommandOrigin`](#internalcommandorigin) as the value it builds;
-  `AmbientOrigin.FlattenRoles` for the roles; BCL `System.Diagnostics.Activity` for the trace and span
+  `AmbientOrigin.FlattenRoles` for the roles and `AmbientOrigin.FlattenPermissions` for the permission claims; BCL `System.Diagnostics.Activity` for the trace and span
   ids.
 - **Concept introduced, capture is scoped because what it reads is scoped.** `[Rubric §13, Observability
   & Operability]` assesses whether the identity and correlation of a request survive an asynchronous
@@ -7470,18 +7554,18 @@ survives a module being pulled out into its own service.
   one owner with one dependency set, so [`InternalCommandScheduler`](#internalcommandscheduler) takes a
   single `InternalCommandOriginCapture` argument instead of the three ambient services.
 - **Walkthrough**:
-  - **`Capture()`** (`:32-43`): reads `Activity.Current` once (`:34`), then builds the
+  - **`Capture()`** (`:28-40`): reads `Activity.Current` once (`:30`), then builds the
     `InternalCommandOrigin` from `currentUserService.UserId`, the roles flattened through
-    `AmbientOrigin.FlattenRoles(currentUserService.Roles)`, `tenantContext.TenantId`,
+    $1 the permission claims flattened through `AmbientOrigin.FlattenPermissions(currentUserService.User)`, `tenantContext.TenantId`,
     `correlationContext.CorrelationId`, and the activity's `TraceId`/`SpanId` as strings, or `null`
-    when no activity is running (`:36-42`).
+    when no activity is running (`:32-39`).
 - **Why it's built this way**: roles go through the shared `AmbientOrigin` helper, which the outbox
   capture uses as well, so the outbox hop and the internal-command hop store roles in the same shape
   (`:15-16`). The class holds no state of its own; every value comes from the scoped services at the
   moment `Capture()` runs.
 - **Where it's used**: registered with `TryAddScoped` (`DependencyInjection.Jobs.cs:160`); called once
   per scheduled command by [`InternalCommandScheduler`](#internalcommandscheduler)
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/InternalCommandScheduler.cs:88`);
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/InternalCommandScheduler.cs:85`);
   constructed directly by `InternalCommandTestHarness`
   (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/InternalCommands/InternalCommandTestHarness.cs`).
 
@@ -7491,7 +7575,7 @@ survives a module being pulled out into its own service.
 - **What it is**: the write side of the internal-command queue, `IInternalCommandScheduler`'s
   implementation: it turns a command into an [`InternalCommandMessage`](#internalcommandmessage) row,
   enrolls it in the caller's transaction if one is open (owing the processor a wake until the commit
-  succeeds), and otherwise saves and signals the processor at once (`InternalCommandScheduler.cs:36-144`).
+  succeeds), and otherwise saves and signals the processor at once (`InternalCommandScheduler.cs:36-148`).
 - **Depends on**: `IDbContextFactory`, `IDataSourceResolver`, `IOptions<InternalCommandsSettings>`,
   [`InternalCommandOriginCapture`](#internalcommandorigincapture), `IInternalCommandSignal`,
   `ILogger<InternalCommandScheduler>` and `TimeProvider`, all through the primary constructor
@@ -7502,48 +7586,45 @@ survives a module being pulled out into its own service.
   assesses whether deferred work is delivered reliably rather than optimistically, the same lens as the
   outbox. `ScheduleAsync` never opens a `SaveChanges` of its own when a transaction is already active:
   it resolves the caller's context through `dbContextFactory.GetDbContext(...)` and `Add`s the row onto
-  it (`:99-104`), so the queued command commits or rolls back exactly with the aggregate change that
-  scheduled it. Inside a transaction it neither saves nor signals at once (`:106-116`): the caller's
+  it (`:101-106`), so the queued command commits or rolls back exactly with the aggregate change that
+  scheduled it. Inside a transaction it neither saves nor signals at once (`:108-118`): the caller's
   next save writes the row, or the transactional pipeline saves it just before the commit when no save
-  follows (`:107-110`), and signalling then would only buy a query against a row that has not committed
-  yet. Instead the wake is owed: `EnrolledCommandWake.Defer(context, signal)` (`:113`) records it, the
+  follows (`:109-112`), and signalling then would only buy a query against a row that has not committed
+  yet. Instead the wake is owed: `EnrolledCommandWake.Defer(context, signal)` (`:115`) records it, the
   unit of work releases it once after a successful commit and drops it on rollback (see
   [`EnrolledCommandWake`](#enrolledcommandwake)). Outside a transaction it saves immediately and
-  always signals the processor (`:120-125`).
+  always signals the processor (`:124-129`).
 - **Walkthrough**:
-  - **`MaxRolesLength`** (`:48`): `internal const int`, aliased to `AmbientOrigin.MaxRolesLength` so the
-    internal-command queue and the outbox agree on the column width for `UserRoles` without restating
+  - **`MaxRolesLength`** (`:50`): `internal const int`, aliased to `AmbientOrigin.MaxRolesLength` so the
+    internal-command queue and the outbox agree on the column width for `UserRoles` (a longer list keeps only the whole roles that fit) without restating
     the number.
-  - **`ScheduleAsync(command, delay, cancellationToken)`** (`:57-64`): the delay-based overload, sugar
+  - **`ScheduleAsync(command, delay, cancellationToken)`** (`:59-66`): the delay-based overload, sugar
     over the `DateTimeOffset?` overload: a positive delay becomes `_timeProvider.GetUtcNow() + delay`,
     anything else passes `null` through.
-  - **`ScheduleAsync(command, runAt, cancellationToken)`** (`:67-125`), the primary path:
-    - Returns `NullCommandError` (a `Validation` error, `:50-51`) for a null command (`:72-75`).
-    - Normalizes a past `runAt` to "now" rather than rejecting it (`:81`): a caller computing a
+  - **`ScheduleAsync(command, runAt, cancellationToken)`** (`:69-133`), the primary path:
+    - Returns `NullCommandError` (a `Validation` error, `:52-53`) for a null command (`:74-77`).
+    - Normalizes a past `runAt` to "now" rather than rejecting it (`:83`): a caller computing a
       deadline that already slipped wants the work done immediately, not an error to handle.
-    - Builds the row via `InternalCommandMessage.FromCommand(command, scheduledOn, now,
-      originCapture.Capture())` (`:83-95`, the call at `:86`) inside a `try`/`catch
+    - Captures the origin once with `originCapture.Capture()` (`:85`), then builds the row via `InternalCommandMessage.FromCommand(command, scheduledOn, now, origin)` (`:88-99`, the call at `:90`) inside a `try`/`catch
       (NotSupportedException)`: `System.Text.Json` reports an unserializable payload this way, and the
       catch turns it into a logged failure result rather than letting it take down the handler that
       scheduled the command. The origin snapshot itself is
       [`InternalCommandOriginCapture`](#internalcommandorigincapture)'s job.
     - Resolves the context for `_settings.DataSource`/`DatabaseName` through
-      `dataSourceResolver.ResolveLogical` (`:97-98`) and adds the row with the standard
-      `VSTHRD103`-suppressed synchronous `Add` (`:100-102`).
+      `dataSourceResolver.ResolveLogical` (`:101-102`) and adds the row with the standard
+      `VSTHRD103`-suppressed synchronous `Add` (`:104-106`).
     - If `context.Database.CurrentTransaction is not null`, defers the wake through
       [`EnrolledCommandWake`](#enrolledcommandwake)`.Defer`, logs `LogEnrolled` and returns without
-      saving or signalling (`:106-116`); the signal fires after the commit succeeds, and the polling
+      saving or signalling (`:108-118`); the signal fires after the commit succeeds, and the polling
       interval is only the backstop.
-    - Otherwise calls `context.SaveChangesAsync` directly, deliberately **not** through a user id
-      overload, because an `InternalCommandMessage` is neither auditable nor an aggregate root, so
-      there is nothing for the audit or domain-event interceptors to do here (`:114-116`). It then
-      signals the processor whether or not the row is due yet (`:118-121`): a due row runs on the
+    - Otherwise calls `context.SaveChangesAsync(origin.UserId, cancellationToken)` as the scheduling user (`:124`): the row itself is neither auditable nor an aggregate root, but the context is shared with the calling handler's repositories, so anything else pending on it is flushed by this save and must be stamped with the real user rather than the system (`:120-123`). It then
+      signals the processor whether or not the row is due yet (`:126-129`): a due row runs on the
       wake, and a not-yet-due row costs one fetch but re-arms the processor's smart wait on its
       `ScheduledOn`, which the processor would otherwise only learn at the next polling interval and
       so run the command late.
-  - **`SerializationError(commandType)`** (`:127-130`): the `Error.Failure` factory for the
+  - **`SerializationError(commandType)`** (`:135-138`): the `Error.Failure` factory for the
     not-serializable branch.
-  - **`LogEnrolled`, `LogScheduled`, `LogSerializationFailed`** (`:132-139`): source-generated
+  - **`LogEnrolled`, `LogScheduled`, `LogSerializationFailed`** (`:140-147`): source-generated
     `[LoggerMessage]` partials at Debug, Debug, and Error respectively.
 - **Why it's built this way**: `internal sealed partial` because it is the one implementation of
   `IInternalCommandScheduler` in the framework and callers depend on the interface, not the class; the
@@ -7557,7 +7638,7 @@ survives a module being pulled out into its own service.
   (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/InternalCommands/InternalCommandSchedulerTests.cs`),
   exercised through `InternalCommandTestHarness`, and referenced by `DbContextFactoryTransactionTests`.
 - **Caveats / not-in-source**: a null command returns `Result.Failure` with a `Validation` error
-  (`:50-51`, `:72-75`) rather than throwing `ArgumentNullException`; the source does not explain the
+  (`:52-53`, `:74-77`) rather than throwing `ArgumentNullException`; the source does not explain the
   choice in a comment.
 
 ### InternalCommandAdministration
@@ -7566,8 +7647,8 @@ survives a module being pulled out into its own service.
 - **What it is**: the operator-facing administration surface for the internal-commands queue: count pending work, list and paginate dead letters, requeue them, and purge completed rows, fanned out across every relational data source (and tenant) this host owns.
 - **Depends on**: `IServiceScopeFactory`, `IOptions<InternalCommandsSettings>` ([`InternalCommandsSettings`](#internalcommandssettings)), [`FrameworkTableTargets`](group-07-persistence-ef-core.md#frameworktabletargets), [`IInternalCommandSignal`](#iinternalcommandsignal), `TimeProvider`, [`IDbContextFactory`](group-07-persistence-ef-core.md#idbcontextfactory), [`ApplicationDbContext`](group-07-persistence-ef-core.md#applicationdbcontext), `InternalCommandMessage`, [`TenantDataSourceTarget`](group-07-persistence-ef-core.md#tenantdatasourcetarget), `Error`/`Result` (Domain layer).
 - **Concept**: the same operator-lever shape as [`IOutboxAdministration`](group-07-persistence-ef-core.md#ioutboxadministration): count / list-dead-letters / requeue / purge, fanned out per owned data source. `[Rubric §8: Data Architecture]` (assesses how a system handles database-per-service and multi-tenant fan-out): every operation here resolves its own target set rather than assuming a single database. `[Rubric §13: Observability & Operability]`: requeue and purge are explicit, logged operator actions, not silent background behavior.
-- **Walkthrough**: the primary constructor (`InternalCommandAdministration.cs:34-40`) takes six required parameters, with target selection delegated to an injected `FrameworkTableTargets` rather than a registry, a resolver and optional tenancy options; `MaxPageSize` (`InternalCommandAdministration.cs:43`, `500`) bounds one page so an admin call cannot pull the whole table; `SkipError`/`TakeError`/`OlderThanError` (`InternalCommandAdministration.cs:45-52`) are pre-built `Error.Validation` instances; every operation returns `Error.NotFoundError` from `UnknownSourceError` (`InternalCommandAdministration.cs:236-239`) when the requested source name matches no owned target; `CountPendingAsync` (`InternalCommandAdministration.cs:58-79`) sums a `LongCountAsync` per target using the processor's pending predicate (`ProcessedOn` and `DeadLetteredOn` null, `Attempts < MaxAttempts`); `ListDeadLettersAsync` (`InternalCommandAdministration.cs:82-138`) paginates across the MERGED result of every target: each target returns at most `skip + take` rows (ordered by `ScheduledOn` then `Id`), because "skip 50" must mean the same thing whether this host owns one database or four, then the merged list is re-ordered and re-paged in memory (`InternalCommandAdministration.cs:132-135`); `RequeueAsync` (`InternalCommandAdministration.cs:141-196`) resets `Attempts` to `0` and clears `DeadLetteredOn`/`ClaimedUntil`/`ClaimedBy` via `ExecuteUpdateAsync` (`InternalCommandAdministration.cs:171-177`) while deliberately preserving `LastError` ("the only evidence of WHY this row needed requeuing"), then calls `signal.Signal()` (`InternalCommandAdministration.cs:192`) to wake the processor immediately instead of waiting for the next poll; `PurgeProcessedAsync` (`InternalCommandAdministration.cs:199-234`) `ExecuteDeleteAsync`s processed rows at or before a caller-supplied cutoff; `SelectTargets` (`InternalCommandAdministration.cs:246-247`) is a one-line call to `tableTargets.Named(DataSource, DatabaseName, dataSource)`, recomputed per call because module assemblies can register entities after startup, and optionally narrowed to one name; `VisitAsync<T>` (`InternalCommandAdministration.cs:254-265`) opens a fresh DI scope via the shared `scopeFactory.CreateTenantScope(target)` extension (`InternalCommandAdministration.cs:261`), which sets the tenant BEFORE the `IDbContextFactory` context is resolved, because the tenant is both what routes the scoped factory to the right database and what the query filter reads.
-- **Why it's built this way**: the tenant-before-context ordering and the deliberate `LastError` preservation are both stated inline as design decisions, not incidental; `LogRequeued`/`LogPurged` (`InternalCommandAdministration.cs:267-271`) give operators a durable audit trail of manual interventions on the queue.
+- **Walkthrough**: the primary constructor (`InternalCommandAdministration.cs:34-40`) takes six required parameters, with target selection delegated to an injected `FrameworkTableTargets` rather than a registry, a resolver and optional tenancy options; `MaxPageSize` (`InternalCommandAdministration.cs:43`, `500`) bounds one page so an admin call cannot pull the whole table; `SkipError`/`TakeError`/`OlderThanError` (`InternalCommandAdministration.cs:45-52`) are pre-built `Error.Validation` instances; every operation returns `Error.NotFoundError` from `UnknownSourceError` (`InternalCommandAdministration.cs:241-244`) when the requested source name matches no owned target; `CountPendingAsync` (`InternalCommandAdministration.cs:58-79`) sums a `LongCountAsync` per target using the processor's pending predicate (`ProcessedOn` and `DeadLetteredOn` null, `Attempts < MaxAttempts`); `ListDeadLettersAsync` (`InternalCommandAdministration.cs:82-143`) paginates across the MERGED result of every target: each target returns at most `perTarget` rows, `skip + take` widened to `long` and clamped to `int.MaxValue` so a skip near `int.MaxValue` cannot wrap negative (`InternalCommandAdministration.cs:101`, applied at `:120`; ordered by `ScheduledOn` then `Id`), because "skip 50" must mean the same thing whether this host owns one database or four, then the merged list is re-ordered and re-paged in memory (`InternalCommandAdministration.cs:137-140`); `RequeueAsync` (`InternalCommandAdministration.cs:146-201`) resets `Attempts` to `0` and clears `DeadLetteredOn`/`ClaimedUntil`/`ClaimedBy` via `ExecuteUpdateAsync` (`InternalCommandAdministration.cs:176-182`) while deliberately preserving `LastError` ("the only evidence of WHY this row needed requeuing"), then calls `signal.Signal()` (`InternalCommandAdministration.cs:197`) to wake the processor immediately instead of waiting for the next poll; `PurgeProcessedAsync` (`InternalCommandAdministration.cs:204-239`) `ExecuteDeleteAsync`s processed rows at or before a caller-supplied cutoff; `SelectTargets` (`InternalCommandAdministration.cs:251-252`) is a one-line call to `tableTargets.Named(DataSource, DatabaseName, dataSource)`, recomputed per call because module assemblies can register entities after startup, and optionally narrowed to one name; `VisitAsync<T>` (`InternalCommandAdministration.cs:259-270`) opens a fresh DI scope via the shared `scopeFactory.CreateTenantScope(target)` extension (`InternalCommandAdministration.cs:266`), which sets the tenant BEFORE the `IDbContextFactory` context is resolved, because the tenant is both what routes the scoped factory to the right database and what the query filter reads.
+- **Why it's built this way**: the tenant-before-context ordering and the deliberate `LastError` preservation are both stated inline as design decisions, not incidental; `LogRequeued`/`LogPurged` (`InternalCommandAdministration.cs:272-276`) give operators a durable audit trail of manual interventions on the queue.
 - **Where it's used**: registered in `DependencyInjection.Jobs.cs` (1 site); referenced from `ApplicationDbContext.cs` (1); exercised by `InternalCommandAdministrationTests.cs` (4); `SoftDeleteEnforcementTests` in both `MMCA.Common.Architecture.Tests` and `MMCA.ADC.Architecture.Tests` (1 each) check its hard `ExecuteDeleteAsync`/`ExecuteUpdateAsync` calls against the restrict-delete-by-default convention.
 - **ADRs**: [ADR-119](https://ivanball.github.io/docs/adr/119-restrict-delete-by-default.html).
 
@@ -7591,49 +7672,49 @@ survives a module being pulled out into its own service.
 - **Walkthrough**: the primary constructor (`InternalCommandProcessor.cs:43-49`) takes six required parameters, with target selection delegated to an injected `FrameworkTableTargets`; constants: `PollActivityName` (`InternalCommandProcessor.cs:57`, `"InternalCommandPoll"`, must stay in sync with `OutboxPollFilterProcessor` in `MMCA.Common.Aspire`, which has no project reference here and so duplicates the string), `MaxErrorLength` (`InternalCommandProcessor.cs:60`, `4000`, the column width `LastError` is truncated to), `PrincipalAuthenticationType` (`InternalCommandProcessor.cs:66`, `"InternalCommand"`, the auth type stamped on the identity rebuilt from a claimed row); `ExecuteAsync` (`InternalCommandProcessor.cs:75-89`) just calls `PollingLoop.RunAsync`, passing `GetTargets().Count > 0` as `hasTargets`, `LogNoRelationalSources` as `onNoTargets`, a lambda that runs `ProcessDueCommandsAsync` and maps its result to the `(HasMoreWork, EarliestUpcoming)` tuple `PollingLoop` expects, `LogCycleError` as `onCycleError`, the configured delay/interval seconds, and `signal.WaitAsync` as the wait delegate; `ComputeWaitTime` (`InternalCommandProcessor.cs:101-106`) is a one-line forward to `PollingLoop.ComputeWaitTime`, kept as a wrapper so its own unit tests still compile against this type; `GetTargets` (`InternalCommandProcessor.cs:114-115`) is a one-line call to `tableTargets.Relational(DataSource, DatabaseName)`, recomputed every cycle so a module assembly registered after startup is picked up; `ProcessDueCommandsAsync` (`InternalCommandProcessor.cs:125-141`, `internal` for direct test invocation) forwards the per-target fan-out to `PollingLoop.DrainAllAsync`, supplying `ProcessSourceAsync` as the per-target delegate and `LogSourceError` as the per-source error handler, then publishes the aggregated depth through `InternalCommandMetrics.SetPendingDepth`; `ProcessSourceAsync` (`InternalCommandProcessor.cs:147-219`) per target opens a DI scope via `CreateTenantScope` (`InternalCommandProcessor.cs:153`), so the tenant is set before the `ApplicationDbContext` is resolved through `IDbContextFactory` (same ordering rule as the admin and cleanup types), fetches up to `BatchSize` runnable rows via `FetchCandidatesAsync`, derives the pending-depth gauge input from that same fetch via `CountPendingAsync` (no extra query unless the batch is saturated), publishes the oldest-due-age gauge from the fetch's own first row (no extra query), splits the ordered rows into a due prefix and an upcoming remainder, returns early with no claim when nothing is due or when another replica claimed the whole prefix, otherwise claims the due prefix under a fresh `claimToken` and, for each claimed row, first calls `RenewClaimAsync` (`InternalCommandProcessor.cs:204`) and skips the row with `LogLeaseLostBeforeExecution` when the claim is no longer this replica's, else runs `ExecuteClaimedAsync`; it reports `HasMoreDueWork` when the due count exactly filled `BatchSize` and at least one row progressed (`InternalCommandProcessor.cs:216`, so a saturated batch triggers an immediate re-poll); `FetchCandidatesAsync` (`InternalCommandProcessor.cs:229-248`) runs inside its own suppressible `Activity`, queries `AsNoTracking` rows with `ProcessedOn`/`DeadLetteredOn` null, `Attempts < MaxAttempts`, and no unexpired `ClaimedUntil`, ordered by `ScheduledOn` then `Id`; `CountPendingAsync` (`InternalCommandProcessor.cs:256-278`) short-circuits to the fetched row count when it is below `BatchSize` (the fetch already saw the whole backlog) and pays for a `COUNT` query only when the batch is saturated; `ClaimDueAsync` (`InternalCommandProcessor.cs:286-327`) stamps `ClaimedUntil = now + LeaseSeconds` and `ClaimedBy = claimToken` on the due prefix in one guarded `ExecuteUpdateAsync`, and on a partial claim re-reads which ids carry this replica's token so only owned rows run; `RenewClaimAsync` (`InternalCommandProcessor.cs:334-348`) pushes `ClaimedUntil` forward by `LeaseSeconds` in a statement guarded on `ClaimedBy == claimToken` and returns whether a row was updated, which is what makes `LeaseSeconds` bound one handler rather than the whole batch; `ExecuteClaimedAsync` (`InternalCommandProcessor.cs:355-426`) dead-letters a row on the first attempt when its payload throws `JsonException` or `NotSupportedException` on deserialization (`InternalCommandProcessor.cs:369-378`, reason `payload_invalid`, logged by `LogPayloadInvalid`), when its type cannot be resolved (`type_unresolvable`), or when no handler is registered on this host (`handler_missing`), records lag and duration histograms around the invocation, completes the row on a successful `Result`, and otherwise hands off to `RecordFailedAttemptAsync` (`InternalCommandProcessor.cs:435-462`), which treats a `Result.Failure` and a thrown exception alike: dead-letter with `attempts_exhausted` once `MaxAttempts` is reached, else schedule a backoff retry.
 - **Why it's built this way**: the loop, wait-time computation, and per-target aggregation moved into [`PollingLoop`](#pollingloop) because the outbox processor had nearly identical code; keeping `ComputeWaitTime` as a thin forwarding wrapper on this type avoids a breaking change to its own existing unit tests. An un-suppressed poll span would swamp telemetry for an idle fleet, and a `COUNT` on every cycle would be wasted work in the (common) unsaturated case. Cite [ADR-114](https://ivanball.github.io/docs/adr/114-internal-commands-durable-job-queue.html) for the queue itself; the executed handler goes through the same decorated `ICommandHandler<TCommand, Result>` pipeline any other command uses, per [ADR-014](https://ivanball.github.io/docs/adr/014-cqrs-decorator-pipeline.html).
 - **Where it's used**: registered as a hosted service in `DependencyInjection.Jobs.cs` (1 site); ADC's `ScoreEventSessionsInternalCommand` (`Conference.Application`, 1 site) is a concrete `IInternalCommand` this processor drains; `InternalCommandProcessorTests.cs` and the shared test harness exercise `ProcessDueCommandsAsync`/`ComputeWaitTime` directly; `OutboxPollFilterProcessor.cs` (`MMCA.Common.Aspire`, 2 sites) reads `PollActivityName` to filter the matching spans from export.
-- **Caveats / not-in-source**: `InvokeAsync`, `ScheduleRetryAsync`, `CompleteAsync` and `DeadLetterAsync` (from `InternalCommandProcessor.cs:464` onward, through the end of the type at `InternalCommandProcessor.cs:712`) were not re-read line-by-line for this section; read that range for the retry-write details. The principal-restore in `InvokeAsync` (`InternalCommandProcessor.cs:473-510`) opens a fresh DI scope and calls `AmbientOrigin.Restore` (`InternalCommandProcessor.cs:483`), whose returned `IDisposable` is now held by `using var origin`, so the restored origin is undone when the call ends rather than left on the ambient context (`AmbientOrigin.cs:156,240-242`).
+- **Caveats / not-in-source**: `InvokeAsync`, `ScheduleRetryAsync`, `CompleteAsync` and `DeadLetterAsync` (from `InternalCommandProcessor.cs:464` onward, through the end of the type at `InternalCommandProcessor.cs:713`) were not re-read line-by-line for this section; read that range for the retry-write details. The principal-restore in `InvokeAsync` (`InternalCommandProcessor.cs:473-512`) opens a fresh DI scope and calls `AmbientOrigin.Restore` (`InternalCommandProcessor.cs:483`), passing `row.UserPermissions` (`InternalCommandProcessor.cs:487`) alongside the roles so persisted permission claims are restored too, whose returned `IDisposable` is now held by `using var origin`, so the restored origin is undone when the call ends rather than left on the ambient context $1 `CompleteAsync` (`InternalCommandProcessor.cs:514`) and `ScheduleRetryAsync` (`InternalCommandProcessor.cs:541`) are non-`async` methods that return `StampAsync`'s task directly, with no state machine of their own.
 - **ADRs**: [ADR-014](https://ivanball.github.io/docs/adr/014-cqrs-decorator-pipeline.html), [ADR-114](https://ivanball.github.io/docs/adr/114-internal-commands-durable-job-queue.html).
 
 ### GroupedCount<TKey>
 
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Repositories` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:186` · Level 0 · record (private sealed, nested)
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Repositories` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:185` · Level 0 · record (private sealed, nested)
 
-- **What it is**: a two-property carrier for one `GROUP BY` row: the grouping key and the number of rows carrying it. It is declared `private sealed record class` **inside** [`EFReadRepository<TEntity, TIdentifierType>`](#efreadrepositorytentity-tidentifiertype), so it exists only for the lifetime of one query translation and is invisible to every caller (`EFReadRepository.cs:183-186`).
-- **Depends on**: nothing first-party. `TKey` is the caller's grouping key type, constrained to `notnull` at the `CountByAsync<TKey>` declaration (`EFReadRepository.cs:137`).
-- **Concept introduced, a named projection target so the provider can translate the grouping.** `[Rubric §12, Performance and Scalability]` assesses whether aggregation happens in the database rather than after materialization. `CountByAsync` composes `query.GroupBy(keySelector).Select(group => new GroupedCount<TKey>(group.Key, group.Count()))` (`EFReadRepository.cs:146-150`), so the `COUNT` and the `GROUP BY` are both pushed to SQL and only one row per key comes back. The reason a named type appears here at all rather than an anonymous type or a tuple is translatability: EF Core needs a constructor-shaped projection it can bind by parameter name, and a positional record gives it exactly that with a single line of code. The result is flattened into an `IReadOnlyDictionary<TKey, int>` immediately afterwards (`:146`), so the record never escapes the method.
+- **What it is**: a two-property carrier for one `GROUP BY` row: the grouping key and the number of rows carrying it. It is declared `private sealed record class` **inside** [`EFReadRepository<TEntity, TIdentifierType>`](#efreadrepositorytentity-tidentifiertype), so it exists only for the lifetime of one query translation and is invisible to every caller (`EFReadRepository.cs:182-185`).
+- **Depends on**: nothing first-party. `TKey` is the caller's grouping key type, constrained to `notnull` at the `CountByAsync<TKey>` declaration (`EFReadRepository.cs:136`).
+- **Concept introduced, a named projection target so the provider can translate the grouping.** `[Rubric §12, Performance and Scalability]` assesses whether aggregation happens in the database rather than after materialization. `CountByAsync` composes `query.GroupBy(keySelector).Select(group => new GroupedCount<TKey>(group.Key, group.Count()))` (`EFReadRepository.cs:145-149`), so the `COUNT` and the `GROUP BY` are both pushed to SQL and only one row per key comes back. The reason a named type appears here at all rather than an anonymous type or a tuple is translatability: EF Core needs a constructor-shaped projection it can bind by parameter name, and a positional record gives it exactly that with a single line of code. The result is flattened into an `IReadOnlyDictionary<TKey, int>` immediately afterwards (`:146`), so the record never escapes the method.
 - **Walkthrough**
-  - `Key` (`EFReadRepository.cs:186`): the grouping key, projected from `group.Key`.
-  - `Value` (`EFReadRepository.cs:186`): the `int` row count, projected from `group.Count()`.
+  - `Key` (`EFReadRepository.cs:185`): the grouping key, projected from `group.Key`.
+  - `Value` (`EFReadRepository.cs:185`): the `int` row count, projected from `group.Count()`.
   - The record has no methods of its own. Being a positional `record class`, it gets value equality and a `Deconstruct` free, neither of which the one call site uses; the shape is the whole point.
 - **Why it's built this way**: nesting it privately inside the repository keeps a purely mechanical translation helper out of the assembly's type surface, while still giving EF a real named type to bind to. It is the counterpart of [`GroupedSum<TKey>`](#groupedsumtkey), and the two are deliberately separate rather than one generic `Grouped<TKey, TValue>`, because the `int` and `decimal` aggregate shapes translate through different provider paths.
-- **Where it's used**: only in `EFReadRepository.CountByAsync<TKey>` (`EFReadRepository.cs:148`, flattened at `:146`). The public capability it backs is consumed in MMCA.ADC by `BookmarkCountService` (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/UserSessionBookmarks/Services/BookmarkCountService.cs:38`) and `GetAttendanceStatsHandler` (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/CheckIns/UseCases/GetAttendanceStats/GetAttendanceStatsHandler.cs:32`), and covered by `MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/EFReadRepositoryReadSurfaceTests.cs`.
+- **Where it's used**: only in `EFReadRepository.CountByAsync<TKey>` (`EFReadRepository.cs:147`, flattened at `:146`). The public capability it backs is consumed in MMCA.ADC by `BookmarkCountService` (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/UserSessionBookmarks/Services/BookmarkCountService.cs:38`) and `GetAttendanceStatsHandler` (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/CheckIns/UseCases/GetAttendanceStats/GetAttendanceStatsHandler.cs:32`), and covered by `MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/EFReadRepositoryReadSurfaceTests.cs`.
 
 ### GroupedSum<TKey>
 
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Repositories` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:191` · Level 0 · record (private sealed, nested)
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Repositories` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:190` · Level 0 · record (private sealed, nested)
 
-- **What it is**: the summing twin of [`GroupedCount<TKey>`](#groupedcounttkey): one `GROUP BY` row carrying the key and the `decimal` total for that key (`EFReadRepository.cs:188-191`). Same nesting, same privacy, same single-method lifetime.
+- **What it is**: the summing twin of [`GroupedCount<TKey>`](#groupedcounttkey): one `GROUP BY` row carrying the key and the `decimal` total for that key (`EFReadRepository.cs:187-190`). Same nesting, same privacy, same single-method lifetime.
 - **Depends on**: nothing first-party; see [`GroupedCount<TKey>`](#groupedcounttkey) for the concept.
-- **Concept**: introduced by [`GroupedCount<TKey>`](#groupedcounttkey). What is worth reading here is the *element selector* on the grouping. `SumByAsync` calls `query.GroupBy(keySelector, sumSelector)` with two expressions and then `group.Sum()` with none (`EFReadRepository.cs:174-178`). The comment at `:165-167` explains the choice: choosing the summed column inside the grouping keeps the caller's expression tree intact all the way to the provider, whereas summing over the grouping with a separately supplied expression would need that tree spliced in by hand. `[Rubric §12, Performance and Scalability]` again: the whole aggregation is one statement.
+- **Concept**: introduced by [`GroupedCount<TKey>`](#groupedcounttkey). What is worth reading here is the *element selector* on the grouping. `SumByAsync` calls `query.GroupBy(keySelector, sumSelector)` with two expressions and then `group.Sum()` with none (`EFReadRepository.cs:173-177`). The comment at `:165-167` explains the choice: choosing the summed column inside the grouping keeps the caller's expression tree intact all the way to the provider, whereas summing over the grouping with a separately supplied expression would need that tree spliced in by hand. `[Rubric §12, Performance and Scalability]` again: the whole aggregation is one statement.
 - **Walkthrough**
-  - `Key` (`EFReadRepository.cs:191`): the grouping key.
-  - `Value` (`EFReadRepository.cs:191`): the `decimal` total, projected from `group.Sum()` over the element-selected column.
-  - Flattened to `IReadOnlyDictionary<TKey, decimal>` at `EFReadRepository.cs:180`.
+  - `Key` (`EFReadRepository.cs:190`): the grouping key.
+  - `Value` (`EFReadRepository.cs:190`): the `decimal` total, projected from `group.Sum()` over the element-selected column.
+  - Flattened to `IReadOnlyDictionary<TKey, decimal>` at `EFReadRepository.cs:179`.
 - **Why it's built this way**: identical rationale to its twin. `decimal` rather than a generic numeric parameter matches the framework's money and points columns, which are the values callers actually total.
-- **Where it's used**: only in `EFReadRepository.SumByAsync<TKey>` (`EFReadRepository.cs:176`). The capability is consumed in MMCA.ADC by `GetLeaderboardHandler` (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/Points/UseCases/GetLeaderboard/GetLeaderboardHandler.cs:55`) and covered by `EFReadRepositoryReadSurfaceTests.cs`.
+- **Where it's used**: only in `EFReadRepository.SumByAsync<TKey>` (`EFReadRepository.cs:175`). The capability is consumed in MMCA.ADC by `GetLeaderboardHandler` (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/Points/UseCases/GetLeaderboard/GetLeaderboardHandler.cs:55`) and covered by `EFReadRepositoryReadSurfaceTests.cs`.
 
 ### LookupRow<TId, TName>
 
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Repositories` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:735` · Level 0 · class (internal sealed)
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Repositories` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:733` · Level 0 · class (internal sealed)
 
-- **What it is**: the intermediate row a non-string lookup projection materializes: the entity's identifier plus the name property carried in its own CLR type, rather than pre-formatted to a string (`EFReadRepository.cs:727-742`). Declared at file scope in `EFReadRepository.cs`, alongside the class it serves, rather than nested private the way [`GroupedCount<TKey>`](#groupedcounttkey) and [`GroupedSum<TKey>`](#groupedsumtkey) are: [`EFReadRepository<TEntity, TIdentifierType>`](#efreadrepositorytentity-tidentifiertype)'s `ExecuteRawLookupAsync<TName>` is `public static` and needs `LookupRow<TId, TName>` in its own signature, which a `private` nested type could not appear in.
-- **Depends on**: nothing first-party. `TId` and `TName` are the caller's identifier and raw name types, closed over by [`EFReadRepository<TEntity, TIdentifierType>`](#efreadrepositorytentity-tidentifiertype)'s `BuildLookupSelector` (`EFReadRepository.cs:354`) and `ExecuteRawLookupAsync<TName>` (`:282`).
+- **What it is**: the intermediate row a non-string lookup projection materializes: the entity's identifier plus the name property carried in its own CLR type, rather than pre-formatted to a string (`EFReadRepository.cs:725-740`). Declared at file scope in `EFReadRepository.cs`, alongside the class it serves, rather than nested private the way [`GroupedCount<TKey>`](#groupedcounttkey) and [`GroupedSum<TKey>`](#groupedsumtkey) are: [`EFReadRepository<TEntity, TIdentifierType>`](#efreadrepositorytentity-tidentifiertype)'s `ExecuteRawLookupAsync<TName>` is `public static` and needs `LookupRow<TId, TName>` in its own signature, which a `private` nested type could not appear in.
+- **Depends on**: nothing first-party. `TId` and `TName` are the caller's identifier and raw name types, closed over by [`EFReadRepository<TEntity, TIdentifierType>`](#efreadrepositorytentity-tidentifiertype)'s `BuildLookupSelector` (`EFReadRepository.cs:353`) and `ExecuteRawLookupAsync<TName>` (`:282`).
 - **Concept, why the projection stops short of a string.** `[Rubric §12, Performance and Scalability]` assesses whether a translation failure is designed out rather than caught after the fact. `GetAllForLookupAsync`'s selector used to call `ToString()` inside the `Select` for a non-string name property, which has no server-side translation for a value-object property (an `Email`, say): appending it to the projection threw `InvalidOperationException` for the whole query and surfaced as an HTTP 500 on a property `QueryFieldService` had already approved as sortable. `LookupRow<TId, TName>` is the fix: the projection stops at the raw value, in whatever CLR type EF materializes it through the property's own value converter, and the formatting to a display string happens in memory afterwards, in `ExecuteRawLookupAsync<TName>`, where `ToString()` is plain C# rather than an expression tree a provider has to translate.
 - **Walkthrough**
-  - `Id` (`EFReadRepository.cs:738`): the entity identifier, `TId`, defaulted to `default!` like the other lightweight projection carriers in this file.
-  - `Name` (`EFReadRepository.cs:741`): the raw name value, `TName?`, exactly as the provider materialized it, with no coalescing or formatting applied at this stage.
-- **Why it's built this way**: a generic carrier rather than one record per name type is what lets `BuildLookupSelector` build the projection once per `(TEntity, TName)` pair by reflection (`Expression.MemberInit` over `Expression.New(rowType)`, `EFReadRepository.cs:354-358`) without a compile-time-known type for every possible name property; `sealed` and two auto-properties keep it a pure carrier with nothing else to reason about.
-- **Where it's used**: only inside `EFReadRepository.cs`. `BuildLookupSelector` closes `LookupRow<,>` over `(TIdentifierType, nameAccess.Type)` for a non-string name property (`EFReadRepository.cs:354`); `ExecuteRawLookupAsync<TName>` takes the resulting `Expression<Func<TEntity, LookupRow<TIdentifierType, TName>>>` as its selector parameter (`:282`), projects, orders and caps with it, then formats each row's `Name` to the returned [`BaseLookup<TIdentifierType>`](group-12-api-hosting-mapping.md#baselookuptidentifiertype) (`:292-296`).
+  - `Id` (`EFReadRepository.cs:736`): the entity identifier, `TId`, defaulted to `default!` like the other lightweight projection carriers in this file.
+  - `Name` (`EFReadRepository.cs:739`): the raw name value, `TName?`, exactly as the provider materialized it, with no coalescing or formatting applied at this stage.
+- **Why it's built this way**: a generic carrier rather than one record per name type is what lets `BuildLookupSelector` build the projection once per `(TEntity, TName)` pair by reflection (`Expression.MemberInit` over `Expression.New(rowType)`, `EFReadRepository.cs:353-357`) without a compile-time-known type for every possible name property; `sealed` and two auto-properties keep it a pure carrier with nothing else to reason about.
+- **Where it's used**: only inside `EFReadRepository.cs`. `BuildLookupSelector` closes `LookupRow<,>` over `(TIdentifierType, nameAccess.Type)` for a non-string name property (`EFReadRepository.cs:353`); `ExecuteRawLookupAsync<TName>` takes the resulting `Expression<Func<TEntity, LookupRow<TIdentifierType, TName>>>` as its selector parameter (`:282`), projects, orders and caps with it, then formats each row's `Name` to the returned [`BaseLookup<TIdentifierType>`](group-12-api-hosting-mapping.md#baselookuptidentifiertype) (`:292-296`).
 - **Caveats / not-in-source**: no test file targets `LookupRow<TId, TName>` by name; it is exercised indirectly through `EFReadRepositoryLookupProjectionTests.cs` (listed among [`EFReadRepository<TEntity, TIdentifierType>`](#efreadrepositorytentity-tidentifiertype)'s usage sites) whenever a non-string name property is looked up.
 
 ### ValueHolder<T>
@@ -7709,7 +7790,7 @@ survives a module being pulled out into its own service.
 
 - **What it is**: the one place a specification becomes an `IQueryable<T>`. It always applies the specification's criteria, and when the specification is a [`QuerySpecification<TEntity, TIdentifierType>`](group-03-querying-specifications.md#queryspecificationtentity-tidentifiertype) it also applies that specification's includes, ordering, and paging (`SpecificationEvaluator.cs:11-21`).
 - **Depends on**: [`ISpecification<TEntity, TIdentifierType>`](group-03-querying-specifications.md#ispecificationtentity-tidentifiertype) and [`QuerySpecification<TEntity, TIdentifierType>`](group-03-querying-specifications.md#queryspecificationtentity-tidentifiertype) for the input shape, [`OrderExpression`](group-03-querying-specifications.md#orderexpression) for each ordering key, [`IBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#ibaseentitytidentifiertype) as the entity constraint (`SpecificationEvaluator.cs:44`), [`QueryTags`](#querytags) for tagging the query with the specification's type name, EF Core's `Include` and `AsSplitQuery` extensions, plus `System.Reflection` and `System.Collections.Concurrent` for the two caches (`:1-6`).
-- **Concept introduced, the evaluator half of the specification pattern.** `[Rubric §2, Design Patterns]` assesses whether patterns are implemented completely rather than named; the specification pattern has two halves, a declarative object describing what to select and an evaluator that turns it into a provider query, and this class is the second half. `[Rubric §3, Clean Architecture]` also applies: the specification types live in the Domain layer and know nothing about EF, so all EF knowledge is concentrated here. The most important thing to internalize is stated in the class doc at `SpecificationEvaluator.cs:15-19`, and it is a boundary, not an omission. **Tracking and soft-delete scope are deliberately not applied here.** Those two choices select the *base* queryable (`Table` versus `TableNoTracking`, with or without the named soft-delete filter dropped), which only a repository holding the `DbContext` can do. The evaluator composes on top of whatever base it is handed, which is why `BaseQueryFor` lives in [`EFReadRepository<TEntity, TIdentifierType>`](#efreadrepositorytentity-tidentifiertype) (`EFReadRepository.cs:575-584`) and not here.
+- **Concept introduced, the evaluator half of the specification pattern.** `[Rubric §2, Design Patterns]` assesses whether patterns are implemented completely rather than named; the specification pattern has two halves, a declarative object describing what to select and an evaluator that turns it into a provider query, and this class is the second half. `[Rubric §3, Clean Architecture]` also applies: the specification types live in the Domain layer and know nothing about EF, so all EF knowledge is concentrated here. The most important thing to internalize is stated in the class doc at `SpecificationEvaluator.cs:15-19`, and it is a boundary, not an omission. **Tracking and soft-delete scope are deliberately not applied here.** Those two choices select the *base* queryable (`Table` versus `TableNoTracking`, with or without the named soft-delete filter dropped), which only a repository holding the `DbContext` can do. The evaluator composes on top of whatever base it is handed, which is why `BaseQueryFor` lives in [`EFReadRepository<TEntity, TIdentifierType>`](#efreadrepositorytentity-tidentifiertype) (`EFReadRepository.cs:573-582`) and not here.
 - **Walkthrough**
   - `Apply<TEntity, TIdentifierType>(source, specification, applyShape = true)` (`SpecificationEvaluator.cs:40-69`) is the entry point. It applies `specification.Criteria`, then tags the resulting query through [`QueryTags`](#querytags) with `SpecificationPrefix + specification.GetType().Name` (`:52-54`), tagging first so the label survives whatever shape composes on top of it, because EF carries tags on the query rather than on the operator they were attached to (`:50-51`). It then returns early when either `applyShape` is false or the specification is not a `QuerySpecification` (`:56-57`). Otherwise it layers includes, then ordering, then `Skip` when it is a positive integer, then `Take` (`:59-66`). Skip before Take, ordering before both: that is the only order in which paging is meaningful.
   - The `applyShape` parameter earns its own doc paragraph (`SpecificationEvaluator.cs:30-35`) and it is a real correctness argument, not a micro-optimization. Aggregate reads such as count and exists pass `false`, because joining includes in to count rows costs a join per navigation, and counting "page 3 of the matches" is never what a caller means.
@@ -7742,8 +7823,8 @@ survives a module being pulled out into its own service.
   - `Compare(left, right, greaterThan)` (`KeysetQueryBuilder.cs:308-342`) is the provider-translatability layer, and the remarks at `:272-282` explain why it cannot just call `Expression.GreaterThan`: that factory only exists for types that have the operator, which excludes `string`. So strings compare through `string.Compare(string, string)`, which EF translates into a native `>` or `<` (`:287-293`); types with a relational operator use it directly (`:295-300`); and anything else with an `IComparable<T>` implementation (a `Guid` key, for instance) compares through `CompareTo` (`:302-316`), whose translation is provider-specific. A type with none of the three gets a `NotSupportedException` naming the type (`:303-307`), which is a loud failure at query-build time rather than a wrong result.
   - `SupportsRelationalOperator` (`KeysetQueryBuilder.cs:344-353`) enumerates the primitive, enum, decimal, date and time, and `TimeSpan` cases, and falls back to reflecting for a public static `op_GreaterThan`. `StringCompareMethod` and `ZeroConstant` (`:330-333`) are resolved once as statics.
 - **Why it's built this way**: keyset paging is declared as a repository-level capability, deliberately not part of the HTTP query contract of [ADR-034](https://ivanball.github.io/docs/adr/034-generic-entity-query-layer.html), and [ADR-055](https://ivanball.github.io/docs/adr/055-repository-and-specification-contract.html) records that split along with the cursor format. Building the predicate as an expression tree rather than as SQL text is what keeps the same code working on more than one provider ([ADR-018](https://ivanball.github.io/docs/adr/018-polyglot-persistence.html)); reusing [`SpecificationEvaluator`](#specificationevaluator)'s ordering step rather than reimplementing the ordering call means the keyset ORDER BY and the specification ORDER BY are produced by the same code.
-- **Where it's used**: only by [`EFReadRepository<TEntity, TIdentifierType>`](#efreadrepositorytentity-tidentifiertype)'s `GetPageByCursorAsync`, which calls `TryResolveSortProperty` (`EFReadRepository.cs:639`), `ApplyOrdering` (`:669`), `ToInvariantString` twice when encoding the next cursor (`:684-685`), and, through the private `TryBuildSeekPredicate`, `TryFromInvariantString` (`:706`, `:715`) and `BuildSeekPredicate` (`:720-721`), passing `nullsSortFirstAscending` from the engine behind the context. Covered by `EFReadRepositoryKeysetPagingTests.cs` under `MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Repositories/Read/`, and by `KeysetQueryBuilderSqlTests.cs` and `KeysetQueryBuilderNullOrderingTests.cs` under `MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Repositories/`.
-- **Caveats / not-in-source**: the `NotSupportedException` for an unorderable key type and the provider-specific translation of `CompareTo` are both real limits of the design, and neither is discoverable until a query is built for that key type. `nullsSortFirstAscending` defaults to `true` (`KeysetQueryBuilder.cs:123`), so a caller that omits it gets SQL Server and SQLite null placement, which is the wrong side of the boundary for PostgreSQL; the one production caller always passes the engine's value (`EFReadRepository.cs:720-721`). No first-party call site in MMCA.ADC or MMCA.Store calls `GetPageByCursorAsync` today (the only references outside MMCA.Common are the test-support fakes in `MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.Application.Tests/Support/TestSupport.cs` and its Identity sibling), so which key and sort types have actually been exercised against a real engine is established by the test suite rather than by production usage.
+- **Where it's used**: only by [`EFReadRepository<TEntity, TIdentifierType>`](#efreadrepositorytentity-tidentifiertype)'s `GetPageByCursorAsync`, which calls `TryResolveSortProperty` (`EFReadRepository.cs:637`), `ApplyOrdering` (`:669`), `ToInvariantString` twice when encoding the next cursor (`:684-685`), and, through the private `TryBuildSeekPredicate`, `TryFromInvariantString` (`:706`, `:715`) and `BuildSeekPredicate` (`:720-721`), passing `nullsSortFirstAscending` from the engine behind the context. Covered by `EFReadRepositoryKeysetPagingTests.cs` under `MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Repositories/Read/`, and by `KeysetQueryBuilderSqlTests.cs` and `KeysetQueryBuilderNullOrderingTests.cs` under `MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Repositories/`.
+- **Caveats / not-in-source**: the `NotSupportedException` for an unorderable key type and the provider-specific translation of `CompareTo` are both real limits of the design, and neither is discoverable until a query is built for that key type. `nullsSortFirstAscending` defaults to `true` (`KeysetQueryBuilder.cs:123`), so a caller that omits it gets SQL Server and SQLite null placement, which is the wrong side of the boundary for PostgreSQL; the one production caller always passes the engine's value (`EFReadRepository.cs:718-719`). No first-party call site in MMCA.ADC or MMCA.Store calls `GetPageByCursorAsync` today (the only references outside MMCA.Common are the test-support fakes in `MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.Application.Tests/Support/TestSupport.cs` and its Identity sibling), so which key and sort types have actually been exercised against a real engine is established by the test suite rather than by production usage.
 
 ### EFReadRepositoryDecorator<TEntity, TIdentifierType>
 
@@ -7784,34 +7865,35 @@ survives a module being pulled out into its own service.
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Repositories` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:21` · Level 12 · class (internal)
 
 - **What it is**: the EF Core implementation of [`IReadRepository<TEntity, TIdentifierType>`](#ireadrepositorytentity-tidentifiertype), the read half of the repository contract: get by id, get many, projected reads, first-or-default, grouped counts and sums, soft-delete-aware finds, lookups, counts, existence checks, specification-driven reads, and keyset pages, with no mutation surface at all (`EFReadRepository.cs:16-21`).
-- **Depends on**: EF Core's `DbContext` and `DbSet<TEntity>`, taken as its one primary-constructor parameter (`EFReadRepository.cs:21-33`); [`IReadRepository<TEntity, TIdentifierType>`](#ireadrepositorytentity-tidentifiertype) as the contract (declared at `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IRepository.cs:332`); [`AuditableBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype) as the entity constraint (`:24`); [`SpecificationEvaluator`](#specificationevaluator), [`KeysetQueryBuilder`](#keysetquerybuilder), and [`QueryTags`](#querytags) as its composition helpers; [`ApplicationDbContext`](#applicationdbcontext) for the soft-delete filter name (`:41`) and for the engine behind the context, whose [`DataSourceEngineCapabilities`](#datasourceenginecapabilities) drive the existence check and keyset null ordering (`:513-514`); `EntityQueryPipeline.MaxUnboundedResultLimit` for the lookup row ceiling; [`LookupRow<TId, TName>`](#lookuprowtid-tname) as the intermediate projection shape for a non-string lookup name; and [`Result`](group-01-result-error-handling.md#result), [`Error`](group-01-result-error-handling.md#error), [`KeysetPageRequest`](group-01-result-error-handling.md#keysetpagerequest), [`KeysetCollectionResult<T>`](group-01-result-error-handling.md#keysetcollectionresultt), [`KeysetCursor`](group-01-result-error-handling.md#keysetcursor), and [`BaseLookup<TIdentifierType>`](group-12-api-hosting-mapping.md#baselookuptidentifiertype) for the shapes it returns.
-- **Concept introduced, naming the query filter you drop.** `[Rubric §11, Security]` assesses whether isolation boundaries hold under every code path, and `[Rubric §8, Data Architecture]` assesses whether the query-filter design is deliberate. EF 10 gives global query filters **names**, and the framework registers two on the model: `SoftDelete` and `Tenant` ([ADR-073](https://ivanball.github.io/docs/adr/073-multi-tenancy-model.html)). EF's parameterless `IgnoreQueryFilters()` drops *all* of them. That means a caller who only wanted to see soft-deleted rows would, with the parameterless call, also read across every tenant. So the repository declares a one-element array naming exactly the filter it is willing to drop (`EFReadRepository.cs:35-41`, resolving `ApplicationDbContext.SoftDeleteFilterName` from `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:475`) and every `ignoreQueryFilters: true` path passes it (`:58`, `:87`, `:108`, `:204`, `:394`, `:471`, `:485`, `:582`). This is the kind of detail worth copying wherever you add a filter-bypassing read.
-- **Concept, tracked versus no-tracking as an explicit repository decision.** `[Rubric §12, Performance and Scalability]`. The four queryable properties at `EFReadRepository.cs:526-535` are the vocabulary: `Table` (tracked), `TableNoTracking`, `TableNoTrackingSingleQuery`, and `TableNoTrackingSplitQuery`. Read paths default to no-tracking to avoid change-tracker overhead, but two exceptions are load-bearing and both are commented in place, see the walkthrough below.
+- **Depends on**: EF Core's `DbContext` and `DbSet<TEntity>`, taken as its one primary-constructor parameter (`EFReadRepository.cs:21-33`); [`IReadRepository<TEntity, TIdentifierType>`](#ireadrepositorytentity-tidentifiertype) as the contract (declared at `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IRepository.cs:332`); [`AuditableBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype) as the entity constraint (`:24`); [`SpecificationEvaluator`](#specificationevaluator), [`KeysetQueryBuilder`](#keysetquerybuilder), and [`QueryTags`](#querytags) as its composition helpers; [`ApplicationDbContext`](#applicationdbcontext) for the soft-delete filter name (`:41`) and for the engine behind the context, whose [`DataSourceEngineCapabilities`](#datasourceenginecapabilities) drive the existence check and keyset null ordering (`:511-512`); `EntityQueryPipeline.MaxUnboundedResultLimit` for the lookup row ceiling; [`LookupRow<TId, TName>`](#lookuprowtid-tname) as the intermediate projection shape for a non-string lookup name; and [`Result`](group-01-result-error-handling.md#result), [`Error`](group-01-result-error-handling.md#error), [`KeysetPageRequest`](group-01-result-error-handling.md#keysetpagerequest), [`KeysetCollectionResult<T>`](group-01-result-error-handling.md#keysetcollectionresultt), [`KeysetCursor`](group-01-result-error-handling.md#keysetcursor), and [`BaseLookup<TIdentifierType>`](group-12-api-hosting-mapping.md#baselookuptidentifiertype) for the shapes it returns.
+- **Concept introduced, naming the query filter you drop.** `[Rubric §11, Security]` assesses whether isolation boundaries hold under every code path, and `[Rubric §8, Data Architecture]` assesses whether the query-filter design is deliberate. EF 10 gives global query filters **names**, and the framework registers two on the model: `SoftDelete` and `Tenant` ([ADR-073](https://ivanball.github.io/docs/adr/073-multi-tenancy-model.html)). EF's parameterless `IgnoreQueryFilters()` drops *all* of them. That means a caller who only wanted to see soft-deleted rows would, with the parameterless call, also read across every tenant. So the repository declares a one-element array naming exactly the filter it is willing to drop (`EFReadRepository.cs:35-41`, resolving `ApplicationDbContext.SoftDeleteFilterName` from `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:475`) and every `ignoreQueryFilters: true` path passes it (`:58`, `:87`, `:108`, `:203`, `:393`, `:469`, `:483`, `:580`). This is the kind of detail worth copying wherever you add a filter-bypassing read.
+- **Concept, tracked versus no-tracking as an explicit repository decision.** `[Rubric §12, Performance and Scalability]`. The four queryable properties at `EFReadRepository.cs:524-533` are the vocabulary: `Table` (tracked), `TableNoTracking`, `TableNoTrackingSingleQuery`, and `TableNoTrackingSplitQuery`. Read paths default to no-tracking to avoid change-tracker overhead, but two exceptions are load-bearing and both are commented in place, see the walkthrough below.
 - **Walkthrough**
   - `MaxLookupSelectorCacheEntries = 512` (`EFReadRepository.cs:31`) bounds the lookup-selector cache; past it a selector is built per request rather than cached, which the source calls correct and only slightly slower.
   - The protected `_context` field is guarded at construction (`EFReadRepository.cs:33`), and `Entities` is a `virtual` property resolving `_context.Set<TEntity>()` (`:43`). Every member goes through one of those two, which is what makes the class subclassable by [`EFRepository<TEntity, TIdentifierType>`](#efrepositorytentity-tidentifiertype).
-  - The private `BaseQuery(asTracking)` helper (`EFReadRepository.cs:550-551`) picks `Table` or `TableNoTracking` and tags the result through [`QueryTags`](#querytags) with the ambient use-case tag. It backs every specification-less read (`GetAllAsync`, `GetProjectedAsync`, `FirstOrDefaultAsync(where, ...)`, `FindIncludingDeletedAsync`, `GetAllForLookupAsync`, `GetByIdsAsync`, `GetByIdAsync(id, includes, asTracking)`, and a specification-less keyset page); `CountByAsync` and `SumByAsync` call it with `asTracking: false` explicitly. Its doc (`:537-547`) records why `Table` and `TableNoTracking` stay untagged: they are the public, overridable extension point a consumer composes its own queries on, and the specification path is tagged inside [`SpecificationEvaluator`](#specificationevaluator) instead, so no query is tagged twice.
+  - The private `BaseQuery(asTracking)` helper (`EFReadRepository.cs:548-549`) picks `Table` or `TableNoTracking` and tags the result through [`QueryTags`](#querytags) with the ambient use-case tag. It backs every specification-less read (`GetAllAsync`, `GetProjectedAsync`, `FirstOrDefaultAsync(where, ...)`, `FindIncludingDeletedAsync`, `GetAllForLookupAsync`, `GetByIdsAsync`, `GetByIdAsync(id, includes, asTracking)`, and a specification-less keyset page); `CountByAsync` and `SumByAsync` call it with `asTracking: false` explicitly. Its doc (`:537-547`) records why `Table` and `TableNoTracking` stay untagged: they are the public, overridable extension point a consumer composes its own queries on, and the specification path is tagged inside [`SpecificationEvaluator`](#specificationevaluator) instead, so no query is tagged twice.
+  - Several members are plain `Task`-returning methods, not `async` ones: they `return` the EF call's task directly with no `await` and no `ConfigureAwait(false)`, because nothing runs after the query completes. That covers both `FirstOrDefaultAsync` overloads (`EFReadRepository.cs:96`, `:118`), both `GetByIdAsync` overloads (`:402`, `:417`), the three `CountAsync` overloads (`:433`, `:437`, `:447`), both `ExistsAsync` overloads (`:461`, `:475`), and `AnyAsync(specification)` (`:616`). The argument guards (`ArgumentNullException.ThrowIfNull`) still run synchronously at call time, so a null argument throws at the call site instead of inside a faulted task. The members that post-process results stay `async` (`GetAllAsync`, `GetProjectedAsync`, `CountByAsync`, `SumByAsync`, `FindIncludingDeletedAsync`, `GetAllForLookupAsync`, both `ListAsync`, `GetPageByCursorAsync`), as does the private `AnyAsync` helper (`:498`) whose ternary awaits either branch.
   - `GetAllAsync` (`EFReadRepository.cs:46-72`) is the widest read: pick tracked or untracked (`:55`), optionally drop the named soft-delete filter (`:57-58`), apply includes (`:60`), then optional `where` (`:62-63`), then optional `orderBy` (`:65-66`), then materialize with or without a `select` (`:68-71`). Every parameter is optional, which is what makes it the general-purpose read the older query paths call.
   - `GetProjectedAsync<TResult>` (`EFReadRepository.cs:75-93`) is the projection-first read: no includes at all, because a projection selects its own columns, and the `Select` is applied in the database rather than after materialization (`:92`).
   - `FirstOrDefaultAsync(where, includes, ...)` (`EFReadRepository.cs:96-115`) is the predicate overload, and the comment at `:113` records the point: the predicate goes into EF's `FirstOrDefaultAsync` so the database issues a `TOP 1`, rather than materializing a set and narrowing it in memory.
   - `FirstOrDefaultAsync(specification)` (`EFReadRepository.cs:118-130`) is the specification overload, and unlike the aggregate reads it applies the **full** shape, ordering included. The comment at `:124-125` is the reason: "first" is only meaningful against a defined order, and the specification is where that order is declared.
-  - `CountByAsync<TKey>` (`EFReadRepository.cs:133-153`) and `SumByAsync<TKey>` (`:156-181`) are the two grouped aggregates. Both run untracked, apply the optional predicate, group in the database, and project into the private records [`GroupedCount<TKey>`](#groupedcounttkey) (`:148`) and [`GroupedSum<TKey>`](#groupedsumtkey) (`:176`) before flattening to a dictionary (`:152`, `:180`). The comment at `:171-173` explains why `SumByAsync` passes the sum selector as `GroupBy`'s *element* selector: it keeps the caller's expression tree intact all the way to the provider.
-  - `FindIncludingDeletedAsync` (`EFReadRepository.cs:194-220`) returns a named tuple of active and soft-deleted matches. The comment at `:202-203` is the design point: it drops the soft-delete filter and reads **once**, then partitions in memory (`:211-217`), because two separate queries would let a concurrent delete land between them and report the same row in neither half.
-  - `GetAllForLookupAsync` (`EFReadRepository.cs:223-262`) returns id and name pairs ordered by name, where "name" is a *runtime* property name. `GetOrBuildLookupSelector` (`:321-342`) returns an untyped `LambdaExpression` rather than a fixed `Expression<Func<TEntity, BaseLookup<TIdentifierType>>>`, because `BuildLookupSelector` (`:344-375`) builds one of two projection shapes depending on the resolved property's CLR type: a string property projects straight to `BaseLookup<TIdentifierType>` with its name coalesced to empty (`:366-374`), while anything else projects to [`LookupRow<TId, TName>`](#lookuprowtid-tname) carrying the raw value (`:350-364`), because appending `ToString()` to the projection has no server-side translation for a value-object property and throws `InvalidOperationException` for the whole query (the comment at `:251-255`). `GetAllForLookupAsync` pattern-matches the returned `LambdaExpression` (`:241`): the string leg runs `Select`/`OrderBy`/`Take` inline (`:243-248`); the non-string leg resolves the raw name's CLR type by reflection (`:256`) and dispatches, through the cached `ExecuteRawLookupMethod` (`:268-269`), to the public static `ExecuteRawLookupAsync<TName>` (`:281-298`), which runs the same ordered, capped projection against `LookupRow<TIdentifierType, TName>` and formats each row's name in memory afterward (`:293-297`). Both legs keep `.Take(EntityQueryPipeline.MaxUnboundedResultLimit)` (`:246`, `:289`) BEFORE materialization, and the comment above the branch names why (`:236-240`, tagged SEC-Common-24): this path never enters `EntityQueryPipeline`, so the framework's row ceiling has to be applied here or a lookup stays the one unpaginated, uncapped read in the framework. Underneath, `GetOrBuildLookupSelector` first resolves the property name to its CANONICAL spelling (`:325-327`, the SEC-Store-14 remark at `:306-313`) before keying `LookupSelectorCache` (`:314`), checks the cache (`:331-332`), builds uncached rather than admitting a new entry once `MaxLookupSelectorCacheEntries` is reached (`:336-337`), and otherwise memoizes through `GetOrAdd` (`:339-341`). Canonicalizing the name first is a fix, not a cosmetic change: reflection resolves a property name case-insensitively, so every case permutation of a real column used to mint its own never-evicted cache entry, 2^N spellings of an N-letter name, from an anonymous endpoint; resolving the `PropertyInfo` first collapses them onto one entry.
-  - `GetByIdsAsync` (`EFReadRepository.cs:378-400`) materializes the id sequence once, short-circuits on an empty set with an empty result (`:387-389`), and translates to a single `Contains` (in other words a SQL `IN`) rather than N round trips (`:399`).
-  - `GetByIdAsync(id)` (`EFReadRepository.cs:403-415`) carries the single most important comment in the file (`:409-413`) and it encodes two separate bug fixes. First, it is a **filtered query, not `FindAsync`**: `FindAsync` serves a tracked instance straight out of the identity map without evaluating the global soft-delete filter, so an entity soft-deleted earlier in the same scope came back as if it were live. Second, it queries `Table` (**tracked**) on purpose: [`EFRepository<TEntity, TIdentifierType>`](#efrepositorytentity-tidentifiertype) inherits this member and the generic delete and update handlers load through it, mutate the instance, and save, so a no-tracking query would turn those writes into silent no-ops.
-  - `GetByIdAsync(id, includes, asTracking)` (`EFReadRepository.cs:418-431`) is the include-carrying overload and defaults to no-tracking, because a caller asking for includes is normally reading for display.
-  - The three `CountAsync` overloads (`EFReadRepository.cs:434-458`) cover no predicate, an expression predicate, and a specification. The specification overload composes through [`SpecificationEvaluator`](#specificationevaluator) with `applyShape: false` (`:455`), so includes, ordering, and paging never reach a COUNT.
-  - The two `ExistsAsync` overloads (`EFReadRepository.cs:463-488`) both funnel into the private `AnyAsync` helper (`:500-506`), which is engine-aware. The remarks at `:490-499` are worth reading before you touch it: the non-relational engine (Cosmos DB) gets `CountAsync` because its provider generates invalid SQL (an unresolved `root` identifier) when translating a predicated `AnyAsync` into a subquery; every relational engine gets `AnyAsync`, which short-circuits at the first match. The cost of the workaround is stated honestly in the same remark: `CountAsync` reads every matching row, so on a wide predicate the Cosmos path is proportional to the number of matches. The switch is a capability, not a provider-name test: `EngineCapabilities` (`:513-514`, `private protected` so [`EFRepository<TEntity, TIdentifierType>`](#efrepositorytentity-tidentifiertype) can read the same capabilities for its row-version stamp) reads [`DataSourceEngineCapabilities`](#datasourceenginecapabilities) off the [`ApplicationDbContext`](#applicationdbcontext)'s engine, and `TranslatesAny` (`:517`) is its `IsRelational` flag. A plain `DbContext` that is not a framework context (a directly constructed test double) yields `null`, which the doc at `:508-512` reads as a relational engine that sorts nulls first, so both `TranslatesAny` and `NullsSortFirstAscending` (`:523`) fall back to `true`.
-  - `ApplyIncludes` (`EFReadRepository.cs:562-565`) is a `protected static` forwarder to [`SpecificationEvaluator`](#specificationevaluator), including the collection-navigation split-query auto-switch. The doc at `:553-561` says why: the logic lives once so the string-include path and the specification path cannot drift apart.
-  - `BaseQueryFor` (`EFReadRepository.cs:575-584`) is the boundary [`SpecificationEvaluator`](#specificationevaluator) refuses to cross. It reads `AsTracking` and `IgnoreQueryFilters` off a [`QuerySpecification<TEntity, TIdentifierType>`](group-03-querying-specifications.md#queryspecificationtentity-tidentifiertype) when the specification is one, and gives a plain `ISpecification` the untracked, filtered default.
-  - The two `ListAsync` overloads (`EFReadRepository.cs:587-615`) apply the specification to that base. In the projecting overload the comment at `:608-609` records the ordering rule: `Select` comes **last**, so ordering and paging run over entity rows and only the resulting page is projected.
-  - `AnyAsync(specification)` (`EFReadRepository.cs:618-629`) uses criteria only, through the same engine-aware existence check the predicate overloads use (`:625-628`).
-  - `GetPageByCursorAsync` (`EFReadRepository.cs:632-689`) is the keyset page, and it is the one read that returns a [`Result`](group-01-result-error-handling.md#result) rather than a bare value, because two of its failures are caller errors rather than exceptions. An unknown sort column returns `Error.InvalidEntityField` with the column and type named (`:639-648`); a malformed cursor returns a validation error with code `Error.InvalidCursor` (`:654-664`). Between those it starts from `BaseQuery` or applies the optional specification with `applyShape: false` (`:650-652`), then the seek predicate (`:666`), and the `(sortKey, Id)` ordering (`:669`). The `Take(request.PageSize + 1)` at `:673` is the next-page probe, and the comment at `:671-672` explains the choice: the extra row is never returned, it only says whether a next page exists, which is cheaper and more honest than a COUNT over the whole set. The probe row is trimmed (`:675-677`), and a next cursor is encoded from the last surviving row only when there is more (`:679-686`).
-  - `TryBuildSeekPredicate` (`EFReadRepository.cs:696-724`) is the private decode-and-build, an instance method because it reads the engine's null ordering: reject a cursor that fails `KeysetCursor.TryDecode` (`:703-704`), reject an id segment that does not parse to `TIdentifierType` (`:706-710`), reject a sort segment that does not parse to the sort property's type (`:712-718`), and otherwise hand the parsed values to [`KeysetQueryBuilder`](#keysetquerybuilder) together with `nullsSortFirstAscending: NullsSortFirstAscending` (`:720-721`). That flag is what makes a nullable sort key page correctly on PostgreSQL, which sorts nulls last ascending where SQL Server and SQLite sort them first.
+  - `CountByAsync<TKey>` (`EFReadRepository.cs:132-152`) and `SumByAsync<TKey>` (`:156-181`) are the two grouped aggregates. Both run untracked, apply the optional predicate, group in the database, and project into the private records [`GroupedCount<TKey>`](#groupedcounttkey) (`:148`) and [`GroupedSum<TKey>`](#groupedsumtkey) (`:176`) before flattening to a dictionary (`:152`, `:180`). The comment at `:171-173` explains why `SumByAsync` passes the sum selector as `GroupBy`'s *element* selector: it keeps the caller's expression tree intact all the way to the provider.
+  - `FindIncludingDeletedAsync` (`EFReadRepository.cs:193-219`) returns a named tuple of active and soft-deleted matches. The comment at `:202-203` is the design point: it drops the soft-delete filter and reads **once**, then partitions in memory (`:211-217`), because two separate queries would let a concurrent delete land between them and report the same row in neither half.
+  - `GetAllForLookupAsync` (`EFReadRepository.cs:222-261`) returns id and name pairs ordered by name, where "name" is a *runtime* property name. `GetOrBuildLookupSelector` (`:321-342`) returns an untyped `LambdaExpression` rather than a fixed `Expression<Func<TEntity, BaseLookup<TIdentifierType>>>`, because `BuildLookupSelector` (`:344-375`) builds one of two projection shapes depending on the resolved property's CLR type: a string property projects straight to `BaseLookup<TIdentifierType>` with its name coalesced to empty (`:366-374`), while anything else projects to [`LookupRow<TId, TName>`](#lookuprowtid-tname) carrying the raw value (`:350-364`), because appending `ToString()` to the projection has no server-side translation for a value-object property and throws `InvalidOperationException` for the whole query (the comment at `:251-255`). `GetAllForLookupAsync` pattern-matches the returned `LambdaExpression` (`:241`): the string leg runs `Select`/`OrderBy`/`Take` inline (`:243-248`); the non-string leg resolves the raw name's CLR type by reflection (`:256`) and dispatches, through the cached `ExecuteRawLookupMethod` (`:268-269`), to the public static `ExecuteRawLookupAsync<TName>` (`:281-298`), which runs the same ordered, capped projection against `LookupRow<TIdentifierType, TName>` and formats each row's name in memory afterward (`:293-297`). Both legs keep `.Take(EntityQueryPipeline.MaxUnboundedResultLimit)` (`:246`, `:289`) BEFORE materialization, and the comment above the branch names why (`:236-240`, tagged SEC-Common-24): this path never enters `EntityQueryPipeline`, so the framework's row ceiling has to be applied here or a lookup stays the one unpaginated, uncapped read in the framework. Underneath, `GetOrBuildLookupSelector` first resolves the property name to its CANONICAL spelling (`:325-327`, the SEC-Store-14 remark at `:306-313`) before keying `LookupSelectorCache` (`:314`), checks the cache (`:331-332`), builds uncached rather than admitting a new entry once `MaxLookupSelectorCacheEntries` is reached (`:336-337`), and otherwise memoizes through `GetOrAdd` (`:339-341`). Canonicalizing the name first is a fix, not a cosmetic change: reflection resolves a property name case-insensitively, so every case permutation of a real column used to mint its own never-evicted cache entry, 2^N spellings of an N-letter name, from an anonymous endpoint; resolving the `PropertyInfo` first collapses them onto one entry.
+  - `GetByIdsAsync` (`EFReadRepository.cs:377-399`) materializes the id sequence once, short-circuits on an empty set with an empty result (`:387-389`), and translates to a single `Contains` (in other words a SQL `IN`) rather than N round trips (`:399`).
+  - `GetByIdAsync(id)` (`EFReadRepository.cs:402-414`) carries the single most important comment in the file (`:408-412`) and it encodes two separate bug fixes. First, it is a **filtered query, not `FindAsync`**: `FindAsync` serves a tracked instance straight out of the identity map without evaluating the global soft-delete filter, so an entity soft-deleted earlier in the same scope came back as if it were live. Second, it queries `Table` (**tracked**) on purpose: [`EFRepository<TEntity, TIdentifierType>`](#efrepositorytentity-tidentifiertype) inherits this member and the generic delete and update handlers load through it, mutate the instance, and save, so a no-tracking query would turn those writes into silent no-ops.
+  - `GetByIdAsync(id, includes, asTracking)` (`EFReadRepository.cs:417-430`) is the include-carrying overload and defaults to no-tracking, because a caller asking for includes is normally reading for display.
+  - The three `CountAsync` overloads (`EFReadRepository.cs:433-456`) cover no predicate, an expression predicate, and a specification. The specification overload composes through [`SpecificationEvaluator`](#specificationevaluator) with `applyShape: false` (`:454`), so includes, ordering, and paging never reach a COUNT.
+  - The two `ExistsAsync` overloads (`EFReadRepository.cs:461-486`) both funnel into the private `AnyAsync` helper (`:498-504`), which is engine-aware. The remarks at `:488-497` are worth reading before you touch it: the non-relational engine (Cosmos DB) gets `CountAsync` because its provider generates invalid SQL (an unresolved `root` identifier) when translating a predicated `AnyAsync` into a subquery; every relational engine gets `AnyAsync`, which short-circuits at the first match. The cost of the workaround is stated honestly in the same remark: `CountAsync` reads every matching row, so on a wide predicate the Cosmos path is proportional to the number of matches. The switch is a capability, not a provider-name test: `EngineCapabilities` (`:511-512`, `private protected` so [`EFRepository<TEntity, TIdentifierType>`](#efrepositorytentity-tidentifiertype) can read the same capabilities for its row-version stamp) reads [`DataSourceEngineCapabilities`](#datasourceenginecapabilities) off the [`ApplicationDbContext`](#applicationdbcontext)'s engine, and `TranslatesAny` (`:515`) is its `IsRelational` flag. A plain `DbContext` that is not a framework context (a directly constructed test double) yields `null`, which the doc at `:506-510` reads as a relational engine that sorts nulls first, so both `TranslatesAny` and `NullsSortFirstAscending` (`:521`) fall back to `true`.
+  - `ApplyIncludes` (`EFReadRepository.cs:560-563`) is a `protected static` forwarder to [`SpecificationEvaluator`](#specificationevaluator), including the collection-navigation split-query auto-switch. The doc at `:553-561` says why: the logic lives once so the string-include path and the specification path cannot drift apart.
+  - `BaseQueryFor` (`EFReadRepository.cs:573-582`) is the boundary [`SpecificationEvaluator`](#specificationevaluator) refuses to cross. It reads `AsTracking` and `IgnoreQueryFilters` off a [`QuerySpecification<TEntity, TIdentifierType>`](group-03-querying-specifications.md#queryspecificationtentity-tidentifiertype) when the specification is one, and gives a plain `ISpecification` the untracked, filtered default.
+  - The two `ListAsync` overloads (`EFReadRepository.cs:585-613`) apply the specification to that base. In the projecting overload the comment at `:606-607` records the ordering rule: `Select` comes **last**, so ordering and paging run over entity rows and only the resulting page is projected.
+  - `AnyAsync(specification)` (`EFReadRepository.cs:616-627`) uses criteria only, through the same engine-aware existence check the predicate overloads use (`:623-626`).
+  - `GetPageByCursorAsync` (`EFReadRepository.cs:630-687`) is the keyset page, and it is the one read that returns a [`Result`](group-01-result-error-handling.md#result) rather than a bare value, because two of its failures are caller errors rather than exceptions. An unknown sort column returns `Error.InvalidEntityField` with the column and type named (`:637-646`); a malformed cursor returns a validation error with code `Error.InvalidCursor` (`:652-662`). Between those it starts from `BaseQuery` or applies the optional specification with `applyShape: false` (`:648-650`), then the seek predicate (`:664`), and the `(sortKey, Id)` ordering (`:667`). The `Take(request.PageSize + 1)` at `:671` is the next-page probe, and the comment at `:669-670` explains the choice: the extra row is never returned, it only says whether a next page exists, which is cheaper and more honest than a COUNT over the whole set. The probe row is trimmed (`:673-675`), and a next cursor is encoded from the last surviving row only when there is more (`:677-684`).
+  - `TryBuildSeekPredicate` (`EFReadRepository.cs:694-722`) is the private decode-and-build, an instance method because it reads the engine's null ordering: reject a cursor that fails `KeysetCursor.TryDecode` (`:701-702`), reject an id segment that does not parse to `TIdentifierType` (`:704-708`), reject a sort segment that does not parse to the sort property's type (`:710-716`), and otherwise hand the parsed values to [`KeysetQueryBuilder`](#keysetquerybuilder) together with `nullsSortFirstAscending: NullsSortFirstAscending` (`:718-719`). That flag is what makes a nullable sort key page correctly on PostgreSQL, which sorts nulls last ascending where SQL Server and SQLite sort them first.
 - **Why it's built this way**: `internal` rather than public, and every member `virtual`, is what lets [`EFRepository<TEntity, TIdentifierType>`](#efrepositorytentity-tidentifiertype) extend it with writes while consumers hold only the interface. Concentrating the tracking and filter-scope decisions here and pushing pure composition into [`SpecificationEvaluator`](#specificationevaluator) and [`KeysetQueryBuilder`](#keysetquerybuilder) is what keeps this class about *policy* and those about *mechanism*. The contract and its evolution are recorded in [ADR-055](https://ivanball.github.io/docs/adr/055-repository-and-specification-contract.html); the interface segregation into [`IEntityReader<TEntity, TIdentifierType>`](#ientityreadertentity-tidentifiertype) and [`IEntityQuerier<TEntity, TIdentifierType>`](#ientityqueriertentity-tidentifiertype) beneath `IReadRepository` is what makes a read-only consumer unable to write at all (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IRepository.cs:21`, `:80`, `:332`).
 - **Where it's used**: constructed by [`RepositoryFactory`](#repositoryfactory)'s `CreateReadOnly` through a cached `ActivatorUtilities` factory taking the `DbContext` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/Factory/RepositoryFactory.cs:55-56`), optionally wrapped in [`EFReadRepositoryDecorator<TEntity, TIdentifierType>`](#efreadrepositorydecoratortentity-tidentifiertype) (`:58-63`). Application code reaches it through [`IUnitOfWork`](#iunitofwork)'s `GetReadRepository`, implemented at `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/UnitOfWork.cs:68-81`. Covered by `EFReadRepositoryReadSurfaceTests.cs`, `EFReadRepositoryKeysetPagingTests.cs`, `EFReadRepositorySpecificationTests.cs`, `EFReadRepositoryGetByIdFilterTests.cs`, `EFReadRepositoryProjectedFilterTests.cs`, `EFReadRepositoryLookupProjectionTests.cs`, and `EFReadRepositoryLookupSecurityTests.cs` under `MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Repositories/Read/`.
-- **Caveats / not-in-source**: `GetAllForLookupAsync` resolves `nameProperty` by reflection at runtime (`EFReadRepository.cs:325-327`), so an unknown name fails from the expression build rather than at compile time; the source contains no validation of that argument beyond what `Expression.Property` itself enforces. It is capped by `EntityQueryPipeline.MaxUnboundedResultLimit` on both the string and the raw-value leg (`:246`, `:289`), so unlike `FindIncludingDeletedAsync`, which still partitions in memory and materializes every matching row including the deleted ones with no upper bound on that set, a lookup can no longer read an unbounded table.
+- **Caveats / not-in-source**: `GetAllForLookupAsync` resolves `nameProperty` by reflection at runtime (`EFReadRepository.cs:324-326`), so an unknown name fails from the expression build rather than at compile time; the source contains no validation of that argument beyond what `Expression.Property` itself enforces. It is capped by `EntityQueryPipeline.MaxUnboundedResultLimit` on both the string and the raw-value leg (`:246`, `:289`), so unlike `FindIncludingDeletedAsync`, which still partitions in memory and materializes every matching row including the deleted ones with no upper bound on that set, a lookup can no longer read an unbounded table.
 
 ### EFRepository<TEntity, TIdentifierType>
 
@@ -7827,6 +7909,7 @@ survives a module being pulled out into its own service.
   - `UpdateRange` (`EFRepository.cs:69-73`) is the guarded batch forwarder.
   - The two `SetOriginalRowVersion` overloads (`EFRepository.cs:76-95`) implement optimistic concurrency by writing the client's known row version into the tracked entry's **original** value, so EF's generated UPDATE carries it in the WHERE clause and a concurrent modification raises a concurrency exception instead of silently winning. Both null-guard their arguments and then assign unconditionally (`:77-82`, `:88-93`). The second overload takes an [`IRowVersioned`](group-02-domain-building-blocks.md#irowversioned) child entity and casts to `object` for `Entry` (`:91`), which is how a child of the aggregate gets the same protection without being an aggregate root itself.
   - `TouchConcurrencyToken(entity)` (`EFRepository.cs:98-116`) forces a concurrency check on a root that a caller wants to protect even though nothing on it changed. It is a no-op unless the tracked entry's state is exactly `Unchanged`: a root the applier already modified emits its own UPDATE carrying the concurrency predicate already, and marking a property modified on a `Deleted` or `Detached` entry would be wrong rather than merely redundant. When the entry is unchanged, it marks the `LastModifiedOn` audit property `IsModified = true`, which is what puts the row in the generated UPDATE at all; the audit interceptor then fills in the real value, so the write is a genuine edit record rather than a no-op touch, and EF appends `WHERE RowVersion = @original` from the concurrency token.
+  - `AddRangeAsync` (`EFRepository.cs:40`), `ExecuteDeleteAsync` (`:119`) and `ExecuteUpdateAsync` (`:128`) are plain `Task`-returning methods that return the EF task directly, with no `async`, `await` or `ConfigureAwait(false)`, since nothing follows the awaited call. Their argument guards and, for `ExecuteUpdateAsync`, the whole audit and row-version stamping run synchronously before the task is returned.
   - `ExecuteDeleteAsync` (`EFRepository.cs:119-125`) is the set-based delete: `Entities.Where(where).ExecuteDeleteAsync(...)`, returning the affected row count (`:123`).
   - `ExecuteUpdateAsync` (`EFRepository.cs:128-160`) is the flagship. It guards both arguments (`:132-133`), constructs an [`UpdatePropertySetterBuilder<TEntity>`](#updatepropertysetterbuildertentity) (`:135`), lets the caller describe the assignments against the persistence-agnostic interface (`:136`), and throws `ArgumentException` when nothing was described (`:137-138`). Then it stamps: `LastModifiedOn` from `timeProvider.GetUtcNow().UtcDateTime` unless the caller already set it (`:142-146`), and `LastModifiedBy` unless the caller already set it (`:151-154`), with `currentUserService?.UserId ?? default`, so a scope with no current user records the default sentinel as the editor (the comment at `:148-150`). Both guards go through `builder.SetsProperty`, so an explicit caller assignment always wins. It then calls the private `StampRowVersion` (`:157`, defined at `:162-176`), and finally the recorded assignments are replayed into EF as a method group (`:159`). `StampRowVersion` exists because on an engine with no server-generated row version (PostgreSQL, SQLite) the token is written by the audit interceptor, which `ExecuteUpdate` also bypasses: without a fresh value a client still holding the pre-update token would pass its If-Match check. So when `EngineCapabilities?.RowVersion` is `RowVersionStrategy.ClientStamped` (`:170`, the `private protected` capability property inherited from [`EFReadRepository<TEntity, TIdentifierType>`](#efreadrepositorytentity-tidentifiertype)), the caller did not set `RowVersion` (`:171`), and the EF model actually maps that property for the entity (`:172`), it assigns `Guid.NewGuid().ToByteArray()` (`:174`). SQL Server's `rowversion` moves by itself, so nothing is stamped there.
   - `sealed`, and the mutation members are non-virtual: this is the end of the inheritance chain.
@@ -7843,7 +7926,7 @@ survives a module being pulled out into its own service.
 - **Concept introduced, who assigns the key.** `[Rubric §8, Data Architecture]` assesses whether persistence mechanics, key strategy included, are deliberate rather than accidental. The framework keeps one identifier alias per module (an `int` or a `Guid`, see the primer's [identifier-type aliases](00-primer.md) and [ADR-048](https://ivanball.github.io/docs/adr/048-primitive-identifier-type-aliases.html)) and then has to honor that alias on three engines. SQL Server and SQLite both offer a server-side identity column, so the entity configuration asks for one ([`EntityTypeConfiguration<TEntity, TIdentifierType>`](#entitytypeconfigurationtentity-tidentifiertype) at `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeConfiguration/EntityTypeConfiguration.cs:72-77` for SQL Server and `:74-78` for SQLite). Cosmos offers nothing equivalent, so the same switch installs this generator instead (`:83-91`). The alias stays `int` everywhere; only the mechanism that fills it changes per engine, which is the polyglot-persistence bargain of [ADR-018](https://ivanball.github.io/docs/adr/018-polyglot-persistence.html).
 - **Walkthrough**
   - **`_seed`** (`CosmosIntIdValueGenerator.cs:18`): a `private static int` initialized to `(int)(DateTimeOffset.UtcNow.ToUnixTimeSeconds() % int.MaxValue)`. Seeding from the clock rather than from zero means a restarted process does not begin re-issuing ids it already used; the modulo keeps the seconds value inside `int` range instead of overflowing.
-  - **`GeneratesTemporaryValues => false`** (`CosmosIntIdValueGenerator.cs:21`): the value this generator returns is the real stored key, not an EF placeholder to be replaced after the insert. That distinction matters elsewhere in this group: [`DbContextFactory`](#dbcontextfactory) reads the *temporary* flag on SQL Server keys to tell an application-supplied id from an EF-assigned one, and only the non-temporary ones need an `IDENTITY_INSERT` round (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:409-413`).
+  - **`GeneratesTemporaryValues => false`** (`CosmosIntIdValueGenerator.cs:21`): the value this generator returns is the real stored key, not an EF placeholder to be replaced after the insert. That distinction matters elsewhere in this group: [`DbContextFactory`](#dbcontextfactory) reads the *temporary* flag on SQL Server keys to tell an application-supplied id from an EF-assigned one, and only the non-temporary ones need an `IDENTITY_INSERT` round (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:412-416`).
   - **`Next(EntityEntry entry)`** (`CosmosIntIdValueGenerator.cs:24-25`): `Interlocked.Increment(ref _seed)`. Lock-free and thread-safe, which is what you want on a member called once per inserted entity. The `entry` argument is ignored, so every Cosmos entity type in the process draws from the same counter.
 - **Why it's built this way**: the counter is deliberately process-local. A durable sequence would need a round trip to the database per insert, which is exactly the cost a Cosmos-shaped workload is trying to avoid, and the class remarks accept the trade-off explicitly (`CosmosIntIdValueGenerator.cs:11-15`).
 - **Where it's used**: installed by `CosmosDataSourceEngine.ApplyKeyAndTableMapping` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/Engines/CosmosDataSourceEngine.cs:98-99`), which `EntityTypeConfiguration.ApplyEngineConventions` reaches through `DataSourceEngines.For(engine)` (`EntityTypeConfiguration.cs:77`), for every entity whose id is value-generated; pinned by `CosmosIntIdValueGeneratorTests` (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/ValueGenerators/CosmosIntIdValueGeneratorTests.cs:6`).
@@ -7851,35 +7934,35 @@ survives a module being pulled out into its own service.
 
 ### TenantDataSourceOverrideSettings
 
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Tenancy` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettings.cs:138` · Level 0 · class (sealed)
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Tenancy` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettings.cs:144` · Level 0 · class (sealed)
 
-- **What it is**: one tenant's connection override for one physical data source, bound from `Tenancy:Tenants:{tenantId}:DataSources:{sourceName}`. It is the entire configuration surface of database-per-tenant (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettings.cs:138-157`).
-- **Depends on**: nothing. It is the value type of [`TenantEntrySettings`](#tenantentrysettings)`.DataSources` (`TenancySettings.cs:129`), validated by [`TenancySettingsValidator`](#tenancysettingsvalidator) and consumed by [`DbContextFactory`](#dbcontextfactory).
-- **Concept introduced, two isolation models behind one switch.** `[Rubric §8, Data Architecture]` assesses how tenant data is partitioned. Shared-schema isolation (a tenant column plus a global query filter and [`TenantSaveChangesInterceptor`](#tenantsavechangesinterceptor)) needs no entry here at all: the sibling doc says declaring a tenant is only required for the database-per-tenant case, because shared-schema isolation comes from the filter and the interceptor rather than from configuration (`TenancySettings.cs:109-114`). Adding an entry upgrades exactly one source for exactly one tenant to its own database, and every other source stays shared. `[Rubric §11, Security]`: the strongest isolation available (a separate database) becomes a configuration decision per tenant per source rather than an architectural fork, which is what [ADR-073](https://ivanball.github.io/docs/adr/073-multi-tenancy-model.html) set out to make possible. The deliberate omission teaches as much as the members: there is no migrations-assembly override, because a tenant database has the same schema as the shared one (`TenancySettings.cs:132-137`). One schema, N connection strings.
+- **What it is**: one tenant's connection override for one physical data source, bound from `Tenancy:Tenants:{tenantId}:DataSources:{sourceName}`. It is the entire configuration surface of database-per-tenant (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettings.cs:144-163`).
+- **Depends on**: nothing. It is the value type of [`TenantEntrySettings`](#tenantentrysettings)`.DataSources` (`TenancySettings.cs:135`), validated by [`TenancySettingsValidator`](#tenancysettingsvalidator) and consumed by [`DbContextFactory`](#dbcontextfactory).
+- **Concept introduced, two isolation models behind one switch.** `[Rubric §8, Data Architecture]` assesses how tenant data is partitioned. Shared-schema isolation (a tenant column plus a global query filter and [`TenantSaveChangesInterceptor`](#tenantsavechangesinterceptor)) needs no entry here at all: the sibling doc says declaring a tenant is only required for the database-per-tenant case, because shared-schema isolation comes from the filter and the interceptor rather than from configuration (`TenancySettings.cs:115-120`). Adding an entry upgrades exactly one source for exactly one tenant to its own database, and every other source stays shared. `[Rubric §11, Security]`: the strongest isolation available (a separate database) becomes a configuration decision per tenant per source rather than an architectural fork, which is what [ADR-073](https://ivanball.github.io/docs/adr/073-multi-tenancy-model.html) set out to make possible. The deliberate omission teaches as much as the members: there is no migrations-assembly override, because a tenant database has the same schema as the shared one (`TenancySettings.cs:138-143`). One schema, N connection strings.
 - **Walkthrough**
-  - Five nullable `{ get; init; }` strings, one per engine plus the Cosmos database name: `SQLServerConnectionString` (`TenancySettings.cs:141`), `PostgreSQLConnectionString` (`:144`), `SqliteConnectionString` (`:147`), `CosmosConnectionString` (`:150`).
+  - Five nullable `{ get; init; }` strings, one per engine plus the Cosmos database name: `SQLServerConnectionString` (`TenancySettings.cs:147`), `PostgreSQLConnectionString` (`:144`), `SqliteConnectionString` (`:147`), `CosmosConnectionString` (`:150`).
   - `CosmosDatabaseName` (`:153`) is optional: when omitted the shared source's database name is kept, which is how one Cosmos account can serve per-tenant databases (`:149-152`).
-  - The read path is a record `with` clone, and it is the interesting part. `DbContextFactory.ResolveTenantOverride` bails out unless there is a resolved tenant, bound tenancy settings, an entry for that tenant, and an entry for that source name (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:171-177`), picks the connection string for the source's engine through `TenancySettingsValidator.ConnectionStringFor` (`:154`, resolver at `TenancySettingsValidator.cs:123-124`), and returns null when the tenant overrides this source on a different engine only (`DbContextFactory.cs:180-184`). Otherwise it clones the shared [`PhysicalDataSource`](#physicaldatasource) with the new connection string and, if supplied, the new Cosmos database name (`:161-168`).
-  - The clone keeps the ORIGINAL [`DataSourceKey`](#datasourcekey), and the comment above it explains why (`DbContextFactory.cs:163-168`): EF's model cache is keyed on that key, so replacing only the connection string is what lets one compiled model serve every tenant's database.
+  - The read path is a record `with` clone, and it is the interesting part. `DbContextFactory.ResolveTenantOverride` bails out unless there is a resolved tenant, bound tenancy settings, an entry for that tenant, and an entry for that source name (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:174-180`), picks the connection string for the source's engine through `TenancySettingsValidator.ConnectionStringFor` (`:154`, resolver at `TenancySettingsValidator.cs:123-124`), and returns null when the tenant overrides this source on a different engine only (`DbContextFactory.cs:183-187`). Otherwise it clones the shared [`PhysicalDataSource`](#physicaldatasource) with the new connection string and, if supplied, the new Cosmos database name (`:161-168`).
+  - The clone keeps the ORIGINAL [`DataSourceKey`](#datasourcekey), and the comment above it explains why (`DbContextFactory.cs:166-171`): EF's model cache is keyed on that key, so replacing only the connection string is what lets one compiled model serve every tenant's database.
 - **Why it's built this way**: `[Rubric §12, Performance & Scalability]` is the reason for the key-preserving clone. A per-tenant `DataSourceKey` would build and cache a separate EF model per tenant, which multiplies startup cost and memory by the tenant count for no schema difference.
 - **Where it's used**: [`DbContextFactory`](#dbcontextfactory) at context-creation time (`DbContextFactory.cs:105-113`), and [`TenancySettingsValidator`](#tenancysettingsvalidator) at startup, which rejects an entry that declares no connection string at all (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettingsValidator.cs:77-87`) and an entry whose key is not a real physical source name for the engine it declares (`:93-104`, with the round-trip test at `:117-119`). The second check exists because the alternative is a silent fall back to the shared database, which is precisely the failure database-per-tenant is bought to prevent.
-- **Caveats / not-in-source**: an override is keyed by **physical** source name (the name [`IDataSourceResolver`](#idatasourceresolver) produces), not the logical name a module uses (`TenancySettings.cs:123-128`). That distinction is invisible in a single-database host, where everything collapses onto `Default`.
+- **Caveats / not-in-source**: an override is keyed by **physical** source name (the name [`IDataSourceResolver`](#idatasourceresolver) produces), not the logical name a module uses (`TenancySettings.cs:129-134`). That distinction is invisible in a single-database host, where everything collapses onto `Default`.
 
 ### TenantResolutionStrategy
 
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Tenancy` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettings.cs:6` · Level 0 · enum
 
-- **What it is**: how the request pipeline looks for the tenant on an inbound request: from a signed claim, from a request header, or (declared but not implemented) from the host name (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettings.cs:6-28`).
-- **Depends on**: nothing. Ordered into a list by [`TenancySettings`](#tenancysettings)`.ResolutionOrder` (`TenancySettings.cs:73`), checked by [`TenancySettingsValidator`](#tenancysettingsvalidator), and switched on by [`TenantResolutionMiddleware`](group-12-api-hosting-mapping.md#tenantresolutionmiddleware).
-- **Concept introduced, trusted versus asserted identity of a tenant.** `[Rubric §11, Security]` assesses whether an authorization-relevant value can be forged by the caller. The two implemented members are not equivalent and the XML doc says so. `Claim` reads the tenant from the authenticated principal (`TenancySettings.cs:8-12`): the claim was signed by the token issuer, so a caller cannot pick its own tenant. `Header` reads it from a request header (`:15-19`): fine for service-to-service calls behind a trusted gateway, and a public edge honoring it lets any caller name any tenant. The default order is claim first, then header (`TenancySettings.cs:56-57`), so the trustworthy source always wins when both are present.
+- **What it is**: how the request pipeline looks for the tenant on an inbound request: from a signed claim, from a request header, or (declared but not implemented) from the host name (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettings.cs:6-29`).
+- **Depends on**: nothing. Ordered into a list by [`TenancySettings`](#tenancysettings)`.ResolutionOrder` (`TenancySettings.cs:79`), checked by [`TenancySettingsValidator`](#tenancysettingsvalidator), and switched on by [`TenantResolutionMiddleware`](group-12-api-hosting-mapping.md#tenantresolutionmiddleware).
+- **Concept introduced, trusted versus asserted identity of a tenant.** `[Rubric §11, Security]` assesses whether an authorization-relevant value can be forged by the caller. The two implemented members are not equivalent and the XML doc says so. `Claim` reads the tenant from the authenticated principal (`TenancySettings.cs:8-12`): the claim was signed by the token issuer, so a caller cannot pick its own tenant. `Header` reads it from a request header (`:15-19`): fine for service-to-service calls behind a trusted gateway, and a public edge honoring it lets any caller name any tenant. The default order is the claim only (`TenancySettings.cs:56-57`): header resolution is an explicit opt-in, a host listing `Claim` then `Header` in `Tenancy:ResolutionOrder` (`:15-20`, `:73-76`), so the trustworthy source always wins when both are present and a public edge never honors the header by accident.
 - **Walkthrough**
-  - `Claim = 0` (`TenancySettings.cs:13`), read via `context.User?.FindFirst(settings.ClaimType)?.Value` (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/TenantResolutionMiddleware.cs:111`); the claim type defaults to `tenant_id` (`TenancySettings.cs:83`).
-  - `Header = 1` (`:20`), read via `context.Request.Headers[settings.HeaderName].FirstOrDefault()` (`TenantResolutionMiddleware.cs:112`); the header defaults to `X-Tenant-Id` (`TenancySettings.cs:89`).
-  - `Host = 2` (`:27`), which maps to `null` in the middleware switch (`TenantResolutionMiddleware.cs:113`) and is skipped rather than guessed at.
-  - The order is read through `EffectiveResolutionOrder`, not the bound list: an empty `ResolutionOrder` falls back to the framework default pair (`TenancySettings.cs:76-77`). That indirection exists because the configuration binder ADDS to a pre-populated collection rather than replacing it, so a non-empty default would leave a host that configured its own order also running the framework's entries (`:42-48`).
-- **Concept, a declared-but-unimplemented member that cannot silently no-op.** `[Rubric §9, API & Contract Design]`: the member exists so the configuration contract is stable when host-based resolution ships (`TenancySettings.cs:22-26`). `[Rubric §15, Best Practices & Code Quality]`: selecting it is not accepted quietly. [`TenancySettingsValidator`](#tenancysettingsvalidator) walks the effective resolution order and fails options validation with a message naming the value as defined but not implemented (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettingsValidator.cs:55-66`), so the host refuses to boot instead of resolving nothing on every request. That is the fail-fast configuration contract ([ADR-070](https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html)) applied to a rule data annotations cannot express.
+  - `Claim = 0` (`TenancySettings.cs:13`), read via `context.User?.FindFirst(settings.ClaimType)?.Value` (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/TenantResolutionMiddleware.cs:112`); the claim type defaults to `tenant_id` (`TenancySettings.cs:89`).
+  - `Header = 1` (`:20`), read via `context.Request.Headers[settings.HeaderName].FirstOrDefault()` (`TenantResolutionMiddleware.cs:113`); the header defaults to `X-Tenant-Id` (`TenancySettings.cs:95`).
+  - `Host = 2` (`:27`), which maps to `null` in the middleware switch (`TenantResolutionMiddleware.cs:114`) and is skipped rather than guessed at.
+  - The order is read through `EffectiveResolutionOrder`, not the bound list: an empty `ResolutionOrder` falls back to the framework default, the claim alone (`TenancySettings.cs:82-83`). That indirection exists because the configuration binder ADDS to a pre-populated collection rather than replacing it, so a non-empty default would leave a host that configured its own order also running the framework's entries (`:42-48`).
+- **Concept, a declared-but-unimplemented member that cannot silently no-op.** `[Rubric §9, API & Contract Design]`: the member exists so the configuration contract is stable when host-based resolution ships (`TenancySettings.cs:23-27`). `[Rubric §15, Best Practices & Code Quality]`: selecting it is not accepted quietly. [`TenancySettingsValidator`](#tenancysettingsvalidator) walks the effective resolution order and fails options validation with a message naming the value as defined but not implemented (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettingsValidator.cs:55-66`), so the host refuses to boot instead of resolving nothing on every request. That is the fail-fast configuration contract ([ADR-070](https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html)) applied to a rule data annotations cannot express.
 - **Why it's built this way**: shipping the enum member ahead of the implementation keeps the JSON contract additive, and pairing it with a boot-time rejection removes the only real risk of doing that.
-- **Where it's used**: [`TenantResolutionMiddleware`](group-12-api-hosting-mapping.md#tenantresolutionmiddleware) (`TenantResolutionMiddleware.cs:111-113`), `TenancySettings.EffectiveResolutionOrder` (`TenancySettings.cs:76-77`), and [`TenancySettingsValidator`](#tenancysettingsvalidator) (`TenancySettingsValidator.cs:57-65`).
+- **Where it's used**: [`TenantResolutionMiddleware`](group-12-api-hosting-mapping.md#tenantresolutionmiddleware) (`TenantResolutionMiddleware.cs:112-114`), `TenancySettings.EffectiveResolutionOrder` (`TenancySettings.cs:82-83`), and [`TenancySettingsValidator`](#tenancysettingsvalidator) (`TenancySettingsValidator.cs:57-65`).
 
 ### DesignTimeDbContextOptions
 
@@ -7913,15 +7996,15 @@ survives a module being pulled out into its own service.
 
 ### TenantEntrySettings
 
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Tenancy` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettings.cs:121` · Level 1 · class (sealed)
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Tenancy` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettings.cs:127` · Level 1 · class (sealed)
 
-- **What it is**: one declared tenant, bound from `Tenancy:Tenants:{tenantId}`. It holds exactly one member: that tenant's per-data-source connection overrides (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettings.cs:118-130`).
-- **Depends on**: [`TenantDataSourceOverrideSettings`](#tenantdatasourceoverridesettings), the value type of its dictionary (`TenancySettings.cs:129`, declared at `:138`). Held by [`TenancySettings`](#tenancysettings)`.Tenants` (`:115`).
-- **Concept introduced, declaring a tenant is only required for the database-per-tenant case.** This is the single most important thing to read off this class, and it is stated in its own doc (`TenancySettings.cs:109-114`). A shared-schema tenant needs NO entry here at all, because its isolation comes from the global query filter and the [`TenantSaveChangesInterceptor`](#tenantsavechangesinterceptor), which `AddInfrastructure` registers unconditionally with a comment saying why (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:67-70`). Configuration is therefore only how a tenant is PROMOTED to its own database. `[Rubric §8, Data Architecture]` assesses how deliberately data is partitioned. The dictionary is keyed by PHYSICAL data source name (the name [`IDataSourceResolver`](#idatasourceresolver) produces, for example `Default` or `Conference`), and the key choice is load-bearing enough that [`TenancySettingsValidator`](#tenancysettingsvalidator) fails the boot on a key that does not round-trip. A tenant can override some sources and share others: a source with an entry is routed to the tenant's own database, a source without one stays shared (`TenancySettings.cs:123-128`).
+- **What it is**: one declared tenant, bound from `Tenancy:Tenants:{tenantId}`. It holds exactly one member: that tenant's per-data-source connection overrides (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettings.cs:124-136`).
+- **Depends on**: [`TenantDataSourceOverrideSettings`](#tenantdatasourceoverridesettings), the value type of its dictionary (`TenancySettings.cs:135`, declared at `:138`). Held by [`TenancySettings`](#tenancysettings)`.Tenants` (`:115`).
+- **Concept introduced, declaring a tenant is only required for the database-per-tenant case.** This is the single most important thing to read off this class, and it is stated in its own doc (`TenancySettings.cs:115-120`). A shared-schema tenant needs NO entry here at all, because its isolation comes from the global query filter and the [`TenantSaveChangesInterceptor`](#tenantsavechangesinterceptor), which `AddInfrastructure` registers unconditionally with a comment saying why (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:67-70`). Configuration is therefore only how a tenant is PROMOTED to its own database. `[Rubric §8, Data Architecture]` assesses how deliberately data is partitioned. The dictionary is keyed by PHYSICAL data source name (the name [`IDataSourceResolver`](#idatasourceresolver) produces, for example `Default` or `Conference`), and the key choice is load-bearing enough that [`TenancySettingsValidator`](#tenancysettingsvalidator) fails the boot on a key that does not round-trip. A tenant can override some sources and share others: a source with an entry is routed to the tenant's own database, a source without one stays shared (`TenancySettings.cs:129-134`).
 - **Walkthrough**
-  - `DataSources` (`TenancySettings.cs:129`): a get-only `Dictionary<string, TenantDataSourceOverrideSettings>` bound from `Tenancy:Tenants:{tenantId}:DataSources:{sourceName}`. Get-only is the correct shape for a bound dictionary, since the configuration binder populates an existing instance rather than assigning a new one.
+  - `DataSources` (`TenancySettings.cs:135`): a get-only `Dictionary<string, TenantDataSourceOverrideSettings>` bound from `Tenancy:Tenants:{tenantId}:DataSources:{sourceName}`. Get-only is the correct shape for a bound dictionary, since the configuration binder populates an existing instance rather than assigning a new one.
 - **Why it's built this way**: keeping the per-tenant overrides one level below the tenant, rather than flattening connection strings onto the tenant entry, is what lets a single tenant be physically separated on one source while remaining shared on the others, which is the mixed model [ADR-073](https://ivanball.github.io/docs/adr/073-multi-tenancy-model.html) records.
-- **Where it's used**: read by [`DbContextFactory`](#dbcontextfactory)`.ResolveTenantOverride`, which looks up the current tenant then the requested source and clones the shared `PhysicalDataSource` with the tenant's connection string while keeping the ORIGINAL `DataSourceKey`, so one compiled EF model serves every tenant's database (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:169-194`). Also expanded by [`TenantDataSourceTargets`](#tenantdatasourcetargets)`.Expand`, which turns the shared sources plus every (tenant, overridden source) pair into the list the outbox and cleanup background services sweep (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/TenantDataSourceTargets.cs:69-79`), and validated per entry by [`TenancySettingsValidator`](#tenancysettingsvalidator) (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettingsValidator.cs:72-107`).
+- **Where it's used**: read by [`DbContextFactory`](#dbcontextfactory)`.ResolveTenantOverride`, which looks up the current tenant then the requested source and clones the shared `PhysicalDataSource` with the tenant's connection string while keeping the ORIGINAL `DataSourceKey`, so one compiled EF model serves every tenant's database (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:172-197`). Also expanded by [`TenantDataSourceTargets`](#tenantdatasourcetargets)`.Expand`, which turns the shared sources plus every (tenant, overridden source) pair into the list the outbox and cleanup background services sweep (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/TenantDataSourceTargets.cs:69-79`), and validated per entry by [`TenancySettingsValidator`](#tenancysettingsvalidator) (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettingsValidator.cs:72-107`).
 
 ### NullDomainEventDispatcher
 
@@ -7936,16 +8019,16 @@ survives a module being pulled out into its own service.
 
 ### TenancySettings
 
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Tenancy` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettings.cs:50` · Level 2 · class (sealed)
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Tenancy` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettings.cs:51` · Level 2 · class (sealed)
 
-- **What it is**: the `Tenancy` section, bound by `AddMultiTenancy(configuration)`: whether tenant resolution runs, how the tenant is found on a request, whether a request without one is rejected, which paths bypass resolution, and which tenants are declared for database-per-tenant routing (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettings.cs:30-34`).
+- **What it is**: the `Tenancy` section, bound by `AddMultiTenancy(configuration)`: whether tenant resolution runs, how the tenant is found on a request, whether a request without one is rejected, which paths bypass resolution, and which tenants are declared for database-per-tenant routing (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettings.cs:31-35`).
 - **Depends on**: [`TenantResolutionStrategy`](#tenantresolutionstrategy) (the strategy enum at the top of the same file, `:6-28`) and [`TenantEntrySettings`](#tenantentrysettings) (the value type of `Tenants`, `:115`). No externals, and deliberately no relational data annotations: the checks that matter here are relational, so they live in [`TenancySettingsValidator`](#tenancysettingsvalidator).
-- **Concept introduced, "empty means the default" for bound collections.** This is a genuine configuration-binder trap and the class documents it explicitly (`TenancySettings.cs:41-48`). The .NET configuration binder ADDS to a pre-populated collection rather than replacing it. If `ResolutionOrder` shipped pre-filled with `[Claim, Header]`, a host that configured its own order would end up running the framework's entries as well. The resolution is a pair of properties: the bound list starts empty (`:73`, `:103`), and the framework reads a computed `Effective*` projection that substitutes a private static default when the bound list is empty (`:76-77`, `:106-107`).
-  `[Rubric §11, Security]` assesses where trust boundaries are drawn. The two implemented strategies are not equivalent and the enum says so: `Claim` is the trustworthy source because the claim was signed by the token issuer, so a caller cannot pick its own tenant (`:8-13`), while `Header` is intended for service-to-service calls behind a trusted gateway, and a public edge that honors it lets any caller name any tenant (`:15-20`). The default order tries `Claim` first (`:56-57`). `RequireTenant` defaults to `true` and is documented as failing closed, because with tenancy switched on an unscoped request would read across every tenant (`:91-96`).
+- **Concept introduced, "empty means the default" for bound collections.** This is a genuine configuration-binder trap and the class documents it explicitly (`TenancySettings.cs:42-49`). The .NET configuration binder ADDS to a pre-populated collection rather than replacing it. If `ResolutionOrder` shipped pre-filled with `[Claim]`, a host that also wanted `Header` would append to it and a host that configured its own order would end up running the framework's entries as well. The resolution is a pair of properties: the bound list starts empty (`:73`, `:103`), and the framework reads a computed `Effective*` projection that substitutes a private static default when the bound list is empty (`:76-77`, `:106-107`).
+  `[Rubric §11, Security]` assesses where trust boundaries are drawn. The two implemented strategies are not equivalent and the enum says so: `Claim` is the trustworthy source because the claim was signed by the token issuer, so a caller cannot pick its own tenant (`:8-13`), while `Header` is intended for service-to-service calls behind a trusted gateway, and a public edge that honors it lets any caller name any tenant (`:15-20`). The default order is `Claim` alone, with `Header` an explicit opt-in (`:56-57`, `:73-76`). `RequireTenant` defaults to `true` and is documented as failing closed, because with tenancy switched on an unscoped request would read across every tenant (`:91-96`).
   `[Rubric §15, Best Practices & Code Quality]` assesses whether a new capability is additive for existing hosts. `Enabled` gates RESOLUTION, not isolation: the global query filter and the [`TenantSaveChangesInterceptor`](#tenantsavechangesinterceptor) are always registered and are inert whenever no tenant is resolved (`:35-40`, `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:67-70`, and the same point restated on `AddMultiTenancy` itself at `:505-509`). A host that never enables tenancy keeps exactly the behavior it had before tenancy shipped, and a host that does enable it can never accidentally leave the write-side guard off.
 - **Walkthrough**
-  - `SectionName = "Tenancy"` (`TenancySettings.cs:53`), the one public static field.
-  - `DefaultResolutionOrder` (`:56-57`): private static `[Claim, Header]`. `DefaultExcludedPathPrefixes` (`:60-61`): private static `["/health", "/alive", "/.well-known"]`, the probe and discovery endpoints that must answer before any tenant exists.
+  - `SectionName = "Tenancy"` (`TenancySettings.cs:54`), the one public static field.
+  - `DefaultResolutionOrder` (`:56-57`): private static `[Claim]`, the signed claim only. `DefaultExcludedPathPrefixes` (`:60-61`): private static `["/health", "/alive", "/.well-known"]`, the probe and discovery endpoints that must answer before any tenant exists.
   - `Enabled` (`:67`): default `false`.
   - `ResolutionOrder` (`:73`) get-only list plus `EffectiveResolutionOrder` (`:76-77`), the empty-means-default projection.
   - `ClaimType` (`:83`), default `"tenant_id"`, and `HeaderName` (`:89`), default `"X-Tenant-Id"`, the two per-strategy lookup keys. `HeaderName` is only honored when `Header` is in the order.
@@ -7953,7 +8036,7 @@ survives a module being pulled out into its own service.
   - `ExcludedPathPrefixes` (`:103`) plus `EffectiveExcludedPathPrefixes` (`:106-107`), the same projection shape.
   - `Tenants` (`:115`): a get-only `Dictionary<string, TenantEntrySettings>` bound from `Tenancy:Tenants:{tenantId}`, needed only for database-per-tenant.
 - **Why it's built this way**: shared-schema isolation plus optional database-per-tenant promotion is the model [ADR-073](https://ivanball.github.io/docs/adr/073-multi-tenancy-model.html) records, and this class is its whole operator-facing surface. Defaulting `Enabled` to false while keeping the filter and interceptor always-on is what makes the feature safe to ship into an existing host, and keeping every relational check in a separate `IValidateOptions<T>` (rather than in attributes) is what lets the validator reach the resolved data sources.
-- **Where it's used**: bound with `ValidateOnStart` in `AddMultiTenancy`, alongside the `TryAddEnumerable` registration of [`TenancySettingsValidator`](#tenancysettingsvalidator) (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:277-289`). Read at request time by [`TenantResolutionMiddleware`](group-12-api-hosting-mapping.md#tenantresolutionmiddleware), which short-circuits when disabled or on an excluded path (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/TenantResolutionMiddleware.cs:62`), walks `EffectiveResolutionOrder` reading the claim or the header (`:107-118`), lets the request through unscoped when `RequireTenant` is off (`:75-81`), and otherwise answers `400 Bad Request` (`:83`). Read at persistence time by [`DbContextFactory`](#dbcontextfactory) for per-tenant connection routing (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:48`, `:144-168`), and by the background services through [`TenantDataSourceTargets`](#tenantdatasourcetargets)`.Expand` so they sweep every tenant database too (`OutboxProcessor.cs:67`, `OutboxCleanupService.cs:198`, `OutboxAdministration.cs:42`, `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/TenantDataSourceTargets.cs:52-82`). Startup database initialization uses the same expansion to create each tenant's database (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:203`, `:138`), and the design-time helper supplies a default instance so `dotnet ef` needs no tenancy configuration (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Design/DesignTimeDbContextHelper.cs:156`). All of the runtime consumers take the options as NULLABLE, so a host that never called `AddMultiTenancy` resolves `null` and behaves exactly as before.
+- **Where it's used**: bound with `ValidateOnStart` in `AddMultiTenancy`, alongside the `TryAddEnumerable` registration of [`TenancySettingsValidator`](#tenancysettingsvalidator) (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:282-294`). Read at request time by [`TenantResolutionMiddleware`](group-12-api-hosting-mapping.md#tenantresolutionmiddleware), which short-circuits when disabled or on an excluded path (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/TenantResolutionMiddleware.cs:63`), walks `EffectiveResolutionOrder` reading the claim or the header (`:107-118`), lets the request through unscoped when `RequireTenant` is off (`:75-81`), and otherwise answers `400 Bad Request` (`:83`). Read at persistence time by [`DbContextFactory`](#dbcontextfactory) for per-tenant connection routing (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:48`, `:144-168`), and by the background services through [`TenantDataSourceTargets`](#tenantdatasourcetargets)`.Expand` so they sweep every tenant database too (`OutboxProcessor.cs:69`, `OutboxCleanupService.cs:198`, `OutboxAdministration.cs:42`, `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/TenantDataSourceTargets.cs:52-82`). Startup database initialization uses the same expansion to create each tenant's database (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:203`, `:138`), and the design-time helper supplies a default instance so `dotnet ef` needs no tenancy configuration (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Design/DesignTimeDbContextHelper.cs:156`). All of the runtime consumers take the options as NULLABLE, so a host that never called `AddMultiTenancy` resolves `null` and behaves exactly as before.
 
 ### TenancySettingsValidator
 
@@ -7961,19 +8044,19 @@ survives a module being pulled out into its own service.
 
 - **What it is**: the startup validator for [`TenancySettings`](#tenancysettings). It rejects a resolution order naming an unimplemented strategy, and rejects a per-tenant data-source override that declares no connection string or names a source that does not exist (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettingsValidator.cs:9-24`).
 - **Depends on**: [`IDataSourceResolver`](#idatasourceresolver) as an OPTIONAL primary-constructor parameter (`TenancySettingsValidator.cs:24`), plus [`DataSource`](#datasource) and [`DataSourceKey`](#datasourcekey) (`:3-4`, `:28-29`, `:104`), the engine registry [`DataSourceEngines`](#datasourceengines) and its [`IDataSourceEngine`](#idatasourceengine) entries (`:5`, `:29`, `:124`), and the two settings shapes [`TenancySettings`](#tenancysettings) and [`TenantDataSourceOverrideSettings`](#tenantdatasourceoverridesettings). Externals: `Microsoft.Extensions.Options` for `IValidateOptions<T>` and `ValidateOptionsResult` (`:2`), and `System.Globalization` for the `CultureInfo.InvariantCulture` message formatting (`:1`, `:80`).
-- **Concept introduced, `IValidateOptions<T>` when validation needs other services.** Data annotations and `IValidatableObject` are the right tools when a rule only involves the settings object itself. This class is the other half of the options-validation story: `IValidateOptions<T>` is a DI-resolved service, so it can inject collaborators. Here that collaborator is the data-source resolver, which is the only thing that knows whether `Conference` is a real physical source in this host. Registration is `TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<TenancySettings>, TenancySettingsValidator>())` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:285-286`), with `TryAddEnumerable` because two modules calling `AddMultiTenancy` must not run the same validation twice (`DependencyInjection.cs:284`). The same shape is used by [`ConnectionStringSettingsValidator`](#connectionstringsettingsvalidator); these two are the framework's only custom `IValidateOptions<T>` implementations.
+- **Concept introduced, `IValidateOptions<T>` when validation needs other services.** Data annotations and `IValidatableObject` are the right tools when a rule only involves the settings object itself. This class is the other half of the options-validation story: `IValidateOptions<T>` is a DI-resolved service, so it can inject collaborators. Here that collaborator is the data-source resolver, which is the only thing that knows whether `Conference` is a real physical source in this host. Registration is `TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<TenancySettings>, TenancySettingsValidator>())` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:290-291`), with `TryAddEnumerable` because two modules calling `AddMultiTenancy` must not run the same validation twice (`DependencyInjection.cs:289`). The same shape is used by [`ConnectionStringSettingsValidator`](#connectionstringsettingsvalidator); these two are the framework's only custom `IValidateOptions<T>` implementations.
   `[Rubric §11, Security]` assesses whether misconfiguration can degrade silently. The class doc states the rationale outright: every failure here would otherwise surface as silent cross-tenant behavior at run time, which is exactly the class of bug tenancy exists to prevent, so it is worth a failed boot (`TenancySettingsValidator.cs:9-14`). The concrete danger is the override key: an unknown logical name resolves to `Default`, so a mistyped source name would quietly leave that tenant on the shared database instead of its own (`:113-117`).
   `[Rubric §15, Best Practices & Code Quality]` assesses the quality of failure messages. Each message names the exact configuration path that is wrong and tells the operator what to do: the missing-connection-string message lists the four acceptable properties and notes that removing the entry keeps the source shared (`:79-85`); the unknown-source message explains that override keys are physical names (`:96-104`); the `Host` strategy message names the two supported values (`:61-63`).
 - **Walkthrough**
   - `Engines` (`:28-29`): private static, built from [`DataSourceEngines`](#datasourceengines)`.All` ordered by each engine's `SubstitutionPriority` and projected to its `Engine` value. With the shipped priorities (SQL Server `0`, PostgreSQL `1`, Sqlite `2`, Cosmos `3`: `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/Engines/SQLServerDataSourceEngine.cs:29`, `PostgreSQLDataSourceEngine.cs:27`, `SqliteDataSourceEngine.cs:26`, `CosmosDataSourceEngine.cs:28`) that yields `[SQLServer, PostgreSQL, Sqlite, CosmosDB]`, the engines an override can carry a connection string for, in substitution-priority order (`:27`). The list is no longer hand-written, so a newly registered engine is validated without touching this class.
   - `Validate(string? name, TenancySettings options)` (`:32-48`): null-guards the options, collects failures into a list, runs the resolution-order check once and the tenant check per declared tenant, then returns `ValidateOptionsResult.Success` or `Fail(failures)`. Note that it accumulates ALL failures rather than returning on the first, so one boot attempt reports the whole set.
-  - `ValidateResolutionOrder` (`:55-66`): walks `EffectiveResolutionOrder` (so the framework default is validated too, not just an explicitly configured order) and fails on `TenantResolutionStrategy.Host`. That enum member exists so the configuration contract is stable for when host-based resolution ships, but selecting it today must not read as "resolve nothing" (`:50-54`, and the enum's own doc at `TenancySettings.cs:22-26`).
+  - `ValidateResolutionOrder` (`:55-66`): walks `EffectiveResolutionOrder` (so the framework default is validated too, not just an explicitly configured order) and fails on `TenantResolutionStrategy.Host`. That enum member exists so the configuration contract is stable for when host-based resolution ships, but selecting it today must not read as "resolve nothing" (`:50-54`, and the enum's own doc at `TenancySettings.cs:23-27`).
   - `ValidateTenant` (`:72-107`): for each `(sourceName, override)` pair, computes which engines the override actually declares a connection string for. Zero engines is a failure and the loop moves on (`:77-87`). If `resolver` is null the source-existence check is skipped entirely (`:89-92`), which is what makes the validator usable in a container that never registered persistence (`:15-19`). Otherwise every declared engine whose source name is unknown produces a failure (`:94-105`).
   - `DeclaredEngines` (`:110-111`): a collection expression over `Engines` filtered by `ConnectionStringFor` being non-blank.
   - `IsKnownPhysicalSource` (`:118-120`): the round-trip test. `Default` always passes; otherwise the name must survive `resolver.ResolveLogical(engine, sourceName).Name` unchanged, because an unknown logical name collapses onto `Default` and therefore comes back different.
   - `ConnectionStringFor(DataSource, TenantDataSourceOverrideSettings)` (`:123-124`): `internal static`, a one-line delegation to `DataSourceEngines.For(engine).GetConnectionString(over)`, so each engine answers for its own override property (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/Engines/IDataSourceEngine.cs:59`). `For` throws `InvalidOperationException` for an unregistered engine rather than returning null (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/Engines/DataSourceEngines.cs:40-43`). It is `internal` rather than private because it is reused outside validation, which is the detail worth noting next.
 - **Why it's built this way**: the engine-to-property mapping is needed in three places (validation, target expansion, and connection routing). The mapping itself now lives on each engine (`GetConnectionString(TenantDataSourceOverrideSettings)`, `IDataSourceEngine.cs:59`), and this validator's `ConnectionStringFor` is the single entry point the runtime paths call back into rather than resolving the engine themselves ([ADR-073](https://ivanball.github.io/docs/adr/073-multi-tenancy-model.html)). Deriving `Engines` from the registry follows the same rule: `DataSourceEngines` documents that a fifth engine is one new class plus one registry line (`DataSourceEngines.cs:14-17`), and this validator picks it up with no edit. Making the resolver optional rather than required is what keeps the validator constructible in a host that binds tenancy without registering `AddInfrastructure`, at the cost of skipping the source-existence check there; the strategy and connection-string checks still run.
-- **Where it's used**: registered by `AddMultiTenancy` alongside `ValidateOnStart` on the options (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:277-289`). Its `ConnectionStringFor` helper is called at run time by [`TenantDataSourceTargets`](#tenantdatasourcetargets)`.Expand` when deciding whether a (tenant, source) pair is really overridden (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/TenantDataSourceTargets.cs:74`) and by [`DbContextFactory`](#dbcontextfactory)`.ResolveTenantOverride` when cloning the physical source for a tenant (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:179`). Covered by `MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Tenancy/AddMultiTenancyTests.cs`, which asserts the single-registration shape (`:97-98`) and drives the validator both without a resolver (`:168`) and with one (`:206`).
+- **Where it's used**: registered by `AddMultiTenancy` alongside `ValidateOnStart` on the options (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:282-294`). Its `ConnectionStringFor` helper is called at run time by [`TenantDataSourceTargets`](#tenantdatasourcetargets)`.Expand` when deciding whether a (tenant, source) pair is really overridden (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/TenantDataSourceTargets.cs:74`) and by [`DbContextFactory`](#dbcontextfactory)`.ResolveTenantOverride` when cloning the physical source for a tenant (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:182`). Covered by `MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Tenancy/AddMultiTenancyTests.cs`, which asserts the single-registration shape (`:97-98`) and drives the validator both without a resolver (`:168`) and with one (`:206`).
 - **Caveats / not-in-source**: the type is `internal`, so it is not part of the framework's public API and a consumer cannot subclass or replace it; a host needing extra tenancy rules registers its own additional `IValidateOptions<TenancySettings>`.
 
 ### DesignTimeDbContextHelper
@@ -8015,7 +8098,7 @@ survives a module being pulled out into its own service.
 
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Configuration` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeBuilderExtensions.cs:13` · Level 5 · class (public static, extension container)
 
-- **What it is**: a generic `extension<TOwner>(EntityTypeBuilder<TOwner>)` block with two members. `OwnsMoney(...)` maps a [`Money`](group-02-domain-building-blocks.md#money) property as an owned type flattened into two columns on the owner's table: a decimal amount and an ISO 4217 currency code (`EntityTypeBuilderExtensions.cs:13`, `:28-29`, member at `:63-93`). `OwnsAddress(...)` does the same for an `Address` property, flattened into six columns (`:131-177`).
+- **What it is**: a generic `extension<TOwner>(EntityTypeBuilder<TOwner>)` block with two members. `OwnsMoney(...)` maps a [`Money`](group-02-domain-building-blocks.md#money) property as an owned type flattened into two columns on the owner's table: a decimal amount and an ISO 4217 currency code (`EntityTypeBuilderExtensions.cs:13`, `:28-29`, member at `:63-93`). `OwnsAddress(...)` does the same for an `Address` property, flattened into six columns (`:96-173`).
 - **Depends on**: [`Money`](group-02-domain-building-blocks.md#money) and [`Currency`](group-02-domain-building-blocks.md#currency) from `MMCA.Common.Shared.ValueObjects`, `Address` and `AddressInvariants` from the same namespace, EF Core's `EntityTypeBuilder<TEntity>` and `OwnsOne`, and `System.Linq.Expressions`.
 - **Concept introduced, the round-trip contract of a value converter.** `[Rubric §4, Domain-Driven Design]` assesses whether value objects survive the trip to storage intact, and `[Rubric §15, Best Practices and Code Quality]` assesses whether edge cases are handled where they arise. A value converter has two legs, write and read, and correctness means every value the write leg can produce is a value the read leg can materialize. The doc comment at `EntityTypeBuilderExtensions.cs:37-46` documents a real failure of that contract and its fix. An aggregate can seed a zero total with `Money.Zero()`, whose currency `Code` is the empty string, and leave it there; the write leg persists that empty code faithfully. On the way back, `Currency.FromCode("")` fails, and a bare `.Value!` turned those rows into a `null` Currency inside a `Money`, which is a materialization-time `NullReferenceException` waiting for the first read. The same applies to any code that has since dropped out of `Currency.All`. So the read leg coalesces to a sentinel instead.
 - **Walkthrough**
@@ -8025,8 +8108,8 @@ survives a module being pulled out into its own service.
   - All four arguments are guarded, the strings with `ArgumentException.ThrowIfNullOrWhiteSpace` (`EntityTypeBuilderExtensions.cs:69-72`).
   - `OwnsOne` maps the two members (`EntityTypeBuilderExtensions.cs:74-89`): `Amount` gets its column name, an explicit `HasPrecision(18, 2)` (`:78`, the SQL Server default made explicit so PostgreSQL and SQLite store and round amounts the same way; documented at `:47-51`) and `IsRequired`; `Currency` gets the two-leg conversion (write `currency => currency.Code`, read `code => Currency.FromCode(code).Value ?? NoCurrency`), plus `HasMaxLength(3)`, `IsUnicode(false)`, its column name, and `IsRequired`. That is the ISO 4217 code shape exactly: three non-Unicode characters.
   - `builder.Navigation(navigationExpression).IsRequired(required)` (`EntityTypeBuilderExtensions.cs:91`) is a separate call from the `OwnsOne` body because it configures the *navigation* rather than the owned entity's properties. The builder is returned for chaining (`:93`).
-  - `OwnsAddress(...)` (`EntityTypeBuilderExtensions.cs:131-177`) maps `Address`'s six fields (`AddressLine1`, `AddressLine2`, `City`, `State`, `ZipCode`, `Country`) to columns built by the private helper `AddressColumn(columnPrefix, propertyName)` (`:191-194`). Each column is `columnPrefix + propertyName`, except the redundant leading word `Address` is dropped from the two line properties first (`AddressPropertyPrefix`, `:19`), so the default `"Address"` prefix yields `AddressLine1`/`AddressLine2` rather than `AddressAddressLine1`/`AddressAddressLine2`, and `AddressCity`, `AddressState`, `AddressZipCode`, `AddressCountry` for the rest; a second address on the same owner passes a different `columnPrefix` (for example `"ShippingAddress"`) and gets `ShippingAddressLine1`, `ShippingAddressCity`, and so on. That is exactly the mapping the framework's own hand-written configurations already declared, so adopting the helper is a zero-diff model change: no migration, no snapshot churn.
-  - Max lengths on the six columns come from `AddressInvariants` (`EntityTypeBuilderExtensions.cs:144,150,155,160,165,170`), the same constants the `Address` value object validates against, so a column can never be shorter than what the domain accepts; every column is non-Unicode `varchar`, and only `AddressLine1` is required, matching the value object, whose other five fields are optional for international address formats. `required` on the navigation itself defaults to `false` (`:134`), matching the existing call sites where an owner may have no address at all.
+  - `OwnsAddress(...)` (`EntityTypeBuilderExtensions.cs:133-173`) maps `Address`'s six fields (`AddressLine1`, `AddressLine2`, `City`, `State`, `ZipCode`, `Country`) to columns built by the private helper `AddressColumn(columnPrefix, propertyName)` (`:187-190`). Each column is `columnPrefix + propertyName`, except the redundant leading word `Address` is dropped from the two line properties first (`AddressPropertyPrefix`, `:19`), so the default `"Address"` prefix yields `AddressLine1`/`AddressLine2` rather than `AddressAddressLine1`/`AddressAddressLine2`, and `AddressCity`, `AddressState`, `AddressZipCode`, `AddressCountry` for the rest; a second address on the same owner passes a different `columnPrefix` (for example `"ShippingAddress"`) and gets `ShippingAddressLine1`, `ShippingAddressCity`, and so on. That is exactly the mapping the framework's own hand-written configurations already declared, so adopting the helper changes no column name, length or required-ness.
+  - Max lengths on the six columns come from `AddressInvariants` (`EntityTypeBuilderExtensions.cs:146,151,155,159,163,167`), the same constants the `Address` value object validates against, so a column can never be shorter than what the domain accepts. No `IsUnicode(false)` is applied: every column keeps the provider's Unicode default (`nvarchar` on SQL Server), because `Address` accepts free text in any script and a non-Unicode column would silently replace characters outside the database code page (doc comment at `:114-120`). Only `AddressLine1` is required, matching the value object, whose other five fields are optional for international address formats. `required` on the navigation itself defaults to `false` (`:136`), matching the existing call sites where an owner may have no address at all.
 - **Why it's built this way**: value objects are validated primitives ([ADR-068](https://ivanball.github.io/docs/adr/068-value-objects-as-validated-primitives.html)), which means construction is guarded but persistence must still round-trip every value that construction allowed, including the `Money` zero sentinel. Flattening `Money` into two columns and `Address` into six on the owner's table rather than a separate table keeps a price, a total, or a location a single-row read. Putting each mapping behind one extension member means the read-leg fallback for `Money`, and the column-naming and invariant-length rules for `Address`, are each written once and cannot be forgotten by the next configuration that maps one.
 - **Where it's used**: `OwnsMoney` has three call sites, all in MMCA.Store's Sales and Catalog modules: `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Persistence/EntityConfiguration/OrderConfiguration.cs:26` (`Total`, with `required: false`), `.../OrderLineConfiguration.cs:28` (`UnitPrice`), and `MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Infrastructure/Persistence/EntityConfiguration/ProductVariantConfiguration.cs:31` (`Price`); covered by `MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Configuration/OwnsMoneyTests.cs`. `OwnsAddress` is covered by `MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Configuration/OwnsAddressTests.cs`.
 
@@ -8052,12 +8135,12 @@ survives a module being pulled out into its own service.
 
 - **What it is**: the engine marker for Azure Cosmos DB configurations (`IEntityTypeConfigurationCosmos.cs:13`). It adds no members of its own beyond the `new` redeclaration of `Configure` (`:17`); its whole job is to be the type [`CosmosDbContext`](#cosmosdbcontext) scans for.
 - **Depends on**: [`IEntityTypeConfigurationBase<TEntity, TIdentifierType>`](#ientitytypeconfigurationbasetentity-tidentifiertype) (extends it, `IEntityTypeConfigurationCosmos.cs:13`); [`AuditableBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype) (constraint, `:14`); EF Core's `EntityTypeBuilder<TEntity>` (NuGet, `:1`).
-- **Concept reinforced**: the marker-interface-as-discovery-filter idea taught at [`IEntityTypeConfigurationBase<TEntity, TIdentifierType>`](#ientitytypeconfigurationbasetentity-tidentifiertype). The selection happens in one `switch` inside [`ApplicationDbContext`](#applicationdbcontext): `DataSource.CosmosDB` maps to `typeof(IEntityTypeConfigurationCosmos<,>)` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:955`), and that open generic is handed to the assembly scan.
+- **Concept reinforced**: the marker-interface-as-discovery-filter idea taught at [`IEntityTypeConfigurationBase<TEntity, TIdentifierType>`](#ientitytypeconfigurationbasetentity-tidentifiertype). The selection happens in one `switch` inside [`ApplicationDbContext`](#applicationdbcontext): `DataSource.CosmosDB` maps to `typeof(IEntityTypeConfigurationCosmos<,>)` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:961`), and that open generic is handed to the assembly scan.
 - **Walkthrough**
   - **`internal`** (`IEntityTypeConfigurationCosmos.cs:13`): unlike its parent, this interface is not part of the public API. Consumers are not meant to implement it directly; they derive from [`EntityTypeConfigurationCosmos<TEntity, TIdentifierType>`](#entitytypeconfigurationcosmostentity-tidentifiertype) (or annotate with [`UseDataSourceAttribute`](group-14-module-system-composition.md#usedatasourceattribute)), which implements it for them.
   - **`new void Configure(...)`** (`IEntityTypeConfigurationCosmos.cs:17`): the redeclaration the base interface exists to enable.
-- **Caveats / not-in-source**: implementing this interface directly, without the attributed base class, is a supported but degraded path. [`EntityDataSourceRegistry`](#entitydatasourceregistry) skips configurations that carry no [`UseDataSourceAttribute`](group-14-module-system-composition.md#usedatasourceattribute) (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/EntityDataSourceRegistry.cs:174-178`), so such an entity lands in the engine's Default model but is not routable through [`IUnitOfWork`](#iunitofwork); the code comments call this legacy behavior (`ApplicationDbContext.cs:958-962`).
-- **Where it's used**: matched by `ApplicationDbContext.ApplyConfigurationsForEntitiesInContext` for the Cosmos engine (`ApplicationDbContext.cs:953-960`) and implemented by [`EntityTypeConfiguration<TEntity, TIdentifierType>`](#entitytypeconfigurationtentity-tidentifiertype) (`EntityTypeConfiguration.cs:32`).
+- **Caveats / not-in-source**: implementing this interface directly, without the attributed base class, is a supported but degraded path. [`EntityDataSourceRegistry`](#entitydatasourceregistry) skips configurations that carry no [`UseDataSourceAttribute`](group-14-module-system-composition.md#usedatasourceattribute) (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/EntityDataSourceRegistry.cs:174-178`), so such an entity lands in the engine's Default model but is not routable through [`IUnitOfWork`](#iunitofwork); the code comments call this legacy behavior (`ApplicationDbContext.cs:964-968`).
+- **Where it's used**: matched by `ApplicationDbContext.ApplyConfigurationsForEntitiesInContext` for the Cosmos engine (`ApplicationDbContext.cs:959-966`) and implemented by [`EntityTypeConfiguration<TEntity, TIdentifierType>`](#entitytypeconfigurationtentity-tidentifiertype) (`EntityTypeConfiguration.cs:32`).
 
 ### IEntityTypeConfigurationPostgreSQL<TEntity, TIdentifierType>
 
@@ -8065,7 +8148,7 @@ survives a module being pulled out into its own service.
 
 - **What it is**: the engine marker for PostgreSQL configurations (`IEntityTypeConfigurationPostgreSQL.cs:13`), the fourth member of the marker-interface family alongside Cosmos, Sqlite, and SQL Server; structurally identical to its siblings.
 - **Depends on**: [`IEntityTypeConfigurationBase<TEntity, TIdentifierType>`](#ientitytypeconfigurationbasetentity-tidentifiertype) (extends it, `IEntityTypeConfigurationPostgreSQL.cs:13`); [`AuditableBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype) (constraint, `:14`); EF Core's `EntityTypeBuilder<TEntity>` (NuGet, `:1`).
-- **Concept reinforced**: engine selection by interface identity, taught at [`IEntityTypeConfigurationBase<TEntity, TIdentifierType>`](#ientitytypeconfigurationbasetentity-tidentifiertype). `DataSource.PostgreSQL` maps to `typeof(IEntityTypeConfigurationPostgreSQL<,>)` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:956`), the case added alongside the other three when PostgreSQL became a first-class engine ([ADR-113](https://ivanball.github.io/docs/adr/113-postgresql-as-a-first-class-engine.html)).
+- **Concept reinforced**: engine selection by interface identity, taught at [`IEntityTypeConfigurationBase<TEntity, TIdentifierType>`](#ientitytypeconfigurationbasetentity-tidentifiertype). `DataSource.PostgreSQL` maps to `typeof(IEntityTypeConfigurationPostgreSQL<,>)` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:962`), the case added alongside the other three when PostgreSQL became a first-class engine ([ADR-113](https://ivanball.github.io/docs/adr/113-postgresql-as-a-first-class-engine.html)).
 - **Where it's used**: matched by `PostgreSQLDbContext` through the shared discovery method, and implemented by [`EntityTypeConfiguration<TEntity, TIdentifierType>`](#entitytypeconfigurationtentity-tidentifiertype) (`EntityTypeConfiguration.cs:30`).
 
 ### IEntityTypeConfigurationSqlite<TEntity, TIdentifierType>
@@ -8074,7 +8157,7 @@ survives a module being pulled out into its own service.
 
 - **What it is**: the engine marker for SQLite configurations (`IEntityTypeConfigurationSqlite.cs:13`), structurally identical to its Cosmos and SQL Server siblings.
 - **Depends on**: [`IEntityTypeConfigurationBase<TEntity, TIdentifierType>`](#ientitytypeconfigurationbasetentity-tidentifiertype) (`IEntityTypeConfigurationSqlite.cs:13`); [`AuditableBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype) (`:14`); EF Core's `EntityTypeBuilder<TEntity>` (`:1`).
-- **Concept reinforced**: engine selection by interface identity, taught at [`IEntityTypeConfigurationBase<TEntity, TIdentifierType>`](#ientitytypeconfigurationbasetentity-tidentifiertype). `DataSource.Sqlite` maps to `typeof(IEntityTypeConfigurationSqlite<,>)` (`ApplicationDbContext.cs:957`).
+- **Concept reinforced**: engine selection by interface identity, taught at [`IEntityTypeConfigurationBase<TEntity, TIdentifierType>`](#ientitytypeconfigurationbasetentity-tidentifiertype). `DataSource.Sqlite` maps to `typeof(IEntityTypeConfigurationSqlite<,>)` (`ApplicationDbContext.cs:963`).
 - **Where it's used**: matched by [`SqliteDbContext`](#sqlitedbcontext) through the shared discovery method, implemented by [`EntityTypeConfiguration<TEntity, TIdentifierType>`](#entitytypeconfigurationtentity-tidentifiertype) (`EntityTypeConfiguration.cs:31`), and used directly by the framework's own tests as the scan target: the `ApplyAllConfigurations` tests pass `typeof(IEntityTypeConfigurationSqlite<,>)` as the interface to match (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Configuration/ModelBuilderExtensionsTests.cs:93`, `:148`), and two test types implement it directly to exercise the unattributed path (`ModelBuilderExtensionsTests.cs:108`, `MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/DataSources/EntityDataSourceRegistryTests.cs:233`).
 
 ### IEntityTypeConfigurationSQLServer<TEntity, TIdentifierType>
@@ -8083,7 +8166,7 @@ survives a module being pulled out into its own service.
 
 - **What it is**: the engine marker for SQL Server configurations (`IEntityTypeConfigurationSQLServer.cs:13`). It is the one of the three that matters in production today, because every deployed entity in ADC and Store routes to SQL Server.
 - **Depends on**: [`IEntityTypeConfigurationBase<TEntity, TIdentifierType>`](#ientitytypeconfigurationbasetentity-tidentifiertype) (`IEntityTypeConfigurationSQLServer.cs:13`); [`AuditableBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype) (`:14`); EF Core's `EntityTypeBuilder<TEntity>` (`:1`).
-- **Concept reinforced**: engine selection by interface identity. `DataSource.SQLServer` maps to `typeof(IEntityTypeConfigurationSQLServer<,>)` (`ApplicationDbContext.cs:958`); anything the switch does not recognize throws `InvalidOperationException` rather than silently building an empty model (`ApplicationDbContext.cs:959`).
+- **Concept reinforced**: engine selection by interface identity. `DataSource.SQLServer` maps to `typeof(IEntityTypeConfigurationSQLServer<,>)` (`ApplicationDbContext.cs:964`); anything the switch does not recognize throws `InvalidOperationException` rather than silently building an empty model (`ApplicationDbContext.cs:965`).
 - **Where it's used**: matched by [`SQLServerDbContext`](#sqlserverdbcontext) through `ApplyConfigurationsForEntitiesInContext`, and implemented by [`EntityTypeConfiguration<TEntity, TIdentifierType>`](#entitytypeconfigurationtentity-tidentifiertype) (`EntityTypeConfiguration.cs:29`), which is how all 28 ADC configurations and all 12 Store configurations reach it through the [`EntityTypeConfigurationSQLServer<TEntity, TIdentifierType>`](#entitytypeconfigurationsqlservertentity-tidentifiertype) shim.
 
 ### ReadRepositoryExtensions
@@ -8126,8 +8209,8 @@ survives a module being pulled out into its own service.
 - **What it is**: the engine-aware configuration base and the busiest type in this family. It reads the target engine off a [`UseDataSourceAttribute`](group-14-module-system-composition.md#usedatasourceattribute) on the concrete configuration class (or on an inherited shim base) and hands that engine's table/container mapping plus key generation to the matching engine strategy, so a consumer's `Configure` body only ever describes columns, indexes, and relationships (`EntityTypeConfiguration.cs:27-79`). It also exposes `EffectiveEngine`, the engine of the model actually being built, for the few configurations that write engine-specific SQL text themselves (`:54-61`).
 - **Depends on**: [`EntityTypeConfigurationBase<TEntity, TIdentifierType>`](#entitytypeconfigurationbasetentity-tidentifiertype) (base, `EntityTypeConfiguration.cs:28`); all four engine markers, [`IEntityTypeConfigurationSQLServer<TEntity, TIdentifierType>`](#ientitytypeconfigurationsqlservertentity-tidentifiertype), [`IEntityTypeConfigurationPostgreSQL<TEntity, TIdentifierType>`](#ientitytypeconfigurationpostgresqltentity-tidentifiertype), [`IEntityTypeConfigurationSqlite<TEntity, TIdentifierType>`](#ientitytypeconfigurationsqlitetentity-tidentifiertype), [`IEntityTypeConfigurationCosmos<TEntity, TIdentifierType>`](#ientitytypeconfigurationcosmostentity-tidentifiertype) (`:29-32`); `AuditableBaseEntity<TIdentifierType>` as the entity constraint (`:4`, `:33`); [`UseDataSourceAttribute`](group-14-module-system-composition.md#usedatasourceattribute) and the [`DataSource`](#datasource) enum (`:3`, `:43`, `:61`, `:69`); [`DataSourceEngines`](#datasourceengines) (`:5`, `:77`), which returns the registered [`IDataSourceEngine`](#idatasourceengine) for an engine value (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/Engines/DataSourceEngines.cs:40-43`); the internal `EngineAnnotation` constant of [`ApplicationDbContext`](#applicationdbcontext) (`:48`, `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:67`); `System.Reflection` and EF Core's `EntityTypeBuilder<TEntity>` (`:1-2`).
 - **Concept introduced, one configuration body that is portable across storage engines.** The naive way to support four engines is four configuration classes per entity, or one class littered with `if (engine == ...)`. This class removes both. The engine is declared **once**, as an attribute, and everything that actually differs between engines is owned by one strategy per engine: this class looks the strategy up with `DataSourceEngines.For(engine)` and calls its `ApplyKeyAndTableMapping` (`EntityTypeConfiguration.cs:77`, `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/Engines/IDataSourceEngine.cs:95`). [`SQLServerDataSourceEngine`](#sqlserverdatasourceengine) and [`PostgreSQLDataSourceEngine`](#postgresqldatasourceengine) apply the identical mapping, a table in a module schema (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/Engines/SQLServerDataSourceEngine.cs:100-106`, `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/Engines/PostgreSQLDataSourceEngine.cs:98-101`); [`SqliteDataSourceEngine`](#sqlitedatasourceengine) gives a bare table, since SQLite has no schemas (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/Engines/SqliteDataSourceEngine.cs:97-102`); [`CosmosDataSourceEngine`](#cosmosdatasourceengine) gives a per-module container with the entity id as partition key (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/Engines/CosmosDataSourceEngine.cs:92-101`). Moving an entity from SQL Server to Cosmos, or from SQL Server to PostgreSQL, is therefore a one-line attribute change. Two other pieces of the framework complete the portability claim rather than this class alone: [`CosmosDbContext`](#cosmosdbcontext) strips every relational index from the built model, because the Cosmos provider rejects them and indexes every property itself (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/CosmosDbContext.cs:129-137`), and [`CrossDataSourceDegradeConvention`](#crossdatasourcedegradeconvention) removes FK constraints and navigations that would span physical sources while keeping the declared scalar FK column and a compensating index (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Conventions/CrossDataSourceDegradeConvention.cs:10-22`). A dedicated test builds a Cosmos model offline from a configuration that keeps a filtered index and a cross-source relationship, and asserts the indexes are gone, the FK is gone, the scalar FK column survives, and the foreign principal is not in the model (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/DataSources/CosmosConfigurationPortabilityTests.cs:70-76`). `[Rubric §8, Data Architecture]` assesses how deliberately the storage shape is chosen and how tightly the model is bound to one engine. `[Rubric §7, Microservices Readiness]` assesses whether a module can be lifted out without a rewrite; being able to re-point an entity's engine and database with attributes is a precondition for that ([ADR-018](https://ivanball.github.io/docs/adr/018-polyglot-persistence.html), [ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html), [ADR-113](https://ivanball.github.io/docs/adr/113-postgresql-as-a-first-class-engine.html)). `[Rubric §15, Best Practices & Code Quality]` assesses whether one decision lives in one place; each engine's mapping lives in exactly one strategy, and this file names no concrete engine value at all. That last property is enforced: `DataSourceBranchingFitnessTests` scans `Source/**/*.cs` and fails on any concrete engine named outside an exact allow-list, which lists the four shim bases but not this class (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/DataSourceBranchingFitnessTests.cs:24-68`, `:71-80`; [ADR-130](https://ivanball.github.io/docs/adr/130-per-engine-data-source-strategy.html)).
-- **Concept introduced, discovery and routing that agree by construction.** This class implements **all four** engine marker interfaces (`EntityTypeConfiguration.cs:29-32`), so a configuration derived from it is discovered during every engine's model pass. That sounds wrong until you see the filter: `ApplyConfigurationsForEntitiesInContext` applies a discovered configuration only when [`EntityDataSourceRegistry`](#entitydatasourceregistry) says the entity's [`DataSourceKey`](#datasourcekey) equals this context instance's key (`ApplicationDbContext.cs:979-981`). Both sides read the same attributes: the registry derives the engine from [`UseDataSourceAttribute`](group-14-module-system-composition.md#usedatasourceattribute) and the logical database from [`UseDatabaseAttribute`](group-14-module-system-composition.md#usedatabaseattribute), falling back to the entity's module namespace and then to `Default` (`EntityDataSourceRegistry.cs:180-182`), while this class reads the same attribute for its conventions. Discovery is broad, routing is exact, and there is no second source of truth to drift. `[Rubric §1, SOLID]` assesses whether behavior is driven from one declaration; here the attribute is that declaration.
-- **Concept introduced, declared engine versus effective engine.** The declared engine and the engine of the model being built usually agree, but not always: when a host substitutes an unconfigured engine (the doc comment's example is a SQL Server configuration applied to a PostgreSQL-only host), the configuration's own attribute is the wrong input for hand-written SQL such as an index filter (`EntityTypeConfiguration.cs:54-60`). `ApplyConfigurationsForEntitiesInContext` therefore stamps the context's engine onto the model as an annotation for the duration of the configuration pass and removes it in a `finally`, so the finished model and every migration snapshot are unchanged (`ApplicationDbContext.cs:965-970`, `:983-986`). `Configure` copies that annotation into `EffectiveEngine`, falling back to the declared engine when no annotation is present (`EntityTypeConfiguration.cs:48-49`). The key and table mapping still uses the declared engine (`:51`); `EffectiveEngine` is for SQL text only. The framework's own consumers show the use: [`PushNotificationConfiguration`](#pushnotificationconfiguration) builds a filtered unique index whose predicate is quoted for `EffectiveEngine` through [`SoftDeleteFilterSql`](#softdeletefiltersql) (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeConfiguration/Notifications/PushNotificationConfiguration.cs:72-73`), and [`UserNotificationConfiguration`](#usernotificationconfiguration) passes it to `HasSoftDeleteFilter` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeConfiguration/Notifications/UserNotificationConfiguration.cs:45`).
+- **Concept introduced, discovery and routing that agree by construction.** This class implements **all four** engine marker interfaces (`EntityTypeConfiguration.cs:29-32`), so a configuration derived from it is discovered during every engine's model pass. That sounds wrong until you see the filter: `ApplyConfigurationsForEntitiesInContext` applies a discovered configuration only when [`EntityDataSourceRegistry`](#entitydatasourceregistry) says the entity's [`DataSourceKey`](#datasourcekey) equals this context instance's key (`ApplicationDbContext.cs:985-987`). Both sides read the same attributes: the registry derives the engine from [`UseDataSourceAttribute`](group-14-module-system-composition.md#usedatasourceattribute) and the logical database from [`UseDatabaseAttribute`](group-14-module-system-composition.md#usedatabaseattribute), falling back to the entity's module namespace and then to `Default` (`EntityDataSourceRegistry.cs:180-182`), while this class reads the same attribute for its conventions. Discovery is broad, routing is exact, and there is no second source of truth to drift. `[Rubric §1, SOLID]` assesses whether behavior is driven from one declaration; here the attribute is that declaration.
+- **Concept introduced, declared engine versus effective engine.** The declared engine and the engine of the model being built usually agree, but not always: when a host substitutes an unconfigured engine (the doc comment's example is a SQL Server configuration applied to a PostgreSQL-only host), the configuration's own attribute is the wrong input for hand-written SQL such as an index filter (`EntityTypeConfiguration.cs:54-60`). `ApplyConfigurationsForEntitiesInContext` therefore stamps the context's engine onto the model as an annotation for the duration of the configuration pass and removes it in a `finally`, so the finished model and every migration snapshot are unchanged (`ApplicationDbContext.cs:971-976`, `:983-986`). `Configure` copies that annotation into `EffectiveEngine`, falling back to the declared engine when no annotation is present (`EntityTypeConfiguration.cs:48-49`). The key and table mapping still uses the declared engine (`:51`); `EffectiveEngine` is for SQL text only. The framework's own consumers show the use: [`PushNotificationConfiguration`](#pushnotificationconfiguration) builds a filtered unique index whose predicate is quoted for `EffectiveEngine` through [`SoftDeleteFilterSql`](#softdeletefiltersql) (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeConfiguration/Notifications/PushNotificationConfiguration.cs:72-73`), and [`UserNotificationConfiguration`](#usernotificationconfiguration) passes it to `HasSoftDeleteFilter` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeConfiguration/Notifications/UserNotificationConfiguration.cs:45`).
 - **Walkthrough**
   - **Declaration** (`EntityTypeConfiguration.cs:27-34`): abstract, extends the base class, implements the four markers, constrained to an audited entity with a non-null identifier type.
   - **`Configure` override** (`EntityTypeConfiguration.cs:37-52`): null-guards the builder (`:39`), calls `base.Configure(builder)` so the `DomainEvents` exclusion runs first (`:41`), then reads the engine.
@@ -8146,7 +8229,7 @@ survives a module being pulled out into its own service.
 - **What it is**: a body-less shim over [`EntityTypeConfiguration<TEntity, TIdentifierType>`](#entitytypeconfigurationtentity-tidentifiertype) whose only content is the class-level `[UseDataSource(DataSource.CosmosDB)]` annotation (`EntityTypeConfigurationCosmos.cs:17-21`). Deriving from it is equivalent to deriving from the engine-aware base and annotating the concrete class by hand, as its own doc says (`EntityTypeConfigurationCosmos.cs:10-13`).
 - **Depends on**: [`EntityTypeConfiguration<TEntity, TIdentifierType>`](#entitytypeconfigurationtentity-tidentifiertype) (base, `EntityTypeConfigurationCosmos.cs:19`); [`UseDataSourceAttribute`](group-14-module-system-composition.md#usedatasourceattribute) and the [`DataSource`](#datasource) enum (`:1`, `:17`); [`AuditableBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype) (constraint, `:20`).
 - **Concept reinforced, an attribute expressed as a base class.** All mapping logic (per-module container, entity-id partition key, client-side id generation via [`CosmosIntIdValueGenerator`](#cosmosintidvaluegenerator)) lives in the engine-aware base; this type exists so the engine choice reads as part of the class declaration a consumer already writes, and so `Inherited = true` on the attribute (`UseDataSourceAttribute.cs:12`) carries it to the concrete class. The declaration ends in a semicolon (`EntityTypeConfigurationCosmos.cs:21`): there is genuinely no body.
-- **Where it's used**: no configuration in MMCA.Common, MMCA.ADC, MMCA.Store, or the Common test suite derives from it today. The Cosmos path is exercised instead through a direct `[UseDataSource(DataSource.CosmosDB)]` annotation on a configuration deriving from the engine-aware base (`CosmosConfigurationPortabilityTests.cs:101-103`), and the Aspire hosting extensions name the type when documenting which entities a Cosmos data source will serve (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:528`). This matches the state ADR-018 records: the plumbing ships and is tested, with no non-SQL entity in production today.
+- **Where it's used**: no configuration in MMCA.Common, MMCA.ADC, MMCA.Store, or the Common test suite derives from it today. The Cosmos path is exercised instead through a direct `[UseDataSource(DataSource.CosmosDB)]` annotation on a configuration deriving from the engine-aware base (`CosmosConfigurationPortabilityTests.cs:101-103`), and the Aspire hosting extensions name the type when documenting which entities a Cosmos data source will serve (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:575`). This matches the state ADR-018 records: the plumbing ships and is tested, with no non-SQL entity in production today.
 
 ### EntityTypeConfigurationPostgreSQL<TEntity, TIdentifierType>
 
@@ -8268,11 +8351,11 @@ survives a module being pulled out into its own service.
   - **`Status` stored as text** (`:41-44`): `HasConversion<string>()` with `HasMaxLength(20)`. The CLR type is the `PushNotificationStatus` enum with three members, `Pending`, `Sent`, `Failed` (`MMCA.Common/Source/Core/MMCA.Common.Domain/Notifications/PushNotifications/PushNotificationStatus.cs:6-16`); persisting the name rather than the ordinal means reordering or inserting an enum member does not silently re-interpret existing rows.
   - **`DedupKey`** (`:46-47`): nullable, bounded by `PushNotification.DedupKeyMaxLength` (128, `PushNotification.cs:19`). The domain records that this is typically the `Idempotency-Key` header value and that the filtered unique index is what arbitrates the race (`PushNotification.cs:39-45`).
   - **`ScopeKey`** (`:52-53`): nullable, bounded by `ScopeKeyMaxLength` (128, `PushNotification.cs:22`), and deliberately **not** indexed. The comment gives the economics (`:49-51`): the scope filter runs after the primary-key join from [`UserNotification`](group-10-notifications.md#usernotification), over a table holding one row per send, so an index would cost writes without buying a read.
-  - **The filtered unique index** (`:69-73`): `HasIndex(p => p.DedupKey).IsUnique().HasSoftDeleteFilter(EffectiveEngine, additionalFilter: ...)`, where the additional filter is the `DedupKey` column quoted for `EffectiveEngine` by `SoftDeleteFilterSql.QuoteColumn` followed by `IS NOT NULL` (`:73`). The helper composes the final predicate as `{additionalFilter} AND {softDeletePredicate}` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/IndexBuilderExtensions.cs:62-65`), and the soft-delete half comes from [`SoftDeleteFilterSql`](#softdeletefiltersql), which reads the actual column name out of the model and builds the predicate for the given engine (`SoftDeleteFilterSql.cs:35`). The comment at `:58-61` gives the reason the engine is passed explicitly rather than left to the helper's `DataSource.SQLServer` default (`IndexBuilderExtensions.cs:53`): a host that configures only PostgreSQL or SQLite substitutes its engine and applies this SQL Server configuration to that model, and the Cosmos context strips relational indexes. On a SQL Server model the result is `[DedupKey] IS NOT NULL AND [IsDeleted] = 0`, asserted verbatim by `DedupKeyIndex_FiltersOutSoftDeletedRows` (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Configuration/PushNotificationConfigurationTests.cs:26-30`) and by `OnASqlServerHost_NotificationIndexFilters_KeepTheBracketedForm` (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Configuration/NotificationConfigurationEngineTests.cs:68`); on a PostgreSQL-only host it is `"DedupKey" IS NOT NULL AND "IsDeleted" = false` (`NotificationConfigurationEngineTests.cs:46`).
+  - **The filtered unique index** (`:69-73`): `HasIndex(p => p.DedupKey).IsUnique().HasSoftDeleteFilter(EffectiveEngine, additionalFilter: ...)`, where the additional filter is the `DedupKey` column quoted for `EffectiveEngine` by `SoftDeleteFilterSql.QuoteColumn` followed by `IS NOT NULL` (`:73`). The helper composes the final predicate as `{additionalFilter} AND {softDeletePredicate}` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/IndexBuilderExtensions.cs:62-65`), and the soft-delete half comes from [`SoftDeleteFilterSql`](#softdeletefiltersql), which reads the actual column name out of the model and builds the predicate for the given engine (`SoftDeleteFilterSql.cs:35`). The comment at `:58-61` gives the reason the engine is passed explicitly rather than left to the helper's `DataSource.SQLServer` default (`IndexBuilderExtensions.cs:53`): a host that configures only PostgreSQL or SQLite substitutes its engine and applies this SQL Server configuration to that model, and the Cosmos context strips relational indexes. On a SQL Server model the result is `[DedupKey] IS NOT NULL AND [IsDeleted] = 0`, asserted verbatim by `DedupKeyIndex_FiltersOutSoftDeletedRows` (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Configuration/PushNotificationConfigurationTests.cs:27-31`) and by `OnASqlServerHost_NotificationIndexFilters_KeepTheBracketedForm` (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Configuration/NotificationConfigurationEngineTests.cs:68`); on a PostgreSQL-only host it is `"DedupKey" IS NOT NULL AND "IsDeleted" = false` (`NotificationConfigurationEngineTests.cs:46`).
   - **Why the opt-in call is belt and braces, not a requirement** (`:63-68`): [`SoftDeleteUniqueIndexConvention`](#softdeleteuniqueindexconvention) stamps the soft-delete predicate onto every unique index of a soft-deletable entity, and it **extends** a hand-authored filter instead of skipping it: an index that already declares a predicate gets `{existingFilter} AND {filterSql}` in that exact order (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Conventions/SoftDeleteUniqueIndexConvention.cs:67-80`), and an index whose filter already constrains the soft-delete column is left untouched so a second model build cannot append the clause twice (`:73-76`). Because `HasSoftDeleteFilter` produces the same SQL in the same order from the same column name, the convention recognizes this index and stops, which is what the configuration's own comment says (`PushNotificationConfiguration.cs:66-68`).
 - **Why it's built this way**: the two overrides exist because a framework-owned domain type cannot be named by the convention that names consumer domain types, and stating the target explicitly is cheaper than special-casing the convention. Writing the filter for `EffectiveEngine` rather than as a bracketed literal is what lets one SQL Server-declared configuration serve a PostgreSQL or SQLite host: the test that pins it states the failure it prevents, a bracketed SQL Server literal being a syntax error on Npgsql (`NotificationConfigurationEngineTests.cs:14-17`). The soft-delete clause on the dedup index is a fix, not an original design: it closes a defect where a soft-deleted notification held its dedup key permanently, and ADC's migration for it is an explicit expand-contract drop and recreate, since a filtered index predicate cannot be altered in place (`MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Notification/Migrations/20260804185520_CommonV1141PushNotificationDedupIndexSoftDeleteFilter.cs:13-31`). The migration comment argues the safety case explicitly: the new predicate is strictly more permissive, so a previous revision running against the new index still succeeds.
-- **Where it's used**: discovered by assembly scan rather than by a direct reference. `AddNotificationInfrastructure()` registers this class's assembly as an entity-configuration source (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:26-31`, naming the type only to get its `Assembly` at `:29`), and the only production caller is ADC's Notification module (`MMCA.ADC/Source/Modules/Notification/MMCA.ADC.Notification.API/DependencyInjection.cs:33`), whose service points the logical `Notification` source at the `ADC_Notification` database (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/appsettings.Development.json:37-41`). Store hosts no notification entities today: the only other callers of `AddNotificationInfrastructure` are Common's own DI tests. Behavior is pinned against a real model built from this exact configuration (`PushNotificationConfigurationTests.cs:76-82`): index uniqueness (`:22-24`), the composed filter (`:26-30`), the scope-key length and nullability (`:35-41`), and the deliberate absence of a scope-key index (`:43-49`). The engine substitution is pinned separately by `NotificationConfigurationEngineTests`, which builds the full context over a PostgreSQL-only and a SQL Server `Notification` source (`NotificationConfigurationEngineTests.cs:27-47`, `:49-69`).
-- **Caveats / not-in-source**: the `PushNotificationConfigurationTests` double builds the model on SQLite (`PushNotificationConfigurationTests.cs:69-71`) through a plain `DbContext` that carries no engine annotation, so `EffectiveEngine` falls back to the declared SQL Server engine (`EntityTypeConfiguration.cs:48-49`) and the asserted filter is the bracketed SQL Server form; the engine-substituted output is only asserted by `NotificationConfigurationEngineTests`.
+- **Where it's used**: discovered by assembly scan rather than by a direct reference. `AddNotificationInfrastructure()` registers this class's assembly as an entity-configuration source (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:26-31`, naming the type only to get its `Assembly` at `:29`), and the only production caller is ADC's Notification module (`MMCA.ADC/Source/Modules/Notification/MMCA.ADC.Notification.API/DependencyInjection.cs:33`), whose service points the logical `Notification` source at the `ADC_Notification` database (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/appsettings.Development.json:37-41`). Store hosts no notification entities today: the only other callers of `AddNotificationInfrastructure` are Common's own DI tests. Behavior is pinned against a real model built from this exact configuration (`PushNotificationConfigurationTests.cs:77-83`): index uniqueness (`:22-24`), the composed filter (`:26-30`), the scope-key length and nullability (`:35-41`), and the deliberate absence of a scope-key index (`:43-49`). The engine substitution is pinned separately by `NotificationConfigurationEngineTests`, which builds the full context over a PostgreSQL-only and a SQL Server `Notification` source (`NotificationConfigurationEngineTests.cs:27-47`, `:49-69`).
+- **Caveats / not-in-source**: the `PushNotificationConfigurationTests` double builds the model on SQLite (`PushNotificationConfigurationTests.cs:70-72`) through a plain `DbContext` that carries no engine annotation, so `EffectiveEngine` falls back to the declared SQL Server engine (`EntityTypeConfiguration.cs:48-49`) and the asserted filter is the bracketed SQL Server form; the engine-substituted output is only asserted by `NotificationConfigurationEngineTests`.
 
 ### RepositoryFactory
 

@@ -15,9 +15,9 @@ the same one that runs through the whole codebase: application and domain code t
 forwarder) is chosen at the composition root, and a default is always registered so nothing has to
 be configured for DI to resolve. [`NullPushNotificationSender`](#nullpushnotificationsender) and
 [`NullLiveChannelPublisher`](#nulllivechannelpublisher) are no-ops
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:326-327`),
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:331-332`),
 `IEmailSender` defaults to the real [`SmtpEmailSender`](#smtpemailsender)
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:325`), and
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:330`), and
 `INotificationRecipientProvider` gets its default in the Application layer
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/DependencyInjection.cs:75`).
 
@@ -45,7 +45,7 @@ they have different durability guarantees:
    live layer for poll and question updates. This rides the same hub but through
    [`ILiveChannelPublisher`](#ilivechannelpublisher) and the hub's `JoinChannel`/`LeaveChannel`
    group membership rather than per-user targeting
-   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/NotificationHub.cs:127-152`).
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/NotificationHub.cs:127-151`).
 
 A fifth transport, plain **email**, is present as [`IEmailSender`](#iemailsender) /
 [`SmtpEmailSender`](#smtpemailsender) (MailDev locally, real SMTP in production) but is a
@@ -316,8 +316,8 @@ refused connections cannot lock the account out once aborted ones drain (the cap
 It **manages channel (SignalR group) membership** through `JoinChannel`/`LeaveChannel`, validating
 each channel key against the configured pattern with a cached, one-second-timeout `Regex` so a bad
 key throws `HubException` rather than opening an injection or ReDoS hole
-(`NotificationHub.cs:44-47,175-185`). And before it creates that group membership it consults an
-**entitlement check** (`NotificationHub.cs:130-131,154-173`) ([Rubric §11, Security]).
+(`NotificationHub.cs:44-47,174-184`). And before it creates that group membership it consults an
+**entitlement check** (`NotificationHub.cs:130-131,153-172`) ([Rubric §11, Security]).
 
 That check is `IChannelJoinAuthorizer`
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Notifications/IChannelJoinAuthorizer.cs:16`),
@@ -348,18 +348,18 @@ Actual delivery does not run inside the hub:
 so they can be called from any handler without a live connection. The push sender targets
 `Clients.User` / `Clients.Users` / `Clients.All` and **batches large user lists in chunks of 100**
 to avoid overwhelming the connection manager
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/SignalRPushNotificationSender.cs:14,41-58`)
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/SignalRPushNotificationSender.cs:14,39-56`)
 ([Rubric §12, Performance & Scalability]); the live publisher does a single `Clients.Group` send
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Live/SignalRLiveChannelPublisher.cs:14-18`).
 Both are wired by `AddPushNotifications(configuration)`, which also attaches a Redis backplane when
 a `redis` connection string is present, so the fan-out crosses replicas
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:41-70`).
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:41-73`).
 
 The live channel is where the extracted-service topology shows through
 ([Rubric §7, Microservices Readiness]). In a monolith the default
 [`NullLiveChannelPublisher`](#nulllivechannelpublisher) is registered, and a host that maps the hub
 swaps in the real [`SignalRLiveChannelPublisher`](#signalrlivechannelpublisher)
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:327`,
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:332`,
 `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:66`). In extracted ADC, Engagement is a *different* process from the
 one that owns the WebSocket, so Engagement's live layer depends on
 [`ILiveChannelPublisher`](#ilivechannelpublisher) as usual but the composition root `Replace`s the
@@ -426,12 +426,12 @@ handle,
 Both verbs scope ownership the same way: each reads `currentUserService.UserId` and passes it to the
 registrar, so a PUT can only register *the caller's own* installation and a DELETE only removes one
 the caller owns
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Notifications/DevicesController.cs:38-45,62-69`).
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Notifications/DevicesController.cs:43-50,67-74`).
 The ownership check itself lives in the registrar
 ([`IPushDeviceRegistrar`](group-07-persistence-ef-core.md#ipushdeviceregistrar), Group 07): an id
 that does not exist and an id belonging to another user both answer 204 without deleting anything,
 so the response cannot be used as an existence oracle for other users' installation ids
-(`DevicesController.cs:48-54`) ([Rubric §11, Security]).
+(`DevicesController.cs:53-59`) ([Rubric §11, Security]).
 
 Finally, the module carries the Notification half of the cross-service data-subject export
 (PRIVACY.md §7), [`UserNotificationExportService`](#usernotificationexportservice), published across
@@ -585,12 +585,12 @@ without any of the four ever taking the others down, and without a retried reque
 - **Why it's built this way**: keeping the interface in Application (and the SMTP dependency in
   Infrastructure) is what lets a test host register a no-op sender and production register
   [SmtpEmailSender](#smtpemailsender). Registration is `TryAddTransient<IEmailSender, SmtpEmailSender>()`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:325`), so the `TryAdd` lets
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:330`), so the `TryAdd` lets
   a host pre-register its own sender and win.
 - **Where it's used**: the framework's own consumer is the password-reset flow:
   [ForgotPasswordHandlerBase<TUser, TCommand>](group-14-module-system-composition.md#forgotpasswordhandlerbasetuser-tcommand)
   takes it as a primary-constructor dependency
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandlerBase.cs:39`),
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandlerBase.cs:40`),
   and MMCA.ADC's concrete
   [ForgotPasswordHandler](group-24-identity-module.md#forgotpasswordhandler) passes its own sender through
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandler.cs:24`).
@@ -639,7 +639,7 @@ without any of the four ever taking the others down, and without a retried reque
   of the business of knowing each live event's schema; the presentation and UI layers agree on the
   contract. Non-delivery to absent clients is the intended semantics, not a gap. The default registration
   is the inert [NullLiveChannelPublisher](#nulllivechannelpublisher)
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:327`), replaced by
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:332`), replaced by
   [SignalRLiveChannelPublisher](#signalrlivechannelpublisher) when a host opts into the SignalR wiring
   (same file, line 632).
 - **Where it's used**: ADC's conference-day live layer does **not** inject it into command handlers.
@@ -722,7 +722,7 @@ without any of the four ever taking the others down, and without a retried reque
 - **Why it's built this way**: three targeting methods rather than one "audience" parameter keeps each
   call site's intent explicit and lets the SignalR implementation map user-targeting to hub groups
   directly. The default registration is the no-op
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:326`) so a host with no
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:331`) so a host with no
   real-time transport still resolves the port; the SignalR wiring replaces it with `AddTransient` (same
   file, line 631), a deliberate override rather than a `TryAdd`.
 - **Where it's used**: [SendPushNotificationHandler](#sendpushnotificationhandler) fans a message out
@@ -1147,7 +1147,7 @@ without any of the four ever taking the others down, and without a retried reque
   A stable client id plus a rotating platform channel is the installation model both FCM v1 and APNs
   expect, and keeping ownership server-stamped keeps the trust boundary at the authenticated request.
 - **Where it's used**: bound as the `[FromBody]` parameter of the registration action on
-  [DevicesController](#devicescontroller) (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Notifications/DevicesController.cs:35`),
+  [DevicesController](#devicescontroller) (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Notifications/DevicesController.cs:40`),
   which is routed at `Notifications/Devices`
   (`.../DevicesController.cs:21`) and gated by the
   [NotificationFeatures](#notificationfeatures)`.PushNotifications` flag (`.../DevicesController.cs:23`).
@@ -1247,7 +1247,7 @@ without any of the four ever taking the others down, and without a retried reque
   `PushNotificationSettings.ChannelKeyPattern`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/PushNotificationSettings.cs:33`), the
   regex [NotificationHub](#notificationhub) enforces before a client may join a group
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/NotificationHub.cs:178`), so every key the
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/NotificationHub.cs:177`), so every key the
   factories produce is a key the hub accepts by construction. `[Rubric §15, Best Practices & Code
   Quality]` assesses whether shared literals are centralized: the alternative here was a hand-written
   interpolation at each call site, which is what this replaced. `[Rubric §12, Performance &
@@ -1387,8 +1387,9 @@ without any of the four ever taking the others down, and without a retried reque
   Identity is extracted the same call becomes a gRPC hop with no change here.
 - **Walkthrough**: a primary-constructor class taking `IAttendeeQueryService`
   (`AttendeeNotificationRecipientProvider.cs:10-11`). Its single method `GetRecipientUserIdsAsync`
-  (lines 14-16) is an expression-bodied `await` forwarding to
-  `attendeeQueryService.GetAttendeeUserIdsAsync(cancellationToken)`, with no added logic.
+  (lines 14-16) is a non-async expression-bodied method that returns the `Task` from
+  `attendeeQueryService.GetAttendeeUserIdsAsync(cancellationToken)` directly (no `await`, so no extra
+  state machine), with no added logic.
 - **Why it's built this way**: keeping the provider a thin bridge means the "who is a recipient"
   decision has exactly one place to change, and the Identity module stays the owner of the attendee
   roster.
@@ -1745,7 +1746,7 @@ without any of the four ever taking the others down, and without a retried reque
   best-effort by design).
 - **Where it's used**: registered as the framework default with
   `services.TryAddTransient<ILiveChannelPublisher, NullLiveChannelPublisher>()`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:327`) so the port is always
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:332`) so the port is always
   resolvable; `AddPushNotifications` adds the SignalR implementation over it
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:66`), and in ADC Engagement's composition root `services.Replace(...)`
   overwrites it with the [LiveChannelPublisherGrpcAdapter](#livechannelpublishergrpcadapter)
@@ -1776,7 +1777,7 @@ without any of the four ever taking the others down, and without a retried reque
   `AddPushNotifications()`. The send handler always calls the port; whether anything reaches a browser is
   a composition-root decision.
 - **Where it's used**: registered as the default `IPushNotificationSender` by `AddInfrastructure`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:326`); superseded by the
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:331`); superseded by the
   SignalR sender in any host that calls `AddPushNotifications`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:65`).
 
@@ -1899,7 +1900,7 @@ without any of the four ever taking the others down, and without a retried reque
   would be a breaking public-API change. Unlike push, email has **no** null-object default:
   `SmtpEmailSender` itself is what `AddInfrastructure` registers as `IEmailSender`
   (`services.TryAddTransient<IEmailSender, SmtpEmailSender>()`,
-  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:325`), so a host that never
+  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:330`), so a host that never
   configures SMTP settings still resolves a real sender that will fail at send time rather than silently
   no-op.
 - **Where it's used**: injected as `IEmailSender` by callers (the port, not this class); the transient
@@ -1976,10 +1977,11 @@ without any of the four ever taking the others down, and without a retried reque
     (`:73`, so a refused connection cannot keep counting against the user and lock it out once the
     aborted ones drain) and throws `HubException("Too many concurrent connections for this account.")`
     (`:74`); otherwise it marks the connection with `Context.Items[SlotItemKey] = true` (`:77`) and
-    calls `base.OnConnectedAsync()` (`:80`).
+    returns `base.OnConnectedAsync()` directly (`:80`). The override is a plain `Task`-returning method,
+    not `async`: nothing is awaited after the slot bookkeeping, so there is no state machine.
   - `OnDisconnectedAsync` (`NotificationHub.cs:84-93`): decrements the caller's count **only if** the
-    connection carries the marker (`Context.Items.Remove(SlotItemKey)`, `:87`), then calls
-    `base.OnDisconnectedAsync(exception)`. The guard exists because SignalR also runs
+    connection carries the marker (`Context.Items.Remove(SlotItemKey)`, `:87`), then returns
+    `base.OnDisconnectedAsync(exception)` (`:92`) without `async`. The guard exists because SignalR also runs
     `OnDisconnectedAsync` for a connection whose `OnConnectedAsync` threw; releasing a slot for that
     refused connection would erode the cap one refusal at a time (doc comment on `ConnectionsPerUser`,
     `:52-57`).
@@ -1991,9 +1993,9 @@ without any of the four ever taking the others down, and without a retried reque
     (`:121`), then awaits `EnsureAuthorizedForChannelAsync(channelKey)` (`:122`) before calling
     `Groups.AddToGroupAsync(Context.ConnectionId, channelKey, Context.ConnectionAborted)` (`:127-128`).
   - `LeaveChannelAsync(string channelKey)` (`NotificationHub.cs:145`):
-    `[HubMethodName(LeaveChannelMethod)]`, validates then `Groups.RemoveFromGroupAsync(...)` with the same
-    connection token (`:141-142`). Leaving is not re-checked against the authorizer.
-  - `EnsureAuthorizedForChannelAsync` (`NotificationHub.cs:158-173`): a no-op when `joinAuthorizer` is
+    `[HubMethodName(LeaveChannelMethod)]`, a non-`async` method that validates (`:147`) then returns
+    `Groups.RemoveFromGroupAsync(...)` with the same connection token (`:150`). Leaving is not re-checked against the authorizer.
+  - `EnsureAuthorizedForChannelAsync` (`NotificationHub.cs:157-172`): a no-op when `joinAuthorizer` is
     `null`; otherwise awaits `joinAuthorizer.CanJoinAsync(Context.User, channelKey, Context.ConnectionAborted)`
     and throws `HubException("Not authorized for this channel.")` on a `false` result, so a caller not
     entitled to the channel is refused before the group membership is created and never receives a single
@@ -2004,7 +2006,7 @@ without any of the four ever taking the others down, and without a retried reque
     (`Context.ConnectionAborted`) instead, and the repo's `CancellationTokenConventionTests` carry an
     explicit exemption for it. `[Rubric §15, Best Practices & Code Quality]`: the convention is enforced
     by a test, and the deviation is documented at the deviation site.
-  - `EnsureValidChannelKey` (`NotificationHub.cs:175`): `GetOrAdd`s the cached `Regex` for
+  - `EnsureValidChannelKey` (`NotificationHub.cs:174`): `GetOrAdd`s the cached `Regex` for
     `settings.Value.ChannelKeyPattern`; an empty or non-matching key throws
     `HubException("Invalid channel key.")` (`:174`), which SignalR surfaces to the caller rather than
     tearing down the connection.
@@ -2090,7 +2092,9 @@ without any of the four ever taking the others down, and without a retried reque
 - **Walkthrough**: one method, `PublishAsync(channelKey, eventName, payloadJson, cancellationToken)`
   (`SignalRLiveChannelPublisher.cs:14`):
   `hubContext.Clients.Group(channelKey).SendAsync(NotificationHub.ReceiveChannelEventMethod, channelKey,
-  eventName, payloadJson, cancellationToken)` (`SignalRLiveChannelPublisher.cs:15-18`). It invokes the
+  eventName, payloadJson, cancellationToken)` (`SignalRLiveChannelPublisher.cs:15-17`), returned
+  directly as an expression-bodied, non-`async` method (no `await`, so the `Task` from `SendAsync`
+  is the result). It invokes the
   hub's `ReceiveChannelEventMethod` constant so the client and server agree on the method name, and
   passes the channel key, event name, and opaque JSON payload straight through.
 - **Why it's built this way**: live channels are transient by contract
@@ -2128,15 +2132,17 @@ without any of the four ever taking the others down, and without a retried reque
   - `SendToUserAsync(userId, title, body, metadata, cancellationToken)`
     (`SignalRPushNotificationSender.cs:17`): addresses
     `Clients.User(userId.ToString(CultureInfo.InvariantCulture))` and invokes
-    `NotificationHub.ReceiveNotificationMethod` (`SignalRPushNotificationSender.cs:18-21`).
-  - `SendToUsersAsync(userIds, ...)` (`SignalRPushNotificationSender.cs:24`): iterates
+    `NotificationHub.ReceiveNotificationMethod` (`SignalRPushNotificationSender.cs:18-20`), returning the
+    `SendAsync` task directly (non-`async`).
+  - `SendToUsersAsync(userIds, ...)` (`SignalRPushNotificationSender.cs:23`): iterates
     `BatchUserIds(userIds)` and sends each batch to `Clients.Users(batch)`
-    (`SignalRPushNotificationSender.cs:26-32`).
-  - `BroadcastAsync(...)` (`SignalRPushNotificationSender.cs:36`): addresses `Clients.All`
-    (`SignalRPushNotificationSender.cs:37-39`).
-  - `BatchUserIds(userIds)` (`SignalRPushNotificationSender.cs:41`): a private static iterator that
+    (`SignalRPushNotificationSender.cs:25-31`).
+  - `BroadcastAsync(...)` (`SignalRPushNotificationSender.cs:35`): addresses `Clients.All`
+    (`SignalRPushNotificationSender.cs:36-37`), also returning the task directly. Only
+    `SendToUsersAsync` stays `async`, because it awaits inside a loop.
+  - `BatchUserIds(userIds)` (`SignalRPushNotificationSender.cs:39`): a private static iterator that
     accumulates invariant-culture id strings into a `List` and `yield return`s each time it reaches
-    `BatchSize`, flushing the remainder at the end (`SignalRPushNotificationSender.cs:43-57`).
+    `BatchSize`, flushing the remainder at the end (`SignalRPushNotificationSender.cs:41-55`).
 - **Why it's built this way**: all three delivery shapes route through the one hub context and the one
   shared method-name constant, so the client listens on a single event regardless of how it was targeted.
   Batching keeps a broadcast to thousands of recipients from constructing one oversized argument list for
@@ -2461,7 +2467,7 @@ without any of the four ever taking the others down, and without a retried reque
   `services.Replace(...)`
   (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Contracts/DependencyInjection.cs:84`); the one caller
   today is the Identity service's composition root
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:327`), whose
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:331`), whose
   [ExportUserDataHandler](group-24-identity-module.md#exportuserdatahandler) consumes the interface.
 
 ---
@@ -2529,7 +2535,7 @@ heading.)*
 - **Where it's used**: `AddNotificationLiveChannelClient` is called by the Engagement service's
   application pipeline (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:291`);
   `AddNotificationUserExportClient` by the Identity service's
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:327`). The matching AppHost references
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:331`). The matching AppHost references
   that inject the `services__notification__grpc__0` entry are
   `engagementService.WithReference(notificationService)`
   (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:277`) and
@@ -2892,48 +2898,48 @@ heading.)*
   documentation at
   `MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Notifications/DevicesController.cs:14-20`.
 - **Depends on**: [ApiControllerBase](group-12-api-hosting-mapping.md#apicontrollerbase) (its base,
-  line 27); [IPushDeviceRegistrar](group-07-persistence-ef-core.md#ipushdeviceregistrar)
-  (primary-constructor parameter, line 26);
-  [ICurrentUserService](group-08-auth.md#icurrentuserservice) (line 27);
-  [DeviceInstallationRequest](#deviceinstallationrequest) (the PUT body, line 34);
-  [NotificationFeatures](#notificationfeatures) (line 23); [Result](group-01-result-error-handling.md#result)
+  line 28); [IPushDeviceRegistrar](group-07-persistence-ef-core.md#ipushdeviceregistrar)
+  (primary-constructor parameter, line 27);
+  [ICurrentUserService](group-08-auth.md#icurrentuserservice) (line 28);
+  [DeviceInstallationRequest](#deviceinstallationrequest) (the PUT body, line 40);
+  [NotificationFeatures](#notificationfeatures) (line 24); [Result](group-01-result-error-handling.md#result)
   and [Error](group-01-result-error-handling.md#error). Externals: ASP.NET Core MVC (`[ApiController]`,
   `[Route]`, `[HttpPut]`, `[HttpDelete]`, `ProblemDetails`), `Asp.Versioning` (`[ApiVersion("1.0")]`,
-  line 22), `Microsoft.AspNetCore.Authorization` (`[Authorize]`, line 24), and
-  `Microsoft.FeatureManagement.Mvc` (`[FeatureGate]`, line 23).
+  line 23), `Microsoft.AspNetCore.Authorization` (`[Authorize]`, line 25), and
+  `Microsoft.FeatureManagement.Mvc` (`[FeatureGate]`, line 24).
 - **Concept introduced, the ownership-stamped resource whose id comes from the client.** Every other
   controller in this group addresses server-generated ids. A device installation id is a
   **client-generated GUID** instead, because the device mints it before it has ever talked to the server
-  (documented at lines 13-19). Two consequences are visible in the code. First, the owner is never taken
-  from the request: both actions re-derive `userId` from `ICurrentUserService.UserId` (lines 37 and 61)
+  (documented at lines 15-19). Two consequences are visible in the code. First, the owner is never taken
+  from the request: both actions re-derive `userId` from `ICurrentUserService.UserId` (lines 43 and 67)
   and pass it to the registrar, so a caller cannot register or delete a device on someone else's behalf.
   Second, the delete is deliberately indistinguishable between "no such installation" and "not yours":
   [IPushDeviceRegistrar](group-07-persistence-ef-core.md#ipushdeviceregistrar) verifies the owning
   `user:{id}` tag and reports both cases as success
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Notifications/IPushDeviceRegistrar.cs:28-36`),
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Notifications/IPushDeviceRegistrar.cs:39-47`),
   so the endpoint cannot be used as an existence oracle for other users' installation ids (restated on
-  the action itself, `DevicesController.cs:48-54`).
+  the action itself, `DevicesController.cs:53-59`).
   `[Rubric §11, Security]` assesses whether authorization and ownership are enforced at the boundary:
-  class-level `[Authorize]` (line 24) plus server-side ownership stamping plus a uniform 204 on delete
+  class-level `[Authorize]` (line 25) plus server-side ownership stamping plus a uniform 204 on delete
   is the whole posture here.
   `[Rubric §9, API & Contract Design]` assesses REST-shape consistency: both actions declare typed
-  `[ProducesResponseType]` results (204 on success, plus a `ProblemDetails` failure shape, 400 on the
-  upsert at lines 31-32 and 401 on the delete at lines 55-56) and share the `HandleFailure`-or-success
+  `[ProducesResponseType]` results (204 on success, plus a `ProblemDetails` failure shape: 400 and 409 on the
+  upsert at lines 37-38, where the 409 answers an installation id owned by another user: the client mints a new id and retries, per the action doc at lines 30-34, and 401 on the delete at lines 61-62) and share the `HandleFailure`-or-success
   return shape used across the group.
 - **Walkthrough**
-  - Primary-constructor DI of the registrar and the current-user service (lines 25-27); the class is
+  - Primary-constructor DI of the registrar and the current-user service (lines 26-28); the class is
     `sealed` and derives from `ApiControllerBase`, which supplies `HandleFailure`.
-  - `UpsertAsync([FromBody] DeviceInstallationRequest request, ...)` (line 33): reads
-    `currentUserService.UserId` (line 37); a null user short-circuits through
+  - `UpsertAsync([FromBody] DeviceInstallationRequest request, ...)` (line 39): reads
+    `currentUserService.UserId` (line 43); a null user short-circuits through
     `HandleFailure([Error.Unauthorized("PushDevice.Unauthorized", "User is not authenticated.")])`
-    (lines 38-41). Otherwise it awaits `registrar.UpsertAsync(userId.Value, request, cancellationToken)`
-    (line 43) and returns `NoContent()` (204) or `HandleFailure(result.Errors)` (line 44).
-  - `DeleteAsync(string installationId, ...)` (line 57): the id arrives from the route
-    (`[HttpDelete("{installationId}")]`, line 54). The same null-user guard runs (lines 61-65), then
-    `registrar.DeleteAsync(userId.Value, installationId, cancellationToken)` (line 67), the
-    ownership-scoped overload, and the action answers 204 on any non-failure (line 68).
+    (lines 44-47). Otherwise it awaits `registrar.UpsertAsync(userId.Value, request, cancellationToken)`
+    (line 49) and returns `NoContent()` (204) or `HandleFailure(result.Errors)` (line 50).
+  - `DeleteAsync(string installationId, ...)` (line 63): the id arrives from the route
+    (`[HttpDelete("{installationId}")]`, line 60). The same null-user guard runs (lines 68-71), then
+    `registrar.DeleteAsync(userId.Value, installationId, cancellationToken)` (line 73), the
+    ownership-scoped overload, and the action answers 204 on any non-failure (line 74).
 - **Why it's built this way**: the controller is wrapped in
-  `[FeatureGate(NotificationFeatures.PushNotifications)]` (line 23), so with the
+  `[FeatureGate(NotificationFeatures.PushNotifications)]` (line 24), so with the
   `Notification.PushNotifications` flag off the routes are simply not there rather than answering as
   dead endpoints. Routing all storage through
   [IPushDeviceRegistrar](group-07-persistence-ef-core.md#ipushdeviceregistrar) keeps the controller free
@@ -3132,12 +3138,12 @@ heading.)*
   changes.
   The projection path is not taken unconditionally. The decision is taken per read at
   `EntityQueryService.cs:339`, and `CanProject` requires three things
-  (`EntityQueryService.cs:541-544`): a projector is registered, the caller did not ask for tracking
+  (`EntityQueryService.cs:570-573`): a projector is registered, the caller did not ask for tracking
   (a projection yields DTOs, which the change tracker has nothing to do with), and there are no
   unsupported cross-source includes (those are loaded row by row after materialization by the navigation
   populator, which a projection has no rows to hand it). Field shaping deliberately does not disqualify,
   because shaping runs after materialization over whatever object the pipeline produced
-  (`EntityQueryService.cs:536-538`).
+  (`EntityQueryService.cs:565-567`).
   `[Rubric §1, SOLID]` assesses dependency inversion and interface segregation: the contract has exactly
   one member, and the query service depends on that interface rather than on Mapperly or on this class.
   `[Rubric §12, Performance & Scalability]` assesses whether the read path scales with result shape: for

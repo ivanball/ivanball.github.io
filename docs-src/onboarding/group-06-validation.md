@@ -945,7 +945,7 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
 - **Where it's used**: six ADC Engagement handlers call it as their first statement after the null guard,
   then branch on `caller.IsFailure` and propagate `caller.Errors`:
   [`RecordSponsorVisitHandler`](group-22-engagement-module.md#recordsponsorvisithandler)
-  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/CheckIns/UseCases/RecordSponsorVisit/RecordSponsorVisitHandler.cs:50`),
+  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/CheckIns/UseCases/RecordSponsorVisit/RecordSponsorVisitHandler.cs:51`),
   [`RecordRoomCheckInHandler`](group-22-engagement-module.md#recordroomcheckinhandler)
   (`.../CheckIns/UseCases/RecordRoomCheckIn/RecordRoomCheckInHandler.cs:41`),
   [`ManualCheckInHandler`](group-22-engagement-module.md#manualcheckinhandler)

@@ -242,7 +242,7 @@
           branches on null (<code>[Rubric §2, Design Patterns]</code>). It is registered exactly that way for entities
           with nothing to hand-load, for example
           <code>services.TryAddScoped&lt;INavigationPopulator&lt;Question&gt;, NullNavigationPopulator&lt;Question&gt;&gt;()</code><span class="cite"><span>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:92</code>)</span></span> and
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:94</code>)</span></span> and
           the framework&#39;s own push-notification entity<span class="cite"><span>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/DependencyInjection.cs:39</code>)</span></span>.</p>
           <p>The actual batch loading is done by <a href="#navigationloader"><code>NavigationLoader</code></a><span class="cite"><span>
@@ -304,7 +304,7 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:317</code>)</span></span>; it hands that
           split plus its module&#39;s injected <code>INavigationPopulator&lt;TEntity&gt;</code> (as the method-group delegate
           <code>NavigationPopulator.PopulateAsync</code>) to <code>EntityQueryPipeline.ExecuteAsync</code><span class="cite"><span>
-          (<code>EntityQueryService.cs:352-357</code>)</span></span>; the pipeline JOINs the supported navigations and, if any are
+          (<code>EntityQueryService.cs:353-358</code>)</span></span>; the pipeline JOINs the supported navigations and, if any are
           unsupported, materializes the page and calls the populator; the populator (almost always a
           <code>DeclarativeNavigationPopulator</code> built from descriptors) iterates its descriptors and calls
           <code>NavigationLoader</code> once per cross-source navigation. The same metadata also gates the service&#39;s keyed
@@ -320,8 +320,8 @@
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/SessionNavigationPopulator.cs:13</code>)</span></span>
           mixes two <code>FKNavigationDescriptor</code>s (<code>Event</code>, <code>Room</code>) with three <code>ChildNavigationDescriptor</code>s. Each is
           registered per entity as a scoped service<span class="cite"><span>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:75</code>,
-          <code>DependencyInjection.cs:79</code>)</span></span>, and those module-level populators are taught in
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:77</code>,
+          <code>DependencyInjection.cs:81</code>)</span></span>, and those module-level populators are taught in
           <a href="group-18-conference-application.html">Group 18</a>.</p>
           <p>Two architectural threads are worth holding onto as you read the per-type sections. First, this
           subsystem is <em>why</em> the database-per-service split is feasible without rewriting query code
@@ -381,7 +381,7 @@
           <code>IsCollection</code> boolean is the same FK-versus-collection axis that
           <a href="#navigationtype"><code>NavigationType</code></a> names one level up.</li>
           <li><strong>Where it&#39;s used</strong>: applied on domain entity properties (for example
-          <span class="cite"><span><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:66</code></span></span> and <span class="cite"><span><code>:72</code></span></span>
+          <span class="cite"><span><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:76</code></span></span> and <span class="cite"><span><code>:72</code></span></span>
           tag <code>SpeakerCategoryItems</code> and <code>SpeakerQuestionAnswers</code> with <code>[Navigation(IsCollection = true)]</code>,
           and <span class="cite"><span><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sponsors/Sponsor.cs:48</code></span></span> tags the
           <code>Event</code> reference with a bare <code>[Navigation]</code>). Read by

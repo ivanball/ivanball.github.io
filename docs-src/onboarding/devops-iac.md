@@ -616,39 +616,60 @@ structured logs, and metrics to a queryable backend. The workspace-based App Ins
 per-service Cloud Role Names gives full Application Map visibility, end-to-end distributed traces
 across all six services, and Kusto-queryable logs, covering this category end-to-end.
 
-### SLO alerts as code (`main.bicep:304-499`), [ADR-062](https://ivanball.github.io/docs/adr/062-slo-alerting-as-code.html)
+### SLO alerts as code (`main.bicep:357-575`), [ADR-062](https://ivanball.github.io/docs/adr/062-slo-alerting-as-code.html)
 
 The SLOs are declared as **data**: an array of records named `sloAlertSpecs`
-(`main.bicep:343-433`) carrying `key`, `description`, `query`, `timeAggregation`,
+(`main.bicep:407-506`) carrying `key`, `description`, `query`, `timeAggregation`,
 `metricMeasureColumn`, `threshold` and `severity`, plus four optional fields that only one entry sets
 (`enabled`, `windowSize`, `evaluationFrequency`, `autoMitigate`). A Bicep `for` loop materializes one
-Log Analytics `Microsoft.Insights/scheduledQueryRules` per spec (`main.bicep:435-495`). There are
-**five** specs today:
+Log Analytics `Microsoft.Insights/scheduledQueryRules` per spec (`main.bicep:508-569`). There are
+**six** specs today:
 
 | Alert key | KQL source | Threshold | Window | Severity |
 |---|---|---|---|---|
-| `failed-requests` (`:344-352`) | `AppRequests` where `Success == false`, excluding 401/499 and crawler 404s on `/robots.txt` and `/sitemap.xml` | > 10 rows | 15 min | 2 (Error) |
-| `server-response-time` (`:353-361`) | HTTP rows of `AppRequests` only: excludes `/hubs/`, `ResultCode` 101 and rows with no `Url`; `avg(DurationMs)` over windows holding at least 5 requests | > 3000ms | 15 min | 3 (Warning) |
-| `dependency-failures` (`:362-370`) | `AppDependencies` where `Success == false`, excluding 401/499 | > 10 rows | 15 min | 2 (Error) |
-| `resilience-circuit-open` (`:374-382`) | `AppMetrics` where `Name == "resilience.polly.strategy.events"` and `Properties["event.name"] == "OnCircuitOpened"` | > 0 rows | 15 min | 2 (Error) |
-| `ai-scoring-token-ceiling` (`:420-432`) | `AppMetrics` sum of `mmca.ai.input_tokens` and `mmca.ai.output_tokens` | > `aiScoringTokenCeiling` (2,000,000) | 2 days, evaluated every 12h | 3 (Warning) |
+| `failed-requests` (`:408-416`) | `AppRequests` where `Success == false`, excluding 401, 404, 429 and 499 | > 10 rows | 15 min | 2 (Error) |
+| `request-rejections` (`:417-425`) | `AppRequests` answered 404 or 429, excluding crawler probes on `/robots.txt` and `/sitemap.xml` | > 50 rows | 15 min | 3 (Warning) |
+| `server-response-time` (`:426-434`) | HTTP rows of `AppRequests` only: excludes `/hubs/`, `ResultCode` 101 and rows with no `Url`; `avg(DurationMs)` over windows holding at least 5 requests and no Container Apps revision event | > 3000ms | 15 min | 3 (Warning) |
+| `dependency-failures` (`:435-443`) | `AppDependencies` where `Success == false`, excluding 401/499 and any call in an operation whose request answered 499 | > 10 rows | 15 min | 2 (Error) |
+| `resilience-circuit-open` (`:447-455`) | `AppMetrics` where `Name == "resilience.polly.strategy.events"` and `Properties["event.name"] == "OnCircuitOpened"` | > 0 rows | 15 min | 2 (Error) |
+| `ai-scoring-token-ceiling` (`:493-505`) | `AppMetrics` sum of `mmca.ai.input_tokens` and `mmca.ai.output_tokens` | > `aiScoringTokenCeiling` (2,000,000) | 2 days, evaluated every 12h | 3 (Warning) |
 
-**The KQL predicate is the whole point of the migration.** The first three rules replaced metric
-alerts on `requests/failed`, `requests/duration` and `dependencies/failed`, which paged on routine
-traffic because a metric alert cannot express a status-code or URL predicate. The template records
-the three real incidents (`main.bicep:316-332`): one window held 8x401 plus 2x499 plus a single
-readiness 503 and zero other failures, all from one browser session retrying with an expired token;
-five long-lived SignalR hub connections averaging 11.3s dragged the fleet-wide average to 5539ms
-against a 3000ms threshold while every real request was fast (a hub connection reports its
-**connection lifetime** as request duration); and a single Azure-hosted crawler produced 12
-`robots.txt` / `sitemap.xml` 404s inside one 15-minute window. Both hosts serve `robots.txt` now,
-but a sitemap probe is still a 404, which is why that one pair of paths is excluded by name
-(`main.bicep:337`) rather than by excluding 404 as a class. The thresholds and severities are
-unchanged, so this is a precision fix, not a sensitivity cut: a genuine 400, 404 or 500 burst still
-pages at the same numbers.
+**The KQL predicate is the whole point of the migration.** The first three request-side rules
+replaced metric alerts on `requests/failed`, `requests/duration` and `dependencies/failed`, which
+paged on routine traffic because a metric alert cannot express a status-code or URL predicate. The
+template records the real incidents (`main.bicep:373-405`): one window held 8x401 plus 2x499 plus a
+single readiness 503 and zero other failures, all from one browser session retrying with an expired
+token; five long-lived SignalR hub connections averaging 11.3s dragged the fleet-wide average to
+5539ms against a 3000ms threshold while every real request was fast (a hub connection reports its
+**connection lifetime** as request duration); a single Azure-hosted crawler produced 12
+`robots.txt` / `sitemap.xml` 404s inside one 15-minute window; and the 10/6, 10/9 and 10/10 pages
+were scanner and crawler bursts (a caller guessing API paths, a secrets scanner probing `.git/HEAD`,
+a crawler sending HEAD to every speaker page until the UI rate limiter answered 429) with no fault
+behind them (`main.bicep:388-392`). There is no custom domain, so real users arrive on the same
+hosts and the host cannot tell the two populations apart.
 
-`server-response-time` has since been narrowed a second time, to HTTP requests only
-(`main.bicep:355-356`), because the `/hubs/` name filter was not the whole connection problem. Two
+**So 404 and 429 moved out of `failed-requests` and into a volume rule of their own**
+(`main.bicep:396-400`). `failed-requests` keeps its threshold of 10 over every other failure, so a
+genuine 400, 409 or 5xx burst still pages at the same number; `request-rejections` pages at severity 3
+only above **50** rejections in a window, a line every scanner burst of the preceding 30 days stayed
+under and both 2026-10-03 load-test windows crossed (619 and 1909 rows). The crawler-etiquette paths
+moved with it: they are excluded by name inside `request-rejections` (`main.bicep:421`) rather than in
+`failed-requests`. The split is a precision fix, not a sensitivity cut: a broken route under real
+traffic still pages, as a rejection volume rather than as a failure count.
+
+**`dependency-failures` drops the dependency rows of operations whose request answered 499**
+(`main.bicep:393-395`, `:438`). A dependency call cancelled because its caller disconnected logs
+`ResultCode` 0 with `TaskCanceledException`, never 499, so the plain 499 exclusion missed it; ten of
+the twelve rows in the 10/10 page were that. The query anti-joins on the `OperationId` of 499
+requests, so a genuine timeout (a `TaskCanceledException` with no 499 parent) still counts.
+
+`server-response-time` has since been narrowed twice more. It skips any window in which
+`ContainerAppSystemLogs_CL` records a `RevisionCreation` or `RevisionUpdate` (`main.bicep:401-405`,
+`:429`): during a rollout the window can hold only the post-deploy probes, one of them a cold first
+request, so the 5-row floor does not stop the page (Store paged at 3,067 ms on 10/10 from five probe
+rows). The template counts what that costs: those events covered 77 windows in the 30 days to
+2026-10-10, all deploys, and a slow release still pages in the next window. It is also restricted to
+HTTP requests only (`main.bicep:427-429`), because the `/hubs/` name filter was not the whole connection problem. Two
 more kinds of `AppRequests` row carry a duration that is not request latency: SignalR hub and
 Blazor circuit connections, which surface as `ResultCode` 101 (the WebSocket upgrade) and report
 connection lifetime, and the background `InternalCommandExecute` / `OutboxProcess` spans, which are
@@ -657,11 +678,11 @@ alongside the average and keeps a window only when it holds at least 5 requests,
 on a quiet window cannot page. The threshold is still 3000ms: as with the first fix, what changed is
 the population the average is taken over, not the bar it is held to.
 
-**`resilience-circuit-open` is the newest spec and the only one that reads a metric rather than a
+**`resilience-circuit-open` is the one request-side SLO spec that reads a metric rather than a
 request or dependency row.** `MMCA.Common`'s resilience pipelines emit the standard Polly
 `resilience.polly.strategy.events` instrument, and the rule filters it to the `OnCircuitOpened`
 event name on the `Properties` bag. Its threshold is **0**, so it fires on the **first** breaker
-opening rather than on a rate, and the comment gives the reason (`main.bicep:361-363`): an open
+opening rather than on a rate, and the comment gives the reason (`main.bicep:444-446`): an open
 circuit is already the failure mode the retry budget existed to absorb, and every caller behind it
 is failing fast until the break window elapses, so there is nothing to average. That puts it in the
 same "any hit is the incident" class as the outbox dead-letter rule below.
@@ -709,12 +730,12 @@ cost budget (`main.bicep:748`, `:756`). One group, one
 receiver, no severity routing: severity is triage metadata, not a delivery decision.
 
 Each SLO alert is paired with a same-severity triage section in `MMCA.ADC/infra/OPERATIONS.md`
-(`OPERATIONS.md:17`, `:31`, `:50`, `:63`, `:111`), and that pairing is enforced by a framework fitness test rather
+(`OPERATIONS.md:17`, `:33`, `:50`, `:71`, `:88`, `:136`), and that pairing is enforced by a framework fitness test rather
 than by discipline: `ObservabilityConventionTestsBase` parses this template between the literal
 anchors `var sloAlertSpecs` and `resource sloAlerts`
 (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/ObservabilityConventionTestsBase.cs:135-136`)
 and fails the build in both directions. ADC raises the base class's floor of three discovered specs
-(`ObservabilityConventionTestsBase.cs:39`) to five
+(`ObservabilityConventionTestsBase.cs:39`) to six
 (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Governance/ObservabilityConventionTests.cs:14`),
 so a parse-anchor drift that found fewer specs fails rather than passing vacuously. That gate is covered in
 [group 27](group-28-testing-infrastructure.md#observabilityconventiontestsbase); it is not
@@ -723,10 +744,10 @@ duplicated here. Note the coverage boundary, which the runbook itself spells out
 and the availability alert below are provisioned but ungated, and their triage deliberately sits
 under `####` headings so the parser does not read them as SLO runbook sections.
 
-### Operational and availability alerts (`main.bicep:445-703`)
+### Operational and availability alerts (`main.bicep:574-726`, `:838-918`)
 
-Beyond the five SLOs, `main.bicep` provisions **four** more scheduled query rules from
-`scheduledQueryAlertSpecs` (`main.bicep:575`, materialized at `:602`), all severity 2 on a
+Beyond the six SLOs, `main.bicep` provisions **five** more scheduled query rules from
+`scheduledQueryAlertSpecs` (`main.bicep:608-639`, materialized at `:641`), all severity 2 on a
 15-minute evaluation over a 15-minute window:
 
 - `outbox-dead-letter` (`main.bicep:576-581`) fires on **any** hit (`threshold: 0`) of an `AppTraces`
@@ -754,18 +775,29 @@ Beyond the five SLOs, `main.bicep` provisions **four** more scheduled query rule
   because making Redis a readiness dependency would take the whole hub down during a blip. The
   comment also states why the query can see the signal at all: `otelLogLevelEnv` exports Warning and
   above, and Notification sets no category override below that.
+- `broker-error-queue` (`main.bicep:633-638`, comment at `:601-607`) is the consumer-side twin of
+  `outbox-dead-letter`. When a MassTransit consumer exhausts its in-process retries **and** the
+  delayed redeliveries, the message moves to its endpoint's `_error` queue and `MMCA.Common`'s
+  `FaultIntegrationEventConsumer` logs at Error that it "was moved to the error queue". The rule fires
+  on any `AppTraces` row at Error or above containing that static part of the log template, so it
+  holds whatever the event type or reason. The two rules split the delivery path between them: the
+  outbox rule means an event never left the producer, this one means an event reached the consuming
+  service and was never applied. The triage and replay procedure is in the runbook's "Error queue"
+  section (`OPERATIONS.md:231`).
 
-Three of the four have a `####` triage section in the runbook (`OPERATIONS.md:163`, `:206`, `:232`),
-and so does the ingestion-cap rule below (`OPERATIONS.md:262`). `signalr-backplane-errors` does not,
-which the ungated coverage boundary above allows, and the runbook names it as the one gap the honour
-system leaves open (`OPERATIONS.md:158-160`, `:393-395`). Its `description` field (`main.bicep:596`)
-carries the first-response instructions instead: check Azure Managed Redis health and the
-notification app logs.
+Every one of the five now has a `####` triage section in the runbook (`OPERATIONS.md:188`, `:231`,
+`:278`, `:304`, `:334`), and so do the ingestion-cap rule below (`OPERATIONS.md:363`) and the two
+security rules (`OPERATIONS.md:399`, `:441`). They sit under `####` headings inside "Operational
+alert runbooks" (`OPERATIONS.md:174`) precisely so the SLO parser does not read them as SLO sections,
+which is the ungated coverage boundary described above.
 
-**A fourth standalone rule watches the detector itself** (`main.bicep:593`, added 2026-09-07 as
+**A standalone rule watches the detector itself** (`main.bicep:695-726`, added 2026-09-07 as
 SEC-ADC-47). `logIngestionCapAlert` is named `${prefix}-alert-log-ingestion-cap-reached`, fires at
 severity 2 on any hit, and queries `_LogOperation` for an `Ingestion` / `Data collection Status`
-record whose `Detail` contains `OverQuota` (`main.bicep:609`). Three decisions in it are worth
+record whose `Detail` contains `OverQuota` **or** `ApproachingQuota` (`main.bicep:711`). The second
+term is the early warning, the one Store's equivalent rule already reads (`main.bicep:693-694`): it
+gives an operator the chance to raise the cap or stop the source before ingestion goes dark, rather
+than learning about the blind detector after the fact. Three decisions in it are worth
 reading:
 
 - **Why it exists at all** (`main.bicep:578-583`). Every other rule on this page queries the Log
@@ -812,6 +844,46 @@ loss, database reachability, a silently failed rollout, a SignalR hub split into
 islands, and total entry-point outage. The 2026-09-02
 cadence changes are the honest counterweight: this stack now trades roughly ten minutes of detection
 latency for a materially smaller monitoring bill, and the deploy-time gates carry the fast path.
+
+### Security signals: auth-failure spike and 403 burst (`main.bicep:727-833`)
+
+Two standalone scheduled-query rules watch the same request traffic from the **security** side,
+ported from Store's SEC-Store-54 (`main.bicep:729`). The template states why they exist
+(`main.bicep:728-762`): every other request-based rule is an availability signal, and
+`failed-requests` deliberately excludes 401 (with 404, 429 and 499). That exclusion is SLO noise
+reduction and stays as it is, but its side effect is that a credential-stuffing run against the login
+route produces nothing but filtered-out 401s and pages nobody. Watching the traffic separately keeps
+the SLO query untouched.
+
+- `${prefix}-alert-auth-failure-spike` (`main.bicep:763-794`) counts `AppRequests` answering 401
+  **or** 429 whose `Url` or `Name` contains `/Auth` (`main.bicep:779`) and fires at severity 2 above
+  **50** (`main.bicep:782`). It counts 429 as well because ADR-029 account lockout and the gateway's
+  auth-tight limiter both answer 429, so a burst here can mean an attacker locking real users out as
+  much as one guessing passwords. The threshold is reasoned against the hop count: the path is
+  recorded at both the Gateway and the Identity service, so 50 rows is roughly 25 real failed
+  sign-ins, far above expired-token noise and far below what one IP can produce under auth-tight
+  (30/min/IP, up to 450 per window), so a distributed low-and-slow campaign still trips it.
+- `${prefix}-alert-forbidden-burst` (`main.bicep:802-833`) fires on more than **20** `403` rows
+  (`main.bicep:821`) at severity **3** (`main.bicep:809`). A 403 means the caller authenticated and
+  was then denied by permission policy, which in normal operation is close to zero because the UI does
+  not offer actions a user lacks the permission for; a burst means a replayed token probing resources
+  it does not own, or a permission regression shipped by a deploy (`main.bicep:796-801`). Severity 3
+  marks it as an investigate signal, not a page-at-night one.
+
+Three choices are worth noticing. They are standalone resources rather than
+`scheduledQueryAlertSpecs` entries because that loop pins severity 2 and the 403 burst is severity 3,
+and they are declared outside the `sloAlertSpecs`..`sloAlerts` parse window so the fitness test does
+not demand an SLO runbook section for them; their triage sits under `####` headings instead
+(`OPERATIONS.md:399`, `:441`). There is no dedicated 429 rule, because `request-rejections` already
+pages on a sustained 404/429 volume, and the template accepts that a lockout storm on `/Auth` can page
+both rules, since the two runbooks read it differently. Both use `PT15M` over `PT15M`
+(`main.bicep:773`, `:812`), well inside the P2D window cap: a longer ISO 8601 value compiles but
+fails the whole deployment at apply time, after the container apps have already moved.
+
+[Rubric §11, Security] assesses whether attacks against the system are detectable, not only
+preventable. These two rules are that detection layer for the authentication and authorization
+boundaries: lockout (ADR-029) and the rate limiter prevent, and these page when prevention is being
+exercised at an abnormal rate.
 
 ### AI-scoring token-ceiling alert (`main.bicep:383-432`)
 
@@ -1339,13 +1411,15 @@ assignment is scoped to the storage **account**, not to a container, so it also 
 container: the shared key ring needs no second role assignment, and the template says so
 (`main.bicep:1281-1283`).
 
-[Rubric §11, Security] assesses credential and key handling. One follow-up is recorded in the
-template as **not implemented** (`main.bicep:1284-1287`): encrypting the key ring at rest with a Key
-Vault key (`DataProtection__KeyVaultKeyUri`) would need a separate Key Vault Crypto User grant on
-the apps identity, and neither the env var nor the grant exists today. The comment states the
-reason blob persistence deliberately works without it: a missing or delayed crypto grant would
-otherwise be able to break authentication outright, so at-rest encryption is kept as independent
-hardening rather than a prerequisite. The framework side is built the same way, with the key-vault
+[Rubric §11, Security] assesses credential and key handling. Encrypting the key ring at rest with a
+Key Vault key is wired **separately** from the blob persistence (`main.bicep:1508-1513`): the
+`dataProtectionKek` resource, gated by `createDataProtectionKeyVaultKey`, and the
+`DataProtection__KeyVaultKeyUri` app setting, gated by `dataProtectionKeyVaultKeyUri` (set on
+Identity at `main.bicep:2016` and on the UI at `:2800`; see the Key Vault section below). It needs
+its own Key Vault Crypto User grant on the apps identity, which, like the blob grant, is a manual
+step. The comment states the reason blob persistence deliberately works without it: a missing or
+delayed crypto grant would otherwise be able to break authentication outright, so at-rest
+encryption is kept as independent hardening rather than a prerequisite. The framework side is built the same way, with the key-vault
 step behind its own gate on `DataProtection:KeyVaultKeyUri`
 (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/DataProtection/DataProtectionExtensions.cs:74-85`),
 so the infrastructure gap and the code path agree.
@@ -1824,21 +1898,26 @@ cause (`main.bicep:423`).
 Aspire's service discovery convention uses env vars of the form `services__<service-name>__http__0`
 to resolve service endpoints. In production these point at internal ACA hostnames:
 
-- Gateway → all four services: `conference` (`main.bicep:1849`), `identity` (`:1849`),
-  `engagement` (`:1850`), `notification` (`:1851`), each as `http://${<app>.name}`
-- Conference → `services__engagement__http__0 = http://${prefix}-engagement` (`main.bicep:1443`)
+- Gateway -> all four services: `conference` (`main.bicep:2626`), `identity` (`:2627`),
+  `engagement` (`:2628`), `notification` (`:2629`), each as `http://${<app>.name}`
+- Conference -> `services__engagement__http__0 = http://${prefix}-engagement` (`main.bicep:2170`)
   (using the literal `${prefix}-engagement` rather than `${engagementApp.name}` to avoid a
   Bicep symbolic cycle, Conference and Engagement both reference each other)
-- Engagement → `services__conference__http__0 = http://${prefix}-conference` (`main.bicep:1565`)
-- Notification → `services__identity__http__0 = http://${identityApp.name}` (`main.bicep:1710`),
+- Engagement -> `services__conference__http__0 = http://${prefix}-conference` (`main.bicep:2306`)
+- Notification -> `services__identity__http__0 = http://${identityApp.name}` (`main.bicep:2459`),
   for the `IAttendeeQueryService` email-recipient lookup
-- Identity → `services__engagement__http__0` (`main.bicep:1246`), for the PRIVACY.md data-subject
+- Identity -> `services__engagement__http__0` (`main.bicep:1932`), for the PRIVACY.md data-subject
   export's Engagement section
+- Identity -> `services__conference__http__0 = http://${prefix}-conference` (`main.bicep:1941-1945`),
+  for `AddConferenceUserExportClient` (`IUserConferenceExportService`): the Conference section of the
+  same export, the feedback answers the user authored. It uses the literal name for the same reason
+  as the Engagement entry (Conference references `identityApp` for its JWKS authority), and it is a
+  best-effort consumer, so an unreachable peer degrades only that section of the export.
 
 Two edges use a **named** endpoint rather than the default `http` one, because they target
 Notification's dedicated h2c gRPC port: `services__notification__grpc__0 = http://${prefix}-notification:8081`
-from Identity (`main.bicep:1253`, the Notifications section of the same data-subject export) and
-from Engagement (`main.bicep:1570`, the best-effort live-channel push). Both use the literal
+from Identity (`main.bicep:1939`, the Notifications section of the same data-subject export) and
+from Engagement (`main.bicep:2311`, the best-effort live-channel push). Both use the literal
 `${prefix}-notification` name so deployment ordering stays unconstrained, since Notification itself
 references `identityApp` for its JWKS authority.
 
