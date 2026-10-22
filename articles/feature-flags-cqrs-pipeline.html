@@ -125,7 +125,7 @@
         <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
         <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
         <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
-        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · Refresh tokens that rotate per device</a></li>
         <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
         <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
         <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
@@ -289,10 +289,13 @@
           edge handler returns <code>404</code>. Neither answer looks like a permissions problem, but neither body is
           anonymous either (ADR-031). The edge body is titled &quot;Feature not available&quot; (<code>DisabledFeatureHandler.cs:22</code>).
           The CQRS failure travels through the Result to ProblemDetails mapping, whose <code>errors</code> extension serializes
-          each error&#39;s code and message (<code>ErrorHttpMapping.cs:62-70</code>, with the message localized by code when the
-          host registers an <code>IErrorLocalizer</code>, <code>:66</code>), so the caller sees the <code>Feature.Disabled</code> code and the same
-          generic &quot;The requested feature is not currently available.&quot; wording the edge uses as its detail
-          (<code>FeatureGateCommandDecorator.cs:60-62</code>). The flag name stays out of the message on purpose, because the
+          each error&#39;s code and message (<code>ErrorHttpMapping.cs:62-70</code>), with the message localized by code
+          (<code>:66</code>) through the <code>IErrorLocalizer</code> that <code>AddAPI</code> always registers (<code>MMCA.Common.API/DependencyInjection.cs:110</code>,
+          <code>:125</code>). Under the default culture the caller sees the <code>Feature.Disabled</code> code and the same generic
+          &quot;The requested feature is not currently available.&quot; wording the edge uses as its detail
+          (<code>FeatureGateCommandDecorator.cs:60-62</code>). Under a Spanish request culture the CQRS message comes back
+          translated (<code>ErrorResources.es.resx:196-197</code>) while the edge detail stays in English
+          (<code>DisabledFeatureHandler.cs:23</code>), so the two bodies agree on meaning rather than on exact words. The flag name stays out of the message on purpose, because the
           message reaches the user verbatim and the name is internal; clients branch on the code
           (<code>FeatureGateCommandDecorator.cs:56-58</code>). Turning a flag off makes the feature answer not-found and say
           that a feature is unavailable, not report a locked door.</p>
@@ -337,8 +340,11 @@
           (<code>RefreshFromSessionizeCommand.cs:15</code>) and <code>ScoreEventSessionsInternalCommand</code>
           (<code>ScoreEventSessionsInternalCommand.cs:39</code>), and Store&#39;s <code>VerifyPaymentCommand</code> (<code>VerifyPaymentCommand.cs:20</code>).
           The scoring command is a durable internal command that the framework&#39;s processor runs through the same
-          decorator pipeline, so with its flag off the gate&#39;s failure completes the queued row rather than retrying
-          it (<code>ScoreEventSessionsInternalCommand.cs:42-46</code>); its trigger endpoint also carries
+          decorator pipeline, because the dispatcher resolves the decorated <code>ICommandHandler</code> from the container
+          (<code>InternalCommandDispatcher.cs:11-18</code>). The processor completes a queued row only on success
+          (<code>InternalCommandProcessor.cs:415-421</code>), so with the flag off the gate&#39;s failure is treated like any
+          other failed <code>Result</code>: the row spends an attempt and is rescheduled with backoff, then dead-lettered as
+          <code>attempts_exhausted</code> once the attempt budget is spent (<code>:423-425</code>, <code>:450-461</code>). Its trigger endpoint also carries
           <code>[FeatureGate(ConferenceFeatures.SessionScoring)]</code> (<code>SessionSelectionController.cs:134</code>), so that flag is
           enforced at both surfaces. No query is gated. The flag inventory is wider than the pipeline usage:
           thirteen flag-name constants

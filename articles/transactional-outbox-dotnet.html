@@ -125,7 +125,7 @@
         <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
         <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
         <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
-        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · Refresh tokens that rotate per device</a></li>
         <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
         <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
         <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
@@ -198,7 +198,7 @@
           automatic. Your aggregate records a domain event, and the framework does the rest.</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Inside your aggregate. You only declare that something happened:</span>
 AddDomainEvent(<span class="hljs-keyword">new</span> InventoryAdjusted(Id, oldAvailableQuantity, AvailableQuantity));
-<span class="hljs-comment">// SaveChanges does the rest: your data row and the OutboxMessage row,</span>
+<span class="hljs-comment">// SaveChanges does the rest: with the outbox on, your data row and the OutboxMessage row,</span>
 <span class="hljs-comment">// one transaction, same database as the aggregate.</span></code></pre>
           <p><code>AddDomainEvent</code> lives on the aggregate base (<code>AuditableAggregateRootEntity</code>), so any aggregate can
           raise events. The interesting work happens in <code>SaveChangesAsync</code>, which runs a fixed sequence:</p>
@@ -208,8 +208,10 @@ AddDomainEvent(<span class="hljs-keyword">new</span> InventoryAdjusted(Id, oldAv
           rows -&gt; <code>base.SaveChangesAsync()</code> commits <strong>data + outbox in the same transaction</strong> -&gt; dispatch the
           local domain events in-process -&gt; mark their outbox rows processed.</p>
           </blockquote>
-          <p>That commit is the whole guarantee. The data and the outbox rows are written under one commit, so they
-          cannot diverge. The in-process dispatch is a fast path for <strong>pure domain events</strong> only: an
+          <p>That commit is the whole guarantee. With the outbox on (the default for a broker transport; the
+          in-process default is covered under ADR-100 below), the data and the outbox rows are written under one
+          commit, so they cannot diverge. With it off, no rows are written and every captured event, integration
+          events included, is dispatched in-process. The in-process dispatch is a fast path for <strong>pure domain events</strong> only: an
           <code>IIntegrationEvent</code> still gets its outbox row, but it is deliberately not dispatched in-process, so its
           row stays unprocessed and only <code>OutboxProcessor</code> publishes it through <code>IMessageBus</code> (the registered
           transport decides delivery). That is what keeps an integration event broker-correct once the module is
@@ -286,18 +288,22 @@ AddDomainEvent(<span class="hljs-keyword">new</span> InventoryAdjusted(Id, oldAv
           through one method: <code>IUnitOfWork.ExecuteInTransactionAsync</code> is the Application-layer name for it,
           <code>UnitOfWork</code> forwards straight to <code>DbContextFactory.ExecuteInTransactionAsync</code>, and the CQRS
           pipeline&#39;s <code>TransactionalCommandDecorator</code> calls it for any command carrying <code>ITransactional</code>.
-          Running the delegate inside SQL Server&#39;s retrying execution strategy (<code>EnableRetryOnFailure</code>, five
-          attempts, a ten-second maximum delay) decides five things. The whole delegate is the retriable unit,
+          Running the delegate inside SQL Server&#39;s retrying execution strategy (<code>EnableRetryOnFailure</code>, up to
+          five retries, a ten-second maximum delay) decides six things. The whole delegate is the retriable unit,
           so anything computed outside it but committed inside it is silently wrong on a second attempt. Every
           attempt after the first starts from <code>ResetForRetry</code>, which calls <code>ChangeTracker.Clear()</code> on every
           context, because the failed attempt&#39;s entities are still <code>Added</code> and would otherwise be inserted a
           second time with a duplicate outbox row per event. A returned failed <code>Result</code> rolls back exactly like
-          a thrown exception, which is what a framework that mandates <code>Result</code> over exceptions owes itself. On
+          a thrown exception, which is what a framework that mandates <code>Result</code> over exceptions owes itself. A
+          thrown exception, cancellation included, rolls the attempt back best-effort and rethrows the original
+          even when the rollback itself throws, so the strategy judges retriability on the real failure rather
+          than on a rollback error from a connection the fault already broke. On
           a successful result, <code>FlushEnrolledCommandsBeforeCommitAsync</code> runs just before the commit: it saves
           internal-command rows enrolled after the handler&#39;s last save, so they commit with the caller&#39;s
           change, and it throws on any other unsaved tracked change, which rolls the unit back rather than
           committing while silently discarding that change. And the deferred in-process dispatch is flushed only after the commit succeeds (<code>FlushDeferredAsync</code>) and
-          dropped on every other path (<code>DropDeferred</code>), so an in-process handler only ever sees durable state
+          dropped on every other path (<code>DropDeferred</code>), exactly like the internal-command processor wake owed by
+          commands enrolled in the unit (released after the commit, before the flush), so an in-process handler only ever sees durable state
           while the outbox carries everything that crosses a process boundary. A re-entrant call joins the
           ambient transaction instead of nesting, and a Cosmos context is never enlisted at all, since
           <code>SupportsTransactions</code> is false for it. <strong>ADR-107</strong> records that contract.</p>
@@ -317,8 +323,9 @@ AddDomainEvent(<span class="hljs-keyword">new</span> InventoryAdjusted(Id, oldAv
           a local domain event&#39;s row is inserted already leased (<code>Outbox:LeaseSeconds</code>, under a fresh lock
           token), so no replica&#39;s poller claims it while the in-process dispatch runs, and a failed dispatch
           releases that lease so the processor retries promptly instead of waiting out the full lease.</li>
-          <li><strong>Batches and retries.</strong> It processes in batches of 50 and retries a failed message up to 5 times,
-          with at-least-once delivery and OpenTelemetry metrics for dead-letter tracking. Retries back off
+          <li><strong>Batches and retries.</strong> It processes in batches of 50 and gives each message at most 5 delivery
+          attempts (<code>Outbox:MaxRetries</code>, and a rejection by an open broker circuit counts as one) before
+          dead-lettering it, with at-least-once delivery and OpenTelemetry metrics for dead-letter tracking. Retries back off
           exponentially: attempt <code>n</code> waits <code>Outbox:RetryBackoffBaseSeconds * 2^(n-1)</code> (default base 10s),
           multiplied by a random jitter factor between 0.8 and 1.2 and then capped at the lease duration.
           The jitter is what keeps a batch that failed together (one dependency outage fails all 50 rows in
@@ -466,11 +473,14 @@ AddDomainEvent(<span class="hljs-keyword">new</span> InventoryAdjusted(Id, oldAv
           Service Bus when unset. <code>NoOpInboxStore</code> is reached only through an explicit <code>EnableInbox=false</code>,
           and that opt-out logs a startup Warning rather than staying silent. The generic
           <code>IntegrationEventConsumer</code> stages the inbox row in the scope&#39;s unit of work before the handlers
-          run and abandons it when a handler throws, so a handler that saves to the same source commits the
-          inbox row in its own transaction (<strong>ADR-021</strong>; every deployed service host also sets
-          <code>EnableInbox: true</code> explicitly, four in ADC and three in Store). The honest residual is narrower:
-          the duplicate window stays open for a handler that writes nothing or writes to a different source,
-          so handlers must still be idempotent for that case.</li>
+          run, abandons it when a handler throws, and writes it through <code>CompleteAsync</code> once every handler
+          has succeeded (<strong>ADR-021</strong>; every deployed service host also sets <code>EnableInbox: true</code> explicitly,
+          four in ADC and three in Store). Only a handler that saves through the consumer&#39;s own scope to the
+          same source commits the inbox row in its own transaction. The framework&#39;s persisting handlers do
+          not take that path: they derive from <code>ScopedIntegrationEventHandlerBase</code>, which opens a scope of
+          its own per delivery, so their saves never carry the staged row. The honest residual is therefore
+          the common case, not a narrow one: a crash between a handler&#39;s commit and the inbox write
+          redelivers the event, so handlers must still be idempotent.</li>
           <li><strong>The table grows, but it self-purges.</strong> Processed outbox rows accumulate, and the serialized
           payloads can contain PII, so the framework ships an automatic <code>OutboxCleanupService</code> that sweeps every
           relational source and deletes processed rows whose <code>ProcessedOn</code> is older than <code>Outbox:RetentionDays</code>

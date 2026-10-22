@@ -248,11 +248,11 @@
       <category>ADR 034</category>
     </item>
     <item>
-      <title>One rotating refresh token</title>
+      <title>Refresh tokens that rotate per device</title>
       <link>https://ivanball.github.io/articles/jwt-refresh-token-rotation.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/one-rotating-refresh-token-and-reuse-detection-that-makes-theft-self-limiting-fab42234a04a</guid>
       <pubDate>Mon, 27 Jul 2026 10:27:05 GMT</pubDate>
-      <description>A short-lived JWT plus one server-stored refresh token that rotates on every use, with reuse detection that makes a stolen token end its own session.</description>
+      <description>A short-lived JWT plus a server-stored refresh session per device that rotates on every use, with reuse detection that makes a stolen token end its own session.</description>
       <category>Auth &amp; the edge</category>
       <category>ADR 097</category>
     </item>

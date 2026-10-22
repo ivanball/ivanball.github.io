@@ -125,7 +125,7 @@
         <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
         <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
         <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
-        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · Refresh tokens that rotate per device</a></li>
         <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
         <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
         <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
@@ -232,7 +232,7 @@
           New-type-for-breaking-change is the only safe option when transport binds by type and consumers deploy
           independently.</p>
           <p>The framework ships the wiring for that migration, not only the rule (ADR-090, accepted 2026-08-21). An
-          upcaster is one typed class, <code>IEventUpcaster&lt;TOld, TNew&gt;</code>, registered by the module that owns the
+          upcaster is one typed class, <code>IEventUpcaster&lt;TSource, TTarget&gt;</code>, registered by the module that owns the
           contract:</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Module DI: one line per retired contract.</span>
 services.AddEventUpcaster&lt;ProductVariantChanged, ProductVariantChangedV2, ProductVariantChangedUpcaster&gt;();
@@ -264,6 +264,30 @@ x.RegisterUpcastedIntegrationEventConsumer&lt;ProductVariantChanged&gt;(); <span
           contract that a consumer should also be tolerant of versions it knows and explicit about versions it
           does not. The version field is what lets a consumer make that decision instead of guessing from a
           shape that silently changed.</p>
+          <h2 id="one-lifecycle-event-per-entity-fewer-contracts-to-version">One lifecycle event per entity: fewer contracts to version</h2>
+          <p>Versioning is cheaper when there are fewer contracts to version, and ADR-083 settles the shape of a
+          CRUD lifecycle event before ADR-010 governs how it evolves. Instead of a <code>{Entity}Created</code> /
+          <code>{Entity}Changed</code> / <code>{Entity}Deleted</code> triple, an entity raises one event carrying a
+          <code>DomainEntityState</code> discriminator, and handlers filter on <code>State</code>. The framework base is two members
+          wide:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// MMCA.Common.Domain - EntityChangedEvent (XML docs omitted)</span>
+<span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">abstract</span> <span class="hljs-keyword">record</span> <span class="hljs-title">EntityChangedEvent</span>&lt;<span class="hljs-title">TIdentifierType</span>&gt;(<span class="hljs-params">
+    DomainEntityState State,
+    TIdentifierType EntityId</span>) : BaseDomainEvent
+    <span class="hljs-keyword">where</span> TIdentifierType : <span class="hljs-keyword">notnull</span></span>;</code></pre>
+          <p>Seventeen concrete records derive it across the four repos: nine in ADC&#39;s Conference module, seven
+          in Store and one in Helpdesk. Common ships only the base.</p>
+          <p>For versioning, the collapse means one record, one serialized payload shape and one snapshot entry
+          per entity instead of three, and a new transition is an enum member rather than a new type. When a
+          lifecycle event crosses a service boundary, the discriminator rides the wire and is frozen with
+          everything else. Store&#39;s <code>ProductVariantChanged</code> integration event puts <code>State</code> first, typed as
+          Catalog&#39;s own <code>ProductChangeState</code>, which repeats the framework enum&#39;s member names and ordinals but
+          lives in the Shared layer, because the payload-purity rule rejects any type from a <code>*.Domain</code>
+          assembly on an integration event&#39;s wire shape. The committed contract snapshot records
+          <code>State:ProductChangeState</code> as a member of that event, so the discriminator obeys the same rule as
+          every other field: per ADR-083, adding an enum member is additive, while renumbering or removing one
+          is a breaking change that, under ADR-010, takes a new event type and an upcaster. The taxonomy itself is a review
+          convention: no fitness rule names <code>EntityChangedEvent</code> or checks that a discriminator exists.</p>
           <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
           <p>ADR-010 is candid that the field is a signal, not a complete mechanism.</p>
           <ul>
@@ -283,14 +307,18 @@ x.RegisterUpcastedIntegrationEventConsumer&lt;ProductVariantChanged&gt;(); <span
           until every consumer has drained it. That second gap is narrower than it sounds: the outbox stores and
           resolves an event&#39;s declared <code>[EventName]</code> identity, so an event that declares one stays resolvable
           through a rename or a namespace or assembly move, and only a type with no declared identity that is
-          deleted early leaves its rows unresolvable.</li>
+          deleted early leaves its rows unresolvable. The shared convention base also makes that identity
+          mandatory: a fact on <code>EventConventionTestsBase</code> fails the build for any integration event without
+          an <code>[EventName]</code>, in every tree that runs the current rule set.</li>
           <li><strong>The convention test covers a real event in MMCA.Common, but the framework&#39;s own coverage is one
           event wide.</strong> Common ships exactly one concrete integration event, the sealed record
           <code>OutputCacheEvictionRequested</code>, and <code>CommonArchitectureMap</code> registers the Domain assembly it lives
           in, so <code>EventVersioningConventionTests</code> runs against a real event in Common&#39;s own build. Enforcement
-          runs at four points: the framework itself plus three consumer trees (ADC, Store, and Helpdesk),
-          each subclassing the same base and running the identical rules
-          against its own event assemblies. One caveat rides along: Common&#39;s map declares no modules, so the
+          runs at five points: the framework itself plus four consumer trees, each subclassing the same base
+          and running its rules against its own event assemblies. ADC, Store and Helpdesk resolve the current
+          release and run the identical rules; the local-only, unpublished <code>MMCA.ECommerce</code> sample pins an
+          older <code>Testing.Architecture</code> release, so it runs neither the <code>[EventName]</code> rule nor the two upcaster
+          rules. One caveat rides along: Common&#39;s map declares no modules, so the
           Shared-layer half of the namespace rule is relaxed for the framework&#39;s own event, while every
           module-bearing consumer is still held to it. The framework supplies the rule; the consumers still
           supply the bulk of the events that exercise it.</li>
@@ -351,6 +379,7 @@ x.RegisterUpcastedIntegrationEventConsumer&lt;ProductVariantChanged&gt;(); <span
             <li><a href="#why-it-matters">Why it matters</a></li>
             <li><a href="#the-mmca-answer-a-version-on-every-event-and-a-rule-for-changing-it">The MMCA answer: a version on every event, and a rule for changing it</a></li>
             <li><a href="#how-it-complements-the-outbox">How it complements the outbox</a></li>
+            <li><a href="#one-lifecycle-event-per-entity-fewer-contracts-to-version">One lifecycle event per entity: fewer contracts to version</a></li>
             <li><a href="#trade-offs-honestly">Trade-offs, honestly</a></li>
             <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>
             </ul>

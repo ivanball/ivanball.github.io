@@ -22,8 +22,8 @@ functions, and more. Every technical claim traces to real source, an ADR, or a s
 | 12 | [Navigation populators](navigation-populators.md) | P2/P3 | G11 | §8 | 002 | deep-dive |
 | 13 | [Optimistic concurrency: RowVersion to a required If-Match](optimistic-concurrency-rowversion.md) | P2/P3 | G07 | §8 | 035 | deep-dive |
 | 14 | [Self-ordering modules](self-ordering-modules.md) | P2 | G14 | §7 | 059 | deep-dive |
-| 15 | [Event-schema versioning](event-schema-versioning.md) | P3 | G04 | §6 | 010/090 | deep-dive |
-| 16 | [JWKS cross-service auth](jwks-cross-service-auth.md) | P3 | G08 | §11 | 004/122 | deep-dive ★ |
+| 15 | [Event-schema versioning](event-schema-versioning.md) | P3 | G04 | §6 | 010/083/090 | deep-dive |
+| 16 | [JWKS cross-service auth](jwks-cross-service-auth.md) | P3 | G08 | §11 | 004/007/122 | deep-dive ★ |
 | 17 | [Password hashing done right](password-hashing.md) | P2/P4 | G08 | §11 | 102 | deep-dive |
 | 18 | [Idempotency in one attribute](idempotency-attribute.md) | P2 | G12 | §9,§29 | 017/021 | deep-dive |
 | 19 | [The self-invalidating cache](self-invalidating-cache.md) | P2 | G09 | §10,§12 | 026/040/073/077 | deep-dive |
@@ -59,7 +59,7 @@ functions, and more. Every technical claim traces to real source, an ADR, or a s
 | 49 | [Undo is a feature: saga compensation and the reconciliation backstop](saga-compensation-reconciliation.md) | P2/P3 | G04 | §6,§29 | 054/084/086 | deep-dive |
 | 50 | [The LLM is a dependency: a bounded, guarded, metered boundary for chat completions](governed-llm-boundary.md) | P2/P4 | G28 | §16 | 120/111 | deep-dive |
 | 51 | [Four ways to do work later: channels, cron, the outbox and durable internal commands](durable-internal-commands.md) | P2/P3 | G04 | §6,§10 | 114/121 | deep-dive |
-| 52 | [Finishing identity: second factor, email confirmation and stored permission grants](identity-completions.md) | P2/P4 | G08 | §11 | 116 | deep-dive |
+| 52 | [Finishing identity: second factor, email confirmation and stored permission grants](identity-completions.md) | P2/P4 | G08 | §11 | 091/116 | deep-dive |
 | 53 | [Series index (hub)](series-index.md) | P6 | all | all | - | index |
 
 ★ = cornerstone pillar (publish first; everything links up to these).

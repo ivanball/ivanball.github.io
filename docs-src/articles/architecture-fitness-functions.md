@@ -87,7 +87,7 @@ to `latest` with `AnalysisMode` `All` (`:11-12`), and turns on `EnforceCodeStyle
 IDE-only style rules run in the command-line build too. Five third-party analyzer packages, Meziantou,
 Microsoft.VisualStudio.Threading, Roslynator, SonarAnalyzer and StyleCop, ride into every project except
 a Docker Compose `.dcproj` (`:130-150`), with their versions pinned through Central Package Management
-(`MMCA.Common/Directory.Packages.props:223`, `:229-232`). The shared `.editorconfig` then sets
+(`MMCA.Common/Directory.Packages.props:233`, `:239-242`). The shared `.editorconfig` then sets
 `dotnet_analyzer_diagnostic.severity = error` (`MMCA.Common/.editorconfig:312`): every diagnostic
 starts as an error, and a rule that does not apply here is turned off by name with its reason beside
 it, so the exception list is something a reviewer can read rather than something implied by silence.
@@ -102,8 +102,8 @@ a four-repo change.
 
 **An empty run is a failure.** A green test step proves only that the tests which ran passed, and a
 broken filter or a discovery failure can turn a suite into zero tests and still report success. So the
-solution-wide unit runs carry `--minimum-expected-tests`: 2000 in MMCA.Common, against a suite of about
-2,254 (`MMCA.Common/.github/workflows/ci.yml:160-163`), 5000 in MMCA.ADC
+solution-wide unit runs carry `--minimum-expected-tests`: 2000 in MMCA.Common, against a suite that executes
+8,386 tests in CI (`MMCA.Common/.github/workflows/ci.yml:163`), 5000 in MMCA.ADC
 (`MMCA.ADC/.github/workflows/deploy.yml:366`) and 2650 in MMCA.Store
 (`MMCA.Store/.github/workflows/deploy.yml:338`). That is the same vacuity guard the form-count floor
 below applies to a single gate, applied to the whole run. The line-coverage floor that sits beside it
@@ -125,7 +125,7 @@ The rule *bodies* do not live in the test project. They live once, in a shipped 
 package defines:
 
 - `ArchitectureRules`, the reusable rule library that expresses the actual assertions.
-- A set of 61 abstract `*TestsBase` classes holding 153 test methods (for example
+- A set of 63 abstract `*TestsBase` classes holding 159 test methods (for example
   `LayerDependencyTestsBase`, `DomainPurityTestsBase`, `MicroserviceExtractionTestsBase`,
   `PiiConventionTestsBase`, `FolderWidthTestsBase`, `DataResidencyTestsBase`,
   `RawSqlConventionTestsBase`, `ClockReadTestsBase`).
@@ -181,8 +181,10 @@ actually declares that pin.
 Three example rule families show what fitness functions actually assert.
 
 **`LayerDependencyTests`.** The inward-dependency rule: API reaches down to Infrastructure,
-Infrastructure to Application, Application to Domain, Domain to Shared, and never the other way. (UI and
-Grpc are deliberate exceptions, depending only on Shared, so the test encodes that too.)
+Infrastructure to Application, Application to Domain, Domain to Shared, and never the other way. (UI is
+the deliberate exception, barred from Domain, Application and Infrastructure, so the test encodes that
+too. The same bar on the framework's own `MMCA.Common.Grpc` transport package is one of the Common-only
+checks described above.)
 
 **`DomainPurityTests`.** Domain must be framework-pure, and the rule names the ban explicitly rather
 than gesturing at it: a ten-entry assembly-dependency list covering `Microsoft.AspNetCore`,
@@ -327,9 +329,9 @@ on the wire it does not (`:271-273`). Deliberately not pinned: `syntax`, `import
 file-level options and a reordered import turns into a red build, which is the fastest way to teach a
 team to regenerate the snapshot without reading it.
 
-Adoption is the shape this tier always uses. MMCA.ADC's subclass pins the seven protos its four
-`*.Contracts` projects compile, against eighty-three frozen lines
-(`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Contracts/ProtoContractTests.cs:9-18`, list at `:20-105`);
+Adoption is the shape this tier always uses. MMCA.ADC's subclass pins the eight protos its four
+`*.Contracts` projects compile, against ninety-nine frozen lines
+(`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Contracts/ProtoContractTests.cs:9-19`, list at `:21-122`);
 MMCA.Store's pins four
 (`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Contracts/ProtoContractTests.cs:13-19`). MMCA.Common
 ships no `.proto` of its own, because it supplies the gRPC plumbing and not the contracts, so it
@@ -397,44 +399,48 @@ nothing compares the two files. `ObservabilityConventionTestsBase`
 ships in the same `MMCA.Common.Testing.Architecture` package and turns the pairing into a build
 failure (ADR-062).
 
-It always fails in three distinct ways. An SLO alert declared in the consumer's Bicep template with no `###`
-section in `infra/OPERATIONS.md` whose heading carries the matching `-alert-<key>` infix is a
-violation, and so is a heading that does carry the key but not the alert's current severity as
-`(sev N)` (`:89-115`), which means re-tiering an alert without moving its triage steps is a red build
-rather than a surprise at 3am. In the other direction, an orphan runbook section whose alert the
-template no longer provisions is a violation too (`:117-129`). And discovering fewer than
-`MinimumAlertSpecs` specs, default 3 (`:39`), is itself a failure (`:79-87`). A fourth fact is opt-in:
-a subclass that sets `RequireWorkbook` (off by default, `:58`) also fails unless the template declares
-an Azure Monitor workbook or a portal dashboard, so the signals the alerts fire on have somewhere an
-operator can look at them (`:65-77`).
+It fails in four distinct ways. An SLO alert declared in the consumer's Bicep template with no `###`
+section in `infra/OPERATIONS.md` whose heading names it as a whole `-alert-<key>` token is a
+violation, and so is a heading that does name the key but not the alert's current severity as
+`(sev N)` (`:91-117`), which means re-tiering an alert without moving its triage steps is a red build
+rather than a surprise at 3am. The match is whole-token, an optional `-v<N>` version suffix aside, so
+the section for `server-response-time-p99` cannot answer for `server-response-time` (`:168-178`). In
+the other direction, an orphan runbook section whose alert the template no longer provisions is a
+violation too (`:119-131`). Discovering fewer than `MinimumAlertSpecs` specs, default 3 (`:39`), is
+itself a failure (`:81-89`). And the template must declare an Azure Monitor workbook or a portal
+dashboard, so the signals the alerts fire on have somewhere an operator can look at them (`:67-79`):
+`RequireWorkbook` is on by default (`:60`), and a subclass overrides it to `false` only for a
+deployment that deliberately has no operator-facing view, saying why in the override (`:53-59`).
 
 That floor rule is the same fail-closed property the forms floor and the cost gate below both rely
 on, and it earns its keep here more than anywhere: discovery parses the template between two literal
-anchors, `var sloAlertSpecs` and `resource sloAlerts` (`:135-138`), and a rename would otherwise leave
+anchors, `var sloAlertSpecs` and `resource sloAlerts` (`:137-138`), and a rename would otherwise leave
 a gate that pairs zero alerts against zero runbook sections and reports success. A key count that
-disagrees with the severity count fails for the same reason (`:143`).
+disagrees with the severity count fails for the same reason (`:145`).
 
 Adoption is the shape the rest of this tier already uses. MMCA.ADC and MMCA.Store each embed their
 real `infra/main.bicep` and `infra/OPERATIONS.md` as manifest resources
 (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/MMCA.ADC.Architecture.Tests.csproj:17-22`)
 and declare a subclass whose only body is a raised floor matching the specs that repo provisions:
-MMCA.Store's `protected override int MinimumAlertSpecs => 4;`
+MMCA.Store's `protected override int MinimumAlertSpecs => 5;`
 (`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Governance/ObservabilityConventionTests.cs:13`),
-and MMCA.ADC's `=> 5`, the four request and resilience SLOs plus the AI scoring token ceiling
+and MMCA.ADC's `=> 6`, the five request and resilience SLOs plus the AI scoring token ceiling
 (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Governance/ObservabilityConventionTests.cs:14`).
 Leaving the shipped default of 3 in place would let the gate pass on three discovered specs if the
 parse anchors ever drifted, which is the vacuity trap one level up. The
 base reads those resources from `ResourceAssembly`, which defaults to the *derived* type's assembly
 (`:51`), because resolving against its own would look for the consumer's template inside the
 framework package and always throw. MMCA.Common, which deploys nothing, runs the base against its
-framework deployment sample through `SampleDeploymentObservabilityTests`, with a floor of 4 and the
-only `RequireWorkbook` opt-in in the workspace. MMCA.Helpdesk declares no subclass at all: an
+framework deployment sample through `SampleDeploymentObservabilityTests`, with a floor of 4 and
+`RequireWorkbook` stated as true explicitly, because the sample is the deployment consumers copy. The
+two consumers inherit the default, so the workbook fact runs for both. MMCA.Helpdesk declares no subclass at all: an
 inapplicable gate rather than an unadopted one. The honest limits are two. This is a text gate over
 infrastructure-as-code: it proves the two files agree, not that the deployment ran or that the query
 behind an alert measures what it claims. And it pairs only the SLO alerts declared between the parse
-anchors. Each consumer provisions six further operational alerts (dead-lettered outbox messages, a
-failed revision activation, the gateway availability probe among them) after that loop closes, and
-the gate neither requires nor forbids a runbook section for any of those twelve (ADR-062). The alerting mechanism itself sits with the
+anchors. MMCA.ADC provisions nine further operational alerts and MMCA.Store seven (dead-lettered
+outbox messages, a failed revision activation, the gateway availability probe among them) after that
+loop closes, and the gate neither requires nor forbids a runbook section for any of those sixteen; each
+has written triage today, kept by review rather than by the build (ADR-062). The alerting mechanism itself sits with the
 telemetry it watches, in Article 48.
 
 ## The third kind: a fitness function for cost
@@ -558,7 +564,7 @@ severity-correct runbook section, how the same idea extends to cost through a co
 that gates allocations absolutely and latency only as a ratio, and the honest limit that you only
 enforce what you write a rule for.
 
-**Next in the series:** the test pyramid behind these fitness functions, roughly 2,254 fast tests with
+**Next in the series:** the test pyramid behind these fitness functions, more than 8,000 fast tests with
 no Docker and no database.
 
 *MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the Architecture section
@@ -570,76 +576,104 @@ something.*
 
 *Tags: Software Architecture, .NET, C Sharp, Testing, Clean Architecture*
 
-*Notes: 2026-10-08 pass against MMCA.Common v1.233.0. Anchors this pass re-opened are named below; everything else
-was re-opened on 2026-10-02 against v1.221.0 or confirmed by that run's audit, and says so. Counts come from the
-CI-gated `MMCA.Common/FACTS.md` ("As of: 2026-10-07 (framework v1.233.0)" at `:4`, "Current: v1.233.0" at `:14`):
-153 test methods across 61 abstract `*TestsBase` classes (`:51`), of which MMCA.Common's own build executes 410
-(`:54`), and `MMCA.Common.Testing.Architecture` is package 18 of the 22 published (`FACTS.md:19` for the count,
-`:39` for its position in the numbered list); the body moves from 141/55 to 153/61 this pass. FACTS still names
-the consuming repos as "Common, ADC, Store" (`:53`), while the four-codebase reading rests on the Helpdesk map
-below. Scorecard row 14 Testability & Test Strategy restates "153 methods across 61 abstract bases"
-(`Website/docs-src/governance/common-ArchitectureScorecard.md:78`) but still gives Common's executed count as 309,
-which disagrees with FACTS (410); the article states no executed count, and FACTS wins if one is ever added. The
-same row is the source for the next-article pyramid figure, "~2,254 [Fact]/[Theory]" (`:78`), kept as stated.
-2026-10-08 changes. (1) New section "Beneath both gates: a build that does not compile a warning", grounded in
-ADR-132 (`Website/docs-src/adr/132-build-strictness-analyzer-policy.md`, Accepted 2026-10-07 at `:4`, Decision
-`:25-101`, suppression-pressure trade-off `:124-126`) and re-read in source: `TreatWarningsAsErrors`
-(`MMCA.Common/Directory.Build.props:7`), `AnalysisLevel` / `AnalysisMode` (`:11-12`),
+*Notes: 2026-10-22 pass against MMCA.Common v1.250.0 (re-verified 2026-10-22). Every anchor below was re-opened
+this pass and is given at the line it holds today; the 2026-10-08 (v1.233.0) and 2026-10-02 (v1.221.0) passes are
+superseded wherever an anchor moved. Counts come from the CI-gated `MMCA.Common/FACTS.md` ("As of: 2026-10-21
+(framework v1.250.0)" at `:4`, "Current: v1.250.0" at `:14`): 159 test methods across 63 abstract `*TestsBase`
+classes (`:81`), of which MMCA.Common's own build executes 458 (`:84`), and `MMCA.Common.Testing.Architecture` is
+package 18 of the 22 published (`FACTS.md:19` for the count, `:39` for its position in the numbered list). FACTS
+still names the consuming repos as "Common, ADC, Store" (`:83`), while the four-codebase reading rests on the
+Helpdesk map below. Scorecard row 14 Testability & Test Strategy
+(`Website/docs-src/governance/common-ArchitectureScorecard.md:78`) restates "157 methods across 63 abstract
+bases", which disagrees with FACTS (159/63); the article follows FACTS and states no executed count. The same row
+still carries the superseded pyramid figure, "~2,254 [Fact]/[Theory]" (`:78`), as does the comment at
+`MMCA.Common/.github/workflows/ci.yml:160`; the body and the "Next in the series" line follow Article 35's measured count instead (8,386 tests executed, 0 skipped, by the `build-and-test` job of CI run 39625216950, 2026-10-21, the v1.250.0 release PR, against `--minimum-expected-tests 2000` at `ci.yml:163`), as "a suite that executes 8,386 tests in CI" and "more than 8,000 fast tests" (2026-10-22 catch-up
+run). 2026-10-22 changes. (a) Fitness counts move from 153/61 to 159/63 (FACTS `:81`). (b) The analyzer CPM pins
+move to `MMCA.Common/Directory.Packages.props:233` (Meziantou) and `:239-242` (Threading, Roslynator, Sonar,
+StyleCop). (c) ADC proto adoption: eight protos (`user_notification_export.proto` added), `ProtoFiles` at
+`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Contracts/ProtoContractTests.cs:9-19` (entries `:11-18`),
+`FrozenProtoContracts` at `:21` with its list at `:22-122` holding 99 entries (`:23-121`), still with no comment
+above it (`:19-21` read). (d) Alert gate: `RequireWorkbook` defaults to true
+(`Bases/Governance/ObservabilityConventionTestsBase.cs:60`, doc `:53-59`), so the body reads four facts rather than
+three plus an opt-in fourth, matching ADR-062 Revision 2026-10-19 (`062-slo-alerting-as-code.md:513`, default-true
+item `:532-536`) and Revision 2026-10-21 (`:541`, the workbook fact running for both consumers at `:556`); the
+whole-token heading predicate `HeadingNamesAlert` (`:168-178`) joins the body in place of a plain infix match.
+(e) Consumer floors: MMCA.ADC 6
+(`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Governance/ObservabilityConventionTests.cs:14`, reason
+`:9-13`), MMCA.Store 5
+(`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Governance/ObservabilityConventionTests.cs:13`, reason
+`:9-12`), matching ADR-062 ("six paired alerts on ADC and five on Store", `:341-342`). (f) Ungated alerts: sixteen,
+nine on ADC and seven on Store, all with written triage (`062-slo-alerting-as-code.md:294`, `:341-342`, Revision
+2026-10-19 item 2 at `:524-526`); the named examples sit at `:294-297` and in the trade-off at `:384-387`.
+(g) The `LayerDependencyTests` parenthesis is narrowed: the base encodes only the UI bars
+(`Bases/Layering/LayerDependencyTestsBase.cs:90-96`), and the Grpc no-Domain, no-Application, no-Infrastructure
+bars are Common-only (`FrameworkSanityTests.cs:22-34`). (h) Common's sample is no longer called the only
+`RequireWorkbook` opt-in; it states true explicitly (`SampleDeploymentObservabilityTests.cs:24`, reason `:22-23`).
+Analyzer layer (section added 2026-10-08), grounded in ADR-132
+(`Website/docs-src/adr/132-build-strictness-analyzer-policy.md`, Accepted 2026-10-07 at `:4`, Decision `:28-113`,
+decision 5 and the compare script at `:68-78`, suppression-pressure trade-off `:135-136`) and re-read in source:
+`TreatWarningsAsErrors` (`MMCA.Common/Directory.Build.props:7`), `AnalysisLevel` / `AnalysisMode` (`:11-12`),
 `CodeAnalysisTreatWarningsAsErrors` (`:13`), `EnforceCodeStyleInBuild` (`:14`), the five analyzer
 `PackageReference`s under the `.dcproj` exclusion (`:130`, references at `:131`, `:135`, `:139`, `:143`, `:147`,
-group closes `:151`), their CPM pins (`MMCA.Common/Directory.Packages.props:223`, `:229-232`),
-`dotnet_analyzer_diagnostic.severity = error` (`MMCA.Common/.editorconfig:312`, same line in ADC, Store and
-Helpdesk), the baseline contract header (`:5-8`) and the `# REPO-SPECIFIC DELTAS` marker (`:821` in all four);
-`TreatWarningsAsErrors` / `CodeAnalysisTreatWarningsAsErrors` also read at `MMCA.ADC/Directory.Build.props:10`,
+group closes `:151`), `dotnet_analyzer_diagnostic.severity = error` (`MMCA.Common/.editorconfig:312`, same line in
+ADC, Store and Helpdesk), the baseline contract header (`:5-8`) and the `# REPO-SPECIFIC DELTAS` marker (`:821` in
+all four); `TreatWarningsAsErrors` / `CodeAnalysisTreatWarningsAsErrors` also at `MMCA.ADC/Directory.Build.props:10`,
 `:13`, `MMCA.Store/Directory.Build.props:10`, `:13`, `MMCA.Helpdesk/Directory.Build.props:13`, `:16`. Floors:
-`--minimum-expected-tests 2000` with the "~2,254" comment (`MMCA.Common/.github/workflows/ci.yml:160-163`), ADC
-5000 (`MMCA.ADC/.github/workflows/deploy.yml:366`), Store 2650 (`MMCA.Store/.github/workflows/deploy.yml:338`).
-The compare script is cited through ADR-132 decision 5 (`:63-73`) and not re-opened. The coverage floor is left
-to Article 35 (`test-pyramid.md:310`, the "Runner and gate" section). (2) "Exactly one map per repo" corrected:
-MMCA.Common ships `CommonArchitectureMap`
+`--minimum-expected-tests 2000` (`MMCA.Common/.github/workflows/ci.yml:163`; the stale "~2,254" comment at `:160`), ADC
+5000 (`MMCA.ADC/.github/workflows/deploy.yml:366`), Store 2650 (`MMCA.Store/.github/workflows/deploy.yml:338`). The
+coverage floor is left to Article 35 (`test-pyramid.md:310`, the "Runner and gate" section). Maps: MMCA.Common
+ships `CommonArchitectureMap`
 (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/CommonArchitectureMap.cs:15`) plus
 `FrameworkModuleArchitectureMap` (`Domain/EntityModel/FrameworkModuleArchitectureMap.cs:16`, purpose in its XML
-doc `:5-15`), used by `ImmutabilityTests.cs:13` and `EntityConventionTests.cs:14`; ADR-015 Revision 2026-10-07
-records the same correction (`015-architecture-fitness-functions.md:659-672`). (3) Helpdesk's consumption
-narrowed: its committed `local.props` sets `UseLocalMMCA=true` (`MMCA.Helpdesk/local.props:6`) and its AGENTS.md
-states local-source mode is the default and deleting `local.props` switches to packages
-(`MMCA.Helpdesk/AGENTS.md:33`). (4) Residency gap added: ADC and Store classify `*.md` as docs-only
-(`MMCA.ADC/.github/workflows/deploy.yml:138`) and gate the `CI.slnf` test step on a code diff (`:339`), per ADR-105's
-trade-off (`105-data-residency-build-gate.md:173-178`) and Revision 2026-10-06 (`:205-211`); Store's equivalents
-are cited from the ADR, not re-opened. (5) Alert-gate scope: twelve operational alerts outside the parse window,
-neither required nor forbidden (`062-slo-alerting-as-code.md:243-263`), and Common's
-`SampleDeploymentObservabilityTests`
+doc `:5-15`), used by `Domain/EntityModel/ImmutabilityTests.cs:13` and `EntityConventionTests.cs:14`; ADR-015
+Revision 2026-10-07 records the second map (`015-architecture-fitness-functions.md:657`). Helpdesk's consumption:
+its committed `local.props` sets `UseLocalMMCA=true` (`MMCA.Helpdesk/local.props:6`) and its AGENTS.md states
+local-source mode is the default (`MMCA.Helpdesk/AGENTS.md:33`). Residency gap: ADC classifies `*.md` as docs-only
+(`MMCA.ADC/.github/workflows/deploy.yml:138`) and gates its unit and architecture test step on a code diff (step
+`:350`, condition `:351`), per ADR-105's trade-off (`105-data-residency-build-gate.md:173-178`) and Revision
+2026-10-06 (`:205`, trade-off bullet `:210`); Store's equivalents are cited from the ADR, not re-opened. Wire
+freeze: `IntegrationEventContractTestsBase.cs:18`; `ProtoContractTestsBase.cs:19`, `SolutionFileName` `:22`,
+`ProtoFiles` `:25`, `FrozenProtoContracts` `:30`, the fact `:32-34`; `Rules/Contracts/ArchitectureRules.Protos.cs`
+method `:38`, repo root `:46`, two-direction diff `:68-71`, rpc rendering `:293-304` (streaming prefixes
+`:301-302`), enum `:306-312`, field `:314-322`, transparent `oneof` `:271-273`, unpinned set `:28-31`, the
+statement-based parser recorded in ADR-015 Revision 2026-10-06 (`:615`, Protos anchors at `:650`). The fixture
+pair: `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Contracts/ProtoContractFitnessTests.cs:14`,
+renumbered field `:52-64`, missing file `:76-87`. The regenerate comment is MMCA.Store's only
+(`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Contracts/ProtoContractTests.cs:21-24`, its four protos
+at `:13-19`). Alert runbooks: `Bases/Governance/ObservabilityConventionTestsBase.cs` declares the base at `:30`,
+the `-alert-` infix at `:32`, `MinimumAlertSpecs` 3 at `:39`, `ResourceAssembly` at `:51`, `RequireWorkbook` at
+`:60`, `MonitoringWorkbookOrDashboard_IsProvisioned_WhenRequired` (`:67-79`),
+`SloAlertSpecs_AreDiscovered_GateIsNotVacuous` (`:81-89`),
+`EveryProvisionedSloAlert_HasASeverityCorrectRunbookSection` (`:91-117`),
+`EveryRunbookAlertSection_MapsToAProvisionedAlert` (`:119-131`), the parse anchors (`:137-138`), the
+key-versus-severity count (`:145`) and `HeadingNamesAlert` (`:168-178`). The embedded pair at
+`MMCA.ADC.Architecture.Tests.csproj:17-22` holds; Common's `SampleDeploymentObservabilityTests`
 (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/SampleDeploymentObservabilityTests.cs:12`,
-floor 4 at `:20`, `RequireWorkbook` at `:24`; ADR-062 `:235-241`). (6) ADC proto snapshot: 83 frozen entries
-(`ProtoContractTests.cs:22-104`, list `:20-105`), seven protos at `:9-18` hold. (7) Protos.cs anchors after the
-statement-based parser rewrite, matching ADR-015 Revision 2026-10-06 (`:645-648`): rpc rendering `:293-304`
-(streaming prefixes `:301-302`), enum `:306-312`, field `:314-322`, transparent `oneof` `:271-273`; `:28-31`,
-`:38`, `:46`, `:68-71` re-read and hold. Scorecard indices: evidence as of 2026-10-07 at v1.233.0 (`:5`), Maturity 96.6%
-(317/328) at `:9` and Implementation 86.0% (705/820) at `:10`; row N sits at line 64+N, so §3 Clean Architecture is
-`:67` (Maturity 4 / Implementation 9, "domain verified framework-free"), §4 Domain-Driven Design `:68` (the
-`AggregateConventionTests` gate pinning `Create` to `Result<T>`), §5 Vertical Slice Architecture `:69` (slice
-cohesion "machine-enforced" by `SliceCohesionTestsBase`), §25 Navigation & Information Architecture `:89`, §26
-Front-End Security `:90`, §32 Dependency & Supply-Chain `:96` (the ADR-016 fitness function turning the
-MassTransit-v8 pin into a build gate "so the 'blanket update reintroduces known-bad dependency' red flag cannot
-recur") and §34 Architecture Governance & Docs `:98` (Maturity 4 / Implementation 8). The "rubric category 16"
-maintainability reference is corrected to §34: rubric v2 §16 is AI-Native Application Architecture
+floor 4 at `:20`, `RequireWorkbook` at `:24`; ADR-062 `:285-289`); Helpdesk has no observability subclass
+(directory listing below). The text-gate limit is ADR-062's trade-off at `:373-374`, the floor bullet at
+`:365-366`. Scorecard indices: evidence as of 2026-10-22 at v1.250.0 (`:5`), Maturity 97.3% (319/328) at `:9`
+and Implementation 85.4% (700/820) at `:10`; row N sits at line 64+N, so §3 Clean Architecture is `:67` (Maturity 4
+/ Implementation 9, "domain verified framework-free"), §4 Domain-Driven Design `:68` (the `AggregateConventionTests`
+gate pinning `Create` to `Result<T>`), §5 Vertical Slice Architecture `:69` (slice cohesion "machine-enforced" by
+`SliceCohesionTestsBase`), §25 Navigation & Information Architecture `:89`, §26 Front-End Security `:90`, §32
+Dependency & Supply-Chain `:96` (the MassTransit-v8 pin as a build gate "so the 'blanket update reintroduces
+known-bad dependency' red flag cannot recur") and §34 Architecture Governance & Docs `:98` (Maturity 4 /
+Implementation 8). The maintainability reference is §34: rubric v2 §16 is AI-Native Application Architecture
 (`Website/docs-src/governance/ArchitectureEvaluationCriteria.md:469`, scorecard `:80`), and the former
 Maintainability & Evolvability criteria live in §32, §33 and §34 (`:19`, §34 heading at `:890`, its "absorbs the
-former §16" intent at `:892`). The two-gate grounding moves from `MMCA.Common/CLAUDE.md` (now only an `@AGENTS.md`
-import stub, `CLAUDE.md:3`) to `MMCA.Common/AGENTS.md`: the `## Architecture` heading at `:64` and "Two enforcement
-gates; add new rules in BOTH" with the MSBuild target and the NetArchTest tier at `:68-70`; the closing CTA follows
-it, and the unverified README package table is replaced by FACTS. The "every base class is parameterized by
-`IArchitectureMap`" sentence is narrowed to "most": `FolderWidthTestsBase` takes an abstract `RepoRoot`
-(`Bases/Governance/FolderWidthTestsBase.cs:20`) and `ProtoContractTestsBase` a `SolutionFileName` and `ProtoFiles`
-(`Bases/Contracts/ProtoContractTestsBase.cs:22`, `:25`). Added this pass, subsection "Two gates on what a method
-body may call". ADR-125 (`Website/docs-src/adr/125-parameterized-sql-only.md`, Accepted 2026-09-19 at `:4`, the
-"ban is a test" decision bullet at `:66`, re-anchored 2026-10-08): `RawSqlConventionTestsBase` is declared at
-`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Cqrs/RawSqlConventionTestsBase.cs:31` with the
-abstract `Map` (`:33`), `AllowedFiles` empty by default as the adoption ratchet (`:36-39`), the textual-scan limits
+former §16" intent at `:892`). The two-gate grounding is `MMCA.Common/AGENTS.md` (`MMCA.Common/CLAUDE.md:3` is an
+`@AGENTS.md` import stub): the `## Architecture` heading at `:65` and "Two enforcement gates; add new rules in BOTH"
+with the MSBuild target and the NetArchTest tier at `:69-71`. "Most" bases take `IArchitectureMap`:
+`FolderWidthTestsBase` takes an abstract `RepoRoot` (`Bases/Governance/FolderWidthTestsBase.cs:20`) and
+`ProtoContractTestsBase` a `SolutionFileName` and `ProtoFiles` (`Bases/Contracts/ProtoContractTestsBase.cs:22`,
+`:25`). Method-body gates (subsection added 2026-10-08). ADR-125 (`Website/docs-src/adr/125-parameterized-sql-only.md`,
+Accepted 2026-09-19 at `:4`, the "ban is a test" decision bullet at `:67`): `RawSqlConventionTestsBase` is declared
+at `MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Cqrs/RawSqlConventionTestsBase.cs:31` with the
+abstract `Map` (`:33`), `AllowedFiles` empty by default as the adoption ratchet (`:39`), the textual-scan limits
 including the string-literal false positive (`:21-28`), the inherited `[Fact] ModuleCode_UsesParameterizedSqlOnly`
 (`:65-66`) failing when no source directory is found (`:70-72`), whole-line `//` comments skipped (`:105`), and the
-four banned members matched by `RawSqlAccessRegex` (`:115`); the interpolated siblings and `IRawSqlQueryExecutor`
-staying allowed is the base's own summary (`:5-10`). MMCA.Store's subclass is
+four banned members matched by `RawSqlAccessRegex` (`:115-116`); the interpolated siblings and
+`IRawSqlQueryExecutor` staying allowed is the base's own summary (`:5-10`). MMCA.Store's subclass is
 `MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Cqrs/RawSqlConventionTests.cs:12`, map at `:15`, empty
 `AllowedFiles` at `:18`; ADC (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Cqrs/RawSqlConventionTests.cs:14`)
 and Helpdesk (`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/ArchitectureTests.cs:191`) subclass
@@ -648,86 +682,62 @@ fitness test" at `:30`): `ClockReadTestsBase` is declared at
 `MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Domain/ClockReadTestsBase.cs:15` with the abstract
 `Map` (`:17`), `AllowedClockReaders` empty by default (`:24`, entries are type names, namespace prefixes or single
 members, `:19-23`) and the single `[Fact] DomainAndApplication_ShouldNotReadTheAmbientClock` (`:26-28`) calling
-`ArchitectureRules.DomainAndApplicationDoNotReadTheClock`
-(`Rules/Domain/ArchitectureRules.ClockReads.cs:56`), whose five banned getters are at `:20-27`, whose
-Mono.Cecil IL scan covering lambdas and async state machines is the remark at `:40-42`, whose built-in
-`BaseDomainEvent` exemption is at `:14`, and which reads only the map's Domain and Application assemblies
-(`:65-66`). MMCA.ADC's subclass is
+`ArchitectureRules.DomainAndApplicationDoNotReadTheClock` (`Rules/Domain/ArchitectureRules.ClockReads.cs:59`), whose
+five banned getters are at `:20-27`, whose Mono.Cecil IL scan covering lambdas and async state machines is the
+remark at `:40-45`, whose built-in `BaseDomainEvent` exemption is at `:14`, and which reads only the map's Domain
+and Application assemblies (`:68-69`). MMCA.ADC's subclass is
 `MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Domain/ClockReadTests.cs:8`, supplying
 `AdcArchitectureMap` (`:10`) and no allowlist; MMCA.Store's
-(`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Domain/ClockReadTests.cs:9`) carries one reviewed
-exemption per ADR-128 and is not described in the body. The four-codebase reading: MMCA.Helpdesk supplies
-`HelpdeskArchitectureMap : ArchitectureMapBase`
-(`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/HelpdeskArchitectureMap.cs:8`, confirmed by
-this run's audit), alongside `ArchitectureTests`, `FolderWidthTests`, `ContractImplementationTests`,
-`ServiceContractPurityTests`, `DecoratorPipelineOrderTests`, `MiddlewarePipelineOrderTests`,
-`AnonymousEndpointTests`, `DeleteBehaviorConventionTests` and `TicketsExportScopeTests` in that same folder
-(directory listing read this pass). The `DomainPurityTests` ten-entry ban list
-(`Rules/Layering/ArchitectureRules.Purity.cs:9-21`), the `MicroserviceExtractionTests` MassTransit rule
-(`Rules/Layering/ArchitectureRules.Transport.cs:13`; the base also bans Grpc and Protobuf, which the body
-understates rather than contradicts), `FrameworkSanityTests`
-(`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/FrameworkSanityTests.cs:21`),
-`DependencyVersionTests` (`Governance/DependencyVersionTests.cs:9`), the LayerEnforcement import
-(`MMCA.Common/Directory.Build.props:166`, re-read 2026-10-08) and NetArchTest.eNhancedEdition
-(`MMCA.Common.Architecture.Tests.csproj:55`, re-read 2026-10-08) were confirmed by this run's audit at those anchors and not re-opened
-here. Folder width: `FolderWidthTestsBase.cs:14` declares the base, `RepoRoot` abstract (`:20`), `MaxDirectFiles`
-12 (`:23`), `ExemptFolderSuffixes` empty (`:29`), delegating to `ArchitectureRules.FoldersStayNarrow` (`:33`); ADR-109
-decision 6 records all four subclasses and the Common-only `ExemptFolderSuffixes` override (109:78-84) and the
-schema point (109:113, re-anchored 2026-10-08); `ModuleNameConventions.cs:38-51` confirmed by audit. Data residency:
-`Bases/Governance/DataResidencyTestsBase.cs:14` with `Map` (`:16`), `ForbiddenResidencyClaims` (`:24`), the
-inherited `[Fact]` (`:26`) resolving the repo root (`:29`), reading `PRIVACY.md` (`:35`), asserting the region
-(`:38`) and rejecting each forbidden claim (`:40-43`), the abstract `ExtractDeployedRegion` (`:87`) and `Normalize`
-(`:93`); the consumer parsing (ADC `deploy.yml` and "central United States", Store `infra/DISASTER-RECOVERY.md`
-and the two ADC regions) was confirmed by this run's audit; ADR-105 scope at 105:7-8. Wire freeze:
-`IntegrationEventContractTestsBase` moves from `:11` to `:18`; `ProtoContractTestsBase.cs:19`, `:22`, `:25`, `:30`,
-`:32-34` hold; `Rules/Contracts/ArchitectureRules.Protos.cs` anchors all shift by one, method `:38`, repo root
-`:46`, two-direction diff `:68-71`, rpc, enum, field and `oneof` re-anchored 2026-10-08 (see change 7 above),
-unpinned set `:28-31`. The fixture pair moved into `Contracts/`:
-`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Contracts/ProtoContractFitnessTests.cs:14`,
-renumbered field `:52-64`, missing file `:76-87`. The "both consumer files carry the regenerate comment" claim is
-corrected to MMCA.Store only (`Contracts/ProtoContractTests.cs:21-24`); MMCA.ADC's `FrozenProtoContracts` at `:20`
-has no comment above it (`:18-20` read). ADC and Store pin counts (`:9-18`, list `:20-105` as of 2026-10-08; Store `:13-19`)
-confirmed by audit. Alert runbooks: `Bases/Governance/ObservabilityConventionTestsBase.cs` declares the base at
-`:30`, the `-alert-` infix at `:32`, `MinimumAlertSpecs` 3 at `:39`, `ResourceAssembly` at `:51`, the opt-in
-`RequireWorkbook` (`:58`) and its fourth fact `MonitoringWorkbookOrDashboard_IsProvisioned_WhenRequired`
-(`:65-77`, added to the body this pass so "three ways" now reads as the three always-on facts),
-`SloAlertSpecs_AreDiscovered_GateIsNotVacuous` (`:79-87`), `EveryProvisionedSloAlert_HasASeverityCorrectRunbookSection`
-(`:89-115`), `EveryRunbookAlertSection_MapsToAProvisionedAlert` (`:117-129`), the parse anchors (`:135-138`) and the
-key-versus-severity count (`:143`). The consumer floors are corrected: MMCA.ADC raises it to 5
-(`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Governance/ObservabilityConventionTests.cs:14`, reason at
-`:9-13`), MMCA.Store to 4 (`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Governance/ObservabilityConventionTests.cs:13`),
-matching ADR-062 ("five on ADC, four on Store", `Website/docs-src/adr/062-slo-alerting-as-code.md:343`, re-anchored 2026-10-08); the
-embedded pair at `MMCA.ADC.Architecture.Tests.csproj:17-22` and Helpdesk's lack of an observability subclass
-(directory listing above) hold. The text-gate limit is ADR-062's trade-off at `:319-320`, the floor bullet at
-`:311` (both re-anchored 2026-10-08). Cost gate: `performance-smoke` (`MMCA.Common/.github/workflows/ci.yml:355`) named `Performance gate
-(BenchmarkDotNet Short + baseline verify)` (`:356`), `timeout-minutes: 15` (`:359`), the Short-job rationale
-comment (`:386`), the `--filter "*" --job Short` run (`:388`) and the `build/perfgate` step (`:397`), all about
-22 lines earlier than the prior pass. `MMCA.Common/build/perfgate/Program.cs`: empty results directory (`:29-33`),
-missing allocation benchmark (`:59-62`), no allocation data (`:63-66`), strict ceiling compare (`:67-70`), missing
-ratio side (`:82-86`), ratio `mean(slow)/mean(fast)` and floor check (`:88-91`). `Tests/Performance/perf-baseline.json`:
-header comment (`:2`), `allocationCeilingsBytes` (`:3-12`), the single `IsSatisfiedBy_RecompileEachCall` over
-`IsSatisfiedBy_CachedCompile` floor at `minRatio` 1000 (`:13-19`). The five-percent characterization is ADR-060's
-"The Short job cannot see small latency regressions" (`Website/docs-src/adr/060-performance-regression-gate.md:170`, re-anchored 2026-10-08).
-`Load Test (k6)` (`MMCA.ADC/.github/workflows/load-test.yml:1`) on `workflow_dispatch` (`:14`) plus `cron: "0 6 1 *
-*"` (`:23`). The trade-offs bullet on prose masquerading as enforcement is regrounded this pass on scorecard §32
-(`common-ArchitectureScorecard.md:96`): the prior anchors (`common-RemediationBacklog.md:1611`, `:1597`) no longer
-exist after the backlog rewrite, and neither "fixed by a comment, not a rule" nor the retired "MassTransit will
-retry" comment is findable in `docs-src/governance`, so the history sentence and the zero-matches counterpart are
-removed rather than restated. The Article 35 pointer rests on ADR-015's "structure / registration" boundary
-(`Website/docs-src/adr/015-architecture-fitness-functions.md:93`; Revision (2026-08-18) headings at `:101` and
-`:278`, all re-anchored 2026-10-08) and on ADR-058 shipping the booted-host conformance bases in `MMCA.Common.Testing`
-(`Website/docs-src/adr/058-runtime-conformance-suites-as-a-package.md:25`). The NavigationFlow `because:` strings
-(`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Ui/NavigationContractTests.cs:40`, `:42`, auth
-posture `:46` and `:78`) and `FormsConventionTestsBase` (`Bases/Ui/FormsConventionTestsBase.cs:38`, floor `:50-51`,
-assertion `:66-67`) were confirmed by this run's audit. The header moves from Group G28 (which the taxonomy assigns
-to Common AI Integration) to G25 Testing & Quality Infrastructure, whose chapter file is still
-`group-28-testing-infrastructure.md` (`Website/docs-src/onboarding/00-group-taxonomy.md:83`, the G28 row
-at `:82`), and ADR-125 and
-ADR-128 join the Status block. Correction to a note carried from a prior pass: `MiniProfiler.Shared` is the direct
+(`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Domain/ClockReadTests.cs:9`, allowlist at `:18`)
+carries one reviewed exemption per ADR-128 and is not described in the body. The four-codebase reading: MMCA.Helpdesk
+supplies `HelpdeskArchitectureMap : ArchitectureMapBase`
+(`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/HelpdeskArchitectureMap.cs:8`), alongside
+`ArchitectureTests`, `FolderWidthTests`, `ContractImplementationTests`, `ServiceContractPurityTests`,
+`DecoratorPipelineOrderTests`, `MiddlewarePipelineOrderTests`, `AnonymousEndpointTests`,
+`DeleteBehaviorConventionTests` and `TicketsExportScopeTests` in that same folder (directory listing read this
+pass). The `DomainPurityTests` ten-entry ban list (`Rules/Layering/ArchitectureRules.Purity.cs:9-21`), the
+`MicroserviceExtractionTests` MassTransit rule (`Rules/Layering/ArchitectureRules.Transport.cs:13`; the base also
+bans Grpc and Protobuf, `:33`, which the body understates rather than contradicts), `FrameworkSanityTests`
+(`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/FrameworkSanityTests.cs:13`, Grpc bars
+`:22-34`), `DependencyVersionTests` (`Governance/DependencyVersionTests.cs:9`), the LayerEnforcement import
+(`MMCA.Common/Directory.Build.props:166`) and NetArchTest.eNhancedEdition (`MMCA.Common.Architecture.Tests.csproj:58`)
+were re-read at those anchors. Folder width: `FolderWidthTestsBase.cs:14` declares the base, `RepoRoot` abstract
+(`:20`), `MaxDirectFiles` 12 (`:23`), `ExemptFolderSuffixes` empty (`:29`), delegating to
+`ArchitectureRules.FoldersStayNarrow` (`:33`); ADR-109 decision 6 records all four subclasses and the Common-only
+`ExemptFolderSuffixes` override (109:80-88) and the schema point (109:115);
+`MMCA.Common/Source/Core/MMCA.Common.Shared/Conventions/ModuleNameConventions.cs:38-51` derives the module name.
+Data residency: `Bases/Governance/DataResidencyTestsBase.cs:14` with `Map` (`:16`), `ForbiddenResidencyClaims`
+(`:24`), the inherited `[Fact]` (`:26`) resolving the repo root (`:29`), reading `PRIVACY.md` (`:35`), asserting the
+region (`:37-38`) and rejecting each forbidden claim (`:40-43`), the abstract `ExtractDeployedRegion` (`:87`) and
+`Normalize` (`:93`); the consumer parsing (ADC `deploy.yml` and "central United States", Store
+`infra/DISASTER-RECOVERY.md` and the two ADC regions) rests on the 2026-10-08 audit and was not re-opened; ADR-105
+scope at 105:7-8. Cost gate: `performance-smoke` (`MMCA.Common/.github/workflows/ci.yml:310`) named `Performance
+gate (BenchmarkDotNet Short + baseline verify)` (`:311`), `timeout-minutes: 15` (`:314`), the Short-job rationale
+comment (`:341`), the `--filter "*" --job Short` run (`:343`) and the `build/perfgate` step (`:352`).
+`MMCA.Common/build/perfgate/Program.cs`: empty results directory (`:29-33`), missing allocation benchmark
+(`:59-62`), no allocation data (`:63-66`), strict ceiling compare (`:67-70`), missing ratio side (`:82-86`), ratio
+`mean(slow)/mean(fast)` and floor check (`:88-91`). `Tests/Performance/perf-baseline.json`: header comment (`:2`),
+`allocationCeilingsBytes` (`:3-12`), the single `IsSatisfiedBy_RecompileEachCall` over `IsSatisfiedBy_CachedCompile`
+floor at `minRatio` 1000 (`:13-19`). The five-percent characterization is ADR-060's "The Short job cannot see small
+latency regressions" (`Website/docs-src/adr/060-performance-regression-gate.md:171`). `Load Test (k6)`
+(`MMCA.ADC/.github/workflows/load-test.yml:1`) on `workflow_dispatch` (`:14`) plus `cron: "0 6 1 * *"` (`:23`). The
+trade-offs bullet on prose masquerading as enforcement rests on scorecard §32 (`common-ArchitectureScorecard.md:96`).
+The Article 35 pointer rests on ADR-015's "structure / registration" boundary
+(`Website/docs-src/adr/015-architecture-fitness-functions.md:98`; Revision (2026-08-18) headings at `:106` and
+`:283`) and on ADR-058 shipping the booted-host conformance bases in `MMCA.Common.Testing`
+(`Website/docs-src/adr/058-runtime-conformance-suites-as-a-package.md:29`). The NavigationFlow `because:` strings
+(`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Ui/NavigationContractTests.cs:40`, `:42`, the
+auth-posture fact at `:45` and its assertion at `:78`) and `FormsConventionTestsBase`
+(`Bases/Ui/FormsConventionTestsBase.cs:27`, required markers `UnsavedChangesGuard`, `IsDirtyAccessor` and
+`<MudForm` at `:65-68`, floor `MinimumCreateForms` at `:53`, floor assertion `:235-236`) were re-read this pass; the
+prior Forms anchors (`:38`, `:50-51`, `:66-67`) did not point at those members. The header's Group G25 Testing &
+Quality Infrastructure has the chapter file `group-28-testing-infrastructure.md`
+(`Website/docs-src/onboarding/00-group-taxonomy.md:83`, the G28 row at `:82`). `MiniProfiler.Shared` is the direct
 `<PackageReference>` at `Source/Core/MMCA.Common.Application/MMCA.Common.Application.csproj:23`, with
 `MiniProfiler.AspNetCore.Mvc` named only in the comments at `:14` and `:19`. Earlier coverage additions retained:
 the documentation-as-contract section (2026-07-27), the cost gate (2026-07-28, ADR-060), the alert-runbook section
 (2026-08-01, ADR-062), the wire-freeze section (2026-08-20, ADR-015 Revision), the folder-width and residency
-subsections (2026-09-19, ADR-109 and ADR-105).*
+subsections (2026-09-19, ADR-109 and ADR-105), the analyzer layer and method-body gates (2026-10-08, ADR-132,
+ADR-125 and ADR-128).*
 
 - Full series index: https://ivanball.github.io/writing.html

@@ -125,7 +125,7 @@
         <li><a href="permission-based-authorization.html" aria-current="page">24 · Permission-based authorization over roles</a></li>
         <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
         <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
-        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · Refresh tokens that rotate per device</a></li>
         <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
         <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
         <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
@@ -205,7 +205,10 @@
           compared case-insensitively (<code>OrdinalIgnoreCase</code>); permission values are compared ordinally. The same
           class is also the host&#39;s <code>IPermissionCatalog</code>, exposing the closed set of roles and permissions the code
           compiled in, so an administration screen enumerates the compiled map itself rather than a hand-kept second
-          list. It is the one place that knows the role-to-capability mapping, so endpoints never name a role.</p>
+          list. It is the one place that knows the role-to-capability mapping, so no endpoint&#39;s authorization
+          attribute names a role. (Endpoint code may still read a role for a business rule rather than a gate: ADC&#39;s
+          live-poll, question and bookmark controllers pass an organizer flag from <code>IsInRole(RoleNames.Organizer)</code>
+          to their handlers for the organizer bypass.)</p>
           <p><strong>Modules declare grants additively.</strong> <code>AddPermissions(...)</code> accumulates into a shared
           <code>PermissionRegistryBuilder</code>. Each <code>Grant(string role, params string[] permissions)</code> unions the new
           permissions into that role&#39;s set (<code>HashSet.UnionWith</code>), so grants from different modules combine and each
@@ -271,7 +274,8 @@ services.AddPermissions(ConferencePermissionGrants.Apply);
           defines twelve capabilities, including the seven-member <code>ContentManagement</code> subset granted to its own
           <code>ContentEditor</code> role (<code>conference:speakers:link</code> stays Organizer-only, because linking a speaker to a
           user account confers a speaker identity); its Engagement module defines three (among them <code>engagement:live:manage</code>, granted to
-          <code>Organizer</code>, gating the conference-day live-poll management endpoints); its Notification module grants the
+          <code>Organizer</code>, gating the organizer&#39;s event-wide live-poll list, while poll authoring is checked in the
+          handlers so a session&#39;s assigned speakers can run their own polls); its Notification module grants the
           framework&#39;s own <code>notifications:manage</code> to <code>Organizer</code>; and its Identity module defines three, two of which
           alias the framework-owned <code>users:manage</code> and <code>roles:manage</code> from <code>AdministrationPermissions</code> so the shared
           administration controller bases can carry their own <code>[HasPermission]</code>. MMCA.Store defines eleven of its own

@@ -125,7 +125,7 @@
         <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
         <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
         <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
-        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · Refresh tokens that rotate per device</a></li>
         <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
         <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
         <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
@@ -232,18 +232,21 @@
           constructor throws <code>ArgumentException</code> instead of silently dropping the shape; an unshaped one composes
           like any other, and predicates that belong with a shaped read are composed inside its own <code>Criteria</code>.
           Composition is live in production
-          today, in five consumer read paths across two applications. Three are in ADC: the paged sessions read
+          today, in six consumer read paths across two applications. Four are in ADC: the paged sessions read
           ANDs the public-session filter with the speaker-scoped one rather than substituting, because dropping
           the public filter for a speaker-scoped request would leak non-accepted sessions to non-privileged
           callers; the paged speakers read ANDs the public-speaker filter with an event-scoped one for the same
-          reason; and a shared visibility helper ANDs the public-session status rule with an inline event-scope
-          predicate before projecting session ids. Two are in MMCA.Store, where the public product-reviews
-          endpoint and the domain-event handler that recomputes a product&#39;s rating both AND a by-product review
-          specification with a published-reviews one. Each composed <code>Criteria</code> reaches the database as a single
-          server-side <code>WHERE</code>. All five call the fluent <code>.And()</code>, and the hand-built
-          <code>new AndSpecification&lt;...&gt;(a, b)</code> form appears nowhere in the three consumer repositories. Five call
-          sites in two applications is still a narrow sample, though (MMCA.Helpdesk composes nothing), and <code>Or</code>
-          and <code>Not</code> ship without a caller.</p>
+          reason; a shared visibility helper ANDs the public-session status rule with an inline event-scope
+          predicate before projecting session ids; and the organizer user roster turns the grid&#39;s signed-in
+          filter into a specification (an id <code>Contains</code> over the accounts holding a live session), negates it
+          with <code>.Not()</code> for the not-signed-in case, and ANDs it with any specification the caller already
+          supplied. Two are in MMCA.Store, where the public product-reviews endpoint and the domain-event
+          handler that recomputes a product&#39;s rating both AND a by-product review specification with a
+          published-reviews one. Each composed <code>Criteria</code> reaches the database as a single server-side <code>WHERE</code>.
+          That is seven composing call sites, six fluent <code>.And()</code> calls and one fluent <code>.Not()</code>, and the
+          hand-built <code>new AndSpecification&lt;...&gt;(a, b)</code> form appears nowhere in the three consumer repositories.
+          Seven call sites in two applications is still a narrow sample, though (MMCA.Helpdesk composes
+          nothing), and <code>Or</code> ships without a caller.</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// A named, reusable, server-authored visibility rule (ADC, BR-49): a session is publicly</span>
 <span class="hljs-comment">// visible when it is Accepted, or carries no status (organizer-created sessions never get one).</span>
 <span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">PublicSessionStatusSpecification</span> : <span class="hljs-title">Specification</span>&lt;<span class="hljs-title">Session</span>, <span class="hljs-title">SessionIdentifierType</span>&gt;

@@ -125,7 +125,7 @@
         <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
         <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
         <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
-        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · Refresh tokens that rotate per device</a></li>
         <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
         <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
         <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
@@ -173,9 +173,9 @@
           that declares its own dependencies so the host can assemble everything in the right order.</p>
           <p>The framework ships a <code>dotnet new</code> pack, so you type none of that plumbing (ADR-065). Hand-rolling it
           costs a day before you write a line of business logic, and ADR-065 measures that starting cost against
-          the framework&#39;s reference app: 12 projects, 137 files, and 11,571 lines of plumbing, an 827-line
-          <code>.editorconfig</code> among them, plus the 100-line <code>Directory.Packages.props</code> that carries every package pin
-          (58 of them in the seed today), several of those lines load-bearing in ways nothing tells you about
+          the framework&#39;s reference app: 12 projects, 139 files, and 12,157 lines of plumbing, an 827-line
+          <code>.editorconfig</code> and the 99-line <code>Directory.Packages.props</code> that carries every package pin (57 of them
+          in the seed today) among them, several of those lines load-bearing in ways nothing tells you about
           until much later.</p>
           <p>That changes what a tutorial like this is for. Step 0 gets you a green solution in about a minute.
           Steps 1 through 7 are the reasoning behind code you already have, which is what you need before you
@@ -300,8 +300,10 @@ dotnet test  <span class="hljs-literal">--solution</span> Contoso.Support.slnx  
           event sits in the aggregate&#39;s collection until <code>SaveChanges</code> runs. At save time the framework stamps the
           audit fields, captures the domain events, serializes them to <code>OutboxMessage</code> rows, commits data and
           outbox in one transaction, then dispatches in-process and marks the rows processed. You write one line;
-          the durability and the eventual broker delivery come for free (the transactional-outbox article covers
-          that machine in full).</p>
+          the durability comes for free. A domain event like this one stays inside the process; only an
+          integration event (<code>IIntegrationEvent</code>) is left on the outbox for <code>OutboxProcessor</code> to publish through
+          <code>IMessageBus</code>, in-process in the monolith and over a broker once a module is extracted (the
+          transactional-outbox article covers that machine in full).</p>
           <p><code>AddDomainEvent</code> lives on <code>AuditableAggregateRootEntity&lt;TId&gt;</code>, so any aggregate can raise events, and
           nothing in the Domain layer knows or cares how they will eventually be delivered.</p>
           <h2 id="step-3-write-the-command-and-its-handler">Step 3: write the command and its handler</h2>
@@ -488,8 +490,9 @@ dotnet new mmca<span class="hljs-literal">-query</span> <span class="hljs-litera
           are done the module is invisible to the host and to the fitness rules. If your solution came from
           <code>mmca-app</code>, you do not type any of them: that solution ships its own <code>build/add-module.ps1</code>, and the
           printed text opens by telling you to run it instead, because it invokes the template and then performs
-          all seven itself. The list is the fallback for a hand-built solution, and the best description of what
-          the script is doing on your behalf:</p>
+          all seven itself, plus one edit the list does not name: it appends the new module&#39;s event to the
+          frozen <code>ExpectedContract</code>, so your next test run stays green. The list is the fallback for a hand-built
+          solution, and the best description of what the script is doing on your behalf:</p>
           <ol>
           <li><strong>Solution.</strong> Add the eight new projects (five layer projects, both test projects, and the
           migrations project) to the <code>.slnx</code>.</li>
@@ -509,9 +512,11 @@ dotnet new mmca<span class="hljs-literal">-query</span> <span class="hljs-litera
           <li><strong>Database.</strong> The module gets its own: an <code>AddDatabase</code> / <code>WithSQLServerDataSource</code> pair in the
           AppHost, <code>Modules</code> / <code>DataSources</code> / <code>Outbox</code> entries in the Web host&#39;s <code>appsettings.json</code>, and the
           deletion of the now-conflicting top-level <code>SQLServerMigrationsAssembly</code>. Every module database
-          carries its own outbox and inbox tables, so two modules migrated into one database collide on them,
-          and naming the outbox source explicitly is what stops it from moving the day you reorder those
-          calls.</li>
+          carries its own outbox and inbox tables, so two modules migrated into one database collide on them.
+          The order of the AppHost data-source calls is cosmetic (the <code>Default</code> source is decided by the
+          top-level <code>ConnectionStrings__</code> override on the first module), and naming the outbox source
+          explicitly is what stops it from moving to another module&#39;s database the day that connection
+          changes.</li>
           <li><strong>First migration.</strong> <code>dotnet ef migrations add InitialCreate</code> against the new migrations project.</li>
           </ol>
           <p>The first two are what make it compile, so they fail loudly. Numbers three and four do not, and neither

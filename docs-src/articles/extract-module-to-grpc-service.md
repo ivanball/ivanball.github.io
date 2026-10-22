@@ -126,12 +126,16 @@ and resilience details ride along automatically:
   `Authorization` header but authenticated with a bearer token from elsewhere (a SignalR hub connection
   passes it as `?access_token=`), it forwards the token saved on the authentication ticket instead; a
   header that is present always wins. It is a no-op outside an HTTP request, for example in a
-  background processor.
+  background processor, and it forwards only the user's token: a call with no user goes out with no
+  credential unless its client opts into the framework's service token with `WithServiceToken()`
+  (covered in `Website/docs-src/articles/jwks-cross-service-auth.md`).
 - `AddStandardResilienceHandler()` gives every gRPC client a Polly retry, timeout, and
   circuit-breaker pipeline whose values come from `GrpcResilienceDefaults`. The timeouts and the retry
-  budget are the HTTP clients' own. The retry fires only on a failure to reach the peer (an
-  `HttpRequestException`), because every gRPC call is a POST and replaying one that reached the handler
-  could run it twice. The circuit breaker's failure ratio, minimum throughput and break duration are
+  budget are the HTTP clients' own. The retry fires only on a failure to reach the peer before the
+  request was sent (an `HttpRequestException` whose `HttpRequestError` is name resolution, the TCP
+  connect, or the TLS handshake), because every gRPC call is a POST and replaying one that reached the
+  handler could run it twice; an `HttpRequestException` raised after the request frames were written is
+  not retried. The circuit breaker's failure ratio, minimum throughput and break duration are
   explicit gRPC values, while its sampling window is the HTTP clients' own. A deliberate `SocketsHttpHandler` override forces
   explicit HTTP/2 so the resilience handler cannot defeat the h2c negotiation.
 
@@ -177,8 +181,10 @@ does so against the issuer's **JWKS**, the public signing keys, not a shared sec
 `JwksEndpointExtensions` in the API layer serves `/.well-known/jwks.json` so any extracted service can
 fetch the issuer's public keys and validate independently. Under local Aspire the JWKS backchannel is routed
 through the gateway; in Azure Container Apps each service points straight at the identity app's
-in-cluster address (ADR-004, ADR-012). No service ever needs to share a symmetric secret with another, which is what makes the fleet
-safe to grow.
+in-cluster address (ADR-004, ADR-012). Validating a user's token never requires services to share a
+symmetric secret, which is what makes the fleet safe to grow. The framework's one shared key is opt-in
+and separate: an HS256 service token (configuration section `Grpc:ServiceToken`) for calls that carry
+no user, which Store enables on its Sales-to-Identity edge and ADC does not use (ADR-007).
 
 ## Step 6: wire it in the AppHost with MMCA.Common.Aspire.Hosting
 
@@ -412,8 +418,9 @@ The recipe ports to any stack:
 2. **Keep the wire contract in a shared package** that generates both server and client stubs, and ship
    an adapter that implements the same interface the in-process code already used. Extraction becomes a
    registration swap.
-3. **Federate auth with JWKS,** not a shared secret, so adding a service does not mean distributing a
-   symmetric key.
+3. **Federate user auth with JWKS,** not a shared secret, so adding a service does not mean distributing a
+   symmetric key. If services must also call each other with no user present, keep that shared key
+   opt-in, scoped to the edges that need it, and separate from user-token validation.
 4. **Front the services with a single gateway** so clients see one URL and internal transport choices
    stay internal.
 5. **Treat the Kestrel/gateway/ingress/JWKS transport choice as one coupled decision,** and write down
@@ -594,4 +601,70 @@ re-read). Unchanged and still exact per this run's audit: `GatewayRateLimitingEx
 33/15, limiter defaults 120/60/200, probe budget 2 seconds, breaker 0.5/10/10 seconds and ports
 8080/8081. The earlier side finding about ADR-012's Notification anchors is superseded: ADR-012 now
 cites `Program.cs:72` (correct) and `:292`/`:300` (`012-grpc-host-transport.md:344`), while the real
-lines are `:293`/`:301`, so it is off by one in the other direction (reported, not edited here).*
+lines are `:293`/`:301`, so it is off by one in the other direction (reported, not edited here).
+2026-10-22 pass, re-verified against MMCA.Common v1.250.0 (`MMCA.Common/FACTS.md:14`; was v1.233.0).
+Body corrections, all re-read: (1) Step 3's retry predicate is narrower than any
+`HttpRequestException`: `Retry.ShouldHandle` matches only `HttpRequestError.NameResolutionError`,
+`ConnectionError` or `SecureConnectionError`
+(`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:142-147`, rationale
+`:135-141`). (2) Step 3's interceptor bullet records that `JwtForwardingClientInterceptor` forwards
+only the user's token and a no-user call carries a credential only when its client chains
+`WithServiceToken()`
+(`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Interceptors/JwtForwardingClientInterceptor.cs:27-32`;
+`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Authentication/ServiceTokenHttpClientBuilderExtensions.cs:28`,
+interceptor added `:34`). (3) Step 5 and Apply-this point 3 scope the no-shared-secret claim to user
+tokens: the opt-in service token is HS256 over a shared key
+(`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Authentication/ServiceTokenSettings.cs:13`, section
+`Grpc:ServiceToken` `:21`, `SigningKey` `:33`); Store wires it on the Sales-to-Identity edge
+(`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:289`,
+`MMCA.Store/Source/Services/MMCA.Store.Identity.Contracts/DependencyInjection.cs:46`,
+`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:173`); ADR-007's 2026-10-21
+revision records it as Store's one shared-secret exception
+(`Website/docs-src/adr/007-grpc-extraction.md:11-12`); ADC does not use it (Grep for
+`WithServiceToken|AddServiceToken` under `MMCA.ADC/Source`: 0 matches); the full treatment stays in
+Article 16. Corrected anchors (values unchanged): `MMCA.Common.Grpc/DependencyInjection.cs`
+resilience `:129-152` (was `:127-142`), predicate as above (was `:137`), `SocketsHttpHandler`
+`:112-120` (was `:110-118`), h2c address `:98-99` (was `:96-98`); `JwtForwardingClientInterceptor.cs`
+access-token doc `:20-26` (was `:20-24`), `ResolveUserAuthorization` (was `ResolveAuthorization`)
+`:144-160` (was `:117-133`), ticket fallback `:157-159` (was `:130-132`), no-op without an
+`HttpContext` `:16-18` and `:146-148` (were `:14-17`/`:119-122`);
+`MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs` now has 14 public methods
+(adds `WithE2eForceServer` `:441`): `AddMailDev` `:153`, `AddMessageBroker` `:172`,
+`AddServiceBusEmulatorBroker` `:213`, `WithBroker` `:264` and `:292`, `WithJwksDiscovery` `:321`,
+`WithE2eRsaKeys` `:365`, `WithE2eRegistrationThrottleLift` `:404`, `WithE2eGatewayRateLimitLift`
+`:487`, data sources `:530`/`:560`/`:589`/`:614`, still no gRPC API and the single gRPC comment at
+`:334`; ADC AppHost `WithJwksDiscovery` `MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:373-375`
+(was `:368-370`); ADC Bicep in-cluster authority `MMCA.ADC/infra/main.bicep:2161`, `:2297`, `:2451`
+(were `:2005`/`:2141`/`:2295`); ADR-012 (`Website/docs-src/adr/012-grpc-host-transport.md`) no deployed
+pure Profile B host `:272` (was `:271`), Profile A gateway `:332-337` (was `:325-330`), local/ACA JWKS
+`:338-345` (was `:331-338`), historical HTTPS/ALPN note `:366-367` (was `:359-360`), Profile B gateway
+`:368-371` (was `:361-364`), historical single-argument note `:376-380` (was `:369-373`);
+`MmcaGateway:ForwardHttp2` removal `MMCA.Common/CHANGELOG.md:2858` (was `:2545`); outbox registration
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:222-224` (was `:213-225`);
+ADR-089's 26/10 `MapForwarder` Context `:28-29` and its 33-route five-cluster split `:96-97` (the
+earlier `:92-96` covered only the latter); Store Sales `appsettings.json:9-19` (was `:10-19`).
+`AddEngagementBookmarkCountClient` is the real ADC helper, not an illustrative name
+(`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Contracts/DependencyInjection.cs:43`, typed client
+`:45`, `services.Replace` `:49`, called at `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:420`);
+the Step 3 code block abridges its body. Re-read this run and unchanged: `GrpcResilienceDefaults.cs`
+`:15`/`:18`/`:21`/`:24`/`:27`/`:30`/`:33`; `ResultGrpcExtensions.cs` `ToRpcException` `:119-125`,
+`ToResult` `:218-227`; `MessageBusSettings.cs` `:14`, `:17`, `:167`, `:175`, `:241`; `ModuleLoader.cs:119`,
+`IModule.cs:34`; `ErrorHttpMapping.cs:14`, `:20`; `ApiControllerBase.cs:48`, `:58`; ADC AppHost `:256`,
+`:266`, `:268`, `:269`; ADC Notification `Program.cs:72`, `:249`, `:293`, `:301` and `appsettings.json:9-19`
+(8080 `Http1AndHttp2`, named `grpc` 8081 `Http2`); Store Sales `Program.cs:79`; every
+`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Gateway/` anchor of the 2026-10-08 pass
+(`GatewayRateLimitingExtensions.cs`, `GatewayRateLimitingSettings.cs`, `GatewayHealthCheckExtensions.cs`,
+`GatewayCorrelationMiddleware.cs`) and `ForwardedHeadersExtensions.cs:36`/`:40`; ADC gateway `Program.cs`
+`:76`/`:90`/`:148`/`:160`/`:165`/`:173`/`:180`/`:234`; Store gateway `Program.cs:150`, `:155`; gateway
+csprojs `MMCA.ADC.Gateway.csproj:3-4`, `MMCA.Store.Gateway.csproj:25-26`; bypass lists ADC
+`appsettings.json:25` and Store `:20`; `Routes` at ADC `:80` and Store `:51`, 33 and 15 routes counted by
+parsing each file; the `RouteMapTests.cs` anchors of the 2026-10-08 pass (Store rationale `:31-35`
+re-read only at `:32`). `MMCA.Common/AGENTS.md:126` is the "Microservices Extraction Boundaries" heading. Not
+settled this run: the ADR-004 attribution was re-read only as ADR-088 states it
+(`Website/docs-src/adr/088-gateway-edge-responsibilities.md:309`), not against ADR-004's own text.
+Side findings (reported, not edited): `MMCA.Common.Grpc/DependencyInjection.cs:63-65` still says the
+JWT interceptor attaches the service token when `AddServiceTokenClient` registered a provider,
+contradicting `JwtForwardingClientInterceptor.cs:27-32`; `GrpcResilienceDefaults.cs:9-10` says retries
+are left to the standard handler's transient classification, while `DependencyInjection.cs:142`
+overrides `Retry.ShouldHandle`; ADR-012 cites ADC Bicep `main.bicep:2159`/`:2295`/`:2449`
+(`012-grpc-host-transport.md:125-126`), each two lines short of the real `:2161`/`:2297`/`:2451`.*

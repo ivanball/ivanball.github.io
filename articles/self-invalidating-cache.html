@@ -125,7 +125,7 @@
         <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
         <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
         <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
-        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · Refresh tokens that rotate per device</a></li>
         <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
         <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
         <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
@@ -211,9 +211,10 @@
           <p>The two specialized reads each close a gap a plain <code>GetAsync</code> leaves open. <code>TryGetAsync</code> reports
           presence separately from the value, because for a value type a miss and a cached <code>default</code> (<code>0</code>,
           <code>false</code>, <code>Guid.Empty</code>) look identical. The default member infers presence from a non-null <code>GetAsync</code>
-          result, which is exact for reference and nullable types; the memory and distributed stores override it
-          with a real presence check, and the hybrid store does not, so through the hybrid backend a value-type
-          miss still reads as found.
+          result, which is exact for reference and nullable types, and all three shipped stores override it with
+          a real presence check. <code>HybridCache</code> has no presence-reporting read, so the hybrid store asks for the
+          entry with a factory that throws a tagged miss: a hit never calls it, and the thrown sentinel reads as
+          not found, so a cached <code>0</code> or <code>false</code> still counts as a hit.
           <code>GetFromSharedStoreAsync</code> reads the shared store and never a process-local copy, for values whose change
           on one replica must be visible on every other replica at once: single-use records (an OAuth exchange
           code, a password-reset or email-confirmation token, the last accepted second-factor time step), the
@@ -226,9 +227,11 @@
           would fail the next read: the override buys one call site, not atomicity. The hybrid override keeps
           both legs on L2, so no replica counts from a stale local copy.)</p>
           <p><code>GetOrCreateAsync</code> is the most interesting of the default members, because of who does <em>not</em> use
-          it. It is get, then take a per-key lock from a process-wide stripe,
-          double-check, run the factory, store the result. That is the read-through shape the query decorator below
-          implements, offered to the callers that are not queries. The decorators still do not route through it, and
+          it. Its default body is get, then take a per-key lock from a process-wide stripe, double-check, run the
+          factory, store the result; the hybrid store overrides it with <code>HybridCache</code>&#39;s own call, which folds the
+          same double-check and stampede protection into one call and keeps the same guarantees (unconditional
+          storage, protection per process), so the hybrid store overrides all four default members. That is the
+          read-through shape the query decorator below implements, offered to the callers that are not queries. The decorators still do not route through it, and
           the interface says so in its own remarks: <code>GetOrCreateAsync</code> caches whatever the factory returns,
           unconditionally, including a failed <code>Result</code>. The decorator must not, so it keeps its own
           read/execute/write sequence. A convenience helper that quietly relaxes a correctness rule is worth having
@@ -458,7 +461,11 @@
           default except where it deliberately differs: it does not bail out on an <code>Authorization</code> header or an
           authenticated identity, and it varies the cache key by the resolved tenant (<code>VaryByValues[&quot;t&quot;]</code>, the
           mirror of the <code>t:{tenantId}</code> prefix the decorators apply), because one path and query mean different rows
-          per tenant and the entry is shared. It re-implements the safeguards it displaced, GET/HEAD only, never
+          per tenant and the entry is shared. It also turns off request coalescing (<code>AllowLocking = false</code>): the
+          built-in default makes concurrent misses for one key wait on the first request&#39;s execution, which runs
+          under that request&#39;s <code>RequestAborted</code> token, so one disconnecting client would cancel the shared query
+          and answer 500 to every waiter. The price is that simultaneous misses each run the query once, so the
+          edge tier has no stampede protection inside one expiry window. It re-implements the safeguards it displaced, GET/HEAD only, never
           store a <code>Set-Cookie</code> response or a non-200, and vary the key by every query-string parameter
           (<code>CacheVaryByRules.QueryKeys = &quot;*&quot;</code>, the exact rule a hand-rolled policy most easily drops). Hosts register it per named
           policy via <code>OutputCacheOptions.AddPublicEndpointPolicy(name, expiration, tags)</code> and reference it from
@@ -539,9 +546,12 @@
           <code>OperationCanceledException</code> is excluded from the guard, so a genuinely cancelled request still surfaces
           exactly as the inner handler would. A Redis outage therefore costs latency and database load, not a 500
           on every cacheable query. The same posture on the authenticated hot path is where it turns into a real
-          trade-off: <code>SoftDeletedUserMiddleware</code> caches the soft-deleted marker, falls back to the validator query
-          when that cache is unreachable, and proceeds open when the query fails too, rather than locking out every
-          authenticated caller on one blip. The exposure that buys is bounded by access-token lifetime: tokens live
+          trade-off: <code>SoftDeletedUserMiddleware</code> reads the soft-deleted marker from the shared store on every
+          host. On the host that registers the validator (Identity) it runs the validator query whenever no marker
+          is set, the cache being unreachable included, and never caches a &quot;not deleted&quot; answer, so that host pays
+          one shared-store read plus one query per authenticated request; a host with no validator passes a miss
+          or a cache failure straight through. When the query fails too, the middleware proceeds open rather than
+          locking out every authenticated caller on one blip. The exposure that buys is bounded by access-token lifetime: tokens live
           15 minutes, and the deletion already revoked the refresh token, so the residual risk is one
           already-issued token running out its remainder while the cache or database is unhealthy. That bound is
           what makes the fail-open a deliberate choice rather than an accident of the code path.</li>

@@ -161,10 +161,13 @@ not-found, never `403 Forbidden`. The pipeline decorator short-circuits with `Er
 edge handler returns `404`. Neither answer looks like a permissions problem, but neither body is
 anonymous either (ADR-031). The edge body is titled "Feature not available" (`DisabledFeatureHandler.cs:22`).
 The CQRS failure travels through the Result to ProblemDetails mapping, whose `errors` extension serializes
-each error's code and message (`ErrorHttpMapping.cs:62-70`, with the message localized by code when the
-host registers an `IErrorLocalizer`, `:66`), so the caller sees the `Feature.Disabled` code and the same
-generic "The requested feature is not currently available." wording the edge uses as its detail
-(`FeatureGateCommandDecorator.cs:60-62`). The flag name stays out of the message on purpose, because the
+each error's code and message (`ErrorHttpMapping.cs:62-70`), with the message localized by code
+(`:66`) through the `IErrorLocalizer` that `AddAPI` always registers (`MMCA.Common.API/DependencyInjection.cs:110`,
+`:125`). Under the default culture the caller sees the `Feature.Disabled` code and the same generic
+"The requested feature is not currently available." wording the edge uses as its detail
+(`FeatureGateCommandDecorator.cs:60-62`). Under a Spanish request culture the CQRS message comes back
+translated (`ErrorResources.es.resx:196-197`) while the edge detail stays in English
+(`DisabledFeatureHandler.cs:23`), so the two bodies agree on meaning rather than on exact words. The flag name stays out of the message on purpose, because the
 message reaches the user verbatim and the name is internal; clients branch on the code
 (`FeatureGateCommandDecorator.cs:56-58`). Turning a flag off makes the feature answer not-found and say
 that a feature is unavailable, not report a locked door.
@@ -210,8 +213,11 @@ that a feature is unavailable, not report a locked door.
   (`RefreshFromSessionizeCommand.cs:15`) and `ScoreEventSessionsInternalCommand`
   (`ScoreEventSessionsInternalCommand.cs:39`), and Store's `VerifyPaymentCommand` (`VerifyPaymentCommand.cs:20`).
   The scoring command is a durable internal command that the framework's processor runs through the same
-  decorator pipeline, so with its flag off the gate's failure completes the queued row rather than retrying
-  it (`ScoreEventSessionsInternalCommand.cs:42-46`); its trigger endpoint also carries
+  decorator pipeline, because the dispatcher resolves the decorated `ICommandHandler` from the container
+  (`InternalCommandDispatcher.cs:11-18`). The processor completes a queued row only on success
+  (`InternalCommandProcessor.cs:415-421`), so with the flag off the gate's failure is treated like any
+  other failed `Result`: the row spends an attempt and is rescheduled with backoff, then dead-lettered as
+  `attempts_exhausted` once the attempt budget is spent (`:423-425`, `:450-461`). Its trigger endpoint also carries
   `[FeatureGate(ConferenceFeatures.SessionScoring)]` (`SessionSelectionController.cs:134`), so that flag is
   enforced at both surfaces. No query is gated. The flag inventory is wider than the pipeline usage:
   thirteen flag-name constants
@@ -263,8 +269,23 @@ pattern (ADR-031), or `dotnet add package MMCA.Common.Application` and gate your
 
 *Tags: .NET, C Sharp, Software Architecture, CQRS, Feature Flags*
 
-*Notes: verified names and behaviors from THIS run (2026-10-08, MMCA.Common v1.233.0; the prior run was
-2026-10-02 at v1.221.0). 2026-10-08 entry (v1.233.0): the CQRS disabled message is the generic
+*Notes: verified names and behaviors from THIS run (2026-10-22, MMCA.Common v1.250.0; prior runs
+2026-10-08 at v1.233.0 and 2026-10-02 at v1.221.0). 2026-10-22 entry (v1.250.0): every anchor below was
+re-read against current source this run and holds unchanged, except the ADR-031 anchors, which all moved
+down one line after its 2026-10-21 Status line (see below). Two body corrections: (1) the scoring-command
+sentence previously said a flag-off failure completes the queued row rather than retrying it, citing the
+command's XML doc (`ScoreEventSessionsInternalCommand.cs:41-47`), which still says so; the processor does
+not do that. `InternalCommandDispatcher` resolves the closed, decorated `ICommandHandler<TCommand, Result>`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Processing/InternalCommandDispatcher.cs:11-18`,
+`:75`); `InternalCommandProcessor` completes a row only when `IsSuccess` is true (`InternalCommandProcessor.cs:415-421`)
+and sends every failed `Result` to `RecordFailedAttemptAsync` (`:423-425`, method `:435-462`), which
+dead-letters as `attempts_exhausted` at `MaxAttempts` (`:450-456`) and otherwise schedules a retry
+(`:459`); nothing special-cases `Feature.Disabled`. (2) The localization clause previously read "when the
+host registers an `IErrorLocalizer`"; `AddAPI` always calls `AddErrorLocalization()`
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:110`), which `TryAddSingleton`s
+`IErrorLocalizer` (`:125`), and `ErrorResources.es.resx:196-197` translates `Feature.Disabled` while
+`DisabledFeatureHandler.cs:23` hardcodes English, so the identical-wording claim is scoped to the default
+culture. 2026-10-08 entry (v1.233.0): the CQRS disabled message is the generic
 "The requested feature is not currently available." in both decorators
 (`FeatureGateCommandDecorator.cs:60-62`, `FeatureGateQueryDecorator.cs:59-61`), with the reason in a
 source comment (`FeatureGateCommandDecorator.cs:56-58`), as ADR-031's Revision (2026-10-06) records
@@ -307,7 +328,7 @@ Percentage/TimeWindow/Targeting filters noted in the surrounding comment, `:94-9
 requested feature is not currently available." (`:23`) and no `errors` extension; the CQRS failure's
 `errors` extension is built by `BuildErrorsExtension`
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ErrorHttpMapping.cs:62-70`), which serializes
-`Code` and `Message` (the message localized by code when an `IErrorLocalizer` is registered, `:66`). `[FeatureGate(NotificationFeatures.PushNotifications)]` on the framework's
+`Code` and `Message` (the message localized by code through the `IErrorLocalizer` `AddAPI` registers, `:66`). `[FeatureGate(NotificationFeatures.PushNotifications)]` on the framework's
 `DevicesController` (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Notifications/DevicesController.cs:24`).
 The 404 paragraph, Apply item 4 and the takeaway were rewritten in the 2026-10-02 run: the previous text said a disabled
 feature is indistinguishable from a nonexistent one, which ADR-031's Revision (2026-10-01) records the code
@@ -331,8 +352,8 @@ Real gated use cases, counted in the 2026-10-02 run as three (previously two), a
 XML doc `:9-12`, so the previous ledger's `ITransactional` was wrong);
 `ScoreEventSessionsInternalCommand : IInternalCommand, IRequiresPermission, IHasTimeout, IFeatureGated`
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsInternalCommand.cs:39`,
-`FeatureName => ConferenceFeatures.SessionScoring` `:48`, XML doc `:42-46` stating the processor runs it
-through the decorator pipeline and a failure completes the row rather than retrying); its trigger endpoint
+`FeatureName => ConferenceFeatures.SessionScoring` `:48`; its XML doc `:41-47` claims a failure completes
+the row rather than retrying, which the processor contradicts, see the 2026-10-22 entry); its trigger endpoint
 carries `[FeatureGate(ConferenceFeatures.SessionScoring)]`
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs:134`).
 Flag lifecycle: `[FeatureFlag]`
@@ -343,15 +364,16 @@ Flag lifecycle: `[FeatureFlag]`
 (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Governance/ArchitectureRules.FeatureFlags.cs:28`)
 and `TemporaryFeatureFlagsAreNotPastRemoveBy` (`:70`), exposed as facts on `FeatureFlagLifecycleTestsBase`
 (`.../Bases/Governance/FeatureFlagLifecycleTestsBase.cs:10`, facts `:20-25`, `protected virtual Today` `:18`).
-Conventions and trade-offs from `Website/docs-src/adr/031-feature-flag-management.md`, re-anchored this run:
-the `404` convention with bodies that each state a feature is unavailable (Decision bullet `:51-57`), two
-enforcement points agree only by convention with no fitness rule (`:76-78`), flag debt with the expiry check
-shipped and adopted per repo (`:79-82`), missing key resolves to disabled and is fail-safe (`:83-85`). The
-Status lists five revisions (2026-08-18 `:4-6`, 2026-08-31 `:6-8`, 2026-09-11 `:10-14`, 2026-10-01
-`:16-18`, 2026-10-06 `:20-22`). Revision (2026-10-01) (`:176-190`) corrects the anonymous-404 reading;
-Revision (2026-10-06) (`:192-212`) removes the flag name from the CQRS message and drove this run's
-rewrite. The flag-debt trade-off follows the Revision (2026-09-11) (`:133-174`), and the targeting caveat
-follows the narrowing paragraph of the Revision (2026-08-18) (`:121-124`).
+Conventions and trade-offs from `Website/docs-src/adr/031-feature-flag-management.md`, re-anchored in the
+2026-10-22 run: the `404` convention with bodies that each state a feature is unavailable (Decision bullet
+`:52-58`), two enforcement points agree only by convention with no fitness rule (`:77-79`), flag debt with
+the expiry check shipped and adopted per repo (`:80-83`), missing key resolves to disabled and is fail-safe
+(`:84-86`). The Status lists six revisions (2026-08-18 `:4-6`, 2026-08-31 `:6-8`, 2026-09-11 `:10-14`,
+2026-10-01 `:16-18`, 2026-10-06 `:20-22`, 2026-10-21 `:22-23`, the last an anchor refresh with its section at
+`:215-227`). Revision (2026-10-01) (`:177-191`) corrects the anonymous-404 reading; Revision (2026-10-06)
+(`:193-213`) removes the flag name from the CQRS message and drove the 2026-10-08 run's rewrite. The
+flag-debt trade-off follows the Revision (2026-09-11) (`:134-175`), and the targeting caveat follows the
+narrowing paragraph of the Revision (2026-08-18) (`:122-125`).
 The targeting identifier is the JWT `sub` claim (`AuthClaimTypes.Subject`,
 `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/AuthClaimTypes.cs:34`) read through `FindUserIdValue()`
 (`ClaimsPrincipalExtensions.cs:26-28`, falling back to the mapped `ClaimTypes.NameIdentifier`), used at

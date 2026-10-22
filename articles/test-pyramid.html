@@ -5,24 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
-  <title>The test pyramid, not the ice-cream cone: 2,254 fast tests, zero Docker · MMCA · Ivan Ball-llovera</title>
+  <title>The test pyramid, not the ice-cream cone: 8,000 fast tests, zero Docker · MMCA · Ivan Ball-llovera</title>
   <meta name="description" content="How the framework&#39;s tests stack up: fast unit and architecture tests at the base, E2E at the tip.">
   <link rel="canonical" href="https://ivanball.github.io/articles/test-pyramid.html">
   <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
-  <meta property="og:title" content="The test pyramid, not the ice-cream cone: 2,254 fast tests, zero Docker">
+  <meta property="og:title" content="The test pyramid, not the ice-cream cone: 8,000 fast tests, zero Docker">
   <meta property="og:description" content="How the framework&#39;s tests stack up: fast unit and architecture tests at the base, E2E at the tip.">
   <meta property="og:url" content="https://ivanball.github.io/articles/test-pyramid.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-35.png">
-  <meta property="og:image:alt" content="The test pyramid, not the ice-cream cone: 2,254 fast tests, zero Docker">
+  <meta property="og:image:alt" content="The test pyramid, not the ice-cream cone: 8,000 fast tests, zero Docker">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="The test pyramid, not the ice-cream cone: 2,254 fast tests, zero Docker">
+  <meta name="twitter:title" content="The test pyramid, not the ice-cream cone: 8,000 fast tests, zero Docker">
   <meta name="twitter:description" content="How the framework&#39;s tests stack up: fast unit and architecture tests at the base, E2E at the tip.">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-35.png">
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"The test pyramid, not the ice-cream cone: 2,254 fast tests, zero Docker","description":"How the framework's tests stack up: fast unit and architecture tests at the base, E2E at the tip.","url":"https://ivanball.github.io/articles/test-pyramid.html","mainEntityOfPage":"https://ivanball.github.io/articles/test-pyramid.html","image":"https://ivanball.github.io/assets/img/articles/article-35.png","datePublished":"2026-08-04T11:46:55Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":35,"sameAs":"https://medium.com/@ivanball76/the-test-pyramid-not-the-ice-cream-cone-1-880-fast-tests-zero-docker-cb459fda73d9"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"The test pyramid, not the ice-cream cone: 8,000 fast tests, zero Docker","description":"How the framework's tests stack up: fast unit and architecture tests at the base, E2E at the tip.","url":"https://ivanball.github.io/articles/test-pyramid.html","mainEntityOfPage":"https://ivanball.github.io/articles/test-pyramid.html","image":"https://ivanball.github.io/assets/img/articles/article-35.png","datePublished":"2026-08-04T11:46:55Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":35,"sameAs":"https://medium.com/@ivanball76/the-test-pyramid-not-the-ice-cream-cone-1-880-fast-tests-zero-docker-cb459fda73d9"}</script>
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"35 · The test pyramid","item":"https://ivanball.github.io/articles/test-pyramid.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
   <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -125,7 +125,7 @@
         <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
         <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
         <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
-        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · Refresh tokens that rotate per device</a></li>
         <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
         <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
         <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
@@ -158,11 +158,11 @@
     </aside>
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Proof &amp; getting started · No. 35</p>
-          <h1 id="the-test-pyramid-not-the-ice-cream-cone-2254-fast-tests-zero-docker">The test pyramid, not the ice-cream cone: 2,254 fast tests, zero Docker</h1>
+          <h1 id="the-test-pyramid-not-the-ice-cream-cone-8000-fast-tests-zero-docker">The test pyramid, not the ice-cream cone: 8,000 fast tests, zero Docker</h1>
           <p class="article-meta"><time datetime="2026-08-04T11:46:55Z">August 4, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/the-test-pyramid-not-the-ice-cream-cone-1-880-fast-tests-zero-docker-cb459fda73d9" target="_blank" rel="noopener">Also on Medium ↗</a></p>
           <figure class="article-hero"><img src="../assets/img/articles/article-35.webp" srcset="../assets/img/articles/article-35.webp 800w, ../assets/img/articles/article-35-1600.webp 1600w" sizes="(max-width: 900px) 100vw, 900px" alt="" width="800" height="420" decoding="async"></figure>
           <p class="article-subtitle">A suite you run constantly is worth more than a suite you run nervously. Here is how
-          MMCA.Common keeps 2,254 tests fast enough to live in the inner loop, with real-database
+          MMCA.Common keeps more than 8,000 tests fast enough to live in the inner loop, with real-database
           integration coverage and no Docker in that loop.</p>
           <hr>
           <p>There is a failure mode that almost every long-lived codebase drifts into, and it has a name: the
@@ -171,11 +171,13 @@
           takes twenty minutes, fails intermittently for reasons nobody can reproduce, and developers stop running
           it locally because the inner loop is too painful. The tests that were supposed to give you confidence
           instead give you a reason to avoid them.</p>
-          <p>MMCA.Common deliberately builds the right shape. <strong>About 2,254 <code>[Fact]</code>/<code>[Theory]</code>, weighted to Core,</strong>
-          form a correct, non-inverted pyramid, with a wide base that runs in milliseconds and needs no database
-          and no Docker. That number, and the architecture behind it, is the single most-cited evidence in the
-          framework&#39;s testability score: category 14 stands at <strong>maturity 4 / implementation 9</strong>, carried by
-          the enforced coverage floor and the size of the suite behind it.</p>
+          <p>MMCA.Common deliberately builds the right shape. <strong>About 7,100 <code>[Fact]</code>/<code>[Theory]</code> attributes, more than
+          half of them in the Core tests,</strong> form a correct, non-inverted pyramid, with a wide base that runs in
+          milliseconds and needs no database and no Docker. Expanded into theory data rows, the CI unit run
+          executes 8,386 tests (the <code>build-and-test</code> job of CI run 39625216950). That suite, and the architecture
+          behind it, is the single most-cited evidence in the framework&#39;s testability score: category 14 stands
+          at <strong>maturity 4 / implementation 9</strong>, carried by the enforced coverage floor and the size of the suite
+          behind it.</p>
           <h2 id="why-the-shape-matters-more-than-the-count">Why the shape matters more than the count</h2>
           <p>The test-count number is not the point. The shape is. The rubric (<a href="../docs/governance/ArchitectureEvaluationCriteria.html">Architecture Evaluation Criteria</a>,
           category 14) describes a healthy pyramid as &quot;many fast unit tests on domain/application, fewer
@@ -234,7 +236,9 @@
           <li><code>MMCA.Common.Testing.E2E</code>, the Playwright base: browser fixtures, Blazor-aware navigation helpers that
           handle the InteractiveAuto hydration race, Identity page objects, and abstract workflow bases for the
           Login, Register, Profile, Logout, password-reset and authorization journeys (four of which close with
-          an axe-core WCAG 2.1 AA assertion), plus user-preferences and pseudo-localization bases.</li>
+          an axe-core WCAG 2.1 AA assertion), plus user-preferences and pseudo-localization bases and
+          <code>KeyboardOperabilityTestsBase</code>, a WCAG 2.1 keyboard gate (skip link, focus trap, Escape returning
+          focus to the opener, visible focus) that ADC and Store each subclass once.</li>
           <li><code>MMCA.Common.Testing.UI</code>, the bUnit base: <code>BunitComponentTestBase</code> registers MudBlazor&#39;s services,
           configures loose JSInterop, and wires real auth doubles so component tests resolve <code>&lt;AuthorizeView&gt;</code>
           cascades; the same package ships the <code>MarkupSnapshot</code> golden-markup helper and page-test bases for the
@@ -275,7 +279,8 @@
           framework&#39;s <code>HandleFailure</code> Result mapping (404), against one shared
           <code>AssertProblemDetailsShapeAsync</code> check.</li>
           <li><code>OpenApiContractTestsBase&lt;TFixture&gt;</code> asserts the served <code>/openapi/v1.json</code> is OpenAPI 3.x and still
-          describes every public resource the host pinned.</li>
+          describes every public resource the host pinned, and, on a host that names a committed baseline,
+          fails on any breaking change against it.</li>
           <li><code>ServiceInfoVersioningContractTestsBase&lt;TFixture&gt;</code> drives <code>/ServiceInfo</code> at <code>api-version: 1.0</code> and
           then <code>2.0</code> and checks the deprecated and supported reporting headers.</li>
           <li><code>SecurityHeadersTestsBase</code> probes <code>/alive</code> and pins six response headers, including
@@ -307,9 +312,14 @@
           surface at all.</p>
           <p>The cost of adopting one stays small, which is the point of writing the body once: a subclass supplies
           two probe requests, or a path-count floor plus a pinned resource list, or a client factory, and the two
-          gateway shutdown subclasses are single-line declarations with no body. The runtime guard reads no
-          committed snapshot either: the OpenAPI base asserts against the live document rather than a checked-in
-          file, so a new controller can never leave a stale snapshot behind. ADC and Store do commit each host&#39;s
+          gateway shutdown subclasses are single-line declarations with no body. The OpenAPI base&#39;s default
+          assertions run against the live document rather than a checked-in file, so a new controller can never
+          leave a stale snapshot behind. A subclass that overrides <code>BaselineDocumentPath</code> also gets a
+          breaking-change diff: the live document is compared with a committed baseline by
+          <code>OpenApiBreakingChangeDetector</code>, and the test fails on a breaking change, never on an additive or
+          documentation-only one. Refreshing that baseline is a deliberate step (<code>MMCA_UPDATE_OPENAPI_BASELINE=1</code>
+          rewrites the file and fails the run, so a regenerating run never passes), and all seven OpenAPI
+          subclasses in ADC and Store opt in. Those consumers also commit each host&#39;s
           <code>openapi/&lt;host&gt;.json</code> and fail CI on an uncommitted difference, but that is a separate build-time check
           each consumer owns, asking whether the contract changed without review rather than whether a booted
           host serves a usable one.</p>
@@ -424,18 +434,20 @@
           Platform (MTP), not VSTest</strong>, configured in <code>global.json</code>, with <strong>xUnit v3</strong>, AwesomeAssertions, and
           Moq. To run one class or method you target the project and pass an MTP filter after <code>--</code>
           (<code>-- --filter-class &quot;*FooTests*&quot;</code> or <code>-- --filter-method &quot;*Pattern*&quot;</code>). One sharp edge worth knowing: every test
-          project must contain at least one test or MTP exits with code 8, so the unit run floors at
-          <code>--minimum-expected-tests 2000</code> (the suite is about 2,254): a discovery or filter regression that
-          silently drops thousands of tests fails the job instead of passing green with a handful discovered.</p>
+          project must contain at least one test or MTP exits with code 8. The unit run also floors at
+          <code>--minimum-expected-tests 2000</code>, so a discovery or filter regression that leaves only a handful of
+          tests discovered fails the job instead of passing green. Against the 8,386 tests that run executes
+          (CI run 39625216950), the floor is coarse: a regression that drops a few thousand tests still clears it.</p>
           <p>And the suite is a real gate, not a suggestion. CI collects coverage via <code>dotnet-coverage</code> (which wraps
           the MTP run and returns its exit code, so a test failure still fails the build) and <strong>enforces a
-          coverage floor</strong>: the unit tier must stay at or above <strong>68.3%</strong> line coverage (measured about 70.3%) as
-          a regression backstop, gated on the unit tier alone rather than a gallery-diluted merged report, and
-          the floor only ever moves upward.</p>
+          coverage floor</strong>: the unit tier must stay at or above <strong>68.3%</strong> line coverage as a regression backstop,
+          gated on the unit tier alone rather than a gallery-diluted merged report. The unit tier measures
+          <strong>88.1%</strong> (the <code>coverage</code> job of CI run 39625216950), so the floor sits about 20 points below the
+          suite it guards.</p>
           <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
           <p>The shape is right, but the scorecard names real gaps and one is squarely in the testing story.</p>
           <ul>
-          <li><strong>The UI tier&#39;s visual check is markup-deep, not pixel-deep.</strong> The framework ships 29 reusable
+          <li><strong>The UI tier&#39;s visual check is markup-deep, not pixel-deep.</strong> The framework ships 31 reusable
           Blazor components in <code>MMCA.Common.UI</code>, some with real branching logic (<code>MobileCardList</code>,
           <code>MobileInfiniteScrollList</code>), and the pyramid carries a fast base layer <em>for the UI</em> under them: the
           <code>MMCA.Common.Testing.UI</code> bUnit base backs their component tests, a real-browser render-smoke gate
@@ -451,8 +463,7 @@
           deliberately latent, with no production entity on them. The trade buys a fast, Docker-free inner loop
           at the cost of needing the consumer apps and CI to cover the SQL-Server-specific paths.</li>
           <li><strong>The honest limits are mutation testing and the container tiers, not coverage.</strong> The unit tier holds a <strong>68.3%</strong> line-coverage
-          floor (measured about 70.3%), enforced in CI and ratcheted up as the suite grows rather than left as
-          an aspiration. What holds category 14 below the top band starts with mutation testing: there is none
+          floor, enforced in CI, against a measured 88.1%. What holds category 14 below the top band starts with mutation testing: there is none
           on the Core tier, so a green suite proves the lines run, not that every assertion would catch a
           mutant. Three structural gaps sit beside it: the integration tier (Redis, PostgreSQL, package
           consumption, Bicep) runs on pull requests but is not a merge gate, the AppHost tier blocks the run

@@ -76,9 +76,10 @@ members, so a hand-written implementer keeps compiling when one is added.
 The two specialized reads each close a gap a plain `GetAsync` leaves open. `TryGetAsync` reports
 presence separately from the value, because for a value type a miss and a cached `default` (`0`,
 `false`, `Guid.Empty`) look identical. The default member infers presence from a non-null `GetAsync`
-result, which is exact for reference and nullable types; the memory and distributed stores override it
-with a real presence check, and the hybrid store does not, so through the hybrid backend a value-type
-miss still reads as found.
+result, which is exact for reference and nullable types, and all three shipped stores override it with
+a real presence check. `HybridCache` has no presence-reporting read, so the hybrid store asks for the
+entry with a factory that throws a tagged miss: a hit never calls it, and the thrown sentinel reads as
+not found, so a cached `0` or `false` still counts as a hit.
 `GetFromSharedStoreAsync` reads the shared store and never a process-local copy, for values whose change
 on one replica must be visible on every other replica at once: single-use records (an OAuth exchange
 code, a password-reset or email-confirmation token, the last accepted second-factor time step), the
@@ -92,9 +93,11 @@ would fail the next read: the override buys one call site, not atomicity. The hy
 both legs on L2, so no replica counts from a stale local copy.)
 
 `GetOrCreateAsync` is the most interesting of the default members, because of who does *not* use
-it. It is get, then take a per-key lock from a process-wide stripe,
-double-check, run the factory, store the result. That is the read-through shape the query decorator below
-implements, offered to the callers that are not queries. The decorators still do not route through it, and
+it. Its default body is get, then take a per-key lock from a process-wide stripe, double-check, run the
+factory, store the result; the hybrid store overrides it with `HybridCache`'s own call, which folds the
+same double-check and stampede protection into one call and keeps the same guarantees (unconditional
+storage, protection per process), so the hybrid store overrides all four default members. That is the
+read-through shape the query decorator below implements, offered to the callers that are not queries. The decorators still do not route through it, and
 the interface says so in its own remarks: `GetOrCreateAsync` caches whatever the factory returns,
 unconditionally, including a failed `Result`. The decorator must not, so it keeps its own
 read/execute/write sequence. A convenience helper that quietly relaxes a correctness rule is worth having
@@ -356,7 +359,11 @@ So the framework ships `PublicEndpointOutputCachePolicy`, an `IOutputCachePolicy
 default except where it deliberately differs: it does not bail out on an `Authorization` header or an
 authenticated identity, and it varies the cache key by the resolved tenant (`VaryByValues["t"]`, the
 mirror of the `t:{tenantId}` prefix the decorators apply), because one path and query mean different rows
-per tenant and the entry is shared. It re-implements the safeguards it displaced, GET/HEAD only, never
+per tenant and the entry is shared. It also turns off request coalescing (`AllowLocking = false`): the
+built-in default makes concurrent misses for one key wait on the first request's execution, which runs
+under that request's `RequestAborted` token, so one disconnecting client would cancel the shared query
+and answer 500 to every waiter. The price is that simultaneous misses each run the query once, so the
+edge tier has no stampede protection inside one expiry window. It re-implements the safeguards it displaced, GET/HEAD only, never
 store a `Set-Cookie` response or a non-200, and vary the key by every query-string parameter
 (`CacheVaryByRules.QueryKeys = "*"`, the exact rule a hand-rolled policy most easily drops). Hosts register it per named
 policy via `OutputCacheOptions.AddPublicEndpointPolicy(name, expiration, tags)` and reference it from
@@ -445,9 +452,12 @@ shape to copy when the mutation that stales a cached read arrives as a message.
   `OperationCanceledException` is excluded from the guard, so a genuinely cancelled request still surfaces
   exactly as the inner handler would. A Redis outage therefore costs latency and database load, not a 500
   on every cacheable query. The same posture on the authenticated hot path is where it turns into a real
-  trade-off: `SoftDeletedUserMiddleware` caches the soft-deleted marker, falls back to the validator query
-  when that cache is unreachable, and proceeds open when the query fails too, rather than locking out every
-  authenticated caller on one blip. The exposure that buys is bounded by access-token lifetime: tokens live
+  trade-off: `SoftDeletedUserMiddleware` reads the soft-deleted marker from the shared store on every
+  host. On the host that registers the validator (Identity) it runs the validator query whenever no marker
+  is set, the cache being unreachable included, and never caches a "not deleted" answer, so that host pays
+  one shared-store read plus one query per authenticated request; a host with no validator passes a miss
+  or a cache failure straight through. When the query fails too, the middleware proceeds open rather than
+  locking out every authenticated caller on one blip. The exposure that buys is bounded by access-token lifetime: tokens live
   15 minutes, and the deletion already revoked the refresh token, so the residual risk is one
   already-issued token running out its remainder while the cache or database is unhealthy. That bound is
   what makes the fail-open a deliberate choice rather than an accident of the code path.
@@ -543,10 +553,24 @@ guide, or `dotnet add package MMCA.Common.API` and try it.*
 
 *Tags: .NET, C Sharp, Caching, Software Architecture, Performance*
 
-*Notes: anchors were re-read against the current tree on 2026-10-08 (framework v1.233.0,
-`MMCA.Common/FACTS.md:14`, generated 2026-10-07 per `:4`) where the 2026-10-08 pass touched them; the rest
-carry the 2026-10-02 reading and are marked "per the 2026-10-02 pass", and "per audit" marks an anchor
-taken from an audit rather than re-read.
+*Notes: anchors were re-read against the current tree on 2026-10-22 (framework v1.250.0,
+`MMCA.Common/FACTS.md:14`, generated 2026-10-21 per `:4`) where the 2026-10-22 pass touched them (listed in
+that paragraph); the others carry the 2026-10-08 reading (v1.233.0) or are marked "per the 2026-10-02
+pass", and "per audit" marks an anchor taken from an audit rather than re-read.
+**2026-10-22 pass.** Four claims changed prose. (1) `HybridCacheService` overrides `TryGetAsync`
+(`HybridCacheService.cs:175-200`, remarks `:155-174`, miss sentinel caught `:190`), so all three shipped
+stores override it and the interface remark "The shipped stores override it" (`ICacheService.cs:32`) is
+accurate. (2) `HybridCacheService` overrides `GetOrCreateAsync` with `HybridCache`'s native call
+(`:359-376`, remarks `:350-358`); the stripe path is the interface default (`ICacheService.cs:150-153`,
+body `:156-181`), and the "do NOT route through this member" remark still holds (`:139-142`). (3)
+`PublicEndpointOutputCachePolicy` sets `AllowLocking = false` (`PublicEndpointOutputCachePolicy.cs:96`,
+rationale `:92-95`), a third deliberate difference from the built-in default. (4) `SoftDeletedUserMiddleware`
+runs the validator query whenever no marker is set on a host that has one and never caches a "not
+deleted" answer (`SoftDeletedUserMiddleware.cs:13-19`, `:133-141`); with no validator a miss or a cache
+failure passes through (`:114-121`). Re-read and re-anchored this run: the `ICacheService` and
+`HybridCacheService` anchors under Tier 1, the default-TTL `WriteOptions` and `LocalCacheDefault` anchors, the
+host call sites, the direct consumers, the fail-open, edge-tier, AGENTS.md and scorecard anchors, and the
+package count. A 2026-10-22 catch-up pass re-read every anchor this ledger still carried and no body claim changed: `CachingQueryDecorator` (`EffectiveKey` now `:58-59`, the rest unchanged), `CachingCommandDecorator`, `MemoryCacheService`, `DistributedCacheService` (hash-layout remark `:134-146`, so `:137-143` and `:140-142` hold), `BestEffort.cs` and the three `OutputCacheEviction*` files (all unchanged); `DependencyInjection.Caching.cs` (`:26`, `:41`, `:68`, `:77` unchanged; `RedisDistributedLock` now `:96`, `AddCommonHybridCache` `:141`, `RemoveAll` `:167`, the guarded wrapper `:202-214`, guard `:208`, rationale `:190-198`); the ADC Conference host (`Program.cs:269-307`: twelve policies, ten at 5 minutes, eleven with the bypass, unchanged); and the ADR-026, ADR-040, ADR-073 and ADR-077 anchors, most of which moved with later revisions and are re-pointed in place below.
 **2026-10-08 pass.** Six claims changed prose. (1) ADC's bookmark domain-event handler only raises a
 coalescing signal (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/UserSessionBookmarks/DomainEventHandlers/UserSessionBookmarkCacheEvictionHandler.cs:56`,
 "Why it only raises a flag" `:20-25`); the hosted `BookmarkCacheEvictionProcessor`
@@ -558,10 +582,11 @@ pacing rationale `:17-24`); Conference's comment says the same (`MMCA.ADC.Confer
 at `MemoryCacheService.cs:19`, applied `:84`), `DistributedCacheService` (`:72`), `HybridCacheService` (`:329`).
 (3) Only `MemoryCacheService` (`:62`) and `DistributedCacheService` (`:48`) override `TryGetAsync`;
 `HybridCacheService` has no override and inherits the non-null inference (`ICacheService.cs:34-38`), so the
-interface remark "The shipped stores override it" (`:32`) overclaims. (4) `GetFromSharedStoreAsync` also
+interface remark "The shipped stores override it" (`:32`) overclaimed at v1.233.0 (superseded by the
+2026-10-22 pass). (4) `GetFromSharedStoreAsync` also
 serves the registration counter read, the login lockout flag and the soft-deleted marker (interface summary
 `ICacheService.cs:40-45`, `HybridCacheService.cs:40-45`, `SoftDeletedUserMiddleware.cs:92`; ADR-077 Revision
-(2026-10-07) `077-hybridcache-substrate.md:257`, item `:262-268`). (5) `HybridCacheService` also overrides
+(2026-10-07) `077-hybridcache-substrate.md:263`, item `:268-274`). (5) `HybridCacheService` also overrides
 `IncrementAsync`, both legs on L2 (`HybridCacheService.cs:264`, remarks `:240-263`); the reason for
 read-modify-write over `INCR` is the hash layout (`absexp`/`sldexp`/`data` read with `HMGET`,
 `DistributedCacheService.cs:137-143`; interface remark `ICacheService.cs:93-99`, `:108-110`), not a JSON layout.
@@ -583,63 +608,65 @@ and rely on the wrapper's own no-op. Store's `ProductsCache` is 60 seconds. The 
 the token services, the second-factor step and the soft-deleted marker. Replica L1 staleness is a
 configurable default that single-use reads and counters skip. The scorecard's §10 label reads "Related
 cross-cutting evidence". Header grounding moved from `MMCA.Common/CLAUDE.md` (now only an `@AGENTS.md`
-import, `CLAUDE.md:3`) to `MMCA.Common/AGENTS.md` (`### CQRS Decorator Pipeline` `:76`, the Caching bullet
-`:88`). The caching registrations live in `Infrastructure/DependencyInjection.Caching.cs`, so every former
+import, `CLAUDE.md:3`) to `MMCA.Common/AGENTS.md` (`### CQRS Decorator Pipeline` `:77`, the Caching bullet
+`:89`, re-read 2026-10-22). The caching registrations live in `Infrastructure/DependencyInjection.Caching.cs`, so every former
 `Infrastructure/DependencyInjection.cs` anchor is re-pointed below.
 **Tier 1 substrate.** `ICacheService` (`MMCA.Common.Application/Interfaces/ICacheService.cs:10`) has EIGHT
-members: `GetAsync` (`:17`), `TryGetAsync` (`:34-38`), `GetFromSharedStoreAsync` (`:65-66`), `SetAsync`
-(`:75`), `RemoveAsync` (`:85`), `RemoveByPrefixAsync` (`:91`), `IncrementAsync` (`:112`) and
-`GetOrCreateAsync<T>` (`:152`); the four with bodies are default interface members. `TryGetAsync` exists
+members: `GetAsync` (`:17`), `TryGetAsync` (`:34-38`), `GetFromSharedStoreAsync` (`:69`), `SetAsync`
+(`:79`), `RemoveAsync` (`:89`), `RemoveByPrefixAsync` (`:95`), `IncrementAsync` (`:116`) and
+`GetOrCreateAsync<T>` (`:156`); the four with bodies are default interface members. `TryGetAsync` exists
 for a value type whose miss is indistinguishable from a cached `default` (`:19-24`, override note `:29-33`),
-and `MemoryCacheService` (`Infrastructure/Caching/MemoryCacheService.cs:62`) and `DistributedCacheService`
-(`Infrastructure/Caching/DistributedCacheService.cs:48`) override it; `HybridCacheService` does not.
-`GetFromSharedStoreAsync` bypasses any process-local copy (summary `:40-45`, remarks `:50-64`) and
-`HybridCacheService` overrides it (`Infrastructure/Caching/HybridCacheService.cs:154`, class remarks
-`:36-46`). `GetOrCreateAsync` takes the per-key stripe (`CacheKeyLocks.Locks` `:166`, class `:196`); its
-remarks state that caching is unconditional and that "the caching decorators do NOT route through this
-member" (`:135-138`). `DistributedCacheService` (`DistributedCacheService.cs:153`) and `HybridCacheService`
-(`HybridCacheService.cs:264`) override `IncrementAsync` with the same read-modify-write shape rather than
-Redis `INCR`; ADR-026 records the declined `INCR` in its Revision (2026-07-25) (`026-caching-strategy.md:409`).
+and all three stores override it: `MemoryCacheService` (`Infrastructure/Caching/MemoryCacheService.cs:62`)
+and `DistributedCacheService` (`Infrastructure/Caching/DistributedCacheService.cs:48`) per the 2026-10-08
+reading, and `HybridCacheService` (`HybridCacheService.cs:175`). `GetFromSharedStoreAsync` bypasses any
+process-local copy (summary `:40-46`, remarks `:52-67`) and `HybridCacheService` overrides it
+(`Infrastructure/Caching/HybridCacheService.cs:217`, class remarks `:36-46`). The default
+`GetOrCreateAsync` takes the per-key stripe (`CacheKeyLocks.Locks` `:170`, class `:200`) and
+`HybridCacheService` overrides it (`:359`); the interface remarks state that caching is unconditional and
+that "the caching decorators do NOT route through this member" (`:139-142`). `DistributedCacheService`
+(`DistributedCacheService.cs:153`, per the 2026-10-08 reading) and `HybridCacheService`
+(`HybridCacheService.cs:327`) override `IncrementAsync` with the same read-modify-write shape rather than
+Redis `INCR`; ADR-026 records the declined `INCR` in its Revision (2026-07-25) (`026-caching-strategy.md:413`).
 **Backend swap.** `AddCaching` (`Infrastructure/DependencyInjection.Caching.cs:26`) binds
 `CacheKeyPrefixOptions` (`:41`), builds `DistributedCacheService` (`:68`) or falls back to
-`MemoryCacheService` (`:77`), and registers `RedisDistributedLock` (`:94`). `MemoryCacheService` keeps its
+`MemoryCacheService` (`:77`), and registers `RedisDistributedLock` (`:96`). `MemoryCacheService` keeps its
 key set in a `ConcurrentDictionary` (`Infrastructure/Caching/MemoryCacheService.cs:38`); the SCAN eviction
 lives in `RedisPrefixScanner` (`RedisPrefixScanner.cs:24`), fed the qualified pattern
 (`DistributedCacheService.cs:126`); the missing-multiplexer warning is `Interlocked`-guarded (`:115`).
 **Default TTL.** `CacheOptions.DefaultDuration` (`Infrastructure/Caching/CacheOptions.cs:23`);
 `CacheSettings` section `:25`, `DefaultDuration` `:32`, `LocalCacheDuration` `:42` (per the 2026-10-02 pass); read by
-`MemoryCacheService` (`:84`), `DistributedCacheService` (`:72`) and `HybridCacheService.WriteOptions` (`:329`,
-L1 ceiling `:330`). ADR-077 "Revised (2026-08-31)" (`077-hybridcache-substrate.md:17`), keyspace-rule heading `:50`.
+`MemoryCacheService` (`:84`), `DistributedCacheService` (`:72`) and `HybridCacheService.WriteOptions` (`:404`,
+L1 ceiling `:405`). ADR-077 "Revised (2026-08-31)" (`077-hybridcache-substrate.md:17`), keyspace-rule heading `:50`.
 **Backend key namespace.** `CacheKeyPrefixOptions.SectionName` (`CacheKeyPrefix.cs:34`), the SEC-Common-53
 remark (`:43`), `CacheKeyNamespace.From(IServiceProvider)` (`:73`); applied through `_keys.Qualify` on get
 (`DistributedCacheService.cs:42`), set (`:70`), remove (`:78`) and the scan pattern (`:126`).
 **The third backend.** `HybridCacheService` (`HybridCacheService.cs:48`), `KeyspaceSegment` `hc:` (`:59`,
-rationale `:20-27`), `LocalCacheDefault` 30 seconds (`:66`), retuned by `Cache:LocalCacheDuration`
+rationale `:20-27`), `LocalCacheDefault` 30 seconds (`:69`), retuned by `Cache:LocalCacheDuration`
 (`:30-34`), single-use reads, counters and the two flags skipping L1 (`:36-46`). `AddCommonHybridCache`
-(`DependencyInjection.Caching.cs:139`, `RemoveAll<ICacheService>` so it wins in either order `:165`) and
-`AddCommonHybridCacheWhenRedisConfigured` (`:200-212`, guard `:206`, rationale `:184-195`) per the
-2026-10-02 pass. Call sites: ADC Conference `Program.cs:204`, Identity `:138`, Engagement `:116`,
-Notification `:119`; Store Catalog `Program.cs:108`, Sales `:113`, Identity `:102` (Store per the
-2026-10-02 pass). ADR-026 records the helper in its "Revised 2026-09-25" status entry
-(`026-caching-strategy.md:28-32`) and Tier 1 (`:65`).
-**Redis wiring.** `builder.AddRedisCaching()`: ADC Conference `:185` (rationale `:176-184`), Identity `:130`,
-Engagement `:108`, Notification `:111`; Store Catalog `:89`, Sales `:104`, Identity `:93` (per the
-2026-10-02 pass). Wrapper `MMCA.Common.Aspire/Caching/RedisCachingExtensions.cs:57`, blank-string no-op
+(`DependencyInjection.Caching.cs:141`, `RemoveAll<ICacheService>` so it wins in either order `:167`) and
+`AddCommonHybridCacheWhenRedisConfigured` (`:202-214`, guard `:208`, rationale `:190-198`), re-read in the
+2026-10-22 catch-up pass. Call sites (re-read 2026-10-22): ADC Conference `Program.cs:204`, Identity `:139`,
+Engagement `:116`, Notification `:119`; Store Catalog `Program.cs:108`, Sales `:114`, Identity `:103`. ADR-026 records the helper in its "Revised 2026-09-25" status entry
+(`026-caching-strategy.md:28`) and Tier 1 (`:69`).
+**Redis wiring.** `builder.AddRedisCaching()`: ADC Conference `:185` (rationale `:176-184`), Identity `:131`,
+Engagement `:108`, Notification `:111`; Store Catalog `:89`, Sales `:105`, Identity `:94` (call sites
+re-read 2026-10-22). Wrapper `MMCA.Common.Aspire/Caching/RedisCachingExtensions.cs:57`, blank-string no-op
 `:59-61`, `DisableHealthChecks` `:64-65`; `AddRedisOutputCaching` `:91`, no-op `:94-96` (per the 2026-10-02
 pass), called unconditionally at ADC Conference `:196` (comment `:187-195`) and Store Catalog `:99`. ADR-026
-Trade-offs `:248`.
+Trade-offs `:254`.
 **Read path.** `CachingQueryDecorator` (`CachingQueryDecorator.cs:43`): `EffectiveKey` composes both key
-transformations (`:59`), a hit takes no lock (`:74`), the populate-lock budget (`:87`,
+transformations (`:58-59`), a hit takes no lock (`:74`), the populate-lock budget (`:87`,
 `TryAcquirePopulateLockAsync` `:179`, budget-exhausted catch `:194`), the re-check (`:100`), caching only
 non-failure results (`:118`, populate catch `:125`), `TryReadAsync` (`:208`, fail-open catch excluding
 `OperationCanceledException` `:218`), `QueryCacheKeyLocks` (`:247`).
 **Two key transformations.** `TenantCacheKey` marker `t:` (`TenantCacheKey.cs:28`); `UserCacheKey`
 (`UserCacheKey.cs:26`), marker `:u:` (`:29`), applied for `IUserScopedRequest` and not `ISharedQueryCache`
-(`:39`). ADR-026 Revision (2026-09-07) (`:330`). Read path, key transformations and write path anchors are per the 2026-10-02 pass. ADR-073
-"Cache isolation lives in the decorators" (`073-multi-tenancy-model.md:191`) and "Cache isolation stops at
-the decorator" (`:257`). Direct consumers re-read this run: `LoginProtectionService.cs:42,64,119`,
-`OAuthControllerBase.cs:142,196`, `IdempotencyFilter.cs:141`, `PasswordResetTokenService.cs:128`,
-`EmailConfirmationTokenService.cs:90`, `TwoFactor/TwoFactorAuthenticator.cs:105`, `SoftDeletedUserCache.cs:57`.
+(`:39`). ADR-026 Revision (2026-09-07) (`:334`). Read path and write path anchors re-read 2026-10-22; key-transformation anchors are per the 2026-10-02 pass. ADR-073
+"Cache isolation lives in the decorators" (`073-multi-tenancy-model.md:228`) and "Cache isolation stops at
+the decorator" (`:294`). Direct consumers re-read 2026-10-22: `LoginProtectionService.cs:59,141` (shared-store reads; increments
+`:89`, `:170`), `OAuthControllerBase.cs:190,273` (write, shared-store read), `IdempotencyFilter.cs:450`,
+`PasswordResetTokenService.cs:128`, `EmailConfirmationTokenService.cs:90`,
+`TwoFactor/TwoFactorAuthenticator.cs:121`, `SoftDeletedUserCache.cs:63` (marker write).
 **Write path.** `CachingCommandDecorator` (`CachingCommandDecorator.cs:33`): the three-condition guard
 (`:61-63`), eviction on `CancellationToken.None` (`:73`), the swallow (`:84`), `ReInvalidationDelay` 5
 seconds (`:45`), `InvalidationFollowUp` (`:51`), `ReInvalidateAfterDelayAsync` (`:98`, delay and evict
@@ -648,26 +675,28 @@ Caching (`:137`), query Caching (`:145`), pipeline diagram (`:66-79`). A failed 
 drops deferred dispatch (`Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:608`).
 **Fail-open on the auth path.** `SoftDeletedUserMiddleware.cs:37`: the 15-minute access-token bound in the
 class remarks (`:30`), the marker read through `GetFromSharedStoreAsync` (`:92`) and its catch (`:95`), the
-validator catch (`:143`).
+no-validator pass-through (`:114-121`), the validator query when no marker is set (`:133-141`, never-cached
+rationale `:13-19`), and the validator catch (`:143`), re-read 2026-10-22.
 **BestEffort.** `BestEffort.ExecuteAsync` (`MMCA.Common.Application/Services/BestEffort.cs:45`), await
 (`:57`), cancellation rethrow (`:59-63`), catch (`:65`), meter `MMCA.Common.BestEffort` (`:102`), counter
 `besteffort.dispatch.failed` (`:107-108`), tagged `operation` (`:115`). `TryEvictTagsAsync`
 (`MMCA.Common.API/Caching/OutputCacheEvictionExtensions.cs:78`) wraps `BestEffort.ExecuteAsync` under
 `CancellationToken.None` (`:86-90`).
-**Edge tier.** `app.UseOutputCache()` (`MMCA.Common.API/Startup/Pipeline/MiddlewarePipelineBuilder.cs:133`).
-`PublicEndpointOutputCachePolicy`: `TenantVaryByKey` `t` (`:50`), `QueryKeys = "*"` (`:96`), the tenant stamp
-(`:105`), no `Set-Cookie` and no non-200 (`:125-126`), GET/HEAD only (`:135`). The `NoLimiter` partition for
-anonymous traffic is per audit (`WebApplicationBuilderExtensions.RateLimiting.cs:68`; anonymous hub
-requests are metered per IP at `:58-67`, outside the HTTP reads this article discusses).
+**Edge tier.** `app.UseOutputCache()` (`MMCA.Common.API/Startup/Pipeline/MiddlewarePipelineBuilder.cs:132`).
+`PublicEndpointOutputCachePolicy`: `TenantVaryByKey` `t` (`:50`), `AllowLocking = false` (`:96`, rationale
+`:92-95`), `QueryKeys = "*"` (`:101`), the tenant stamp (`:110`), no `Set-Cookie` and no non-200
+(`:130-131`), GET/HEAD only (`:140`). The `NoLimiter` partition for anonymous traffic is
+`WebApplicationBuilderExtensions.RateLimiting.cs:72` (re-read 2026-10-22); anonymous hub requests are
+metered per IP (per audit), outside the HTTP reads this article discusses.
 **ADC host counts.** `adminBypassRoles` built from `ConferenceReadAudience.PrivilegedRoles` (`Program.cs:269`;
 source `MMCA.ADC.Conference.Shared/Authorization/ConferenceReadAudience.cs:34-37` per the 2026-10-02 pass,
 `Organizer` and `ContentEditor`); twelve policies at `:270-301`, ten at 5 minutes, `NowNextCache` (`:287`, 60
 seconds, no bypass) and `BookmarkCountsCache` (`:301`, 60 seconds, with the bypass). ADR-040 records twelve and eleven
-in its status (`040-authenticated-output-caching-for-public-reads.md:23-25`) and Revision (2026-09-25)
-(`:222`, count `:243`), which closes the ADR-side follow-up the previous ledger noted. Store Catalog:
+in its status (`040-authenticated-output-caching-for-public-reads.md:25-27`) and Revision (2026-09-25)
+(`:267`, count `:288`), which closes the ADR-side follow-up the previous ledger noted. Store Catalog:
 `CatalogCache` `:152`, `CategoriesCache` `:153`, `ProductsCache` 60 seconds `:159` (reason `:154-158`),
-`ProductImagesCache` `:162`; ADR-040 `:224-231`, the unconditional output store `:236`, and the observation
-that `CatalogCache` backs no endpoint `:262-263` (not repeated in the body).
+`ProductImagesCache` `:162`; ADR-040 `:269-277`, the unconditional output store `:281`, and the observation
+that `CatalogCache` backs no endpoint `:307-308` (not repeated in the body).
 **Cross-service edge eviction.** `OutputCacheEvictionRequested` (`MMCA.Common.Domain/IntegrationEvents/OutputCacheEvictionRequested.cs:28-29`, `Tags` defaulting to empty `:37`). `OutputCacheEvictionHandler`
 (`MMCA.Common.API/Caching/OutputCacheEvictionHandler.cs:32`), `EvictByTagAsync` (`:53`), catch (`:56`),
 `RecordEvictionFailure` (`:60`); meter `MMCA.Common.OutputCache` (`OutputCacheMetrics.cs:19`),
@@ -675,21 +704,21 @@ that `CatalogCache` backs no endpoint `:262-263` (not repeated in the body).
 (`Program.cs:307`, the "silent no-op" comment `:304-306`). ADC Engagement: the signal at
 `UserSessionBookmarkCacheEvictionHandler.cs:56`, the broadcast at `BookmarkCacheEvictionProcessor.cs:62-77`.
 Per audit: the Conference consumer at `ConferenceBrokerConsumers.cs:37`, Store `CustomerErasedHandler.cs:109`;
-ADR-040 Revision (2026-09-10) `:181`.
-**The optional third tier.** ADR-026 "### An optional third tier on the client" (`:188`); `UiReadCache`
+ADR-040 Revision (2026-09-10) `:226`.
+**The optional third tier.** ADR-026 "### An optional third tier on the client" (`:194`); `UiReadCache`
 registered scoped (`MMCA.Common.UI/DependencyInjection.cs:76`) with no reference in ADC, Store or Helpdesk
-source (per audit). ADR-026 structure: Status `:3-44`, Decision `:62`, Tier 1 `:65`, Tier 2 `:128`, third
-tier `:188`, Rationale `:233`, Trade-offs `:248`, Revision (2026-09-07) `:330`, Related `:365`.
-**Scorecard.** `common-ArchitectureScorecard.md` evidence as of 2026-10-07 at v1.233.0 (`:5`), indices unchanged. §10 Messaging &
-Integration Architecture, Maturity 4, Implementation 9 (`:74`), keeps the `AddCaching()` /
+source (per audit). ADR-026 structure: Status `:3-48`, Decision `:66`, Tier 1 `:69`, Tier 2 `:132`, third
+tier `:194`, Rationale `:239`, Trade-offs `:254`, Revision (2026-09-07) `:334`, Related `:369`.
+**Scorecard.** `common-ArchitectureScorecard.md` evidence as of 2026-10-22 at v1.250.0 (`:5`). §10 Messaging &
+Integration Architecture, Maturity 4, Implementation 8 (`:74`), keeps the `AddCaching()` /
 `MemoryCacheService` sentence under "Related cross-cutting evidence (scored under §5/§6/§9/§12/§17/§29)";
 §12 Performance & Scalability, Maturity 4, Implementation 8 (`:76`), still cites no cache benchmark.
-Maturity index 317 / 328 = 96.6% (`:9`), Implementation index 705 / 820 = 86.0% (`:10`), N/A none with all 34
+Maturity index 319 / 328 = 97.3% (`:9`), Implementation index 700 / 820 = 85.4% (`:10`), N/A none with all 34
 rows scored (`:104`). The body states no index.
 **Perf gate (per audit).** `performance-smoke` (`MMCA.Common/.github/workflows/ci.yml:310`) is a required
 check ("Performance gate (BenchmarkDotNet Short + baseline verify)"), its suites are
 `SpecificationBenchmarks.cs` and `QueryPipelineBenchmarks.cs`, and the Benchmarks project is outside
 `MMCA.Common.slnx`; neither suite touches the cache decorators. 22 published packages
-(`MMCA.Common/FACTS.md:19`) at v1.233.0 (`:14`).*
+(`MMCA.Common/FACTS.md:19`) at v1.250.0 (`:14`).*
 
 - Full series index: https://ivanball.github.io/writing.html

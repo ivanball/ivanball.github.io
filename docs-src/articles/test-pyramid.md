@@ -1,4 +1,4 @@
-# The test pyramid, not the ice-cream cone: 2,254 fast tests, zero Docker
+# The test pyramid, not the ice-cream cone: 8,000 fast tests, zero Docker
 
 > Series: MMCA.Common · Article #35 (deep-dive) · Pillar P4 · Group G25 · Rubric §14 ·
 > Status: grounded in `MMCA.Common/AGENTS.md` (Build & Test and Testing sections),
@@ -6,11 +6,11 @@
 > `Website/docs-src/adr/058-runtime-conformance-suites-as-a-package.md`,
 > `Website/docs-src/adr/063-accessibility-conformance-gate.md`,
 > `Website/docs-src/adr/117-apphost-integration-test-base.md`,
-> `MMCA.Common/.github/workflows/ci.yml`, `MMCA.Common/FACTS.md`, the `MMCA.Common.Testing*` sources, and
+> `MMCA.Common/.github/workflows/ci.yml` and its CI run 39625216950, `MMCA.Common/FACTS.md`, the `MMCA.Common.Testing*` sources, and
 > `Website/docs-src/onboarding/group-28-testing-infrastructure.md`. No em dashes.
 
 **Subtitle:** A suite you run constantly is worth more than a suite you run nervously. Here is how
-MMCA.Common keeps 2,254 tests fast enough to live in the inner loop, with real-database
+MMCA.Common keeps more than 8,000 tests fast enough to live in the inner loop, with real-database
 integration coverage and no Docker in that loop.
 
 ---
@@ -22,11 +22,13 @@ takes twenty minutes, fails intermittently for reasons nobody can reproduce, and
 it locally because the inner loop is too painful. The tests that were supposed to give you confidence
 instead give you a reason to avoid them.
 
-MMCA.Common deliberately builds the right shape. **About 2,254 `[Fact]`/`[Theory]`, weighted to Core,**
-form a correct, non-inverted pyramid, with a wide base that runs in milliseconds and needs no database
-and no Docker. That number, and the architecture behind it, is the single most-cited evidence in the
-framework's testability score: category 14 stands at **maturity 4 / implementation 9**, carried by
-the enforced coverage floor and the size of the suite behind it.
+MMCA.Common deliberately builds the right shape. **About 7,100 `[Fact]`/`[Theory]` attributes, more than
+half of them in the Core tests,** form a correct, non-inverted pyramid, with a wide base that runs in
+milliseconds and needs no database and no Docker. Expanded into theory data rows, the CI unit run
+executes 8,386 tests (the `build-and-test` job of CI run 39625216950). That suite, and the architecture
+behind it, is the single most-cited evidence in the framework's testability score: category 14 stands
+at **maturity 4 / implementation 9**, carried by the enforced coverage floor and the size of the suite
+behind it.
 
 ## Why the shape matters more than the count
 
@@ -100,7 +102,9 @@ how the pyramid stays consistent across three codebases instead of being rebuilt
 - `MMCA.Common.Testing.E2E`, the Playwright base: browser fixtures, Blazor-aware navigation helpers that
   handle the InteractiveAuto hydration race, Identity page objects, and abstract workflow bases for the
   Login, Register, Profile, Logout, password-reset and authorization journeys (four of which close with
-  an axe-core WCAG 2.1 AA assertion), plus user-preferences and pseudo-localization bases.
+  an axe-core WCAG 2.1 AA assertion), plus user-preferences and pseudo-localization bases and
+  `KeyboardOperabilityTestsBase`, a WCAG 2.1 keyboard gate (skip link, focus trap, Escape returning
+  focus to the opener, visible focus) that ADC and Store each subclass once.
 - `MMCA.Common.Testing.UI`, the bUnit base: `BunitComponentTestBase` registers MudBlazor's services,
   configures loose JSInterop, and wires real auth doubles so component tests resolve `<AuthorizeView>`
   cascades; the same package ships the `MarkupSnapshot` golden-markup helper and page-test bases for the
@@ -145,7 +149,8 @@ contract, that a consuming host subclasses to prove it wired the framework corre
   framework's `HandleFailure` Result mapping (404), against one shared
   `AssertProblemDetailsShapeAsync` check.
 - `OpenApiContractTestsBase<TFixture>` asserts the served `/openapi/v1.json` is OpenAPI 3.x and still
-  describes every public resource the host pinned.
+  describes every public resource the host pinned, and, on a host that names a committed baseline,
+  fails on any breaking change against it.
 - `ServiceInfoVersioningContractTestsBase<TFixture>` drives `/ServiceInfo` at `api-version: 1.0` and
   then `2.0` and checks the deprecated and supported reporting headers.
 - `SecurityHeadersTestsBase` probes `/alive` and pins six response headers, including
@@ -178,9 +183,14 @@ surface at all.
 
 The cost of adopting one stays small, which is the point of writing the body once: a subclass supplies
 two probe requests, or a path-count floor plus a pinned resource list, or a client factory, and the two
-gateway shutdown subclasses are single-line declarations with no body. The runtime guard reads no
-committed snapshot either: the OpenAPI base asserts against the live document rather than a checked-in
-file, so a new controller can never leave a stale snapshot behind. ADC and Store do commit each host's
+gateway shutdown subclasses are single-line declarations with no body. The OpenAPI base's default
+assertions run against the live document rather than a checked-in file, so a new controller can never
+leave a stale snapshot behind. A subclass that overrides `BaselineDocumentPath` also gets a
+breaking-change diff: the live document is compared with a committed baseline by
+`OpenApiBreakingChangeDetector`, and the test fails on a breaking change, never on an additive or
+documentation-only one. Refreshing that baseline is a deliberate step (`MMCA_UPDATE_OPENAPI_BASELINE=1`
+rewrites the file and fails the run, so a regenerating run never passes), and all seven OpenAPI
+subclasses in ADC and Store opt in. Those consumers also commit each host's
 `openapi/<host>.json` and fail CI on an uncommitted difference, but that is a separate build-time check
 each consumer owns, asking whether the contract changed without review rather than whether a booted
 host serves a usable one.
@@ -313,21 +323,23 @@ A detail that trips up people coming from older .NET projects: the suite runs on
 Platform (MTP), not VSTest**, configured in `global.json`, with **xUnit v3**, AwesomeAssertions, and
 Moq. To run one class or method you target the project and pass an MTP filter after `--`
 (`-- --filter-class "*FooTests*"` or `-- --filter-method "*Pattern*"`). One sharp edge worth knowing: every test
-project must contain at least one test or MTP exits with code 8, so the unit run floors at
-`--minimum-expected-tests 2000` (the suite is about 2,254): a discovery or filter regression that
-silently drops thousands of tests fails the job instead of passing green with a handful discovered.
+project must contain at least one test or MTP exits with code 8. The unit run also floors at
+`--minimum-expected-tests 2000`, so a discovery or filter regression that leaves only a handful of
+tests discovered fails the job instead of passing green. Against the 8,386 tests that run executes
+(CI run 39625216950), the floor is coarse: a regression that drops a few thousand tests still clears it.
 
 And the suite is a real gate, not a suggestion. CI collects coverage via `dotnet-coverage` (which wraps
 the MTP run and returns its exit code, so a test failure still fails the build) and **enforces a
-coverage floor**: the unit tier must stay at or above **68.3%** line coverage (measured about 70.3%) as
-a regression backstop, gated on the unit tier alone rather than a gallery-diluted merged report, and
-the floor only ever moves upward.
+coverage floor**: the unit tier must stay at or above **68.3%** line coverage as a regression backstop,
+gated on the unit tier alone rather than a gallery-diluted merged report. The unit tier measures
+**88.1%** (the `coverage` job of CI run 39625216950), so the floor sits about 20 points below the
+suite it guards.
 
 ## Trade-offs, honestly
 
 The shape is right, but the scorecard names real gaps and one is squarely in the testing story.
 
-- **The UI tier's visual check is markup-deep, not pixel-deep.** The framework ships 29 reusable
+- **The UI tier's visual check is markup-deep, not pixel-deep.** The framework ships 31 reusable
   Blazor components in `MMCA.Common.UI`, some with real branching logic (`MobileCardList`,
   `MobileInfiniteScrollList`), and the pyramid carries a fast base layer *for the UI* under them: the
   `MMCA.Common.Testing.UI` bUnit base backs their component tests, a real-browser render-smoke gate
@@ -343,8 +355,7 @@ The shape is right, but the scorecard names real gaps and one is squarely in the
   deliberately latent, with no production entity on them. The trade buys a fast, Docker-free inner loop
   at the cost of needing the consumer apps and CI to cover the SQL-Server-specific paths.
 - **The honest limits are mutation testing and the container tiers, not coverage.** The unit tier holds a **68.3%** line-coverage
-  floor (measured about 70.3%), enforced in CI and ratcheted up as the suite grows rather than left as
-  an aspiration. What holds category 14 below the top band starts with mutation testing: there is none
+  floor, enforced in CI, against a measured 88.1%. What holds category 14 below the top band starts with mutation testing: there is none
   on the Core tier, so a green suite proves the lines run, not that every assertion would catch a
   mutant. Three structural gaps sit beside it: the integration tier (Redis, PostgreSQL, package
   consumption, Bicep) runs on pull requests but is not a merge gate, the AppHost tier blocks the run
@@ -397,72 +408,66 @@ own app.*
 
 *Tags: .NET, Testing, C Sharp, Software Architecture, Test Automation*
 
-*Notes (this run, 2026-10-08, re-verified at framework v1.233.0 (`MMCA.Common/FACTS.md:4`, `:14`) against source,
-the Common scorecard, the rubric and ADR-058/063/117; carries forward the 2026-10-02 v1.221.0 ledger, which superseded the 2026-09-17 v1.205.0 one).
-Header group cell corrected to G25, Testing & Quality Infrastructure
-(`Website/docs-src/onboarding/00-group-taxonomy.md:83`; G28 is Common AI Integration at `:82`, G26 the ADC
+*Notes (this run, 2026-10-22, re-verified at framework v1.250.0 (`MMCA.Common/FACTS.md:4`, `:14`) against source, CI run 39625216950,
+the Common scorecard, the rubric and ADR-015/058/063/117; carries forward the 2026-10-08 v1.233.0 ledger, which superseded the 2026-10-02 v1.221.0 and 2026-09-17 v1.205.0 ones).
+Header group cell G25, Testing & Quality Infrastructure (`Website/docs-src/onboarding/00-group-taxonomy.md:83`; G28 is Common AI Integration at `:82`, G26 the ADC
 engagement layer at `:78`); the group's page keeps the file name `group-28-testing-infrastructure.md`.
-Suite size: about 2,254 `[Fact]`/`[Theory]` behind `--minimum-expected-tests 2000`
-(`MMCA.Common/.github/workflows/ci.yml:160-163`); `dotnet-coverage` returns the test exit code (`:156`);
-unit-tier coverage floor 68.3%, measured 70.3% (comment `:395-396`, `awk -v m="68.3"` at `:409`); gallery
-a11y matrix `chromium, firefox, webkit` (`:232`). Scorecard evidence 2026-10-07 at v1.233.0
-(`Website/docs-src/governance/common-ArchitectureScorecard.md:5`), Maturity 96.6% (317/328) (`:9`),
-Implementation 86.0% (705/820) (`:10`). Category 8 Data Architecture is maturity 4 / implementation 9 with
-ADR-018's non-SQL engines latent (`:72`). Category 14 is 4/9 (`:78`) and is held at 9 by no mutation
-testing plus three structural gaps (integration tier not a merge gate, Redis `ci.yml:784` and PostgreSQL
-`ci.yml:828`; AppHost tier `ci.yml:905`, blocking but not a required merge check per `:910-911`, where the scorecard row's "advisory, `continue-on-error: true`, `ci.yml:976`" is stale; no real broker in Common CI), so the
-trade-off bullet's "single Exemplary gap" was corrected this run. Category 28 is 4/9, markup not pixels
-(`:92`). Rubric quotes re-cut to the exact wording
-(`Website/docs-src/governance/ArchitectureEvaluationCriteria.md:430,433,440`). Packages: 22 published
-(`FACTS.md:19`, list `:22-43`), six of them test infrastructure: `MMCA.Common.AI.Testing` (`:34`, harness
-types and the hash it keys on per `MMCA.Common/AGENTS.md:141`), `Testing`, `Testing.Architecture`,
-`Testing.Aspire`, `Testing.E2E`, `Testing.UI` (`:38-42`); "five of nineteen" corrected and the AI.Testing
-bullet added. Testing.UI's `MarkupSnapshot` and the identity page-test bases per ADR-058's 2026-09-25
-revision (`Website/docs-src/adr/058-runtime-conformance-suites-as-a-package.md:289-316`). ADR-058 status
-`:4`, later revisions 2026-09-10 (`:249`), 2026-09-22 (`:267`), 2026-09-25 (`:289`), 2026-10-01 (`:318`), 2026-10-06 (`:343`), 2026-10-07 (`:361`);
-seven contract bases (`:32`). Gateway probe gate is switchable:
-`MMCA.Common/Source/Hosting/MMCA.Common.Testing/Conformance/MmcaGatewayHardeningTestsBase.cs:111` (default
-true), inverse assertion `:308`, overridden to false by
-`MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/GatewayHardeningTests.cs:89` and
-`MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/GatewayHardeningTests.cs:93`. The runtime OpenAPI guard
-reads no committed file (ADR-058 `:107-111`), while both consumers commit their documents and diff them in
-CI (`:291-294`), so the "no committed snapshots" sentence was scoped to the runtime guard. UI web heads boot
-over Production-pinned factories (ADR-058 `:147-148`;
-`MMCA.ADC/Tests/Hosts/MMCA.ADC.UI.Web.Tests/ConferenceUiHostApplicationFactory.cs:17` derives
-`ProductionHostApplicationFactory`, which pins Production at
-`MMCA.Common/Source/Hosting/MMCA.Common.Testing/Fixtures/ProductionHostApplicationFactory.cs:37`). Helpdesk
-pins all four `MMCA.Common.Testing*` packages at 1.233.0 (`MMCA.Helpdesk/Directory.Packages.props:93-96`).
-AppHost tier, read in `MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/`:
-`Fixtures/AppHostFixtureBase.cs:41` (collection fixture), readiness-not-liveness docstring `:23-28`, the
-branch-not-`SkipWhen` rule `:35-38`, `SkipReason` `:56`, `IsAvailable` `:59`, default requirement opt-in
-plus Docker `:79-80`, `SuppliesE2eRsaKeys` `:92`, gate evaluated first `:105-111`, builder `:123` and
-`:172`, teardown `:138`; opt-in variable `Preconditions/AppHostEnvironmentGate.cs:16`; probe constants
-`Probes/AppHostProbePaths.cs:18,26,32,35`; `Fixtures/AppHostTestBase.cs:29` with `CreateHttpClient` `:44`,
-`GetConnectionStringAsync` `:54`, `CreateBearerToken` `:74` and assertions `:98,113,127,147,203,246`
-(`AssertDataSourceAsync` at `:246` added this run). The snippet's skip line was corrected to the branch
-form, as the base's own documentation prescribes (`Fixtures/AppHostFixtureBase.cs:35-38`); the ADC AppHost smoke project once cited here was removed 2026-10-07 (ADR-117 `:21`, `:294-295`).
-The E2E sentence was corrected: ADC's E2E workflow brings the Aspire stack up in CI
-(`MMCA.ADC/.github/workflows/e2e.yml:3-4`, step `:200`), which contradicts ADR-117's "deployed environment"
-wording (`Website/docs-src/adr/117-apphost-integration-test-base.md:39`, not edited here); the eight-day
-red nightly is ADR-117 `:52-53`. Deploy gates: chromium-only, UI-scoped `e2e-gate`
-(`MMCA.ADC/.github/workflows/deploy.yml:806,820`, UI filter `:57`; `MMCA.Store/.github/workflows/deploy.yml:752,765`)
-plus `cross-browser-freshness` (ADC `:923`, 10-day window comment `:907-916`; Store `:857`, `:869`), now
-named in the enforcement paragraph. Trade-offs: 29 `.razor` components under
-`MMCA.Common/Source/Presentation/MMCA.Common.UI/Components` (Glob `Components/*/*.razor`, re-counted 2026-10-08; 26 on 2026-10-02) replace "roughly a dozen";
-the SQL Server Testcontainers job (`ci.yml:865`) runs
-`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.SQLServer.Tests/SQLServerPersistenceTests.cs:112,144,175`
-(identity insert, stale row-version save, outbox in the same save). The subtitle's "no Docker" is scoped to
-the inner loop, because the Redis, PostgreSQL and SQL Server Testcontainers jobs and the AppHost tier's
-default requirement all need a container runtime. The base tier's "dominate the type count" and its
-onboarding citation were removed: the group page does not carry that characterization. Carried from the
-2026-10-02 audit's confirmations without re-opening this run: `IntegrationTestBase.cs:31,42-48,51-71,75`,
-`JwtTokenGenerator.cs:14,131`, `SqlServerIntegrationTestFixtureBase.cs:90,183`,
-`MultiSourceSqliteIntegrationTests.cs:44-51,97,120,138,167-183`, `AxeOptions.cs:12-15,17,22,35,40,44`, the
-four Identity workflow bases (`UserLoginTestsBase.cs:82`, `UserRegistrationTestsBase.cs:99`,
-`ProfileManagementTestsBase.cs:191`, `PasswordResetTestsBase.cs:88,99`), `E2ETestBase.cs:529,539`,
-`PageExtensions.cs:326-327`, `MMCA.Common/global.json:3`, ADR-015's structure/registration trade-off
-(`Website/docs-src/adr/015-architecture-fitness-functions.md:93`), and the Helpdesk subclasses
-(`DecoratorPipelineOrderTests.cs:36`, `MiddlewarePipelineOrderTests.cs:15`). The illustrative `CatalogTests`
-snippet is composed for shape; the base type and helpers are real. 2026-10-07: the AppHost-tier sentences (consumers boot their real AppHost through E2E; the framework tier fails the run but is not a required check) follow `MMCA.ADC/AGENTS.md:77`, `MMCA.Store/AGENTS.md:76` and `MMCA.Common/.github/workflows/ci.yml:910-911`. 2026-10-08 (Common v1.233.0, `FACTS.md:14`): UI component count 26 -> 29 (`Components/Legal/TermsAcceptanceGate.razor`, `Components/Forms/DeleteConfirmationDialog.razor` and `Components/Auth/ChangePasswordCard.razor` added); the header grounding and footer move from `CLAUDE.md` (now only an `@AGENTS.md` import) to `MMCA.Common/AGENTS.md` `## Build & Test` (`:9`) and `## Testing` (`:145`), and the CTA from the contributor guide (`MMCA.Common/CONTRIBUTING.md` has no Testing section) to that `AGENTS.md` section; the E2E bullet adds `Workflows/Preferences/UserPreferencesTestsBase.cs:21` and `Workflows/Globalization/PseudoLocalizationTestsBase.cs:52`, the four axe closes unchanged; the trade-off bullet's AppHost clause is grounded in `ci.yml:910-911` rather than attributed to the scorecard, whose row 14 (`common-ArchitectureScorecard.md:78`) still reads advisory at a stale `ci.yml:976` and says 309 executed fitness methods against `FACTS.md:54`'s 410; the `CatalogTests` snippet null-forgives because `GetAsync<T>` returns `Task<T?>` (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/Fixtures/IntegrationTestBase.cs:51`). About 2,254 tests is kept as the scorecard states it (`:78`).*
+Suite size, corrected this run from "about 2,254" (the figure the CI comment `MMCA.Common/.github/workflows/ci.yml:160` and scorecard row 14 still carry):
+7,087 `[Fact]`/`[Theory]` attributes under `MMCA.Common/Tests/` in 836 files, 3,882 of them under `Tests/Core` (`git grep` at Common `51c321fe`, tag v1.250.0),
+and 8,386 tests executed, 0 skipped, by the `build-and-test` job of CI run 39625216950 (2026-10-21, head `ade966b`, the v1.250.0 release PR).
+The unit run floors at `--minimum-expected-tests 2000` (`ci.yml:163`), so the "drops thousands of tests fails the job" sentence was scoped to a
+handful-discovered regression; `dotnet-coverage` returns the test exit code (`:156`); unit-tier coverage floor 68.3% (comment `:395-397`,
+`awk -v m="68.3"` at `:409`), measured 88.1% by the `coverage` job of the same run ("Unit line coverage 88.1% meets the 68.3% floor"), replacing the
+2026-07 figure of 70.3% in that comment. The "only ever moves upward" and "ratcheted up as the suite grows" claims were removed: the floor has not moved
+while measured coverage rose, and the comment's "ratchet up as it grows" (`:397`) is intent, not history. Gallery a11y matrix `chromium, firefox, webkit` (`:232`).
+Scorecard evidence 2026-10-22 at v1.250.0 (`Website/docs-src/governance/common-ArchitectureScorecard.md:5`), Maturity 97.3% (319/328) (`:9`),
+Implementation 85.4% (700/820) (`:10`). Category 8 Data Architecture is maturity 4 / implementation 9 with ADR-018's non-SQL engines latent (`:72`).
+Category 14 is 4/9 (`:78`), held at 9 by no mutation testing plus three structural gaps (integration tier not a merge gate, Redis `ci.yml:725`,
+PostgreSQL `:769`, SQL Server `:806`; AppHost tier `:846`, blocking but not a required merge check per `:851-852`, which row 14 now cites the same way;
+no real broker in Common CI). Category 28 is 4/9, markup not pixels (`:92`). Rubric quotes
+(`Website/docs-src/governance/ArchitectureEvaluationCriteria.md:430,433,440`). Packages: 22 published (`FACTS.md:19`, list `:22-43`), six of them test
+infrastructure: `MMCA.Common.AI.Testing` (`:34`, harness types and the hash it keys on per `MMCA.Common/AGENTS.md:142`), `Testing`, `Testing.Architecture`,
+`Testing.Aspire`, `Testing.E2E`, `Testing.UI` (`:38-42`). ADR-058 status `:4`, latest-revision summary `:10`; revisions 2026-09-10 (`:289`),
+2026-09-22 (`:307`), 2026-09-25 (`:329-340`, Testing.UI's `MarkupSnapshot` and the identity page-test bases, the consumers' committed OpenAPI documents),
+2026-10-01 (`:358`), 2026-10-06 (`:383`), 2026-10-07 (`:401`), 2026-10-21 (`:423`, seven contract bases `:425`).
+OpenAPI, corrected this run: the base's default assertions read no committed file
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing/Conformance/OpenApiContractTestsBase.cs:15-17`), an override of `BaselineDocumentPath` (`:80`) adds
+`OpenApiDocument_HasNoBreakingChangesAgainstTheBaseline` (`:118`, docstring `:21-28`), refreshed by `MMCA_UPDATE_OPENAPI_BASELINE` (`:41`), and all seven
+OpenAPI subclasses opt in (ADR-058 `:117-134`; re-read `MMCA.ADC/Tests/Integration/MMCA.ADC.Conference.IntegrationTests/Contract/OpenApiContractTests.cs:29`
+and `MMCA.Store/Tests/Integration/MMCA.Store.Catalog.IntegrationTests/Contract/OpenApiContractTests.cs:30`), so the bullet and the "reads no committed
+snapshot either" paragraph were rewritten. E2E bullet, corrected this run: adds
+`MMCA.Common/Source/Hosting/MMCA.Common.Testing.E2E/Workflows/Accessibility/KeyboardOperabilityTestsBase.cs:41` (checks listed `:12-28`), subclassed by
+`MMCA.ADC/Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/Engagement/LiveModerationKeyboardTests.cs:23` and
+`MMCA.Store/Tests/E2E/MMCA.Store.E2E.Tests/Workflows/CartDrawerKeyboardTests.cs:21`, beside `Workflows/Preferences/UserPreferencesTestsBase.cs:21` and
+`Workflows/Globalization/PseudoLocalizationTestsBase.cs:52`. Gateway probe gate is switchable:
+`MMCA.Common/Source/Hosting/MMCA.Common.Testing/Conformance/MmcaGatewayHardeningTestsBase.cs:111` (default true), inverse assertion `:308`, overridden to
+false by `MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/GatewayHardeningTests.cs:89` and `MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/GatewayHardeningTests.cs:93`.
+UI web heads boot over Production-pinned factories (ADR-058 `:168-169`; `MMCA.ADC/Tests/Hosts/MMCA.ADC.UI.Web.Tests/ConferenceUiHostApplicationFactory.cs:17`
+derives `ProductionHostApplicationFactory` (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/Fixtures/ProductionHostApplicationFactory.cs:23`), which pins
+Production at `:37`). Helpdesk pins four `MMCA.Common.Testing*` packages at 1.250.0 (`MMCA.Helpdesk/Directory.Packages.props:92-95`) and subclasses
+`DecoratorPipelineOrderTests.cs:38` and `MiddlewarePipelineOrderTests.cs:15` (`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/`).
+AppHost tier, read in `MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/`: `Fixtures/AppHostFixtureBase.cs:41` (collection fixture),
+readiness-not-liveness docstring `:23`, the branch-not-`SkipWhen` rule `:36`, `SkipReason` `:56`, `IsAvailable` `:59`, default requirement `:79`,
+`SuppliesE2eRsaKeys` `:92`, gate evaluated first `:107`, start `:129`, builder hook `:172`, teardown `:138`; opt-in variable
+`Preconditions/AppHostEnvironmentGate.cs:16`; probe constants `Probes/AppHostProbePaths.cs:18,26,32,35`; `Fixtures/AppHostTestBase.cs:29` with
+`CreateHttpClient` `:44`, `GetConnectionStringAsync` `:54`, `CreateBearerToken` `:74`, `AssertHealthyAsync` `:98`, `AssertAliveAsync` `:113`,
+`AssertReadyAsync` `:127`, `AssertJwksAsync` `:147`, `AssertH2cAsync` `:203` and `AssertDataSourceAsync` `:246` (the `AssertJwksAsync` and `AssertDataSourceAsync` lines re-read in a 2026-10-22 catch-up pass, unchanged).
+ADC's E2E workflow brings the Aspire stack up in CI (`MMCA.ADC/.github/workflows/e2e.yml:3-4`, step `:200`), which ADR-117's "deployed environment"
+wording (`Website/docs-src/adr/117-apphost-integration-test-base.md:43`, not edited here) still contradicts; the consumer AppHost smoke projects are removed
+(ADR-117 `:21`, `:299`; `MMCA.ADC/AGENTS.md:77`, `MMCA.Store/AGENTS.md:76`); the eight-day red nightly is ADR-117 `:57`. Deploy gates: chromium-only,
+UI-scoped `e2e-gate` (`MMCA.ADC/.github/workflows/deploy.yml:807`, `browsers` `:821`, UI filter comment `:57`; `MMCA.Store/.github/workflows/deploy.yml:753`,
+`:766`, `:72`) plus the cross-browser-freshness step of each freshness job (ADC `:803`, 10-day window `:916`; Store `:746-748`, `:870`).
+Trade-offs: 31 `.razor` components under `MMCA.Common/Source/Presentation/MMCA.Common.UI/Components` (Glob `Components/*/*.razor`, re-counted 2026-10-22;
+29 on 2026-10-08); the SQL Server Testcontainers job (`ci.yml:806`) runs
+`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.SQLServer.Tests/SQLServerPersistenceTests.cs:129,161,192` (identity insert, stale row-version save,
+outbox in the same save) plus a legacy-collation empty-string filter test at `:219`. The subtitle's "no Docker" is scoped to the inner loop, because the
+Redis, PostgreSQL and SQL Server Testcontainers jobs and the AppHost tier's default requirement all need a container runtime. Re-read this run:
+`IntegrationTestBase.cs:13,31,42,51,59,63,75`, `JwtTokenGenerator.cs:30,131`, `SqlServerIntegrationTestFixtureBase.cs:71,95,184`,
+`MultiSourceSqliteIntegrationTests.cs:44-45,97,120,138,171`, `AxeOptions.cs:9,17,22,35,40`, the four Identity workflow bases (`UserLoginTestsBase.cs:82`,
+`UserRegistrationTestsBase.cs:99`, `ProfileManagementTestsBase.cs:191`, `PasswordResetTestsBase.cs:88,99`), `E2ETestBase.cs:529,539`,
+`PageExtensions.cs:316,355`, `MMCA.Common/global.json:3`, ADR-015's structure/registration trade-off
+(`Website/docs-src/adr/015-architecture-fitness-functions.md:98`), and `MMCA.Common/AGENTS.md` `## Build & Test` (`:9`) and `## Testing` (`:146`).
+The illustrative `CatalogTests` snippet is composed for shape; the base type and helpers are real, and it null-forgives because `GetAsync<T>` returns
+`Task<T?>` (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/Fixtures/IntegrationTestBase.cs:51`).*
 
 - Full series index: https://ivanball.github.io/writing.html

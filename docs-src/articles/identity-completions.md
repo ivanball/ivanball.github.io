@@ -1,7 +1,8 @@
 # Finishing Identity: Second Factor, Email Confirmation and Stored Permission Grants
 
-> Series: MMCA.Common · Article #52 (deep-dive) · Pillar P2/P4 · Group G08 · Rubric §11 · ADR-116 ·
+> Series: MMCA.Common · Article #52 (deep-dive) · Pillar P2/P4 · Group G08 · Rubric §11 · ADR-116 · ADR-091 ·
 > Status: grounded in `Website/docs-src/adr/116-identity-completions-opt-in.md`,
+> `Website/docs-src/adr/091-cache-backed-password-reset.md`,
 > `MMCA.Common/.../Application/Auth/AuthenticationServiceBase.cs`,
 > `.../Application/Auth/TwoFactor/TwoFactorSettings.cs`,
 > `.../Application/Auth/EmailConfirmation/EmailConfirmationSettings.cs`,
@@ -18,6 +19,11 @@
 > `.../API/Controllers/Administration/UsersAdminControllerBase.cs`,
 > `.../API/Controllers/Legal/LegalAcceptanceControllerBase.cs`,
 > `.../UI/Pages/Auth/ConfirmEmail.razor`, `.../UI/Components/Legal/TermsAcceptanceGate.razor.cs`,
+> `.../Infrastructure/Auth/PasswordResetTokenService.cs`,
+> `.../Infrastructure/Auth/EmailConfirmationTokenService.cs`,
+> `.../Application/Auth/PasswordResetSettings.cs`,
+> `.../Application/Users/UseCases/ResetPassword/ResetPasswordHandlerBase.cs`,
+> `.../API/Controllers/PasswordResetAuthControllerBase.cs`,
 > the two consumers' Identity service hosts, and the §11 row of
 > `Website/docs-src/governance/common-ArchitectureScorecard.md`.
 > No em dashes.
@@ -67,7 +73,7 @@ is a system with users who cannot review your diff. Adding a mandatory query to 
 not a feature in a library, it is a behavior change in somebody else's production, delivered by a
 version bump. The framework's own history is the argument: the 1.188.0 release needed an
 `UPGRADING.md` section with eight items, one of which (a fallback authorization policy) broke
-unannotated endpoints (`ADR-116:45-49`).
+unannotated endpoints (`ADR-116:46-50`).
 
 So the question is not "how do I implement TOTP." It is "how do I ship TOTP so that the app which
 does not want it cannot possibly be affected by it."
@@ -201,7 +207,7 @@ aggregate (`Infrastructure/DependencyInjection.Auth.cs:29-32`).
 This is the same trade the framework already made for password material and for user lookups, and
 ADR-116 states the reason plainly: the two deployed apps model users differently, and a
 framework-owned user table would either be too thin to use or force columns an app has no place for
-(`ADR-116:38-43`). Every consumer that wants two-factor writes one class. That is deliberate
+(`ADR-116:39-44`). Every consumer that wants two-factor writes one class. That is deliberate
 duplication, bought on purpose.
 
 The settings carry the RFC 6238 defaults every authenticator app assumes: six digits, a thirty-second
@@ -213,7 +219,7 @@ against one period cannot read codes minted with another (`:9-14`).
 
 Email confirmation reuses the password-reset design rather than inventing one, down to the record
 shape, the hashing, the attempt cap and the throttle, under its own key prefix so issuing a
-confirmation link cannot invalidate an outstanding reset link (`ADR-116:93-104`). And
+confirmation link cannot invalidate an outstanding reset link (`ADR-116:94-105`). And
 `RequireConfirmedEmail` defaults to false, with the reason written next to it: turning it on locks
 out every existing account whose address was never confirmed, so a host backfills its rows as
 confirmed first and flips the flag afterwards (`EmailConfirmationSettings.cs:47-55`). With it off the
@@ -221,9 +227,9 @@ whole capability is additive: tokens are issued and redeemed, and nothing about 
 changes.
 
 Above both sit handler bases the apps derive from rather than reimplement:
-`ConfirmTwoFactorEnrollmentHandlerBase<TCommand>` (`:29`), `DisableTwoFactorHandlerBase<TCommand>`
-(`:29`), `RegenerateRecoveryCodesHandlerBase<TCommand>` (`:30`),
-`SendEmailConfirmationHandlerBase<TUser, TCommand>` (`:40`) and
+`ConfirmTwoFactorEnrollmentHandlerBase<TCommand>` (`:39`), `DisableTwoFactorHandlerBase<TCommand>`
+(`:36`), `RegenerateRecoveryCodesHandlerBase<TCommand>` (`:36`),
+`SendEmailConfirmationHandlerBase<TUser, TCommand>` (`:41`) and
 `ConfirmEmailHandlerBase<TUser, TCommand>` (`:33`).
 
 ## Stored grants: operator-editable, and structurally unable to deny
@@ -238,7 +244,7 @@ host already registered and **unions** the stored set with the compiled one
 fallback at `:166-181`). The union is the security property: **there is no deny row.** A stored edit
 can only widen a role, so the effective permission set never depends on evaluation order, and a data
 change can never disable an endpoint the code guarantees. Removing a compiled capability stays a code
-change (`ADR-116:291-293`).
+change (`ADR-116:292-294`).
 
 Two more decisions hold this up.
 
@@ -247,9 +253,10 @@ empty sealed class that is never injected anywhere
 (`PermissionGrantModelGate.cs:19`), registered by `AddStoredPermissionGrants`
 (`DependencyInjection.Auth.cs:147`). `ApplicationDbContext` resolves it from the root provider with
 `GetService`, so its absence reads as "this host did not opt in" rather than failing every context
-construction (`ApplicationDbContext.cs:914-919`), and applies the grant configuration only then, and
+construction (`ApplicationDbContext.cs:920-921`), and applies the grant configuration only then, and
 only in the context instance whose physical source matches the configured `DataSourceName`
-(`:944`, default `"Default"` at `PermissionGrantSettings.cs:33`). A host that never calls
+(`:922-925`, applied in `ConfigurePermissionGrants` at `:950`, default `"Default"` at
+`PermissionGrantSettings.cs:33`). A host that never calls
 `AddStoredPermissionGrants` keeps a byte-identical model, and an opted-in host gets the table in
 exactly one of its databases.
 
@@ -273,29 +280,34 @@ ship this one complete, unlike the user half, because every input is framework-o
 answers what the code grants, the catalog enumerates what the code *can* grant, and the store holds
 what data grants (`:16-21`).
 
-Its write method, `SetStoredPermissionsAsync` (`:114`), refuses two things, and both refusals are the
+Its write method, `SetStoredPermissionsAsync` (`:115`), refuses two things, and both refusals are the
 kind you only think of after an incident.
 
-**It refuses `AdministrationPermissions.ManageRoles`, outright** (`:142-149`). That is the permission
+**It refuses `AdministrationPermissions.ManageRoles`, outright** (`:147-154`). That is the permission
 guarding this very surface. Granting it from a row would make access to role administration a matter
 of data, and deleting that row would lock every operator out of the one screen that could restore it.
 The check runs *before* the catalog test and regardless of whether the host compiled the permission
-in, because the error message has to name the real reason rather than "unknown" (`:140-141`). A host
+in, because the error message has to name the real reason rather than "unknown" (`:145-146`). A host
 that wants a role to administer roles compiles that grant in.
 
-**It refuses any permission outside the compiled catalog** (`:151-163`). A stored row that no endpoint
+**It refuses any permission outside the compiled catalog** (`:156-168`). A stored row that no endpoint
 checks is not a grant, it is a typo, and the difference between "refused at the API" and "written and
 silently inert" is the difference between a user error and a support ticket six months later.
 
 Everything else about the write is deliberately boring, which is the compliment: a set is a diff
 rather than a truncate-and-insert, so only changed permissions are written, an unchanged submission
-writes nothing, and the `GrantedAt` stamps of untouched rows survive (`:32-37`, writes at `:165-192`).
-The snapshot is invalidated once, in a `finally` after the writes. Each grant and revoke commits on
-its own, so a failure part-way through leaves earlier rows written, and the invalidation therefore
-runs on every exit rather than only on success (`:167-169`, `:193-196`).
+writes nothing, and the `GrantedAt` stamps of untouched rows survive (`:32-37`, writes at `:175-197`).
+Every read, write and invalidation uses the role's one canonical spelling, so a route value cased
+differently from the stored rows cannot write a second casing beside them (`:131-134`). The snapshot
+is invalidated once, in a `finally` after the writes. Each grant and revoke commits on its own, so a
+failure part-way through leaves earlier rows written, and the invalidation therefore runs on every
+exit rather than only on success (`:172-174`, `:198-201`).
 
 ```csharp
 // Illustrative of the documented shape: the two refusals on a set.
+// Every read, write and invalidation below uses the role's one canonical spelling.
+var canonicalRole = CanonicalRole(role);
+
 var desired = new HashSet<string>(permissions.Select(p => p.Trim()), StringComparer.Ordinal);
 
 // Checked BEFORE the catalog test, and regardless of whether the host compiled this
@@ -322,21 +334,21 @@ try
 {
     foreach (var permission in desired.Except(existing, StringComparer.Ordinal))
     {
-        var granted = await store.GrantAsync(role, permission, changedBy, cancellationToken);
+        var granted = await store.GrantAsync(canonicalRole, permission, changedBy, cancellationToken);
         if (granted.IsFailure)
             return Result.Failure<RolePermissionsResponse>(granted.Errors);
     }
 
     foreach (var permission in existing.Except(desired, StringComparer.Ordinal))
     {
-        var revoked = await store.RevokeAsync(role, permission, cancellationToken);
+        var revoked = await store.RevokeAsync(canonicalRole, permission, cancellationToken);
         if (revoked.IsFailure)
             return Result.Failure<RolePermissionsResponse>(revoked.Errors);
     }
 }
 finally
 {
-    await invalidator.InvalidateAsync(role, cancellationToken);
+    await invalidator.InvalidateAsync(canonicalRole, cancellationToken);
 }
 ```
 
@@ -344,13 +356,15 @@ finally
 
 `RolesAdminControllerBase` (`:61`) needs no app-supplied service, because
 `AddStoredPermissionGrants()` registers a complete one; an app implements the interface only to
-change that behavior (`:29-33`). `UsersAdminControllerBase<TUserDto>` (`:49`) takes a
+change that behavior (`:29-33`). `UsersAdminControllerBase<TUserDto>` (`:43`) takes a
 consumer-implemented `IUserAdministrationService<TUserDto>`, because only the app knows its user
-table, and clamps any requested page to `MaxPageSize = 100` (`:53`).
+table, and serves one account, its live sessions, lock, unlock and role replacement (`:55`, `:76`,
+`:103`, `:123`, `:144`). The roster itself is the app's generic paged entity endpoint, not an action
+on the base (`:12-14`).
 
 Both are gated on capabilities, never on role names:
 `[HasPermission(AdministrationPermissions.ManageRoles)]` at `RolesAdminControllerBase.cs:60` and
-`[HasPermission(AdministrationPermissions.ManageUsers)]` at `UsersAdminControllerBase.cs:48`. That
+`[HasPermission(AdministrationPermissions.ManageUsers)]` at `UsersAdminControllerBase.cs:42`. That
 matters more here than anywhere else in an app: an administration surface gated on the string
 `"Admin"` is the one place where a role rename becomes a privilege escalation.
 
@@ -413,8 +427,44 @@ otherwise closes every open dialog on a location change (`:32-35`). The gate rea
 `OnAfterRenderAsync`, never during prerender, because the bearer token is only readable once the
 renderer is interactive (`:25-26`).
 
-The capability shipped in MMCA.Common 1.223.0 (`MMCA.Common/CHANGELOG.md:230`). One consumer runs it,
+The capability shipped in MMCA.Common 1.223.0 (`MMCA.Common/CHANGELOG.md:543`, entry `:547`). One consumer runs it,
 covered in the trade-offs below.
+
+## Password reset: the single-use token the confirmation copies
+
+The email-confirmation token earlier is a copy, and **ADR-091** records the original. A
+forgot-password credential is a cache record rather than a schema change: `PasswordResetTokenService`
+(`Infrastructure/Auth/PasswordResetTokenService.cs:33`) writes one `pwdreset:token:{email}` record and
+one `pwdreset:req:{email}` request counter through `ICacheService`, both keyed by the normalized
+address (`:53-55`). Expiry is the cache TTL, so there is no sweeper and no row to reap (`:13-14`).
+
+The token is 32 random bytes, Base64Url-encoded (`:39`, `:81`), and only its SHA-256 is stored, with
+the token's lifetime as the record's TTL (`:84-90`). Issuing overwrites, so an address holds at most
+one live link (`:16-17`). Redemption compares in fixed time (`:146`); a wrong guess rewrites the
+record with its remaining lifetime rather than a fresh one, and the record is dropped at the attempt
+cap (`:165-180`). A match removes the token and the request counter together (`:152-155`). The
+defaults are a 30-minute lifetime, five attempts and three requests per address per hour
+(`PasswordResetSettings.cs:29-44`).
+
+Single use is why the credential is stored at all: a signed token that has not expired stays valid
+however many times it is presented (`ADR-091:28`, `:122`). So the read, compare and remove run as one
+critical section under an `IDistributedLock` on `lock:{key}` (`:106-108`), and a redemption that
+cannot take the lock within five seconds is answered as an invalid token (`:41-43`, `:109-112`).
+
+That lock is the one structural difference from the confirmation token.
+`EmailConfirmationTokenService` (`EmailConfirmationTokenService.cs:36`) takes no lock (`:36-39`) and
+relies on the shared-store read alone (`:88-90`); its record lives a day rather than half an hour
+(`EmailConfirmationSettings.cs:29`), under its own `emailconfirm:` prefix so neither link can
+invalidate the other (`:28-31`).
+
+The callers keep the contract. `ResetPasswordHandlerBase<TUser, TCommand>`
+(`Users/UseCases/ResetPassword/ResetPasswordHandlerBase.cs:42`) consumes the token before the save on
+purpose, folds every rejection into one `Auth.InvalidResetToken` (`:20-22`, `:74-79`), and revokes
+every refresh session before it applies the new password (`:106-111`).
+`PasswordResetAuthControllerBase` (`API/Controllers/PasswordResetAuthControllerBase.cs:43`) exposes
+both endpoints anonymous, idempotent and behind the per-IP auth limiter (`:75-78`, `:99-102`). The
+cost is the cache's: an eviction or a restart silently kills live links, and the user requests
+another (`ADR-091:127`).
 
 ## Trade-offs, honestly
 
@@ -423,15 +473,15 @@ covered in the trade-offs below.
   implementation of `ITwoFactorStore` in either MMCA.ADC or MMCA.Store. The capability is framework
   code with handler bases, settings, a claim and a challenge, waiting for its first adopter. Email
   confirmation and stored grants, by contrast, are both live: ADC's Identity service calls
-  `AddEmailConfirmation` (`Program.cs:235`) and `AddStoredPermissionGrants` (`:287`), Store's calls
-  the same two (`Program.cs:183`, `:220`), both apps' `User` implements `IEmailConfirmableUser`
+  `AddEmailConfirmation` (`Program.cs:236`) and `AddStoredPermissionGrants` (`:288`), Store's calls
+  the same two (`Program.cs:191`, `:228`), both apps' `User` implements `IEmailConfirmableUser`
   (`ADC User.cs:35`, `Store User.cs:30`), and both route the two controller bases
   (`ADC AdminRolesController.cs:37`, `UsersAdminController.cs:26`; `Store AdminRolesController.cs:36`,
-  `AdminUsersController.cs:28`).
+  `AdminUsersController.cs:39`).
 - **Terms acceptance has one adopter, and its gate fails open.** ADC's Identity service calls
-  `AddLegalAcceptance` (`Program.cs:241`), its `User` implements `ILegalAcceptingUser`
+  `AddLegalAcceptance` (`Program.cs:242`), its `User` implements `ILegalAcceptingUser`
   (`ADC User.cs:35`), it routes a `LegalAcceptanceController` (`LegalAcceptanceController.cs:28`), and
-  its Identity UI module contributes the gate (`IdentityUIModule.cs:40`); the same search finds none
+  its Identity UI module contributes the gate (`IdentityUIModule.cs:33`); the same search finds none
   of the four in MMCA.Store or MMCA.Helpdesk. Every non-success outcome of the gate's read renders
   nothing, because the gate exists to ask for consent and never to take the app down with the API
   (`TermsAcceptanceGate.razor.cs:26-27`), so while the read endpoint is failing nobody is asked. A
@@ -460,19 +510,19 @@ covered in the trade-offs below.
   outliving the interval, because the layer can only widen.
 - **A stored grant reaches another service only through a token claim.** Where modules run as separate
   services, the host that mints tokens is the one that holds the grants, so a permission granted by a
-  row lands on the holder's next sign-in rather than within `CacheSeconds` (`ADR-116:326-329`). That
+  row lands on the holder's next sign-in rather than within `CacheSeconds` (`ADR-116:327-330`). That
   is the same latency a role change has always had, and it is the price of keeping the grant table in
   one host instead of replicating it.
 - **Adopting the table is a migration in the consumer, and it joins the hard-delete allowlist.** The
   grant store hard-deletes a revoked grant, which makes it an exception to the framework's
   soft-delete default, and consumers running the same fitness rule have to add the type to their own
-  allowlist when they upgrade (`ADR-116:317-320`).
+  allowlist when they upgrade (`ADR-116:318-321`).
 - **No enrollment page ships.** Two-factor enrollment (with its QR code and its show-recovery-codes-once
   screen) stays with the consumers. The email confirmation landing page is the one page of the five
   completions that `MMCA.Common.UI` ships, anonymous at `/confirm-email` (`ConfirmEmail.razor:1-3`);
   the Terms gate ships as a layout component the host adds, and the administration surface ships as
-  routeless components the app routes, authorizes and links for itself (`ADR-116:176-204`,
-  `:249-274`). Two consumers have not yet wanted the same enrollment page, and the rule is that a
+  routeless components the app routes, authorizes and links for itself (`ADR-116:177-205`,
+  `:250-275`). Two consumers have not yet wanted the same enrollment page, and the rule is that a
   component gets promoted when they do.
 
 ## Apply this even without MMCA
@@ -523,7 +573,8 @@ material, how stored permission grants union with the compiled registry behind a
 maps the table, the two refusals `SetStoredPermissionsAsync` makes, how the two administration
 controller bases gate on capabilities rather than role names, and how versioned Terms of Service
 acceptance keeps the version on the server and holds a non-dismissable dialog open until the user
-accepts or signs out.
+accepts or signs out, and how the cache-backed password-reset token stays single-use under a lock
+the email-confirmation token does not take.
 
 **Next in the series:** Article 53, the series index: every pattern in one place, from the Result
 railway to this one.
@@ -540,8 +591,17 @@ Next: Article 53, the series index, "The MMCA series: every pattern, one place."
 
 *Tags: .NET, C Sharp, Authentication, Security, Software Architecture*
 
-*Notes: verified 2026-10-08 against MMCA.Common v1.233.0 (`MMCA.Common/FACTS.md:14`); every
-type/behavior name below re-read with path:line this run. Changes this run (2026-10-08): a new
+*Notes: re-verified 2026-10-22 against MMCA.Common v1.250.0 (`MMCA.Common/FACTS.md:14`); every
+type/behavior name below re-read with path:line this run. Changes this run (2026-10-22): a new
+section on the cache-backed password-reset token (ADR-091) and how it compares with the
+email-confirmation token, with ADR-091 added to the header and a closing-summary clause; the
+`UsersAdminControllerBase` sentence rewritten, because the base carries no list action and no page
+cap (the roster is the app's generic paged entity endpoint); the second code block and the write
+paragraph resolve `canonicalRole` and use it for every write, revoke and invalidation; and the
+anchors re-pointed for ADR-116 (one line down after its 2026-10-21 Status line),
+`ApplicationDbContext`, `StoredPermissionRoleAdministrationService`, the handler bases, the
+CHANGELOG, both consumers' Identity hosts, Store's `AdminUsersController`, ADC's `IdentityUIModule`,
+`RolesAdminControllerBase`'s catalog remark and the taxonomy. The 2026-10-08 run (v1.233.0) added a new
 section on versioned Terms of Service acceptance as the fifth opt-in completion (ADR-116 item 13,
 revision 2026-10-06), with the count moved from four to five in the opening, the subtitle and the
 pages trade-off, a Terms adoption trade-off, the Terms adoption steps added to the
@@ -558,30 +618,32 @@ Both code blocks are illustrative of the documented shape rather than compilable
 splices `AuthenticationServiceBase`'s constructor header (`:64-71`), the two login-gate call sites
 (`:178-193`) and three of its methods (`:506-516`, `:530-536`, `:548-561`) into one class body, which
 the source of course does not do; the second condenses
-`StoredPermissionRoleAdministrationService.SetStoredPermissionsAsync` (from `:114`) with the null,
+`StoredPermissionRoleAdministrationService.SetStoredPermissionsAsync` (from `:115`) with the null,
 whitespace and role-existence guards and `ConfigureAwait` calls dropped and the two error messages
-shortened from the source strings beside the codes at `:145` and `:159`. Control flow, member names
-and refusal codes are faithful.*
+shortened from the source strings beside the codes at `:150` and `:164`; the `canonicalRole`
+resolution (`:134`) is kept ahead of the refusals, as in the source. Control flow, member names
+(`canonicalRole` in the grant, revoke and invalidation at `:180`, `:191` and `:200`) and refusal codes
+are faithful. The password-reset section carries no code block.*
 - *ADR-116 (`Website/docs-src/adr/116-identity-completions-opt-in.md`), Accepted 2026-09-09, revised
-  2026-09-19, 2026-10-01, 2026-10-06 and 2026-10-07 (`:3-10`; Revision sections `:331`, `:345`,
-  `:360`): the four originally missing capabilities and why each consumer would otherwise have
-  written its own (`:29-32`); the three reasons a framework-feature shape is wrong here, the
-  app-owned user row (`:38-43`), the sign-in chain no consumer can afford to have changed under it
-  with the 1.188.0 `UPGRADING.md` precedent (`:45-49`) and pages being where apps diverge most
-  (`:51-54`); the decision statement that a consumer adopting none of them observes no change
-  (`:57-61`); two-factor as contract plus challenge (`:63-70`); the optional-constructor-argument hook
-  (`:72-79`); the claim and its presence-is-the-test rule (`:81-91`); email confirmation mirroring the
-  password-reset design under its own key prefix (`:93-104`); stored grants unioning with the compiled
-  registry with no deny row (`:106-124`, that sentence `:122-124`); the synchronous-read cache contract
-  (`:126-134`); the two controller bases (`:136-157`); the three separate DI calls (`:159-167`); the
-  single new package `Otp.NET` in Infrastructure only (`:169-174`); pages staying with the consumers,
+  2026-09-19, 2026-10-01, 2026-10-06, 2026-10-07 and 2026-10-21 (`:3-11`; Revision sections `:332`,
+  `:346`, `:361`, `:379`): the four originally missing capabilities and why each consumer would
+  otherwise have written its own (`:30-33`); the three reasons a framework-feature shape is wrong
+  here, the app-owned user row (`:39-44`), the sign-in chain no consumer can afford to have changed
+  under it with the 1.188.0 `UPGRADING.md` precedent (`:46-50`) and pages being where apps diverge
+  most (`:52-55`); the decision statement that a consumer adopting none of them observes no change
+  (`:58-62`); two-factor as contract plus challenge (`:64-71`); the optional-constructor-argument hook
+  (`:73-80`); the claim and its presence-is-the-test rule (`:82-92`); email confirmation mirroring the
+  password-reset design under its own key prefix (`:94-105`); stored grants unioning with the compiled
+  registry with no deny row (`:107-125`, that sentence `:123-125`); the synchronous-read cache contract
+  (`:127-135`); the two controller bases (`:137-158`); the three separate DI calls (`:160-168`); the
+  single new package `Otp.NET` in Infrastructure only (`:170-175`); pages staying with the consumers,
   the email confirmation page as the one promoted page, and the routeless administration components
-  (`:176-204`); the closed catalog and the two refusals (`:206-224`); the token carrying permissions
-  so a service that never sees the grants still honours them (`:226-247`); versioned Terms of Service
-  acceptance as the fifth completion (item 13, `:249-274`, recorded by the 2026-10-06 revision at
-  `:346-349`); the six rejected shapes, including "let a stored grant deny" (`:277-299`, that one
-  `:291-293`); and the trade-offs restated here (`:301-329`, hard-delete allowlist `:317-320`,
-  next-sign-in latency `:326-329`).*
+  (`:177-205`); the closed catalog and the two refusals (`:207-225`); the token carrying permissions
+  so a service that never sees the grants still honours them (`:227-248`); versioned Terms of Service
+  acceptance as the fifth completion (item 13, `:250-275`, recorded by the 2026-10-06 revision at
+  `:347-350`); the six rejected shapes, including "let a stored grant deny" (`:277-300`, that one
+  `:292-294`); and the trade-offs restated here (`:302-330`, hard-delete allowlist `:318-321`,
+  next-sign-in latency `:327-330`).*
 - *`AuthenticationServiceBase<TUser>`
   (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs`): primary
   constructor `:64-71` (five required parameters `:65-69`), the two optional parameters
@@ -617,10 +679,11 @@ and refusal codes are faithful.*
   `:18-19`), `DataSourceName` defaulting `"Default"` `:33`.*
 - *Handler bases (paths rooted at
   `MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/`):
-  `TwoFactor/ConfirmTwoFactorEnrollmentHandlerBase.cs:29`, `TwoFactor/DisableTwoFactorHandlerBase.cs:29`,
-  `TwoFactor/RegenerateRecoveryCodesHandlerBase.cs:30`,
-  `EmailConfirmation/SendEmailConfirmationHandlerBase.cs:40`,
-  `EmailConfirmation/ConfirmEmailHandlerBase.cs:33`.*
+  `TwoFactor/ConfirmTwoFactorEnrollmentHandlerBase.cs:39`, `TwoFactor/DisableTwoFactorHandlerBase.cs:36`,
+  `TwoFactor/RegenerateRecoveryCodesHandlerBase.cs:36`,
+  `EmailConfirmation/SendEmailConfirmationHandlerBase.cs:41`,
+  `EmailConfirmation/ConfirmEmailHandlerBase.cs:33`; all five are declared `abstract partial class`
+  with the generic signatures named in the body.*
 - *DI (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Auth.cs`):
   `AddTwoFactorAuthentication(IConfiguration)` `:40` with the "deliberately registers no
   `ITwoFactorStore`" remark `:29-32` and the "calling this alone changes nothing about sign-in"
@@ -638,28 +701,34 @@ and refusal codes are faithful.*
 - *`StoredPermissionRoleAdministrationService`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/Administration/StoredPermissionRoleAdministrationService.cs`):
   declaration `:45`, the "every half is framework-owned" remark `:16-21`, the two-refusals remark
-  `:23-31`, the set-is-a-diff remark `:32-37`; `SetStoredPermissionsAsync` `:114`, the
-  checked-before-the-catalog-test comment `:140-141`, the `ManageRoles` refusal
-  (`PermissionGrant.ManageRolesMustBeCompiled` `:145`) `:142-149`, the catalog refusal
-  (`PermissionGrant.UnknownPermission` `:159`) `:151-163`, the each-write-commits-on-its-own comment
-  `:167-169`, the grant/revoke diff `:170-191` (grant `:175`, revoke `:186`) and the single
-  invalidation in the `finally` `:193-196` (call `:195`).*
+  `:23-31`, the set-is-a-diff remark `:32-37`; `SetStoredPermissionsAsync` `:115`, the
+  one-canonical-spelling comment `:131-133` and `var canonicalRole = CanonicalRole(role)` `:134`
+  (helper `:254`), the checked-before-the-catalog-test comment `:145-146`, the `ManageRoles` refusal
+  (`PermissionGrant.ManageRolesMustBeCompiled` `:150`) `:147-154`, the catalog refusal
+  (`PermissionGrant.UnknownPermission` `:164`) `:156-168`, the each-write-commits-on-its-own comment
+  `:172-174`, the grant/revoke diff `:175-197` (grant on `canonicalRole` `:180`, revoke `:191`) and
+  the single invalidation in the `finally` `:198-201` (call on `canonicalRole` `:200`).*
 - *`PermissionGrantModelGate`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Auth/PermissionGrantModelGate.cs:19`),
   an empty `internal sealed class` with no state and no injection site (its remarks `:15-18`);
   resolved with `GetService` in `ResolvePermissionGrantGate`,
-  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:914-919`
-  (gate lookup `:915`, the "whole opt-in" documentation `:122`), with
-  `modelBuilder.ApplyPermissionGrantConfiguration()` applied in `ConfigurePermissionGrants` at `:944`.*
+  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:920-925`
+  (gate lookup `:921`, the `DataSourceName` match `:922-925`, the both-use-`GetService` remark
+  `:914-918`, the "whole opt-in" documentation `:122`), with
+  `modelBuilder.ApplyPermissionGrantConfiguration()` applied in `ConfigurePermissionGrants`
+  (`:943-951`) at `:950`.*
 - *Controller bases (paths rooted at
   `MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Administration/`):
   `RolesAdminControllerBase.cs` capability gate `[HasPermission(AdministrationPermissions.ManageRoles)]`
   `:60`, declaration `:61`, the "needs no app-supplied service" remark `:29-33`, the two-refusals
   client contract `:40-56`, `GetCatalogAsync` on the literal route `[HttpGet("catalog")]` `:98` with
-  the takes-precedence-over-`{role}` remark `:90-93`;
+  the takes-precedence-over-`{role}` remark `:92-95` (text `:93-94`);
   `UsersAdminControllerBase.cs` capability gate `[HasPermission(AdministrationPermissions.ManageUsers)]`
-  `:48`, declaration `:49`, `MaxPageSize = 100` `:53`.*
-- *Terms of Service acceptance (MMCA.Common 1.223.0, `MMCA.Common/CHANGELOG.md:230`):
+  `:42`, declaration `:43`, the summary naming the roster as the app's generic paged entity endpoint
+  rather than an action here `:11-15` (sentence `:12-14`), and the actions `GET {userId}` `:55`,
+  `GET {userId}/sessions` `:76`, `POST {userId}/lock` `:103`, `POST {userId}/unlock` `:123` and
+  `PUT {userId}/roles` `:144`; the base has no list action and no page-size cap.*
+- *Terms of Service acceptance (MMCA.Common 1.223.0, heading `MMCA.Common/CHANGELOG.md:543`, entry `:547`):
   `LegalAcceptanceOptions`
   (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Legal/LegalAcceptanceOptions.cs`), the
   unset-is-the-off-switch remark `:8-10`, `SectionName = "Legal"` `:15`, `CurrentTermsVersion` `:21`
@@ -684,22 +753,54 @@ and refusal codes are faithful.*
   the after-render read and render-nothing-on-failure remark `:25-27`, the non-dismissable
   `DialogOptions` `:37-45` (`BackdropClick` `:39`, `CloseOnEscapeKey` `:40`, `CloseOnNavigation`
   `:41`, `CloseButton` `:42`) and their reason `:32-35`.*
+- *Cache-backed password reset: ADR-091
+  (`Website/docs-src/adr/091-cache-backed-password-reset.md`), Accepted 2026-08-22, revised
+  2026-10-01, 2026-10-07 and 2026-10-21 (Status `:3`), the signed-payload option that cannot express
+  single use without a store (`:28`, Rationale `:122`) and the cache-eviction trade-off (`:127`);
+  `PasswordResetTokenService`
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordResetTokenService.cs:33`), its
+  lifecycle summary `:12-27` (no schema change and TTL reaping `:13-14`, one active token per email
+  `:16-17`, single redemption `:24-26`), the `IDistributedLock` constructor parameter `:36`,
+  `TokenByteLength = 32` `:39`, lock TTL of 10 seconds `:41` and wait of 5 seconds `:43`, the
+  `pwdreset:token:` and `pwdreset:req:` keys over `EmailIdentity.Normalize` `:53-55`, the
+  `IncrementAsync` throttle `:68`, the Base64Url token `:81`, the hashed record written with the
+  lifetime TTL `:84-90`, `ValidateAndConsumeAsync` `:96` taking the lock `:106-108` and answering a
+  contended redemption as invalid `:109-112`, the shared-store read `:128`, `FixedTimeEquals` `:146`,
+  the consume of token and counter `:152-155`, the remaining-lifetime rewrite and attempt-cap discard
+  `:165-180`, `Auth.InvalidResetToken` `:183-187`; `PasswordResetSettings`
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/PasswordResetSettings.cs`), section
+  `PasswordReset` `:13`, `TokenLifetimeMinutes` 30 `:29`, `MaxValidationAttempts` 5 `:36`,
+  `MaxRequestsPerEmail` 3 `:40`, `RequestWindowMinutes` 60 `:44`; `EmailConfirmationTokenService`
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/EmailConfirmationTokenService.cs:36`),
+  constructor with no `IDistributedLock` `:36-39`, the own-prefix remark `:28-31`, the shared-store
+  read `:88-90`, keys `:130` and `:132`; `EmailConfirmationSettings.TokenLifetimeMinutes` 1440
+  (`.../Auth/EmailConfirmation/EmailConfirmationSettings.cs:29`); `ResetPasswordHandlerBase<TUser,
+  TCommand>`
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ResetPassword/ResetPasswordHandlerBase.cs:42`),
+  the required `IRefreshSessionStore` `:48`, the one-error remark `:20-22`, the consume-before-save
+  comment `:74-76` and call `:77-79`, session revocation `:106-108`, the password hashed and applied
+  `:110-111`, the save `:117`, the lockout clear `:120`;
+  `PasswordResetAuthControllerBase<TForgotPasswordCommand, TResetPasswordCommand>`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/PasswordResetAuthControllerBase.cs:43`),
+  `POST forgot-password` `:75-79` (202) and `POST reset-password` `:99-103` (204), each
+  `[Idempotent]`, `[AllowAnonymous]` and `[EnableRateLimiting]` on
+  `RateLimitPolicyAuthIp` (`:78`, `:102`).*
 - *Email confirmation page:
   `MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/ConfirmEmail.razor:1-3`
   (`@page "/confirm-email"`, `[AllowAnonymous]`).*
 - *Consumer adoption, from a search across the consumers' `Source/` trees this run. Live: ADC
-  `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:235` (`AddEmailConfirmation`),
-  `:241` (`AddLegalAcceptance`) and `:287` (`AddStoredPermissionGrants`); Store
-  `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:183` and `:220`;
+  `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:236` (`AddEmailConfirmation`),
+  `:242` (`AddLegalAcceptance`) and `:288` (`AddStoredPermissionGrants`); Store
+  `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:191` and `:228`;
   `IEmailConfirmableUser` on
   `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:35` (which also declares
   `ILegalAcceptingUser`) and
   `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Domain/Users/User.cs:30`; the controller
   subclasses at `MMCA.ADC/.../Identity.API/Controllers/AdminRolesController.cs:37`,
   `UsersAdminController.cs:26` and `LegalAcceptanceController.cs:28`,
-  `MMCA.Store/.../Identity.API/Controllers/AdminRolesController.cs:36` and `AdminUsersController.cs:28`;
+  `MMCA.Store/.../Identity.API/Controllers/AdminRolesController.cs:36` and `AdminUsersController.cs:39` (declaration `:36`);
   the ADC Identity UI module contributing `TermsAcceptanceGate` as a layout component
-  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.UI/IdentityUIModule.cs:40`); Store's
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.UI/IdentityUIModule.cs:33`); Store's
   confirmation migration
   `MMCA.Store/Source/Hosting/MMCA.Store.Migrations.SqlServer.Identity/Migrations/20260910144620_AddEmailConfirmation.cs:8`.
   Not adopted: the same search returns no `AddTwoFactorAuthentication` call and no `ITwoFactorStore`
@@ -710,11 +811,13 @@ and refusal codes are faithful.*
   `:376`); MMCA.Common's §11 row at Weight 3 / Maturity 4 / Implementation 8
   (`Website/docs-src/governance/common-ArchitectureScorecard.md:75`, column header `:63`). Group G08
   Authentication and Authorization (`Website/docs-src/onboarding/00-group-taxonomy.md:63`), which is
-  where `ITwoFactorAuthenticator` (`:665`), `IEmailConfirmationTokenService` (`:658`),
-  `StoredPermissionRoleAdministrationService` (`:689`) and `PermissionGrantModelGate` (`:392`) are
-  inventoried; the Terms types sit in the same taxonomy (`ILegalAcceptingUser` `:660`,
-  `LegalAcceptancePolicy` `:669`, `LegalAcceptanceControllerBase` `:905`, `TermsAcceptanceGate`
-  `:1214`). Framework v1.233.0 (`MMCA.Common/FACTS.md:14`) / 22 published packages (`:19`) this
-  run; not recounted here.*
+  where `ITwoFactorAuthenticator` (`:669`), `IEmailConfirmationTokenService` (`:662`),
+  `StoredPermissionRoleAdministrationService` (`:694`) and `PermissionGrantModelGate` (`:396`) are
+  inventoried; the Terms types sit in the same taxonomy (`ILegalAcceptingUser` `:664`,
+  `LegalAcceptancePolicy` `:674`, `LegalAcceptanceControllerBase` `:913`, `TermsAcceptanceGate`
+  `:1240`), and so do the password-reset types (`IPasswordResetTokenService` `:667`,
+  `PasswordResetTokenService` `:699`, `PasswordResetAuthControllerBase` `:920`,
+  `ResetPasswordHandlerBase` `:1035`). Framework v1.250.0 (`MMCA.Common/FACTS.md:14`) / 22 published
+  packages (`:19`) this run; not recounted here.*
 
 - Full series index: https://ivanball.github.io/writing.html

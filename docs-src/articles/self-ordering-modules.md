@@ -288,30 +288,37 @@ or `dotnet add package MMCA.Common.API` and try it.*
 
 *Tags: .NET, C Sharp, Software Architecture, Modular Monolith, Microservices*
 
-*Notes: re-verified against source this run (2026-10-02 apply pass, MMCA.Common v1.221.0). Four claims
-changed meaning. (1) Scan guard: `DiscoverAndRegister` scans `moduleAssemblies` at
+*Notes: re-verified against source this run (2026-10-22 apply pass, MMCA.Common v1.250.0,
+`MMCA.Common/FACTS.md:14`). No body claim changed meaning in this pass; the ADC host anchors moved and
+are re-anchored below, and every other anchor was re-read at the line given. Carried from the
+2026-10-02 pass (MMCA.Common v1.221.0), where four claims changed meaning. (1) Scan guard:
+`DiscoverAndRegister` scans `moduleAssemblies` at
 `MMCA.Common.Application/Modules/ModuleLoader.cs:74-95` with TWO catches, a typed
 `catch (ReflectionTypeLoadException ex)` at `:81-88` that keeps the loaded types
 (`ex.Types.OfType<Type>()` at `:87`) and logs at Error through `LogAssemblyPartiallyLoaded`
 (`:352-353`), and a broad `catch (Exception ex)` at `:89-93` that returns no types and logs at Error
 through `LogAssemblyScanFailed` (`:349-350`); the rationale comment is `:69-73`. The body previously said
 a broken assembly contributes no types, which holds only for the broad catch. (2) Fleet topology: every
-ADC service host names ONLY its own module assembly (`MMCA.ADC.Conference.Service/Program.cs:366`,
-`MMCA.ADC.Engagement.Service/Program.cs:211`, `MMCA.ADC.Identity.Service/Program.cs:255`,
-`MMCA.ADC.Notification.Service/Program.cs:189`; `MMCA.ADC/AGENTS.md:43`), so peers are never discovered
+ADC service host names ONLY its own module assembly (`MMCA.ADC.Conference.Service/Program.cs:374`,
+`MMCA.ADC.Engagement.Service/Program.cs:215`, `MMCA.ADC.Identity.Service/Program.cs:267`,
+`MMCA.ADC.Notification.Service/Program.cs:197`; `MMCA.ADC/AGENTS.md:43`), so peers are never discovered
 and no disabled stub is registered there, even though Conference's appsettings disables Engagement
-(`MMCA.ADC.Conference.Service/appsettings.json:21,24`). `AddEngagementBookmarkCountClient` is a
-pipeline step at `Program.cs:412` and calls
+(`MMCA.ADC.Conference.Service/appsettings.json:21,24`: the `Modules` section opens at `:21`, Engagement
+`"Enabled": false` is `:24`). `AddEngagementBookmarkCountClient` is a
+pipeline step at `Program.cs:420` and calls
 `services.Replace(ServiceDescriptor.Scoped<IBookmarkCountService, BookmarkCountServiceGrpcAdapter>())` at
 `MMCA.ADC.Engagement.Contracts/DependencyInjection.cs:49`; the host comments at `Program.cs:34-39` and
-`:385-389` state that no Engagement stub exists in this host. The body previously said the host
+`:393-397` state that no Engagement stub exists in this host. The body previously said the host
 replaces a stub with a gRPC client; it now says the host adds the adapter and frames the stub path as the
 name-and-disable shape. (3) Disabled-module example: the handler is
-`GetSessionBookmarkCountsHandler` (plural, `Conference.Application/Speakers/UseCases/GetSessionBookmarkCounts/GetSessionBookmarkCountsHandler.cs:17`,
+`GetSessionBookmarkCountsHandler` (plural, batched, `Conference.Application/Speakers/UseCases/GetSessionBookmarkCounts/GetSessionBookmarkCountsHandler.cs:17`,
 `IBookmarkCountService` parameter `:19`); the stub is real (`EngagementModule.cs:30-33`, registering
-`DisabledBookmarkCountService` at `:32`) and the example is now framed for a host that names the
-Engagement assembly and disables it. The Conference host comments still spell the handler singular
-(`Program.cs:34`, `:385`); the article follows the class. (4) "A forgotten stub is caught at startup"
+`DisabledBookmarkCountService` at `:32`) and the example is framed for a host that names the
+Engagement assembly and disables it. The Conference host comments (`Program.cs:34`, `:393`) name the
+sibling single-session `GetSessionBookmarkCountHandler`
+(`Conference.Application/Speakers/UseCases/GetSessionBookmarkCount/GetSessionBookmarkCountHandler.cs:14`,
+`IBookmarkCountService` parameter `:16`), which consumes the same interface; the article names the
+batched one. (4) "A forgotten stub is caught at startup"
 was UNVERIFIABLE and is removed: no `ValidateOnBuild` appears in Common or ADC source and the loader does
 not check stub coverage. Added instead: `ValidateRemoteDependencies(IServiceProvider)` at
 `ModuleLoader.cs:212` (doc `:198-211`, stub capture `:118-120`, throw `:244-249`, still-stub warning
@@ -331,8 +338,9 @@ environment variant `:188`, `SeedAllAsync` `:266`, Kahn `TopologicalSort` `:282-
 `RemoteDependencies` at `ModuleSettings.cs:9,38`. `AddModuleHost` at
 `MMCA.Common.API/Startup/ModuleHostExtensions.cs:51` binds and validates both settings (`:62-64`,
 `:70-72`), registers the loader (`:82`) and returns the `ModuleHostContext` (`:84`); it is shipped API
-(`MMCA.Common.API/PublicAPI.Shipped.txt:398,564`, no longer in Unshipped).
-`ModuleHostContext.RegisterModules` at `ModuleHostContext.cs:66`. The convention scan lives in
+(`MMCA.Common.API/PublicAPI.Shipped.txt:413,584`, absent from Unshipped).
+`ModuleHostContext.RegisterModules` at `ModuleHostContext.cs:66`, passing all six arguments to
+`DiscoverAndRegister` at `:70-76`. The convention scan lives in
 `MMCA.Common.Application/DependencyInjection.ModuleScanning.cs`: generic `:28`, `Assembly` overload `:46`,
 `ThrowIfPipelineSealed` `:49`, domain event handlers `:54`, integration event handlers `:61`,
 `IEntityDTOMapper<,,>` `:67`, `IEntityDTOProjector<,,>` `:76`, `IEntityRequestMapper<,,>` `:82`,
@@ -342,17 +350,21 @@ environment variant `:188`, `SeedAllAsync` `:266`, Kahn `TopologicalSort` `:282-
 `DependencyInjection.cs:48`. `AddMmcaApplicationPipeline` at `DependencyInjection.cs:207-216`
 (`AddApplication()` `:211`, callback `:213`, `AddApplicationDecorators()` `:215`), remarks `:185-206` with
 the non-handler note at `:195-196`, `VerifyDecoratorPipeline()` `:244`, `ThrowIfPipelineSealed` `:310`
-(also called from `DependencyInjection.Crud.cs:80` for `AddEntityCrud` and `:193` for
-`AddEntityUpdate`). Conference host: `AddInfrastructure` `Program.cs:340`, "deliberately does NOT run
-discovery" `:356-359`, "no AppDomain scan" `:361-363`, `AddModuleHost` `:364-367`, `AddAPI` `:369`,
-pipeline comment `:374-409`, `AddMmcaApplicationPipeline` `:410-413` with `RegisterModules` at `:411`;
-the snippets mirror `:364-367` and `:410-411` with ADC-specific steps elided. `EngagementModule`
-`Dependencies => ["Conference"]` `:20`, `RequiresDependencies => true` `:23`. Topology: ADC four
+(also called from `DependencyInjection.Crud.cs:80` for `AddEntityCrud`, `:142` for `AddEntityUpdateVerb`
+and `:193` for `AddEntityUpdate`). Conference host: `AddInfrastructure` `Program.cs:348`, "deliberately
+does NOT run discovery" `:364-367`, "no AppDomain scan" `:369-371`, `AddModuleHost` `:372-375` (bootstrap
+logger factory `:372`), `AddAPI` `:377`, pipeline comment `:382-417`, `AddMmcaApplicationPipeline`
+`:418-421` with `RegisterModules` at `:419`; the snippets mirror `:372-375` and `:418-419` with
+ADC-specific steps elided. `EngagementModule`
+`Dependencies => ["Conference"]` `:20`, `RequiresDependencies => true` `:23`. `ConferenceModule` shape
+re-read this run: `Name` `ConferenceModule.cs:19`, `RegisterDisabledStubs` `:22`, `Register` forwards to
+`AddConferenceModule(applicationSettings)` at `:31`, no `Dependencies` override. Topology: ADC four
 single-module hosts behind YARP, no single WebAPI host (`MMCA.ADC/AGENTS.md:7`); Helpdesk monolith-first,
 one `Tickets` module, "build the monolith now, extract a service later" (`MMCA.Helpdesk/AGENTS.md:7`).
-Both repos' `CLAUDE.md` are `@AGENTS.md` imports, so the grounding cites `AGENTS.md`. The header no
-longer cites the "DI Registration Sequence" section of `MMCA.Common/AGENTS.md`: its text says
-`AddMmcaApplicationPipeline` runs `AddInfrastructure` and `AddAPI`, which `DependencyInjection.cs:211-215`
-does not; the body follows the code (source-doc drift, not fixed here). ADR-059 Decision
-(`Website/docs-src/adr/059-module-contract-and-composition.md:22-25`) and the `ConferenceModule` shape are
-carried as CONFIRMED by this cycle's audit, not re-read in the apply pass.*
+Both repos' `CLAUDE.md` are `@AGENTS.md` imports, so the grounding cites `AGENTS.md`; the header cites
+`MMCA.Common/AGENTS.md` "Module System" (`:96`). The "DI Registration Sequence" section
+(`MMCA.Common/AGENTS.md:73-75`) now agrees with the code (`AddInfrastructure`, `AddAPI` and other
+non-handler registrations stay outside the call, matching `DependencyInjection.cs:211-215`), so the
+source-doc drift recorded on 2026-10-02 is closed; the header is unchanged. ADR-059 Decision
+re-read this run at `Website/docs-src/adr/059-module-contract-and-composition.md:24-27` (Status last
+revised 2026-10-21, `:6`).*

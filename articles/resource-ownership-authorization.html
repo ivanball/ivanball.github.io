@@ -125,7 +125,7 @@
         <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
         <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
         <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
-        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · Refresh tokens that rotate per device</a></li>
         <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
         <li><a href="resource-ownership-authorization.html" aria-current="page">29 · Resource-ownership authorization</a></li>
         <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
@@ -235,7 +235,7 @@
           &quot;nothing to enforce&quot;, which silently stops guarding any action whose parameter is optional or not an
           integer: the guard disappears with no error, no exception and nothing for a who-can-do-what test to
           catch. ADR-033 records deny-by-default as the deliberate choice
-          (<code>033-resource-ownership-authorization.md:80-91</code>). An action that genuinely has no owner parameter says
+          (<code>033-resource-ownership-authorization.md:87-98</code>). An action that genuinely has no owner parameter says
           so out loud with <code>[AllowMissingOwner]</code>
           (<code>Source/Presentation/MMCA.Common.API/Authorization/AllowMissingOwnerAttribute.cs:21</code>, an
           <code>AttributeTargets.Class | AttributeTargets.Method</code> attribute with <code>Inherited = true</code>,
@@ -245,12 +245,12 @@
           owner id is still denied, and a missing owner claim is still denied regardless.</p>
           <p><strong>Collection routes get an ownership Specification.</strong> <code>OwnershipHelper</code>
           (<code>Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:11</code>) is a static helper. Its
-          <code>GetOwnershipSpecification&lt;TSpec, TId&gt;</code> (<code>OwnershipHelper.cs:35</code>) takes the bypass role as a required
-          argument (<code>OwnershipHelper.cs:39</code>) and returns <code>null</code> for a caller who holds it
-          (<code>OwnershipHelper.cs:46</code>, <code>OwnershipHelper.cs:48</code>), and otherwise reads the caller&#39;s id claim
-          (<code>GetClaimValue&lt;TId&gt;(claimType)</code>, <code>OwnershipHelper.cs:51</code>) and builds a specification through a supplied
-          factory (<code>OwnershipHelper.cs:52</code>); a convenience overload defaults the claim name to <code>&quot;customer_id&quot;</code>
-          (<code>OwnershipHelper.cs:65-70</code>, the literal at <code>:70</code>) and still requires the role (<code>:68</code>). The object it
+          <code>GetOwnershipSpecification&lt;TSpec, TId&gt;</code> (<code>OwnershipHelper.cs:41</code>) takes the bypass role as a required
+          argument (<code>OwnershipHelper.cs:45</code>) and returns <code>null</code> for a caller who holds it
+          (<code>OwnershipHelper.cs:52</code>, <code>OwnershipHelper.cs:54</code>), and otherwise reads the caller&#39;s id claim
+          (<code>GetClaimValue&lt;TId&gt;(claimType)</code>, <code>OwnershipHelper.cs:57</code>) and builds a specification through a supplied
+          factory (<code>OwnershipHelper.cs:58</code>); a convenience overload defaults the claim name to <code>&quot;customer_id&quot;</code>
+          (<code>OwnershipHelper.cs:71-76</code>, the literal at <code>:76</code>) and still requires the role (<code>:74</code>). The object it
           hands back is a <code>Specification&lt;TEntity, TIdentifierType&gt;</code>
           (<code>Source/Core/MMCA.Common.Domain/Specifications/Specification.cs:15</code>) whose <code>Criteria</code> is an
           EF-translatable expression tree (<code>Specification.cs:23</code>). That is the same specification type from Article
@@ -258,10 +258,13 @@
           list query returns only the caller&#39;s rows. A <code>null</code> specification (the bypass case) applies no filter,
           and because these are real specifications they compose, an <code>AndSpecification</code> (<code>Specification.cs:81</code>)
           ties the ownership scope to any other criteria a query already carries.</p>
-          <p><strong>One bypass role, on both.</strong> Both points call <code>OwnershipHelper.IsAdmin</code> (<code>OwnershipHelper.cs:18</code>), which
-          compares <code>ICurrentUserService.Role</code>
-          (<code>Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Auth/ICurrentUserService.cs:22</code>) to the
-          <code>bypassRole</code> its caller supplies, case-insensitively (<code>OwnershipHelper.cs:21</code>). That parameter has no
+          <p><strong>One bypass role, on both.</strong> Both points call <code>OwnershipHelper.IsAdmin</code> (<code>OwnershipHelper.cs:24</code>), which
+          returns <code>ICurrentUserService.IsInRole</code> for the <code>bypassRole</code> its caller supplies (<code>OwnershipHelper.cs:27</code>):
+          a case-insensitive match against every role claim the caller holds
+          (<code>Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Auth/ICurrentUserService.cs:88-89</code>), not
+          only <code>ICurrentUserService.Role</code>, which is the first role claim (<code>ICurrentUserService.cs:22</code>). A caller
+          holding the bypass role alongside other roles is therefore bypassed at both points, the same answer an
+          inline <code>IsInRole</code> check gives (the helper&#39;s remarks, <code>OwnershipHelper.cs:18-23</code>). That parameter has no
           default value, and the XML doc says why: the framework declares no role names
           (<code>OwnershipHelper.cs:13-17</code>, the sentence at <code>:16</code>). MMCA.Store names its own <code>RoleNames.Admin</code> at both
           points: as the filter&#39;s <code>BypassRole</code> in each module that applies it
@@ -271,13 +274,13 @@
           and you do not maintain two definitions of &quot;may see everything.&quot;</p>
           <p><strong>The helper also owns the two fail-closed checks.</strong> A <code>null</code> from <code>GetOwnershipSpecification</code> means two
           different things: the caller holds the bypass role, or the caller&#39;s owner claim cannot be resolved, and
-          only the first may read unscoped. <code>RequireResolvableOwner&lt;TId&gt;</code> (<code>OwnershipHelper.cs:91-104</code>) tells them
+          only the first may read unscoped. <code>RequireResolvableOwner&lt;TId&gt;</code> (<code>OwnershipHelper.cs:97-110</code>) tells them
           apart: it succeeds for the bypass role or a parsable owner claim and otherwise fails with
-          <code>Error.Forbidden</code>, a 403 (<code>OwnershipHelper.cs:101-103</code>, the error built at <code>:174-175</code>).
-          <code>ValidateOwnershipAsync&lt;TId&gt;</code> (<code>OwnershipHelper.cs:133-157</code>) is the per-record check for a mutation: the
-          bypass role passes without a lookup (<code>:146</code>), a missing owner claim fails with the same 403 before any
-          lookup (<code>:151-153</code>), and a caller who does not own the record gets <code>Error.NotFound</code>, a 404
-          (<code>:167-171</code>), so the existence of someone else&#39;s record cannot be probed. Both take the claim type and
+          <code>Error.Forbidden</code>, a 403 (<code>OwnershipHelper.cs:107-109</code>, the error built at <code>:180-181</code>).
+          <code>ValidateOwnershipAsync&lt;TId&gt;</code> (<code>OwnershipHelper.cs:139-163</code>) is the per-record check for a mutation: the
+          bypass role passes without a lookup (<code>:152-155</code>), a missing owner claim fails with the same 403 before any
+          lookup (<code>:157-160</code>), and a caller who does not own the record gets <code>Error.NotFound</code>, a 404
+          (<code>:175-177</code>), so the existence of someone else&#39;s record cannot be probed. Both take the claim type and
           the bypass role from the caller, exactly as the rest of the helper does, so a host&#39;s vocabulary flows
           through unchanged.</p>
           <p>Notice the deliberately different failure shapes. The single-resource filter denies with a 403
@@ -378,11 +381,11 @@
           <code>RoleNames.Admin</code> (<code>:392-393</code>). The only ownership logic the controller supplies is the existence
           predicate, an order with this id whose <code>CustomerId</code> is the caller&#39;s (<code>OrdersController.cs:394-396</code>). The
           helper then splits into two denial shapes on purpose. A caller carrying no <code>customer_id</code> claim at all gets
-          <code>Error.Forbidden</code>, a 403 (<code>OwnershipHelper.cs:151-153</code>): nothing was looked up, so there is no resource
+          <code>Error.Forbidden</code>, a 403 (<code>OwnershipHelper.cs:157-160</code>): nothing was looked up, so there is no resource
           whose existence a 403 could leak, and this matches the filter&#39;s own missing-claim <code>ForbidResult</code>. Only an
           owner <em>mismatch</em>, where the claim is present but the order is someone else&#39;s, returns <code>Error.NotFound</code>, a
-          <strong>404 rather than a 403</strong> (<code>OwnershipHelper.cs:167-171</code>), so the response does not reveal that another
-          customer&#39;s order exists (the rationale is in the helper&#39;s remarks, <code>OwnershipHelper.cs:110-115</code>, and in
+          <strong>404 rather than a 403</strong> (<code>OwnershipHelper.cs:175-177</code>), so the response does not reveal that another
+          customer&#39;s order exists (the rationale is in the helper&#39;s remarks, <code>OwnershipHelper.cs:116-121</code>, and in
           the wrapper&#39;s own summary, <code>OrdersController.cs:381-385</code>). That is the same axis, fitted to a resource
           whose owning id is not its route id by a single predicate.</p>
           <p>The query endpoints carry a third guard the mutating check does not need, and both row-scoped controllers

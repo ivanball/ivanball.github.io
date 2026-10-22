@@ -61,7 +61,10 @@ capability? The implementation, `PermissionRegistry`, holds an immutable
 compared case-insensitively (`OrdinalIgnoreCase`); permission values are compared ordinally. The same
 class is also the host's `IPermissionCatalog`, exposing the closed set of roles and permissions the code
 compiled in, so an administration screen enumerates the compiled map itself rather than a hand-kept second
-list. It is the one place that knows the role-to-capability mapping, so endpoints never name a role.
+list. It is the one place that knows the role-to-capability mapping, so no endpoint's authorization
+attribute names a role. (Endpoint code may still read a role for a business rule rather than a gate: ADC's
+live-poll, question and bookmark controllers pass an organizer flag from `IsInRole(RoleNames.Organizer)`
+to their handlers for the organizer bypass.)
 
 **Modules declare grants additively.** `AddPermissions(...)` accumulates into a shared
 `PermissionRegistryBuilder`. Each `Grant(string role, params string[] permissions)` unions the new
@@ -141,7 +144,8 @@ Adoption is a per-module decision, and every module in both real apps has made i
 defines twelve capabilities, including the seven-member `ContentManagement` subset granted to its own
 `ContentEditor` role (`conference:speakers:link` stays Organizer-only, because linking a speaker to a
 user account confers a speaker identity); its Engagement module defines three (among them `engagement:live:manage`, granted to
-`Organizer`, gating the conference-day live-poll management endpoints); its Notification module grants the
+`Organizer`, gating the organizer's event-wide live-poll list, while poll authoring is checked in the
+handlers so a session's assigned speakers can run their own polls); its Notification module grants the
 framework's own `notifications:manage` to `Organizer`; and its Identity module defines three, two of which
 alias the framework-owned `users:manage` and `roles:manage` from `AdministrationPermissions` so the shared
 administration controller bases can carry their own `[HasPermission]`. MMCA.Store defines eleven of its own
@@ -223,41 +227,55 @@ pattern, or `dotnet add package MMCA.Common.API` and try it.*
 
 *Tags: .NET, C Sharp, Software Architecture, Security, Authorization*
 
-*Notes: re-verified against source 2026-10-08 (MMCA.Common v1.233.0, `FACTS.md:14`; findings
-`Docs/Planning/Quality/medium-apply-2026-10-08/24-permission-based-authorization.json`). Changes in this
-pass: ADC's Conference module "defines eleven capabilities" became twelve, with the Organizer-only
+*Notes: re-verified against source 2026-10-22 (MMCA.Common v1.250.0, `FACTS.md:14`; findings from the
+2026-10-22 `/update-medium` audit). Changes in this pass: the Engagement clause said
+`engagement:live:manage` gates "the conference-day live-poll management endpoints"; it gates one
+endpoint, the organizer's event-wide poll list `GET /livepolls?eventId=`
+(`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:164-166`),
+while the controller itself is plain `[Authorize]` (`:40`), create, open, close and delete are enforced
+in the handlers by the BR-236 rule (`:28-35`, organizer flag at `:210`), and the per-session manage list
+is deliberately not behind the capability (`:179-186`). "Endpoints never name a role" was narrowed to
+authorization attributes, because ADC endpoint code reads `IsInRole(RoleNames.Organizer)` for the
+organizer bypass in eight places across seven controllers (`LivePollsController.cs:210`,
+`SessionQuestionsController.cs:266`, `LivePollVotingController.cs:135`, `BookmarksController.cs:64,132`,
+`SpeakerSessionsController.cs:50`, `EventQuestionAnswersController.cs:256`,
+`SessionQuestionAnswersController.cs:257`). Anchors re-read this run and moved: ADC
+`MMCA.ADC.Identity.Service/Program.cs` `AddTokenPermissionGrants` `:280` to `:281` and
+`AddStoredPermissionGrants` `:287` to `:288`; Store `MMCA.Store.Identity.Service/Program.cs` `:213` to
+`:221` and `:220` to `:228`; ADC `Authorization/TokenPermissionGrants.cs` (first re-read since
+2026-10-02) keeps its rationale at `:16-24` and `AddTokenPermissionGrants` at `:44-45`, with `ApplyAll`
+over the four module maps at `:53-58`; ADR-020 anchors `:60-61` to `:65-66`, `:67-73` to `:72-78`,
+`:90-97` to `:96-103`, `:100-103` to `:105-109`. Re-read and unchanged: `TokenService.cs:129-141` and
+`:30`, `LayeredPermissionRegistry.cs:12,30,49`, `AuthorizationGate.cs:40,46-48,52`,
+`ClaimsPrincipalExtensions.cs:59-67,75-77,94-97`, `ICurrentUserService.cs:45`,
+`AuthorizationExtensions.cs:20-22,70-72,135-136`, `DependencyInjection.Auth.cs:139,170`,
+`PermissionPolicyProvider.cs:35`, `PermissionAuthorizationHandler.cs:24-33` (block still verbatim),
+`IPermissionRegistry.cs:29`, `PermissionRegistry.cs:16`, `PermissionRegistryBuilder.cs:34`,
+`IdentityPermissions.cs:13,26,41,49`, `IdentityPermissionGrants.cs:36`,
+`ConferencePermissions.cs:27,49-55,58-72,79-88`, `ConferencePermissionGrants.cs:47-48` (registered at
+`MMCA.ADC.Conference.API/DependencyInjection.cs:43`, the one-line registration in the code block),
+`EngagementPermissions.cs:16`, `EngagementPermissionGrants.cs:37`, `NotificationPermissionGrants.cs:38`,
+Store `AddPermissions` `:66`/`:45`/`:52`, and `common-ArchitectureScorecard.md:75`. The nineteen-test
+count is now counted at source this run (6 + 6 + 4 + 3 `[Fact]`/`[Theory]` attributes in the four test
+classes) rather than carried. Prior pass: re-verified against source 2026-10-08 (MMCA.Common
+v1.233.0): ADC's Conference module "defines eleven capabilities" became twelve, with the Organizer-only
 `SpeakersLink` (`conference:speakers:link`) named as the one outside the content-editor subset
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferencePermissions.cs:55`,
 its Organizer-only rationale `:49-54`, `All` listing twelve at `:58-72`, the seven-member
-`ContentManagement` at `:79-88`). The 2026-10-02 anchors below were re-read on 2026-10-08 and corrected
-in place where they moved: ADC `Program.cs` `AddTokenPermissionGrants` `:269` to `:280` and
-`AddStoredPermissionGrants` `:276` to `:287`; `AddStoredPermissionGrants` declared at
-`DependencyInjection.Auth.cs:139` with the `TryDecorate<IPermissionRegistry, LayeredPermissionRegistry>`
-at `:170` (the old `:139-149` range no longer reaches it); `AuthorizationExtensions.cs` forwarding
-`:133-134` to `:135-136` and handler/provider registration `:68` to `:70-72`; `QuestionsManage` `:26`
-to `:27`; `ContentManagement` `:70` to `:79-88`. Re-read and unchanged: `TokenService.cs:129-141` and
-`:30`, `LayeredPermissionRegistry.cs:12,30,49`, `AuthorizationGate.cs:40,46-48,52`,
-`ClaimsPrincipalExtensions.cs:59-67,75-77,94-97`, `ICurrentUserService.cs:45`,
-`AuthorizationExtensions.cs:20-22`, `PermissionPolicyProvider.cs:35`,
-`PermissionAuthorizationHandler.cs:24-33` (block still verbatim), `IPermissionRegistry.cs:29`,
-`PermissionRegistry.cs:16`, `PermissionRegistryBuilder.cs:34`, `IdentityPermissions.cs:13,26,41,49`,
-`IdentityPermissionGrants.cs:36`, `ConferencePermissionGrants.cs:47-48`, `EngagementPermissionGrants.cs:37`,
-`NotificationPermissionGrants.cs:38`, Store `Program.cs:213,220` and Store `AddPermissions` `:66`/`:45`/`:52`.
-Not re-read in this pass: ADC `TokenPermissionGrants.cs`, the ADR-020 and scorecard anchors, and the
-nineteen-test count (carried from the 2026-10-02 audit). Prior pass: re-verified against source
-2026-10-02 (MMCA.Common v1.221.0). That run's
+`ContentManagement` at `:79-88`), and drifted anchors were corrected in place. Earlier pass: re-verified
+against source 2026-10-02 (MMCA.Common v1.221.0). That run's
 changes: the token paragraph said baking a `permission` claim into the token was optional and role-derived
 resolution the default; the framework `TokenService` emits one claim per granted permission into every
 access token (`MMCA.Common.Infrastructure/Auth/TokenService.cs:129-141`, registry field at `:30`), and both
 Identity hosts apply every module's grant map before minting (ADC
-`MMCA.ADC.Identity.Service/Program.cs:280`, the map at `Authorization/TokenPermissionGrants.cs:16-24,44-45`;
-Store `MMCA.Store.Identity.Service/Program.cs:213`), so the paragraph and Apply-this step 4 ("keeps tokens
+`MMCA.ADC.Identity.Service/Program.cs:281`, the map at `Authorization/TokenPermissionGrants.cs:16-24,44-45,53-58`;
+Store `MMCA.Store.Identity.Service/Program.cs:221`), so the paragraph and Apply-this step 4 ("keeps tokens
 small by default") were rewritten. The claim that `GetRoleValues` is the only role reader was narrowed: the
 CQRS gate reads `ICurrentUserService.Roles`
 (`MMCA.Common.Application/Interfaces/Infrastructure/Auth/ICurrentUserService.cs:45-62`), a separate
 default member over the same three claim types with a single-`Role` fallback. The claim that the registry
 and catalog "can never answer from different maps" was narrowed to the base wiring, because both Identity
-hosts call `AddStoredPermissionGrants` (ADC `Program.cs:287`, Store `Program.cs:220`), which decorates
+hosts call `AddStoredPermissionGrants` (ADC `Program.cs:288`, Store `Program.cs:228`), which decorates
 `IPermissionRegistry` with `LayeredPermissionRegistry` while the catalog stays compiled
 (`MMCA.Common.Infrastructure/DependencyInjection.Auth.cs:139`, decorated at `:170`; union-only at
 `MMCA.Common.Application/Auth/Permissions/LayeredPermissionRegistry.cs:12,30,49`). "The question queue"
@@ -282,9 +300,10 @@ block is verbatim); handler and provider registration at `AuthorizationExtension
 `EngagementPermissionGrants.cs:37`; `NotificationPermissionGrants.cs:38`; Store `AddPermissions` in all
 three modules (`MMCA.Store.Identity.API/DependencyInjection.cs:66`, Catalog `:45`, Sales `:52`) and its
 eleven permissions; no role names in MMCA.Common. ADR context:
-`Website/docs-src/adr/020-permission-based-authorization.md` records the Store permissions at `:90-97`, the
-ADC grant tests at `:100-103` and the framework-owned endpoints at `:67-73`; its `:60-61` still calls the
-token claim optional (ADR drift, not edited here). Nineteen unit tests (6 `PermissionRegistryTests`, 6
+`Website/docs-src/adr/020-permission-based-authorization.md` records the Store permissions at `:96-103`, the
+ADC grant tests at `:105-109` and the framework-owned endpoints at `:72-78`; its `:65-66` still calls the
+token claim optional, and its `:87` still says `engagement:live:manage` gates the live-poll management
+endpoints (ADR drift, not edited here). Nineteen unit tests (6 `PermissionRegistryTests`, 6
 `PermissionCatalogTests`, 4 `PermissionAuthorizationHandlerTests`, 3 `PermissionPolicyProviderTests`, all
 `[Fact]`), per the audit. RBAC-not-ABAC framing per
 `Website/docs-src/governance/common-ArchitectureScorecard.md:75` section 11 (Weight 3, Maturity 4, Impl 8, 12/24);

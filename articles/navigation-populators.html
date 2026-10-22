@@ -125,7 +125,7 @@
         <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
         <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
         <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
-        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · Refresh tokens that rotate per device</a></li>
         <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
         <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
         <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
@@ -201,17 +201,20 @@
           collection versus FK reference). The domain entity stays persistence-ignorant: zero EF dependency.</p>
           <p>The Application layer decides <em>which navigations EF can actually load</em>. <code>NavigationMetadataProvider</code>
           reflects over the entity&#39;s <code>[Navigation]</code>-tagged properties and, for each, asks the Infrastructure
-          boundary <code>IDataSourceService.HaveIncludeSupport(declaringType, targetType)</code> whether both ends share one
-          physical source. The result is a split: <code>SupportedIncludes</code> (EF can JOIN these, both ends co-located)
-          and <code>UnsupportedIncludes</code> (these need manual loading, the ends are split). Crucially, the Application
+          boundary <code>IDataSourceService.HaveIncludeSupport</code> (passing the two entities&#39; full type names) whether both
+          ends resolve to the same physical source on a relational engine. The result is a split:
+          <code>SupportedIncludes</code> (EF can JOIN these: one source, relational engine) and <code>UnsupportedIncludes</code> (these
+          need manual loading: the ends are split, either entity has no registered source, or the engine is Cosmos
+          DB, which has no JOINs even inside one container). Crucially, the Application
           layer never references <code>Microsoft.EntityFrameworkCore</code> to make that call. The only component that knows
           the physical topology is the data-source service at the Infrastructure edge.</p>
           <p>The Application layer does the actual <em>batch loading</em>, through the populator (<code>INavigationPopulator&lt;T&gt;</code>
           and <code>NavigationLoader</code> both live in <code>MMCA.Common.Application</code>; the EF execution they call is injected
           from Infrastructure, so the populator itself never touches <code>Microsoft.EntityFrameworkCore</code>). Each entity with
-          cross-source navigations implements <code>INavigationPopulator&lt;TEntity&gt;</code>. Entities with none get
-          <code>NullNavigationPopulator&lt;TEntity&gt;</code>, a textbook Null Object whose <code>PopulateAsync</code> is one
-          <code>Task.CompletedTask</code>, so the pipeline always has something to call and never branches on null.</p>
+          cross-source navigations implements <code>INavigationPopulator&lt;TEntity&gt;</code>. An entity read through the generic
+          <code>EntityQueryService</code> that has none gets <code>NullNavigationPopulator&lt;TEntity&gt;</code>, a textbook Null Object whose
+          <code>PopulateAsync</code> is one <code>Task.CompletedTask</code>, so the pipeline always has something to call and never
+          branches on null.</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// The query pipeline runs a two-path strategy (EntityQueryPipeline):</span>
 <span class="hljs-comment">//</span>
 <span class="hljs-comment">// Path 1 - SupportedIncludes exist:</span>
@@ -230,8 +233,8 @@
           results into a lookup, and assigns each parent its slice. That is one query per cross-source
           navigation for the whole batch, then O(1) assignment per parent. The compiled grouping selectors are
           cached, so repeated calls skip <code>Expression.Compile()</code>.</p>
-          <p>Writing that classify-and-load boilerplate by hand for every entity would be roughly 30 to 40 lines of
-          repeated if-checks per entity. The declarative layer removes it. A navigation is described once as an
+          <p>Writing that classify-and-load boilerplate by hand means repeating the same checks in every populator: is
+          this navigation requested, is it unsupported, which loader applies. The declarative layer removes it. A navigation is described once as an
           <code>INavigationDescriptor&lt;TEntity&gt;</code> (a <code>ChildNavigationDescriptor</code> for collections, an
           <code>FKNavigationDescriptor</code> for references), and <code>DeclarativeNavigationPopulator&lt;TEntity&gt;</code> drives a list of
           them. A real consumer in ADC&#39;s Conference module, <code>EventNavigationPopulator</code>, is just a subclass
@@ -242,8 +245,12 @@
           <p>Here is why this is not over-engineering. When you split a module out and a relationship&#39;s two ends move
           to different physical sources, the EF model&#39;s <code>CrossDataSourceDegradeConvention</code> drops the FK constraint
           and the navigations from the model (the scalar FK columns and a compensating index survive; the foreign
-          entity type is removed). From that point, <code>NavigationMetadataProvider</code> starts reporting that navigation
-          as <code>Unsupported</code>, and the populator path picks it up automatically.</p>
+          entity type is removed). Independently, <code>NavigationMetadataProvider</code> reads the same entity-to-source
+          registry and starts reporting that navigation as <code>Unsupported</code>, so the query pipeline routes it to the
+          populator path. The populator loads it once it carries a descriptor for that navigation: a declarative
+          populator only loads the unsupported navigations it declares, and an entity still on
+          <code>NullNavigationPopulator</code> returns the navigation unloaded, so extraction means adding that one
+          descriptor, not rewriting the query.</p>
           <p>The application code that issued the query never changes. The read handler still asks for events with
           their rooms and speakers. Before extraction, EF JOINs them. After extraction, the populator batch-loads
           them across the source boundary. Cross-source consistency is the outbox&#39;s job; cross-source eager
@@ -257,9 +264,10 @@
           always works, the populator is a layer you do not strictly need. It is mitigated by being free at
           runtime there: the populator is only invoked when the metadata actually reports an unsupported
           include, and otherwise the <code>NullNavigationPopulator</code> no-ops. You pay in concepts, not in cycles.</li>
-          <li><strong>Every entity needs a populator, even a no-op one.</strong> Entities that need no manual loading still
-          require <code>NullNavigationPopulator&lt;TEntity&gt;</code> (or an empty declarative one) so the pipeline has something
-          to call. That is a registration line per entity.</li>
+          <li><strong>Every entity read through the generic query service needs a populator, even a no-op one.</strong> Such
+          entities that need no manual loading still require <code>NullNavigationPopulator&lt;TEntity&gt;</code> (or an empty
+          declarative one) so the pipeline has something to call. That is a registration line per entity;
+          entities queried only through a repository can skip it.</li>
           <li><strong>The classification is runtime reflection (cached).</strong> The supported/unsupported split is computed by
           reflecting over properties, then cached per <code>(entity type, navigation kind)</code>. The first query for a
           shape pays the reflection cost once.</li>

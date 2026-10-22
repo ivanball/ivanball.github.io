@@ -125,7 +125,7 @@
         <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
         <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
         <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
-        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · Refresh tokens that rotate per device</a></li>
         <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
         <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
         <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
@@ -234,7 +234,9 @@
           is <code>ValueGeneratedNever()</code>, so an entity that supplies its own ids keeps them on every engine.</p>
           <p>The registry is static on purpose: model-building code (this configuration base, the EF conventions,
           the soft-delete SQL builder) runs where no DI container is reachable, and the engine set is a closed
-          enum only the framework extends. A fifth engine is one strategy class plus one line in the registry.
+          enum only the framework extends. Adding a fifth engine touches a short, fixed list: a new <code>DataSource</code>
+          enum member, its sealed context class, the provider marker interface the engine-aware base
+          implements, one strategy class, and one line in the registry. No call site changes.
           What keeps it that way is a source-scanning fitness test, <code>DataSourceBranchingFitnessTests</code>, which
           fails the test run on any reference to a concrete engine value outside the strategies and a short,
           reasoned allow-list, and also fails when an allow-list entry goes stale. A new <code>switch</code> over the
@@ -349,9 +351,11 @@ s =&gt; s.Event.IsPublished</code></pre>
           (<code>GetPublicSessionFilterHandler</code>, built on <code>CrossSourceSpecification.BuildAsync</code>) is written this way:
           it resolves published <code>Event</code> ids and filters <code>Session.EventId IN (...)</code>, which is portable across all
           four engines.</p>
-          <p>There is even a fitness rule that enforces this discipline: an opt-in
-          <code>SpecificationsDoNotNavigateToOtherEntities</code> test fails the test run if a specification navigates
-          across an entity boundary the way the un-translatable version above does.</p>
+          <p>There is even a fitness rule that guards this discipline: an opt-in
+          <code>SpecificationsDoNotNavigateToOtherEntities</code> test fails the test run if a specification&#39;s criteria
+          navigates across an entity boundary the way the un-translatable version above does. It is a
+          best-effort check: it inspects only parameterless specifications, and skips any whose constructor or
+          criteria cannot be evaluated on its own. The resolve-then-filter shape does not navigate, so it passes.</p>
           <h2 id="the-honest-adoption-note">The honest adoption note</h2>
           <p>Here is the part most articles would quietly omit. All of the above is shipped and tested, and the
           engine-agnostic plumbing is in production: every ADC entity configuration runs through the engine-aware
@@ -417,8 +421,9 @@ s =&gt; s.Event.IsPublished</code></pre>
           <strong>startup error</strong>, never a silent default. Loud beats subtle.</li>
           <li><strong>Give each engine one strategy object</strong> that answers every engine question (mapping, capabilities,
           dialect), looked up by the engine value, so call sites read engine facts instead of branching on
-          the engine. A new engine is then one class and one registry line, and a text-scan test can keep new
-          branches from creeping back into call sites.</li>
+          the engine. A new engine then adds its own strategy class and one registry line (plus whatever
+          per-engine types the ORM itself demands, such as a context class) instead of an edit at every call
+          site, and a text-scan test can keep new branches from creeping back into call sites.</li>
           <li><strong>Degrade cross-engine relationships automatically</strong> at model-build time: drop the impossible
           constraint, keep the scalar FK column, and make it a no-op when everything is on one engine.</li>
           <li>For cross-engine filters, <strong>resolve principal keys first, then filter by <code>foreignKey IN (keys)</code></strong>.

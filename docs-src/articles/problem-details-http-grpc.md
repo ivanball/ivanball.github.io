@@ -89,8 +89,11 @@ chain of `IExceptionHandler`s: `OperationCanceledExceptionHandler` (client disco
 monitoring can tell an abandoned request from a server error), `DomainExceptionHandler` (business-rule
 violation -> 400), `DbUpdateExceptionHandler` (concurrency or constraint -> 409, with a deliberately
 generic message so schema names do not leak), `ValidationExceptionHandler` (FluentValidation -> 400
-with a per-property errors dictionary), and `GlobalExceptionHandler` as the catch-all 500. Together
-they guarantee one invariant: every error an action returns or throws leaves the API as an RFC 9457
+with a per-property errors dictionary), and `GlobalExceptionHandler` last. That final handler first
+answers two caller faults with a client status (a cross-tenant write -> 400 titled "Tenant write
+rejected", and a `BadHttpRequestException` keeps the status the server set, typically 413 for an
+oversize body or 400 otherwise) and turns everything else into a 500. Together they guarantee one
+invariant: every error an action returns or throws leaves the API as an RFC 9457
 Problem Details with a sensible status. The invariant covers the MVC pipeline, not the middleware in
 front of it: the rate limiter rejects with a bare 429 (it sets a rejection status and writes no body),
 and an unmatched route is a bare 404, because the framework does not call `UseStatusCodePages`.
@@ -186,7 +189,7 @@ contract. The first two are the honest notes below.
   registers a Contracts layer in its map today, so a layer-iterating rule would pass vacuously forever,
   while an attribute-driven one starts biting the moment a repo marks its first contract type. The
   honest part is that MMCA.Common marks no type with the attribute, so the framework's own run of the
-  rule asserts nothing and is a ratchet there. The consumers are where it bites: ADC marks six Shared
+  rule asserts nothing and is a ratchet there. The consumers are where it bites: ADC marks seven Shared
   interfaces (`ISessionBookmarkValidationService` and `IEventLiveValidationService` among them) and
   Store marks four (`IProductVariantService`, `ICustomerService` and two export services), and both
   repos run the rule on every build.
@@ -239,9 +242,23 @@ included), or `dotnet add package MMCA.Common.API` and try it.*
 
 *Tags: .NET, C Sharp, Software Architecture, gRPC, API Design*
 
+*Notes (2026-10-22 refresh against MMCA.Common v1.250.0; every anchor in this ledger re-verified this
+run, and the drifted ones corrected in place). `GlobalExceptionHandler` is still the last handler but
+not a pure 500: `CrossTenantWriteException` answers 400 with Title "Tenant write rejected"
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/GlobalExceptionHandler.cs:54-72`, title
+constant `:36`), `BadHttpRequestException` passes its own status through, titled "Payload Too Large" for
+413 and "Bad Request" otherwise (`:74-98`), and only the remainder falls to 500 (`:100-113`); the body
+now says so. ADC marks seven `[ServiceContract]` interfaces, not six: the seventh is
+`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Exports/IUserConferenceExportService.cs:13`.
+Re-anchored in place below: `AGENTS.md` "Microservices Extraction Boundaries" `:125` to `:126` (headings
+`:5` to `:159`), the exception-handler chain `DependencyInjection.cs:154-158` to `:159-163`
+(`AddCommonExceptionHandlers` at `:154`), and `EventLiveValidationServiceGrpcAdapter.cs` gains a fifth
+catch at `:205` returning `ex.ToResult<T>()` at `:210`. Every other anchor below matched source as
+cited. Header blockquote grounding files all exist as named.*
+
 *Notes (2026-10-08 refresh against MMCA.Common v1.233.0; this run's changes, each anchor re-read).
 Header blockquote drops "Result pattern": `MMCA.Common/AGENTS.md` has no such section (headings `:5`
-to `:158`; "Microservices Extraction Boundaries" at `:125`). The Problem Details invariant is scoped to
+to `:159`; "Microservices Extraction Boundaries" at `:126`). The Problem Details invariant is scoped to
 the MVC pipeline: the API rate limiter sets `RejectionStatusCode` 429 with no `OnRejected` writer
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:399`),
 and no `UseStatusCodePages` call exists under `MMCA.Common/Source` (the one hit is a doc comment in
@@ -254,9 +271,10 @@ reasons, not two; the single-document reason anchors at `.../Startup/Endpoints/O
 and the event-snapshot gate is `MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Contracts/IntegrationEventContractTestsBase.cs`
 (the scorecard cites `:35-53`; not re-read this run). `[ServiceContract]` targets Interface, Class and Struct
 (`MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/ServiceContractAttribute.cs:22`) and its doc
-says consumers mark interfaces only (`:16-18`). Consumer marks: ADC six
+says consumers mark interfaces only (`:16-18`). Consumer marks: ADC seven
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Sessions/ISessionBookmarkValidationService.cs:10`,
 `.../Conference.Shared/Events/Live/IEventLiveValidationService.cs:12`,
+`.../Conference.Shared/Exports/IUserConferenceExportService.cs:13`,
 `.../MMCA.ADC.Engagement.Shared/UserSessionBookmarks/IBookmarkCountService.cs:10`,
 `.../MMCA.ADC.Engagement.Shared/Exports/IUserEngagementExportService.cs:13`,
 `.../MMCA.ADC.Identity.Shared/Users/IAttendeeQueryService.cs:10`,
@@ -288,7 +306,7 @@ fence renders it; the list overload at `:51-52` (doc from `:41`) delegates to
 UnprocessableEntity 20, Invariant/Validation/Failure 10; doc list at `:18-25`; `MostSevere` at `:71`).
 The `ApiControllerBase.cs:25-30` doc comment lists the same ranking, `TooManyRequests` (429) at `:27`.
 Exception chain registered in order at
-`MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:154-158`
+`MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:159-163`
 (OperationCanceled, Domain, DbUpdate, Validation, Global); `UnhandledResultFailureFilter` added globally
 at `:50`. gRPC edge: `GrpcResultExceptionInterceptor.ToTransportException`
 (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Interceptors/GrpcResultExceptionInterceptor.cs:126-138`)
@@ -303,7 +321,7 @@ source/target at `:138-146`, escaping through `EscapeTrailerValue` (`:287`); `To
 ADC adapters, `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Contracts/`:
 `SessionBookmarkValidationServiceGrpcAdapter.cs` catches at `:53,79` and returns `ex.ToResult()` at
 `:58` and `ex.ToResult<T>()` at `:85`; `EventLiveValidationServiceGrpcAdapter.cs` catches at
-`:56,112,141,173` and returns `ex.ToResult<T>()` at `:61,117,146,178`; class remarks at `:20` and `:21`
+`:56,112,141,173,205` and returns `ex.ToResult<T>()` at `:61,117,146,178,210`; class remarks at `:20` and `:21`
 name the framework's own `RpcException.ToResult` decoder. OpenAPI:
 `AddCommonOpenApi()` (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:101-115`,
 doc `:87-100`) registers no document; it installs the parameter backfill and the strongly-typed-id
@@ -319,7 +337,7 @@ startup throw `:67`, `AllowAnonymous` `:74`); `MapCommonScalarUi()` at `:89`. Ba
 (per the 2026-10-02 audit, `:32` and `:81`; not re-read this run). Scorecard: the "API & Contract
 Design" row is `Website/docs-src/governance/common-ArchitectureScorecard.md:73` (weight 2, Maturity 4,
 Implementation 9, weighted 8/18); row 7 is at `:71` and the table header at `:63`. Header blockquote
-now cites `MMCA.Common/AGENTS.md` ("Microservices Extraction Boundaries" at `:125`), since
+now cites `MMCA.Common/AGENTS.md` ("Microservices Extraction Boundaries" at `:126`), since
 `MMCA.Common/CLAUDE.md` only imports it. The fence gained the `TooManyRequests` row and ranking tier this
 run; `Tools/Scripts/sync-medium-fences.ps1 -Verify` was not re-run by the author.*
 

@@ -49,9 +49,10 @@ MMCA.Common enforces its layer rules **twice**, on purpose:
 A third gate sits alongside those two, and ADR-015 as revised records the enforcement as running in
 three layers. It is neither MSBuild nor NetArchTest: `Microsoft.CodeAnalysis.PublicApiAnalyzers` runs on
 every published package except `MMCA.Common.UI.Maui` (excluded by name, because it builds only on the
-Windows MAUI job outside the main solution) against a committed `PublicAPI.Shipped.txt` baseline (one
-per gated package, twenty-one files), so adding or removing a public member fails the compile until that
-text file is updated in the same pull request. It guards the shipped package surface rather than layer
+Windows MAUI job outside the main solution) against committed baselines (a `PublicAPI.Shipped.txt` /
+`PublicAPI.Unshipped.txt` pair per gated package, twenty-one pairs), so adding or removing a public
+member fails the compile until the change is declared in that package's `PublicAPI.Unshipped.txt` in the
+same pull request; the release step then folds every unshipped file into its shipped baseline. It guards the shipped package surface rather than layer
 flow, which is why the two speeds above are the ones this tutorial teaches.
 
 This article is about adding the second layer to your own code, and optionally the first.
@@ -69,12 +70,12 @@ This article is about adding the second layer to your own code, and optionally t
 
 The key design idea: the rule *bodies* ship in the package once. You do not copy them. You supply a tiny
 map of your assemblies and subclass the bases, and you inherit roughly the same suite that runs across
-MMCA.Common, MMCA.Store, MMCA.ADC and MMCA.Helpdesk (153 test methods across 61 abstract `*TestsBase`
-classes; the framework's own build executes 410 of them).
+MMCA.Common, MMCA.Store, MMCA.ADC and MMCA.Helpdesk (159 test methods across 63 abstract `*TestsBase`
+classes; the framework's own build executes 458 of them).
 
 > **If you scaffolded with `dotnet new mmca-app`, steps 1 through 4 are already done.** The generated
-> solution ships the architecture-test project, the `IArchitectureMap`, and every applicable base
-> subclassed (32 sealed subclasses in the current reference-app seed), including the wire-contract
+> solution ships the architecture-test project, the `IArchitectureMap`, and the reference app's set of
+> base subclasses (32 sealed subclasses in the current seed), including the wire-contract
 > freeze, which arrives frozen under your own names and green on the first `dotnet test`. Read those
 > steps anyway to know what you have, then skip to Step 5. If you are retrofitting an existing
 > solution, the steps are the work.
@@ -89,7 +90,7 @@ dotnet add package MMCA.Common.Testing.Architecture
 ```
 
 The package brings the NetArchTest engine (NetArchTest.eNhancedEdition), the `ArchitectureRules` rule
-library, the diagnostic helpers, and the 61 abstract `*TestsBase` classes. You will not write rule
+library, the diagnostic helpers, and the 63 abstract `*TestsBase` classes. You will not write rule
 logic; you will point the rules at your assemblies and subclass the bases.
 
 ## Step 2: implement `IArchitectureMap`, one anchor type per layer
@@ -123,7 +124,9 @@ internal sealed class MyAppArchitectureMap : ArchitectureMapBase
 
 That is the "what to scan" half. The package's `ArchitectureRules` are the "what to assert" half. The
 framework's own `CommonArchitectureMap` is module-less (every layer is a framework layer, seven `Framework(...)`
-entries, one anchor per layer it scans); ADC's `AdcArchitectureMap` adds module entries the same way. Your map looks like one of those,
+entries, one anchor per layer it scans); ADC's `AdcArchitectureMap` adds one `Module(...)` entry per
+module and layer, pinning an anchor type where a public one is handy and loading the remaining
+assemblies by name with `Assembly.Load`, as its doc comment states. Your map looks like one of those,
 scaled to your solution. One map per solution is the usual shape, not a limit: MMCA.Common also runs a
 second map, `FrameworkModuleArchitectureMap`, that registers its own Shared, Domain and Application
 assemblies as one `Module(...)` named `Framework`, so the module-scoped DDD rules (sealed entities, no
@@ -284,88 +287,93 @@ holds in two unrelated production systems.
 
 *Tags: .NET, C Sharp, Software Architecture, Testing, Clean Architecture*
 
-*Notes: verified facts (this run, 2026-10-08, against framework v1.233.0, `MMCA.Common/FACTS.md:14`,
-snapshot dated 2026-10-07 at `:4`). Changed this run: fitness counts 141 -> **153** test methods across
-55 -> **61** abstract `*TestsBase` classes (`MMCA.Common/FACTS.md:51`) and 339 -> **410** executed by
-MMCA.Common's own build (`:54`), swept in the key-design-idea paragraph and the Step 1 package description.
-ADC's CI floor corrected 1 -> **5000**: its CI.slnf run carries `--minimum-expected-tests 5000`
+*Notes: verified facts (this run, re-verified 2026-10-22 against framework v1.250.0, `MMCA.Common/FACTS.md:14`,
+snapshot dated 2026-10-21 at `:4`). Changed this run: fitness counts 153 -> **159** test methods across
+61 -> **63** abstract `*TestsBase` classes (`MMCA.Common/FACTS.md:81`) and 410 -> **458** executed by
+MMCA.Common's own build (`:84`), swept in the key-design-idea paragraph and the Step 1 package description.
+Public-API gate sentence corrected: the per-PR declaration goes to `PublicAPI.Unshipped.txt`
+(`Website/docs-src/adr/015-architecture-fitness-functions.md:262-264`), and the release step folds every
+unshipped file into its shipped baseline through `build/publicapi/Promote-PublicApi.ps1`
+(`MMCA.Common/AGENTS.md:35`); both files are `AdditionalFiles` (`MMCA.Common/Directory.Build.props:116-117`),
+twenty-one pairs (ADR-015 `:35`, `:572-573`). Step 2's ADC sentence corrected: `AdcArchitectureMap`
+declares 21 `Module(...)` entries, of which 10 load by name via `Assembly.Load` (`:29-30`, `:33`, `:37-38`,
+`:41`, `:45-46`, `:49`, `:52`), as its doc comment states (`:5-6`), so "the same way" (anchor types)
+no longer described it. Scaffold callout narrowed from "every applicable base" to "the reference app's
+set of base subclasses": Helpdesk's 32 sealed subclasses do not cover all 63 bases (no
+`SubstitutabilityTestsBase` or `PiiInventoryTestsBase` subclass, both added in ADR-015's 2026-10-21
+revision, `:45-47`). Onboarding part count corrected 37 -> **41**. CI floors re-read this run:
+ADC's CI.slnf run carries `--minimum-expected-tests 5000`
 (`MMCA.ADC/.github/workflows/deploy.yml:366`, solution-wide rationale `:356-362`); a floor of 1 survives
-only on the AI golden-replay step (`:554`, not stated in the body), ADC's Integration run carries 450
-(`:729`, not stated in the body), and the live-judge step carries no floor and states why (`:557`).
+only on the AI golden-replay step (`:555`, not stated in the body), ADC's Integration run carries 450
+(`:730`, not stated in the body), and the live-judge step carries no floor and states why (`:558`).
 Store's CI floor of 2650 sits on one CI.slnf run (`MMCA.Store/.github/workflows/deploy.yml:338`), so the
-body reads "Store's CI run" (singular); its Integration run carries 250 (`:676`, not stated in the body).
+body reads "Store's CI run" (singular); its Integration run carries 250 (`:677`, not stated in the body).
 MMCA.Common's solution-wide floor 2000 is at `MMCA.Common/.github/workflows/ci.yml:163`, its Helpdesk
-canary 40 at `:527`, its UI E2E job 1 at `:292` (all three re-anchored from `:161`, `:580`, `:324`).
-Step 2 gains one sentence on MMCA.Common's second map, `FrameworkModuleArchitectureMap`, which registers
-Shared, Domain and Application as `Module("Framework", ...)` entries and keeps Infrastructure a
+canary 40 at `:527`, its UI E2E job 1 at `:292`. MMCA.Common's second map, `FrameworkModuleArchitectureMap`,
+registers Shared, Domain and Application as `Module("Framework", ...)` entries and keeps Infrastructure a
 `Framework(...)` layer
 (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Domain/EntityModel/FrameworkModuleArchitectureMap.cs:16`,
-`ModuleName` at `:19`, entries at `:25-28`, purpose in its doc comment `:5-14`); ADR-015 records it as a
-second map (`Website/docs-src/adr/015-architecture-fitness-functions.md:70-74`, revision `:659-672`). The
+`ModuleName` at `:19`, entries at `:25-28`, purpose in its doc comment from `:5`); ADR-015 records it as a
+second map (`Website/docs-src/adr/015-architecture-fitness-functions.md:76-79`, revision `:657-685`). The
 statement that `CommonArchitectureMap` is module-less with seven `Framework(...)` entries stays true as
-written (`CommonArchitectureMap.cs:6`, entries `:21-27`). Removed this run: the previous open item
-claiming `Website/docs-src/articles/README.md:50` contradicts this header; the header and README both
-read G25 (README `:50`), so there was no contradiction. Onboarding part count corrected 35 -> **37**.
-Earlier facts, anchors corrected in place where they moved: the framework publishes **22** packages
-(`MMCA.Common/FACTS.md:19`), with `MMCA.Common.Testing.Architecture` at position 18 in that list (`:39`),
-so the prerequisite bullet reads "one of the twenty-two packages". Four consumers each supply a primary
-`IArchitectureMap` (`Website/docs-src/adr/015-architecture-fitness-functions.md:69-70`:
-`CommonArchitectureMap`, `StoreArchitectureMap`, `AdcArchitectureMap`, `HelpdeskArchitectureMap`), while
-`FACTS.md:53` lists only Common, ADC and Store; the article follows ADR-015 because the Helpdesk subclasses
-are on disk (counted below). Scaffold callout seed size **32** sealed `*TestsBase` subclasses in the
-reference app (2026-10-02 count, not re-counted this run): 25 in
+written (`CommonArchitectureMap.cs:6`, entries `:21-27`). Earlier facts, re-read and re-anchored this
+run: the framework publishes **22** packages (`MMCA.Common/FACTS.md:19`), with
+`MMCA.Common.Testing.Architecture` at position 18 in that list (`:39`), so the prerequisite bullet reads
+"one of the twenty-two packages". Four consumers each supply a primary `IArchitectureMap`
+(`Website/docs-src/adr/015-architecture-fitness-functions.md:73-75`: `CommonArchitectureMap`,
+`StoreArchitectureMap`, `AdcArchitectureMap`, `HelpdeskArchitectureMap`), while `FACTS.md:81-83` lists
+only Common, ADC and Store; the article follows ADR-015 because the Helpdesk subclasses are on disk
+(counted below). Scaffold callout seed size **32** sealed `*TestsBase` subclasses in the reference app
+(re-counted this run): 25 in
 `MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/ArchitectureTests.cs` (`:5` through
 `:210`) plus seven single-class siblings in the same folder (`ServiceContractPurityTests.cs:9`,
 `MiddlewarePipelineOrderTests.cs:15`, `AnonymousEndpointTests.cs:17`, `DeleteBehaviorConventionTests.cs:20`,
-`FolderWidthTests.cs:8`, `ContractImplementationTests.cs:12`, and `DecoratorPipelineOrderTests.cs:35-36`,
+`FolderWidthTests.cs:8`, `ContractImplementationTests.cs:12`, and `DecoratorPipelineOrderTests.cs:38-39`,
 whose base list wraps onto the next line); `TicketsExportScopeTests.cs:22` is sealed but has no base, so
 it is not counted. The wire-contract freeze ships in the template
-(`MMCA.Helpdesk/build/templates/stage.ps1:1298`, the block headed "the wire-contract freeze SHIPS, and is
-guarded rather than deleted"), the SET comparison is named as the reason at `:1300-1301`, the staged app
-"arrives with its OWN contract already frozen" at `:1307`, and the guard asserting exactly one
-`IntegrationEventContractTests` class is at `:1316-1320` (2026-10-02 anchors, not re-read this run). The
-trade-off bullet is grounded in the base class: members compared as a SET, not a sequence, with missing,
-extra, retyped members and event-set changes all still failures
+(`MMCA.Helpdesk/build/templates/stage.ps1:1309`, the block headed "the wire-contract freeze SHIPS, and is
+guarded rather than deleted"), the SET comparison is named as the reason at `:1311-1312`, the staged app
+"arrives with its OWN contract already frozen" at `:1319`, and the guard asserting exactly one
+`IntegrationEventContractTests` class is at `:1328-1332`. The trade-off bullet is grounded in the base
+class: members compared as a SET, not a sequence, with missing, extra, retyped members and event-set
+changes all still failures
 (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Contracts/IntegrationEventContractTestsBase.cs:11-15`),
 `ExpectedContract` declared at `:33` and the comparison helper's "member order aside" at `:58`. README
 package row quoted verbatim from `MMCA.Common/README.md:85`. `CommonArchitectureMap` lists seven
 `Framework(...)` entries, one per layer (Shared, Domain, Application, Infrastructure, Api, Grpc, Ui)
 (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/CommonArchitectureMap.cs:21-27`); the body
-says "one anchor per layer it scans" rather than the doc comment's "one anchor per package" (`:7`), since
+says "one anchor per layer it scans" rather than the doc comment's "one anchor type per package" (`:7`), since
 seven anchors cover twenty-two packages and `MMCA.Common.UI.Maui` is deliberately absent (`:9-12`).
 `MicroserviceExtractionTestsBase` matches the rule list, which bans `MassTransit`, `Grpc` and
 `Google.Protobuf`
 (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Layering/ArchitectureRules.Transport.cs:13-15`).
-Engine NetArchTest.eNhancedEdition 1.4.5 (`MMCA.Common/Directory.Packages.props:275`);
-`Microsoft.CodeAnalysis.PublicApiAnalyzers` 5.6.0 (`:228`) (both 2026-10-02 anchors, not re-read this
-run). ADR-015 restates the 2000 floor with `ci.yml:163`
-(`Website/docs-src/adr/015-architecture-fitness-functions.md:79`, re-anchored from `:69`), frames the pair
-as "two layers, two speeds" (`:89`, from `:79`) and names `FrameworkSanityTests` (`:99`, from `:89`). MTP's
-zero-discovery failure is exit code 8 (`MMCA.Common/AGENTS.md:38`). Compile-time import at
-`MMCA.Common/Directory.Build.props:166-167` (re-anchored from `:144-145`), whose condition requires both a
-`Source` directory and a project name starting with `MMCA.Common`; the article's representative snippet
-shows only the `Source` half. Public-API gate: one ItemGroup excluding `MMCA.Common.UI.Maui` by name
+Engine NetArchTest.eNhancedEdition 1.4.5 (`MMCA.Common/Directory.Packages.props:285`);
+`Microsoft.CodeAnalysis.PublicApiAnalyzers` 5.6.0 (`:238`). ADR-015 restates the 2000 floor with
+`ci.yml:163` (`Website/docs-src/adr/015-architecture-fitness-functions.md:83-84`), frames the pair as
+"two layers, two speeds" (`:94`) and names `FrameworkSanityTests` (`:104`). MTP's zero-discovery failure
+is exit code 8 (`MMCA.Common/AGENTS.md:39`). Compile-time import at
+`MMCA.Common/Directory.Build.props:166-167`, whose condition requires both a `Source` directory and a
+project name starting with `MMCA.Common`; the article's representative snippet shows only the `Source`
+half. Public-API gate: one ItemGroup excluding `MMCA.Common.UI.Maui` by name
 (`MMCA.Common/Directory.Build.props:111`, rationale `:101-110`), RS0016 / RS0017 named at `:103`, and
-`PublicAPI.Shipped.txt` / `PublicAPI.Unshipped.txt` as `AdditionalFiles` (`:116-117`), all re-anchored
-this run from `:89`, `:79-88`, `:81-82`, `:94-95`. The baseline file count is **21**
-`PublicAPI.Shipped.txt` files (ADR-015 agrees at `:35` and `:567-568`, re-anchored from `:34` and `:557`).
-The declaration count stays out of the body: ADR-015's latest revision records 8,260 declarations
-(`:674`), after earlier entries of 7,881 (`:572`) and 8,254 (`:627`), so the figure moves with each
-release and is not printed here. Header grounding: `MMCA.Common/CLAUDE.md` is a stub importing
-`AGENTS.md`, and the two-gates rule lives in `MMCA.Common/AGENTS.md` section "Architecture" ("Two
-enforcement gates; add new rules in BOTH", `:68`). G25 is published at
-`Website/docs-src/onboarding/group-28-testing-infrastructure.md` and authored as 37 parts under
-`Docs/Onboarding/parts/`, `group-28-testing-infrastructure-p00.md` through `-p36.md` (Glob this run;
-previously 35). Carried from the 2026-10-02 audit as CONFIRMED and not re-read in this apply pass:
-`LayerDependencyTestsBase` holds 15 `[Fact]`s, 13 edges plus two map guards
-(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Layering/LayerDependencyTestsBase.cs:52`);
-`DomainPurityTestsBase` and its `ExtraForbiddenDomainDependencies` (`.../Bases/Layering/DomainPurityTestsBase.cs:12`);
-Store's `["RabbitMQ", "Stripe"]` ban
+`PublicAPI.Shipped.txt` / `PublicAPI.Unshipped.txt` as `AdditionalFiles` (`:116-117`). The declaration
+count stays out of the body: ADR-015's latest revision (2026-10-21, `:699`) records 8,434 declarations
+(`:48`, `:729`), after earlier entries of 7,881 (`:577`), 8,254 (`:632`) and 8,260 (`:678`), so the
+figure moves with each release and is not printed here. Header grounding: `MMCA.Common/CLAUDE.md` is a
+stub importing `AGENTS.md`, and the two-gates rule lives in `MMCA.Common/AGENTS.md` section
+"Architecture" ("Two enforcement gates; add new rules in BOTH", `:69`). G25 is published at
+`Website/docs-src/onboarding/group-28-testing-infrastructure.md` and authored as 41 parts under
+`Docs/Onboarding/parts/`, `group-28-testing-infrastructure-p00.md` through `-p40.md` (counted this run).
+Also re-read this run: `LayerDependencyTestsBase` holds 15 `[Fact]`s, 13 edges plus two map guards
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Layering/LayerDependencyTestsBase.cs:53`,
+`:56`); `DomainPurityTestsBase` and its `ExtraForbiddenDomainDependencies`
+(`.../Bases/Layering/DomainPurityTestsBase.cs:12`, the "a payment SDK or a broker client" doc wording at
+`:6`); Store's `["RabbitMQ", "Stripe"]` ban
 (`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Layering/DomainPurityTests.cs:11`);
 `ArchitectureMapBase` `RepoToken` / `DefineLayers` / `Framework` / `Module` (`ArchitectureMapBase.cs:19`,
 `:22`, `:94`, `:98`); `AdcArchitectureMap` module entries
-(`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/AdcArchitectureMap.cs:28`); entity conventions
-(`.../Bases/Domain/EntityConventionTestsBase.cs:18-30`) and PII (`PiiConventionTestsBase.cs:12`);
+(`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/AdcArchitectureMap.cs:28-54`); entity conventions
+(`.../Bases/Domain/EntityConventionTestsBase.cs:18-30`) and PII (`PiiConventionTestsBase.cs:7`);
 `BeforeTargets="ResolveProjectReferences"` (`MMCA.Common/Source/Build/MMCA.Common.LayerEnforcement.targets:21`);
 MTP via `MMCA.Common/global.json:3`. Sources: ADR-015, `MMCA.Common/AGENTS.md`,
 `MMCA.Common/README.md`, `MMCA.Common/FACTS.md`. The code blocks labeled representative use `MyApp*`

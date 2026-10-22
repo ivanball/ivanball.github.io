@@ -1,7 +1,7 @@
 # EF Core Include chains are a trap: navigation populators decouple eager loading
 
 > Series: MMCA.Common · Article #12 · Pillar P2/P3 · Group G11 · Rubric §8 · ADR-002 ·
-> Status: grounded in `Website/docs-src/adr/002-navigation-populators.md`, `Website/docs-src/onboarding/group-11-navigation-populators.md`,
+> Status: grounded in `Website/docs-src/adr/002-navigation-populators.md` (revised 2026-10-06), `Website/docs-src/onboarding/group-11-navigation-populators.md`,
 > and `MMCA.Common/CLAUDE.md` (cross-source degrade convention). No em dashes.
 
 **Subtitle:** `Include(x).Include(y).ThenInclude(z)` couples your read model to one physical database.
@@ -59,18 +59,21 @@ collection versus FK reference). The domain entity stays persistence-ignorant: z
 
 The Application layer decides *which navigations EF can actually load*. `NavigationMetadataProvider`
 reflects over the entity's `[Navigation]`-tagged properties and, for each, asks the Infrastructure
-boundary `IDataSourceService.HaveIncludeSupport(declaringType, targetType)` whether both ends share one
-physical source. The result is a split: `SupportedIncludes` (EF can JOIN these, both ends co-located)
-and `UnsupportedIncludes` (these need manual loading, the ends are split). Crucially, the Application
+boundary `IDataSourceService.HaveIncludeSupport` (passing the two entities' full type names) whether both
+ends resolve to the same physical source on a relational engine. The result is a split:
+`SupportedIncludes` (EF can JOIN these: one source, relational engine) and `UnsupportedIncludes` (these
+need manual loading: the ends are split, either entity has no registered source, or the engine is Cosmos
+DB, which has no JOINs even inside one container). Crucially, the Application
 layer never references `Microsoft.EntityFrameworkCore` to make that call. The only component that knows
 the physical topology is the data-source service at the Infrastructure edge.
 
 The Application layer does the actual *batch loading*, through the populator (`INavigationPopulator<T>`
 and `NavigationLoader` both live in `MMCA.Common.Application`; the EF execution they call is injected
 from Infrastructure, so the populator itself never touches `Microsoft.EntityFrameworkCore`). Each entity with
-cross-source navigations implements `INavigationPopulator<TEntity>`. Entities with none get
-`NullNavigationPopulator<TEntity>`, a textbook Null Object whose `PopulateAsync` is one
-`Task.CompletedTask`, so the pipeline always has something to call and never branches on null.
+cross-source navigations implements `INavigationPopulator<TEntity>`. An entity read through the generic
+`EntityQueryService` that has none gets `NullNavigationPopulator<TEntity>`, a textbook Null Object whose
+`PopulateAsync` is one `Task.CompletedTask`, so the pipeline always has something to call and never
+branches on null.
 
 ```csharp
 // The query pipeline runs a two-path strategy (EntityQueryPipeline):
@@ -94,8 +97,8 @@ results into a lookup, and assigns each parent its slice. That is one query per 
 navigation for the whole batch, then O(1) assignment per parent. The compiled grouping selectors are
 cached, so repeated calls skip `Expression.Compile()`.
 
-Writing that classify-and-load boilerplate by hand for every entity would be roughly 30 to 40 lines of
-repeated if-checks per entity. The declarative layer removes it. A navigation is described once as an
+Writing that classify-and-load boilerplate by hand means repeating the same checks in every populator: is
+this navigation requested, is it unsupported, which loader applies. The declarative layer removes it. A navigation is described once as an
 `INavigationDescriptor<TEntity>` (a `ChildNavigationDescriptor` for collections, an
 `FKNavigationDescriptor` for references), and `DeclarativeNavigationPopulator<TEntity>` drives a list of
 them. A real consumer in ADC's Conference module, `EventNavigationPopulator`, is just a subclass
@@ -108,8 +111,12 @@ one descriptor," not "write a new class."
 Here is why this is not over-engineering. When you split a module out and a relationship's two ends move
 to different physical sources, the EF model's `CrossDataSourceDegradeConvention` drops the FK constraint
 and the navigations from the model (the scalar FK columns and a compensating index survive; the foreign
-entity type is removed). From that point, `NavigationMetadataProvider` starts reporting that navigation
-as `Unsupported`, and the populator path picks it up automatically.
+entity type is removed). Independently, `NavigationMetadataProvider` reads the same entity-to-source
+registry and starts reporting that navigation as `Unsupported`, so the query pipeline routes it to the
+populator path. The populator loads it once it carries a descriptor for that navigation: a declarative
+populator only loads the unsupported navigations it declares, and an entity still on
+`NullNavigationPopulator` returns the navigation unloaded, so extraction means adding that one
+descriptor, not rewriting the query.
 
 The application code that issued the query never changes. The read handler still asks for events with
 their rooms and speakers. Before extraction, EF JOINs them. After extraction, the populator batch-loads
@@ -127,9 +134,10 @@ ADR-002 names the rough edges rather than hiding them.
   always works, the populator is a layer you do not strictly need. It is mitigated by being free at
   runtime there: the populator is only invoked when the metadata actually reports an unsupported
   include, and otherwise the `NullNavigationPopulator` no-ops. You pay in concepts, not in cycles.
-- **Every entity needs a populator, even a no-op one.** Entities that need no manual loading still
-  require `NullNavigationPopulator<TEntity>` (or an empty declarative one) so the pipeline has something
-  to call. That is a registration line per entity.
+- **Every entity read through the generic query service needs a populator, even a no-op one.** Such
+  entities that need no manual loading still require `NullNavigationPopulator<TEntity>` (or an empty
+  declarative one) so the pipeline has something to call. That is a registration line per entity;
+  entities queried only through a repository can skip it.
 - **The classification is runtime reflection (cached).** The supported/unsupported split is computed by
   reflecting over properties, then cached per `(entity type, navigation kind)`. The first query for a
   shape pays the reflection cost once.
@@ -180,6 +188,31 @@ pattern, or `dotnet add package MMCA.Common.API` and try it.*
 `NullNavigationPopulator<TEntity>`, `DeclarativeNavigationPopulator<TEntity>`,
 `ChildNavigationDescriptor`/`FKNavigationDescriptor`, `CrossDataSourceDegradeConvention`,
 `EventNavigationPopulator` (ADC Conference). Trade-offs drawn from ADR-002 and
-`group-11-navigation-populators.md`, stated as trade-offs, not hidden.*
+`group-11-navigation-populators.md`, stated as trade-offs, not hidden.
+Re-verified 2026-10-22 against MMCA.Common v1.250.0 (`MMCA.Common/FACTS.md:14`); paths under
+`Source/` are relative to `MMCA.Common/`.
+**2026-10-22 run (v1.250.0):** four body corrections. (1) The "30 to 40 lines per entity" figure is
+gone, matching ADR-002's 2026-10-06 revision that drops it as overstated
+(`Website/docs-src/adr/002-navigation-populators.md:32`). (2) `HaveIncludeSupport` takes entity full
+names, not types (`NavigationMetadataProvider.cs:96`, string overload `IDataSourceService.cs:70`), and
+is supported only for the same `DataSourceKey` on a relational engine, false when either entity is
+unregistered (`DataSourceService.cs:31-32,35-38`); co-located Cosmos navigations are unsupported
+(ADR-002:6,9). (3) The populator requirement is scoped to entities read through `EntityQueryService`
+(ctor `EntityQueryService.cs:37`, null guard `:94`); ADC registers none for PointsEntry,
+LeaderboardOptIn, CheckIn and AttendeeBadge (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/DependencyInjection.cs:81-83`).
+(4) "picks it up automatically" became a precise account: the degrade convention and the metadata
+provider each read the registry, the pipeline routes unsupported includes to the populator
+(`EntityQueryPipeline.cs:53-54`), and a declarative populator loads only declared unsupported
+properties (`DeclarativeNavigationPopulator.cs:30-37`) while the Null Object loads nothing
+(`NullNavigationPopulator.cs:19`).
+Anchors confirmed this run: `NavigationAttribute.cs:10` (`IsCollection` `:16`),
+`NavigationMetadataProvider.cs:20` (cache keyed by `(Type, NavigationType)` `:28`),
+`EntityQueryPipeline.cs:132-142` (Path 1, `AsSplitQuery` on a child collection `:141-142`),
+`:176-201` (Path 2 sort, page, materialize, then populate), `NavigationLoader.cs:21` (expression-tree
+`Contains` predicate `:71-75,144-148`, `GroupBy` `:89,162`, compiled-selector cache `:27,178-180`),
+`INavigationPopulator.cs:9`, `NullNavigationPopulator.cs:11`, `DeclarativeNavigationPopulator.cs:14`,
+`ChildNavigationDescriptor.cs:15`, `FKNavigationDescriptor.cs:14`,
+`CrossDataSourceDegradeConvention.cs:10-34`, ADC `EventNavigationPopulator.cs:11-31`
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/`).*
 
 - Full series index: https://ivanball.github.io/writing.html

@@ -125,7 +125,7 @@
         <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
         <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
         <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
-        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · Refresh tokens that rotate per device</a></li>
         <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
         <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
         <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
@@ -220,7 +220,7 @@
           IDE-only style rules run in the command-line build too. Five third-party analyzer packages, Meziantou,
           Microsoft.VisualStudio.Threading, Roslynator, SonarAnalyzer and StyleCop, ride into every project except
           a Docker Compose <code>.dcproj</code> (<code>:130-150</code>), with their versions pinned through Central Package Management
-          (<code>MMCA.Common/Directory.Packages.props:223</code>, <code>:229-232</code>). The shared <code>.editorconfig</code> then sets
+          (<code>MMCA.Common/Directory.Packages.props:233</code>, <code>:239-242</code>). The shared <code>.editorconfig</code> then sets
           <code>dotnet_analyzer_diagnostic.severity = error</code> (<code>MMCA.Common/.editorconfig:312</code>): every diagnostic
           starts as an error, and a rule that does not apply here is turned off by name with its reason beside
           it, so the exception list is something a reviewer can read rather than something implied by silence.</p>
@@ -233,13 +233,13 @@
           a four-repo change.</p>
           <p><strong>An empty run is a failure.</strong> A green test step proves only that the tests which ran passed, and a
           broken filter or a discovery failure can turn a suite into zero tests and still report success. So the
-          solution-wide unit runs carry <code>--minimum-expected-tests</code>: 2000 in MMCA.Common, against a suite of about
-          2,254 (<code>MMCA.Common/.github/workflows/ci.yml:160-163</code>), 5000 in MMCA.ADC
+          solution-wide unit runs carry <code>--minimum-expected-tests</code>: 2000 in MMCA.Common, against a suite that executes
+          8,386 tests in CI (<code>MMCA.Common/.github/workflows/ci.yml:163</code>), 5000 in MMCA.ADC
           (<code>MMCA.ADC/.github/workflows/deploy.yml:366</code>) and 2650 in MMCA.Store
           (<code>MMCA.Store/.github/workflows/deploy.yml:338</code>). That is the same vacuity guard the form-count floor
           below applies to a single gate, applied to the whole run. The line-coverage floor that sits beside it
           belongs to the test pyramid and is covered in Article 35
-          (<a href="test-pyramid.html">The test pyramid, not the ice-cream cone: 2,254 fast tests, zero Docker</a>).</p>
+          (<a href="test-pyramid.html">The test pyramid, not the ice-cream cone: 8,000 fast tests, zero Docker</a>).</p>
           <p>The honest cost is suppression pressure: at error severity, suppressing a rule is the fastest way to
           green, and in a diff it looks exactly like a deliberate relaxation. Nothing in this layer stops that;
           review of <code>.editorconfig</code> and <code>NoWarn</code> changes does.</p>
@@ -252,7 +252,7 @@
           package defines:</p>
           <ul>
           <li><code>ArchitectureRules</code>, the reusable rule library that expresses the actual assertions.</li>
-          <li>A set of 61 abstract <code>*TestsBase</code> classes holding 153 test methods (for example
+          <li>A set of 63 abstract <code>*TestsBase</code> classes holding 159 test methods (for example
           <code>LayerDependencyTestsBase</code>, <code>DomainPurityTestsBase</code>, <code>MicroserviceExtractionTestsBase</code>,
           <code>PiiConventionTestsBase</code>, <code>FolderWidthTestsBase</code>, <code>DataResidencyTestsBase</code>,
           <code>RawSqlConventionTestsBase</code>, <code>ClockReadTestsBase</code>).</li>
@@ -300,8 +300,10 @@
           <h2 id="the-rules-that-matter-most">The rules that matter most</h2>
           <p>Three example rule families show what fitness functions actually assert.</p>
           <p><strong><code>LayerDependencyTests</code>.</strong> The inward-dependency rule: API reaches down to Infrastructure,
-          Infrastructure to Application, Application to Domain, Domain to Shared, and never the other way. (UI and
-          Grpc are deliberate exceptions, depending only on Shared, so the test encodes that too.)</p>
+          Infrastructure to Application, Application to Domain, Domain to Shared, and never the other way. (UI is
+          the deliberate exception, barred from Domain, Application and Infrastructure, so the test encodes that
+          too. The same bar on the framework&#39;s own <code>MMCA.Common.Grpc</code> transport package is one of the Common-only
+          checks described above.)</p>
           <p><strong><code>DomainPurityTests</code>.</strong> Domain must be framework-pure, and the rule names the ban explicitly rather
           than gesturing at it: a ten-entry assembly-dependency list covering <code>Microsoft.AspNetCore</code>,
           <code>Microsoft.EntityFrameworkCore</code>, <code>Serilog</code>, <code>AutoMapper</code>, <code>Newtonsoft.Json</code>, <code>FluentValidation</code>,
@@ -422,9 +424,9 @@
           <code>csharp_namespace</code> included (<code>:28-31</code>). The line is drawn at &quot;would a deployed peer notice.&quot; Pin the
           file-level options and a reordered import turns into a red build, which is the fastest way to teach a
           team to regenerate the snapshot without reading it.</p>
-          <p>Adoption is the shape this tier always uses. MMCA.ADC&#39;s subclass pins the seven protos its four
-          <code>*.Contracts</code> projects compile, against eighty-three frozen lines
-          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Contracts/ProtoContractTests.cs:9-18</code>, list at <code>:20-105</code>);
+          <p>Adoption is the shape this tier always uses. MMCA.ADC&#39;s subclass pins the eight protos its four
+          <code>*.Contracts</code> projects compile, against ninety-nine frozen lines
+          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Contracts/ProtoContractTests.cs:9-19</code>, list at <code>:21-122</code>);
           MMCA.Store&#39;s pins four
           (<code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Contracts/ProtoContractTests.cs:13-19</code>). MMCA.Common
           ships no <code>.proto</code> of its own, because it supplies the gRPC plumbing and not the contracts, so it
@@ -478,42 +480,46 @@ phantom.Should().BeEmpty(
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/ObservabilityConventionTestsBase.cs:30</code>)
           ships in the same <code>MMCA.Common.Testing.Architecture</code> package and turns the pairing into a build
           failure (ADR-062).</p>
-          <p>It always fails in three distinct ways. An SLO alert declared in the consumer&#39;s Bicep template with no <code>###</code>
-          section in <code>infra/OPERATIONS.md</code> whose heading carries the matching <code>-alert-&lt;key&gt;</code> infix is a
-          violation, and so is a heading that does carry the key but not the alert&#39;s current severity as
-          <code>(sev N)</code> (<code>:89-115</code>), which means re-tiering an alert without moving its triage steps is a red build
-          rather than a surprise at 3am. In the other direction, an orphan runbook section whose alert the
-          template no longer provisions is a violation too (<code>:117-129</code>). And discovering fewer than
-          <code>MinimumAlertSpecs</code> specs, default 3 (<code>:39</code>), is itself a failure (<code>:79-87</code>). A fourth fact is opt-in:
-          a subclass that sets <code>RequireWorkbook</code> (off by default, <code>:58</code>) also fails unless the template declares
-          an Azure Monitor workbook or a portal dashboard, so the signals the alerts fire on have somewhere an
-          operator can look at them (<code>:65-77</code>).</p>
+          <p>It fails in four distinct ways. An SLO alert declared in the consumer&#39;s Bicep template with no <code>###</code>
+          section in <code>infra/OPERATIONS.md</code> whose heading names it as a whole <code>-alert-&lt;key&gt;</code> token is a
+          violation, and so is a heading that does name the key but not the alert&#39;s current severity as
+          <code>(sev N)</code> (<code>:91-117</code>), which means re-tiering an alert without moving its triage steps is a red build
+          rather than a surprise at 3am. The match is whole-token, an optional <code>-v&lt;N&gt;</code> version suffix aside, so
+          the section for <code>server-response-time-p99</code> cannot answer for <code>server-response-time</code> (<code>:168-178</code>). In
+          the other direction, an orphan runbook section whose alert the template no longer provisions is a
+          violation too (<code>:119-131</code>). Discovering fewer than <code>MinimumAlertSpecs</code> specs, default 3 (<code>:39</code>), is
+          itself a failure (<code>:81-89</code>). And the template must declare an Azure Monitor workbook or a portal
+          dashboard, so the signals the alerts fire on have somewhere an operator can look at them (<code>:67-79</code>):
+          <code>RequireWorkbook</code> is on by default (<code>:60</code>), and a subclass overrides it to <code>false</code> only for a
+          deployment that deliberately has no operator-facing view, saying why in the override (<code>:53-59</code>).</p>
           <p>That floor rule is the same fail-closed property the forms floor and the cost gate below both rely
           on, and it earns its keep here more than anywhere: discovery parses the template between two literal
-          anchors, <code>var sloAlertSpecs</code> and <code>resource sloAlerts</code> (<code>:135-138</code>), and a rename would otherwise leave
+          anchors, <code>var sloAlertSpecs</code> and <code>resource sloAlerts</code> (<code>:137-138</code>), and a rename would otherwise leave
           a gate that pairs zero alerts against zero runbook sections and reports success. A key count that
-          disagrees with the severity count fails for the same reason (<code>:143</code>).</p>
+          disagrees with the severity count fails for the same reason (<code>:145</code>).</p>
           <p>Adoption is the shape the rest of this tier already uses. MMCA.ADC and MMCA.Store each embed their
           real <code>infra/main.bicep</code> and <code>infra/OPERATIONS.md</code> as manifest resources
           (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/MMCA.ADC.Architecture.Tests.csproj:17-22</code>)
           and declare a subclass whose only body is a raised floor matching the specs that repo provisions:
-          MMCA.Store&#39;s <code>protected override int MinimumAlertSpecs =&gt; 4;</code>
+          MMCA.Store&#39;s <code>protected override int MinimumAlertSpecs =&gt; 5;</code>
           (<code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Governance/ObservabilityConventionTests.cs:13</code>),
-          and MMCA.ADC&#39;s <code>=&gt; 5</code>, the four request and resilience SLOs plus the AI scoring token ceiling
+          and MMCA.ADC&#39;s <code>=&gt; 6</code>, the five request and resilience SLOs plus the AI scoring token ceiling
           (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Governance/ObservabilityConventionTests.cs:14</code>).
           Leaving the shipped default of 3 in place would let the gate pass on three discovered specs if the
           parse anchors ever drifted, which is the vacuity trap one level up. The
           base reads those resources from <code>ResourceAssembly</code>, which defaults to the <em>derived</em> type&#39;s assembly
           (<code>:51</code>), because resolving against its own would look for the consumer&#39;s template inside the
           framework package and always throw. MMCA.Common, which deploys nothing, runs the base against its
-          framework deployment sample through <code>SampleDeploymentObservabilityTests</code>, with a floor of 4 and the
-          only <code>RequireWorkbook</code> opt-in in the workspace. MMCA.Helpdesk declares no subclass at all: an
+          framework deployment sample through <code>SampleDeploymentObservabilityTests</code>, with a floor of 4 and
+          <code>RequireWorkbook</code> stated as true explicitly, because the sample is the deployment consumers copy. The
+          two consumers inherit the default, so the workbook fact runs for both. MMCA.Helpdesk declares no subclass at all: an
           inapplicable gate rather than an unadopted one. The honest limits are two. This is a text gate over
           infrastructure-as-code: it proves the two files agree, not that the deployment ran or that the query
           behind an alert measures what it claims. And it pairs only the SLO alerts declared between the parse
-          anchors. Each consumer provisions six further operational alerts (dead-lettered outbox messages, a
-          failed revision activation, the gateway availability probe among them) after that loop closes, and
-          the gate neither requires nor forbids a runbook section for any of those twelve (ADR-062). The alerting mechanism itself sits with the
+          anchors. MMCA.ADC provisions nine further operational alerts and MMCA.Store seven (dead-lettered
+          outbox messages, a failed revision activation, the gateway availability probe among them) after that
+          loop closes, and the gate neither requires nor forbids a runbook section for any of those sixteen; each
+          has written triage today, kept by review rather than by the build (ADR-062). The alerting mechanism itself sits with the
           telemetry it watches, in Article 48.</p>
           <h2 id="the-third-kind-a-fitness-function-for-cost">The third kind: a fitness function for cost</h2>
           <p>Structural rules assert shape. Documentation rules assert honesty. There is a third thing worth failing
@@ -620,7 +626,7 @@ phantom.Should().BeEmpty(
           severity-correct runbook section, how the same idea extends to cost through a committed benchmark baseline
           that gates allocations absolutely and latency only as a ratio, and the honest limit that you only
           enforce what you write a rule for.</p>
-          <p><strong>Next in the series:</strong> the test pyramid behind these fitness functions, roughly 2,254 fast tests with
+          <p><strong>Next in the series:</strong> the test pyramid behind these fitness functions, more than 8,000 fast tests with
           no Docker and no database.</p>
           <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the Architecture section
           of the contributor guide, or add one NetArchTest rule to your own codebase this week and watch it catch

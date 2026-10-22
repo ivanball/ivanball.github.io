@@ -153,7 +153,7 @@ first authenticated request does not pay a cold connection on a CPU-throttled id
 
 The AppHost `Program.cs` does not start anything immediately. It builds a *resource model*: a graph of
 containers, databases, services, the gateway, and the UI, with their dependency edges. The cross-cutting
-wiring vocabulary lives in `MMCA.Common.Aspire.Hosting` as fifteen fluent helpers (sixteen methods,
+wiring vocabulary lives in `MMCA.Common.Aspire.Hosting` as sixteen fluent helpers (seventeen methods,
 because `WithBroker` has one overload per broker resource). Here is the shape of a service declaration
 (representative, condensed from ADC's AppHost):
 
@@ -287,8 +287,9 @@ code change between them.
 
 A dashboard is only as readable as the trail through it, and one id ties that trail together.
 `CorrelationIdMiddleware` reads an `X-Correlation-ID` header off each request, cut to 64 characters (the
-width of the persisted correlation columns); when the client sends none, it falls back to the current
-W3C trace id, then to ASP.NET Core's `TraceIdentifier`. It sets that
+width of the persisted correlation columns). When the client sends none, sends a blank value, or sends
+one with a control or non-ASCII character (which Kestrel would refuse to echo), it falls back to the
+current W3C trace id, then to ASP.NET Core's `TraceIdentifier`. It sets that
 id on a scoped `ICorrelationContext` and echoes it on the response header, and the CQRS logging
 decorators stamp the same id into every log scope they open. So one id lines up a request's logs, its
 response header, and its distributed trace: the first thing you reach for when a call that crossed the
@@ -345,13 +346,14 @@ services.AddOptions<ConnectionStringSettings>()
 
 `ValidateOnStart()` is the load-bearing link. `ValidateDataAnnotations()` on its own defers evaluation to
 the first resolution, which for a section only a background service reads can be minutes after the replica
-started taking traffic; pairing the two converts "configured wrong" into "did not start". Thirty-one
+started taking traffic; pairing the two converts "configured wrong" into "did not start". Thirty-two
 framework sections bind with both links: the nineteen Infrastructure sections (connection strings, SMTP,
 persistence, outbox, login protection, password reset, refresh sessions, message bus, JWKS, tenancy, cache,
 query-cache pipeline, scheduler, audit trail, internal commands, two-factor, email confirmation, permission
 grants, push notifications), plus idempotency, JWT, API rate limiting, the UI's API settings, UI rate
 limiting, the Blazor circuit limit, the health-report cache, the host-edge security headers, the gateway
-settings, gateway rate limiting, and the optional AI package's settings and content policy, including the
+settings, gateway rate limiting, the gRPC service-token settings, and the optional AI package's settings
+and content policy, including the
 ones behind opt-in features. Two of them, UI rate limiting and the Blazor circuit limit, bind through
 `BindConfiguration(...)` instead of `Bind(GetSection(...))`, and the security headers attach the
 validation chain first and bind their section only when the host passes its configuration. Two Blazor-host sections, the CSP settings and the same-origin API proxy settings,
@@ -456,7 +458,7 @@ the AppHost wiring you just met.
 
 *Tags: .NET, C Sharp, Microservices, DevOps, Observability*
 
-*Notes: re-verified against source on 2026-10-08 (MMCA.Common v1.233.0); every anchor below is re-stamped
+*Notes: re-verified against source on 2026-10-22 (MMCA.Common v1.250.0); every anchor below is re-stamped
 to that tree unless marked as carried from an earlier pass. Paths are under `MMCA.Common/Source/` unless
 stated. Baseline: `AddServiceDefaults` (`Hosting/MMCA.Common.Aspire/Extensions.cs:30`); `ConfigureOpenTelemetry`
 (`Extensions.Telemetry.cs:71`) with formatted message + scopes (`:75-76`), metrics via `ConfigureMetrics`
@@ -470,10 +472,9 @@ Four trace sources at `:83-86` (`AiTelemetryName = "MMCA.Common.AI"`, `:44`). `O
 added at `:122`, `ProbeTelemetryFilterProcessor` at `:129`, `FilterProbeTelemetryConfigKey` at `:19`;
 sampler `ParentBasedSampler(TraceIdRatioBasedSampler)` at `:138-139`, ratio parsed by `TryGetTraceSampleRatio`
 (`:186`); exporters read `OTEL_EXPORTER_OTLP_ENDPOINT` (`:163`) and `APPLICATIONINSIGHTS_CONNECTION_STRING`
-(`:171`). Carried from the 2026-10-02 pass, not re-read here: the poll filter
-(`Hosting/MMCA.Common.Aspire/Telemetry/OutboxPollFilterProcessor.cs`) matches `OutboxPoll` on
-`MMCA.Common.Outbox` and `InternalCommandPoll` on `MMCA.Common.InternalCommands` (constants `:26-29`,
-predicate `:60-64`) and clears `Recorded` at `:49`; the doc comment (`:9-15`) names the per-message
+(`:171`). The poll filter (`Hosting/MMCA.Common.Aspire/Telemetry/OutboxPollFilterProcessor.cs`) matches
+`OutboxPoll` on `MMCA.Common.Outbox` and `InternalCommandPoll` on `MMCA.Common.InternalCommands` (constants
+`:26-29`, predicate `:60-64`) and clears `Recorded` at `:49`; the doc comment (`:9-15`) names the per-message
 `OutboxProcess` and per-command `InternalCommandExecute` survivors. Outbox meter, five instruments:
 `DeadLetterCounter`, `ProcessedCounter`, `DispatchLagHistogram`, `PendingDepthGauge`, `OldestPendingAgeGauge`
 (`Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxMetrics.cs:41,47,57,75,98`). CQRS meter:
@@ -481,71 +482,90 @@ predicate `:60-64`) and clears `Recorded` at `:49`; the doc comment (`:9-15`) na
 (`Core/MMCA.Common.Application/UseCases/Decorators/CqrsMetrics.cs:29,35,41,47,53,59`). Resilience:
 `AddStandardResilienceHandler` at `Extensions.cs:49`; values in
 `Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:13,16,19` (30s / 60s / 90s) and
-`MaxRetryAttempts = 1` at `:30` (carried); `SocketsHttpHandler` at `Extensions.cs:78-86`; warm-up task
-registered at `:106`. Health (carried): `MapDefaultEndpoints` (`Extensions.Health.cs:123`), `/health` cached
-(`:134`), `/alive` on the `Live` tag uncached (`:138-140`, "self" check tagged `Live` at `:28`), `/health/ready`
-cached with the `Live`/`Optional` exclusion (`:154-156`). Step 4 vocabulary, fifteen helper names across sixteen
-methods: `Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs` `AddMailDev` (`:141`), `AddMessageBroker` (`:160`,
-`AddRabbitMQ(name).WithManagementPlugin()` at `:164`), `AddServiceBusEmulatorBroker` (`:201`), `WithBroker`
-(`:252`, `:280`), `WithJwksDiscovery` (`:309`), `WithE2eRsaKeys` (`:353`), `WithE2eRegistrationThrottleLift`
-(`:392`), `WithE2eGatewayRateLimitLift` (`:440`), `WithSQLServerDataSource` (`:483`), `WithPostgreSQLDataSource`
-(`:513`), `WithCosmosDataSource` (`:542`), `WithSqliteDataSource` (`:567`), `WithH2cHealthCheck`
-(`H2cHealthCheckExtensions.cs:110`, behavior per its doc comment `:95-108`, carried), plus `AddSelectedBroker`
-(`BrokerSelection.cs:57`: emulator branch `:64-67`, persistent RabbitMQ `:70-72`) and `WithSelectedBroker`
-(`:81-86`). The static `IsServiceBusSelected` (`:35`, case-insensitive match on `ServiceBusSelection = "servicebus"`
-at `:27`) is not a fluent helper and is not counted. The "second container plus a warm-up" cost is the class doc
-comment `:10`; the "two overloads take different resource types" rationale is `:13-17`. `WithSQLServerDataSource`
-chains `WithReference(database)` (`:491`), `WaitFor` (`:492`) and the `DataSources__{logicalName}__SQLServerConnectionString`
-variable (`:493`); the "one entry, becomes Default" reasoning is its doc comment `:474-477` (carried).
-`WithReference` on a database resource may inject Aspire's own `ConnectionStrings__*` entry too, which is not
-determinable from repo source. No RabbitMQ management port appears in Step 1: `WithManagementPlugin()` is called
-with no port (`Extensions.cs:164`) and `AddSelectedBroker` adds none (`BrokerSelection.cs:70-71`); only an ADC
-comment states 15672. ADC AppHost (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs`): 15672 comment
-`:48-50`, broker wiring comment `:59-67`, RabbitMQ-vs-Service-Bus divergence comment `:69-91`, selection
-`builder.AddSelectedBroker("ADC_BROKER", sqlServer)` `:97` (comment `:93-96`), MailDev `:105`; every service
-chain calls `WithSelectedBroker(withBroker)` (`:128`, `:157`, `:200`, `:228`); the Step 4 source chain is
-`:195-210` (the snippet omits its `Seeding__IncludeSampleConferenceData` variable, `:206`); gRPC edges `:264`,
-`:266`, `:269`; gateway 6001 pin `:359`; JWKS `:368-370`. The 6002 UI pin is carried from the 2026-10-02 audit.
-Store's AppHost project is `MMCA.Store/Source/Hosting/MMCA.Store.AppHost/MMCA.Store.AppHost.csproj`.
+`MaxRetryAttempts = 1` at `:30`; `SocketsHttpHandler` at `Extensions.cs:78-86`; warm-up gate added by
+`AddWarmupReadiness()` (called `:34`, defined `:101`) with `OpenIdConnectMetadataWarmupTask` registered at `:106`.
+Health: `MapDefaultEndpoints` (`Extensions.Health.cs:123`), `/health` cached (`:134`), `/alive` on the `Live`
+tag uncached (`:138-140`, "self" check tagged `Live` at `:28`), `/health/ready` cached with the `Live`/`Optional`
+exclusion (`:154-156`). Step 4 vocabulary, sixteen helper names across seventeen methods:
+`Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs` `AddMailDev` (`:153`; `MailDevHttpPort = 1080` at `:130`),
+`AddMessageBroker` (`:172`, `AddRabbitMQ(name).WithManagementPlugin()` at `:176`), `AddServiceBusEmulatorBroker`
+(`:213`), `WithBroker` (`:264`, `:292`), `WithJwksDiscovery` (`:321`), `WithE2eRsaKeys` (`:365`),
+`WithE2eRegistrationThrottleLift` (`:404`), `WithE2eForceServer` (`:441`, called by ADC's AppHost at
+`Program.cs:432`), `WithE2eGatewayRateLimitLift` (`:487`), `WithSQLServerDataSource` (`:530`),
+`WithPostgreSQLDataSource` (`:560`), `WithCosmosDataSource` (`:589`), `WithSqliteDataSource` (`:614`),
+`WithH2cHealthCheck` (`H2cHealthCheckExtensions.cs:110`, behavior per its doc comment `:80-109`), plus
+`AddSelectedBroker` (`BrokerSelection.cs:57`: emulator branch `:64-67`, persistent RabbitMQ `:70-71`) and
+`WithSelectedBroker` (`:81`). The static `IsServiceBusSelected` (`:35`, case-insensitive match on
+`ServiceBusSelection = "servicebus"` at `:27`) is not a fluent helper and is not counted. The "second container
+plus a warm-up" cost is the class doc comment `:10`; the "two overloads take different resource types" rationale
+is `:13-17`. `WithSQLServerDataSource` chains `WithReference(database)` (`:538`), `WaitFor` (`:539`) and the
+`DataSources__{logicalName}__SQLServerConnectionString` variable (`:540`); the "one entry, becomes Default"
+reasoning is its doc comment `:521-524`. `WithReference` on a database resource may inject Aspire's own
+`ConnectionStrings__*` entry too, which is not determinable from repo source. No RabbitMQ management port
+appears in Step 1: `WithManagementPlugin()` is called with no port (`Extensions.cs:176`) and `AddSelectedBroker`
+adds none (`BrokerSelection.cs:70-71`); only an ADC comment states 15672. ADC AppHost
+(`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs`): 15672 comment `:48-50`, broker wiring comment `:59-67`,
+RabbitMQ-vs-Service-Bus divergence comment `:69-91`, selection `builder.AddSelectedBroker("ADC_BROKER", sqlServer)`
+`:97` (comment `:93-96`), MailDev `:105`; every service chain calls `WithSelectedBroker(withBroker)` (`:128`,
+`:157`, `:200`, `:228`); the Step 4 source chain is `:195-210` (the snippet omits its
+`Seeding__IncludeSampleConferenceData` variable, `:206`); the Step 5 gRPC snippet shows the edges at `:264`,
+`:266`, `:269` (the AppHost declares further edges at `:287`, `:293`, `:301`); gateway 6001 pin `:364`; JWKS
+`:373-375`; UI 6002 pin `:406` (comment `:387`). Store's AppHost project is
+`MMCA.Store/Source/Hosting/MMCA.Store.AppHost/MMCA.Store.AppHost.csproj`.
 Correlation: `Presentation/MMCA.Common.API/Middleware/CorrelationIdMiddleware.cs` header `:23`, `MaxLength = 64`
-`:26`, read-or-fall-back `:40-43`, set `:45`, echo `:46-50`. Security headers
-(`Hosting/MMCA.Common.Aspire/Security/SecurityHeaders.cs`): `AddCommonSecurityHeaders` `:268`, options builder
-`:276` with `ValidateDataAnnotations().ValidateOnStart()` at `:277` (ADR-070 comment `:274-275`), section bound
-only when a configuration is passed (`:278-281`), `StaticCspPolicyProvider` registered `:288`,
-`UseCommonSecurityHeaders` `:296` inserting the middleware `:299`; `CspPolicy` record `:78`. Step 8 (ADR-070):
-canonical chain `Core/MMCA.Common.Infrastructure/DependencyInjection.cs:72-75`. Thirty-one sections carry
-`ValidateDataAnnotations().ValidateOnStart()` (count from a Grep of all 35 `ValidateOnStart()` hits under
-`Source/`, minus the two without data annotations and the two module-host chains). Infrastructure (19):
-`DependencyInjection.cs:75,101,147,152,157,163,171,191,196,282`, `.Caching.cs:46,51`, `.Jobs.cs:42,113,152`,
-`.Auth.cs:45,73,144`, `.Notifications.cs:46`. Others (12): `Presentation/MMCA.Common.API/DependencyInjection.cs:80`
+`:26`, read-or-fall-back `:40-43` (a blank header counts as absent), `Sanitize` keeps a value only when every
+character is printable ASCII (`:61-65`; Kestrel-echo rationale in the class doc comment `:13-17`), set `:45`,
+echo `:46-50`. Security headers (`Hosting/MMCA.Common.Aspire/Security/SecurityHeaders.cs`):
+`AddCommonSecurityHeaders` `:268`, options builder `:276` with `ValidateDataAnnotations().ValidateOnStart()` at
+`:277` (ADR-070 comment `:274-275`), section bound only when a configuration is passed (`:278-281`),
+`StaticCspPolicyProvider` registered `:288`, `UseCommonSecurityHeaders` `:296` inserting the middleware `:299`;
+`CspPolicy` record `:78`. Step 8 (ADR-070): canonical chain `Core/MMCA.Common.Infrastructure/DependencyInjection.cs:72-75`.
+Thirty-two sections carry `ValidateDataAnnotations().ValidateOnStart()` (count from a Grep of all 37
+`ValidateOnStart()` hits under `Source/`, minus the two sections without data annotations, the service-token
+default-scheme guard, and the two module-host chains). Infrastructure (19):
+`DependencyInjection.cs:75,101,147,152,157,163,171,195,200,287`, `.Caching.cs:46,51`, `.Jobs.cs:42,113,152`,
+`.Auth.cs:45,73,144`, `.Notifications.cs:46`. Others (13): `Presentation/MMCA.Common.API/DependencyInjection.cs:80`
 (idempotency), `API/Startup/WebApplicationBuilderExtensions.Authentication.cs:135-138` (JWT),
-`WebApplicationBuilderExtensions.RateLimiting.cs:378`, `Presentation/MMCA.Common.UI/DependencyInjection.cs:42-45`
+`WebApplicationBuilderExtensions.RateLimiting.cs:378`, `Presentation/MMCA.Common.UI/DependencyInjection.cs:43-46`
 (ApiSettings), `UI.Web/Hardening/UiRateLimitingExtensions.cs:180-183` and `BlazorCircuitLimitExtensions.cs:55-58`
 (both `BindConfiguration`), `Hosting/MMCA.Common.Aspire/Extensions.Health.cs:36` (HealthReportCacheOptions),
 `Hosting/MMCA.Common.Aspire/Security/SecurityHeaders.cs:276-277` (SecurityHeadersSettings),
-`Hosting/MMCA.Common.Gateway/GatewayReverseProxyExtensions.cs:57` (GatewaySettings),
-`Hosting/MMCA.Common.Aspire/Gateway/GatewayRateLimitingExtensions.cs:276`,
+`Hosting/MMCA.Common.Gateway/GatewayReverseProxyExtensions.cs:55-58` (GatewaySettings),
+`Hosting/MMCA.Common.Aspire/Gateway/GatewayRateLimitingExtensions.cs:273-276`,
+`Presentation/MMCA.Common.Grpc/Authentication/ServiceTokenServiceCollectionExtensions.cs:103-106`
+(ServiceTokenSettings, section `Grpc:ServiceToken` at `ServiceTokenSettings.cs:21`),
 `Core/MMCA.Common.AI/DependencyInjection.cs:126` (AiSettings),
-`Core/MMCA.Common.AI/Guardrails/GuardrailServiceCollectionExtensions.cs:70` (ContentPolicySettings).
-`ValidateOnStart` without data annotations: `BlazorCspSettings` (`UI.Web/DependencyInjection.cs:69-71`,
-`BindConfiguration`) and `SameOriginApiProxySettings` (`UI.Web/SameOriginProxy/SameOriginApiProxyServiceExtensions.cs:65`,
-with `PostConfigure`). `ApplicationSettings` / `ModulesSettings` at
-`Presentation/MMCA.Common.API/Startup/ModuleHostExtensions.cs:64` and `:72`; Store Stripe at
-`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/SalesModule.cs:51-54` per the earlier audit. Exclusions:
+`Core/MMCA.Common.AI/Guardrails/GuardrailServiceCollectionExtensions.cs:70` (ContentPolicySettings). The same
+service-token file's other hit (`:78-82`) is not a settings section: it validates a `DefaultSchemeGuard` marker
+type at startup, with no data annotations, so the service-token scheme cannot become the default authentication
+scheme; Step 8 does not count it. `ValidateOnStart` without data annotations: `BlazorCspSettings`
+(`UI.Web/DependencyInjection.cs:69-71`, `BindConfiguration`) and `SameOriginApiProxySettings`
+(`UI.Web/SameOriginProxy/SameOriginApiProxyServiceExtensions.cs:65`, with `PostConfigure`). `ApplicationSettings` /
+`ModulesSettings` at `Presentation/MMCA.Common.API/Startup/ModuleHostExtensions.cs:61-64` and `:69-72`; Store Stripe
+at `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/SalesModule.cs:51-54`. Exclusions:
 `OwnerOrAdminFilterOptions` (`API/DependencyInjection.cs:87-92`, comment from `:87`), `LegalAcceptanceOptions`
 (`Infrastructure/DependencyInjection.Auth.cs:109-110`, no-`ValidateOnStart` comment `:106-108`; it carries no
 data-annotation link either), `HybridCacheOptions` (no section of its own: `Configure`d from the validated
 `CacheSettings` at `.Caching.cs:149-150`), `CacheKeyPrefixOptions` (`Configure` at `.Caching.cs:41`),
-`NativePushSettings` and `FileStorageSettings` (`.Notifications.cs:84-85`, `:116-117`), and the UI's
+`NativePushSettings` and `FileStorageSettings` (`.Notifications.cs:87-88`, `:119-120`), and the UI's
 `LayoutSettings` / `LegalSettings` / `RegistrationSettings` / `UiReadCacheOptions` / `NotificationBellOptions`
-(`UI/DependencyInjection.cs:48-49`, `:53-54`, `:58-59`, `:63-64`, `:66-67`, optional-section comments `:47`,
-`:51-52`, `:56-57`, `:61-62`). `JwtSettings` rules (`Core/MMCA.Common.Infrastructure/Auth/JwtSettings.cs:72`)
-carried from the earlier audit. "Nothing gates the chain" is carried from the 2026-10-02 pass (no
-`ValidateOnStart` / `AddOptions` governance test in `Hosting/MMCA.Common.Testing.Architecture`; the
-`ValidateOnStart` hits under `MMCA.Common/Tests/` were four behavior-test files) and was not re-run here.
-ADR cells unchanged (ADR-023 / 025 / 041 / 070), range 001-132 per `Website/docs-src/adr/README.md:6`. The
-headless-launch caveat is a known operational note, not a code limitation, and is not determinable from source.
-Changed 2026-10-08: Step 4 helper count 13/14 to 15/16 (`BrokerSelection` added `AddSelectedBroker` and
+(`UI/DependencyInjection.cs:49-50`, `:54-55`, `:59-60`, `:64-65`, `:67-68`, optional-section comments `:48`,
+`:52-53`, `:57-58`, `:62-63`). `JwtSettings` rules (`Core/MMCA.Common.Infrastructure/Auth/JwtSettings.cs`):
+`[Required]` at `:53` and `:57`, `Validate` at `:79` (HS256 32-character secret `:81`, RS256 private key `:88`).
+"Nothing gates the chain" was re-run this pass: no `ValidateOnStart` or `AddOptions` hit in
+`Hosting/MMCA.Common.Testing.Architecture`, and the `ValidateOnStart` hits under `MMCA.Common/Tests/` are six
+behavior-test files, none of them a governance test. ADR cells unchanged (ADR-023 / 025 / 041 / 070), range
+001-132 per `Website/docs-src/adr/README.md:6`. The headless-launch caveat is a known operational note, not a
+code limitation, and is not determinable from source.
+Changed 2026-10-22: Step 4 helper count 15/16 to 16/17 (`WithE2eForceServer`, Common #569 per the audit); Step 8
+validated sections 31 to 32, with the gRPC service-token settings added to the list (Common #563/#565 per the
+audit), and `ValidateOnStart()` hits 35 to 37 (the second new hit is the default-scheme guard); the correlation
+sentence names the blank and unechoable-value fallback; behavior-test files 4 to 6; anchors re-stamped (hosting
+helpers moved 12 lines, Infrastructure `:191`/`:196`/`:282` to `:195`/`:200`/`:287`, ADC gateway pin `:359` to
+`:364` and JWKS `:368-370` to `:373-375`); the items previously carried (health endpoints, poll filter,
+`MaxRetryAttempts`, the H2c doc comment, the 6002 pin, `JwtSettings`, Store Stripe) were re-read this pass.
+Earlier pass 2026-10-08 (v1.233.0):
+Step 4 helper count 13/14 to 15/16 (`BrokerSelection` added `AddSelectedBroker` and
 `WithSelectedBroker`, Common #513 per the audit); the Step 4 snippet shows `AddSelectedBroker` plus
 `WithSelectedBroker(withBroker)` instead of `.WithBroker(rabbit)`, matching ADC's chain, and a bullet for the
 pair was added; the trade-offs broker bullet names `AddSelectedBroker` as the owner of the switch; the host-edge

@@ -60,10 +60,10 @@ hand it the issuer, and change nothing about the token logic. Here is the model,
 
 **The access token is stateless; the refresh side is one row per signed-in device.** The access token is a
 signed JWT whose `exp` comes from `JwtSettings.AccessTokenExpirationMinutes` (default 15 minutes,
-`JwtSettings.cs:61`), written by `TokenService.GenerateAccessToken` (`TokenService.cs:101`, expiry stamped at
+`JwtSettings.cs:66`), written by `TokenService.GenerateAccessToken` (`TokenService.cs:101`, expiry stamped at
 `:148`). The refresh side is `RefreshSession`, a sealed framework class kept as a flat bookkeeping record,
 with one row per signed-in device (`RefreshSession.cs:43`): the user id, a token hash, an issue instant, an
-expiry, and revocation bookkeeping (`:73,76,79,82,85,91,94`). Refresh tokens are deliberately absent from the
+expiry, and revocation bookkeeping (`:76,79,82,85,88,94,97`). Refresh tokens are deliberately absent from the
 credential contract the user aggregate exposes to the workflow: `IAuthUser` carries password material only
 (`IAuthUser.cs:9-14,20,23`). A user holds as many live sessions as they have signed-in devices, bounded by a
 per-user cap (`AuthSessionIssuer.cs:17-28`). Every access token the issuer mints names the session behind it
@@ -74,7 +74,7 @@ code never has to know the claim exists.
 **The stored value is a digest, not the token.** `TokenService.GenerateRefreshToken` draws 64 bytes from
 `RandomNumberGenerator.GetBytes` and base64-encodes them (`TokenService.cs:155,157,158`). That plaintext
 lives only in the response that hands it to the client. What the store keeps is `RefreshSession.TokenHash`,
-an unsalted hex SHA-256 digest of the token's UTF-8 bytes (`RefreshSession.cs:76,177-181`), exactly 64
+an unsalted hex SHA-256 digest of the token's UTF-8 bytes (`RefreshSession.cs:79,180-184`), exactly 64
 characters wide (`:45-46`). The digest is deterministic on purpose, because lookup is by hash: a presented
 token finds its row through `FindByTokenHashAsync(RefreshSession.HashToken(token))`
 (`AuthSessionIssuer.cs:309-311`). A database read therefore yields digests, and a digest is not something
@@ -90,7 +90,7 @@ its own path. `RefreshTokenAsync` (`AuthenticationServiceBase.cs:309`) calls `Ro
 (`ResolveRotatableSessionAsync`, called at `:103`, body `:298`) and then rotates it (`RotateSessionAsync`,
 called at `:111`, body `:394`). Rotation mints a successor session (`:402-409`) and claims the presented row
 through `IRefreshSessionStore.TryRotateAsync` (`:417-419`), which revokes it with reason `Rotated` and links
-it to that successor via `ReplacedByTokenHash` (`EFRefreshSessionStore.cs:138-143`; `RefreshSession.cs:58,91`).
+it to that successor via `ReplacedByTokenHash` (`EFRefreshSessionStore.cs:191-196`; `RefreshSession.cs:58,94`).
 The successor is a new row with a new id, so the access token handed back carries a new `sid` too
 (`AuthSessionIssuer.cs:118-124`). The consequence is the important part: the instant a successor is issued,
 the token that bought it is spent, and the rotated row it leaves behind is precisely what makes a replay
@@ -124,7 +124,9 @@ longer ago, or already flagged as reuse at any age, it is the BR-206 reuse signa
 user holds is revoked with reason `ReuseDetected` (`:335-339`, `RefreshSession.cs:64`). Only the `Rotated`
 reason qualifies for the grace, a revocation stamped slightly ahead of the local clock (another replica's)
 counts as inside it, and a grace of `0` turns it off (`:476-477,483-486`). Any other or missing reason counts
-as reuse, the conservative answer for a row the code does not recognize (`:456-461,469`). An **expired** row
+as reuse, `AccountDeleted` included (the reason account erasure writes, `RefreshSession.cs:70`,
+`RefreshSessionRevocation.cs:86`), the conservative answer for a row the code does not recognize
+(`AuthSessionIssuer.cs:456-461,469`). An **expired** row
 is an ordinary end of life, so that device re-authenticates and the rest are untouched (`:342-344`). Four of
 the five outcomes answer with the same `Auth.InvalidRefreshToken` error (`:267-271`), so an unknown token, an
 expired one and a replayed one look identical to the caller and the distinction lives in what happens behind
@@ -133,7 +135,7 @@ session is intact and to retry with the token the winning request received.
 
 **A simultaneous refresh is a race first, and a replay only past the grace.** Two requests presenting the
 same still-live token both read an un-revoked row, so the store arbitrates rather than memory:
-`TryRotateAsync` (`EFRefreshSessionStore.cs:121`) is a conditional update on `RevokedAt IS NULL` (`:138`),
+`TryRotateAsync` (`EFRefreshSessionStore.cs:174`) is a conditional update on `RevokedAt IS NULL` (`:191`),
 and only one request claims the row. The loser's tracked copy was read before that claim and still shows the
 row live, so it re-reads the row untracked, as the database holds it now (`AuthSessionIssuer.cs:427-429`),
 and branches the way the lookup path does. A row that a sign-out or a cap eviction reached first fails that
@@ -144,14 +146,16 @@ indistinguishable from a replay and gets the replay answer: the whole live famil
 **The expiry slides on every rotation.** Every session is stamped with its issue instant plus
 `RefreshTokenLifetime`, both when one is opened (`AuthSessionIssuer.cs:364`) and when a successor is minted
 (`:407`). That property reads `TokenService.RefreshTokenLifetime` (`TokenService.cs:165`), derived from
-`JwtSettings.RefreshTokenExpirationDays` (`JwtSettings.cs:64`, default 7 days). A device that refreshes at
+`JwtSettings.RefreshTokenExpirationDays` (`JwtSettings.cs:73`, default 7 days). A device that refreshes at
 least once inside each window stays signed in indefinitely; re-authentication is required only after a full
-lifetime passes with no successful refresh, or after a revocation. If the configured value is non-positive,
-the issuer falls back to the seven-day BR-205 default rather than failing startup
-(`AuthSessionIssuer.cs:60-61`). It holds a fifteen-minute fallback for the access token too (`:57-58`), but
-that one sets only the expiry the response reports (`:88`, `:124`): the JWT's own `exp` is stamped from the
-raw `AccessTokenExpirationMinutes` (`TokenService.cs:148`), which `JwtSettings.Validate` does not range-check
-(`JwtSettings.cs:70-85`).
+lifetime passes with no successful refresh, or after a revocation. Both configured lifetimes must be at
+least 1 (`[Range(1, int.MaxValue)]`, `JwtSettings.cs:65,72`), and `AddCommonAuthentication` binds the
+settings with `ValidateDataAnnotations().ValidateOnStart()`
+(`MMCA.Common.API/Startup/WebApplicationBuilderExtensions.Authentication.cs:135-138`), so a zero or
+negative value fails host startup rather than every sign-in. The issuer still guards itself against an
+`ITokenService` that reports a non-positive lifetime: it falls back to the seven-day BR-205 default for the
+refresh side (`AuthSessionIssuer.cs:60-61`) and to fifteen minutes for the access side (`:57-58`), and that
+second fallback sets only the expiry the response reports (`:88`, `:124`), never the JWT's own `exp`.
 
 **A per-user cap bounds the family.** `RefreshSessionSettings.MaxActiveSessionsPerUser` binds
 `RefreshSessions:MaxActiveSessionsPerUser`, default 10, range 1-1000 (`RefreshSessionSettings.cs:34-35`),
@@ -161,7 +165,7 @@ sign-in (`EnforceSessionCapAsync` at `AuthSessionIssuer.cs:512`, eviction loop `
 `ReasonSessionCap` at `RefreshSession.cs:67`). Expired-but-unrevoked rows authenticate nobody and do not
 count against the cap; they age out with the framework's retention sweep, `RefreshSessionCleanupService`
 over the `RefreshSessions:RetentionDays` window (default 30, `RefreshSessionSettings.cs:71-72`), which the
-host runs once `RefreshSessions:Enabled` is set (`DependencyInjection.cs:182-186`).
+host runs once `RefreshSessions:Enabled` is set (`DependencyInjection.cs:186-190`).
 
 **Explicit revocation names one device or takes them all.** `RevokeTokenAsync`
 (`AuthenticationServiceBase.cs:378`) hands an optional refresh token to `SignOutAsync`
@@ -298,13 +302,15 @@ This model is a deliberate set of choices, and ADR-097 names the edges rather th
   stays signed in indefinitely. The per-user cap bounds how many devices, and the retention sweep bounds how
   long a dead row lingers, but neither ends a chain that keeps refreshing. An absolute cap on session age is
   deliberately not imposed.
-- **A non-positive configured lifetime falls back silently.** A zero or negative `RefreshTokenExpirationDays`
-  is treated as absent and reverts to the seven-day baseline rather than failing startup
-  (`AuthSessionIssuer.cs:60-61`); a test double that leaves `ITokenService.RefreshTokenLifetime` alone lands
-  on the same seven days through the interface default (`ITokenService.cs:40`). A misconfiguration quietly
-  reverts to the default instead of surfacing an error. The access-token side is looser still: its
-  fifteen-minute fallback (`AuthSessionIssuer.cs:57-58`) reaches only the expiry the response reports, not
-  the token, whose `exp` comes from the raw configured value (`TokenService.cs:148`).
+- **A lifetime fallback survives below configuration.** A zero or negative configured lifetime never gets
+  that far: both `Jwt` lifetimes carry `[Range(1, int.MaxValue)]` (`JwtSettings.cs:65,72`) and validate at
+  startup (`WebApplicationBuilderExtensions.Authentication.cs:135-138`), so the host refuses to boot. What
+  remains sits behind `ITokenService`: a token service other than the framework's (a test double, a custom
+  implementation) that leaves `RefreshTokenLifetime` alone lands on seven days through the interface default
+  (`ITokenService.cs:40`, `AccessTokenLifetime` fifteen minutes at `:33`), and one that reports a
+  non-positive value is quietly treated as seven days by the issuer (`AuthSessionIssuer.cs:60-61`) instead
+  of surfacing an error. Its fifteen-minute access-side fallback (`:57-58`) reaches only the expiry the
+  response reports, not the token, whose `exp` is whatever that token service stamps.
 
 None of these are reasons to skip rotation. They are the reasons to wire it knowing what it does and does not
 promise.
@@ -345,7 +351,8 @@ story, how MMCA.Common splits who-is-signed-in from what-they-are-handed and kee
 is the reuse signal that revokes a user's whole live family once a short race grace has passed (inside it the
 answer is a retryable 409) while a signed-out, cap-evicted or expired one fails alone, and the honest
 trade-offs (a growing table, aggressive reuse detection softened by a grace a thief can also use, a
-server-side write per refresh, no absolute session-age cap, a silent lifetime fallback) that come with
+server-side write per refresh, no absolute session-age cap, a lifetime fallback only a custom token service
+reaches) that come with
 choosing to fail closed past the grace.
 
 **Next in the series:** the write-once REST surface every entity inherits: generic entity controllers that
@@ -358,33 +365,33 @@ pattern, or `dotnet add package MMCA.Common.Application` and try it.*
 
 *Tags: .NET, C Sharp, Software Architecture, Authentication, Security*
 
-*Notes (evidence refresh, 2026-10-08, MMCA.Common v1.233.0; ADC and Store pin 1.233.0): every named type,
-anchor and number re-read from source this run. Changes recorded here, not in the body: a reuse grace window
-exists. `RefreshSessionSettings.ReuseGraceSeconds` [Range(0,300)] = 10
-(`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/RefreshSessionSettings.cs:97-98`, doc :83-96,
-security trade-off :90-94); a row revoked as `Rotated` less than the grace ago answers 409
-`Auth.RefreshSuperseded` and revokes nothing (`AuthSessionIssuer.cs` resolve branch :328-333,
-`IsWithinRotationGrace` :479-487, `RefreshSupersededError` :278-282). The lost rotation claim no longer always
-revokes the family: it re-reads the row untracked (:427-429) and fails alone on a signed-out or cap-evicted
-row (:430-436), answers 409 inside the grace (:438-441), and revokes the family only past the grace, for a
-reuse-flagged row, or for an unreadable row (:443-450). `InvalidRefreshTokenError` (:267-271) is shared by
-every failing branch except that race. Reworked for this: the "no grace period" sentence, "One error, four
-consequences" (now "Five outcomes, two answers"), the simultaneous-replay paragraph, the code block, the
-aggressive-reuse trade-off, the lifetime-fallback sentence and trade-off (the interface default is
-`TimeSpan.FromDays(7)` at `ITokenService.cs:40`, `AccessTokenLifetime` 15 min at :33, not `TimeSpan.Zero`;
-the 15-minute issuer fallback :57-58 feeds only the reported expiry :88/:124, while `exp` is stamped from the
-raw setting at `TokenService.cs:148` and `JwtSettings.Validate` :70-85 has no range check), apply item 5, the
-takeaway and "What we covered". Governing record: ADR-097, Accepted 2026-08-26, revised 2026-08-27,
-2026-09-01, 2026-09-07, 2026-10-01 (:20), 2026-10-06 (:22, re-anchored on `AuthSessionIssuer`) and 2026-10-07
-(:25-29, grace adopted); its trade-off reads "still revokes a family on a benign race that outlasts the grace"
-(`Website/docs-src/adr/097-multi-device-refresh-sessions.md:433-444`, grace bullet :445-450). ADR-050
-superseded by it (`050-jwt-refresh-token-rotation.md:4`). The 2026-10-02 honest gap (ADR-097 citing base-class
-anchors and predating `IsReuseSignal`) is closed by the 2026-10-06 revision. Standing inventory, corrected in
-place: `AuthSessionIssuer` (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Sessions/AuthSessionIssuer.cs:41`,
+*Notes (evidence refresh, 2026-10-22, MMCA.Common v1.250.0; ADC and Store pin 1.250.0 at
+`MMCA.ADC/Directory.Packages.props:102` and `MMCA.Store/Directory.Packages.props:10`): every named type,
+anchor and number re-read from source this run. Changes recorded here, not in the body: both `Jwt`
+lifetimes carry `[Range(1, int.MaxValue)]`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/JwtSettings.cs:65` access, `:72` refresh, docs
+:60-64 and :68-71) and `AddCommonAuthentication` binds `JwtSettings` with
+`ValidateDataAnnotations().ValidateOnStart()`
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.Authentication.cs:135-138`),
+so a non-positive configured lifetime fails startup. Reworked for this: the lifetime-fallback sentences
+under "The expiry slides", the fallback trade-off bullet and "What we covered", which now say the issuer
+fallbacks (:57-58, :60-61) are reached only through an `ITokenService` reporting a non-positive lifetime.
+A fifth revocation reason, `ReasonAccountDeleted` = "AccountDeleted" (`RefreshSession.cs:70`, written on
+account erasure by `MMCA.Common.Application/Auth/RefreshSessionRevocation.cs:86`, doc :58-61), shifted
+every `RefreshSession` member below it by +3 and counts as reuse through the conservative return of
+`IsReuseSignal`; the five-outcomes paragraph names it. `EFRefreshSessionStore` gained members above
+`TryRotateAsync` (now :174). Governing record: ADR-097, Accepted 2026-08-26, revised 2026-08-27,
+2026-09-01, 2026-09-07, 2026-10-01 (:20), 2026-10-06 (:22, re-anchored on `AuthSessionIssuer`),
+2026-10-07 (:25-29, grace adopted) and 2026-10-21 (:30-34, `AccountDeleted` erasure, password-reset
+ordering, administrator sessions view, anchors after 1.250.0); its reason paragraph says "`AccountDeleted`
+included" (`Website/docs-src/adr/097-multi-device-refresh-sessions.md:122-124`) and its trade-off reads
+"still revokes a family on a benign race that outlasts the grace" (:449-460, grace bullet :461-466).
+ADR-050 superseded by it (`050-jwt-refresh-token-rotation.md:4`). Standing inventory, corrected in place:
+`AuthSessionIssuer` (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Sessions/AuthSessionIssuer.cs:41`,
 598 lines; class doc device :17-18, cap :27-28) behind `IAuthSessionIssuer` (`Auth/Sessions/IAuthSessionIssuer.cs:26`;
 `TokenService` :34, `IssueAsync` :46, `RotateAsync` :70, `SignOutAsync` :97, `SignOutEverywhereAsync` :103),
 registered `TryAddScoped` at `MMCA.Common.Infrastructure/DependencyInjection.cs:176`; the base
-(`AuthenticationServiceBase.cs:64`, 635 lines) delegates, class doc :41-44. Base anchors: `LoginAsync` :123
+(`AuthenticationServiceBase.cs:64`, 641 lines) delegates, class doc :41-44. Base anchors: `LoginAsync` :123
 (issue :212), `RegisterAsync` :221 (issue :305), `RefreshTokenAsync` :309 (`GetPrincipalFromExpiredToken`
 :323, null principal :324-328, `GetUserId` :333, user load :340, `mfa` carry :353-358, `RotateAsync` call
 :363), `RevokeTokenAsync` :378 (`SignOutAsync` :389), `RevokeAllSessionsAsync` :395, `GetSessionsAsync` :412,
@@ -393,41 +400,50 @@ Issuer anchors: lifetime fallbacks :57-58 (15 min) and :60-61 (7 days); `IssueAs
 response :85-88); `RotateAsync` :92 (resolve :103, rotate :111, new `sid` :118-124); `SignOutAsync` :150
 (single device :164-171, degrade :174); `SignOutEverywhereAsync` :179; `ListActiveAsync` :193;
 `RevokeSessionAsync` :231 (NotFound :236-244; an already-revoked session answers NotFound
-`Auth.SessionAlreadyRevoked` and writes nothing, :246-253); `ResolveRotatableSessionAsync` :298 (blank
-:304-307, lookup :309-311, unknown or wrong user :313-316, revoked :318, non-reuse fail-alone :320-326, grace
-409 :328-333, family revoke :335-339, expired :342-344); `OpenSessionAsync` :352 (generate :359, expiry :364,
-cap :374, staged insert :375); `RotateSessionAsync` :394 (successor :402-409, expiry :407, `TryRotateAsync`
-:417-419, lost claim :421-451); `IsReuseSignal` :462-470 (doc :456-461, conservative return :469);
+`Auth.SessionAlreadyRevoked` and writes nothing, :246-253); `InvalidRefreshTokenError` :267-271,
+`RefreshSupersededError` :278-282; `ResolveRotatableSessionAsync` :298 (blank :304-307, lookup :309-311,
+unknown or wrong user :313-316, revoked :318, non-reuse fail-alone :320-326, grace 409 :328-333, family
+revoke :335-339, expired :342-344); `OpenSessionAsync` :352 (generate :359, expiry :364, cap :374, staged
+insert :375); `RotateSessionAsync` :394 (successor :402-409, expiry :407, `TryRotateAsync` :417-419, lost
+claim :421-451, untracked re-read :427-429, fail alone :430-436, 409 :438-441, family revoke :443-450);
+`IsReuseSignal` :462-470 (doc :456-461, conservative return :469); `IsWithinRotationGrace` :479-487;
 `RevokeLiveSessionsAsync` :490; `EnforceSessionCapAsync` :512 (cap read :514, loop :521-524);
 `SessionStampingTokenService` :544 (`sid` :576-581, `mfa` :583-586). Store claim:
-`MMCA.Common.Infrastructure/Persistence/Auth/EFRefreshSessionStore.cs:121` (conditional update predicate :138,
-`RevokedAt`/`ReasonRotated`/`ReplacedByTokenHash` :141-143). Session record:
-`MMCA.Common.Domain/Auth/RefreshSession.cs:43` (sealed class documented as a flat record; `IAnonymizable`,
-`[Pii]` `IpAddress` :101-102, `UserAgent` :108-109), `TokenHashLength` 64 :45-46, reasons `ReasonRotated` :58,
-`ReasonSignedOut` :61, `ReasonReuseDetected` :64, `ReasonSessionCap` = "SessionCapExceeded" :67, fields
-`UserId` :73, `TokenHash` :76, `CreatedAt` :79, `ExpiresAt` :82, `RevokedAt` :85, `ReplacedByTokenHash` :91,
-`ReasonRevoked` :94, `IsActiveAt` :116, `Create` :129, `HashToken` (SHA-256 over UTF-8, upper-case hex)
-:177-181, `Revoke` :191. The 2026-10-02 source-comment drift is resolved: `RefreshSession.cs:27-32` now says a
-row is deleted only by the retention sweep once revoked or expired past the window. Settings:
-`MMCA.Common.Application/Auth/RefreshSessionSettings.cs` `MaxActiveSessionsPerUser` [Range(1,1000)] = 10
-:34-35, `RetentionDays` = 30 :71-72 (hard-delete doc :54-58, reuse-bound doc :60-66), `ReuseGraceSeconds`
-:97-98; options bound and `ValidateOnStart` at `DependencyInjection.cs:168-171`; `RefreshSessionCleanupService`
-registered only when `RefreshSessions:Enabled` :182-186. Tokens: `MMCA.Common.Infrastructure/Auth/TokenService.cs`
-`GenerateAccessToken` :101, `sub` only :110-116, `exp` :148, `GenerateRefreshToken` :155 (64 bytes :157,
-base64 :158), `RefreshTokenLifetime` :165, `GetPrincipalFromExpiredToken` :174 (issuer :178, audience :179,
-key :180, lifetime off :182, `ValidAlgorithms` :187, header alg re-check :196-197); `JwtSettings.cs` 15 min
-:61, 7 days :64, `Validate` :70-85; `ITokenService.cs` `GenerateRefreshToken` :26, interface defaults
-`AccessTokenLifetime` 15 min :33 and `RefreshTokenLifetime` 7 days :40; `MMCA.Common.Domain/Auth/IAuthUser.cs:9-14,20,23`
-unchanged. Subclasses: ADC `MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:50`
-(`IAuthSessionIssuer` :56, base :59, configuration doc :44-47, `ExternalLoginAsync` :214,
-`ExternalLoginCoreAsync` :226, `IssueTokensAsync` :338, `speaker_id` :406); Store
-`MMCA.Store.Identity.Application/Users/AuthenticationService.cs:26` (`IAuthSessionIssuer` :31, base :33,
-`customer_id` builder :184-187, claim :186). Numbers: 15 min, 7 days, 64 bytes, 64-char hash, cap 10, range
-1-1000, retention 30 days unchanged; added: reuse grace 10 seconds, range 0-300; outcomes five (four share
-`Auth.InvalidRefreshToken`, one answers 409 `Auth.RefreshSuperseded`). The code block is illustrative of the
-shape, condensed from `ResolveRotatableSessionAsync` (:304-344), `IsReuseSignal` (:462-470),
-`IsWithinRotationGrace` (:479-487) and `RotateSessionAsync` (:402-450); it is not byte-for-byte. Prior pass
-2026-10-02 at v1.221.0 moved the session logic from `AuthenticationServiceBase.cs` into `AuthSessionIssuer`
-and introduced the `IsReuseSignal` split. Prose verified free of em dashes and the banned boundary-noun.*
+`MMCA.Common.Infrastructure/Persistence/Auth/EFRefreshSessionStore.cs:174` (inside
+`ExecuteInTransactionAsync` :187, conditional update predicate :191,
+`RevokedAt`/`ReasonRotated`/`ReplacedByTokenHash` :194-196). Session record:
+`MMCA.Common.Domain/Auth/RefreshSession.cs:43` (sealed class documented as a flat record, doc :27-32;
+`IAnonymizable`, `[Pii]` `IpAddress` :104-105, `UserAgent` :111-112, `Anonymize` :217), `TokenHashLength` 64
+:45-46, reasons `ReasonRotated` :58, `ReasonSignedOut` :61, `ReasonReuseDetected` :64, `ReasonSessionCap` =
+"SessionCapExceeded" :67, `ReasonAccountDeleted` :70, fields `Id` :73, `UserId` :76, `TokenHash` :79,
+`CreatedAt` :82, `ExpiresAt` :85, `RevokedAt` :88, `ReplacedByTokenHash` :94, `ReasonRevoked` :97,
+`IsActiveAt` :119, `Create` :132, `HashToken` (SHA-256 over UTF-8, upper-case hex) :180-184, `Revoke` :194.
+Settings: `MMCA.Common.Application/Auth/RefreshSessionSettings.cs` `MaxActiveSessionsPerUser`
+[Range(1,1000)] = 10 :34-35, `RetentionDays` = 30 :71-72 (hard-delete doc :54-58, reuse-bound doc :60-66),
+`ReuseGraceSeconds` [Range(0,300)] = 10 :97-98 (doc :83-96, security trade-off :90-94); options bound and
+`ValidateOnStart` at `DependencyInjection.cs:168-171`; `RefreshSessionCleanupService` registered only when
+`RefreshSessions:Enabled` :186-190 (`AddHostedService` :189). Tokens:
+`MMCA.Common.Infrastructure/Auth/TokenService.cs` `GenerateAccessToken` :101, `sub` only :110-116, `exp`
+:148, `GenerateRefreshToken` :155 (64 bytes :157, base64 :158), `RefreshTokenLifetime` :165,
+`GetPrincipalFromExpiredToken` :174 (issuer :178, audience :179, key :180, lifetime off :182,
+`ValidAlgorithms` :187, header alg re-check :196-197); `JwtSettings.cs` 15 min :66, 7 days :73, `Validate`
+:79-94 (signing-key checks only; the lifetimes are range-checked by attribute);
+`MMCA.Common.Application/Interfaces/Infrastructure/Auth/ITokenService.cs` `GenerateRefreshToken` :26,
+interface defaults `AccessTokenLifetime` 15 min :33 and `RefreshTokenLifetime` 7 days :40;
+`MMCA.Common.Domain/Auth/IAuthUser.cs:9-14,20,23` unchanged. Subclasses: ADC
+`MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:50` (`IAuthSessionIssuer` :56, base :59,
+configuration doc :44-47, `ExternalLoginAsync` :214, `ExternalLoginCoreAsync` :226, `IssueTokensAsync`
+:338, `speaker_id` :406); Store `MMCA.Store.Identity.Application/Users/AuthenticationService.cs:26`
+(`IAuthSessionIssuer` :31, base :33, `customer_id` builder :184-187, claim :186). Numbers: 15 min, 7 days,
+64 bytes, 64-char hash, cap 10, range 1-1000, retention 30 days, reuse grace 10 seconds, range 0-300,
+outcomes five (four share `Auth.InvalidRefreshToken`, one answers 409 `Auth.RefreshSuperseded`) unchanged;
+added: lifetime range 1 to int.MaxValue on both `Jwt` lifetimes, revocation reasons five. The code block is
+illustrative of the shape, condensed from `ResolveRotatableSessionAsync` (:304-344), `IsReuseSignal`
+(:462-470), `IsWithinRotationGrace` (:479-487) and `RotateSessionAsync` (:402-450); it is not byte-for-byte.
+Prior passes: 2026-10-08 at v1.233.0 adopted the reuse grace window into the body ("Five outcomes, two
+answers", the simultaneous-refresh paragraph, the code block, the aggressive-reuse trade-off, apply item 5,
+the takeaway and "What we covered"); 2026-10-02 at v1.221.0 moved the session logic from
+`AuthenticationServiceBase.cs` into `AuthSessionIssuer` and introduced the `IsReuseSignal` split. Prose
+verified free of em dashes and the banned boundary-noun.*
 
 - Full series index: https://ivanball.github.io/writing.html

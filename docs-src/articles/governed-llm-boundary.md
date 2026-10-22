@@ -68,7 +68,7 @@ the trade-offs.
 ## The MMCA answer: four optional packages, and the call is a pipeline
 
 The AI boundary is four of the twenty-two published framework packages (`MMCA.Common/FACTS.md:19`), all
-at framework v1.233.0 (`:14`): `MMCA.Common.AI`, the governed pipeline (`:22`);
+at framework v1.250.0 (`:14`): `MMCA.Common.AI`, the governed pipeline (`:22`);
 `MMCA.Common.AI.Anthropic` and `MMCA.Common.AI.OpenAI`, provider adapters that each register one
 `IAiProviderFactory` (`:23`, `:24`); and `MMCA.Common.AI.Testing`, the replay and golden-evaluation
 harness (`:34`). All four are optional: nothing in the metapackage drags them in, and a host that never
@@ -275,7 +275,7 @@ the interface documentation says why (`IChatGuardrail.cs:9-14`). `AddPiiRedactio
 user-role content and redacts, blocks or ignores them per `InjectionMode` (`Redact` by default,
 `ContentPolicySettings.cs:35`), plus any request pattern the host adds and a response-side refusal on
 configured blocked patterns; one singleton serves as both a guardrail and a redactor (`ADR-120:40-47`).
-Those two ship because neither judgement varies by application (`ADR-120:380-384`). What counts as an
+Those two ship because neither judgement varies by application (`ADR-120:391-395`). What counts as an
 off-topic answer or a disallowed topic depends on the data the application holds and the jurisdiction it
 operates in, so a rule like that baked into a shared package would be wrong somewhere by construction.
 That policy stays with the feature that knows what its input is.
@@ -325,7 +325,7 @@ reads it back off the options a call carried, and `PromptTaggingChatClient`
 (`Chat/PromptTaggingChatClient.cs:21`) puts it on the `gen_ai` span (`DependencyInjection.cs:183`).
 
 `MMCA.Common.AI.Testing` turns that identity into two gates, and the framework runs both on its own
-reference contract (`ADR-120:273`). `PromptContractPinTestsBase` (`PromptContractPinTestsBase.cs:25`) pins
+reference contract (`ADR-120:284`). `PromptContractPinTestsBase` (`PromptContractPinTestsBase.cs:25`) pins
 every contract's hash in a JSON file, and its two facts fail on a contract with no recorded hash (`:39`)
 and on a recorded hash that no longer matches its contract (`:60`). `GoldenReplayTestsBase`
 (`GoldenReplayTestsBase.cs:24`) replays every case of a corpus through the real code against the answer
@@ -338,9 +338,9 @@ too (`:57-62`), because an evaluation that evaluates nothing passes forever.
 `AiUsageMeter` (`AiUsageMeter.cs:20`) publishes `mmca.ai.input_tokens` (`:29`) and
 `mmca.ai.output_tokens` (`:32`) on the meter `MMCA.Common.AI` (`:26`), plus a
 `mmca.ai.call.duration` histogram in seconds (`:45`). Every instrument shares four attribution
-dimensions, `model`, `prompt_name`, `prompt_version` and `provider` (`AttributionTags`, `:155-165`), and
-the histogram adds an `outcome` of `success`, `error` or `canceled` (`:48`, `:51`, `:54`, applied at
-`:137-149`).
+dimensions, `model`, `prompt_name`, `prompt_version` and `provider` (`AttributionTags`, `:158-168`), and
+the histogram adds an `outcome` of `success`, `error` or `canceled` (`:48`, `:51`, `:57`, applied at
+`:149` inside `RecordDuration`, `:140-152`).
 
 Those dimensions are chosen to answer the question an unexplained spend jump actually asks. A model swap
 moves the per-token price; a prompt revision moves the token count. Tagging by model and by prompt version
@@ -362,12 +362,15 @@ through `ChatClientMetadata`, with the configured name lowercased as the fallbac
 (`ResolveProviderName`, `:68-81`). The buffered path records duration on all three outcomes and then the
 usage (`:84-117`); the streaming path drives the enumerator by hand rather than with `await foreach`,
 because the duration has to be attributed to an outcome and C# forbids a `yield return` inside a `try`
-with a `catch` (`:129-131`), and it harvests usage from the `UsageContent` item the provider delivers on
-the stream (`RecordUsageIn`, `:179-190`).
+with a `catch` (`:134-136`), and it harvests usage from the `UsageContent` item the provider delivers on
+the stream (`RecordUsageIn`, `:185-196`). A streamed call counts as `canceled` until the stream is seen to
+end, so a consumer that stops reading early (a guardrail blocking an update, a caller breaking out of its
+loop) is never recorded as a success (`:128-132`).
 
-Two absences are deliberate. A usage the provider did not report records nothing (`AiUsageMeter.cs:108-123`):
-an absent number must not read as a zero on a spend dashboard. And the `Meter` itself is created through
-`IMeterFactory` and neither retained nor disposed (`:62-67`), because disposing a factory-owned meter
+Two absences are deliberate. A usage the provider did not report records nothing (`AiUsageMeter.cs:95-97`,
+enforced in `Record` at `:104-127`): an absent number must not read as a zero on a spend dashboard. And
+the `Meter` itself is created through `IMeterFactory` and neither retained nor disposed (`:65-70`),
+because disposing a factory-owned meter
 kills the instrument for every other holder of the same name.
 
 ## The layering rule that keeps all of this at one place
@@ -389,9 +392,9 @@ The second rule is the interesting one, and the class documentation explains the
 evaluated, capped or swapped.
 
 It ships the way every shared rule in this framework ships: as an abstract base subclassed in each repo's
-architecture tests with that repo's architecture map (`:14-17`), one of 153 fitness test methods across 61
-abstract `*TestsBase` classes, of which MMCA.Common's own build executes 410 (`MMCA.Common/FACTS.md:51`,
-`:54`). A prompt or a bound must not become a type your domain depends on, and that sentence is a failing
+architecture tests with that repo's architecture map (`:14-17`), one of 159 fitness test methods across 63
+abstract `*TestsBase` classes, of which MMCA.Common's own build executes 458 (`MMCA.Common/FACTS.md:81`,
+`:84`). A prompt or a bound must not become a type your domain depends on, and that sentence is a failing
 test rather than a code review comment.
 
 ## Trade-offs, honestly
@@ -404,18 +407,18 @@ test rather than a code review comment.
   startup failure. It does not make "the right guardrail" one.
 - **Retrieval is unexercised, on purpose.** Nothing in the package addresses vector or hybrid search,
   embedding freshness or retrieved-content injection, and ADR-120 leaves the rubric's retrieval
-  criterion to the feature that builds one, if one ever is (`ADR-120:402-405`). The scorecard reads it as
+  criterion to the feature that builds one, if one ever is (`ADR-120:413-416`). The scorecard reads it as
   unexercised rather than unmet because the criterion is worded conditionally on such a store existing
   (`common-ArchitectureScorecard.md:80`).
 - **The framework ships the evaluation harness, not the evaluation.** The replay client, the golden base,
   the pin base and the protocol are framework code; the corpus, the assertions and any live-judge tier
   remain the feature's, because only the feature knows what a good answer is. The framework's own
-  reference contract proves the bases work, not that any product prompt is good (`ADR-120:398-401`). The
+  reference contract proves the bases work, not that any product prompt is good (`ADR-120:409-412`). The
   package governs the call. It does not make your feature evaluable for you.
 - **The package governs the call and only the narrowest part of the content.** Contact-detail redaction
   and a small injection-marker list ship; delimiting untrusted input, escaping it, constraining the
   response schema and any domain-specific check stay in the feature that knows what its input is
-  (`ADR-120:380-392`). The marker list is eight phrases on purpose, so ordinary prose about instructions
+  (`ADR-120:391-403`). The marker list is eight phrases on purpose, so ordinary prose about instructions
   survives it, which also means it catches the common phrasings rather than every phrasing.
 - **Least-privilege tool calling is framework mechanism, not framework policy.** With `Ai:AllowTools`
   true, a tool reaches the model only when every `IChatToolPolicy` allows it and, if consequential, the
@@ -425,22 +428,22 @@ test rather than a code review comment.
   policy.
 - **Two defaults can refuse a host at startup.** `Ai:RequireGuardrail` true and `Ai:AllowTools` with no
   policy are both registration-time failures, and the model pin turns a `PromptContract` that disagrees
-  with `Ai:Model` into a refused call (`ADR-120:368-371`). That is the intended direction, and it means
+  with `Ai:Model` into a refused call (`ADR-120:379-382`). That is the intended direction, and it means
   adopting the package is more than one line of registration.
 - **Off by absence puts a null on the consumer.** Nothing is registered when `Ai:Enabled` is false
   (`DependencyInjection.cs:128-132`), so a feature resolves with `GetService` and holds a nullable
   dependency. That is a branch in your code, written once per feature, that the framework will not write
-  for you (`ADR-120:351-356`).
+  for you (`ADR-120:362-367`).
 - **A cache hit still records usage.** `UsageRecordingChatClient` sits inside the optional response cache
   (`DependencyInjection.cs:36-39`), so a hit counts what the call would have cost rather than what was
   billed. The provider span is absent on a hit, so the two are distinguishable, but a spend graph read
-  without that context over-reports (`ADR-120:376-379`).
+  without that context over-reports (`ADR-120:387-390`).
 - **The input budget is an estimate and says so.** Message text plus instructions only, four characters
   to the token, everything else under-counted (`BoundedChatClient.cs:51-58`). Treat it as a runaway
   guardrail with headroom. The authoritative numbers arrive after the call.
 - **A provider is two references and a name.** A host adds an adapter package beside the governed one,
   calls its registration method and names it in `Ai:Provider`; the governed package cannot fall back to a
-  provider it was never handed (`ADR-120:357-361`). Two adapters ship (`MMCA.Common/FACTS.md:23`, `:24`),
+  provider it was never handed (`ADR-120:368-372`). Two adapters ship (`MMCA.Common/FACTS.md:23`, `:24`),
   anything else implements `IAiProviderFactory` or goes through the factory overload
   (`DependencyInjection.cs:113`), and a misnamed provider is a boot failure naming the registered ones
   (`AiProviderValidator.cs:34`).
@@ -454,7 +457,7 @@ test rather than a code review comment.
   name (`:173-174`). Its organizer-facing session scoring (`SessionScoringService.cs:47`) is the one
   product feature in these repos that calls a model. MMCA.Store adopts none of it: §16 is N/A there
   because no product feature calls a model (`store-ArchitectureScorecard.md:57`). The rules are proven by
-  exactly one consumer (`ADR-120:406-408`).
+  exactly one consumer (`ADR-120:417-419`).
 
 ## Apply this even without MMCA
 
@@ -529,8 +532,21 @@ Article 51, "Four ways to do work later: channels, cron, the outbox and durable 
 
 *Tags: .NET, C Sharp, AI, LLM, Software Architecture*
 
-*Notes: 2026-10-08 refresh (MMCA.Common v1.233.0, `MMCA.Common/FACTS.md:14`, as of 2026-10-07 at `:4`),
-audit verdict Needs-edit. Changed this run: every `BoundedChatClient` anchor moved (the file gained
+*Notes: 2026-10-22 refresh, re-verified 2026-10-22 against MMCA.Common v1.250.0 (`MMCA.Common/FACTS.md:14`,
+as of 2026-10-21 at `:4`), audit verdict Needs-edit. Changed this run: the framework version (v1.250.0);
+the fitness numbers are 159 methods across 63 bases with 458 executed (`FACTS.md:81`, `:84`); every
+ADR-120 anchor is re-located (the record grew to 538 lines: decision 10 `:284`, every trade-off
+`:362-419`, the `Program.cs` consequences `:434-435`); ADR-111 decision 8 moved to `:245`; the
+`AiUsageMeter` anchors moved (`CanceledOutcome` `:57`, do-not-dispose remark `:65-70`, absent-usage
+summary `:95-97` with `Record` `:104-127`, `RecordDuration` `:140-152`, `AttributionTags` `:158-168`);
+the `UsageRecordingChatClient` anchors moved (hand-driven-enumerator comment `:134-136`, `RecordUsageIn`
+`:185-196`), and the metering section names the canceled-until-the-stream-ends outcome (`:128-132`).
+Re-read 2026-10-22: every anchor listed below, in `MMCA.Common.AI`, both adapters, both
+`MMCA.Common.AI.Testing` bases, `AiDependencyIsolationTestsBase.cs`, the ADC csproj, `Program.cs`,
+`DependencyInjection.cs` and `SessionScoringService.cs` lines, the section 16 rubric rows,
+`common-ArchitectureScorecard.md:80`, `:104`, `store-ArchitectureScorecard.md:57`,
+`00-group-taxonomy.md:82`, ADR-120 and ADR-111 `:4`, `:245`; anchors not listed as moved were confirmed
+unchanged. Earlier entry, 2026-10-08 (MMCA.Common v1.233.0): every `BoundedChatClient` anchor moved (the file gained
 `CanHonorToolMode` at `:181-191`), and the tool-use bound now names that tool-mode fallback; the second
 code block follows the current `Bound` (the `CanHonorToolMode` check at `:209-212`, the `setting` string
 in both exception messages); the ADC host anchors moved to `Program.cs:141`, `:152`, `:154`, `:173-174`
@@ -553,9 +569,9 @@ met, one partial, one unexercised), the package framing (one package to four), t
 L0-L3 to 32 types L0-L10), the bound count (four to five), the guardrail section (shipped policies,
 redactors, streamed-update inspection, the `RequireGuardrail` refusal), the tool-governance and provider
 trade-offs, and added the AI.Testing pin and golden-replay gates. Source drift noted, not edited:
-`BoundedChatClient.cs:13` still says "Four bounds" above a five-item list (`:16-50`). The earlier
-`ADR-120` `Program.cs` mismatch is resolved: its Consequences now cite `:141`, `:152`, `:154`
-(`ADR-120:423-424`), matching source.*
+`BoundedChatClient.cs:13` still says "Four bounds" above a five-item list (`:16-50`), re-confirmed
+2026-10-22. ADR-120's Consequences cite `Program.cs` `:141`, `:152`, `:154` (`ADR-120:434-435`),
+matching source.*
 - *Package source, paths rooted at `MMCA.Common/Source/Core/MMCA.Common.AI/`:*
   - *`AiSettings.cs`: `AiSettings : IValidatableObject` `:22`, `SectionName` `"Ai"` `:25`,
     `DefaultMaxOutputTokens` 1024 `:28`, `DefaultTimeout` 30 seconds `:31`, `MaxTimeout` one hour `:38`,
@@ -581,7 +597,7 @@ trade-offs, and added the AI.Testing pin and golden-replay gates. Source drift n
     `MMCA.Common.AI.Anthropic/AnthropicAiProviderFactory.cs:14` with
     `new AnthropicClient(options).AsIChatClient(...)` `:48`; `MMCA.Common.AI.OpenAI/DependencyInjection.cs:26`
     (`AddOpenAiProvider`), `MMCA.Common.AI.OpenAI/OpenAiProviderFactory.cs:18` with `.AsIChatClient()` `:51`.*
-  - *`Chat/BoundedChatClient.cs` (re-read 2026-10-08): five-bound list `:16-50` (tool policy `:28-38`,
+  - *`Chat/BoundedChatClient.cs` (re-read 2026-10-22): five-bound list `:16-50` (tool policy `:28-38`,
     model pin `:43-49`), estimate caveat `:51-58`, no-mutation remark `:59-63`, class `:65`, eager
     bound/budget `:124-130`, `StreamBoundedAsync` `:133-146` (whole-stream comment `:140-141`),
     four-characters fallback `(text.Length + 3) / 4` `:178` (comment `:175-177`), `CanHonorToolMode`
@@ -606,16 +622,18 @@ trade-offs, and added the AI.Testing pin and golden-replay gates. Source drift n
     `Block` `:39-44`. `Chat/ChatGuardrailException.cs`: class `:12`, rationale `:7-11`.
     `Chat/IAiTokenEstimator.cs`: interface `:14`, no-second-dependency rationale `:9-12`.
     `Chat/PromptTaggingChatClient.cs:21`.*
-  - *`PromptContract.cs` (unchanged anchors, confirmed by this run's audit): record `:23`, property keys
+  - *`PromptContract.cs` (re-read 2026-10-22, anchors unchanged): record `:23`, property keys
     `:26`, `:29`, `:32`, `Hash` `:46` with the do-not-cache remark `:40-45`, `ToChatOptions` `:53`, `Apply`
     `:62`, `ReadName` `:77`, `ReadVersion` `:82`, hash and normalization `:90-103`.*
-  - *`Observability/AiUsageMeter.cs` (unchanged anchors, confirmed by this run's audit): class `:20`,
+  - *`Observability/AiUsageMeter.cs` (re-read 2026-10-22, anchors re-located): class `:20`,
     `MeterName` `:26`, counters `:29`, `:32`, histogram `:45` with remark `:36-43`, outcomes `:48`, `:51`,
-    `:54`, do-not-dispose remark `:62-67`, absent usage records nothing `:108-123`, `RecordDuration`
-    `:137-149`, `AttributionTags` `:155-165`.*
-  - *`Chat/UsageRecordingChatClient.cs`: bound-before/cost-after rationale `:13-15`, class `:38`,
+    `:57` (canceled summary `:53-56`), do-not-dispose remark `:65-70`, absent usage records nothing
+    `:95-97` (`Record` `:104-127`, null return `:111-114`), `RecordDuration` `:140-152` (outcome tag
+    `:149`), `AttributionTags` `:158-168`.*
+  - *`Chat/UsageRecordingChatClient.cs` (re-read 2026-10-22): bound-before/cost-after rationale `:13-15`, class `:38`,
     `ResolveProviderName` from `ChatClientMetadata` with lowercased config fallback `:68-81`, buffered path
-    `:84-117`, hand-driven-enumerator comment `:129-131`, `RecordUsageIn` over `UsageContent` `:179-190`.*
+    `:84-117`, canceled-until-the-stream-ends comment `:128-132`, hand-driven-enumerator comment `:134-136`,
+    `RecordUsageIn` over `UsageContent` `:185-196`.*
 - *Evaluation harness, `MMCA.Common/Source/Hosting/MMCA.Common.AI.Testing/`: `GoldenReplayTestsBase.cs`
   (offline replay summary `:7-9`, collected failures `:18-20`, class `:24`, `EveryGoldenCase_ReplaysAsRecorded`
   `:43`, empty-corpus failure `:57-62`); `PromptContractPinTestsBase.cs` (protocol summary `:8-23`, class
@@ -625,33 +643,33 @@ trade-offs, and added the AI.Testing pin and golden-replay gates. Source drift n
   two-ways-it-leaks documentation `:6-13`, subclass-per-repo instruction `:14-17`, class `:19`,
   `LanguageModelSdks_ShouldStayAt_TheModelBoundary` `:24-25`,
   `GovernedAiPackage_ShouldStayBehind_Infrastructure` `:28-29`.*
-- *ADR-120 (`Website/docs-src/adr/120-governed-chat-client-boundary.md`, 502 lines, re-located
-  2026-10-08): Accepted 2026-09-11 `:4`, revisions `:8`, `:12`, the AI.Testing harness and prompt tagging
-  `:34-38`, the v1.208.0 `ContentPolicyGuardrail` revision `:40-47`; decision 10 (evaluation harness is
-  framework code) `:273`; trade-offs cited here: off-by-absence `:351-356`, provider is two references
-  and a name `:357-361`, two defaults can refuse a host `:368-371`, cache-hit usage `:376-379`, two narrow
-  content policies `:380-392`, streamed fragments `:393-397`, harness not evaluation `:398-401`, retrieval
-  out of scope `:402-405`, one consumer `:406-408`; consequences: ADC adoption `:420-428`, ADC §16 at
-  M4/I10 `:431-436`.*
+- *ADR-120 (`Website/docs-src/adr/120-governed-chat-client-boundary.md`, 538 lines, re-located
+  2026-10-22): Accepted 2026-09-11 `:4`, revisions `:8`, `:12`, the AI.Testing harness and prompt tagging
+  `:34-38`, the v1.208.0 `ContentPolicyGuardrail` revision `:40-47`; decision 9 (prompt contract) `:273`, decision 10 (evaluation harness is
+  framework code) `:284`; trade-offs cited here: off-by-absence `:362-367`, provider is two references
+  and a name `:368-372`, two defaults can refuse a host `:379-382`, cache-hit usage `:387-390`, two narrow
+  content policies `:391-403` (neither varies by application `:393-395`), streamed fragments `:404-408`,
+  harness not evaluation `:409-412`, retrieval out of scope `:413-416`, one consumer `:417-419`;
+  consequences: ADC adoption `:431-439` (`Program.cs` cites `:434-435`), ADC §16 at M4/I10 `:442-447`.*
 - *ADR-111 (`Website/docs-src/adr/111-ai-session-scoring-governance.md`), Accepted 2026-09-04 and
   **extended, not superseded**, by ADR-120 `:4`: the scoring-specific rules, the prompt-change protocol,
   the two evaluation tiers, the input and output guardrails and the budgeted ceiling alert stay with the
   feature. Its decision 8 (the framework meters the tokens, a budgeted ceiling alert watches the total)
-  is at `:226`.*
+  is at `:245` (re-read 2026-10-22).*
 - *Rubric: §16 heading (`Website/docs-src/governance/ArchitectureEvaluationCriteria.md:469`), intent
   `:471`, applicability `:473`, the seven criteria `:476-482` (least-privilege tool calling `:480`,
-  retrieval `:481`), red flags `:485-489`, default weight 2 `:491` (anchors confirmed by this run's audit).*
+  retrieval `:481`), red flags `:485-489`, default weight 2 `:491` (re-read 2026-10-22).*
 - *Scorecards: MMCA.Common §16 at weight 2, Maturity 4 / Implementation 9, 8/18, five met, one partial
   (guardrails), one unexercised (retrieval), held at I9 by three guardrail residuals
   (`Website/docs-src/governance/common-ArchitectureScorecard.md:80`); no N/A rows, 34 rows, weight total 82
   (`:104`). MMCA.Store §16 N/A, no product feature calls a model (`store-ArchitectureScorecard.md:57`).*
-- *Numbers: framework v1.233.0 (`MMCA.Common/FACTS.md:14`, dated 2026-10-07 at `:4`), twenty-two
+- *Numbers: framework v1.250.0 (`MMCA.Common/FACTS.md:14`, dated 2026-10-21 at `:4`), twenty-two
   published packages (`:19`) with `MMCA.Common.AI` `:22`, `MMCA.Common.AI.Anthropic` `:23`,
-  `MMCA.Common.AI.OpenAI` `:24` and `MMCA.Common.AI.Testing` `:34`; 153 fitness test methods across 61
-  abstract bases (`:51`), MMCA.Common's own build executing 410 (`:54`). Group G28 Common AI Integration,
+  `MMCA.Common.AI.OpenAI` `:24` and `MMCA.Common.AI.Testing` `:34`; 159 fitness test methods across 63
+  abstract bases (`:81`), MMCA.Common's own build executing 458 (`:84`). Group G28 Common AI Integration,
   32 types, levels L0-L10 (`Website/docs-src/onboarding/00-group-taxonomy.md:82`, chapter
   `Website/docs-src/onboarding/group-27-common-ai-integration.md`).*
-- *Consumer adoption, re-read 2026-10-08:
+- *Consumer adoption, re-read 2026-10-22:
   `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/MMCA.ADC.Conference.Infrastructure.csproj:19`
   takes `MMCA.Common.AI`; `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/MMCA.ADC.Conference.Service.csproj`
   takes `MMCA.Common.AI` `:31` and `MMCA.Common.AI.Anthropic` `:34`; the host's `Program.cs` section comment
