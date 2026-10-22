@@ -381,8 +381,11 @@ Working file for `/update-medium` (underscore-prefixed, so the site build skips 
 > section of **Article 16**, which had still described it as an open backlog lever; ADR-007 joins that
 > article's matrix cell. Group cells keep the taxonomy IDs of
 > `Website/docs-src/onboarding/00-group-taxonomy.md` (which differ from the chapter file numbers above
-> G22), as recorded in the 2026-10-02 audit. Every ADR in 001-132 and every functional group in G01-G28
-> has an article cell or a recorded scope-out.
+> G22), as recorded in the 2026-10-02 audit; the series README now states this under its table. Owner
+> mapping decisions the same day: Article 7's ADR cell is 014/079 (ADR-031 belongs to Article 45) and keeps
+> §10 because the scorecard's §10 row credits the decorator pipeline; Article 18's rubric cell widens to
+> §6, §9, §10, §29; Article 42's header gains ADR-071 to match its matrix cell. Every ADR in 001-132 and
+> every functional group in G01-G28 has an article cell or a recorded scope-out.
 
 **Coverage history**
 

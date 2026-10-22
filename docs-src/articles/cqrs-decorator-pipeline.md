@@ -432,7 +432,7 @@ decorators (`FeatureGateCommandDecorator.cs:50` `is not IFeatureGated`, `Transac
 `TimeoutCommandDecorator.cs:65`, `CachingCommandDecorator.cs:61`, `AuthorizationGate.cs:46,60`), and
 "the pass-through cost of an `is`-check" is now "of a dormant decorator". (4) The closing takeaway was
 presented as a line of ADR-014; no such line exists, so it is framed as the argument of ADR-014's Context
-(`Website/docs-src/adr/014-cqrs-decorator-pipeline.md:37-42`, Rationale `:101-102`). The header ADR cell and the section 10 mapping are still left for the owner (see Mapping).
+(`Website/docs-src/adr/014-cqrs-decorator-pipeline.md:37-42`, Rationale `:101-102`). The header ADR cell and the section 10 mapping were settled by the owner on 2026-10-22 (see Mapping).
 **2026-10-19 entry.** No body change. The Helpdesk host composes with `AddMmcaApplicationPipeline`
 (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:121`, now on `main`), so the DI-sequence anchors
 below are corrected in place. The `MMCA.Common/AGENTS.md` drift noted in the 2026-10-08 entry is fixed on
@@ -568,7 +568,7 @@ Adopters' `UseCommonMiddlewarePipeline()` calls re-read 2026-10-22:
 section 1 (SOLID) `:122`, section 6 (CQRS and event-driven) `:229`, section 10 (Messaging and
 integration) `:329`. Section 10 matches the README mapping row but the body carries no messaging
 content; the ADR cell lists 014 and 079 while the README row (`Website/docs-src/articles/README.md:17`)
-lists 014/031/079. Both cells are left unchanged this run and raised for an owner decision. Dropped
+listed 014/031/079. Owner decision 2026-10-22: the README row drops 031 to match the header (Article 45 owns ADR-031 and this body never names a feature flag), and section 10 stays because the scorecard's section 10 row (`Website/docs-src/governance/common-ArchitectureScorecard.md:74`) credits the decorator pipeline. Dropped
 from the previous ledger: the About-the-author package note (`FACTS.md:19` reads 22 packages, and the
 body has no About-the-author section) and the "five markers" count (eight today).*
 

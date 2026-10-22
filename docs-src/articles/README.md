@@ -14,7 +14,7 @@ functions, and more. Every technical claim traces to real source, an ADR, or a s
 | 4 | [The Result railway in C#](result-railway-csharp.md) | P2 | G01 | §1,§2 | 013 | deep-dive |
 | 5 | [Kill the anemic domain model](kill-anemic-domain-model.md) | P2 | G02 | §4 | 068/115/129 | deep-dive |
 | 6 | [Specifications over LINQ spaghetti](specification-pattern.md) | P2 | G03 | §2,§8 | - | deep-dive |
-| 7 | [The CQRS decorator pipeline](cqrs-decorator-pipeline.md) | P2 | G05 | §1,§6,§10 | 014/031/079 | deep-dive |
+| 7 | [The CQRS decorator pipeline](cqrs-decorator-pipeline.md) | P2 | G05 | §1,§6,§10 | 014/079 | deep-dive |
 | 8 | [Compose validators, don't copy them](validation-kit.md) | P2 | G06 | §24,§33 | - | deep-dive |
 | 9 | [The transactional outbox](transactional-outbox-dotnet.md) | P2/P3 | G04 | §6,§8 | 003/066/075/087/100/107 | deep-dive ★ |
 | 10 | [Database-per-service inside a monolith](database-per-service.md) | P3 | G07 | §7,§8 | 006/073 | deep-dive ★ |
@@ -25,7 +25,7 @@ functions, and more. Every technical claim traces to real source, an ADR, or a s
 | 15 | [Event-schema versioning](event-schema-versioning.md) | P3 | G04 | §6 | 010/083/090 | deep-dive |
 | 16 | [JWKS cross-service auth](jwks-cross-service-auth.md) | P3 | G08 | §11 | 004/007/122 | deep-dive ★ |
 | 17 | [Password hashing done right](password-hashing.md) | P2/P4 | G08 | §11 | 102 | deep-dive |
-| 18 | [Idempotency in one attribute](idempotency-attribute.md) | P2 | G12 | §9,§29 | 017/021 | deep-dive |
+| 18 | [Idempotency in one attribute](idempotency-attribute.md) | P2 | G12 | §6,§9,§10,§29 | 017/021 | deep-dive |
 | 19 | [The self-invalidating cache](self-invalidating-cache.md) | P2 | G09 | §10,§12 | 026/040/073/077 | deep-dive |
 | 20 | [Problem Details across HTTP and gRPC](problem-details-http-grpc.md) | P2 | G12,G13 | §9 | - | deep-dive |
 | 21 | [Notifications as a vertical slice](notifications-vertical-slice.md) | P2 | G10 | §5 | 024 | deep-dive |
@@ -63,6 +63,8 @@ functions, and more. Every technical claim traces to real source, an ADR, or a s
 | 53 | [Series index (hub)](series-index.md) | P6 | all | all | - | index |
 
 ★ = cornerstone pillar (publish first; everything links up to these).
+
+Group(s) = the onboarding taxonomy ID in `Website/docs-src/onboarding/00-group-taxonomy.md`; from G23 up it differs from the chapter number in the guide.
 
 **The numbering is the reading order.** Each article builds on the ones before it, so reading 1 through 53
 in sequence is the intended curriculum (1-3 orient, 4-9 are the core patterns, 10-15 data and persistence,

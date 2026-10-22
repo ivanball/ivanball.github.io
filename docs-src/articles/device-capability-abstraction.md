@@ -1,6 +1,6 @@
 # One Blazor UI, two hosts: a device-capability layer that stays resolvable everywhere
 
-> Series: MMCA.Common · Article #42 (deep-dive) · Pillar P2,P5 · Group G27 · Rubric §18 · ADR-042 (+043) ·
+> Series: MMCA.Common · Article #42 (deep-dive) · Pillar P2,P5 · Group G27 · Rubric §18 · ADR-042 (+043, +071) ·
 > Status: grounded in `Website/docs-src/adr/042-device-capability-abstraction.md`,
 > `Website/docs-src/adr/043-mobile-deep-links-and-native-oauth-callback.md`,
 > `Website/docs-src/onboarding/group-26-device-capability-layer.md`, and the real contracts under

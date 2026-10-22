@@ -1,6 +1,6 @@
 # Idempotency in one attribute: safe retries for HTTP APIs
 
-> Series: MMCA.Common · Article #18 (deep-dive) · Pillar P2 · Group G12 · Rubric §9,§29 · ADR-017 ·
+> Series: MMCA.Common · Article #18 (deep-dive) · Pillar P2 · Group G12 · Rubric §6,§9,§10,§29 · ADR-017 ·
 > Status: grounded in `MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyFilter.cs`,
 > `MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyRecord.cs`,
 > `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Inbox/EfInboxStore.cs`,
@@ -418,10 +418,6 @@ unique `MessageId` index (`:733-735`) inside `ConfigureInbox` (`:727`, invoked `
 (`Website/docs-src/adr/021-consumer-inbox-idempotency.md:8`, revised 2026-10-06, 2026-10-07 and 2026-10-21, `:29-35`). At-least-once outbox delivery
 from ADR-003. Scorecard: evidence stamp 2026-10-22 at v1.250.0 (`common-ArchitectureScorecard.md:5`), Maturity
 97.3% (319/328) `:9`, Implementation 85.4% (700/820) `:10`; §6 credits the inbox consumer `:70`, §9 the filter
-`:73`, §10 the filter's `IDistributedLock` `:74`, §29 the Polly handlers plus outbox degradation `:93`. NOT
-RESOLVED (still, 2026-10-22): the header lists Rubric §9,§29 while the grounding line and this ledger cite §6, §9, §10 and
-§29; the scorecard supports all four credits, and the header cell is left as written because the series README
-mapping row (`Website/docs-src/articles/README.md:28`) carries the same §9,§29 and widening both is an authoring
-decision.*
+`:73`, §10 the filter's `IDistributedLock` `:74`, §29 the Polly handlers plus outbox degradation `:93`. Owner decision 2026-10-22: the header and the series README mapping row (`Website/docs-src/articles/README.md:28`) widen to Rubric §6, §9, §10, §29, matching the grounding line and the four scorecard credits above.*
 
 - Full series index: https://ivanball.github.io/writing.html
