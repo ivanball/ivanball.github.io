@@ -125,7 +125,7 @@
         <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
         <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
         <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
-        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · Refresh tokens that rotate per device</a></li>
         <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
         <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
         <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
@@ -215,7 +215,8 @@
 <span class="hljs-keyword">var</span> results = <span class="hljs-keyword">await</span> resultsBuilder.BuildAsync(poll, command.UserId, ct);  <span class="hljs-comment">// includes the caller&#x27;s own vote</span>
 <span class="hljs-keyword">return</span> Result.Success(results);
 
-<span class="hljs-comment">// 2. The domain-event handler runs after that commit, off the request path. It rebuilds the</span>
+<span class="hljs-comment">// 2. The domain-event handler runs after that save, inside the same request; only the drain</span>
+<span class="hljs-comment">//    to the publisher runs off the request path. The handler rebuilds the</span>
 <span class="hljs-comment">//    tallies with no caller identity, so MyVoteOptionId stays null and no per-user field can</span>
 <span class="hljs-comment">//    ride the broadcast.</span>
 <span class="hljs-keyword">var</span> results = <span class="hljs-keyword">await</span> resultsBuilder.BuildAsync(poll, userId: <span class="hljs-literal">null</span>, ct);
@@ -231,12 +232,15 @@ liveChannelPublishQueue.Enqueue(<span class="hljs-keyword">new</span> LiveChanne
     LivePollChannel.PollResultsChanged,
     JsonSerializer.Serialize(results, JsonSerializerOptions.Web)));</code></pre>
           <p>Three things in that block are load-bearing. First, the broadcast is enqueued <strong>after</strong> the commit, and
-          it is the placement that guarantees it. Enqueue inline in the command handler and the enqueue runs while
-          the transactional decorator still holds the transaction open, so a rollback can leave clients already
-          told about a vote that never persisted. Hanging the enqueue off a handler for the <code>LivePollVoteChanged</code>
-          domain event buys post-commit delivery with no sequencing code at all: in-process domain-event dispatch
-          inside a transactional command is deferred until after the commit succeeds and dropped on rollback, so
-          the guarantee follows from where the work is attached. The enqueue itself is a non-blocking write to a
+          it is the placement that guarantees it. The framework&#39;s domain-event interceptor runs in-process
+          handlers only after a save succeeds: straight after a plain <code>SaveChangesAsync</code>, which commits on its own,
+          and, inside a command that opts into the transactional decorator, deferred until the commit succeeds and
+          dropped on rollback. <code>CastVoteCommand</code> does not opt in, so its save commits by itself and the handler for
+          the <code>LivePollVoteChanged</code> domain event runs right after it. Hanging the enqueue off that handler makes
+          post-commit delivery a property of where the work is attached rather than of sequencing code, and it
+          keeps holding if the command is ever wrapped in a transaction, where an inline enqueue would run while
+          the transaction is still open and a rollback could leave clients told about a vote that never persisted.
+          The enqueue itself is a non-blocking write to a
           bounded in-process queue, and a single-reader hosted drain worker forwards each item to the publisher
           off the request path (BR-229), so a hub hiccup, a slow peer, or a down Notification service can neither
           stall nor fail the command.</p>
@@ -257,7 +261,7 @@ liveChannelPublishQueue.Enqueue(<span class="hljs-keyword">new</span> LiveChanne
           <p>The implementation is chosen at the composition root, the same null-object discipline the durable sender
           uses. Infrastructure registers a no-op <code>NullLiveChannelPublisher</code> as the default, so the port resolves in
           every host whether or not real-time transport is configured. <code>AddPushNotifications(configuration)</code> then
-          replaces it with <code>SignalRLiveChannelPublisher</code>, which is a nine-line class: it group-sends
+          replaces it with <code>SignalRLiveChannelPublisher</code>, which is an eight-line class: it group-sends
           <code>ReceiveChannelEvent</code> through <code>IHubContext&lt;NotificationHub&gt;</code>. It never holds a hub connection itself, so a
           host that never calls <code>AddPushNotifications</code> keeps the no-op and the publishing code still resolves and
           runs with nothing on the wire.</p>
@@ -388,8 +392,9 @@ _channel = Channel.CreateBounded&lt;LiveChannelPublishWorkItem&gt;(
           Hangfire or Quartz.NET: a schema, a storage abstraction, a dashboard to authorize and host, and an
           upgrade obligation that every extracted service host inherits. ADR-074 declines both, on the grounds
           that the framework already ran a durable, multi-replica-safe polling loop in production. The outbox
-          claims a batch of rows with one <code>ExecuteUpdateAsync</code> that stamps a lease and a token, and only one
-          racing replica matches the predicate. The missing piece was a cron expression, not a product.</p>
+          claims a batch of rows with one <code>ExecuteUpdateAsync</code> that stamps a lease and a token, and each row
+          matches the still-unleased predicate for exactly one racing replica: a replica that wins only part of a
+          batch processes just the rows carrying its own token. The missing piece was a cron expression, not a product.</p>
           <p>So the scheduler is that same claim-lease idiom pointed at a calendar:</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// A job is a name, a schedule and a body. Nothing else.</span>
 <span class="hljs-keyword">public</span> <span class="hljs-keyword">interface</span> <span class="hljs-title">IScheduledJob</span>
@@ -415,7 +420,7 @@ _channel = Channel.CreateBounded&lt;LiveChannelPublishWorkItem&gt;(
           long-lived runner never captures a scoped dependency, which is the failure mode a hand-rolled timer
           usually ships with.</p>
           <p>The state is one row per job (<code>JobName</code> as the primary key, plus the cron expression, <code>NextRunOn</code>,
-          <code>LastRunOn</code>, the last outcome and duration, and the lease pair), and it lives in the <strong>Default</strong> data
+          <code>LastRunOn</code>, the last outcome, error and duration, and the lease pair), and it lives in the <strong>Default</strong> data
           source only. That is a deliberate split from the outbox, which exists once per physical database
           because an outbox row has to be written in the same transaction as the aggregate that produced it. A
           schedule has no such tie: a job belongs to the host that registered it, so a four-database host gets
@@ -423,7 +428,7 @@ _channel = Channel.CreateBounded&lt;LiveChannelPublishWorkItem&gt;(
           claim also guards the outcome stamp, so a replica whose lease expired mid-run writes nothing and
           drops its stale result instead of overwriting the current holder&#39;s.</p>
           <p>The runner is a plain <code>BackgroundService</code> rather than a fixed-period one, for the same reason the
-          outbox is: after each cycle it sleeps until the <strong>earliest</strong> <code>NextRunOn</code> across the store, read
+          outbox is: after each cycle it sleeps until the <strong>earliest</strong> <code>NextRunOn</code> among the jobs this host registered, read
           through <code>TimeProvider</code>, capped at the polling interval (30 seconds by default) and floored at one
           second so an overdue row another replica already holds cannot spin the loop. The cap means the wait
           shortens a sleep but never removes a wake: a host whose only job is nightly still runs a cycle every 30
@@ -464,12 +469,13 @@ _channel = Channel.CreateBounded&lt;LiveChannelPublishWorkItem&gt;(
           <li><strong>Multi-replica needs the backplane.</strong> If a hub-hosting service runs more than one replica, group sends
           only reach connections on other replicas through the Redis backplane that <code>AddPushNotifications</code> wires
           when a <code>redis</code> connection string is present. Single-replica deployments need nothing extra.</li>
-          <li><strong>Best-effort is not delivery.</strong> A publish can be discarded at four points: the queue evicts its oldest
-          item under sustained backpressure, the drain&#39;s <code>BestEffort</code> wrapper swallows a publish failure
+          <li><strong>Best-effort is not delivery.</strong> A publish can be discarded at five points: the producing handler&#39;s own
+          <code>BestEffort</code> guard swallows a failed read ahead of the enqueue (the vote and upvote handlers&#39; reload
+          of the poll or question, the question handlers&#39; fresh Pending count), the queue evicts its oldest item under sustained backpressure, the drain&#39;s <code>BestEffort</code> wrapper swallows a publish failure
           (including every transport failure the gRPC adapter propagates to it), a graceful stop aborts the
           in-flight publish and abandons whatever the five-second drain budget cannot reach, and an enqueue that
           lands after shutdown has completed the queue is refused. Most of these are observable (the eviction is
-          counted on <code>DroppedCount</code> and logged with a running total, the swallow is logged and counted on the
+          counted on <code>DroppedCount</code> and logged with a running total, each swallow is logged and counted on the
           <code>besteffort.dispatch.failed</code> meter, and an abandoned shutdown drain logs how many it dropped), but the
           aborted in-flight item and a post-shutdown enqueue leave no trace, and observability is not delivery in
           any case. It is the correct posture for a hint over durable state, and it still means
@@ -485,8 +491,8 @@ _channel = Channel.CreateBounded&lt;LiveChannelPublishWorkItem&gt;(
           <li><strong>Attach the broadcast where post-commit is structural, not where it reads well.</strong> The durable write is
           the truth; the broadcast is an optimization over it. If your framework already defers domain-event
           dispatch until after the transaction commits, hang the broadcast off the event rather than writing it
-          inline in the command handler, where a later rollback can leave clients told about state that never
-          landed. Then hand it to a background drain (or at least wrap and swallow), log the failure, move on.</li>
+          inline in the command handler, where inside a transaction a later rollback can leave clients told about
+          state that never landed. Then hand it to a background drain (or at least wrap and swallow), log the failure, move on.</li>
           <li><strong>Serialize once, at the edge, and keep the payload opaque across hops.</strong> A pre-serialized string makes
           a cross-service relay trivial: no hop in the middle needs the payload type.</li>
           <li><strong>Validate client-supplied group names against a pattern.</strong> The moment a client can name the group it

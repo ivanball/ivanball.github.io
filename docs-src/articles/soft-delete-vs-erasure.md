@@ -90,14 +90,17 @@ This is the entity-level half of the split. In a consumer app (ADC's `User`), `D
 `IsDeleted` for lifecycle *and* `Anonymize()` scrubs the data for a right-to-be-forgotten request, and
 they are deliberately separate operations. The delete handler calls both in one transaction to honor
 the "erase within 30 days" promise, and `Delete()` raises a `UserDeleted` domain event rather than
-touching credentials. Outstanding refresh sessions need no separate revocation: the refresh flow
-re-fetches the account through the same soft-delete query filter, so the moment the erasure commits
-there is no account left to mint a fresh access token for. (The access token the user is already
-holding is cut off separately, at runtime, which is its own section below.) For the fields a service chooses to keep retrievable after
+touching credentials. The same save revokes the account's live refresh sessions and anonymizes every
+session row, revoked or not, because the IP address and user agent captured at sign-in are personal
+data too. The revocation records why a session ended rather than being the lock itself: the refresh
+flow re-fetches the account through the same soft-delete query filter, so the moment the erasure
+commits there is no account left to mint a fresh access token for. (The access token the user is
+already holding is cut off separately, at runtime, which is its own section below.) For the fields a service chooses to keep retrievable after
 anonymization rather than overwrite, ADR-005 offers an AES-256-GCM `EncryptedStringConverter`, so
 "keep this usable" and "protect it at rest" need not be in tension. ADC's `User` takes the simpler
-route: `Anonymize()` overwrites every `[Pii]` field (`Email`, `FirstName`, `LastName`, and the
-`AvatarUrl` added with the avatar feature) in place and keeps none, so it does not wire the converter
+route: `Anonymize()` overwrites every stored `[Pii]` field (`Email`, `FirstName`, `LastName`, the
+seven device fields, the external-login `LoginProvider` and `ProviderKey`, and `AvatarUrl`; the
+computed `FullName` follows the two names) in place and keeps none, so it does not wire the converter
 at all. The converter is a framework capability for the
 service that needs it, not a default.
 
@@ -201,8 +204,11 @@ processed entries are cleaned up. So without a purge, even after you anonymized 
 their personal data could still be sitting in old, processed outbox payloads forever.
 
 ADR-005 closes that too: `OutboxCleanupService` purges processed outbox rows older than
-`Outbox:RetentionDays` (default 7, set 0 to disable) across every relational data source. Bounded
-retention without changing delivery semantics. It is worth flagging as a deliberate **behavior change**:
+`Outbox:RetentionDays` (default 7, set 0 to disable) across every relational data source. A row whose
+retries are exhausted is never marked processed, so the same service sweeps those dead-lettered rows
+on their own window, `Outbox:DeadLetterRetentionDays`, which falls back to `RetentionDays` when left
+at 0; a payload that never delivered is not retained forever either. Bounded retention without
+changing delivery semantics. It is worth flagging as a deliberate **behavior change**:
 consumers upgrading the framework start purging processed outbox rows older than seven days unless they
 opt out, which is the kind of thing that belongs in a CHANGELOG and an ADR rather than a surprise in
 production.
@@ -211,8 +217,8 @@ production.
 
 Anonymizing the aggregate and committing the soft-delete shuts two doors: no future logins, and no
 silent re-mint of a fresh access token, because the refresh flow re-fetches the account through the
-same soft-delete query filter
-(`Source/Core/MMCA.Common.Application/Users/UseCases/DeleteUser/DeleteUserHandlerBase.cs:107-111`).
+same soft-delete query filter, and the erasure's own save revokes every live refresh session besides
+(`Source/Core/MMCA.Common.Application/Users/UseCases/DeleteUser/DeleteUserHandlerBase.cs:150-157`).
 There is a third door, though, and stateless auth
 holds it open by design. Authentication is stateless JWT (ADR-004): every service validates an access
 token by signature and expiry, with no per-request lookup against the account store. That is exactly
@@ -224,15 +230,15 @@ ADR-047 closes that door. `SoftDeletedUserMiddleware`
 (`Source/Presentation/MMCA.Common.API/Middleware/SoftDeletedUserMiddleware.cs:37`, business rule
 BR-133 named in its class doc at `:11`) runs in the shared pipeline **after authentication and before authorization**.
 That ordering is a declarative step list (ADR-079):
-`Startup/Pipeline/MiddlewarePipelineBuilder.cs` registers `UseAuthentication()` at `:105`, the
-`SoftDeletedUserFilter` step that adds the middleware at `:124-125`, and `UseAuthorization()` at `:129`.
+`Startup/Pipeline/MiddlewarePipelineBuilder.cs` registers `UseAuthentication()` at `:104`, the
+`SoftDeletedUserFilter` step that adds the middleware at `:123-124`, and `UseAuthorization()` at `:128`.
 So `HttpContext.User` is already populated and the check
 gates every downstream endpoint. For an authenticated caller whose account has been soft-deleted, it
 returns HTTP 401 mid-flight, before the endpoint runs.
 
 The check reads a shared deleted-user marker first. The erasure handler writes that marker itself,
 right after the erasure is saved (`SoftDeletedUserCache.MarkDeletedAsync`,
-`DeleteUserHandlerBase.cs:146-148`), and the marker lasts 15 minutes
+`DeleteUserHandlerBase.cs:167-169`), and the marker lasts 15 minutes
 (`SoftDeletedUserCache.MarkerDuration`, `Source/Core/MMCA.Common.Application/Auth/SoftDeletedUserCache.cs:32`),
 the default access-token lifetime, because it has to outlive every token issued before the delete.
 Every host honors it (`SoftDeletedUserMiddleware.cs:105-112`), so on any host that shares that cache
@@ -249,11 +255,11 @@ outlive a delete made on another replica. The price is paid on the Identity host
 read plus one validator query per authenticated request.
 
 The marker write is best effort: a failure is logged and the erasure still succeeds
-(`DeleteUserHandlerBase.cs:150-153`). That failure is the one case with a residual window, and only
+(`DeleteUserHandlerBase.cs:171-174`). That failure is the one case with a residual window, and only
 one kind of host feels it. An Identity host finds no marker, queries the validator on the next
 request and rejects the deleted account there (`SoftDeletedUserMiddleware.cs:136-173`); a host with
 no validator has nothing to fall back to, so the existing access token stays usable until it expires,
-which is exactly what the logged warning says (`DeleteUserHandlerBase.cs:199-200`).
+which is exactly what the logged warning says (`DeleteUserHandlerBase.cs:220-221`).
 
 Two honest edges. Anonymous requests pass straight through with no lookup
 (`SoftDeletedUserMiddleware.cs:72-80`), so unauthenticated traffic pays nothing. And the validator is
@@ -385,153 +391,141 @@ decision, or read the §30 scorecard entry, the most honest one on the board.*
 *Tags: .NET, C Sharp, Software Architecture, GDPR, Data Privacy*
 
 *Notes (verified 2026-07-28, corrected 2026-08-07, re-verified 2026-09-19, refreshed 2026-10-02 at
-framework v1.221.0, refreshed 2026-10-08 at framework v1.233.0). Anchors marked (re-read) were opened
-in source by the 2026-10-02 run unless a 2026-10-08 note says otherwise; anchors marked (audit) were
-re-read by the 2026-10-02 audit (`Reports/update-medium/2026-10-02/36.json`) and not reopened.
-2026-10-08 REFRESH (Common v1.233.0; audit `Docs/Planning/Quality/Medium-Audit-2026-10-08.json`,
-every anchor below reopened this run): Common #520 (2026-10-07) removed `NotDeletedLookupDuration`
-from `SoftDeletedUserMiddleware`; a "not deleted" answer is never cached (`:133-135`, class doc
-`:17-19`), only a fresh "deleted" answer is written as the 15-minute marker (`:152-169`, write at
-`:159-161` with `SoftDeletedUserCache.MarkerDuration`). FIX: the body's "not deleted for only 30
-seconds, at most one status query per 30 seconds per cache scope" and "an Identity host catches the
-deleted account within 30 seconds" after a failed marker write were both false; the body now states
-one shared-store read plus one validator query per authenticated request on the Identity host, and
-rejection on the next request after a marker miss (`:136-173`). The only cached "not deleted" entry
-still honored is a legacy one written to the shared store by an earlier framework version
-(`:124-131`); left out of the body as an upgrade edge. The no-validator half of the failure case is
-unchanged and still matches `DeleteUserHandlerBase.cs:199-200` (re-read). FIX: "passes only a cache
-miss through" now reads "a cache miss, or an unreachable cache" (comment `:117-119`). Body anchors
-moved: class `:33` to `:37`, cached-true 401 `:102-109` to `:105-112`, anonymous pass-through
-`:74-82` to `:72-80`, lazy resolve `:111` to `:114`, no-validator pass-through `:112-119` to
-`:115-122`; `ApplicationDbContext.cs` registrations `:392` to `:393` and `:399` to `:400`.
-`DeleteUserHandlerBase.cs` `:107-111`, `:146-148`, `:150-153`, `:199-200` and
-`SoftDeletedUserCache.cs:32` unchanged (re-read).
+framework v1.221.0, refreshed 2026-10-08 at framework v1.233.0, re-verified 2026-10-22 at framework
+v1.250.0 (`MMCA.Common/FACTS.md:14`)). Every anchor below was reopened in source on 2026-10-22 unless
+marked (audit), meaning it was last read by an earlier run and not reopened this pass.
+2026-10-22 REFRESH (Common v1.250.0): `DeleteUserHandlerBase` now revokes and anonymizes refresh
+sessions itself. FIX: the body said outstanding refresh sessions "need no separate revocation"; the
+handler calls `RefreshSessionRevocation.RevokeAndAnonymizeAllAsync` at `:155-157`, after
+`Anonymize()` and before the one save, revoking live sessions and anonymizing every session row (IP
+address, user agent; rationale comment `:150-154`, which also states the soft-delete filter already
+stops an erased account's refresh); `Source/Core/MMCA.Common.Application/Auth/RefreshSessionRevocation.cs:69`
+declares it, `Revoke(now, RefreshSession.ReasonAccountDeleted)` `:86`, `session.Anonymize()` `:89`.
+The body now states both the revocation and the filter. FIX: ADC `User` carries 14 `[Pii]`
+attributes, not four; the body's parenthetical now names them. FIX: the outbox section adds the
+dead-lettered-row sweep. All handler and pipeline anchors re-anchored (see below).
 DOMAIN: `public virtual Result Delete()` at `MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/AuditableBaseEntity.cs:67`,
-guard `:69-75` returning `Error.AlreadyDeleted` (`:72`), `IsDeleted = true` at `:77` (re-read). FIX
-(2026-10-02): the body called `Delete()` "idempotent", which contradicts the failure on a second call;
-it now reads "guarded". The "entities are never hard-deleted" invariant is documented at
-`Website/docs-src/onboarding/00-primer.md:193` and `group-02-domain-building-blocks.md:644` (re-read);
-the header no longer cites `MMCA.Common/CLAUDE.md`, which is only an `@AGENTS.md` import and holds no
-such phrase. `IAnonymizable` is `Domain/Interfaces/IAnonymizable.cs:22-31`, `Result Anonymize()` at
-`:30`, idempotency contract in its doc at `:26-28` (re-read); the `EncryptedStringConverter` mention
-in its doc at `:17-18` (audit). ADC `User` (re-read 2026-10-08 unless marked): `MMCA.ADC/.../Identity.Domain/Users/User.cs:34-35`
-declares six interfaces (`IPasswordChangeableUser`, `IUserPreferences`, `IErasableUser`,
-`IEmailConfirmableUser`, `ILegalAcceptingUser`, `IAuditedEntity`; was five), `IErasableUser`
-extending `IAnonymizable` (`MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/IErasableUser.cs:30`,
-audit); four `[Pii]` attributes at `:51`, `:55`, `:59`, `:118` (`Email`, `FirstName`, `LastName`,
-`AvatarUrl`; property lines `:52`/`:56`/`:60`/`:120` audit); `Anonymize()` `:507-548` (was
-`:465-503`), placeholder email `:512`, idempotent early return `:518-522`, credential/device/provider
-clears `:524-537`, `AvatarUrl = null` `:538`, `IsEmailConfirmed` cleared `:542`, consent evidence
-(`AcceptedTermsVersion`, `TermsAcceptedOn`) deliberately kept `:544-546`; `public new Result Delete()`
-`:485` (was `:443`) calling `base.Delete()` `:487` and raising `UserDeleted` `:490`; no `RefreshToken` member.
-ERASURE WORKFLOW (re-read): `Source/Core/MMCA.Common.Application/Users/UseCases/DeleteUser/DeleteUserHandlerBase.cs`,
-refresh-session model stated at `:107-111`, `erasable.Delete()` `:119`, `OnAfterSoftDeleteAsync`
-`:126`, `erasable.Anonymize()` `:133`, ONE `SaveChangesAsync` `:139`, marker write
-`SoftDeletedUserCache.MarkDeletedAsync` `:146-148` with its best-effort catch `:150-153`, the
-`SoftDeletedMarkerFailed` warning (`LoggerMessage` on the base) `:199-200`. The `afterCommit` doc at
-`:180-182` says the marker is written after the save and, under an `ITransactional` command, before
-the commit, so the body says "as it saves" rather than "after commit". All five handler anchors moved
-+4 from the 2026-09-19 ledger. ADC (audit): `DeleteUserHandler.cs` (87 lines) subclasses at `:29-35`,
-overrides `OnAfterSoftDeleteAsync` `:43-74`, integration event `:59`, avatar-blob internal command
-`:68-71`, `ScheduleAvatarBlobDeletionAsync` `:76-86`, failure `:85`, class doc `:25-27`;
-`DeleteUserCommand.cs:22` implements `ICacheInvalidating, ITransactional, IUserOwnedRequest`, the
-`ITransactional` rationale at `:9-14`.
+guard `:69-75` returning `Error.AlreadyDeleted` (`:72`), `IsDeleted = true` at `:77`. The body calls
+`Delete()` "guarded", not idempotent, because a second call fails. The "entities are never
+hard-deleted" invariant is documented at `Website/docs-src/onboarding/00-primer.md:193` and
+`group-02-domain-building-blocks.md:607`. `IAnonymizable` is `Domain/Interfaces/IAnonymizable.cs:22-31`
+(31 lines), `Result Anonymize()` at `:30`, idempotency contract in its doc at `:26-28`, the
+`EncryptedStringConverter` mention in its doc at `:17-18`. ADC `User`:
+`MMCA.ADC/.../Identity.Domain/Users/User.cs:34-35` declares six interfaces (`IPasswordChangeableUser`,
+`IUserPreferences`, `IErasableUser`, `IEmailConfirmableUser`, `ILegalAcceptingUser`, `IAuditedEntity`),
+`IErasableUser` extending `IAnonymizable` (`MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/IErasableUser.cs:30`);
+14 `[Pii]` attributes at `:51` `Email`, `:55` `FirstName`, `:59` `LastName`, `:81`-`:105` the seven
+`Device*` fields (`DeviceId`, `DeviceFormFactor`, `DevicePlatform`, `DeviceModel`,
+`DeviceManufacturer`, `DeviceName`, `DeviceType`), `:109` `LoginProvider`, `:113` `ProviderKey`,
+`:127` `AvatarUrl` (property `:129`), `:180` the computed `FullName` (`:181`, from the two names);
+`Anonymize()` `:519-560`, placeholder email `:524`, idempotent early return `:530-534`, overwrites
+`:536-550` (names, credentials, all seven device fields, both provider fields), `AvatarUrl = null`
+`:550`, `IsEmailConfirmed = false` `:554`, consent evidence (`AcceptedTermsVersion`,
+`TermsAcceptedOn`) deliberately kept `:556-558`; every stored `[Pii]` member is overwritten.
+`public new Result Delete()` `:497` calling `base.Delete()` `:499` and raising `UserDeleted` `:502`; no
+`RefreshToken` member.
+ERASURE WORKFLOW: `Source/Core/MMCA.Common.Application/Users/UseCases/DeleteUser/DeleteUserHandlerBase.cs`,
+aggregate lookup `:112-117`, refresh-session note `:119-122`, `erasable.Delete()` `:130`,
+`OnAfterSoftDeleteAsync` `:137`, `erasable.Anonymize()` `:144`, session revoke-and-anonymize
+`:155-157` (comment `:150-154`), ONE `SaveChangesAsync` `:159`, marker write
+`SoftDeletedUserCache.MarkDeletedAsync` `:167-169` with its best-effort catch `:171-174`, the
+`SoftDeletedMarkerFailed` warning (`LoggerMessage` on the base) `:220-221`, whose text still says a
+host without the account-status query accepts the token until it expires. The `afterCommit` doc at
+`:200-206` says the marker is written after the save and, under an `ITransactional` command, before
+the commit, so the body says "as it saves" rather than "after commit". ADC: `DeleteUserHandler.cs`
+(91 lines) declared `:32`, overrides `OnAfterSoftDeleteAsync` `:47`, raises `UserDeleted` on the
+aggregate inside the erasure transaction `:63` (rationale `:61-62`), avatar-blob scheduling call
+`:74`, `ScheduleAvatarBlobDeletionAsync` `:80`, internal command scheduled `:83`, failure mapping
+`:89`, class remarks `:24-30`; `DeleteUserCommand.cs:22` implements `ICacheInvalidating,
+ITransactional, IUserOwnedRequest`, the `ITransactional` rationale from `:9`.
 NEW SECTION (2026-10-02, user-approved fold-in), "The row that still holds its slot", grounded in
 ADR-095 (`Website/docs-src/adr/095-soft-delete-unique-indexes.md`, Accepted 2026-08-23, revised
-2026-08-26 and 2026-10-01) and in source (re-read):
+2026-08-26, 2026-10-01, 2026-10-06, 2026-10-07 and 2026-10-21) and in source:
 `Source/Core/MMCA.Common.Infrastructure/Persistence/Conventions/SoftDeleteUniqueIndexConvention.cs:34`
 declares `SoftDeleteUniqueIndexConvention(DataSource engine) : IModelFinalizingConvention`; the
 speaker-email example is its remarks at `:11-17`; non-owned `IAuditableEntity` scope `:46-47`;
 unique-only `:61-64`; shared `SoftDeleteFilterSql.Build` `:55-57`; hand-authored filter extended with
 `AND` `:80`; existing soft-delete clause left alone `:73-76`; engine coverage `:29-30`; relational
 check `:43-44`. Registered once at
-`Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:393` (comment
-`:389-392`; was `:392`, re-read 2026-10-08). The per-engine predicate (`= false` on PostgreSQL, `= 0` elsewhere) is
-`Persistence/SoftDeleteFilterSql.cs:31`. The undelete-collision and invisible-filter costs are
-ADR-095 Trade-offs (`:145-160`). UPSTREAM FLAG: ADR-095 cites the class at `:33` and the registration
-at `ApplicationDbContext.cs:393`; current source is `:34` and `:393` (the registration anchor matches
-again as of 2026-10-08), and its `SoftDeleteFilterSql.cs` ranges no longer match that file's layout. This article cites source, not the ADR's anchors.
-RESTRICT BY DEFAULT (re-read, all moved +1): `RestrictDeleteByDefaultConvention.cs:42`, annotation
-`MMCA:DeleteBehaviorSource` `:48`, `Explicit` `:51`, `Convention` `:54`, `Ownership` `:57`,
-`ProcessModelFinalizing` `:60`, rationale `:15-20`, left-alone `:22-28`, Cosmos no-op `:35-39`;
-registered at `ApplicationDbContext.cs:400` (the code block's first line, verbatim; comment
-`:395-399`; was `:399`, re-read 2026-10-08). `DeleteBehaviorConventionTestsBase.cs:21` (audit). ADR-119 Accepted 2026-09-11, revised
-2026-09-19 (audit).
+`Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:393`. The
+per-engine predicate (`= false` on PostgreSQL, `= 0` elsewhere) is documented at
+`Persistence/SoftDeleteFilterSql.cs:31-32` (ADR-095's 2026-10-06 revision records that each engine's
+`IDataSourceEngine.BuildSoftDeleteFilter` supplies it). The undelete-collision and invisible-filter
+costs are ADR-095's Trade-offs section (from `:137`). This article cites source, not the ADR's anchors.
+RESTRICT BY DEFAULT: `RestrictDeleteByDefaultConvention.cs:42`, annotation `MMCA:DeleteBehaviorSource`
+`:48`, `Explicit` `:51`, `Convention` `:54`, `Ownership` `:57`, `ProcessModelFinalizing` `:60`,
+rationale `:15-20`, left-alone `:22-28`, Cosmos no-op `:35-39`; registered at
+`ApplicationDbContext.cs:400` (the code block's first line, verbatim).
+`Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Domain/DeleteBehaviorConventionTestsBase.cs:21`.
+ADR-119 Accepted 2026-09-11, revised 2026-09-19 and 2026-10-21 (anchor refresh).
 OUTBOX: `OutboxCleanupService` declared at
-`Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxCleanupService.cs:42`
-(re-read; was `:47`); `Outbox:RetentionDays` default 7, 0 disables, `OutboxSettings.cs:66` (re-read 2026-10-08; was `:65`).
-FIX (2026-10-02): the body quoted ADR-003 as "grows until cleaned up", which is not its text; it now
-paraphrases `Website/docs-src/adr/003-outbox-dual-dispatch.md:59` (was `:56`; "The outbox table grows until
-processed entries are cleaned up") without quotation marks, and the section is in present tense.
-PII (re-read unless marked): `PiiConventionTestsBase.cs:12` `EntitiesWithPiiProperties_ShouldImplement_IAnonymizable`
-(audit); `Domain/Privacy/PiiRedactor.cs` is 145 lines, class `:24-145`, token `:27` (audit for `:27`);
-`PiiRedactorTests.cs` has 9 `[Fact]`s and no `[Theory]` (was 7); `PiiErasureContractFitnessTests.cs:19`
-(audit). The one production call site: `AuditTrailSaveChangesInterceptor.cs:301`
-(`PiiRedactor.HasPii`), `RedactedToken` into `OldValue`/`NewValue` at `:324-325` (re-read 2026-10-08;
-was `:287`, `:310-311`; the same pair recurs at `:375` and `:395-396` in the same interceptor); opt-in via
+`Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxCleanupService.cs:42`,
+disabled when `RetentionDays <= 0` (`:72`), processed purge `:104-105`, dead-letter sweep
+`SweepDeadLettersAsync` `:145` (doc `:133-143`: rows with retries exhausted keep `ProcessedOn` null,
+window keyed on `OccurredOn`), fallback to `RetentionDays` `:150-152`, predicate `:157-159`;
+`Outbox:RetentionDays` default 7, 0 disables, `OutboxSettings.cs:66`; `DeadLetterRetentionDays`
+(default 0, falls back) `:112`, doc `:105-110`. The body paraphrases
+`Website/docs-src/adr/003-outbox-dual-dispatch.md:64` ("The outbox table grows until processed
+entries are cleaned up") without quotation marks.
+PII: `Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/PiiConventionTestsBase.cs:34`
+`EntitiesWithPiiProperties_ShouldImplement_IAnonymizable`; `Domain/Privacy/PiiRedactor.cs` is 145
+lines, class `:24-145`, token `RedactedToken = "[REDACTED]"` `:27`; `PiiRedactorTests.cs` has 11
+`[Fact]`s and no `[Theory]` (was 9); `PiiErasureContractFitnessTests.cs:19`. The one production
+call site: `AuditTrailSaveChangesInterceptor.cs:323` (`PiiRedactor.HasPii`), `RedactedToken` into
+`OldValue`/`NewValue` at `:347-348` (the same pair recurs at `:398` and `:419-420`); opt-in via
 `AuditTrailSettings.Enabled` (no initializer) at
-`Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSettings.cs:26` (path
-corrected from `Infrastructure/Settings/`). For logs the redactor remains an opt-in call-site utility,
-not an auto-wired destructuring policy. `EncryptedStringConverter` (audit, all unchanged):
-AES-256-GCM `Infrastructure/Persistence/Encryption/EncryptedStringConverter.cs:10-11`, layout doc
-`:39-40`, `NonceSize = 12` `:78`, `TagSize = 16` `:81`, versioned envelope `:203-208`, key version
-`:109`, associated data `:198`/`:231`; zero references in `MMCA.ADC/Source` or `MMCA.Store/Source`;
-ADR-037 Decision item 10 starts `:122`, zero adoption at `:136-141`.
-SCORECARD (re-read): section 30 row `Website/docs-src/governance/common-ArchitectureScorecard.md:94`
-(was `:110`), `| 30 | Compliance, Privacy & Governance | 2 | 3 | 8 | 6/16 |`, values unchanged.
-Indices as stamped at `:5` (evidence 2026-10-07 at v1.233.0, re-read 2026-10-08; was 2026-10-01 at
-v1.218.0, indices unchanged by that re-score): Maturity `:9` 317/328 = 96.6% (was 97.0%, 318/328 before
-2026-10-01), Implementation `:10` 705/820 = 86.0%; row `:94` re-read 2026-10-08, still M3/I8; N/A bullet `:104` reads "none." with
-Sigma-weight 82; section 16 row `:80` is M4/I9 (was M3/I6). Section 30 itself did not move. The
-original single-axis 1-out-of-4 snapshot: the 2026-09-19 FLAG (no live evidence path) is resolved by
-the audit, which located it in MMCA.Common git history at commit f5180991, `ArchitectureScorecard.md:42`
-(score 1, "Lowest score") and `:74` ("the single lowest category score").
-LIVE SESSION (re-read; REFRAMED 2026-10-02; middleware anchors re-read 2026-10-08): `SoftDeletedUserMiddleware` declared at
-`Source/Presentation/MMCA.Common.API/Middleware/SoftDeletedUserMiddleware.cs:37` (was `:33`, earlier `:31`), BR-133
-at `:11`, class doc `:13-19` says the marker is honored on every host, read from the shared store,
-and that a "not deleted" answer is never cached. Pipeline steps in
+`Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSettings.cs:26`. For logs the
+redactor remains an opt-in call-site utility, not an auto-wired destructuring policy.
+`EncryptedStringConverter`: AES-256-GCM `Infrastructure/Persistence/Encryption/EncryptedStringConverter.cs:10-11`,
+version byte passed as associated data `:42-43` (code `:227-231`, decrypt `:261`), stored envelope
+`:68`, `NonceSize = 12` `:82`, `TagSize = 16` `:85`, `DefaultKeyVersion` `:91`; zero references in
+`MMCA.ADC/Source` or `MMCA.Store/Source`; ADR-037 Decision item 10 ("Unit-tested but not yet
+adopted") at `:131`.
+SCORECARD: section 30 row `Website/docs-src/governance/common-ArchitectureScorecard.md:94`,
+`| 30 | Compliance, Privacy & Governance | 2 | 3 | 8 | 6/16 |`, values unchanged. Indices as stamped
+at `:5` (evidence 2026-10-22 at v1.250.0): Maturity `:9` 319/328 = 97.3% (was 96.6%, 317/328, at
+the 2026-10-07 evidence), Implementation `:10` 700/820 = 85.4% (was 86.0%, 705/820); N/A bullet
+`:104` reads "none." with Sigma-weight 82; section 16 row `:80` is M4/I9. Section 30 itself did not
+move. The original single-axis 1-out-of-4 snapshot (audit): MMCA.Common git history at commit
+f5180991, `ArchitectureScorecard.md:42` (score 1, "Lowest score") and `:74` ("the single lowest
+category score").
+LIVE SESSION: `SoftDeletedUserMiddleware` declared at
+`Source/Presentation/MMCA.Common.API/Middleware/SoftDeletedUserMiddleware.cs:37`, BR-133 at `:11`,
+class doc `:13-19` says the marker is honored on every host, read from the shared store, and that a
+"not deleted" answer is never cached. Pipeline steps in
 `Source/Presentation/MMCA.Common.API/Startup/Pipeline/MiddlewarePipelineBuilder.cs`: `UseAuthentication()`
-`:105`, `TenantResolution` `:108`, `UseRateLimiter()` `:121`, `SoftDeletedUserFilter` `:124-125`,
-`UseAuthorization()` `:129`; `WebApplicationExtensions.cs:170` calls `MiddlewarePipelineBuilder.CreateDefault()`.
-Anonymous pass-through `:72-80`; shared-store read `:88-93`; cached-true 401 `:105-112`; lazy
-`GetService<ISoftDeletedUserValidator>()` `:114`; no-validator pass-through on a miss or an
-unreachable cache `:115-122` (rationale `:49-57`); legacy cached-false pass-through `:124-131`;
-never-cache comment `:133-135`; validator query `:139-141`; fresh-query marker write `:152-169`
-and 401 `:171`; fail-open rationale `:22-35`, cache-read catch `:95-103`, validator catch
-`:143-150` (`LogValidatorFailed` at `:147`). There is no `NotDeletedLookupDuration` (removed by
-Common #520). `SoftDeletedUserCache.MarkerDuration =>
-TimeSpan.FromMinutes(15)` at `Source/Core/MMCA.Common.Application/Auth/SoftDeletedUserCache.cs:32`,
+`:104`, `TenantResolution` `:107` (middleware `:112`), `UseRateLimiter()` `:120`,
+`SoftDeletedUserFilter` `:123-124`, `UseAuthorization()` `:128`; `WebApplicationExtensions.cs:173`
+calls `MiddlewarePipelineBuilder.CreateDefault()`. Anonymous pass-through `:72-80`; shared-store read
+`:88-93`; cached-true 401 `:105-112`; lazy `GetService<ISoftDeletedUserValidator>()` `:114`;
+no-validator pass-through on a miss or an unreachable cache `:115-122` (rationale `:49-57`); legacy
+cached-false pass-through `:124-131` (left out of the body as an upgrade edge); never-cache comment
+`:133-135`; validator query `:139-141`; fresh-query marker write `:152-169` (write `:159-161`) and 401
+`:171`; fail-open rationale `:22-35`, cache-read catch `:95-103`, validator catch `:143-150`
+(`LogValidatorFailed` at `:147`). There is no `NotDeletedLookupDuration`.
+`SoftDeletedUserCache.MarkerDuration => TimeSpan.FromMinutes(15)` at
+`Source/Core/MMCA.Common.Application/Auth/SoftDeletedUserCache.cs:32` (`MarkDeletedAsync` `:56`),
 rationale `:23-30` (must outlive the access token; equals the default 15-minute lifetime,
-`JwtSettings.cs:61`, audit). `ISoftDeletedUserValidator.cs:7`, `IsUserSoftDeletedAsync` `:15`;
-implemented once by the framework as
-`Source/Core/MMCA.Common.Application/Users/SoftDeletedUserValidator.cs:20` (single filter-bypassing
-`ExistsAsync` at `:31-34`), closed over ADC's `User` at
-`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/DependencyInjection.cs:38` (was
-`:37`, re-read 2026-10-08). FIX
-(2026-10-02): the body's "cached roughly 30 seconds, bounded revocation window" and "a host with no
-validator no-ops" were both false against current source (changed in Common #473); the section now
-teaches the 15-minute marker written by the base, honored everywhere, with the residual window
-confined to a failed marker write (the 2026-10-02 "30 seconds for a not-deleted answer" wording was
-itself retired on 2026-10-08, see above). UPSTREAM FLAGS:
-ADR-047 (`:78-89`, `:162-183`, `:242`) still documents `MarkerDuration = FromSeconds(30)`, so this
-section is grounded in source rather than the ADR; and the middleware's own remarks
-(`SoftDeletedUserMiddleware.cs:31-32`, was `:27-28`, still present 2026-10-08) say deletion "already revoked the refresh token", which
-contradicts `DeleteUserHandlerBase.cs:107-111`. The article follows the handler.
-EXPORT (re-read unless marked): `MMCA.Common/Source/Core/MMCA.Common.Shared/Privacy/UserDataExportDTO.cs:15`
-(audit); ADC `UserDataExportSubjectDTO.cs:16`, credential exclusion `:6-7` (audit). The quoted block
-is verbatim from
+`AccessTokenExpirationMinutes = 15` at `Source/Core/MMCA.Common.Infrastructure/Auth/JwtSettings.cs:66`,
+doc `:61`). `ISoftDeletedUserValidator.cs:7`, `IsUserSoftDeletedAsync` `:15`; implemented once by
+the framework as `Source/Core/MMCA.Common.Application/Users/SoftDeletedUserValidator.cs:20` (single
+filter-bypassing `ExistsAsync` from `:31`), closed over ADC's `User` at
+`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/DependencyInjection.cs:41` (was
+`:38`). The middleware's remark that deletion "already revoked the refresh token"
+(`SoftDeletedUserMiddleware.cs:31-32`) now agrees with the handler (`:155-157`), so the earlier
+UPSTREAM FLAG on it is retired; ADR-047 now states the 15-minute marker (`:94`, `:464`), and its
+`FromSeconds(30)` at `:310` sits in a historical revision paragraph, so that flag is retired too.
+EXPORT: `MMCA.Common/Source/Core/MMCA.Common.Shared/Privacy/UserDataExportDTO.cs:15`; ADC
+`UserDataExportSubjectDTO.cs:16`, credential exclusion `:6-7`. The quoted block is verbatim from
 `MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ExportUserData/ExportUserDataHandlerBase.cs:185-198`,
 whose `:190` calls the base's private `ExportSectionUnavailable` `LoggerMessage` (Warning, declared
-`:201-202`); FIX (2026-10-02): the block's `UserUseCaseLog.` qualifier is removed, since
-`UserUseCaseLog.cs` no longer exists. "Cancellation is not degradation." at `:35` (audit). ADC
-`ExportUserDataHandler.cs` (78 lines, audit): declared `:30-35`, `HasExportPrivilege` `:38`,
-`BuildSubjectSnapshotAsync` `:41-77`, no catch, class doc `:23-28`; `NotificationUserDataExportSection`
-doc `:11-15` (audit). `MMCA.ADC.Engagement.Contracts/UserEngagementExportServiceGrpcAdapter.cs`
-declares the class at `:19-20`, doc and rationale `:10-18` (was `:18-19`, `:10-16`).
-HEADER (2026-10-02): ADR cell gains ADR-095; Status adds ADR-095 and `00-primer.md:193`, scorecard
-anchor `:94`. Header reconciled with `README.md:46` in this run: group G23 is the ADC Identity module (published as
-`group-24-identity-module.md`; group IDs and file numbers differ, `00-group-taxonomy.md:79`), and ADR-076
-is added because the export section relies on it. Other facts (audit): four ADC service hosts, Apache-2.0 license,
-next article #37 (`README.md:47`), `group-24-identity-module.md` exists.*
+`:201-202`). "Cancellation is not degradation." at `:35`. ADC `ExportUserDataHandler.cs` (91 lines,
+was 78): declared `:31`, `HasExportPrivilege` `:39`, `BuildSubjectSnapshotAsync` `:42`, no catch;
+`NotificationUserDataExportSection` declared `:18`, doc `:7-16`.
+`MMCA.ADC.Engagement.Contracts/UserEngagementExportServiceGrpcAdapter.cs` declares the class at `:19`.
+HEADER: ADR cell and Status unchanged this pass; scorecard anchor `:94` and `00-primer.md:193`
+confirmed. Group G23 is the ADC Identity module (published as `group-24-identity-module.md`, which
+exists; group IDs and file numbers differ, `00-group-taxonomy.md:79`); `README.md:46` row matches,
+next article #37 at `README.md:47`. Other facts (audit): four ADC service hosts, Apache-2.0 license.*
 
 - Full series index: https://ivanball.github.io/writing.html

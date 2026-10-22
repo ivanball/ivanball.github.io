@@ -6,24 +6,24 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>Refresh tokens that rotate per device, and reuse detection that makes theft self-limiting · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="A short-lived JWT plus one server-stored refresh token that rotates on every use, with reuse detection that makes a stolen token end its own session.">
+  <meta name="description" content="A short-lived JWT plus a server-stored refresh session per device that rotates on every use, with reuse detection that makes a stolen token end its own session.">
   <link rel="canonical" href="https://ivanball.github.io/articles/jwt-refresh-token-rotation.html">
   <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="Refresh tokens that rotate per device, and reuse detection that makes theft self-limiting">
-  <meta property="og:description" content="A short-lived JWT plus one server-stored refresh token that rotates on every use, with reuse detection that makes a stolen token end its own session.">
+  <meta property="og:description" content="A short-lived JWT plus a server-stored refresh session per device that rotates on every use, with reuse detection that makes a stolen token end its own session.">
   <meta property="og:url" content="https://ivanball.github.io/articles/jwt-refresh-token-rotation.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-27.png">
   <meta property="og:image:alt" content="Refresh tokens that rotate per device, and reuse detection that makes theft self-limiting">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Refresh tokens that rotate per device, and reuse detection that makes theft self-limiting">
-  <meta name="twitter:description" content="A short-lived JWT plus one server-stored refresh token that rotates on every use, with reuse detection that makes a stolen token end its own session.">
+  <meta name="twitter:description" content="A short-lived JWT plus a server-stored refresh session per device that rotates on every use, with reuse detection that makes a stolen token end its own session.">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-27.png">
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Refresh tokens that rotate per device, and reuse detection that makes theft self-limiting","description":"A short-lived JWT plus one server-stored refresh token that rotates on every use, with reuse detection that makes a stolen token end its own session.","url":"https://ivanball.github.io/articles/jwt-refresh-token-rotation.html","mainEntityOfPage":"https://ivanball.github.io/articles/jwt-refresh-token-rotation.html","image":"https://ivanball.github.io/assets/img/articles/article-27.png","datePublished":"2026-07-27T10:27:05Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":27,"sameAs":"https://medium.com/@ivanball76/one-rotating-refresh-token-and-reuse-detection-that-makes-theft-self-limiting-fab42234a04a"}</script>
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"27 · One rotating refresh token","item":"https://ivanball.github.io/articles/jwt-refresh-token-rotation.html"}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Refresh tokens that rotate per device, and reuse detection that makes theft self-limiting","description":"A short-lived JWT plus a server-stored refresh session per device that rotates on every use, with reuse detection that makes a stolen token end its own session.","url":"https://ivanball.github.io/articles/jwt-refresh-token-rotation.html","mainEntityOfPage":"https://ivanball.github.io/articles/jwt-refresh-token-rotation.html","image":"https://ivanball.github.io/assets/img/articles/article-27.png","datePublished":"2026-07-27T10:27:05Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":27,"sameAs":"https://medium.com/@ivanball76/one-rotating-refresh-token-and-reuse-detection-that-makes-theft-self-limiting-fab42234a04a"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"27 · Refresh tokens that rotate per device","item":"https://ivanball.github.io/articles/jwt-refresh-token-rotation.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
   <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -89,7 +89,7 @@
         <span aria-hidden="true">/</span>
         <a href="../articles/index.html">The MMCA.Common series</a>
         <span aria-hidden="true">/</span>
-        <span class="current">27 · One rotating refresh token</span>
+        <span class="current">27 · Refresh tokens that rotate per device</span>
         <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
       </nav>
       <div class="doc-layout doc-layout--toc">
@@ -125,7 +125,7 @@
         <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
         <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
         <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
-        <li><a href="jwt-refresh-token-rotation.html" aria-current="page">27 · One rotating refresh token</a></li>
+        <li><a href="jwt-refresh-token-rotation.html" aria-current="page">27 · Refresh tokens that rotate per device</a></li>
         <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
         <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
         <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
@@ -202,10 +202,10 @@
           hand it the issuer, and change nothing about the token logic. Here is the model, piece by piece.</p>
           <p><strong>The access token is stateless; the refresh side is one row per signed-in device.</strong> The access token is a
           signed JWT whose <code>exp</code> comes from <code>JwtSettings.AccessTokenExpirationMinutes</code> (default 15 minutes,
-          <code>JwtSettings.cs:61</code>), written by <code>TokenService.GenerateAccessToken</code> (<code>TokenService.cs:101</code>, expiry stamped at
+          <code>JwtSettings.cs:66</code>), written by <code>TokenService.GenerateAccessToken</code> (<code>TokenService.cs:101</code>, expiry stamped at
           <code>:148</code>). The refresh side is <code>RefreshSession</code>, a sealed framework class kept as a flat bookkeeping record,
           with one row per signed-in device (<code>RefreshSession.cs:43</code>): the user id, a token hash, an issue instant, an
-          expiry, and revocation bookkeeping (<code>:73,76,79,82,85,91,94</code>). Refresh tokens are deliberately absent from the
+          expiry, and revocation bookkeeping (<code>:76,79,82,85,88,94,97</code>). Refresh tokens are deliberately absent from the
           credential contract the user aggregate exposes to the workflow: <code>IAuthUser</code> carries password material only
           (<code>IAuthUser.cs:9-14,20,23</code>). A user holds as many live sessions as they have signed-in devices, bounded by a
           per-user cap (<code>AuthSessionIssuer.cs:17-28</code>). Every access token the issuer mints names the session behind it
@@ -215,7 +215,7 @@
           <p><strong>The stored value is a digest, not the token.</strong> <code>TokenService.GenerateRefreshToken</code> draws 64 bytes from
           <code>RandomNumberGenerator.GetBytes</code> and base64-encodes them (<code>TokenService.cs:155,157,158</code>). That plaintext
           lives only in the response that hands it to the client. What the store keeps is <code>RefreshSession.TokenHash</code>,
-          an unsalted hex SHA-256 digest of the token&#39;s UTF-8 bytes (<code>RefreshSession.cs:76,177-181</code>), exactly 64
+          an unsalted hex SHA-256 digest of the token&#39;s UTF-8 bytes (<code>RefreshSession.cs:79,180-184</code>), exactly 64
           characters wide (<code>:45-46</code>). The digest is deterministic on purpose, because lookup is by hash: a presented
           token finds its row through <code>FindByTokenHashAsync(RefreshSession.HashToken(token))</code>
           (<code>AuthSessionIssuer.cs:309-311</code>). A database read therefore yields digests, and a digest is not something
@@ -230,7 +230,7 @@
           (<code>ResolveRotatableSessionAsync</code>, called at <code>:103</code>, body <code>:298</code>) and then rotates it (<code>RotateSessionAsync</code>,
           called at <code>:111</code>, body <code>:394</code>). Rotation mints a successor session (<code>:402-409</code>) and claims the presented row
           through <code>IRefreshSessionStore.TryRotateAsync</code> (<code>:417-419</code>), which revokes it with reason <code>Rotated</code> and links
-          it to that successor via <code>ReplacedByTokenHash</code> (<code>EFRefreshSessionStore.cs:138-143</code>; <code>RefreshSession.cs:58,91</code>).
+          it to that successor via <code>ReplacedByTokenHash</code> (<code>EFRefreshSessionStore.cs:191-196</code>; <code>RefreshSession.cs:58,94</code>).
           The successor is a new row with a new id, so the access token handed back carries a new <code>sid</code> too
           (<code>AuthSessionIssuer.cs:118-124</code>). The consequence is the important part: the instant a successor is issued,
           the token that bought it is spent, and the rotated row it leaves behind is precisely what makes a replay
@@ -262,7 +262,9 @@
           user holds is revoked with reason <code>ReuseDetected</code> (<code>:335-339</code>, <code>RefreshSession.cs:64</code>). Only the <code>Rotated</code>
           reason qualifies for the grace, a revocation stamped slightly ahead of the local clock (another replica&#39;s)
           counts as inside it, and a grace of <code>0</code> turns it off (<code>:476-477,483-486</code>). Any other or missing reason counts
-          as reuse, the conservative answer for a row the code does not recognize (<code>:456-461,469</code>). An <strong>expired</strong> row
+          as reuse, <code>AccountDeleted</code> included (the reason account erasure writes, <code>RefreshSession.cs:70</code>,
+          <code>RefreshSessionRevocation.cs:86</code>), the conservative answer for a row the code does not recognize
+          (<code>AuthSessionIssuer.cs:456-461,469</code>). An <strong>expired</strong> row
           is an ordinary end of life, so that device re-authenticates and the rest are untouched (<code>:342-344</code>). Four of
           the five outcomes answer with the same <code>Auth.InvalidRefreshToken</code> error (<code>:267-271</code>), so an unknown token, an
           expired one and a replayed one look identical to the caller and the distinction lives in what happens behind
@@ -270,7 +272,7 @@
           session is intact and to retry with the token the winning request received.</p>
           <p><strong>A simultaneous refresh is a race first, and a replay only past the grace.</strong> Two requests presenting the
           same still-live token both read an un-revoked row, so the store arbitrates rather than memory:
-          <code>TryRotateAsync</code> (<code>EFRefreshSessionStore.cs:121</code>) is a conditional update on <code>RevokedAt IS NULL</code> (<code>:138</code>),
+          <code>TryRotateAsync</code> (<code>EFRefreshSessionStore.cs:174</code>) is a conditional update on <code>RevokedAt IS NULL</code> (<code>:191</code>),
           and only one request claims the row. The loser&#39;s tracked copy was read before that claim and still shows the
           row live, so it re-reads the row untracked, as the database holds it now (<code>AuthSessionIssuer.cs:427-429</code>),
           and branches the way the lookup path does. A row that a sign-out or a cap eviction reached first fails that
@@ -280,14 +282,16 @@
           <p><strong>The expiry slides on every rotation.</strong> Every session is stamped with its issue instant plus
           <code>RefreshTokenLifetime</code>, both when one is opened (<code>AuthSessionIssuer.cs:364</code>) and when a successor is minted
           (<code>:407</code>). That property reads <code>TokenService.RefreshTokenLifetime</code> (<code>TokenService.cs:165</code>), derived from
-          <code>JwtSettings.RefreshTokenExpirationDays</code> (<code>JwtSettings.cs:64</code>, default 7 days). A device that refreshes at
+          <code>JwtSettings.RefreshTokenExpirationDays</code> (<code>JwtSettings.cs:73</code>, default 7 days). A device that refreshes at
           least once inside each window stays signed in indefinitely; re-authentication is required only after a full
-          lifetime passes with no successful refresh, or after a revocation. If the configured value is non-positive,
-          the issuer falls back to the seven-day BR-205 default rather than failing startup
-          (<code>AuthSessionIssuer.cs:60-61</code>). It holds a fifteen-minute fallback for the access token too (<code>:57-58</code>), but
-          that one sets only the expiry the response reports (<code>:88</code>, <code>:124</code>): the JWT&#39;s own <code>exp</code> is stamped from the
-          raw <code>AccessTokenExpirationMinutes</code> (<code>TokenService.cs:148</code>), which <code>JwtSettings.Validate</code> does not range-check
-          (<code>JwtSettings.cs:70-85</code>).</p>
+          lifetime passes with no successful refresh, or after a revocation. Both configured lifetimes must be at
+          least 1 (<code>[Range(1, int.MaxValue)]</code>, <code>JwtSettings.cs:65,72</code>), and <code>AddCommonAuthentication</code> binds the
+          settings with <code>ValidateDataAnnotations().ValidateOnStart()</code>
+          (<code>MMCA.Common.API/Startup/WebApplicationBuilderExtensions.Authentication.cs:135-138</code>), so a zero or
+          negative value fails host startup rather than every sign-in. The issuer still guards itself against an
+          <code>ITokenService</code> that reports a non-positive lifetime: it falls back to the seven-day BR-205 default for the
+          refresh side (<code>AuthSessionIssuer.cs:60-61</code>) and to fifteen minutes for the access side (<code>:57-58</code>), and that
+          second fallback sets only the expiry the response reports (<code>:88</code>, <code>:124</code>), never the JWT&#39;s own <code>exp</code>.</p>
           <p><strong>A per-user cap bounds the family.</strong> <code>RefreshSessionSettings.MaxActiveSessionsPerUser</code> binds
           <code>RefreshSessions:MaxActiveSessionsPerUser</code>, default 10, range 1-1000 (<code>RefreshSessionSettings.cs:34-35</code>),
           validated at startup (<code>MMCA.Common.Infrastructure/DependencyInjection.cs:168-171</code>). Opening one session past
@@ -296,7 +300,7 @@
           <code>ReasonSessionCap</code> at <code>RefreshSession.cs:67</code>). Expired-but-unrevoked rows authenticate nobody and do not
           count against the cap; they age out with the framework&#39;s retention sweep, <code>RefreshSessionCleanupService</code>
           over the <code>RefreshSessions:RetentionDays</code> window (default 30, <code>RefreshSessionSettings.cs:71-72</code>), which the
-          host runs once <code>RefreshSessions:Enabled</code> is set (<code>DependencyInjection.cs:182-186</code>).</p>
+          host runs once <code>RefreshSessions:Enabled</code> is set (<code>DependencyInjection.cs:186-190</code>).</p>
           <p><strong>Explicit revocation names one device or takes them all.</strong> <code>RevokeTokenAsync</code>
           (<code>AuthenticationServiceBase.cs:378</code>) hands an optional refresh token to <code>SignOutAsync</code>
           (<code>AuthSessionIssuer.cs:150</code>). A live session belonging to that user is revoked alone with reason
@@ -424,13 +428,15 @@
           stays signed in indefinitely. The per-user cap bounds how many devices, and the retention sweep bounds how
           long a dead row lingers, but neither ends a chain that keeps refreshing. An absolute cap on session age is
           deliberately not imposed.</li>
-          <li><strong>A non-positive configured lifetime falls back silently.</strong> A zero or negative <code>RefreshTokenExpirationDays</code>
-          is treated as absent and reverts to the seven-day baseline rather than failing startup
-          (<code>AuthSessionIssuer.cs:60-61</code>); a test double that leaves <code>ITokenService.RefreshTokenLifetime</code> alone lands
-          on the same seven days through the interface default (<code>ITokenService.cs:40</code>). A misconfiguration quietly
-          reverts to the default instead of surfacing an error. The access-token side is looser still: its
-          fifteen-minute fallback (<code>AuthSessionIssuer.cs:57-58</code>) reaches only the expiry the response reports, not
-          the token, whose <code>exp</code> comes from the raw configured value (<code>TokenService.cs:148</code>).</li>
+          <li><strong>A lifetime fallback survives below configuration.</strong> A zero or negative configured lifetime never gets
+          that far: both <code>Jwt</code> lifetimes carry <code>[Range(1, int.MaxValue)]</code> (<code>JwtSettings.cs:65,72</code>) and validate at
+          startup (<code>WebApplicationBuilderExtensions.Authentication.cs:135-138</code>), so the host refuses to boot. What
+          remains sits behind <code>ITokenService</code>: a token service other than the framework&#39;s (a test double, a custom
+          implementation) that leaves <code>RefreshTokenLifetime</code> alone lands on seven days through the interface default
+          (<code>ITokenService.cs:40</code>, <code>AccessTokenLifetime</code> fifteen minutes at <code>:33</code>), and one that reports a
+          non-positive value is quietly treated as seven days by the issuer (<code>AuthSessionIssuer.cs:60-61</code>) instead
+          of surfacing an error. Its fifteen-minute access-side fallback (<code>:57-58</code>) reaches only the expiry the
+          response reports, not the token, whose <code>exp</code> is whatever that token service stamps.</li>
           </ul>
           <p>None of these are reasons to skip rotation. They are the reasons to wire it knowing what it does and does not
           promise.</p>
@@ -467,7 +473,8 @@
           is the reuse signal that revokes a user&#39;s whole live family once a short race grace has passed (inside it the
           answer is a retryable 409) while a signed-out, cap-evicted or expired one fails alone, and the honest
           trade-offs (a growing table, aggressive reuse detection softened by a grace a thief can also use, a
-          server-side write per refresh, no absolute session-age cap, a silent lifetime fallback) that come with
+          server-side write per refresh, no absolute session-age cap, a lifetime fallback only a custom token service
+          reaches) that come with
           choosing to fail closed past the grace.</p>
           <p><strong>Next in the series:</strong> the write-once REST surface every entity inherits: generic entity controllers that
           give a new aggregate its full CRUD API without a hand-written controller per type.</p>

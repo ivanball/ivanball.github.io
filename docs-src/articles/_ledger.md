@@ -21,18 +21,19 @@ Working file for `/update-medium` (underscore-prefixed, so the site build skips 
 **Anchor facts (current state, verify before publishing)**
 - .NET 10, C# preview (extension types), Apache-2.0, repo `https://github.com/ivanball/MMCA.Common`
   (confirmed via git remote).
-- Framework version **v1.233.0**, tracked in lockstep by every consumer (per `MMCA.Common/FACTS.md`).
+- Framework version **v1.250.0**, tracked in lockstep by every consumer (per `MMCA.Common/FACTS.md`).
 - 22 NuGet packages released in lockstep; **132 ADRs (001-132)** (per `Website/docs-src/adr/README.md`).
-- `MMCA.Common.Testing.Architecture` defines 153 test methods across 61 base classes;
-  Common's own build runs 410, plus a compile-time MSBuild layer guard (per `FACTS.md`).
-- Two-axis architecture index (current per-repo scorecards): Common **Maturity 96.6% (317/328),
-  Implementation 86.0% (705/820)** across all 34 categories (none N/A now: §27 i18n is scored after
-  ADR-027 superseded the single-locale ADR-011); ADC **Maturity 96.9% (314/324), Implementation 86.0% (697/810)**; Store **Maturity 97.5% (308/316), Implementation 83.2% (657/790)**.
-- ~2,254 fast tests, no Docker. Two real consumer apps: MMCA.ADC (conference, Azure Container Apps) and
-  MMCA.Store (e-commerce, Stripe). Both consumers are pinned at 1.233.0 in lockstep.
+- `MMCA.Common.Testing.Architecture` defines 159 test methods across 63 base classes;
+  Common's own build runs 458, plus a compile-time MSBuild layer guard (per `FACTS.md`).
+- Two-axis architecture index (current per-repo scorecards): Common **Maturity 97.3% (319/328),
+  Implementation 85.4% (700/820)** across all 34 categories (none N/A now: §27 i18n is scored after
+  ADR-027 superseded the single-locale ADR-011); ADC **Maturity 97.5% (316/324), Implementation 86.0% (697/810)**; Store **Maturity 97.5% (308/316), Implementation 83.2% (657/790)**.
+- 8,386 tests executed by Common's `build-and-test` job (CI run 39625216950, 2026-10-21), no Docker; the
+  CI comment's "~2,254" (`MMCA.Common/.github/workflows/ci.yml:160`) is stale. Two real consumer apps: MMCA.ADC (conference, Azure Container Apps) and
+  MMCA.Store (e-commerce, Stripe). Both consumers are pinned at 1.250.0 in lockstep.
 
 > **Note on the scorecard:** the repo's committed `Website/docs-src/governance/common-ArchitectureScorecard.md` is now the
-> canonical **two-axis** scorecard (Maturity 96.6% (317/328) / Implementation 86.0% (705/820) as of the 2026-10-01 re-score at v1.218.0;
+> canonical **two-axis** scorecard (Maturity 97.3% (319/328) / Implementation 85.4% (700/820) as of the 2026-10-22 re-score at v1.250.0;
 > re-scored clean-tree at v1.101.0, then moved by the fifteenth-wave i18n completion train 2026-07-03,
 > the sixteenth-wave clean-tree re-score at v1.106.0 2026-07-06, which lifted §14 Testability
 > Implementation 8 to 9, the seventeenth-wave re-score at v1.108.0 2026-07-09, which recalibrated
@@ -73,8 +74,8 @@ Working file for `/update-medium` (underscore-prefixed, so the site build skips 
 > applicable categories, "eleven packages"), which survives in git history as the historical baseline
 > (MMCA.Common commit `f518099`, `ArchitectureScorecard.md:3`: "80% (218 of 272 weighted points across
 > 28 applicable categories; 6 N/A categories excluded)").
-> ADC's two-axis scorecard is `Website/docs-src/governance/adc-ArchitectureScorecard.md` (Maturity 96.9% (314/324) / Implementation
-> 86.0% (697/810) as of the 2026-10-01 re-score). Store's is
+> ADC's two-axis scorecard is `Website/docs-src/governance/adc-ArchitectureScorecard.md` (Maturity 97.5% (316/324) / Implementation
+> 86.0% (697/810) as of the 2026-10-22 re-score). Store's is
 > `Website/docs-src/governance/store-ArchitectureScorecard.md` (Maturity 97.5% (308/316) / Implementation
 > 83.2% (657/790) as of the 2026-10-07 re-score). The cornerstone articles
 > frame proof as "scored, published, then fixed, then re-scored": the 80% snapshot predated several
@@ -369,6 +370,22 @@ Working file for `/update-medium` (underscore-prefixed, so the site build skips 
 > `LifetimeTokens` fitness rule) are a new §19 section of **Article 37**. The refresh-token reuse grace
 > window (`RefreshSessionSettings.ReuseGraceSeconds`, ADR-097 revised 2026-10-07) regrounds **Article 27**.
 > Every ADR in 001-132 and every functional group in G01-G28 now has an article cell or a recorded scope-out.
+>
+> **2026-10-22 coverage audit** (full sweep at v1.250.0, ADR set unchanged at 132, re-inversion of the
+> whole matrix): no new article; three gaps close as sections of existing pieces. **ADR-083** (the CRUD
+> lifecycle event taxonomy) was recorded above as taught in Article 15, but no article text named
+> `EntityChangedEvent<TId>`; **Article 15** now carries the section (17 derived records across ADC, Store
+> and Helpdesk) and its matrix cell. **ADR-091** (the cache-backed single-use password reset) is a new
+> section of **Article 52**, beside the email-confirmation token it mirrors. The opt-in gRPC
+> service-to-service token (`WithServiceToken`, `ServiceTokenProvider`; recorded in ADR-007) is a new
+> section of **Article 16**, which had still described it as an open backlog lever; ADR-007 joins that
+> article's matrix cell. Group cells keep the taxonomy IDs of
+> `Website/docs-src/onboarding/00-group-taxonomy.md` (which differ from the chapter file numbers above
+> G22), as recorded in the 2026-10-02 audit; the series README now states this under its table. Owner
+> mapping decisions the same day: Article 7's ADR cell is 014/079 (ADR-031 belongs to Article 45) and keeps
+> §10 because the scorecard's §10 row credits the decorator pipeline; Article 18's rubric cell widens to
+> §6, §9, §10, §29; Article 42's header gains ADR-071 to match its matrix cell. Every ADR in 001-132 and
+> every functional group in G01-G28 has an article cell or a recorded scope-out.
 
 **Coverage history**
 

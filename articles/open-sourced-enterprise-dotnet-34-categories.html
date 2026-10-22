@@ -125,7 +125,7 @@
         <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
         <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
         <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
-        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · Refresh tokens that rotate per device</a></li>
         <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
         <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
         <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
@@ -231,7 +231,7 @@ dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal"
           </ol>
           <p>Those fitness functions do not live as copy-pasted test code in each repo. They live once, in a
           shipped package, <code>MMCA.Common.Testing.Architecture</code>, which exposes a reusable rule library and abstract
-          test bases (<strong>153 test methods across 61 base classes</strong>). MMCA.Common&#39;s own build executes 410 fitness
+          test bases (<strong>159 test methods across 63 base classes</strong>). MMCA.Common&#39;s own build executes 458 fitness
           tests built on them. MMCA.ADC and MMCA.Store subclass the same bases and supply their own architecture
           map, and so does MMCA.Helpdesk, the reference app the templates are staged from, so the rules are
           literally identical in every codebase that runs them.</p>
@@ -259,21 +259,26 @@ dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal"
           <p>I graded MMCA.Common against a 34-category architecture rubric (backend, front-end, and
           operational/governance categories), scoring each category on two axes: <strong>Maturity</strong> (how well-governed
           the process is) and <strong>Implementation</strong> (how much substance is actually executed). It sits at a
-          <strong>maturity index of 96.6% and an implementation index of 86.0%</strong> across all 34 categories
+          <strong>maturity index of 97.3% and an implementation index of 85.4%</strong> across all 34 categories
           (internationalization ships in the framework as en-US plus Spanish under ADR-027, which supersedes the
           single-locale ADR-011, so it scores on both axes like every other category; nothing is excluded as
           N/A). Then I committed the full evaluation to the repo, with every category&#39;s two scores, the evidence,
           and the honest gaps.</p>
           <p>The rubric itself is versioned. Version 2 (ADR-110) keeps all 34 categories and scores category 10 as
-          <strong>Messaging &amp; Integration Architecture</strong> (Maturity 4 / Implementation 9) and category 16 as <strong>AI-Native
+          <strong>Messaging &amp; Integration Architecture</strong> (Maturity 4 / Implementation 8) and category 16 as <strong>AI-Native
           Application Architecture</strong> (Maturity 4 / Implementation 9), which is where the governed language-model
           boundary is graded.</p>
           <p>The pattern in the scores is the same line from earlier: <strong>every category that earned top marks was
-          backed by a fitness function or a compile-time guard. Every category capped lower either left the
-          design to code review, or has its real proof living downstream in a consumer app.</strong> Clean Architecture,
-          microservices readiness, CQRS, and testability all sit at Maturity 4 / Implementation 9, and all of them
-          are enforced automatically. SOLID sits lower, at Maturity 3 / Implementation 8, for exactly that reason:
-          the principles are applied throughout, but only two of the five are enforced automatically.</p>
+          backed by a fitness function or a compile-time guard. Every category capped lower either has its real
+          proof living downstream in a consumer app, or carries a named in-repo residual the scorecard writes
+          down.</strong> Clean Architecture, microservices readiness, CQRS, and testability all sit at Maturity 4 /
+          Implementation 9, and all of them are enforced automatically. SOLID sits lower, at Maturity 3 /
+          Implementation 8, for exactly that reason: the principles are applied throughout, and SRP, DIP and the
+          throw half of LSP are enforced automatically, but OCP and ISP have no automated gate. Its Implementation
+          8 is held by named code gaps (a base context that resolves about thirteen collaborators through
+          <code>GetService</code>, one SQL Server-named unique-violation detector serving every engine, a few very large
+          classes). Messaging holds at Implementation 8 the same way: RabbitMQ delayed redelivery is opt-in,
+          and no CI job runs a live broker.</p>
           <p>Implementation is the weaker axis on purpose. A framework ships mature, well-governed mechanisms whose
           full execution often completes in the apps that consume it. Deployment and resilience recovery both
           stop at Implementation 8 precisely because the substance they reward (a real deploy, production
@@ -289,7 +294,7 @@ dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal"
           <li><strong>MMCA.Store</strong>, an e-commerce app with Catalog, Sales, and Identity modules and Stripe integration.</li>
           </ul>
           <p>Both run on the same framework version, swept in lockstep when the framework releases. The test suite
-          is roughly <strong>2,254 fast tests</strong> in a correct pyramid with no Docker or database dependency, held above
+          is more than <strong>8,000 fast tests</strong> in a correct pyramid with no Docker or database dependency, held above
           a 2,000-test zero-discovery floor by CI, so the inner loop stays quick and a filter regression that
           silently drops tests fails the build.</p>
           <h2 id="what-this-series-will-cover">What this series will cover</h2>

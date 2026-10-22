@@ -125,7 +125,7 @@
         <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
         <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
         <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
-        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · Refresh tokens that rotate per device</a></li>
         <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
         <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
         <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
@@ -181,8 +181,10 @@
           complains about a duplicate charge, and by then the originating request is long gone from the logs.</p>
           <p>And the pressure toward retries only increases as systems get hardened. A stock resilience handler retries
           every verb unless it is told otherwise, which is exactly why MMCA&#39;s own outbound handlers switch the retry
-          off for <code>POST</code> and <code>PATCH</code> (ADR-009), and why the framework&#39;s UI client retries a <code>POST</code> only when it
-          carries an <code>Idempotency-Key</code> held constant across the attempts. A server cannot assume every caller is that
+          off for <code>POST</code> and <code>PATCH</code> (ADR-009), and why the framework&#39;s UI client retries a <code>POST</code> that may have
+          reached the server only when it carries an <code>Idempotency-Key</code> held constant across the attempts (a
+          connection that failed before the request was ever sent is the one case it resends without a key). A
+          server cannot assume every caller is that
           careful, and the ones that are still need the server to honor the key. Resilience and idempotency are two halves
           of the same coin: retries make the system robust to transient failure <em>only if</em> the operations being
           retried are safe to repeat. Idempotency is what makes &quot;just retry it&quot; a safe instruction.</p>
@@ -191,8 +193,10 @@
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs">[<span class="hljs-meta">Idempotent</span>]
 [<span class="hljs-meta">HttpPost</span>]
 <span class="hljs-function"><span class="hljs-keyword">public</span> Task&lt;IActionResult&gt; <span class="hljs-title">CreateAsync</span>(<span class="hljs-params">[FromBody] CreateOrderRequest request</span>)</span> =&gt; ...</code></pre>
-          <p>The generic create action in the framework&#39;s controller bases carries <code>[Idempotent]</code> by default, so most
-          write endpoints get it for free. The attribute is a <code>ServiceFilterAttribute</code>, which means the real work
+          <p>The generic create and update actions in the framework&#39;s controller bases carry <code>[Idempotent]</code> by
+          default, so most write endpoints get it for free. The opt-in is not silent either: every <code>POST</code> action has
+          to declare its intent, <code>[Idempotent]</code> or <code>[NonIdempotent(&quot;why&quot;)]</code>, and an architecture fitness test fails
+          any that declares neither. The attribute is a <code>ServiceFilterAttribute</code>, which means the real work
           happens in a filter resolved from DI (so it can depend on scoped services like the cache). The attribute
           itself is a one-line marker.</p>
           <p>The runtime contract is:</p>
@@ -334,7 +338,7 @@
           <p>The retry half is wired too: every receive endpoint gets an exponential-backoff <code>UseMessageRetry</code> policy
           (<code>MessageBusSettings.RetryLimit</code>), and the consumer rethrows on handler failure so MassTransit applies it
           before dead-lettering. So the honest framing is: the HTTP write path is idempotent-by-attribute (the
-          scorecard credits the filter under §9 and §10, where the §10 row, scored Implementation 9, lists the
+          scorecard credits the filter under §9 and §10, where the §10 row, scored Implementation 8, lists the
           filter taking a distributed lock with the stripe as fallback among its evidence, while §29 covers the Polly
           handlers and the outbox&#39;s graceful degradation), and the broker consumer path dedups by <code>MessageId</code> by
           default on any broker transport. That dedup is at-least-once-with-dedup, not exactly-once: the crash

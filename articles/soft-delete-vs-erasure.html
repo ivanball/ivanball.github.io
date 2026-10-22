@@ -125,7 +125,7 @@
         <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
         <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
         <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
-        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · Refresh tokens that rotate per device</a></li>
         <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
         <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
         <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
@@ -225,14 +225,17 @@
           <code>IsDeleted</code> for lifecycle <em>and</em> <code>Anonymize()</code> scrubs the data for a right-to-be-forgotten request, and
           they are deliberately separate operations. The delete handler calls both in one transaction to honor
           the &quot;erase within 30 days&quot; promise, and <code>Delete()</code> raises a <code>UserDeleted</code> domain event rather than
-          touching credentials. Outstanding refresh sessions need no separate revocation: the refresh flow
-          re-fetches the account through the same soft-delete query filter, so the moment the erasure commits
-          there is no account left to mint a fresh access token for. (The access token the user is already
-          holding is cut off separately, at runtime, which is its own section below.) For the fields a service chooses to keep retrievable after
+          touching credentials. The same save revokes the account&#39;s live refresh sessions and anonymizes every
+          session row, revoked or not, because the IP address and user agent captured at sign-in are personal
+          data too. The revocation records why a session ended rather than being the lock itself: the refresh
+          flow re-fetches the account through the same soft-delete query filter, so the moment the erasure
+          commits there is no account left to mint a fresh access token for. (The access token the user is
+          already holding is cut off separately, at runtime, which is its own section below.) For the fields a service chooses to keep retrievable after
           anonymization rather than overwrite, ADR-005 offers an AES-256-GCM <code>EncryptedStringConverter</code>, so
           &quot;keep this usable&quot; and &quot;protect it at rest&quot; need not be in tension. ADC&#39;s <code>User</code> takes the simpler
-          route: <code>Anonymize()</code> overwrites every <code>[Pii]</code> field (<code>Email</code>, <code>FirstName</code>, <code>LastName</code>, and the
-          <code>AvatarUrl</code> added with the avatar feature) in place and keeps none, so it does not wire the converter
+          route: <code>Anonymize()</code> overwrites every stored <code>[Pii]</code> field (<code>Email</code>, <code>FirstName</code>, <code>LastName</code>, the
+          seven device fields, the external-login <code>LoginProvider</code> and <code>ProviderKey</code>, and <code>AvatarUrl</code>; the
+          computed <code>FullName</code> follows the two names) in place and keeps none, so it does not wire the converter
           at all. The converter is a framework capability for the
           service that needs it, not a default.</p>
           <p>There is one more piece that turns this from a convention into a guarantee: an <strong>architecture fitness
@@ -319,16 +322,19 @@ configurationBuilder.Conventions.Add(_ =&gt; <span class="hljs-keyword">new</spa
           processed entries are cleaned up. So without a purge, even after you anonymized a user&#39;s aggregate,
           their personal data could still be sitting in old, processed outbox payloads forever.</p>
           <p>ADR-005 closes that too: <code>OutboxCleanupService</code> purges processed outbox rows older than
-          <code>Outbox:RetentionDays</code> (default 7, set 0 to disable) across every relational data source. Bounded
-          retention without changing delivery semantics. It is worth flagging as a deliberate <strong>behavior change</strong>:
+          <code>Outbox:RetentionDays</code> (default 7, set 0 to disable) across every relational data source. A row whose
+          retries are exhausted is never marked processed, so the same service sweeps those dead-lettered rows
+          on their own window, <code>Outbox:DeadLetterRetentionDays</code>, which falls back to <code>RetentionDays</code> when left
+          at 0; a payload that never delivered is not retained forever either. Bounded retention without
+          changing delivery semantics. It is worth flagging as a deliberate <strong>behavior change</strong>:
           consumers upgrading the framework start purging processed outbox rows older than seven days unless they
           opt out, which is the kind of thing that belongs in a CHANGELOG and an ADR rather than a surprise in
           production.</p>
           <h2 id="the-live-session-cutting-off-a-token-mid-flight">The live session: cutting off a token mid-flight</h2>
           <p>Anonymizing the aggregate and committing the soft-delete shuts two doors: no future logins, and no
           silent re-mint of a fresh access token, because the refresh flow re-fetches the account through the
-          same soft-delete query filter
-          (<code>Source/Core/MMCA.Common.Application/Users/UseCases/DeleteUser/DeleteUserHandlerBase.cs:107-111</code>).
+          same soft-delete query filter, and the erasure&#39;s own save revokes every live refresh session besides
+          (<code>Source/Core/MMCA.Common.Application/Users/UseCases/DeleteUser/DeleteUserHandlerBase.cs:150-157</code>).
           There is a third door, though, and stateless auth
           holds it open by design. Authentication is stateless JWT (ADR-004): every service validates an access
           token by signature and expiry, with no per-request lookup against the account store. That is exactly
@@ -339,14 +345,14 @@ configurationBuilder.Conventions.Add(_ =&gt; <span class="hljs-keyword">new</spa
           (<code>Source/Presentation/MMCA.Common.API/Middleware/SoftDeletedUserMiddleware.cs:37</code>, business rule
           BR-133 named in its class doc at <code>:11</code>) runs in the shared pipeline <strong>after authentication and before authorization</strong>.
           That ordering is a declarative step list (ADR-079):
-          <code>Startup/Pipeline/MiddlewarePipelineBuilder.cs</code> registers <code>UseAuthentication()</code> at <code>:105</code>, the
-          <code>SoftDeletedUserFilter</code> step that adds the middleware at <code>:124-125</code>, and <code>UseAuthorization()</code> at <code>:129</code>.
+          <code>Startup/Pipeline/MiddlewarePipelineBuilder.cs</code> registers <code>UseAuthentication()</code> at <code>:104</code>, the
+          <code>SoftDeletedUserFilter</code> step that adds the middleware at <code>:123-124</code>, and <code>UseAuthorization()</code> at <code>:128</code>.
           So <code>HttpContext.User</code> is already populated and the check
           gates every downstream endpoint. For an authenticated caller whose account has been soft-deleted, it
           returns HTTP 401 mid-flight, before the endpoint runs.</p>
           <p>The check reads a shared deleted-user marker first. The erasure handler writes that marker itself,
           right after the erasure is saved (<code>SoftDeletedUserCache.MarkDeletedAsync</code>,
-          <code>DeleteUserHandlerBase.cs:146-148</code>), and the marker lasts 15 minutes
+          <code>DeleteUserHandlerBase.cs:167-169</code>), and the marker lasts 15 minutes
           (<code>SoftDeletedUserCache.MarkerDuration</code>, <code>Source/Core/MMCA.Common.Application/Auth/SoftDeletedUserCache.cs:32</code>),
           the default access-token lifetime, because it has to outlive every token issued before the delete.
           Every host honors it (<code>SoftDeletedUserMiddleware.cs:105-112</code>), so on any host that shares that cache
@@ -362,11 +368,11 @@ configurationBuilder.Conventions.Add(_ =&gt; <span class="hljs-keyword">new</spa
           outlive a delete made on another replica. The price is paid on the Identity host: one shared-store
           read plus one validator query per authenticated request.</p>
           <p>The marker write is best effort: a failure is logged and the erasure still succeeds
-          (<code>DeleteUserHandlerBase.cs:150-153</code>). That failure is the one case with a residual window, and only
+          (<code>DeleteUserHandlerBase.cs:171-174</code>). That failure is the one case with a residual window, and only
           one kind of host feels it. An Identity host finds no marker, queries the validator on the next
           request and rejects the deleted account there (<code>SoftDeletedUserMiddleware.cs:136-173</code>); a host with
           no validator has nothing to fall back to, so the existing access token stays usable until it expires,
-          which is exactly what the logged warning says (<code>DeleteUserHandlerBase.cs:199-200</code>).</p>
+          which is exactly what the logged warning says (<code>DeleteUserHandlerBase.cs:220-221</code>).</p>
           <p>Two honest edges. Anonymous requests pass straight through with no lookup
           (<code>SoftDeletedUserMiddleware.cs:72-80</code>), so unauthenticated traffic pays nothing. And the validator is
           resolved lazily (<code>SoftDeletedUserMiddleware.cs:114</code>) rather than injected as a parameter, so a host that

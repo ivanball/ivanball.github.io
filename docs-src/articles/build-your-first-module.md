@@ -25,9 +25,9 @@ that declares its own dependencies so the host can assemble everything in the ri
 
 The framework ships a `dotnet new` pack, so you type none of that plumbing (ADR-065). Hand-rolling it
 costs a day before you write a line of business logic, and ADR-065 measures that starting cost against
-the framework's reference app: 12 projects, 137 files, and 11,571 lines of plumbing, an 827-line
-`.editorconfig` among them, plus the 100-line `Directory.Packages.props` that carries every package pin
-(58 of them in the seed today), several of those lines load-bearing in ways nothing tells you about
+the framework's reference app: 12 projects, 139 files, and 12,157 lines of plumbing, an 827-line
+`.editorconfig` and the 99-line `Directory.Packages.props` that carries every package pin (57 of them
+in the seed today) among them, several of those lines load-bearing in ways nothing tells you about
 until much later.
 
 That changes what a tutorial like this is for. Step 0 gets you a green solution in about a minute.
@@ -183,8 +183,10 @@ The sequence is always: the aggregate mutates its own state, then calls `AddDoma
 event sits in the aggregate's collection until `SaveChanges` runs. At save time the framework stamps the
 audit fields, captures the domain events, serializes them to `OutboxMessage` rows, commits data and
 outbox in one transaction, then dispatches in-process and marks the rows processed. You write one line;
-the durability and the eventual broker delivery come for free (the transactional-outbox article covers
-that machine in full).
+the durability comes for free. A domain event like this one stays inside the process; only an
+integration event (`IIntegrationEvent`) is left on the outbox for `OutboxProcessor` to publish through
+`IMessageBus`, in-process in the monolith and over a broker once a module is extracted (the
+transactional-outbox article covers that machine in full).
 
 `AddDomainEvent` lives on `AuditableAggregateRootEntity<TId>`, so any aggregate can raise events, and
 nothing in the Domain layer knows or cares how they will eventually be delivered.
@@ -414,8 +416,9 @@ already exist, so `mmca-module` **prints seven numbered wire-ups it cannot perfo
 are done the module is invisible to the host and to the fitness rules. If your solution came from
 `mmca-app`, you do not type any of them: that solution ships its own `build/add-module.ps1`, and the
 printed text opens by telling you to run it instead, because it invokes the template and then performs
-all seven itself. The list is the fallback for a hand-built solution, and the best description of what
-the script is doing on your behalf:
+all seven itself, plus one edit the list does not name: it appends the new module's event to the
+frozen `ExpectedContract`, so your next test run stays green. The list is the fallback for a hand-built
+solution, and the best description of what the script is doing on your behalf:
 
 1. **Solution.** Add the eight new projects (five layer projects, both test projects, and the
    migrations project) to the `.slnx`.
@@ -435,9 +438,11 @@ the script is doing on your behalf:
 6. **Database.** The module gets its own: an `AddDatabase` / `WithSQLServerDataSource` pair in the
    AppHost, `Modules` / `DataSources` / `Outbox` entries in the Web host's `appsettings.json`, and the
    deletion of the now-conflicting top-level `SQLServerMigrationsAssembly`. Every module database
-   carries its own outbox and inbox tables, so two modules migrated into one database collide on them,
-   and naming the outbox source explicitly is what stops it from moving the day you reorder those
-   calls.
+   carries its own outbox and inbox tables, so two modules migrated into one database collide on them.
+   The order of the AppHost data-source calls is cosmetic (the `Default` source is decided by the
+   top-level `ConnectionStrings__` override on the first module), and naming the outbox source
+   explicitly is what stops it from moving to another module's database the day that connection
+   changes.
 7. **First migration.** `dotnet ef migrations add InitialCreate` against the new migrations project.
 
 The first two are what make it compile, so they fail loudly. Numbers three and four do not, and neither
@@ -500,103 +505,95 @@ what breaks.*
 
 *Tags: .NET, C Sharp, Domain Driven Design, CQRS, Software Architecture*
 
-*Notes: 2026-10-02 pass against MMCA.Common v1.221.0. Re-read directly this pass: the decorator
-registration inside `AddApplicationDecorators()` at
+*Notes: 2026-10-22 pass against MMCA.Common v1.250.0, re-verified: every anchor below was re-read this
+pass unless marked otherwise. The decorator registration inside `AddApplicationDecorators()` at
 `MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:114-153` (seven command
 decorators at :134-140, six query decorators at :143-148, query `Validating` registered inside
 `Caching` at :144-145; registered last = outermost, so execution order is the reverse of registration
 order), the `SealPipeline` call at :150, `AddMmcaApplicationPipeline` at :207-216 (calls only
-`AddApplication()`, the callback, and `AddApplicationDecorators()`; its remarks at :195-196 say non-handler
-registrations can stay outside the call), `VerifyDecoratorPipeline()` at :244 (never called
-automatically, :221-222), and `ThrowIfPipelineSealed` throwing `InvalidOperationException` at :310-319.
-`ScanModuleApplicationServices` calls `ThrowIfPipelineSealed` at
-`DependencyInjection.ModuleScanning.cs:49` and scans domain-event handlers (:52), integration-event
-handlers (:59), DTO mappers (:65), DTO projectors (:74), request mappers (:80), update appliers (:90),
-command-aware appliers (:99), command handlers (:105), query handlers (:111), validators (:117).
-`MMCA.Common/CLAUDE.md` is a six-line `@AGENTS.md` import, so the framework doc anchors moved to
-`MMCA.Common/AGENTS.md`: DI Registration Sequence at :72-74 ("That ordering is the only load-bearing
-part."), execution order at :81-82, per-decorator bullets at :85-91 (Authorization with `IRequiresMfa`
-:86, Caching :88, Validating :89, Timeout :90, Transactional :91). Source inconsistency recorded, not
-resolved: `AGENTS.md:74` says `AddMmcaApplicationPipeline` runs `AddInfrastructure` and `AddAPI`, but
-the method body at `DependencyInjection.cs:207-216` does not; the article follows the code. Generated
-host sequence read from `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:77-141`
-(`AddInfrastructure` :77, `AddAPI` :99, `AddErrorResources` :104, `AddMmcaApplicationPipeline` :121
-with `ModuleLoader.DiscoverAndRegister` and the host-named assembly list as a `Register` step
-:125-133 and `AddBrokerMessaging` as a second step :139, `AddModuleHealthChecks` :141); the module's own scan at
-`Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Application/DependencyInjection.cs:35`. Seed fitness test
-`Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/DecoratorPipelineOrderTests.cs:35` (subclass of
-`DecoratorPipelineOrderTestsBase`, one command plus one query, sequence at :59-61;
-`ComposedPipeline_LeavesNoHandlerUndecorated` at :64-77 calls `services.VerifyDecoratorPipeline()` at
-:76); no stage or template exclusion names it. Transactional rollback on business failure at
-`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:606`
-(`RunTransactionalAttemptAsync`), `if (result is Result { IsFailure: true })` at :615, the "Business
-failure: atomicity over partial persistence" comment at :617, `RollbackTransaction();` at :620.
+`AddApplication()` :211, the callback :213 and `AddApplicationDecorators()` :215; its remarks at
+:195-196 say non-handler registrations can stay outside the call), `VerifyDecoratorPipeline()` at :244
+(never called automatically, :221-222), and `ThrowIfPipelineSealed` throwing `InvalidOperationException`
+at :310-318. `ScanModuleApplicationServices` calls `ThrowIfPipelineSealed` at
+`DependencyInjection.ModuleScanning.cs:49` and scans domain-event handlers (:54), integration-event
+handlers (:61), DTO mappers (:67), DTO projectors (:76), request mappers (:82), update appliers (:92),
+command-aware appliers (:101), command handlers (:107), query handlers (:113); the validator scan
+(:117, `AddValidatorsFromAssembly`) was re-read in a 2026-10-22 catch-up pass. `MMCA.Common/AGENTS.md`: DI Registration
+Sequence at :73-75 (:75 carries "That ordering is the only load-bearing part." and lists
+`AddApplication()`, the configure callback and `AddApplicationDecorators()`, with `AddInfrastructure`
+and `AddAPI` outside the call, matching `DependencyInjection.cs:207-216`), execution order at :82-83,
+per-decorator bullets at :86-92 (Authorization with `IRequiresMfa` :87, Caching :89, Validating :90,
+Timeout :91, Transactional :92), and the SaveChanges flow at :118 (local domain events dispatched
+in-process and their rows marked processed; integration events left for `OutboxProcessor` to publish
+via `IMessageBus`), matching `DeliverAsync` at
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:767-794`
+(`IIntegrationEvent` to `IMessageBus` at :774-787, pure domain events to `IDomainEventDispatcher` at
+:789-793). Generated host sequence in `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs`, read
+on disk: `AddCommonExceptionHandlers` :75, `AddInfrastructure` :77, `AddAPI` :99, `AddErrorResources`
+:104, `AddMmcaApplicationPipeline` :121 with `ModuleLoader.DiscoverAndRegister` and the host-named
+assembly list as a `Register` step from :125 and `AddBrokerMessaging` as a second step at :139,
+`AddModuleHealthChecks` :141. The module's own scan at
+`Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Application/DependencyInjection.cs:35`; `TicketsModule`
+at `MMCA.Helpdesk.Tickets.API/TicketsModule.cs:13` (`Name` :15, `Register` :17-18 delegating to
+`AddTicketsModule` at `MMCA.Helpdesk.Tickets.API/DependencyInjection.cs:15`). Seed fitness test
+`Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/DecoratorPipelineOrderTests.cs:38` (subclass of
+`DecoratorPipelineOrderTestsBase`, one command plus one query; the module registration composed through
+`AddMmcaApplicationPipeline` at :67-68, explained at :59-66; `ComposedPipeline_LeavesNoHandlerUndecorated`
+at :71-84 calls `services.VerifyDecoratorPipeline()` at :83). Transactional rollback on business
+failure at
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:632`
+(`RunTransactionalAttemptAsync`), `if (result is Result { IsFailure: true })` at :641, the "Business
+failure: atomicity over partial persistence" comment at :643, `RollbackTransaction();` at :646.
 `IModule` defaults at `Modules/IModule.cs:17` (`Dependencies => []`), :23 (`RequiresDependencies =>
 false`), :34 (`RegisterDisabledStubs`); Kahn at `Modules/ModuleLoader.cs:275`; `ModulesSettings.SectionName
-= "Modules"` at `Settings/ModulesSettings.cs:10`. Entity chain, `ICommandHandler`, `ITransactional`,
-`ICacheInvalidating` and `IQueryCacheable` anchors carried from the 2026-10-02 audit's CONFIRMED verdicts
-(`BaseEntity.cs:37`, `AuditableBaseEntity.cs:13`, `AuditableAggregateRootEntity.cs:13`,
-`ICommandHandler.cs:9,17`, `ITransactional.cs:6`, `ICacheInvalidating.cs:14`, `IQueryCacheable.cs:23,28`),
-not re-opened this pass. Scaffolding figures from `Website/docs-src/adr/065-scaffolding-templates.md`:
-seed tally 12 projects, 137 files, 11,571 lines at :42-43, method re-run 2026-10-06 at Helpdesk
-`f6ef4b0` at :44-46 (130 files and 10,500 lines under `Source/` and `Tests/`, plus 1,071 lines across
-seven root build files), the 827-line `.editorconfig` and 100-line `Directory.Packages.props` with 58
-pins at :47. "One thing the scaffold deliberately does not hand over" and the three relaxed rules at
-ADR-065 :83-102 (`SA1211` aliases renamed by `--child` at :88-89, matching `stage.ps1:1193-1195`); the
-wire-contract freeze shipping under the adopter's names at :104-124; the smoke job (`ci.yml:120`)
-generating three solutions at :162-173, cases at
-`MMCA.Helpdesk/build/templates/smoke.ps1:117`, :123, :129 (Contoso.Support, Zeta.Warehouse,
-Nordic.Books); `template-smoke` is advisory, the one required check being `build-and-test`
-(`MMCA.Helpdesk/AGENTS.md`, Contribution Flow). Generated README
-`MMCA.Helpdesk/build/templates/overlay/mmca-app/README.md`: "The one-time fixup" at :103,
-`dotnet format analyzers ... --diagnostics SA1210 SA1211 --severity info` at :111, `IDE0021` hand-fold
-at :117-120, "Your integration-event wire contract is already frozen" at :122-134, `--no-aspire` at
-:206, seven wire-ups at :171. Wire-ups from
+= "Modules"` at `Settings/ModulesSettings.cs:10`. Entity chain: `BaseEntity.cs:37` (`required` `init`
+identifier), `MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/AuditableBaseEntity.cs:13` (`IsDeleted`
+:20, set by `Delete()` at :67-77, `CreatedOn/By` and `LastModifiedOn/By` at :25-31, `DeletedOn` :39 and
+`DeletedBy` :45 stamped by the audit interceptor per the doc at :60-63, `RowVersion` :53),
+`AuditableAggregateRootEntity.cs:13`; `ICommandHandler.cs:9,17`, `ITransactional.cs:6`,
+`ICacheInvalidating.cs:14`, `IQueryCacheable.cs:23,28`. `AddAPI` at
+`MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:45-113` registers controllers
+(:47), the idempotency and owner filters (:84-85), feature management (:105-106) and error localization
+(:110); exception handlers come from `AddCommonExceptionHandlers()` at :154 (handlers :159-163).
+Scaffolding figures from `Website/docs-src/adr/065-scaffolding-templates.md`: seed tally 12 projects,
+139 files, 12,157 lines at :45-46, method re-run 2026-10-21 at Helpdesk `f10bc45` at :47-49 (132 files
+and 11,068 lines under `Source/` and `Tests/`, plus 1,089 lines across seven root build files), the
+827-line `.editorconfig` and 99-line `Directory.Packages.props` with 57 pins at :50 (re-counted on disk
+this pass: 99 lines, 57 `PackageVersion` entries). "One thing the scaffold deliberately does not hand
+over" and the three relaxed rules at ADR-065 :87-106 (`SA1211` aliases renamed by `--child` at :92-93,
+matching `MMCA.Helpdesk/build/templates/stage.ps1:1204-1205`; the staged delta at
+`stage.ps1:1261-1263`); the wire-contract freeze shipping under the adopter's names at :108-128; the
+seven printed wire-ups at :130-140; the smoke job (`MMCA.Helpdesk/.github/workflows/ci.yml:120`)
+generating three solutions at :167-182, cases at `MMCA.Helpdesk/build/templates/smoke.ps1:117`, :123,
+:129 (Contoso.Support, Zeta.Warehouse, Nordic.Books); `add-module.ps1` performing all seven plus the
+frozen-contract append at :179-180 (and `MMCA.Helpdesk/AGENTS.md`, template section); `template-smoke`
+is advisory, the one required check being `build-and-test` (`MMCA.Helpdesk/AGENTS.md`, Contribution
+Flow). Generated README `MMCA.Helpdesk/build/templates/overlay/mmca-app/README.md`: "The one-time
+fixup" at :107, `dotnet format analyzers ... --diagnostics SA1210 SA1211 --severity info` at :115,
+`IDE0021` hand-fold from :121, "Your integration-event wire contract is already frozen" at :126, seven
+wire-ups at :177, `--no-aspire` at :212. Wire-ups from
 `MMCA.Helpdesk/templates/mmca-module/.template.config/template.json:264` (`manualInstructions`), sqlite
-entry :268, server-engine entry :271, step 5 being two host edits (module assembly into the
-`DiscoverAndRegister` list, then `AddErrorResources`) in both entries; ADR-065 :126-136 agrees. Source
-inconsistency still recorded rather than resolved: the README says "seven wire-ups" at :171 and "six
-wire-ups" at :225; the article follows `template.json`. ALL code blocks are labeled representative (the
-`Coupon`/`Promotions` example is invented; the Step 6 block is an abridged shape of the generated
-`Program.cs` with module names substituted). Corrections this pass: seed tally moved to the ADR's
-2026-10-01 figures (136 / 11,532); smoke solution count moved to three; "two things" the scaffold leaves -> one, with the wire
-contract described as shipping frozen; Step 6 rewritten to the generated host's shape (scans inside
-each module's registration via `ModuleLoader`) and to the sealed pipeline (a late scan throws; only a
-late hand-registered handler is silent), plus `AddMmcaApplicationPipeline`; wire-up 5 is two host
-edits and its assembly half joins the silent list; `ModuleLoader` discovers modules only in the
-host-named assemblies; trade-off bullets updated for the seal, `DecoratorPipelineOrderTests` and
-`VerifyDecoratorPipeline`; Authorization bullet gained `IRequiresMfa`; scan list gained
-integration-event handlers, projectors and appliers; all framework doc anchors moved from `CLAUDE.md`
-to `AGENTS.md`; decorator anchors :117-153 -> :114-153; rollback anchors :573/:582/:584/:587 ->
-:599/:608/:610/:613. 2026-10-08 pass against MMCA.Common v1.233.0. Corrections: seed tally 136 files /
-11,532 lines -> 137 / 11,571 (ADR-065 :42-43, re-run 2026-10-06 at :44-46), and the ADR anchors above
-moved to match; `SA1211` wording "when a shape flag renames them" -> "when `--child` renames them"
-(`MMCA.Helpdesk/build/templates/stage.ps1:1193-1195`, ADR-065 :88-89); the Step 5 `IModule` block
-relabeled from Application to API layer and rewritten to the per-layer composition, after
-`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.API/TicketsModule.cs:6`, :13, :17-18
-delegating to `AddTicketsModule` at `MMCA.Helpdesk.Tickets.API/DependencyInjection.cs:15-19`
-(Application, Infrastructure, API); the Step 6 `AddAPI` comment "exception handlers" removed, since
-`AddAPI` at `MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:45-113` registers
-controllers (:47), the idempotency and owner filters (:84-85), feature management (:105-106) and error
-localization (:110), while exception handlers come from `AddCommonExceptionHandlers()` at :149-161,
-which the generated host calls at `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:75` (now
-in the Step 6 block; the other host anchors :78-132 re-read unchanged); the trade-off bullet now says
-the seed `DecoratorPipelineOrderTests` itself calls `VerifyDecoratorPipeline()` over the module's
-handler set (:64-77, :76), with the caveat that it runs the module registration (:59-61), not
-`Program.cs`; the entity paragraph now separates the save-path stamps from `IsDeleted`:
-`MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/AuditableBaseEntity.cs` declares `IsDeleted` at
-:20 (set by `Delete()` at :67-77, :77), `CreatedOn/By` and `LastModifiedOn/By` at :25-31, `DeletedOn`
-:39 and `DeletedBy` :45 (stamped by the audit interceptor, doc :60-63), `RowVersion` :53; rollback
-anchors :599/:608/:610/:613 -> :606/:615/:617/:620. "Green solution in about a minute" (Step 0) is
-not a figure any source on disk records; left as the author's own observation. 2026-10-19 pass
-(Helpdesk PR #177 and Common PR #572, both open, read from their branches): the generated host
-composes through `AddMmcaApplicationPipeline`
-(`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:121` on `refactor/h1-application-pipeline`)
-and no longer calls `AddApplication()` or `AddApplicationDecorators()` directly, so the Step 6 lead-in,
-code block and `AddMmcaApplicationPipeline` bullet describe the composed call and the host anchors
-above are re-read in place (:77-141). The recorded `AGENTS.md:74` inconsistency is resolved on
-Common's `docs/agents-pipeline-call` branch: `MMCA.Common/AGENTS.md:75` lists `AddApplication()`, the
-configure callback and `AddApplicationDecorators()`, with `AddInfrastructure` and `AddAPI` outside the
-call, matching `DependencyInjection.cs:207-216`.*
+entry :268, server-engine entry :271, step 5 being two host edits in both entries; the server-engine
+entry's step 6 says the data-source call order is cosmetic and that naming the outbox source stops it
+moving "the day that connection changes", which the article follows (the sqlite entry at :268 still
+says "the day you reorder those calls"). Source inconsistency still recorded rather than resolved: the
+README says "seven wire-ups" at :177 and "six wire-ups" at :231; the article follows `template.json`.
+ALL code blocks are labeled representative (the `Coupon`/`Promotions` example is invented; the Step 6
+block is an abridged shape of the generated `Program.cs` with module names substituted). "Green
+solution in about a minute" (Step 0) is not a figure any source on disk records; left as the author's
+own observation. Corrections this pass: seed tally 137 files / 11,571 lines -> 139 / 12,157, and the
+root-file sentence places the `.editorconfig` and the 99-line `Directory.Packages.props` (57 pins; was
+100 / 58) among the counted lines; Step 2 no longer promises broker delivery for a domain event (only an
+`IIntegrationEvent` row is published through `IMessageBus`); the `add-module.ps1` paragraph names the
+`ExpectedContract` append; wire-up 6's outbox reason follows the server-engine entry; the 2026-10-19
+pass's branch reads (Helpdesk PR #177, Common PR #572) are re-read on disk at `Program.cs:121` and
+`AGENTS.md:75`; every anchor above re-anchored. Earlier passes (2026-10-02 against v1.221.0,
+2026-10-08 against v1.233.0, 2026-10-19) moved the framework doc anchors from `CLAUDE.md` to
+`AGENTS.md`, rewrote Step 6 to the generated host's composed `AddMmcaApplicationPipeline` call and the
+sealed pipeline (a late scan throws; only a late hand-registered handler is silent), made wire-up 5 two
+host edits with its assembly half on the silent list, relabeled the Step 5 block to the API layer with
+per-layer composition, removed "exception handlers" from the `AddAPI` comment, separated the save-path
+audit stamps from `IsDeleted`, and recorded the `DecoratorPipelineOrderTests` caveat that it runs the
+module registration, not `Program.cs`.*
 
 - Full series index: https://ivanball.github.io/writing.html

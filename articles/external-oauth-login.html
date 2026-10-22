@@ -125,7 +125,7 @@
         <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
         <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
         <li><a href="external-oauth-login.html" aria-current="page">26 · External OAuth login behind your own JWTs</a></li>
-        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · Refresh tokens that rotate per device</a></li>
         <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
         <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
         <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
@@ -229,7 +229,10 @@
           challenge stashes in the authentication properties and the completion redirect hands back, so the
           client can prove the code belongs to the flow it started. The server never interprets that value.
           <code>CompleteAsync</code> authenticates the <code>ExternalLogin</code> cookie, pulls
-          <code>(provider, providerKey, email, firstName, lastName)</code> out of the standard claims, and calls
+          <code>(provider, providerKey, email, firstName, lastName)</code> off the external principal (the key and email
+          from the standard name-identifier and email claims, the name from the given-name and surname claims,
+          falling back to GitHub&#39;s display-name claim and finally a <code>User</code> placeholder; Apple&#39;s name is added
+          from its callback form when the ticket is created), and calls
           <code>IAuthenticationService.ExternalLoginAsync</code>. On success it signs the external cookie straight out,
           mints a 32-byte opaque code, stashes the token pair server-side in the cache under a two-minute TTL,
           and redirects to the UI carrying that code and the client&#39;s state (the web redirect also carries the
@@ -323,8 +326,10 @@
           injected <code>IExternalLoginEmailVerifier</code> is asked whether the provider asserted this address as
           verified, and an unverified assertion is refused with <code>Auth.ExternalEmailNotVerified</code>. <strong>No local
           password:</strong> even on a verified assertion, an account whose <code>HasLocalPassword</code> is true is refused with
-          <code>Auth.ExternalLinkRequiresLocalSignIn</code>, and the message tells the person to sign in with their
-          password and link the provider from their profile. The verifier proves only the provider&#39;s side of the
+          <code>Auth.ExternalLinkRequiresLocalSignIn</code>, whose message tells the person to sign in with their email
+          and password because that provider&#39;s sign-in is not available for the account (the login page has
+          no resource of its own for this code, so a browser shows the generic refusal: try again or use
+          another sign-in method). The verifier proves only the provider&#39;s side of the
           address, so only an account nobody can already sign into with a password is claimable by an email
           match; everyone else proves possession first. Once all three pass, <code>User.LinkExternalProvider</code>
           attaches the provider to the existing account and marks its email confirmed, since the link only ever
@@ -370,7 +375,8 @@
           Google&#39;s <code>email_verified</code> claim passes the verifier; GitHub&#39;s OAuth flow asserts nothing, so a
           GitHub sign-in whose email matches an existing account is refused rather than linked. A verified
           assertion is still not enough on its own: an account that signs in with a password is refused too,
-          and the message routes that person through the credential they already hold. Those guards live in
+          and the refusal sends that person back to the password they already hold (the API message says so
+          outright; the login page shows its generic &quot;use another sign-in method&quot; text). Those guards live in
           ADC&#39;s override, not the framework: a non-adopting host gets only the <code>Auth.ExternalLoginNotSupported</code>
           default, so the check is ADC&#39;s own edge, not a framework guarantee.</li>
           <li><strong>Not exactly-once account creation across the redirect.</strong> The exchange commits the <code>User</code> before
@@ -390,7 +396,9 @@
           that passes the UI&#39;s HTTPS endpoint to the service as <code>OAuth__UIBaseUrl</code> so the post-exchange redirect
           lands on the right host. MMCA.Store does none of this. It registers no OAuth schemes, defines no
           <code>OAuthController</code>, adds no provider columns to its <code>User</code>, and leaves <code>ExternalLoginAsync</code> at the
-          not-supported default. Store&#39;s Identity story stays local-credential and RS256 only. That is not a gap
+          not-supported default. Store&#39;s user sign-in stays local-credential, with RS256 user tokens (the only
+          other bearer scheme its Identity host registers is the HS256 service token for internal gRPC
+          callers). That is not a gap
           to close: partial adoption is the framework&#39;s model (ship the capability, let each app opt in), the
           same shape as the permission and polyglot-persistence opt-ins.</p>
           <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
@@ -426,7 +434,7 @@
           still holding a local password are all refusals), then by create, and the honest costs: a per-app
           opt-in that is easy to half-wire, link guards that are ADC-level rather than framework ones, a
           not-exactly-once account creation across the redirect, a second credential shape on <code>User</code>, and
-          adoption that is ADC-only while Store stays local-credential and RS256 only.</p>
+          adoption that is ADC-only while Store&#39;s user sign-in stays local-credential with RS256 tokens.</p>
           <p><strong>Next in the series:</strong> refresh tokens that rotate per device, stored only as hashes in a
           <code>RefreshSession</code> row, and the reuse detection that turns a replayed token into a self-limiting,
           revoke-on-reuse forced re-login.</p>
@@ -441,7 +449,7 @@
           
         <nav class="article-pager" aria-label="Series navigation">
           <a class="article-pager-link article-pager-link--prev" href="session-cookie-auth-blazor-ssr.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">25 · Browser session-cookie auth for Blazor SSR</span></a>
-          <a class="article-pager-link article-pager-link--next" href="jwt-refresh-token-rotation.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">27 · One rotating refresh token</span></a>
+          <a class="article-pager-link article-pager-link--next" href="jwt-refresh-token-rotation.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">27 · Refresh tokens that rotate per device</span></a>
         </nav>
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>

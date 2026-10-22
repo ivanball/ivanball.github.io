@@ -125,7 +125,7 @@
         <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
         <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
         <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
-        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · Refresh tokens that rotate per device</a></li>
         <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
         <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
         <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
@@ -252,12 +252,16 @@ services.AddEngagementBookmarkCountClient();   <span class="hljs-comment">// shi
           <code>Authorization</code> header but authenticated with a bearer token from elsewhere (a SignalR hub connection
           passes it as <code>?access_token=</code>), it forwards the token saved on the authentication ticket instead; a
           header that is present always wins. It is a no-op outside an HTTP request, for example in a
-          background processor.</li>
+          background processor, and it forwards only the user&#39;s token: a call with no user goes out with no
+          credential unless its client opts into the framework&#39;s service token with <code>WithServiceToken()</code>
+          (covered in <a href="jwks-cross-service-auth.html">Cross-service auth without a shared secret: JWKS discovery</a>).</li>
           <li><code>AddStandardResilienceHandler()</code> gives every gRPC client a Polly retry, timeout, and
           circuit-breaker pipeline whose values come from <code>GrpcResilienceDefaults</code>. The timeouts and the retry
-          budget are the HTTP clients&#39; own. The retry fires only on a failure to reach the peer (an
-          <code>HttpRequestException</code>), because every gRPC call is a POST and replaying one that reached the handler
-          could run it twice. The circuit breaker&#39;s failure ratio, minimum throughput and break duration are
+          budget are the HTTP clients&#39; own. The retry fires only on a failure to reach the peer before the
+          request was sent (an <code>HttpRequestException</code> whose <code>HttpRequestError</code> is name resolution, the TCP
+          connect, or the TLS handshake), because every gRPC call is a POST and replaying one that reached the
+          handler could run it twice; an <code>HttpRequestException</code> raised after the request frames were written is
+          not retried. The circuit breaker&#39;s failure ratio, minimum throughput and break duration are
           explicit gRPC values, while its sampling window is the HTTP clients&#39; own. A deliberate <code>SocketsHttpHandler</code> override forces
           explicit HTTP/2 so the resilience handler cannot defeat the h2c negotiation.</li>
           </ul>
@@ -294,8 +298,10 @@ builder.Services.AddBrokerMessaging(builder.Configuration);
           <code>JwksEndpointExtensions</code> in the API layer serves <code>/.well-known/jwks.json</code> so any extracted service can
           fetch the issuer&#39;s public keys and validate independently. Under local Aspire the JWKS backchannel is routed
           through the gateway; in Azure Container Apps each service points straight at the identity app&#39;s
-          in-cluster address (ADR-004, ADR-012). No service ever needs to share a symmetric secret with another, which is what makes the fleet
-          safe to grow.</p>
+          in-cluster address (ADR-004, ADR-012). Validating a user&#39;s token never requires services to share a
+          symmetric secret, which is what makes the fleet safe to grow. The framework&#39;s one shared key is opt-in
+          and separate: an HS256 service token (configuration section <code>Grpc:ServiceToken</code>) for calls that carry
+          no user, which Store enables on its Sales-to-Identity edge and ADC does not use (ADR-007).</p>
           <h2 id="step-6-wire-it-in-the-apphost-with-mmcacommonaspirehosting">Step 6: wire it in the AppHost with MMCA.Common.Aspire.Hosting</h2>
           <p>Local orchestration is where the topology becomes runnable. <code>MMCA.Common.Aspire.Hosting</code> provides
           AppHost extension methods for the cross-cutting infrastructure of an extracted deployment: the RabbitMQ
@@ -501,8 +507,9 @@ app.MapReverseProxy();</code></pre>
           <li><strong>Keep the wire contract in a shared package</strong> that generates both server and client stubs, and ship
           an adapter that implements the same interface the in-process code already used. Extraction becomes a
           registration swap.</li>
-          <li><strong>Federate auth with JWKS,</strong> not a shared secret, so adding a service does not mean distributing a
-          symmetric key.</li>
+          <li><strong>Federate user auth with JWKS,</strong> not a shared secret, so adding a service does not mean distributing a
+          symmetric key. If services must also call each other with no user present, keep that shared key
+          opt-in, scoped to the edges that need it, and separate from user-token validation.</li>
           <li><strong>Front the services with a single gateway</strong> so clients see one URL and internal transport choices
           stay internal.</li>
           <li><strong>Treat the Kestrel/gateway/ingress/JWKS transport choice as one coupled decision,</strong> and write down

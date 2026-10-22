@@ -125,7 +125,7 @@
         <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
         <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
         <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
-        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · Refresh tokens that rotate per device</a></li>
         <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
         <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
         <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
@@ -218,9 +218,12 @@
           six field fragments (<code>AddressLine1Rules&lt;T&gt;</code> through <code>CountryRules&lt;T&gt;</code>), and <code>AddressValidator</code> is a
           composite <code>AbstractValidator&lt;Address&gt;</code> whose entire body is six <code>Include(...)</code> calls. It owns <strong>no</strong>
           <code>RuleFor</code> chains of its own. The address fragments also pull their length limits from the
-          <code>AddressInvariants</code> fields in <code>MMCA.Common.Shared</code> rather than baking numeric literals into the rule, so the domain
-          invariant and its validator agree by construction. The max length for a city lives in exactly one place
-          across the entire solution, and the validator references it.</p>
+          <code>AddressInvariants</code> fields in <code>MMCA.Common.Shared</code> rather than baking numeric literals into the rule, and
+          the EF mapping for the owned <code>Address</code> reads the same fields for its column widths, so the validator and
+          the database column agree by construction. The max length for a city lives in exactly one place across the
+          entire solution, and both the validator and the column reference it. (The <code>Address.Create</code> factory itself
+          checks only that the first address line is non-empty; the length caps are enforced at the edge, not
+          re-checked in the domain.)</p>
           <h2 id="one-validator-for-the-request-free-for-the-command">One validator for the request, free for the command</h2>
           <p>Some commands carry a request DTO rather than being one. The generic update command,
           <code>UpdateEntityCommand&lt;TEntity, TUpdateRequest, TIdentifierType&gt;(Id, Request, RowVersion)</code>, wraps the request
@@ -248,9 +251,11 @@
           of the way. An empty validator collection is not an error either: it just means the request has no rules
           and the generic validator is a no-op. A command the scan cannot see (a closed generic constructed at
           registration time rather than declared in the module assembly) gets the same bridge explicitly:
-          <code>AddEntityUpdate&lt;...&gt;()</code> calls <code>AddCommandRequestValidator&lt;TCommand, TRequest&gt;()</code>, which registers the same
-          <code>CommandRequestValidator</code> with the same <code>TryAdd</code> semantics. Convention over configuration, with an escape
-          hatch that never blocks a bespoke case.</p>
+          <code>AddEntityCrud&lt;...&gt;()</code> and <code>AddEntityUpdateVerb&lt;...&gt;()</code> close <code>UpdateEntityCommand</code> at registration and
+          call <code>AddCommandRequestValidator&lt;TCommand, TRequest&gt;()</code>, which registers the same <code>CommandRequestValidator</code>
+          with the same <code>TryAdd</code> semantics. <code>AddEntityUpdate&lt;...&gt;()</code>, for a derived command, calls it too, so that
+          registration is complete whether or not the command lives in a scanned assembly. Convention over
+          configuration, with an escape hatch that never blocks a bespoke case.</p>
           <h2 id="a-validation-failure-is-a-result-and-the-edge-maps-it-to-400">A validation failure is a Result, and the edge maps it to 400</h2>
           <p>A validator that runs is useless unless its output flows into the rest of the system cleanly.
           FluentValidation speaks in <code>ValidationResult</code> and <code>ValidationFailure</code>. The rest of the codebase speaks in
@@ -263,7 +268,10 @@
           <code>PropertyName</code> the <code>target</code> so the client learns <em>which</em> field failed. The <code>ValidatingCommandDecorator</code>
           calls it with <code>typeof(TCommand).Name</code> as the source, so each error carries the name of the command that
           produced it. On failure the decorator never calls the inner handler: it converts the failures to errors
-          and returns a <code>Result</code> failure immediately.</p>
+          and returns a <code>Result</code> failure immediately. The registration validator shown earlier takes the other
+          route into the same bridge: registration is an authentication-service call, not a command, so
+          <code>AuthenticationServiceBase.RegisterAsync</code> runs the validator itself and calls <code>ToErrors(nameof(RegisterAsync))</code>.
+          The source names the method instead of a command, and the errors are the same <code>ErrorType.Validation</code> kind.</p>
           <p>Two properties of that flow matter to a caller:</p>
           <ul>
           <li><strong>Validation runs before the transaction opens.</strong> The <code>ValidatingCommandDecorator</code> sits <em>before</em> the
@@ -315,10 +323,11 @@
           That is correct (those belong in the domain factory), but it means the validator is not the whole
           story, and a reviewer must check both altitudes to know a command is fully guarded.</li>
           <li><strong>It overlaps the domain factory at the edges.</strong> &quot;Required&quot; and &quot;max length&quot; can be expressed both as a
-          validator fragment and as a domain invariant. The kit keeps the structural copy in the validator and
-          sources address limits from the same <code>AddressInvariants</code> fields the domain uses, so the two agree by
-          construction. Where a field has no shared constant, keeping the two in sync is a discipline, not a
-          compiler guarantee.</li>
+          validator fragment and as a domain invariant. Where a shared constant exists the two agree by
+          construction: ADC&#39;s registration caps come from the <code>UserInvariants</code> constants the <code>User</code> checks use,
+          and address limits come from the <code>AddressInvariants</code> fields the EF column mapping also reads (the
+          <code>Address</code> factory checks only the first line). Where a field has no shared constant, keeping the two
+          in sync is a discipline, not a compiler guarantee.</li>
           </ul>
           <p>None of these argue for copy-pasting <code>RuleFor</code> chains. They argue for knowing which altitude a rule lives
           at and composing the structural ones deliberately.</p>
@@ -346,7 +355,8 @@
           command for free from its request validator, and how <code>ValidationFailureExtensions.ToErrors</code> turns a
           failure into an <code>ErrorType.Validation</code> <code>Result</code> that the API edge maps to 400 before any transaction opens.</p>
           <p><strong>Next in the series:</strong> the transactional outbox, the reliability backbone that persists a domain
-          event and publishes it in the same transaction, never losing one.</p>
+          event in the same transaction as the data it describes and publishes it afterwards, at least once, so a
+          crash between the two never loses it.</p>
           <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the validation chapter of the onboarding
           guide, or <code>dotnet add package MMCA.Common.Application</code> and try it.</em></p>
           <ul>

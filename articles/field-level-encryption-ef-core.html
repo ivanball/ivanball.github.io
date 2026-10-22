@@ -125,7 +125,7 @@
         <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
         <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
         <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
-        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · Refresh tokens that rotate per device</a></li>
         <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
         <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
         <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
@@ -202,8 +202,8 @@
           never see ciphertext.</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Wire the converter onto the sensitive column in the entity configuration.</span>
 <span class="hljs-comment">// (Illustrative: the first HasConversion call is the converter&#x27;s own documented usage,</span>
-<span class="hljs-comment">//  the second paraphrases the key-ring constructor, and the layout comment</span>
-<span class="hljs-comment">//  describes what Encrypt actually writes.)</span>
+<span class="hljs-comment">//  the second paraphrases the key-ring constructor, the layout comment</span>
+<span class="hljs-comment">//  describes what Encrypt actually writes, and the last two lines sketch rotation step 3.)</span>
 builder.Property(e =&gt; e.SocialSecurityNumber)
     .HasConversion(<span class="hljs-keyword">new</span> EncryptedStringConverter(encryptionKey)); <span class="hljs-comment">// encryptionKey: 32 bytes</span>
 
@@ -215,7 +215,11 @@ builder.Property(e =&gt; e.SocialSecurityNumber)
 
 <span class="hljs-comment">// On write, the stored value is Base64 of:</span>
 <span class="hljs-comment">//   [key version (1)] [nonce (12)] [ciphertext (N)] [tag (16)]</span>
-<span class="hljs-comment">// On read, the version byte picks the key, and the tag (which covers that byte) is verified.</span></code></pre>
+<span class="hljs-comment">// On read, the version byte picks the key, and the tag (which covers that byte) is verified.</span>
+
+<span class="hljs-comment">// Re-encrypting a loaded row under the current version: mark, then save.</span>
+EncryptedStringConverter.MarkForReEncryption(dbContext.Entry(entity));
+<span class="hljs-keyword">await</span> dbContext.SaveChangesAsync(cancellationToken);</code></pre>
           <p>Four properties of that converter are worth naming precisely, because they are the whole design.</p>
           <p><strong>It is authenticated, not merely confidential.</strong> Both directions use <code>AesGcm</code>, AES-256 in Galois/Counter
           Mode, which binds a 128-bit authentication tag to the ciphertext. Encryption gives you confidentiality;
@@ -252,9 +256,14 @@ builder.Property(e =&gt; e.SocialSecurityNumber)
           reads take their key from the data, rotation is a four-step operation with no maintenance window: add the
           new key to the ring and make it current while keeping the old version registered, deploy (new writes carry
           the new version, existing rows keep decrypting under theirs), re-encrypt the old rows in the background at
-          whatever pace the table allows, then drop the retired version from the ring. A value whose version is no
-          longer registered throws a <code>CryptographicException</code> naming only the version number, never key material,
-          which is the loud failure rather than the silent one.</p>
+          whatever pace the table allows (load each entity, call <code>EncryptedStringConverter.MarkForReEncryption</code> on
+          its entry, then save), then drop the retired version from the ring. The explicit mark in step 3 is not
+          optional. Change tracking compares the decrypted plaintext against its snapshot, so after a plain
+          load-and-save the property looks unchanged, the UPDATE leaves its column out, and the row keeps its old
+          version byte. <code>MarkForReEncryption</code> sets <code>IsModified</code> on every property of the entry mapped through the
+          converter and returns how many it marked; an owned type is tracked as an entry of its own and has to be
+          passed separately. A value whose version is no longer registered throws a <code>CryptographicException</code> naming
+          only the version number, never key material, which is the loud failure rather than the silent one.</p>
           <p>There is one deliberate passthrough: both directions short-circuit on a null-or-empty string, so a NULL
           or empty column stays as-is rather than becoming a block of ciphertext for the empty string.</p>
           <p>Where do the keys come from? Not from the framework. The converter takes raw key material as a
@@ -265,6 +274,12 @@ builder.Property(e =&gt; e.SocialSecurityNumber)
           Vault, user-secrets, or an environment variable, and never hardcoded. That lines up with rubric §11&#39;s
           secrets criterion (in a vault or managed identity, never in source or plain config), and it keeps the
           crypto primitive free of any opinion about your secret store.</p>
+          <p>One other Infrastructure type does recognize the converter, and it matters for a PII column: the
+          audit-trail interceptor. The change tracker hands that interceptor the model-side value of a property,
+          which for an encrypted column is the decrypted plaintext, so recording it would write in clear text exactly
+          what the column encrypts. The interceptor therefore records its redaction token, never the value, for any
+          property whose value converter is an <code>EncryptedStringConverter</code>, with no attribute or marker needed on
+          the property.</p>
           <p>It is also stateless and context-free on purpose. Version resolution is data-driven from the stored
           envelope and never consults the <code>DbContext</code>, because a value converter is a pair of compiled expressions
           running inside the provider&#39;s materialization path: it cannot reach the context, the current user, or any
@@ -278,9 +293,12 @@ builder.Property(e =&gt; e.SocialSecurityNumber)
           ring-validation guards (every one except the null-entry check), the defensive copy of the caller&#39;s
           dictionary, the version byte each write stamps, a full rotation round-trip, an unregistered version, a
           rewritten version byte, the empty-string passthrough, and the too-short-ciphertext rejection are all
-          exercised by <code>EncryptedStringConverterTests</code> (21 cases), but no <code>*Configuration.cs</code> in
-          any repo calls <code>.HasConversion(new EncryptedStringConverter(...))</code>. ADR-037 records that posture in the
-          open: the capability is proven by tests, not by any deployed column. It records the coverage limit just as
+          exercised by <code>EncryptedStringConverterTests</code> (21 cases). Two further suites wire the converter into a real
+          EF model: <code>EncryptedStringConverterReEncryptionTests</code> saves a row under version 1 in an SQLite table, then
+          rewrites it under version 2 through <code>MarkForReEncryption</code>, and the audit-trail test harness maps an
+          encrypted property to prove the redaction. All three are tests; no <code>*Configuration.cs</code> in any repo calls
+          <code>.HasConversion(new EncryptedStringConverter(...))</code>. ADR-037 records that posture in the open: the
+          capability is proven by tests, not by any deployed column. It records the coverage limit just as
           openly: the only tag failure a test provokes is the rewritten version byte, and no test flips a bit inside
           the ciphertext body or decrypts under a wrong key at the same version, so integrity over the ciphertext
           itself rests on the AES-GCM primitive rather than on a test.</p>
@@ -326,8 +344,10 @@ builder.Property(e =&gt; e.SocialSecurityNumber)
           key still makes every row written under that version permanently unrecoverable; the ring makes that
           failure mode more granular, not less likely.</li>
           <li><strong>Rotation is enabled, not automated.</strong> The versioned envelope makes a zero-downtime rotation possible,
-          but the re-encryption pass is yours to write and to run, and nothing in the framework reports how many
-          rows still carry an old version. Retire a version early and every unconverted row throws on read: loud,
+          but the re-encryption pass is yours to write and to run. The framework supplies only the per-entry
+          primitive, <code>MarkForReEncryption</code>, whose return value counts the properties it marked on that entry, not
+          the rows left; nothing in the framework reports how many rows still carry an old version. A pass written
+          as a plain load-and-save rewrites nothing and leaves every row on the old version. Retire a version early and every unconverted row throws on read: loud,
           but still an outage for that column. The version prefix is one <code>byte</code>, so a ring caps at 256 live
           versions, which is ample for annual or quarterly rotation and a real ceiling for anything faster.</li>
           <li><strong>Per-property wiring, not a global switch.</strong> Encryption is one <code>HasConversion</code> call at a time in each
@@ -336,7 +356,8 @@ builder.Property(e =&gt; e.SocialSecurityNumber)
           the first place).</li>
           <li><strong>Storage and CPU overhead.</strong> Every value grows by 29 bytes (a 1-byte key version, a 12-byte nonce, and a
           16-byte tag) before Base64 inflation, and every read and write performs an AES-GCM operation.</li>
-          <li><strong>Latent until adopted.</strong> Proven by <code>EncryptedStringConverterTests</code>, not by production. The round-trip
+          <li><strong>Latent until adopted.</strong> Proven by tests (<code>EncryptedStringConverterTests</code>, the SQLite rotation test and
+          the audit-trail harness), not by production. The round-trip
           works; the decision to encrypt a specific column is still yours to make and to audit.</li>
           </ul>
           <p>None of these are reasons to skip encrypting genuinely sensitive columns. They are the reasons to encrypt
@@ -359,7 +380,9 @@ builder.Property(e =&gt; e.SocialSecurityNumber)
           <li><strong>Keep the keys out of the code.</strong> Take them from a vault, managed identity, user-secrets, or an
           environment variable, and design the rotation drill (add the new version as current, deploy, re-encrypt
           in the background, retire the old version) before you encrypt the first column, because the format
-          stops being free to change the moment a row uses it.</li>
+          stops being free to change the moment a row uses it. In the re-encrypt step, force the encrypted
+          property modified before saving: an ORM that diffs the decrypted value against its snapshot sees no
+          change and skips the column.</li>
           <li><strong>Encrypt by threat model.</strong> Column-level crypto is a second boundary above TDE for the few columns a
           database reader should never see in the clear, and you trade away queryability to get it.</li>
           </ol>

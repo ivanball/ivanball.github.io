@@ -125,7 +125,7 @@
         <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
         <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
         <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
-        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · Refresh tokens that rotate per device</a></li>
         <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
         <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
         <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
@@ -228,8 +228,11 @@
           monitoring can tell an abandoned request from a server error), <code>DomainExceptionHandler</code> (business-rule
           violation -&gt; 400), <code>DbUpdateExceptionHandler</code> (concurrency or constraint -&gt; 409, with a deliberately
           generic message so schema names do not leak), <code>ValidationExceptionHandler</code> (FluentValidation -&gt; 400
-          with a per-property errors dictionary), and <code>GlobalExceptionHandler</code> as the catch-all 500. Together
-          they guarantee one invariant: every error an action returns or throws leaves the API as an RFC 9457
+          with a per-property errors dictionary), and <code>GlobalExceptionHandler</code> last. That final handler first
+          answers two caller faults with a client status (a cross-tenant write -&gt; 400 titled &quot;Tenant write
+          rejected&quot;, and a <code>BadHttpRequestException</code> keeps the status the server set, typically 413 for an
+          oversize body or 400 otherwise) and turns everything else into a 500. Together they guarantee one
+          invariant: every error an action returns or throws leaves the API as an RFC 9457
           Problem Details with a sensible status. The invariant covers the MVC pipeline, not the middleware in
           front of it: the rate limiter rejects with a bare 429 (it sets a rejection status and writes no body),
           and an unmatched route is a bare 404, because the framework does not call <code>UseStatusCodePages</code>.</p>
@@ -318,7 +321,7 @@
           registers a Contracts layer in its map today, so a layer-iterating rule would pass vacuously forever,
           while an attribute-driven one starts biting the moment a repo marks its first contract type. The
           honest part is that MMCA.Common marks no type with the attribute, so the framework&#39;s own run of the
-          rule asserts nothing and is a ratchet there. The consumers are where it bites: ADC marks six Shared
+          rule asserts nothing and is a ratchet there. The consumers are where it bites: ADC marks seven Shared
           interfaces (<code>ISessionBookmarkValidationService</code> and <code>IEventLiveValidationService</code> among them) and
           Store marks four (<code>IProductVariantService</code>, <code>ICustomerService</code> and two export services), and both
           repos run the rule on every build.</li>

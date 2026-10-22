@@ -3,7 +3,7 @@
 > Series: MMCA.Common · Article #3 (cornerstone) · Pillar P4 · Rubric: all
 > Status: grounded in `Website/docs-src/governance/ArchitectureEvaluationCriteria.md` (rubric version 2,
 > ADR-110) and `Website/docs-src/governance/common-ArchitectureScorecard.md`. No em dashes. Current facts
-> (two-axis index: Maturity 96.6%, Implementation 86.0%; all 34 categories scored, no N/A, with §16
+> (two-axis index: Maturity 97.3%, Implementation 85.4%; all 34 categories scored, no N/A, with §16
 > AI-Native Application Architecture carrying a scored 4 / 9 rather than an exemption; the first-scored
 > lowest category later remediated via ADR-005).
 
@@ -20,8 +20,8 @@ impressions, and impressions do not survive a code review six months later, let 
 
 I wanted something better for my own framework, so I wrote a rubric: 34 categories, each scored on two
 axes, each requiring evidence. Then I scored MMCA.Common against it in public and committed the
-scorecard to the repo. The framework stands at a maturity index of 96.6% and an implementation index of
-86.0%. This article is about the rubric itself, because the scoring instrument is more reusable than the
+scorecard to the repo. The framework stands at a maturity index of 97.3% and an implementation index of
+85.4%. This article is about the rubric itself, because the scoring instrument is more reusable than the
 score.
 
 ## Why "good architecture" needs a rubric
@@ -75,7 +75,7 @@ Here is the part that makes the rubric honest. Each category gets **two** scores
 
 - **Maturity (0 to 4)** measures *process*: how consistently and how well-governed the pattern is, on a
   scale from Absent (0) through Initial, Developing, Consistent, to Optimized (4). Level 4 has a precise
-  meaning: "enforced automatically (analyzers, tests, CI), documented, and evolved deliberately."
+  meaning: "Enforced automatically (analyzers/tests/CI), documented, and evolved deliberately."
 - **Implementation (0 to 10)** measures *substance*: how good the implementation is right now, judged
   against the category's concrete criteria and red flags, from None (0) to Exemplary (where 10 means
   almost perfect: every criterion met at reference quality, no red flags, at most trivial polish left).
@@ -102,8 +102,8 @@ are.
 ## The worked example: MMCA.Common, scored on both axes
 
 When I ran MMCA.Common through the rubric (the canonical, version-controlled scorecard lives in
-`Website/docs-src/governance/common-ArchitectureScorecard.md`), it landed at a **maturity index of 96.6% and
-an implementation index of 86.0%** across **all 34 categories**. No category sits at N/A: multi-locale
+`Website/docs-src/governance/common-ArchitectureScorecard.md`), it landed at a **maturity index of 97.3% and
+an implementation index of 85.4%** across **all 34 categories**. No category sits at N/A: multi-locale
 i18n ships under ADR-027, which supersedes the single-locale ADR-011, and Internationalization scores
 maturity 4, implementation 8 on that evidence, while AI-Native Application Architecture carries a scored
 maturity 4, implementation 9 rather than an exemption, because the framework ships its own governed
@@ -113,14 +113,14 @@ can reopen.
 
 The high scores clustered exactly where I would want them to: Clean Architecture, Microservices
 Readiness, Supply-Chain, and Testability all reached maturity 4 with implementation 9, each enforced
-automatically. The two axes are deliberately asymmetric: maturity (96.6%) runs ahead of implementation
-(86.0%), and that gap is the most useful thing the scorecard says. It is structural, not a defect. It is
+automatically. The two axes are deliberately asymmetric: maturity (97.3%) runs ahead of implementation
+(85.4%), and that gap is the most useful thing the scorecard says. It is structural, not a defect. It is
 also honest in both directions, which is rarer than it sounds: every score states what today's evidence
 supports and nothing more, so a category holds a 9 only while its stated reasoning still carries an
 Exemplary verdict, and it moves *down* as readily as up when the next re-score reads the evidence
 (Testability scores 9 on a gated coverage floor of 68.3%). A rubric that only ever ratchets up is not
 being honest, and neither is one that only ratchets down. No category scores below 8 on implementation,
-and Cost Efficiency / FinOps holds the lowest maturity, a 2. Most of the remaining implementation gap is
+and none below 3 on maturity. Most of the remaining implementation gap is
 structural rather than neglected: deployment execution, production SLOs, cost right-sizing and the
 consent process belong to the consuming apps, not to a library.
 
@@ -136,10 +136,13 @@ reason to score yourself in public.
 When I lined the scores up, a single pattern explained almost all of the variance between the top tier
 and the middle tier, and it is the pattern that has driven every re-score since. Thirty of the 34
 categories sit at maturity 4, most of them on build-breaking gates: layer rules, domain purity,
-transport coupling, outbox behavior, an automated database restore drill. The three categories still
-capped at 3 have the right design but stop short of an automatic, always-on gate: SOLID enforces only its
-single-responsibility and dependency-inversion rules automatically, Compliance ships its audit-trail and
-data-export surfaces opt-in, and DevOps and Deployment is the cleanest illustration: the repo ships a
+transport coupling, outbox behavior, an automated database restore drill. The four categories
+capped at 3 have the right design but stop short of an automatic, always-on gate: SOLID enforces its
+single-responsibility and dependency-inversion rules and the throw half of Liskov substitution
+automatically, with no gate on open-closed or interface segregation, Compliance ships its audit-trail and
+data-export surfaces opt-in, Cost Efficiency / FinOps enforces exactly one cost convention (a shipped
+cost-tag attribution test that consumers subclass) while right-sizing stays with the consuming apps, and
+DevOps and Deployment is the cleanest illustration: the repo ships a
 reference Bicep deployment sample plus a CI job that compiles it, but that job is not one of the eight
 required contexts on the branch, and the deployment machinery itself lives in consumer repos, so the
 rule is trusted rather than gated. Performance and
@@ -202,7 +205,7 @@ redesign. It is a check.
 
 **What we covered:** why "good architecture" needs a measurable rubric, the three-part 34-category
 structure, the two-axis (maturity plus implementation) scoring with mandatory evidence, MMCA.Common's
-96.6% maturity / 86.0% implementation as a worked example including its first-scored lowest category and
+97.3% maturity / 85.4% implementation as a worked example including its first-scored lowest category and
 its later remediation, and the single insight that explains the top tier: enforced beats convention-only.
 
 **Next in the series:** the Result railway that retired exceptions-as-control-flow, the foundational
@@ -216,35 +219,38 @@ gaps and all, and then score one of your own systems against the rubric.*
 
 *Tags: Software Architecture, .NET, Engineering Management, Code Quality, Technical Leadership*
 
-*Notes (2026-10-08 refresh, framework v1.233.0): the two-axis indices (Maturity 96.6% = 317/328, Implementation
-86.0% = 705/820), the all-34-categories-scored / no-N/A status and the per-category scores are taken from the
+*Notes (2026-10-22 refresh, framework v1.250.0): the two-axis indices (Maturity 97.3% = 319/328, Implementation
+85.4% = 700/820), the all-34-categories-scored / no-N/A status and the per-category scores are taken from the
 canonical two-axis scorecard, `Website/docs-src/governance/common-ArchitectureScorecard.md` (`:9` Maturity index,
 `:10` Implementation index, `:104` "N/A (excluded from denominators): none", sigma-weight 82). Scorecard evidence
-stamp: 2026-10-07 at v1.233.0, git HEAD `55e427b3`, clean tree (`:5`); the framework is v1.233.0 per
+stamp: 2026-10-22 at v1.250.0, git HEAD `51c321fe`, clean tree (`:5`); the framework is v1.250.0 per
 `MMCA.Common/FACTS.md:4,14`, so the scorecard and FACTS agree on the version, and the article claims only that each re-verification
 stamps the version and commit it read. Twenty-two published packages (`FACTS.md:19`). Category row N sits at
 scorecard line 64+N (`:65` to `:98`). Section 16 AI-Native Application Architecture is Maturity 4 / Implementation
 9 on weight 2 (`:80`), scored because `MMCA.Common.AI` ships a model-calling feature (`:104`). The Maturity-3
-categories are section 1 SOLID (`:65`: only SRP and DIP are enforced automatically, ISP, LSP and OCP have no
-automated gate), section 17 DevOps & Deployment (`:81`) and section 30 Compliance (`:94`: audit trail and DSAR
-export are opt-in twice over), with section 31 Cost Efficiency / FinOps at Maturity 2 (`:95`); the maturity band
-is at `:12`. Thirty of 34 categories sit at Maturity 4, "most of them on build-breaking gates" (`:15`), which is
-why the insight section says "most" rather than "every". The lowest Implementation is 8, held by 15 categories
-(`:13`); the structural-gap sentence paraphrases `:15`. At Maturity 4 / Implementation 9: Clean Architecture
+categories are section 1 SOLID (`:65`: SRP, DIP and the throw half of LSP are enforced automatically via
+`SubstitutabilityTestsBase`; OCP and ISP have no automated gate and the type-sniffing half of LSP is ungated),
+section 17 DevOps & Deployment (`:81`), section 30 Compliance (`:94`: audit trail and DSAR export are opt-in
+twice over) and section 31 Cost Efficiency / FinOps (`:95`: one cost convention enforced, the shipped
+`CostTagConventionTestsBase`; nothing enforces cost discipline at review time per `:19`); the maturity band is at
+`:12` (four categories, all at 3, so no category sits below 3). Thirty of 34 categories sit at Maturity 4, "most
+of them on build-breaking gates" (`:15`), which is why the insight section says "most" rather than "every". The
+lowest Implementation is 8, held by 17 categories (`:13`); the structural-gap sentence paraphrases `:15`. At Maturity 4 / Implementation 9: Clean Architecture
 section 3 (`:67`), Microservices section 7 (`:71`), Testability section 14 (`:78`) and Supply-Chain section 32
 (`:96`, weight 3). Section 27 Internationalization is Maturity 4 / Implementation 8 on weight 1 (`:91`); ADR-027
 supersedes the single-locale ADR-011 (`Website/docs-src/adr/README.md:24,40`). Section 20 Design System is
 Implementation 8 (`:84`), section 21 Accessibility 9 (`:85`) and section 22 Responsive 9 (`:86`); the dark-theme
-WCAG AA contrast values are at `Source/Presentation/MMCA.Common.UI/Theme/MMCATheme.cs:66,93`, locked by the
+WCAG AA contrast values are at `Source/Presentation/MMCA.Common.UI/Theme/MMCATheme.cs:66,71,95,98`
+(`PrimaryDarken`, `PrimaryContrastText`, `Error`, `ErrorContrastText`), locked by the
 `ui-e2e` job (`.github/workflows/ci.yml:223`, `browser: [chromium, firefox, webkit]` matrix at `:232`, all three
 required per `:233-235`). Section 14 Testability rests on a CI line-coverage floor of 68.3% (the `Enforce coverage
 floor (unit/arch/bUnit tier, generated code excluded)` step at `ci.yml:398`, `m="68.3"` at `:409`, 70.3% measured
 per `:396`). Section 9 API & Contract Design is Maturity 4 / Implementation 9 (`:73`), section 10 Messaging &
-Integration Architecture is weight 3, Maturity 4 / Implementation 9 (`:74`), section 11 Security is Maturity 4 /
+Integration Architecture is weight 3, Maturity 4 / Implementation 8 (`:74`), section 11 Security is Maturity 4 /
 Implementation 8 (`:75`), section 23 Front-End Performance is Maturity 4 / Implementation 8 (`:87`), and slice
 cohesion section 5 (`:69`) and Resilience section 29 (`:93`) are Maturity 4. The insight section's convention-only
-survivor is section 17: `sample-deployment-validate` (`ci.yml:766`) runs two compile-only `az bicep build` steps
-(`:778`, `:782`) and is absent from the 8 required contexts (scorecard `:81`, read from the branch-protection
+survivor is section 17: `sample-deployment-validate` (`ci.yml:707`) runs two compile-only `az bicep build` steps
+(`:719`, `:723`) and is absent from the 8 required contexts (scorecard `:81`, read from the branch-protection
 API); section 12 Performance & Scalability is the merge-enforced counterpart at Maturity 4 (`:76`), gated by the
 `Performance gate (BenchmarkDotNet Short + baseline verify)` job (`ci.yml:311`) running `--filter "*" --job Short
 --exporters json` (`:343`) then `build/perfgate` against the committed `perf-baseline.json` (`:352`). The
@@ -263,13 +269,25 @@ and section 32 breaking-change policy (`:850`); the scorecard states Implementat
 on purpose as the original snapshot: the earlier single-axis baseline (80% / 218 of 272 / 28 applicable) and the
 first-scored lowest category (Compliance, soft-delete only, no erasure) are from MMCA.Common commit `f518099`,
 `ArchitectureScorecard.md:3` and `:42`; the "MassTransit will retry" comment and the `ServiceContractAttribute`
-claiming a nonexistent test are at `:100` and `:117` of the same commit. Neither is in the current scorecard. 2026-10-08
+claiming a nonexistent test are at `:100` and `:117` of the same commit. Neither is in the current scorecard. 2026-10-22
+run (re-verified 2026-10-22 against MMCA.Common v1.250.0): indices 96.6% (317/328) / 86.0% (705/820) to 97.3%
+(319/328) / 85.4% (700/820) in the header, body and summary; section 31 FinOps Maturity 2 to 3, so the body's
+"FinOps holds the lowest maturity, a 2" became "none below 3 on maturity" and the insight section's Maturity-3
+list went from three categories to four (FinOps added); SOLID's automated gates widened to include the throw half
+of LSP (`:65`); Level 4 quotation made verbatim to rubric `:39`; Notes header v1.233.0 to v1.250.0; scorecard
+stamp 2026-10-07 / v1.233.0 / `55e427b3` to 2026-10-22 / v1.250.0 / `51c321fe`; Implementation-8 count 15 to 17;
+section 10 Implementation 9 to 8; `sample-deployment-validate` 766/778/782 to 707/719/723; `MMCATheme.cs:66,93`
+to `:66,71,95,98`; scorecard rows `:76` (`ci.yml:347-352`) and `:81` (`:719`, `:723`) now cite current `ci.yml`
+lines, so the earlier upstream-drift remark is retired. All other anchors re-read unchanged (`ci.yml`
+223/232/233-235, 398/409/396, 311/343/352; `release.yml:103-106`; `IdempotencyFilter.cs:149`;
+`DependencyInjection.Caching.cs:88-96`; `RedisDistributedLock.cs:37,67`; `DependencyVersionTests.cs:9`;
+`FACTS.md:4,14,19`; rubric `:15`, `:39`, `:60`, `:329`, `:469`, `:805`, `:812`, `:850`; ADR README `:24,40`;
+scorecard `:104`, `:107`). 2026-10-08
 run (Common v1.233.0): no reader-visible claim changed; Notes header v1.221.0 to v1.233.0; scorecard stamp
 2026-10-01 / v1.218.0 / `f93bc6e2` dirty to 2026-10-07 / v1.233.0 / `55e427b3` clean, so "the scorecard trails
 FACTS" became "agree"; `ci.yml` anchors re-read (`ui-e2e` 248/257/258-260 to 223/232/233-235, coverage floor
 451/462/449 to 398/409/396, `sample-deployment-validate` 819/831/835 to 766/778/782, Performance gate 356/388/397 to
-311/343/352); SBOM gate `release.yml:101` to `:106`; `DependencyInjection.Caching.cs:86-94` to `:88-96`. Scorecard
-rows `:76` and `:81` still cite the pre-shift `ci.yml` lines (upstream drift, not corrected here). 2026-10-02
+311/343/352); SBOM gate `release.yml:101` to `:106`; `DependencyInjection.Caching.cs:86-94` to `:88-96`. 2026-10-02
 run: maturity 97.0% (318/328) to 96.6% (317/328); section 16 from 3/6 to 4/9; SOLID dropped from the Maturity 4 /
 Implementation 9 cluster (it is 3/8); section 27 and section 20 implementation 9 to 8; lowest implementation 6
 (section 16 alone) to 8 (15 categories); Maturity-3 set 16/17/30 to 1/17/30; packages nineteen to twenty-two;

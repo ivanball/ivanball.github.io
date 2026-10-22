@@ -1,7 +1,8 @@
 # Event-schema versioning: never silently reshape an event
 
-> Series: MMCA.Common · Article #15 · Pillar P3 · Group G04 · Rubric §6 · ADR-010 · ADR-090 ·
+> Series: MMCA.Common · Article #15 · Pillar P3 · Group G04 · Rubric §6 · ADR-010 · ADR-083 · ADR-090 ·
 > Status: grounded in `Website/docs-src/adr/010-integration-event-schema-versioning.md`,
+> `Website/docs-src/adr/083-crud-lifecycle-event-taxonomy.md`,
 > `Website/docs-src/adr/090-event-upcaster-registration.md` and
 > `Website/docs-src/onboarding/group-04-events-outbox.md`. No em dashes.
 
@@ -101,7 +102,7 @@ New-type-for-breaking-change is the only safe option when transport binds by typ
 independently.
 
 The framework ships the wiring for that migration, not only the rule (ADR-090, accepted 2026-08-21). An
-upcaster is one typed class, `IEventUpcaster<TOld, TNew>`, registered by the module that owns the
+upcaster is one typed class, `IEventUpcaster<TSource, TTarget>`, registered by the module that owns the
 contract:
 
 ```csharp
@@ -142,6 +143,37 @@ contract that a consumer should also be tolerant of versions it knows and explic
 does not. The version field is what lets a consumer make that decision instead of guessing from a
 shape that silently changed.
 
+## One lifecycle event per entity: fewer contracts to version
+
+Versioning is cheaper when there are fewer contracts to version, and ADR-083 settles the shape of a
+CRUD lifecycle event before ADR-010 governs how it evolves. Instead of a `{Entity}Created` /
+`{Entity}Changed` / `{Entity}Deleted` triple, an entity raises one event carrying a
+`DomainEntityState` discriminator, and handlers filter on `State`. The framework base is two members
+wide:
+
+```csharp
+// MMCA.Common.Domain - EntityChangedEvent (XML docs omitted)
+public abstract record EntityChangedEvent<TIdentifierType>(
+    DomainEntityState State,
+    TIdentifierType EntityId) : BaseDomainEvent
+    where TIdentifierType : notnull;
+```
+
+Seventeen concrete records derive it across the four repos: nine in ADC's Conference module, seven
+in Store and one in Helpdesk. Common ships only the base.
+
+For versioning, the collapse means one record, one serialized payload shape and one snapshot entry
+per entity instead of three, and a new transition is an enum member rather than a new type. When a
+lifecycle event crosses a service boundary, the discriminator rides the wire and is frozen with
+everything else. Store's `ProductVariantChanged` integration event puts `State` first, typed as
+Catalog's own `ProductChangeState`, which repeats the framework enum's member names and ordinals but
+lives in the Shared layer, because the payload-purity rule rejects any type from a `*.Domain`
+assembly on an integration event's wire shape. The committed contract snapshot records
+`State:ProductChangeState` as a member of that event, so the discriminator obeys the same rule as
+every other field: per ADR-083, adding an enum member is additive, while renumbering or removing one
+is a breaking change that, under ADR-010, takes a new event type and an upcaster. The taxonomy itself is a review
+convention: no fitness rule names `EntityChangedEvent` or checks that a discriminator exists.
+
 ## Trade-offs, honestly
 
 ADR-010 is candid that the field is a signal, not a complete mechanism.
@@ -162,14 +194,18 @@ ADR-010 is candid that the field is a signal, not a complete mechanism.
   until every consumer has drained it. That second gap is narrower than it sounds: the outbox stores and
   resolves an event's declared `[EventName]` identity, so an event that declares one stays resolvable
   through a rename or a namespace or assembly move, and only a type with no declared identity that is
-  deleted early leaves its rows unresolvable.
+  deleted early leaves its rows unresolvable. The shared convention base also makes that identity
+  mandatory: a fact on `EventConventionTestsBase` fails the build for any integration event without
+  an `[EventName]`, in every tree that runs the current rule set.
 - **The convention test covers a real event in MMCA.Common, but the framework's own coverage is one
   event wide.** Common ships exactly one concrete integration event, the sealed record
   `OutputCacheEvictionRequested`, and `CommonArchitectureMap` registers the Domain assembly it lives
   in, so `EventVersioningConventionTests` runs against a real event in Common's own build. Enforcement
-  runs at four points: the framework itself plus three consumer trees (ADC, Store, and Helpdesk),
-  each subclassing the same base and running the identical rules
-  against its own event assemblies. One caveat rides along: Common's map declares no modules, so the
+  runs at five points: the framework itself plus four consumer trees, each subclassing the same base
+  and running its rules against its own event assemblies. ADC, Store and Helpdesk resolve the current
+  release and run the identical rules; the local-only, unpublished `MMCA.ECommerce` sample pins an
+  older `Testing.Architecture` release, so it runs neither the `[EventName]` rule nor the two upcaster
+  rules. One caveat rides along: Common's map declares no modules, so the
   Shared-layer half of the namespace rule is relaxed for the framework's own event, while every
   module-bearing consumer is still held to it. The framework supplies the rule; the consumers still
   supply the bulk of the events that exercise it.
@@ -220,32 +256,82 @@ policy, or `dotnet add package MMCA.Common.API` and try it.*
 
 *Tags: .NET, C Sharp, Software Architecture, Event-Driven Architecture, Microservices*
 
-*Notes: 2026-10-08 refresh, verified at MMCA.Common v1.233.0 (`MMCA.Common/FACTS.md:14`; Common `main` at
-v1.233.0-4-g55e427b3) against the same-day audit
+*Notes: 2026-10-22 refresh, re-verified at MMCA.Common v1.250.0 (`MMCA.Common/FACTS.md:14`) against the
+same-day `/update-medium` audit; every anchor below was re-read at its current location this run and
+moved anchors are corrected in place. Changed this run: the upcaster type parameters read
+`IEventUpcaster<TSource, TTarget>` in both places, matching the declaration
+`IEventUpcaster<in TSource, out TTarget>`
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Events/IEventUpcaster.cs:67`); the aliasing
+gap names the `[EventName]` build gate, `IntegrationEvents_ShouldDeclare_EventName`
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Contracts/EventConventionTestsBase.cs:21`,
+rule body `IntegrationEventsDeclareEventName` at
+`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.Events.cs:33`),
+recorded by ADR-010's Revision (2026-10-21)
+(`Website/docs-src/adr/010-integration-event-schema-versioning.md:188-219`, item 1 at `:193-199`); and the
+enforcement trade-off says five points, not four, matching ADR-010
+(`Website/docs-src/adr/010-integration-event-schema-versioning.md:66-67`), with "identical rules" limited to
+ADC, Store and Helpdesk, all pinning `MMCA.Common.Testing.Architecture` `1.250.0`
+(`MMCA.ADC/Directory.Packages.props:126`, `MMCA.Store/Directory.Packages.props:18`,
+`MMCA.Helpdesk/Directory.Packages.props:95`), while `MMCA.ECommerce` pins `1.142.0`
+(`MMCA.ECommerce/Directory.Packages.props:123`), whose base carries neither the `[EventName]` rule nor the
+two upcaster rules (`Website/docs-src/adr/010-integration-event-schema-versioning.md:94-100`, Revision
+2026-10-21 item 2 at `:200-204`). ADR-010's Revision (2026-10-21) also records that framework-shipped events
+are gated only in Common's own build (`:101-104`, item 3 at `:205-207`); the article does not cover that.
+ADR-090's Status line gained a 2026-10-21 revision
+(`Website/docs-src/adr/090-event-upcaster-registration.md:14`, Revision at `:210-231`, anchors only); the
+article does not cover it. New section "One lifecycle event per entity: fewer contracts to version" (ADR-083,
+`Website/docs-src/adr/083-crud-lifecycle-event-taxonomy.md`, Decision at `:43-151`): the code block is
+copied from `EntityChangedEvent<TIdentifierType>` with its XML docs omitted
+(`MMCA.Common/Source/Core/MMCA.Common.Domain/DomainEvents/EntityChangedEvent.cs:24-27`; the
+Created/Changed/Deleted consolidation is its doc at `:6-8` and the handler-filter usage at `:10-13`). The
+seventeen derived records were counted this run by searching each repo's `Source/` for a primary-constructor
+base of `EntityChangedEvent<`: nine in ADC Conference (`SponsorChanged.cs:16`, `QuestionChanged.cs:16`,
+`ActivityChanged.cs:16`, `SpeakerChanged.cs:21`, `CategoryChanged.cs:16`, `PartnerChanged.cs:16`,
+`EventChanged.cs:16`, `SessionChanged.cs:18`, `SessionAssetChanged.cs:18`, all under
+`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/`), seven in Store (`ProductReviewChanged.cs:20`,
+`ProductChanged.cs:23`, `CategoryChanged.cs:19` under `MMCA.Store.Catalog.Domain/`; `CustomerChanged.cs:25`
+under `MMCA.Store.Identity.Domain/`; `InventoryItemChanged.cs:17`, `ShoppingCartChanged.cs:16`,
+`OrderChanged.cs:19` under `MMCA.Store.Sales.Domain/`), one in Helpdesk
+(`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/Tickets/DomainEvents/TicketChanged.cs:15`),
+and none in `MMCA.Common/Source` beyond the base itself, matching ADR-083's count
+(`Website/docs-src/adr/083-crud-lifecycle-event-taxonomy.md:103-113`). The wire discriminator:
+`ProductVariantChanged` declares `ProductChangeState State` first
+(`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Products/IntegrationEvents/ProductVariantChanged.cs:34-35`),
+`ProductChangeState` repeats `Unchanged = 0`, `Added = 1`, `Updated = 2`, `Deleted = 3` with its doc giving
+the Shared-layer reason
+(`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Products/IntegrationEvents/ProductChangeState.cs:7-12,15-28`),
+the purity rule is `IntegrationEventPayloadsAreDomainFree`
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.IntegrationEventPurity.cs:56`,
+the `.Domain` assembly test at `:152`), and the frozen line is
+`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Contracts/IntegrationEventContractTests.cs:12`. The
+additive-versus-breaking enum rule is ADR-083's own trade-off (`:214-216`); "no fitness rule names
+`EntityChangedEvent`" is ADR-083's Decision (`:130-151`), consistent with the search above finding no
+`EntityChangedEvent<` reference under `MMCA.Common/Source/Hosting`. Earlier entry: 2026-10-08 refresh,
+verified at MMCA.Common v1.233.0 (Common `main` at v1.233.0-4-g55e427b3) against the same-day audit
 (`Docs/Planning/Quality/medium-apply-2026-10-08/15-event-schema-versioning.json`). Changed this run: the
 "solely by its type string" sentence is replaced by the stored identity, because `EventType` holds
-`EventNameResolver.GetStorageName(type)` (`OutboxMessage.cs:141`, documented at `:35-40`), the `[EventName]`
+`EventNameResolver.GetStorageName(type)` (`OutboxMessage.cs:148`, documented at `:35-40`), the `[EventName]`
 identity when declared (Commons own event declares one, `OutputCacheEvictionRequested.cs:28`) and the
-assembly-qualified name otherwise, resolved CLR name first then declared name (`:201`); ADR-010s Revision
+assembly-qualified name otherwise, resolved CLR name first then declared name (`ResolveEventType` at `:199`, the fallback at `:209`); ADR-010s Revision
 (2026-10-06) keeps its own "type string" Context as decision-time framing
-(`Website/docs-src/adr/010-integration-event-schema-versioning.md:169-172`). The first trade-off now names
+(`Website/docs-src/adr/010-integration-event-schema-versioning.md:182`, in the Revision at `:174-186`). The first trade-off now names
 the frozen wire-contract snapshot gate
 (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Contracts/IntegrationEventContractTestsBase.cs:18`,
 the `[Fact]` at `:35-36`, set comparison remark `:9-15`), subclassed by ADC and Store
 (`Contracts/IntegrationEventContractTests.cs:3` in each) and Helpdesk (`ArchitectureTests.cs:99`); Common
 runs only the adversarial `IntegrationEventContractTestsBaseTests.cs:13`. The aliasing gap is qualified by
-ADR-090s narrowing (`Website/docs-src/adr/090-event-upcaster-registration.md:117-125`, Revision 2026-09-03
-`:135-163`). ADR-090s Status line (`:3-13`) also records Revisions 2026-10-06 (`:175`, terminal
-unresolvable-type miss leaves `ProcessedOn` null) and 2026-10-07 (`:191`, anchors only); the article does
+ADR-090s narrowing (`Website/docs-src/adr/090-event-upcaster-registration.md:118-126`, Revision 2026-09-03
+`:136-163`). ADR-090s Status line (`:3-14`) also records Revisions 2026-10-06 (`:176`, terminal
+unresolvable-type miss leaves `ProcessedOn` null) and 2026-10-07 (`:192`, anchors only); the article does
 not cover them. Moved anchors corrected in place below. Earlier entry:
 the 2026-10-02 run re-verified the article against MMCA.Common `main` at v1.221.0
 (`git describe --tags` returns `v1.221.0-1-g36228518`); every anchor below was re-read at its current
 location. Body corrections this run: the outbox payload key is `"SchemaVersion":1`, not camelCase, because
 the outbox `SerializerOptions` set only `ReferenceHandler.IgnoreCycles` and no naming policy
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:17-20`, with the
-payload serialized at line 142), matching ADR-010's Rationale
+payload serialized at line 149), matching ADR-010's Rationale
 (`Website/docs-src/adr/010-integration-event-schema-versioning.md:45`) and its Revision (2026-10-01)
-(lines 149-159); and the "one substantive gap the scorecard names under section 6" sentence is replaced, because
+(lines 162-172); and the "one substantive gap the scorecard names under section 6" sentence is replaced, because
 the current Common section 6 row (`Website/docs-src/governance/common-ArchitectureScorecard.md:70`) cites
 `SchemaVersion`, `EventVersioningConventionTests` and the ADR-090 upcaster pipeline as evidence and holds
 the category below 10 for DTO-projection read models, not for versioning (only ADR-010's historical
@@ -278,28 +364,28 @@ which dedups on the original `MessageId` before any upcasting (lines 70-84: the 
 `EventUpcasterStartupValidator`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Consumers/EventUpcasterStartupValidator.cs:20`)
 resolves the registry as an `IHostedService`, added through `TryAddEnumerable` at
-`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:203-204`. The two upcaster
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:207-208`. The two upcaster
 fitness functions are `EventUpcastersHaveUniqueSourceTypes` and `EventUpcastersIncreaseSchemaVersion`
 (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.Upcasters.cs:12`
 and `:28`), surfaced as two facts on `EventConventionTestsBase`
-(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Contracts/EventConventionTestsBase.cs:23`
-and `:26`), so every consumer tree inherits them with no edit. ADR-090 records the decision: its Status
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Contracts/EventConventionTestsBase.cs:27`
+and `:30`), so every consumer tree inherits them with no edit. ADR-090 records the decision: its Status
 line ties it to ADR-010's named follow-up
 (`Website/docs-src/adr/090-event-upcaster-registration.md:4`), its five decision points sit at lines
-33-77 and the migration recipe at lines 79-90, and the two residual gaps quoted in the trade-offs are its
-own (no framework V2 event yet, lines 129-133; outbox type-name aliasing out of scope, lines 117-125,
+33-78 and the migration recipe at lines 80-91, and the two residual gaps quoted in the trade-offs are its
+own (no framework V2 event yet, lines 130-134; outbox type-name aliasing out of scope, lines 118-126,
 narrowed by that record's 2026-09-03 revision but still called out of scope); its Revision (2026-10-01),
-lines 164-173, refreshes citations only and moves the `AddEventUpcaster` path to
+lines 165-174, refreshes citations only and moves the `AddEventUpcaster` path to
 `DependencyInjection.Extensibility.cs`. ADR-010's Status line
 (`Website/docs-src/adr/010-integration-event-schema-versioning.md:4`) carries the Helpdesk gap closed
 2026-06-27, ADC's seven events plus the ECommerce tree 2026-08-14, Common's own event 2026-08-18, the
 upcaster extension point 2026-08-21, the 2026-09-11 payload-purity amendment (an integration event may
 neither ship from outside a `*.Shared` assembly nor expose a `*.Domain` type on its wire shape) and a
 2026-09-19 update recording four concrete Store integration events; the article does not cover the last
-two. Its trade-off sections: the first trade-off reads as shipped (lines 52-58); the "no longer vacuous"
-trade-off sits at lines 59-91, with the Shared-layer namespace relaxation for Common's module-less map at
-lines 65-70 and the closed-Helpdesk-gap sentence at lines 89-91; the informational-on-the-wire trade-off
-is at lines 92-94. Still verified this run: `BaseIntegrationEvent` with
+two. Its trade-off sections: the first trade-off reads as shipped (lines 54-60); the "no longer vacuous"
+trade-off sits at lines 61-100, with the Shared-layer namespace relaxation for Common's module-less map at
+lines 67-72 and the closed-Helpdesk-gap sentence at lines 92-94; the informational-on-the-wire trade-off
+is at lines 105-107. Still verified this run: `BaseIntegrationEvent` with
 `public virtual int SchemaVersion => 1;`
 (`MMCA.Common/Source/Core/MMCA.Common.Domain/DomainEvents/BaseIntegrationEvent.cs:32`), the
 `public override int SchemaVersion => 2;` override pattern documented on the same member (line 19) with
@@ -315,14 +401,15 @@ gates a real event in Common's own build; the rule body
 `ArchitectureRules.IntegrationEventsDeclareSchemaVersion`
 (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.Events.cs:6`);
 outbox `EventType`-keyed JSON serialization (`OutboxMessage.FromDomainEvent`,
-`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:133`, with
-`EventType` set from `EventNameResolver.GetStorageName` at line 141); and enforcement at five points,
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:140`, with
+`EventType` set from `EventNameResolver.GetStorageName` at line 148); and enforcement at five points,
 Common itself plus ADC
 (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Contracts/EventConventionTests.cs:3`), Store
 (`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Contracts/EventConventionTests.cs:3`),
 Helpdesk (`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/ArchitectureTests.cs:38`,
 gating `TicketOpenedIntegrationEvent`) and the local-only, unpublished `MMCA.ECommerce` sample
-(`MMCA.ECommerce/Tests/Architecture/MMCA.ECommerce.Architecture.Tests/ArchitectureTests.cs:38`), each
-inheriting the two upcaster facts as well.*
+(`MMCA.ECommerce/Tests/Architecture/MMCA.ECommerce.Architecture.Tests/ArchitectureTests.cs:38`), the three published
+trees on `1.250.0` also inheriting the `[EventName]` rule and the two upcaster facts, and the sample on
+its pinned `1.142.0` rule set without them (`Website/docs-src/adr/010-integration-event-schema-versioning.md:94-98`).*
 
 - Full series index: https://ivanball.github.io/writing.html

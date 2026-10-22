@@ -71,9 +71,12 @@ The address family is the worked example of composition all the way up. `Address
 six field fragments (`AddressLine1Rules<T>` through `CountryRules<T>`), and `AddressValidator` is a
 composite `AbstractValidator<Address>` whose entire body is six `Include(...)` calls. It owns **no**
 `RuleFor` chains of its own. The address fragments also pull their length limits from the
-`AddressInvariants` fields in `MMCA.Common.Shared` rather than baking numeric literals into the rule, so the domain
-invariant and its validator agree by construction. The max length for a city lives in exactly one place
-across the entire solution, and the validator references it.
+`AddressInvariants` fields in `MMCA.Common.Shared` rather than baking numeric literals into the rule, and
+the EF mapping for the owned `Address` reads the same fields for its column widths, so the validator and
+the database column agree by construction. The max length for a city lives in exactly one place across the
+entire solution, and both the validator and the column reference it. (The `Address.Create` factory itself
+checks only that the first address line is non-empty; the length caps are enforced at the edge, not
+re-checked in the domain.)
 
 ## One validator for the request, free for the command
 
@@ -105,9 +108,11 @@ module ships an explicit hand-written `IValidator<TCommand>`, that wins, and the
 of the way. An empty validator collection is not an error either: it just means the request has no rules
 and the generic validator is a no-op. A command the scan cannot see (a closed generic constructed at
 registration time rather than declared in the module assembly) gets the same bridge explicitly:
-`AddEntityUpdate<...>()` calls `AddCommandRequestValidator<TCommand, TRequest>()`, which registers the same
-`CommandRequestValidator` with the same `TryAdd` semantics. Convention over configuration, with an escape
-hatch that never blocks a bespoke case.
+`AddEntityCrud<...>()` and `AddEntityUpdateVerb<...>()` close `UpdateEntityCommand` at registration and
+call `AddCommandRequestValidator<TCommand, TRequest>()`, which registers the same `CommandRequestValidator`
+with the same `TryAdd` semantics. `AddEntityUpdate<...>()`, for a derived command, calls it too, so that
+registration is complete whether or not the command lives in a scanned assembly. Convention over
+configuration, with an escape hatch that never blocks a bespoke case.
 
 ## A validation failure is a Result, and the edge maps it to 400
 
@@ -123,7 +128,10 @@ error code, its `ErrorMessage` the message, the caller-supplied `source` the sou
 `PropertyName` the `target` so the client learns *which* field failed. The `ValidatingCommandDecorator`
 calls it with `typeof(TCommand).Name` as the source, so each error carries the name of the command that
 produced it. On failure the decorator never calls the inner handler: it converts the failures to errors
-and returns a `Result` failure immediately.
+and returns a `Result` failure immediately. The registration validator shown earlier takes the other
+route into the same bridge: registration is an authentication-service call, not a command, so
+`AuthenticationServiceBase.RegisterAsync` runs the validator itself and calls `ToErrors(nameof(RegisterAsync))`.
+The source names the method instead of a command, and the errors are the same `ErrorType.Validation` kind.
 
 Two properties of that flow matter to a caller:
 
@@ -182,10 +190,11 @@ and consistent, so the domain factory is free to focus on the rules only it can 
   That is correct (those belong in the domain factory), but it means the validator is not the whole
   story, and a reviewer must check both altitudes to know a command is fully guarded.
 - **It overlaps the domain factory at the edges.** "Required" and "max length" can be expressed both as a
-  validator fragment and as a domain invariant. The kit keeps the structural copy in the validator and
-  sources address limits from the same `AddressInvariants` fields the domain uses, so the two agree by
-  construction. Where a field has no shared constant, keeping the two in sync is a discipline, not a
-  compiler guarantee.
+  validator fragment and as a domain invariant. Where a shared constant exists the two agree by
+  construction: ADC's registration caps come from the `UserInvariants` constants the `User` checks use,
+  and address limits come from the `AddressInvariants` fields the EF column mapping also reads (the
+  `Address` factory checks only the first line). Where a field has no shared constant, keeping the two
+  in sync is a discipline, not a compiler guarantee.
 
 None of these argue for copy-pasting `RuleFor` chains. They argue for knowing which altitude a rule lives
 at and composing the structural ones deliberately.
@@ -218,7 +227,8 @@ command for free from its request validator, and how `ValidationFailureExtension
 failure into an `ErrorType.Validation` `Result` that the API edge maps to 400 before any transaction opens.
 
 **Next in the series:** the transactional outbox, the reliability backbone that persists a domain
-event and publishes it in the same transaction, never losing one.
+event in the same transaction as the data it describes and publishes it afterwards, at least once, so a
+crash between the two never loses it.
 
 *MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the validation chapter of the onboarding
 guide, or `dotnet add package MMCA.Common.Application` and try it.*
@@ -226,7 +236,7 @@ guide, or `dotnet add package MMCA.Common.Application` and try it.*
 
 *Tags: .NET, C Sharp, Validation, Software Architecture, FluentValidation*
 
-*Notes: source-verified 2026-10-08 against MMCA.Common v1.233.0 (`MMCA.Common/FACTS.md:14`), paths
+*Notes: source-verified 2026-10-22 against MMCA.Common v1.250.0 (`MMCA.Common/FACTS.md:14`), paths
 relative to `MMCA.Common/Source/Core/MMCA.Common.Application/` unless prefixed. Rule fragments, all
 eleven, in `Validation/CommonValidationRules.cs`: `RequiredStringRules<T>` (:42), `OptionalStringRules<T>`
 (:54), `EmailRules<T>` (:65), `AbsoluteUrlRules<T>` (:86), `PositiveIntRules<T>` (:101),
@@ -253,7 +263,11 @@ and :22-25 (password, 8/128, no `Matches`), composing only `AddressValidator` (:
 `RuleFor(x => x.Email)`. Address family: `Validation/AddressValidationRules.cs`, `AddressValidator` :13
 with six `Include` calls :17-22, fragments :31-88 reading `AddressInvariants`
 (`MMCA.Common.Shared/ValueObjects/Contact/AddressInvariants.cs:9`, the six limits declared
-`public static readonly int` at :12-27, not `const`). Command bridge:
+`public static readonly int` at :12-27, not `const`), the same six fields setting the owned `Address`
+column widths in `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/
+EntityTypeBuilderExtensions.cs:146-167`; `Address.Create` (`MMCA.Common.Shared/ValueObjects/Contact/
+Address.cs:69-89`) combines only `EnsureAddressLine1IsValid` (:78; non-empty check at
+`AddressInvariants.cs:50-55`), so no domain code reads the six limits. Command bridge:
 `UpdateEntityCommand<TEntity, TUpdateRequest, TIdentifierType>(Id, Request, RowVersion)` implements
 `ICommandWithRequest<TUpdateRequest>` (`UseCases/Crud/UpdateEntityCommand.cs:48-52`);
 `ICommandWithRequest<TRequest>.Request` (`UseCases/Contracts/ICommandWithRequest.cs:14-17`); create path:
@@ -265,17 +279,32 @@ which is `ICommandHandler<TCreateRequest, Result<TEntityDTO>>` (`UseCases/Crud/C
 `AddValidatorsFromAssembly(moduleAssembly)` (:117) and reflects over `ICommandWithRequest<>` (:121-135),
 registering via `TryAddTransient(serviceType, validatorType)` (:134). Explicit form:
 `AddCommandRequestValidator<TCommand, TRequest>()` (`DependencyInjection.Crud.cs:220-226`, `TryAddTransient`
-:223), called from `AddEntityUpdate` (:199). `ValidationFailureExtensions.ToErrors(string source)`
+:223, closed-generic doc :204-211), called from `AddEntityCrud` (:94-96, closing
+`UpdateEntityCommand<TEntity, TUpdateRequest, TIdentifierType>`), `AddEntityUpdateVerb` (:150-152) and
+`AddEntityUpdate` (:199; derived command, "complete whether or not the command lives in a scanned
+assembly" doc at :177-179). `ValidationFailureExtensions.ToErrors(string source)`
 (`Extensions/ValidationFailureExtensions.cs:11,19-21`) builds `Error.Validation(code, message, source,
 target)` (`MMCA.Common.Shared/Abstractions/Error.cs:37-38`). `ValidatingCommandDecorator` calls
 `ToErrors(typeof(TCommand).Name)` (`UseCases/Decorators/ValidatingCommandDecorator.cs:83`) and returns a
 failure without calling the inner handler (:86-94); its comment that a validator may reach the database
-through a scoped repository is at :70-72. Decorator order: `DependencyInjection.cs:134` Transactional
+through a scoped repository is at :70-72. Registration path: ADC
+`MMCA.ADC.Identity.API/Controllers/AuthController.cs:66` calls `AuthenticationService.RegisterAsync`
+(`MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:81`, delegating to the base at :87), and
+`Auth/AuthenticationServiceBase.cs:227` validates via `validators.Register` then calls
+`ToErrors(nameof(RegisterAsync))` at :230, outside the command decorator. Decorator order: `DependencyInjection.cs:134` Transactional
 (innermost), :135 Timeout, :136 Validating. `ErrorType.Validation` -> 400 at
 `MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ErrorHttpMapping.cs:22`. FluentValidation 12:
-`MMCA.Common/Directory.Packages.props:30` (`FluentValidation.DependencyInjectionExtensions` 12.1.1). There
+`MMCA.Common/Directory.Packages.props:30` (`FluentValidation.DependencyInjectionExtensions` 12.2.0). Next-in-series
+outbox wording: at-least-once delivery documented on `MMCA.Common.Infrastructure/Persistence/Outbox/
+Processing/OutboxProcessor.cs:35` (class :58). There
 is no dedicated ADR for validation; it is governed by the CQRS-decorator ADRs (ADR-014) and the layering
-fitness tests. Change history (2026-10-08, v1.233.0): every Common anchor re-checked and holding;
+fitness tests. Change history (2026-10-22, v1.250.0): every anchor re-verified and holding except as
+noted; stamp refreshed; FluentValidation pin 12.1.1 to 12.2.0; the escape-hatch example corrected from
+`AddEntityUpdate` alone to the closed-generic callers `AddEntityCrud` and `AddEntityUpdateVerb` (three
+callers, not one); "address limits the domain uses" reworded to validator plus EF column width, since
+`Address.Create` reads none of the six limits; noted that the shown `RegisterRequestValidator` reaches
+`ToErrors` through `AuthenticationServiceBase`, not the decorator; next-in-series outbox wording
+corrected (persist in the data transaction, publish afterwards at least once). Change history (2026-10-08, v1.233.0): every Common anchor re-checked and holding;
 stamp refreshed; ADC anchors re-based (`EventValidationRules.cs:67` to :123, the `UserInvariants`
 email-check cite :29 to :38/:44); "`AddressInvariants` constants" reworded to "fields" in the body and
 trade-offs, since the six limits are `static readonly`, not `const`. Change history (2026-10-02): re-anchored every Common cite after the `DependencyInjection`

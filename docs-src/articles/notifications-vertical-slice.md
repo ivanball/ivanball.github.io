@@ -46,10 +46,11 @@ port-and-adapter reference:
   `NotificationHub`) plus their no-op fallbacks.
 - **API** exposes three REST controllers, split by who is allowed to call them.
 
-Four loosely coupled delivery legs share one feature flag and one set of application ports: an in-app
-inbox (durable per-user record), a SignalR real-time push (best-effort delivery to connected clients),
-an OS-level native push (FCM and APNs to backgrounded or killed devices, added in ADR-044), and email
-(system mail).
+Four loosely coupled channels share one set of application ports: an in-app inbox (durable per-user
+record), a SignalR real-time push (best-effort delivery to connected clients), an OS-level native push
+(FCM and APNs to backgrounded or killed devices, the third leg of a send, added in ADR-044), and email
+(system mail). The first three are the legs of a send and sit behind one feature flag; email is wired
+separately and no flag gates it.
 
 ## Sending a push notification, end to end
 
@@ -95,8 +96,8 @@ by POSTing to `NotificationsController`. The handler runs in a deliberate order:
 
 Those three saves are one unit of work, not three. `SendPushNotificationCommand` declares
 `ITransactional`, and `TransactionalCommandDecorator` wraps any command carrying that marker in a
-single database transaction that commits when the handler returns and rolls back on a thrown
-exception. The dedup key is the reason. A fault between the audit save and the inbox fan-out would
+single database transaction that commits only when the handler returns a success result, and rolls
+back on a failure result or a thrown exception. The dedup key is the reason. A fault between the audit save and the inbox fan-out would
 otherwise leave a committed notification row carrying a key that nothing ever delivered, and every
 later retry of that key would short-circuit on the dedup lookup and report success forever. Rolling
 the attempt back whole is what lets the retry re-run the send. A failed delivery does not trigger that
@@ -213,7 +214,8 @@ deep-dive on it.
 The important design decision is that **which sender is live is a registration decision, not a runtime
 branch.** Infrastructure registers the safe default: `AddInfrastructure` calls `AddServices`, which
 does `TryAddTransient<IPushNotificationSender, NullPushNotificationSender>()` (the no-op lives in
-`MMCA.Common.Infrastructure.Services`, so it is an Infrastructure registration, not an Application one).
+`MMCA.Common.Infrastructure.Notifications.Push`, so it is an Infrastructure registration, not an
+Application one).
 Infrastructure's `AddPushNotifications(configuration)` then replaces `IPushNotificationSender` with the
 SignalR implementation, wires `AddSignalR()`, and, if a `redis` connection string is present, adds a
 Redis backplane for SignalR scale-out across replicas, with a per-application channel prefix so two
@@ -238,8 +240,8 @@ composition root, and the same null-object discipline applies to recipients via
 
 The SignalR leg stops at the edge of a connected client. A phone with the app backgrounded, killed, or
 offline hears nothing until the next launch, and conference announcements ("lunch is served", "room
-change") are exactly the messages that must reach pockets, not open tabs. ADR-044 adds a fourth delivery
-leg for that: OS-level native push through Firebase Cloud Messaging (Android) and APNs (iOS), fanned out
+change") are exactly the messages that must reach pockets, not open tabs. ADR-044 adds a third leg to
+the send for that: OS-level native push through Firebase Cloud Messaging (Android) and APNs (iOS), fanned out
 by Azure Notification Hubs.
 
 It follows the same abstraction discipline as the SignalR channel, with two new Application ports.
@@ -256,7 +258,11 @@ The registration surface is `DevicesController`, the third REST controller. Any 
 manages their own device installations: `PUT /Notifications/Devices` upserts (called after sign-in and
 on token rotation), `DELETE /Notifications/Devices/{installationId}` removes one (called before
 sign-out) and is idempotent. Ownership is stamped server-side from the current user, and installation
-ids are client-generated GUIDs, so they are not enumerable.
+ids are client-generated GUIDs, so they are not enumerable. Because the id comes from the client, both
+verbs check it against the owner. A PUT naming an installation that belongs to another user's device
+answers 409 Conflict, and the client mints a new installation id and retries. A DELETE reads the
+installation's owner tag first, and an id that does not exist or belongs to another user answers 204
+without deleting anything, so the response cannot be used to probe for other users' installation ids.
 
 ## The in-app inbox: pure CQRS read/write, scoped to the caller
 
@@ -404,8 +410,22 @@ example, or `dotnet add package MMCA.Common.API` and try it.*
 
 *Tags: .NET, C Sharp, Software Architecture, SignalR, Vertical Slice*
 
-*Notes: refreshed 2026-10-08 against MMCA.Common v1.233.0 (paths below are under `MMCA.Common/` unless
-stated). Changes this run: the handler was rewritten in Common #498 (2026-10-04) and #516
+*Notes: re-verified 2026-10-22 against MMCA.Common v1.250.0 (paths below are under `MMCA.Common/` unless
+stated). Changes this run: the channel paragraph no longer puts email under the feature flag (the flag
+sits on the three controllers only, `NotificationsController.cs:28`, `NotificationInboxController.cs:27`,
+`DevicesController.cs:24`, while `IEmailSender` is registered unconditionally,
+`DependencyInjection.cs:330`) and counts native push as the third leg of a send, as ADR-044 and the
+handler do ("Third channel (ADR-044)" `SendPushNotificationHandler.cs:137`; ADR-044 title `:1`, "gains
+the third leg" `:40`); the decorator sentence is restated as commit-on-success (a failure result rolls
+back, `Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:641`-`:647`;
+an exception rolls back best-effort, catch `:674`, `RollbackBestEffort` `:680`); the no-op's namespace
+is corrected to `MMCA.Common.Infrastructure.Notifications.Push`
+(`Source/Core/MMCA.Common.Infrastructure/Notifications/Push/NullPushNotificationSender.cs:3`); the
+device paragraph gains the owner checks (PUT 409 doc `DevicesController.cs:31`-`:33`, `409` response
+type `:38`; DELETE owner-tag doc `:54`-`:58`; registrar conflict
+`Source/Core/MMCA.Common.Infrastructure/Notifications/Push/AzureNotificationHubDeviceRegistrar.cs:56`-`:57`,
+owner-tag read-then-delete `:80`-`:89`); every anchor below is re-read and re-pointed.
+Previous refresh 2026-10-08 (v1.233.0): the handler was rewritten in Common #498 (2026-10-04) and #516
 (2026-10-06), so the audit-save catch and requery are gone; step 3, the code block, the retry-safety
 section (both paragraphs), the dedup trade-off and Apply #5 are re-grounded on propagate-and-roll-back
 (the lost race fails the bare audit save, surfaces as a 409 through
@@ -433,7 +453,7 @@ inside the transaction is added to the transaction trade-off; ADC's scope fallba
 fails narrow to the last resolved key or an `event:0` sentinel, never to null); the Redis backplane's
 per-application channel prefix is added; three "as it always did / as before" phrasings are removed;
 every DI anchor is re-pointed (the push registrations live in `DependencyInjection.Notifications.cs`).
-Handler, re-read in full this run:
+Handler, every anchor re-read this run (unchanged since v1.233.0):
 `Source/Core/MMCA.Common.Application/Notifications/PushNotifications/UseCases/Send/SendPushNotificationHandler.cs`.
 "Atomicity" XML doc `:21`-`:31` (live legs re-run under the execution strategy on a transient fault of
 the final save, at-least-once for SignalR and native, exactly-once for inbox rows, `:28`-`:30`);
@@ -474,7 +494,7 @@ handler); `NotificationInboxController.cs` `[FeatureGate]` `:27`, `[Authorize]` 
 `InboxController` `:29`, `[FromQuery, StringLength(PushNotification.ScopeKeyMaxLength)] string? scope`
 `:46`, `:70`, `:113` (mark-one `[HttpPut("{id:int}/read")]` `:86` takes no scope, read-all `:110`);
 `DevicesController.cs` `[FeatureGate]` `:24`, `[Authorize]` `:25`, class `:26`,
-`IPushDeviceRegistrar` `:27`, `[HttpPut]` `:31`, `[HttpDelete("{installationId}")]` `:55`.
+`IPushDeviceRegistrar` `:27`, `[HttpPut]` `:35`, `[HttpDelete("{installationId}")]` `:60`.
 Inbox slices (`Source/Core/MMCA.Common.Application/Notifications/UserNotifications/UseCases/`):
 `GetInbox/GetMyNotificationsHandler.cs` `MaxPageSize = 500` `:21`, scope filter `:40`-`:43`, caller
 filter `:50`; `GetUnreadCount/GetUnreadNotificationCountHandler.cs` caller `:25`, scope `:31`-`:38`;
@@ -482,16 +502,16 @@ filter `:50`; `GetUnreadCount/GetUnreadNotificationCountHandler.cs` caller `:25`
 `MarkRead/MarkNotificationReadHandler.cs` id plus caller `:26`, `TimeProvider` injected `:15` and used
 `:38`.
 DI: `Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs` `AddInfrastructure` `:57` calls
-`AddServices()` `:235` (declared `:295`), which does `TryAddTransient` for `IEmailSender` ->
-`SmtpEmailSender` `:325`, `IPushNotificationSender` -> `NullPushNotificationSender` `:326`,
-`ILiveChannelPublisher` -> `NullLiveChannelPublisher` `:327`, `INativePushSender` ->
-`NullNativePushSender` `:331`, `IPushDeviceRegistrar` -> `NullPushDeviceRegistrar` `:332`.
+`AddServices()` `:239` (declared `:300`), which does `TryAddTransient` for `IEmailSender` ->
+`SmtpEmailSender` `:330`, `IPushNotificationSender` -> `NullPushNotificationSender` `:331`,
+`ILiveChannelPublisher` -> `NullLiveChannelPublisher` `:332`, `INativePushSender` ->
+`NullNativePushSender` `:336`, `IPushDeviceRegistrar` -> `NullPushDeviceRegistrar` `:337`.
 `Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs`: `AddPushNotifications`
 `:41`, `AddSignalR()` `:48`, `redis` connection string `:50`, per-application `ChannelPrefix` with
 `AddStackExchangeRedis` `:53`-`:61`, `SignalRPushNotificationSender` `:65`,
-`SignalRLiveChannelPublisher` `:66`, `ClaimBasedUserIdProvider` `:67`; `AddNativePushNotifications`
-`:82`, enabled-and-complete guard `:88`-`:93`, `AzureNotificationHubNativePushSender` `:98`,
-`AzureNotificationHubDeviceRegistrar` `:99`. Application registers only
+`SignalRLiveChannelPublisher` `:66`, `ClaimBasedUserIdProvider` `:70`; `AddNativePushNotifications`
+`:85`, enabled-and-complete guard `:91`-`:95`, `AzureNotificationHubNativePushSender` `:101`,
+`AzureNotificationHubDeviceRegistrar` `:102`. Application registers only
 `NullNotificationRecipientProvider` at `Source/Core/MMCA.Common.Application/Notifications/DependencyInjection.cs:75`.
 Hub and sender: `Source/Core/MMCA.Common.Infrastructure/Notifications/NotificationHub.cs`
 `[Authorize]` `:24`, class `:25`, `ReceiveNotificationMethod` `:30` (plus `ReceiveChannelEventMethod`
@@ -499,7 +519,7 @@ Hub and sender: `Source/Core/MMCA.Common.Infrastructure/Notifications/Notificati
 (`[HubMethodName]` `:127`), `LeaveChannelAsync` `:145` (`[HubMethodName]` `:144`), per ADR-039);
 `Source/Core/MMCA.Common.Infrastructure/Notifications/Push/SignalRPushNotificationSender.cs`
 `BatchSize = 100` `:14`, `SendToUsersAsync(userIds, title, body, metadata = null, cancellationToken)`
-`:24`, sends on `NotificationHub.ReceiveNotificationMethod` `:20`, `:30`, `:38`;
+`:23`, sends on `NotificationHub.ReceiveNotificationMethod` `:20`, `:29`, `:37`;
 `ClaimBasedUserIdProvider` at `Source/Core/MMCA.Common.Infrastructure/Context/ClaimBasedUserIdProvider.cs`.
 ADC scope: `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Services/Notifications/CurrentEventNotificationScopeProvider.cs`
 resolves `NotificationScopeKey.ForEvent(currentEvent.EventId)` `:67`, caches a resolved key five
@@ -508,16 +528,18 @@ minutes `:41`, and on no event or a failure (`catch` `:74`) answers from `LastRe
 no row carries; the "never answers unscoped" reasoning is its own remarks `:20`-`:24`.
 ADR mapping: `Website/docs-src/adr/024-push-notifications.md` records the scope key (status `:5`-`:6`),
 the per-application backplane channel (`:9`-`:10`), the sender-scoped dedup key (`:13`), the
-propagate-and-roll-back dedup race (`:14`, decision `:43`-`:57`) and the WebSockets-only hub client
-(`:15`); the ADR-024 + ADR-044 mapping holds.
-Carried forward from the 2026-10-02 read, not re-read this run: the command and decorator, aggregate,
-EF configuration (bar the `[UseDatabase]` lines), inbox controller and slices (bar the join and the
-validator), `DependencyInjection.Notifications.cs`, `SignalRPushNotificationSender` and ADC scope
-provider anchors above (ADR-024 `:39`-`:51` independently cites `SendPushNotificationCommand.cs:23`
-and `PushNotificationConfiguration.cs:69`-`:73` at v1.233.0), plus `AttendeeNotificationRecipientProvider` (ADC),
-`PushNotificationInvariants`, `SmtpEmailSender` building a fresh `SmtpClient` per send, the idempotent
-`UserNotification.MarkAsRead`, `GlobalUsings.NotificationIdentifierType.cs`, the `DevicesController`
-delete documentation, and the content of `Website/docs-src/adr/044-native-push-delivery.md`.
+propagate-and-roll-back dedup race (`:14`, decision bullet `:44`-`:58`) and the WebSockets-only hub
+client (`:15`); its 2026-10-21 revision (`:16`) covers the ADC scale block and anchors only. ADR-024 independently
+cites `SendPushNotificationCommand.cs:23` (`:41`) and `PushNotificationConfiguration.cs:69`-`:73`
+(`:52`), both still correct; the ADR-024 + ADR-044 mapping holds.
+Re-read this run beyond the anchors above: `SmtpEmailSender` builds a client per send
+(`Source/Core/MMCA.Common.Infrastructure/Mail/SmtpEmailSender.cs:67`, `using var`); the idempotent
+`UserNotification.MarkAsRead(DateTime readOnUtc)`
+(`Source/Core/MMCA.Common.Domain/Notifications/UserNotifications/UserNotification.cs:58`, `IsRead` guard
+`:60`); `Source/Core/MMCA.Common.Shared/GlobalUsings.NotificationIdentifierType.cs` exists.
+Carried forward, not re-read this run: `AttendeeNotificationRecipientProvider` (ADC),
+`PushNotificationInvariants`, and the body of `Website/docs-src/adr/044-native-push-delivery.md`
+beyond its title and "third leg" lines.
 The `SendPushNotificationHandler` code block is an illustrative reconstruction of the step order, not
 a verbatim copy: it simplifies variable names, inlines the `LiveMetadata` dictionary as a comment and
 drops the `Result<PushNotification>` unwrap. Next article: Article 22, live channel push.*

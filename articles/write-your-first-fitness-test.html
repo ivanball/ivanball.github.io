@@ -125,7 +125,7 @@
         <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
         <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
         <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
-        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · Refresh tokens that rotate per device</a></li>
         <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
         <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
         <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
@@ -197,9 +197,10 @@
           <p>A third gate sits alongside those two, and ADR-015 as revised records the enforcement as running in
           three layers. It is neither MSBuild nor NetArchTest: <code>Microsoft.CodeAnalysis.PublicApiAnalyzers</code> runs on
           every published package except <code>MMCA.Common.UI.Maui</code> (excluded by name, because it builds only on the
-          Windows MAUI job outside the main solution) against a committed <code>PublicAPI.Shipped.txt</code> baseline (one
-          per gated package, twenty-one files), so adding or removing a public member fails the compile until that
-          text file is updated in the same pull request. It guards the shipped package surface rather than layer
+          Windows MAUI job outside the main solution) against committed baselines (a <code>PublicAPI.Shipped.txt</code> /
+          <code>PublicAPI.Unshipped.txt</code> pair per gated package, twenty-one pairs), so adding or removing a public
+          member fails the compile until the change is declared in that package&#39;s <code>PublicAPI.Unshipped.txt</code> in the
+          same pull request; the release step then folds every unshipped file into its shipped baseline. It guards the shipped package surface rather than layer
           flow, which is why the two speeds above are the ones this tutorial teaches.</p>
           <p>This article is about adding the second layer to your own code, and optionally the first.</p>
           <h2 id="prerequisites">Prerequisites</h2>
@@ -215,12 +216,12 @@
           </ul>
           <p>The key design idea: the rule <em>bodies</em> ship in the package once. You do not copy them. You supply a tiny
           map of your assemblies and subclass the bases, and you inherit roughly the same suite that runs across
-          MMCA.Common, MMCA.Store, MMCA.ADC and MMCA.Helpdesk (153 test methods across 61 abstract <code>*TestsBase</code>
-          classes; the framework&#39;s own build executes 410 of them).</p>
+          MMCA.Common, MMCA.Store, MMCA.ADC and MMCA.Helpdesk (159 test methods across 63 abstract <code>*TestsBase</code>
+          classes; the framework&#39;s own build executes 458 of them).</p>
           <blockquote>
           <p><strong>If you scaffolded with <code>dotnet new mmca-app</code>, steps 1 through 4 are already done.</strong> The generated
-          solution ships the architecture-test project, the <code>IArchitectureMap</code>, and every applicable base
-          subclassed (32 sealed subclasses in the current reference-app seed), including the wire-contract
+          solution ships the architecture-test project, the <code>IArchitectureMap</code>, and the reference app&#39;s set of
+          base subclasses (32 sealed subclasses in the current seed), including the wire-contract
           freeze, which arrives frozen under your own names and green on the first <code>dotnet test</code>. Read those
           steps anyway to know what you have, then skip to Step 5. If you are retrofitting an existing
           solution, the steps are the work.</p>
@@ -230,7 +231,7 @@
           <code>Tests/Architecture/*.Architecture.Tests</code>), and reference the package:</p>
           <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet add package MMCA.Common.Testing.Architecture</code></pre>
           <p>The package brings the NetArchTest engine (NetArchTest.eNhancedEdition), the <code>ArchitectureRules</code> rule
-          library, the diagnostic helpers, and the 61 abstract <code>*TestsBase</code> classes. You will not write rule
+          library, the diagnostic helpers, and the 63 abstract <code>*TestsBase</code> classes. You will not write rule
           logic; you will point the rules at your assemblies and subclass the bases.</p>
           <h2 id="step-2-implement-iarchitecturemap-one-anchor-type-per-layer">Step 2: implement <code>IArchitectureMap</code>, one anchor type per layer</h2>
           <p>This is the only real work, and it is small. <code>IArchitectureMap</code> is the single extension point every rule is
@@ -258,7 +259,9 @@
 }</code></pre>
           <p>That is the &quot;what to scan&quot; half. The package&#39;s <code>ArchitectureRules</code> are the &quot;what to assert&quot; half. The
           framework&#39;s own <code>CommonArchitectureMap</code> is module-less (every layer is a framework layer, seven <code>Framework(...)</code>
-          entries, one anchor per layer it scans); ADC&#39;s <code>AdcArchitectureMap</code> adds module entries the same way. Your map looks like one of those,
+          entries, one anchor per layer it scans); ADC&#39;s <code>AdcArchitectureMap</code> adds one <code>Module(...)</code> entry per
+          module and layer, pinning an anchor type where a public one is handy and loading the remaining
+          assemblies by name with <code>Assembly.Load</code>, as its doc comment states. Your map looks like one of those,
           scaled to your solution. One map per solution is the usual shape, not a limit: MMCA.Common also runs a
           second map, <code>FrameworkModuleArchitectureMap</code>, that registers its own Shared, Domain and Application
           assemblies as one <code>Module(...)</code> named <code>Framework</code>, so the module-scoped DDD rules (sealed entities, no

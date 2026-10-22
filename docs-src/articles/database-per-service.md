@@ -161,9 +161,9 @@ again per row: each `OutboxMessage` records the tenant its raising request resol
 processor restores that tenant (with the user, roles, and correlation id) onto a fresh scope for each
 row before dispatch, so a handler reads and writes the same tenant's rows the original request did.
 
-Resolution is claim first, then header, and it fails closed. `TenantResolutionMiddleware` runs
-immediately after `UseAuthentication` (a claim-first order needs `HttpContext.User` already
-populated), is registered unconditionally, and passes every request straight through until
+Resolution reads the signed claim by default (a host opts into the header by listing it after the
+claim), and it fails closed. `TenantResolutionMiddleware` runs immediately after `UseAuthentication`
+(the claim needs `HttpContext.User` already populated), is registered unconditionally, and passes every request straight through until
 `Tenancy:Enabled` is on. With `RequireTenant` (true by default) a request that resolves no tenant on
 a non-excluded path is answered with a 400 ProblemDetails rather than allowed through unscoped,
 because an unscoped request reads across every tenant, which is the exact outcome tenancy exists to
@@ -300,25 +300,38 @@ design, or install it and watch the single-database case behave like a plain mon
 
 *Tags: .NET, C Sharp, Software Architecture, Data Engineering, EF Core*
 
-*Notes: 2026-10-08 evidence refresh (verified against source today, MMCA.Common v1.233.0). Paths
+*Notes: 2026-10-22 evidence refresh (re-verified against source today, MMCA.Common v1.250.0). Paths
 under `Infrastructure/` mean `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/`. Fixed this run
-(four body claims; every anchor in the 2026-10-02 entry below is corrected in place to v1.233.0):
+(one body claim; every anchor in the two entries below is corrected in place to v1.250.0): the
+resolution sentence said "claim first, then header". The framework default order is the claim only
+(`DefaultResolutionOrder = [Claim]` at `Infrastructure/Persistence/Tenancy/TenancySettings.cs:61-62`,
+`EffectiveResolutionOrder` `:82-83`); `Header` is never in the default order, and a host opts in by
+listing it after `Claim` in `Tenancy:ResolutionOrder` (`:15-21`, `:74-79`). The middleware walks
+`EffectiveResolutionOrder` (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/TenantResolutionMiddleware.cs:108`).
+Helpdesk's `[ "Claim", "Header" ]` (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/appsettings.json:32`)
+is that explicit opt-in, and ADR-073 records the same (`Website/docs-src/adr/073-multi-tenancy-model.md:39-41`,
+`:98`, Revision 2026-10-21 at `:439`). The body now says the signed claim by default, the header by
+opt-in, and the placement parenthetical says the claim needs `HttpContext.User`. Fail-closed is
+unchanged (`RequireTenant = true` at `TenancySettings.cs:102`; 400 at `TenantResolutionMiddleware.cs:137`).
+Not changed: every other body claim re-read against the anchors below.
+Prior entry, 2026-10-08 (verified then at MMCA.Common v1.233.0). Fixed in that run (four body claims):
 (a) The read-narrowing sentence said reads were "just as narrow" as writes and could not cross
 tenants by accident. Only the repository path is narrowed (`SoftDeleteFilterOnly` at
 `Infrastructure/Persistence/Repositories/EFReadRepository.cs:41`, eight call sites, re-confirmed). The
 body now scopes that claim to the repository and names the raw-surface gap, as ADR-073 Trade-offs
-states it (`Website/docs-src/adr/073-multi-tenancy-model.md:250-257`: reads are on discipline where
+states it (`Website/docs-src/adr/073-multi-tenancy-model.md:269-276`: reads are on discipline where
 writes are on an invariant; no gate holds the parameterless count). A Grep of `MMCA.Common/Source`
-for `IgnoreQueryFilters()` today returns only the two doc comments (`EFReadRepository.cs:38`,
-`Infrastructure/Persistence/Interceptors/TenantSaveChangesInterceptor.cs:32`), zero call sites.
+for `IgnoreQueryFilters()` returns only the two doc comments (`EFReadRepository.cs:38`,
+`Infrastructure/Persistence/Interceptors/TenantSaveChangesInterceptor.cs:32`), zero call sites
+(re-run 2026-10-22).
 (b) "A guard" on the per-scope context cache became two: `GuardRoutedTenantUnchanged`
-(`Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:202-218`, throw `:211`, called
-`:125`) and `GuardSharedContextNotRoutable` (`:227-238`, throw `:232`, called `:129`), which refuses a
+(`Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:205`, throw `:214`, called
+`:125`) and `GuardSharedContextNotRoutable` (`:230`, throw `:235`, called `:129`), which refuses a
 shared-database context created before the tenant resolved once that tenant overrides the source.
 (c) The commit-failure bullet and the closing summary called the outbox "the reconciler". Source
-assigns reconciliation of a partial commit to the caller's replay (`DbContextFactory.cs:540-544`,
-"the caller's replay is what reconciles it"), with the outbox delivering only what became durable
-(`:536-537`); the outbox stays the cross-source consistency mechanism (`:501`), which the body keeps.
+assigns reconciliation of a partial commit to the caller's replay (`DbContextFactory.cs:566-570`,
+"the caller's replay is what reconciles it" at `:568`), with the outbox delivering only what became
+durable (`:562-563`); the outbox stays the cross-source consistency mechanism (`:527`), which the body keeps.
 (d) The tenant index is created only on a relational engine (`Engine.Capabilities.IsRelational`,
 `Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:544`; widening keyed on
 `IAuditableEntity` `:546-553`; column `:532-535`; owned types excluded `:527`). The body now says so.
@@ -330,21 +343,21 @@ line anchors had drifted. Fixed in that run (three body claims plus the header):
 column. Wrong: `public string? TenantId { get; init; }` is at
 `Infrastructure/Persistence/Outbox/OutboxMessage.cs:95` (doc-comment `:90-94`: restored around
 delivery, null for a tenant-less host and for rows written before the column existed), filled from the
-raising scope's origin at `:146`, and mapped at `Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:682`.
-`Website/docs-src/adr/073-multi-tenancy-model.md:340-369` (Revision 2026-10-01) retracts the same
+raising scope's origin at `:153`, and mapped at `Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:682`.
+`Website/docs-src/adr/073-multi-tenancy-model.md:359-388` (Revision 2026-10-01) retracts the same
 wording in the ADR. Routing still does not depend on the column: `GetOutboxTargets()` at
-`Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:147-148` (rationale `:140-146`) returns
+`Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:157-158` (rationale `:150-156`) returns
 the `(source, tenant)` targets, and `ProcessSourceAsync` opens its scope through
-`scopeFactory.CreateTenantScope(target)` at `:187`, which sets the tenant before the context is
+`scopeFactory.CreateTenantScope(target)` at `:197`, which sets the tenant before the context is
 obtained (`Infrastructure/Persistence/DataSources/TenantDataSourceTargets.cs:100-109`). The body now
 says the column exists only so delivery can restore the tenant.
 (2) The system-context sentence named "the outbox loop, the migration runner, and the seeders". The
 `ApplicationDbContext.ApplyTenantFilters` remarks (`ApplicationDbContext.cs:509-511`) name the outbox
 processor, the seeders and the retention jobs, so the sentence follows that list (the migration runner
 is not named in source; removed). Added the per-row delivery behavior: `DispatchMessagesAsync` remarks
-`OutboxProcessor.cs:445-464` (captured user, roles, tenant and correlation id restored onto a FRESH
-scope per row), the row scope at `:501` and `AmbientOrigin.Restore(..., message.TenantId, ...)` at
-`:508-514` (tenant argument `:512`).
+`OutboxProcessor.cs:457-486` (captured user, roles, tenant and correlation id restored onto a FRESH
+scope per row), the row scope at `:558` and `AmbientOrigin.Restore(..., message.TenantId, ...)` at
+`:565-572` (tenant argument `:570`).
 (3) The configuration block used an invented `ConnectionStrings:Default` key. The bound top-level key
 is `SQLServerConnectionString`
 (`Infrastructure/Persistence/DataSources/ConnectionStringSettings.cs:43`, plus
@@ -352,7 +365,7 @@ is `SQLServerConnectionString`
 (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/appsettings.json:46-48`); the per-source entry key
 `SQLServerConnectionString` is `Infrastructure/Persistence/DataSources/DataSourceEntrySettings.cs:58`.
 (4) Header: `MMCA.Common/CLAUDE.md` is a stub importing `AGENTS.md`; the sections are
-`MMCA.Common/AGENTS.md:107` ("Multi-Database Strategy (database per service)") and `:119` ("Outbox and
+`MMCA.Common/AGENTS.md:108` ("Multi-Database Strategy (database per service)") and `:120` ("Outbox and
 Internal Commands"). There is no "Outbox Pattern" section.
 Re-confirmed, unchanged in substance: one sealed context per engine (`DataSource` enum at
 `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IDataSourceService.cs:6`,
@@ -376,26 +389,26 @@ domainEventInterceptor)` at `:307`; `TryAddSingleton<TenantSaveChangesIntercepto
 `Infrastructure/DependencyInjection.cs:70`. `TenantSaveChangesInterceptor`
 (`Infrastructure/Persistence/Interceptors/TenantSaveChangesInterceptor.cs:36`) throws
 `CrossTenantWriteException` for an unresolved-tenant insert (`:110`) and on a mismatch (`:123`, `:150`).
-`TenantResolutionMiddleware` (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/TenantResolutionMiddleware.cs:36`)
-is inert unless enabled (`:62`), passes through when `RequireTenant` is off (`:75`) and otherwise
-answers 400 (`:133`); it is registered right after `UseAuthentication`
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Pipeline/MiddlewarePipelineBuilder.cs:105`,
-`:113`); `RequireTenant = true` default at
-`Infrastructure/Persistence/Tenancy/TenancySettings.cs:96`. Read narrowing: `SoftDeleteFilterOnly` at
+`TenantResolutionMiddleware` (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/TenantResolutionMiddleware.cs:37`)
+is inert unless enabled (`:63`), passes through when `RequireTenant` is off (`:76`) and otherwise
+answers 400 (`:137`); it is registered right after `UseAuthentication`
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Pipeline/MiddlewarePipelineBuilder.cs:104`,
+`:112`); `RequireTenant = true` default at
+`Infrastructure/Persistence/Tenancy/TenancySettings.cs:102`. Read narrowing: `SoftDeleteFilterOnly` at
 `Infrastructure/Persistence/Repositories/EFReadRepository.cs:41`, passed to `IgnoreQueryFilters` at
-eight sites (`:58`, `:87`, `:108`, `:204`, `:394`, `:471`, `:485`, `:582`; grep-confirmed).
+eight sites (`:58`, `:87`, `:108`, `:203`, `:393`, `:469`, `:483`, `:580`; grep-confirmed 2026-10-22).
 DB-per-tenant: `ResolveTenantOverride` at
-`Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:169`, called at `:105`;
-`GuardRoutedTenantUnchanged` at `:202-218` (throw `:211`). Transactions: `ExecuteInTransactionAsync` at
-`DbContextFactory.cs:551`, `TryCommit` `:719` (called `:627`), `AbandonAfterCommitFailure` invoked
-`:743` (declared `:760`); `TransactionCommitAmbiguousException`
+`Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:172`, called at `:105`;
+`GuardRoutedTenantUnchanged` at `:205` (throw `:214`). Transactions: `ExecuteInTransactionAsync` at
+`DbContextFactory.cs:577`, `TryCommit` `:751` (called `:653`), `AbandonAfterCommitFailure` invoked
+`:775` (declared `:792`); `TransactionCommitAmbiguousException`
 (`Infrastructure/Persistence/DbContexts/Factory/TransactionCommitAmbiguousException.cs`) exposes
 `CommittedSources` `:76`, `AmbiguousSource` `:85`, `RolledBackSources` `:93`, and appends
 `" Per-source outcome: ..."` at `:117`. Registration: `services.AddInfrastructure` at
 `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:77`, `services.AddMultiTenancy` at `:90`;
 the two demo tenants (`acme` shared, `globex` overriding `Default` to `Helpdesk_Globex`) at
 `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/appsettings.json:29-45`. ADR-073 adoption and the two
-honest costs: `Website/docs-src/adr/073-multi-tenancy-model.md:219-224` and `:263-268`.
+honest costs: `Website/docs-src/adr/073-multi-tenancy-model.md:238-243` and `:282-287`.
 Honest gaps: both JSON blocks are representative shapes, not verbatim files (Helpdesk's real
 `Tenancy` block also sets `RequireTenant: false`, `ResolutionOrder`, `ClaimType` and `HeaderName`);
 cache-key tenant isolation is deliberately left to the caching-pattern article.*

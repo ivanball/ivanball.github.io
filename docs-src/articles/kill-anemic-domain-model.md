@@ -167,8 +167,8 @@ The validation lives in static *invariants* classes (`EmailInvariants`, `Address
 inside MMCA.Common: `AddressValidationRules` reads them for FluentValidation, and the `OwnsAddress`
 mapping extension reads the same six fields for `HasMaxLength` on the owned `Address` columns, so a
 consuming app (Store's `CustomerConfiguration`) gets the field-length rule from one source of truth
-through a single `builder.OwnsAddress(p => p.Address);` call (a second `OwnsOne` there overrides only
-the unicode facet, never a length). `EmailInvariants.MaxLength` does not get
+through a single `builder.OwnsAddress(p => p.Address);` call that names no length itself.
+`EmailInvariants.MaxLength` does not get
 the same treatment: each consumer declares its own, separate email length limit instead (Store's
 `CustomerInvariants.EmailMaxLength` is 100, ADC's `UserInvariants.EmailMaxLength` is 100, and ADC's
 `SpeakerInvariants.EmailMaxLength` aliases the 255 its own DTO declares), none derived from the 256
@@ -265,8 +265,10 @@ non-public setters pass; navigation properties are included, so a child collecti
 through a `SetXxx` method). **Placement:** no entity sits in an Application or Infrastructure
 assembly, no DTO or request type sits in Domain, and no DTO sits in Infrastructure. MMCA.ADC,
 MMCA.Store and MMCA.Helpdesk each subclass the base unchanged and supply only their architecture map.
-MMCA.Common runs the smaller `AggregateConventionTestsBase` instead: it has no business modules, so
-the module-scoped rules would check nothing there.
+MMCA.Common subclasses it too, over its own Domain: it has no business modules, so its map declares
+the framework's Shared, Domain and Application assemblies as one module, and the module-scoped rules
+run over the aggregates it ships (the Notifications family) instead of checking nothing. It also runs
+the smaller `AggregateConventionTestsBase`, which pins the four construction facts on their own.
 
 The convention half is the rest. `GetChildOrNotFound`, `SetItems` and the remove, restore and
 cascade-delete helpers are protected members of `AuditableAggregateRootEntity`, and no fitness rule
@@ -337,19 +339,25 @@ or `dotnet add package MMCA.Common.API` and try it.*
 
 *Tags: .NET, C Sharp, Software Architecture, Programming, Domain-Driven Design*
 
-*Notes: re-verified 2026-10-08 against MMCA.Common v1.233.0 (`MMCA.Common/FACTS.md:14`); paths
+*Notes: re-verified 2026-10-22 against MMCA.Common v1.250.0 (`MMCA.Common/FACTS.md:14`); paths
 under `Source/` are relative to `MMCA.Common/`.
-**2026-10-08 run (v1.233.0):** body prose unchanged (every claim still holds); anchors re-based in
-place: `OwnsAddress` `HasMaxLength` reads (`EntityTypeBuilderExtensions.cs:144,150,155,160,165,170`, were
-`:138-164`), `AddStronglyTypedIds` (`DependencyInjection.cs:377`, registry `:381`, converter registration
-`:384`), the `ConfigureConventions` strongly typed identifier block (comment `:402-406`, `GetService` `:407`,
-`Apply` `:409`), the `Directory.Build.props` alias link block (`:153-157`, was `:131-135`), the
-interceptor lines (`AuditSaveChangesInterceptor.cs:38`, `:41`, `:63`, `:69`;
-`DomainEventSaveChangesInterceptor.cs:242`), ADR-068 (`:40-41`, `:47-53`, `:67`) and ADR-115 (`:57-59`,
-`:10-11`, `:108-118`). Re-checked and unchanged: `AggregateConventionTestsBase` and
-`EntityConventionTestsBase` fact lines, the `ArchitectureRules.Entities.cs` rule start lines, the
-ADR-129 anchors, `ApplicationDbContext.cs:31-33,290,294-297`, and the scorecard row `:68` with indices
-`:9`/`:10`.
+**2026-10-22 run (v1.250.0):** two body sentences corrected. Store's `CustomerConfiguration` no
+longer carries a second `OwnsOne` over `Address` (the unicode-facet parenthetical is gone), and
+MMCA.Common runs `EntityConventionTestsBase` itself over a `FrameworkModuleArchitectureMap`, so the
+"Common runs only the smaller base" sentence became "Common subclasses it too, and also runs the
+smaller base". Anchors re-based in place: `OwnsAddress` `HasMaxLength` reads
+(`EntityTypeBuilderExtensions.cs:146,151,155,159,163,167`, were `:144-170`), `AddStronglyTypedIds`
+(`DependencyInjection.cs:382`, registry `:386`, converter registration `:389`, were `:377/:381/:384`),
+`Money` (`:53`, `:85`, were `:52`, `:67`), `StronglyTypedIdMappings` (`:36,43,48`, were `:31,38,43`),
+ADR-068 (`:42-43`, `:49-55`, `:69`), ADR-115 (`:60-63`, `:12-13`, `:112-122`), the scorecard indices
+and the Common fitness adopters. Re-checked and unchanged: the three entity rungs, `Error.cs`,
+`Result.cs`, `CommonInvariants.cs:63-64`, the interceptor lines, `ApplicationDbContext.cs`
+(`:31-33`, `:290`, `:294-297`, `:378`, `:402-409`), `Directory.Build.props:153-157`, the value-object
+and invariants anchors other than `Money`, the remaining strongly typed identifier files, the
+`AggregateConventionTestsBase` and `EntityConventionTestsBase` fact lines, the
+`ArchitectureRules.Entities.cs` rule start lines, the ADR-129 anchors, Helpdesk `Ticket.cs`, the
+Store/ADC email-length constants and the scorecard row `:68`.
+**2026-10-08 run (v1.233.0):** body prose unchanged; anchors re-based in place.
 **2026-10-02 run's changes:** header `Status` re-grounded on source folders (the `MMCA.Common/CLAUDE.md`
 "Entity Model" section it cited does not exist; that file holds only a `# CLAUDE.md` heading);
 `DeletedOn/By` added to the audit-field list; the identifier-alias sentence narrowed to where the alias
@@ -391,19 +399,19 @@ from one source file. Its calls match shipped signatures: `Result.Combine(params
 (`Source/Core/MMCA.Common.Domain/Invariants/CommonInvariants.cs:63-64`).
 **Value objects:** `public abstract record ValueObject;`
 (`Source/Core/MMCA.Common.Shared/ValueObjects/ValueObject.cs:8`); private ctor plus
-`Result<T>`-returning `Create` on `Money` (`Financial/Money.cs:52`, `:67`), `Email`
+`Result<T>`-returning `Create` on `Money` (`Financial/Money.cs:53`, `:85`), `Email`
 (`Contact/Email.cs:23`, `:30`), `Address` (`Contact/Address.cs:43`, `:69`) and `DateRange`
 (`Time/DateRange.cs:17`, `:30`).
 **Invariants reuse:** both reuse sites for
 `AddressInvariants.{AddressLine1,AddressLine2,City,State,ZipCode,Country}MaxLength` are inside
 MMCA.Common: `AddressValidationRules` reads them for FluentValidation
 (`Source/Core/MMCA.Common.Application/Validation/AddressValidationRules.cs:37,47,57,67,77,87`), and the
-`OwnsAddress` mapping extension reads them for EF `HasMaxLength` on the owned `Address` columns
-(`Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeBuilderExtensions.cs:144,150,155,160,165,170`).
-Store's `CustomerConfiguration` (61 lines) maps `Address` through `builder.OwnsAddress(p => p.Address);`
-(`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Infrastructure/Persistence/EntityConfiguration/CustomerConfiguration.cs:42`)
-and then re-enters the same owned navigation with `builder.OwnsOne(p => p.Address, ...)` (`:47`) that sets
-only `IsUnicode()` on the six columns; it names no `AddressInvariants` field itself.
+`OwnsAddress` mapping extension (declared at `:133`) reads them for EF `HasMaxLength` on the owned `Address` columns
+(`Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeBuilderExtensions.cs:146,151,155,159,163,167`).
+Store's `CustomerConfiguration` (48 lines) maps `Address` only through `builder.OwnsAddress(p => p.Address);`
+(`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Infrastructure/Persistence/EntityConfiguration/CustomerConfiguration.cs:42`),
+with no further `OwnsOne` over that navigation (the file's only `OwnsOne` mention is the comment at `:30`
+about `Email`); it names no `AddressInvariants` field itself.
 `EmailInvariants.MaxLength` (256, `Source/Core/MMCA.Common.Shared/ValueObjects/Contact/EmailInvariants.cs:14`)
 has no executable reference outside its own file: the only other mentions are a doc-comment usage
 example (`Source/Core/MMCA.Common.Infrastructure/Persistence/Conversions/EmailValueConverter.cs:16`)
@@ -430,12 +438,12 @@ at `:24`).
 **Scorecard:** `Website/docs-src/governance/common-ArchitectureScorecard.md` section 4, the Domain-Driven Design
 row at `:68` (weight 3, Maturity 4 / Implementation 8, 12/24, crediting `AggregateConventionTests` by
 name), held at 8 by two open criteria: strategic DDD realized downstream, and the tenant identifier kept
-a plain string by deliberate decision. Current indices: Maturity 96.6% (317/328, `:9`) and
-Implementation 86.0% (705/820, `:10`). The article states no index value in its body.
+a plain string by deliberate decision. Current indices: Maturity 97.3% (319/328, `:9`) and
+Implementation 85.4% (700/820, `:10`). The article states no index value in its body.
 **ADR mapping:** ADR-068 names the memberless `public abstract record ValueObject` base
-(`Website/docs-src/adr/068-value-objects-as-validated-primitives.md:40-41`), the private-constructor plus
-`Result`-returning `Create` factory shape (`:47-53`), and records that the shape is fitness-enforced by
-`ArchitectureRules.DomainFactoriesReturnResult` (`:67`).
+(`Website/docs-src/adr/068-value-objects-as-validated-primitives.md:42-43`), the private-constructor plus
+`Result`-returning `Create` factory shape (`:49-55`), and records that the shape is fitness-enforced by
+`ArchitectureRules.DomainFactoriesReturnResult` (`:69`).
 **Strongly typed identifiers:** `IStronglyTypedId<TSelf, TValue> : IParsable<TSelf>` with its
 `TValue Value` getter and `static abstract TSelf From(TValue)`
 (`Source/Core/MMCA.Common.Shared/Identifiers/IStronglyTypedId.cs:60`, `:65`, `:72`, the `IParsable<TSelf>`
@@ -445,9 +453,9 @@ default implementations just below), the `StronglyTypedId` static helper (`Stron
 (`StronglyTypedIdTypeConverter.cs:21`) with `StronglyTypedIdTypeConverters.Register` (`:89`) and
 `.RegisterAll` (`:119`), `StronglyTypedIdRegistry` (`StronglyTypedIdRegistry.cs:22`),
 `StronglyTypedIdMappings<TSelf, TValue>` with `ToValue`/`ToIdentifier`
-(`StronglyTypedIdMappings.cs:31,38,43`), the opt-in call `AddStronglyTypedIds`
-(`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:377`, registry at `:381`, converter
-registration at `:384`), `StronglyTypedIdModelConfiguration.Apply`
+(`StronglyTypedIdMappings.cs:36,43,48`), the opt-in call `AddStronglyTypedIds`
+(`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:382`, registry at `:386`, converter
+registration at `:389`), `StronglyTypedIdModelConfiguration.Apply`
 (`Source/Core/MMCA.Common.Infrastructure/Persistence/Conventions/StronglyTypedIdModelConfiguration.cs:21,29`),
 and `StronglyTypedIdValueConverter<TSelf, TValue>` / `NullableStronglyTypedIdValueConverter<TSelf, TValue>` /
 `StronglyTypedIdValueComparer<TSelf>`
@@ -456,8 +464,8 @@ The registry resolve and the pre-convention apply happen in `ApplicationDbContex
 (`ApplicationDbContext.cs:378`; comment `:402-406`, `GetService<StronglyTypedIdRegistry>` `:407`, `Apply`
 `:409`), where the comment records that absent the service it is a no-op and the aliases stay the
 identifier model. The posture (aliases default, wrapper opt-in, nothing migrates) is ADR-115
-(`Website/docs-src/adr/115-strongly-typed-identifiers-opt-in.md:57-59`), which revisits ADR-048 and
-ADR-085 (`:10-11`) and records the MVC `TypeConverter` binding finding (`:108-118`).
+(`Website/docs-src/adr/115-strongly-typed-identifiers-opt-in.md:60-63`), which revisits ADR-048 and
+ADR-085 (`:12-13`) and records the MVC `TypeConverter` binding finding (`:112-122`).
 **2026-10-02 ADR-129 fold-in** (section "One contract, and which half the build holds", header ADR
 cell and `Status` line, one closing clause in "What we covered"): the gated/convention split is
 ADR-129's Decision (`Website/docs-src/adr/129-tactical-aggregate-contract.md:22-24`) and its first
@@ -475,9 +483,15 @@ placement (`:199-217`; DTO in Infrastructure `:209-213`). Adopters: MMCA.ADC
 MMCA.Store (`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Domain/EntityConventionTests.cs:3`)
 and MMCA.Helpdesk
 (`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/ArchitectureTests.cs:89`). Common
-subclasses `AggregateConventionTestsBase` (`AggregateConventionTests.cs:9`), whose constructor fact
-calls the whole-Domain rule (`AggregateConventionTestsBase.cs:21`; `ArchitectureRules.Entities.cs:90-100`);
-the module-scoped rules are vacuous in a module-less repo (`ArchitectureRules.Entities.cs:141-144`).
+subclasses both bases: `EntityConventionTestsBase`
+(`Tests/Architecture/MMCA.Common.Architecture.Tests/Domain/EntityModel/EntityConventionTests.cs:12`, map
+at `:14`) over `FrameworkModuleArchitectureMap` (`.../Domain/EntityModel/FrameworkModuleArchitectureMap.cs:16`),
+whose doc (`:6-13`) records that it declares the framework's Shared, Domain and Application assemblies as
+one module so the module-scoped rules run over the Notifications family (`PushNotification`,
+`UserNotification`), where under `CommonArchitectureMap` they are vacuous
+(`ArchitectureRules.Entities.cs:141-144`); and `AggregateConventionTestsBase`
+(`AggregateConventionTests.cs:9`, `CommonArchitectureMap` at `:11`), whose constructor fact calls the
+whole-Domain rule (`AggregateConventionTestsBase.cs:21`; `ArchitectureRules.Entities.cs:90-100`).
 Child-access members are the protected helpers already anchored above (`AuditableAggregateRootEntity.cs:60`,
 `:105`, `:158`, `:214`, `:275`); ADR-129 records that no fitness rule requires them
 (`129-tactical-aggregate-contract.md:78`).

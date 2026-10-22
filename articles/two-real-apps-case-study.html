@@ -125,7 +125,7 @@
         <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
         <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
         <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
-        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · Refresh tokens that rotate per device</a></li>
         <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
         <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
         <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
@@ -183,15 +183,16 @@
           <li><strong>Identity</strong> (the <code>User</code> aggregate, JWT auth, plus social login via Google, GitHub and Sign in with Apple),</li>
           <li><strong>Conference</strong> (events, sessions, speakers, rooms, categories, questions and answers, social
           activities, partners and session assets, across twenty-two domain REST controllers),</li>
-          <li><strong>Engagement</strong> (session bookmarks, event and session feedback, and the conference-day live layer:
-          the <code>LivePolls</code> and <code>SessionQuestions</code> aggregates behind Happening Now, the session Live view, and
-          the presenter UI),</li>
+          <li><strong>Engagement</strong> (session bookmarks, the event and session feedback screens, check-ins, attendee
+          badges and leaderboard points, and the conference-day live layer: the <code>LivePolls</code> and
+          <code>SessionQuestions</code> aggregates behind Happening Now, the session Live view, and the presenter UI),</li>
           <li><strong>Notification</strong> (a thin SignalR module hosting the real-time notification hub).</li>
           </ul>
           <p>It is deployed to Azure Container Apps, one container image per deployable (the four services, the
-          Gateway, and the web UI), and a merge to <code>main</code> is the deploy: the full build and test tiers gate the
-          pull request against the exact tree that merges, and the merge push builds the images and rolls the
-          release out. That is a harder claim than &quot;it builds&quot;: the framework is carrying a six-image
+          Gateway, and the web UI), and a merge to <code>main</code> is the deploy: the required build, integration and
+          coverage checks gate the pull request against the exact tree that merges, and the merge push runs the
+          chromium end-to-end tier when the diff touches the UI, refuses to deploy when a scheduled tier such as
+          the cross-service or load run has no recent success, then builds the images and rolls the release out. That is a harder claim than &quot;it builds&quot;: the framework is carrying a six-image
           production topology, not a sample project.</p>
           <p><strong>MMCA.Store</strong> is an e-commerce application. Its domain is selling things: a product catalog, orders and
           carts, and the payment plumbing around them. It carries three modules:</p>
@@ -211,8 +212,10 @@
           <p>Both apps sit at the <strong>same architecture stage</strong>, and that is deliberate. Each one has its modules
           extracted into separate service hosts (one process per module) behind a YARP reverse-proxy Gateway
           pinned to <a href="https://localhost:6001" target="_blank" rel="noopener">https://localhost:6001</a>. Services talk to each other synchronously over gRPC (typed clients
-          defined in <code>*.Contracts</code> projects) and asynchronously over a broker using the outbox pattern. Tokens are
-          signed with RS256 and validated through JWKS discovery, with no shared secret.</p>
+          defined in <code>*.Contracts</code> projects) and asynchronously over a broker using the outbox pattern. User
+          tokens are signed with RS256 and validated through JWKS discovery, with no shared secret. Store adds
+          one deliberate exception for service-to-service gRPC: Identity&#39;s Customers edge requires an internal
+          caller, so Sales attaches an HS256 service token on the calls that have no user token to forward.</p>
           <p>None of that topology is hand-rolled per app. It comes from the framework:</p>
           <ul>
           <li><strong>The same packages, at the same number.</strong> MMCA.Common publishes twenty-two packages, and each app pins
@@ -233,7 +236,8 @@
           <li><strong>The same fitness rules, applied to their own code.</strong> This is the part most &quot;reference architecture&quot;
           repos skip. The architecture tests are not copy-pasted into each app. The rule bodies live once in the
           <code>MMCA.Common.Testing.Architecture</code> package as a rule library plus abstract test bases parameterized by
-          an <code>IArchitectureMap</code>. Each app supplies <strong>its own map</strong> (one anchor type per package) and subclasses
+          an <code>IArchitectureMap</code>. Each app supplies <strong>its own map</strong> (one entry per layer assembly, tagged with
+          its module and layer) and subclasses
           the same bases, so the layer, purity, and extraction rules are literally identical across MMCA.Common,
           MMCA.ADC, and MMCA.Store. The transport-leakage rule that forbids Domain and Application from touching
           MassTransit applies to all three the same way.</li>
@@ -267,7 +271,7 @@
           <p>A framework can demonstrate a pattern. It cannot, by itself, demonstrate that the pattern survives a
           real domain and a real deployment. That is the division of labor between MMCA.Common and its consumers.</p>
           <p><strong>ADC proves real bounded contexts and real eventing.</strong> Identity publishing <code>UserRegistered</code> so
-          Conference can auto-link a speaker by email match is a genuine cross-context workflow, not a contrived
+          Conference can auto-link a speaker by a verified email match is a genuine cross-context workflow, not a contrived
           one. Conference calling Engagement&#39;s bookmark-count service over gRPC, through an adapter that implements
           the same <code>IBookmarkCountService</code> interface the in-process call uses (each service host loads only its
           own module, so the gRPC client is what answers), is the extraction boundary working in a running system
@@ -305,7 +309,7 @@
           <p>That is not a weakness to hide; it is the reason the two apps exist. The framework supplies the base
           classes, the enforced layering, and the extraction points. The apps supply the proof that those things
           hold up against two different real domains and two different production deployments. The
-          framework&#39;s two-axis evaluation scores it at roughly 97% maturity and 86% implementation (96.6% and 86.0%
+          framework&#39;s two-axis evaluation scores it at roughly 97% maturity and 85% implementation (97.3% and 85.4%
           exactly), with implementation
           the weaker axis precisely because some of the most important &quot;does this actually model a domain well&quot;
           evidence lives downstream, in the consumers, where it should.</p>

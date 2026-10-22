@@ -110,7 +110,7 @@ later additions that round out the framework surface: managed file storage with 
 handling, and provable HTTP API versioning.
 
 - 34 · [Architecture fitness functions: rules that fail the build, not a wiki page](architecture-fitness-functions.md)
-- 35 · [The test pyramid, not the ice-cream cone: 2,254 fast tests, zero Docker](test-pyramid.md)
+- 35 · [The test pyramid, not the ice-cream cone: 8,000 fast tests, zero Docker](test-pyramid.md)
 - 36 · [Soft-delete vs the right to erasure: the GDPR conflict and the erasure pathway](soft-delete-vs-erasure.md)
 - 37 · [A list page in a few lines: a reusable Blazor UI framework with the same discipline as the backend](reusable-blazor-ui-framework.md)
 - 38 · [One preference, two switches: shipping i18n and dark mode on a single cookie-and-profile pipeline](i18n-and-theming.md)
@@ -141,13 +141,19 @@ then monthly evergreen.*
 
 *Tags: .NET, Software Architecture, C Sharp, Microservices, Programming*
 
-*Notes: 2026-10-08 refresh (framework v1.233.0, `MMCA.Common/FACTS.md:4,14`; 132 accepted ADRs
-001-132, `Website/docs-src/adr/README.md:6`; no new article this run, ADR-132 is covered inside Article
-34 at `architecture-fitness-functions.md:82`, so the series stays at 53). Changed this run: the intro's
-"52 deep-dives plus this map" now follows the Format column of `README.md` (45 deep-dive rows, four
-tutorials at `README.md:41,42,49,50`, two opinion pieces at `:11,13`, one case study at `:51`, and this
-index at `:63`), and the license and repo-URL anchors moved to `Directory.Build.props:71,72`. The
-2026-10-02 refresh ran at framework v1.221.0 with 131 ADRs (ADR-131 folded into Article 25). Evidence
+*Notes: re-verified 2026-10-22 against MMCA.Common v1.250.0 (`MMCA.Common/FACTS.md:4,14`; 132 accepted
+ADRs 001-132, `Website/docs-src/adr/README.md:6`; no new article this run, so the series stays at 53).
+Changed this run: the Article 35 entry's link text now reproduces the retitled H1 ("8,000 fast tests",
+`test-pyramid.md:1`); the other 51 entries already matched their H1s, Article 27 included
+(`jwt-refresh-token-rotation.md:1`). Articles 15, 16 and 52 each gained a section this run (the ADR-083
+CRUD lifecycle event, the opt-in gRPC service token, the ADR-091 single-use password reset token); the
+group descriptions above stay accurate without them, so they are unchanged. The intro's Format split
+still matches `README.md` (45 deep-dive rows, four tutorials at `README.md:41,42,49,50`, two opinion
+pieces at `:11,13`, one case study at `:51`, and this index at `:63`). This hub states no scorecard
+index, package count or fitness-method count, so the FACTS and scorecard figures need no edit here. The
+2026-10-08 refresh ran at framework v1.233.0 with 132 ADRs (ADR-132 covered inside Article 34) and
+aligned the intro's Format split with `README.md`; the 2026-10-02 refresh ran at framework v1.221.0
+with 131 ADRs (ADR-131 folded into Article 25). Evidence
 read this run: the folder holds 53 slug-named article files plus `README.md` and `_ledger.md` (the
 build-skipped maintenance notes; no `Article-NN-*` files; the number lives only in each
 file's line-3 `Article #N` header), and a scripted pass compared all 52 list entries against their
@@ -163,12 +169,13 @@ Apache-2.0 (`MMCA.Common/Directory.Build.props:71`), .NET 10 (`Directory.Build.p
 `Website/docs-src/governance/ArchitectureEvaluationCriteria.md:890`), `dotnet new mmca-app`
 (`MMCA.Helpdesk/.template.config/template.json:7`), `MMCA.Common.API` (`MMCA.Common/FACTS.md:29`), the
 three `Website/docs-src/governance/*-ArchitectureScorecard.md` files and `Website/writing.html` exist.
-Article 35's link text carries the 2,254-test figure only because it reproduces that article's H1
-(`test-pyramid.md:1`); this hub asserts no test count of its own, and the figure is owned by Article 35
-and the Common scorecard (`Website/docs-src/governance/common-ArchitectureScorecard.md:78`; FACTS.md
-carries no total test count). The 2026-10-08 audit could not reproduce 2,254 from a raw Grep (about
-6,590 `[Fact]`/`[Theory]` attributes under `MMCA.Common/Tests` across all tiers), so the link text stays
-tied to the H1 and any correction belongs to Article 35 first. `Personal/Medium/` (including
+Article 35's link text carries the 8,000-test figure only because it reproduces that article's H1
+(`test-pyramid.md:1`); this hub asserts no test count of its own. Article 35 owns the figure: 8,386
+tests executed by the `build-and-test` job of Common's CI run 39625216950 (`test-pyramid.md:28`);
+FACTS.md carries no total test count and defers test totals to the scorecard (`FACTS.md:10,11`). The
+Common scorecard's Testability row still reads about 2,254 `[Fact]`/`[Theory]`
+(`Website/docs-src/governance/common-ArchitectureScorecard.md:78`), which disagrees with Article 35;
+reconciling it belongs to the scorecard, not this hub. `Personal/Medium/` (including
 `Medium-Campaign-Plan.md`) is retired (`Personal/Medium/README.md:3`), so this hub no longer measures
 its order against that calendar. History: the 2026-09-19 refresh grew the series from 50 to 53 and moved
 this hub from 50 to 53: the governed LLM boundary (`governed-llm-boundary.md`) joined "Run, extract, and

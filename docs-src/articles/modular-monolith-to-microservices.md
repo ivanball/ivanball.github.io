@@ -4,7 +4,7 @@
 > Rubric §7 · ADRs 006/007/008 · Status: grounded in `MMCA.Common/AGENTS.md` (its "Microservices
 > Extraction Boundaries" section), `Website/docs-src/adr/006-database-per-service.md`, `Website/docs-src/adr/007-grpc-extraction.md`,
 > `Website/docs-src/adr/008-service-extraction-topology.md`, and `Website/docs-src/onboarding/group-14-module-system-composition.md`
-> + `group-13-grpc-contracts.md`, with source re-read 2026-10-08 at v1.233.0 (`MessageBusSettings.cs`,
+> + `group-13-grpc-contracts.md`, with source re-read 2026-10-22 at v1.250.0 (`MessageBusSettings.cs`,
 > `ArchitectureRules.Transport.cs`, `ResultGrpcExtensions.cs`, ADC `IBookmarkCountService.cs`,
 > `GetSessionBookmarkCountHandler.cs`, Engagement.Contracts `DependencyInjection.cs`, Conference.Service
 > `Program.cs`). No em dashes.
@@ -203,7 +203,7 @@ install it and try the split for yourself.*
 
 *Tags: .NET, C Sharp, Software Architecture, Microservices, Modular Monolith*
 
-*Notes: 2026-10-08 re-verify at framework v1.233.0 (`MMCA.Common/FACTS.md:14`); every anchor below was
+*Notes: 2026-10-22 re-verify at framework v1.250.0 (`MMCA.Common/FACTS.md:14`); every anchor below was
 re-read in this run. Messaging: `IMessageBus`
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Messaging/IMessageBus.cs:28`), `InProcessMessageBus`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/InProcessMessageBus.cs:19`) and
@@ -218,7 +218,7 @@ and subclassed in Common, ADC, Store, Helpdesk and the MMCA.ECommerce sample. Da
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/DataSourceKey.cs:15`,
 `DefaultName = "Default"` at :18), `DataSourceResolver`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/DataSourceResolver.cs:16`, the
-collapse onto Default described at :191 and :294) and `EntityDataSourceRegistry`
+collapse onto Default described at :192 and :295) and `EntityDataSourceRegistry`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/EntityDataSourceRegistry.cs:21`).
 Modules: `ModuleLoader` (`MMCA.Common/Source/Core/MMCA.Common.Application/Modules/ModuleLoader.cs:16`, the
 disabled-module stub path `module.RegisterDisabledStubs(services)` at :119) and the `Disabled*` stubs, e.g.
@@ -228,16 +228,17 @@ The extracted Conference host passes only its own assembly to `AddModuleHost`
 (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:373-375`), so no Engagement stub is
 registered (header comment at :36-39, pipeline comment at :393-397), and registers
 `AddEngagementBookmarkCountClient()` at :420; ADR-008's 2026-10-01 Revision
-(`Website/docs-src/adr/008-service-extraction-topology.md:154`) states the same, while the payoff wording
-"the monolith with one module enabled" stays at its :47.
+(`Website/docs-src/adr/008-service-extraction-topology.md:155`) states the same and its 2026-10-21
+Revision (:206) re-verifies it, while the payoff wording "the monolith with one module enabled" stays at
+its :48.
 Auth: `IJwksProvider` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/IJwksProvider.cs:11`, serving
 `/.well-known/jwks.json` per its doc comment at :6), `RsaJwksProvider`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/RsaJwksProvider.cs:14`) and `JwksEndpointExtensions`
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Endpoints/JwksEndpointExtensions.cs:15`). JWKS
 discovery through the gateway is AppHost-only (`WithJwksDiscovery(identityService, gateway)` at
-`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:368-370`); in production each service's
-`Authentication__JwtBearer__Authority` is `http://${identityApp.name}` (`MMCA.ADC/infra/main.bicep:2005`,
-:2141, :2295). gRPC and
+`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:373-375`); in production each service's
+`Authentication__JwtBearer__Authority` is `http://${identityApp.name}` (`MMCA.ADC/infra/main.bicep:2161`,
+:2297, :2451). gRPC and
 Result over the wire: `GrpcResultExceptionInterceptor`
 (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Interceptors/GrpcResultExceptionInterceptor.cs:19`,
 catching `ResultFailureException` at :34 and mapping its errors through `ToRpcException()` in
@@ -267,19 +268,25 @@ returns `Result.Success(count)` at :45; the code sample's `services.Replace(...)
 registration or a disabled stub where one exists). Aspire hosting: `MMCA.Common.Aspire.Hosting` ships five
 source files (`BrokerSelection.cs`, `Extensions.cs`, `H2cHealthCheckExtensions.cs`, `H2cEndpointHealthCheck.cs`,
 `ServiceBusEmulatorResource.cs`); `MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs`
-exposes `AddMessageBroker` (:160), `WithBroker` (:252, second overload :280), `WithJwksDiscovery` (:309),
-`WithE2eRsaKeys` (:353) and
+exposes `AddMessageBroker` (:172), `WithBroker` (:264, second overload :292), `WithJwksDiscovery` (:321),
+`WithE2eRsaKeys` (:365) and
 `WithSQLServerDataSource`/`WithPostgreSQLDataSource`/`WithCosmosDataSource`/`WithSqliteDataSource`
-(:483/:513/:542/:567), and **no** gRPC project-reference API (the only gRPC mention is a prose comment at
-:322). ADC's AppHost wires gRPC peers with stock Aspire `WithReference`
-(`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:264-296`; the Conference to Engagement reference at
-:269 carries no `WaitFor`). Repo and license: `ivanball/MMCA.Common`, Apache-2.0
-(`MMCA.Common/Directory.Build.props:71-72`). Changes this run (2026-10-08): section 4's module paragraph and
+(:530/:560/:589/:614), and **no** gRPC project-reference API (the only gRPC mention is a prose comment at
+:334). ADC's AppHost wires gRPC peers with stock Aspire `WithReference`
+(`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:264-301`; the Conference to Engagement reference at
+:269 carries no `WaitFor`, per the comment at :268). Repo and license: `ivanball/MMCA.Common`, Apache-2.0
+(`MMCA.Common/Directory.Build.props:71-72`). Header source: the "Microservices Extraction Boundaries"
+heading is at `MMCA.Common/AGENTS.md:126`. Changes this run (2026-10-22): no body claim had drifted; the
+framework stamp moved to v1.250.0 and only anchors were re-anchored (`DataSourceResolver` collapse 191/294
+to 192/295, ADR-008 Revision and payoff 154/47 to 155/48, AppHost JWKS 368-370 to 373-375, `main.bicep`
+2005/2141/2295 to 2161/2297/2451, `Extensions.cs` 160/252/280/309/353 to 172/264/292/321/365, its
+data-source methods 483/513/542/567 to 530/560/589/614 and its gRPC comment 322 to 334, AppHost peer block
+264-296 to 264-301, `AGENTS.md` 125 to 126). The 2026-10-08 run: section 4's module paragraph and
 the code sample's extracted-host comment were corrected (an extracted host names only its own module
 assembly, so no `Disabled*` stub holds the peer's slot; the stubs serve a combined host), the JWKS sentence
 was corrected (gateway discovery is AppHost-only, production points at Identity directly), the code sample's
 handler constructor gained its `IUnitOfWork` parameter, the header source moved from `MMCA.Common/CLAUDE.md`
-to `MMCA.Common/AGENTS.md:125`, the Aspire.Hosting file count went from four to five (`BrokerSelection.cs`),
+to `MMCA.Common/AGENTS.md`, the Aspire.Hosting file count went from four to five (`BrokerSelection.cs`),
 and the `Directory.Build.props` anchors (153/160 to 175/182, 49-50 to 71-72) and AppHost anchors (269-301/274
 to 264-296/269) were re-anchored. The 2026-10-02 run: the license/URL anchor was re-anchored to
 49-50; the error-model paragraph was corrected (the trailer-to-`Result` rebuild is `ToResult()` in

@@ -123,7 +123,7 @@
         <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
         <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
         <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
-        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · Refresh tokens that rotate per device</a></li>
         <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
         <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
         <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
@@ -233,7 +233,7 @@
           <td>P2</td>
           <td>G05</td>
           <td>§1,§6,§10</td>
-          <td>014/031/079</td>
+          <td>014/079</td>
           <td>deep-dive</td>
           </tr>
           <tr>
@@ -305,7 +305,7 @@
           <td>P3</td>
           <td>G04</td>
           <td>§6</td>
-          <td>010/090</td>
+          <td>010/083/090</td>
           <td>deep-dive</td>
           </tr>
           <tr>
@@ -314,7 +314,7 @@
           <td>P3</td>
           <td>G08</td>
           <td>§11</td>
-          <td>004/122</td>
+          <td>004/007/122</td>
           <td>deep-dive ★</td>
           </tr>
           <tr>
@@ -331,7 +331,7 @@
           <td><a href="idempotency-attribute.html">Idempotency in one attribute</a></td>
           <td>P2</td>
           <td>G12</td>
-          <td>§9,§29</td>
+          <td>§6,§9,§10,§29</td>
           <td>017/021</td>
           <td>deep-dive</td>
           </tr>
@@ -638,7 +638,7 @@
           <td>P2/P4</td>
           <td>G08</td>
           <td>§11</td>
-          <td>116</td>
+          <td>091/116</td>
           <td>deep-dive</td>
           </tr>
           <tr>
@@ -652,6 +652,7 @@
           </tr>
           </tbody></table></div>
           <p>★ = cornerstone pillar (publish first; everything links up to these).</p>
+          <p>Group(s) = the onboarding taxonomy ID in <a href="../docs/onboarding/00-group-taxonomy.html">Phase 1b - Functional Group Taxonomy</a>; from G23 up it differs from the chapter number in the guide.</p>
           <p><strong>The numbering is the reading order.</strong> Each article builds on the ones before it, so reading 1 through 53
           in sequence is the intended curriculum (1-3 orient, 4-9 are the core patterns, 10-15 data and persistence,
           16-30 auth, the API edge, and notifications, 31-33 run/extract/harden, 34-44 proof, front end, getting

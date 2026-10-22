@@ -125,7 +125,7 @@
         <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
         <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
         <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
-        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · Refresh tokens that rotate per device</a></li>
         <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
         <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
         <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
@@ -286,9 +286,9 @@
           again per row: each <code>OutboxMessage</code> records the tenant its raising request resolved to, and the
           processor restores that tenant (with the user, roles, and correlation id) onto a fresh scope for each
           row before dispatch, so a handler reads and writes the same tenant&#39;s rows the original request did.</p>
-          <p>Resolution is claim first, then header, and it fails closed. <code>TenantResolutionMiddleware</code> runs
-          immediately after <code>UseAuthentication</code> (a claim-first order needs <code>HttpContext.User</code> already
-          populated), is registered unconditionally, and passes every request straight through until
+          <p>Resolution reads the signed claim by default (a host opts into the header by listing it after the
+          claim), and it fails closed. <code>TenantResolutionMiddleware</code> runs immediately after <code>UseAuthentication</code>
+          (the claim needs <code>HttpContext.User</code> already populated), is registered unconditionally, and passes every request straight through until
           <code>Tenancy:Enabled</code> is on. With <code>RequireTenant</code> (true by default) a request that resolves no tenant on
           a non-excluded path is answered with a 400 ProblemDetails rather than allowed through unscoped,
           because an unscoped request reads across every tenant, which is the exact outcome tenancy exists to

@@ -125,7 +125,7 @@
         <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
         <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
         <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
-        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · Refresh tokens that rotate per device</a></li>
         <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
         <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
         <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
@@ -193,10 +193,11 @@
           <code>NotificationHub</code>) plus their no-op fallbacks.</li>
           <li><strong>API</strong> exposes three REST controllers, split by who is allowed to call them.</li>
           </ul>
-          <p>Four loosely coupled delivery legs share one feature flag and one set of application ports: an in-app
-          inbox (durable per-user record), a SignalR real-time push (best-effort delivery to connected clients),
-          an OS-level native push (FCM and APNs to backgrounded or killed devices, added in ADR-044), and email
-          (system mail).</p>
+          <p>Four loosely coupled channels share one set of application ports: an in-app inbox (durable per-user
+          record), a SignalR real-time push (best-effort delivery to connected clients), an OS-level native push
+          (FCM and APNs to backgrounded or killed devices, the third leg of a send, added in ADR-044), and email
+          (system mail). The first three are the legs of a send and sit behind one feature flag; email is wired
+          separately and no flag gates it.</p>
           <h2 id="sending-a-push-notification-end-to-end">Sending a push notification, end to end</h2>
           <p>The send flow is the most instructive because it touches distinct consistency concerns: a
           deduplication check, a durable audit record, a per-user inbox, and two best-effort delivery legs
@@ -240,8 +241,8 @@
           </ol>
           <p>Those three saves are one unit of work, not three. <code>SendPushNotificationCommand</code> declares
           <code>ITransactional</code>, and <code>TransactionalCommandDecorator</code> wraps any command carrying that marker in a
-          single database transaction that commits when the handler returns and rolls back on a thrown
-          exception. The dedup key is the reason. A fault between the audit save and the inbox fan-out would
+          single database transaction that commits only when the handler returns a success result, and rolls
+          back on a failure result or a thrown exception. The dedup key is the reason. A fault between the audit save and the inbox fan-out would
           otherwise leave a committed notification row carrying a key that nothing ever delivered, and every
           later retry of that key would short-circuit on the dedup lookup and report success forever. Rolling
           the attempt back whole is what lets the retry re-run the send. A failed delivery does not trigger that
@@ -344,7 +345,8 @@
           <p>The important design decision is that <strong>which sender is live is a registration decision, not a runtime
           branch.</strong> Infrastructure registers the safe default: <code>AddInfrastructure</code> calls <code>AddServices</code>, which
           does <code>TryAddTransient&lt;IPushNotificationSender, NullPushNotificationSender&gt;()</code> (the no-op lives in
-          <code>MMCA.Common.Infrastructure.Services</code>, so it is an Infrastructure registration, not an Application one).
+          <code>MMCA.Common.Infrastructure.Notifications.Push</code>, so it is an Infrastructure registration, not an
+          Application one).
           Infrastructure&#39;s <code>AddPushNotifications(configuration)</code> then replaces <code>IPushNotificationSender</code> with the
           SignalR implementation, wires <code>AddSignalR()</code>, and, if a <code>redis</code> connection string is present, adds a
           Redis backplane for SignalR scale-out across replicas, with a per-application channel prefix so two
@@ -363,8 +365,8 @@
           <h2 id="the-native-push-channel-reaching-devices-the-hub-cannot">The native push channel: reaching devices the hub cannot</h2>
           <p>The SignalR leg stops at the edge of a connected client. A phone with the app backgrounded, killed, or
           offline hears nothing until the next launch, and conference announcements (&quot;lunch is served&quot;, &quot;room
-          change&quot;) are exactly the messages that must reach pockets, not open tabs. ADR-044 adds a fourth delivery
-          leg for that: OS-level native push through Firebase Cloud Messaging (Android) and APNs (iOS), fanned out
+          change&quot;) are exactly the messages that must reach pockets, not open tabs. ADR-044 adds a third leg to
+          the send for that: OS-level native push through Firebase Cloud Messaging (Android) and APNs (iOS), fanned out
           by Azure Notification Hubs.</p>
           <p>It follows the same abstraction discipline as the SignalR channel, with two new Application ports.
           <code>INativePushSender</code> does the user-targeted send, and <code>IPushDeviceRegistrar</code> upserts and deletes the
@@ -379,7 +381,11 @@
           manages their own device installations: <code>PUT /Notifications/Devices</code> upserts (called after sign-in and
           on token rotation), <code>DELETE /Notifications/Devices/{installationId}</code> removes one (called before
           sign-out) and is idempotent. Ownership is stamped server-side from the current user, and installation
-          ids are client-generated GUIDs, so they are not enumerable.</p>
+          ids are client-generated GUIDs, so they are not enumerable. Because the id comes from the client, both
+          verbs check it against the owner. A PUT naming an installation that belongs to another user&#39;s device
+          answers 409 Conflict, and the client mints a new installation id and retries. A DELETE reads the
+          installation&#39;s owner tag first, and an id that does not exist or belongs to another user answers 204
+          without deleting anything, so the response cannot be used to probe for other users&#39; installation ids.</p>
           <h2 id="the-in-app-inbox-pure-cqrs-readwrite-scoped-to-the-caller">The in-app inbox: pure CQRS read/write, scoped to the caller</h2>
           <p>The inbox is the durable channel, exposed by <code>InboxController</code> to any authenticated user (unlike the
           send and history endpoints, which need the notification-management capability). Four slices back it:</p>

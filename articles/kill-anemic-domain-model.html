@@ -125,7 +125,7 @@
         <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
         <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
         <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
-        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · Refresh tokens that rotate per device</a></li>
         <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
         <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
         <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
@@ -292,8 +292,8 @@
           inside MMCA.Common: <code>AddressValidationRules</code> reads them for FluentValidation, and the <code>OwnsAddress</code>
           mapping extension reads the same six fields for <code>HasMaxLength</code> on the owned <code>Address</code> columns, so a
           consuming app (Store&#39;s <code>CustomerConfiguration</code>) gets the field-length rule from one source of truth
-          through a single <code>builder.OwnsAddress(p =&gt; p.Address);</code> call (a second <code>OwnsOne</code> there overrides only
-          the unicode facet, never a length). <code>EmailInvariants.MaxLength</code> does not get
+          through a single <code>builder.OwnsAddress(p =&gt; p.Address);</code> call that names no length itself.
+          <code>EmailInvariants.MaxLength</code> does not get
           the same treatment: each consumer declares its own, separate email length limit instead (Store&#39;s
           <code>CustomerInvariants.EmailMaxLength</code> is 100, ADC&#39;s <code>UserInvariants.EmailMaxLength</code> is 100, and ADC&#39;s
           <code>SpeakerInvariants.EmailMaxLength</code> aliases the 255 its own DTO declares), none derived from the 256
@@ -372,8 +372,10 @@
           through a <code>SetXxx</code> method). <strong>Placement:</strong> no entity sits in an Application or Infrastructure
           assembly, no DTO or request type sits in Domain, and no DTO sits in Infrastructure. MMCA.ADC,
           MMCA.Store and MMCA.Helpdesk each subclass the base unchanged and supply only their architecture map.
-          MMCA.Common runs the smaller <code>AggregateConventionTestsBase</code> instead: it has no business modules, so
-          the module-scoped rules would check nothing there.</p>
+          MMCA.Common subclasses it too, over its own Domain: it has no business modules, so its map declares
+          the framework&#39;s Shared, Domain and Application assemblies as one module, and the module-scoped rules
+          run over the aggregates it ships (the Notifications family) instead of checking nothing. It also runs
+          the smaller <code>AggregateConventionTestsBase</code>, which pins the four construction facts on their own.</p>
           <p>The convention half is the rest. <code>GetChildOrNotFound</code>, <code>SetItems</code> and the remove, restore and
           cascade-delete helpers are protected members of <code>AuditableAggregateRootEntity</code>, and no fitness rule
           requires an aggregate to use them. <code>Result.Combine</code> is a framework member too: its arguments are

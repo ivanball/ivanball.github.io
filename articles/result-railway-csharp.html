@@ -125,7 +125,7 @@
         <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
         <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
         <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
-        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · Refresh tokens that rotate per device</a></li>
         <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
         <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
         <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
@@ -237,8 +237,8 @@
           <p>The other two are conveniences over the same short-circuit: <strong><code>Tap(action)</code></strong> runs a side effect on the
           success value and hands back the same instance, and <strong><code>Ensure(predicate, error)</code></strong> fails the chain with a
           supplied <code>Error</code> when the value does not satisfy a predicate. Every success-side delegate (the mapper, the
-          binder, the side effect, the predicate) is skipped when the result is already a failure; only <code>Match</code> and
-          <code>MatchAsync</code> run a delegate on the failure track, their <code>onFailure</code> branch. A separate <code>ResultExtensions</code> class lifts <code>BindAsync</code>,
+          binder, the side effect, the predicate) is skipped when the result is already a failure; of the seven, only
+          <code>Match</code> and <code>MatchAsync</code> run a delegate on the failure track, their <code>onFailure</code> branch. A separate <code>ResultExtensions</code> class lifts <code>BindAsync</code>,
           <code>MapAsync</code>, <code>TapAsync</code> and <code>MatchAsync</code> onto a pending <code>Task&lt;Result&lt;T&gt;&gt;</code>, so an asynchronous pipeline
           composes end to end without an <code>await</code> and a temporary local between every step.</p>
           <p>The non-generic base carries four combinators of its own, and <strong><code>Result.Combine(params ReadOnlySpan&lt;Result&gt;)</code></strong>
@@ -318,9 +318,12 @@
           place, the controller base and the filter can never drift apart.</p>
           <p>The gRPC layer does the equivalent over the wire (<code>GrpcResultExceptionInterceptor</code>, ADR-007), so a remote
           call looks like a local <code>Result&lt;T&gt;</code> to application code (<code>TooManyRequests</code>, for instance, travels as
-          <code>ResourceExhausted</code>). One enum drives both transports, so every
-          endpoint and every extracted service produces the same error shape. There is one source of truth for
-          &quot;what does a not-found look like.&quot;</p>
+          <code>ResourceExhausted</code>). One enum and one severity ranking drive both transports, so every endpoint and
+          every extracted service classifies a failure the same way and picks the same winner from an aggregate.
+          The status tables themselves are per edge: the gRPC layer keeps its own <code>FrozenDictionary</code> that mirrors
+          <code>ErrorHttpMapping</code> by convention, and the client-side reader that turns a ProblemDetails body back into a
+          <code>Result</code> keeps a reverse status-to-<code>ErrorType</code> table. The enum is the single source of truth for what kind
+          of failure occurred; each table only translates it for one transport.</p>
           <p>The payoff at the framework level: the domain layer throws zero exceptions for business outcomes. The
           scorecard credits §15 for &quot;consistent Result-based error handling&quot;; the domain reserves exceptions for
           the genuinely exceptional (EF Core materialization), with no business-logic throws.</p>
@@ -338,10 +341,14 @@
           derivations (<code>TotalPageCount</code>, <code>FirstRowOnPage</code>, <code>LastRowOnPage</code>). <code>[DataMember(Order = ...)]</code>
           annotations pin a deterministic wire order, and <code>[IgnoreDataMember]</code> keeps the derived values off the
           wire so the client recomputes them.</li>
+          <li><strong><code>KeysetCollectionResult&lt;T&gt;</code></strong> is the cursor-paged sibling for deep or infinite scrolling. It also
+          extends <code>CollectionResult&lt;T&gt;</code>, adding a nullable, opaque <code>NextCursor</code> that the next request passes back
+          to fetch the rows after it, and deliberately carries no total count or page number, because a keyset
+          read never pays for either.</li>
           </ul>
           <p>A paged query handler returns <code>Result&lt;PagedCollectionResult&lt;T&gt;&gt;</code>, composing the two ideas: the railway
           carries success-or-failure, and the success payload is the canonical paged shape. One envelope for every
-          write, one for every read, and the response contract stays stable as the API grows.</p>
+          write, one small family of them for every read, and the response contract stays stable as the API grows.</p>
           <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
           <p>The Result pattern is not free, and ADR-013 names the rough edges rather than hiding them:</p>
           <ul>
@@ -354,7 +361,7 @@
           well-behaved caller reasonably trigger this?&quot; If yes, return a <code>Result</code>; if no, throw. MMCA.Common
           keeps a single concrete domain exception type (<code>DomainInvariantViolationException</code>) for the one
           structural gap where <code>Result</code> cannot be returned: EF Core materialization, where the call stack is
-          framework-owned. That is not the only exception the framework catches, though. An ordered
+          framework-owned. The type is held in reserve: no code path in MMCA.Common throws it. That is not the only exception the framework catches, though. An ordered
           <code>IExceptionHandler</code> chain converges every escaped exception onto the same RFC 9457 ProblemDetails
           contract: a cancellation handler (499), a domain-exception handler (400), a <code>DbUpdate</code> handler (409),
           a validation handler (400), and a catch-all (500, except 400 for a refused cross-tenant write and the

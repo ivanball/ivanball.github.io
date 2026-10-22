@@ -125,7 +125,7 @@
         <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
         <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
         <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
-        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · Refresh tokens that rotate per device</a></li>
         <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
         <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
         <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
@@ -270,14 +270,49 @@
           releasing the native key handles on disposal.</p>
           <p>The rule of thumb: never let the token tell you how to verify it. The validator decides the algorithm;
           the token only supplies the signature.</p>
+          <h2 id="when-there-is-no-user-the-opt-in-service-token">When there is no user: the opt-in service token</h2>
+          <p>Everything above covers calls that carry a user. A typed gRPC client registered with
+          <code>AddTypedGrpcClient&lt;TClient&gt;</code> forwards the inbound user&#39;s bearer token through
+          <code>JwtForwardingClientInterceptor</code>, and the downstream service validates it against the issuer&#39;s
+          published keys like any other request. Some calls have no user to forward: a background processor, a
+          webhook, an anonymous request that fans out internally. For those, <code>MMCA.Common.Grpc</code> ships a service
+          token, and it is opt-in per client.</p>
+          <p>The calling host registers <code>AddServiceTokenClient(configuration)</code>, which binds and validates the
+          <code>Grpc:ServiceToken</code> section on start and registers <code>ServiceTokenProvider</code> as a singleton. That sends
+          nothing by itself: a client carries the token only after <code>.WithServiceToken()</code> is chained onto its
+          registration, which adds <code>ServiceTokenClientInterceptor</code> to that client alone. The interceptor attaches
+          <code>Bearer {serviceToken}</code> only when the ambient request has no user token, and never overwrites an
+          <code>Authorization</code> entry already on the call, so the user&#39;s token always wins.</p>
+          <p>The provider mints an HS256 token whose <code>sub</code> and <code>svc</code> claims name the calling service, with <code>iss</code>
+          and <code>aud</code> from settings, a fresh <code>jti</code>, and a five-minute default lifetime (validated to 1 through 60).
+          One token serves every outgoing call until its last 60 seconds:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Abridged from ServiceTokenProvider.GetToken (MMCA.Common.Grpc).</span>
+<span class="hljs-keyword">var</span> cached = Volatile.Read(<span class="hljs-keyword">ref</span> _cached);
+<span class="hljs-keyword">if</span> (IsFresh(cached, now)) { <span class="hljs-keyword">return</span> cached.Value; }       <span class="hljs-comment">// more than 60 s of lifetime left</span>
+
+<span class="hljs-keyword">lock</span> (_gate)
+{
+    cached = _cached;                                     <span class="hljs-comment">// another caller may have minted</span>
+    <span class="hljs-keyword">if</span> (IsFresh(cached, now)) { <span class="hljs-keyword">return</span> cached.Value; }
+    <span class="hljs-keyword">var</span> minted = Mint(now);                               <span class="hljs-comment">// HS256, sub and svc = ServiceName</span>
+    Volatile.Write(<span class="hljs-keyword">ref</span> _cached, minted);
+    <span class="hljs-keyword">return</span> minted.Value;
+}</code></pre>
+          <p>The receiving service opts in separately with <code>AddServiceTokenAuthentication</code>: a second JwtBearer
+          scheme that pins <code>ValidAlgorithms</code> to HS256, refuses a token without the <code>svc</code> claim, and is never the
+          default scheme. Only an endpoint under the <code>InternalCaller</code> policy accepts it, and that policy takes an
+          authenticated caller from either scheme, so a user token on the same call is validated by the user
+          scheme against the issuer&#39;s JWKS exactly as described above. Store is the one adopter: its Sales service sends the token on its Customers client, and
+          its Identity service validates it (<code>MMCA.Store.Identity.Service/Program.cs:173</code>); ADC uses neither half.</p>
           <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
           <p>The JWKS layer is the right model, but it is not free, and the rough edges are worth naming.</p>
           <ul>
           <li><p><strong>Two round trips on successful login.</strong> The Identity service&#39;s login flow (the shared login
           dual-fetch above, not the JWKS layer itself) pays a tracked re-fetch, a second query on the success
-          path. In practice the first query warms the database buffer pool so the second is near-instantaneous,
-          and failed logins (the adversarial majority) pay nothing extra. It is a deliberate trade, not an
-          oversight.</p>
+          path. Failed logins (the adversarial majority) never reach that second query, though an unknown
+          email still pays one real password-verification cost on purpose, so its timing matches a known
+          account&#39;s.
+          It is a deliberate trade, not an oversight.</p>
           </li>
           <li><p><strong>A small race window between the two fetches.</strong> A user could be deleted between the untracked
           validation and the tracked re-fetch. The re-fetch then returns NotFound, which is the correct
@@ -334,18 +369,28 @@
           register, refresh, the OAuth exchange, the three provider challenges and the provider callback,
           forgot-password and reset-password, and sending and confirming an email-confirmation link), six
           credential pages (the email-confirmation landing among them), and three landing and outcome pages
-          that render nothing depending on the caller. NetArchTest&#39;s fluent API cannot express this pair,
-          which is why
-          the rules live as full-name reflection and options-resolution tests instead. Two residuals stay
+          that render nothing depending on the caller. The scan matches <code>ControllerBase</code>, <code>RouteAttribute</code>
+          and <code>AllowAnonymousAttribute</code> by full-name reflection, which keeps the shared test package free of
+          ASP.NET references, and the bearer and CORS invariants run the real registration code and read the
+          options back. Two residuals stay
           honest. Minimal-API endpoints opt out through an <code>.AllowAnonymous()</code> builder call, which is endpoint
           metadata rather than an attribute, so the JWKS and OIDC discovery endpoints themselves sit outside
           the scan&#39;s reach. And the anonymous-endpoint scan is only as complete as the suites that subclass it:
           each consuming repo owns its own allow-list. The framework&#39;s thesis is that a rule that matters
           should fail the build, and these rules do.</p>
           </li>
+          <li><p><strong>The service token is one shared secret, scoped to one edge.</strong> It is HS256 over a single key that
+          the caller and the receiver both hold, so any holder can mint a token naming any service, and the
+          receiving scheme checks that the <code>svc</code> claim is present, not which service it names. What bounds it
+          is the opt-in on both sides: the scheme is never the default, a plain <code>[Authorize]</code> endpoint still
+          authenticates the user scheme alone, and only <code>InternalCaller</code> endpoints accept it. Per-service keys
+          or transport-level service identity are a deliberate non-goal for traffic that stays inside the
+          Container Apps environment; the governance backlog names a service reachable from outside it, or a
+          second team owning a service, as the condition to revisit that.</p>
+          </li>
           </ul>
-          <p>None of these are reasons to share a symmetric secret across services. They are the reasons to wire the
-          asymmetric boundary deliberately.</p>
+          <p>None of these are reasons to share a symmetric secret for user tokens across services. They are the
+          reasons to wire the asymmetric boundary deliberately, and to keep the one shared key opt-in and narrow.</p>
           <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
           <p>The pattern ports to any stack with a JWT story:</p>
           <ol>
@@ -373,7 +418,8 @@
           with no secret of their own, how discovery (gateway-routed under the local AppHost, direct to
           Identity&#39;s internal ingress when deployed) and the empty-key-set fallback keep the boundary stable,
           why algorithm pinning closes the key-substitution attack that publishing a public key would otherwise
-          open, and how ADR-122 makes every dev-only relaxation fail closed when the environment is unknown.</p>
+          open, how the opt-in service token covers calls with no user while keeping its one shared key narrow,
+          and how ADR-122 makes every dev-only relaxation fail closed when the environment is unknown.</p>
           <p><strong>Next in the series:</strong> password hashing done right: PBKDF2-SHA512, 600k iterations, and timing-safe
           comparison, the credential-at-rest half of the same security story.</p>
           <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the 2-minute ADR-004 behind this
@@ -400,6 +446,7 @@
             <li><a href="#the-mmca-answer-publish-the-public-half-as-a-jwks-document">The MMCA answer: publish the public half as a JWKS document</a></li>
             <li><a href="#discovery-and-the-graceful-empty-set">Discovery, and the graceful empty set</a></li>
             <li><a href="#jwt-algorithm-pinning-the-attack-you-would-otherwise-ship">JWT algorithm pinning: the attack you would otherwise ship</a></li>
+            <li><a href="#when-there-is-no-user-the-opt-in-service-token">When there is no user: the opt-in service token</a></li>
             <li><a href="#trade-offs-honestly">Trade-offs, honestly</a></li>
             <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>
             </ul>

@@ -125,7 +125,7 @@
         <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
         <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
         <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
-        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · Refresh tokens that rotate per device</a></li>
         <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
         <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
         <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
@@ -284,7 +284,7 @@ app.MapDefaultEndpoints();      <span class="hljs-comment">// health + liveness 
           <h2 id="step-4-see-how-the-apphost-wires-the-distributed-app">Step 4: see how the AppHost wires the distributed app</h2>
           <p>The AppHost <code>Program.cs</code> does not start anything immediately. It builds a <em>resource model</em>: a graph of
           containers, databases, services, the gateway, and the UI, with their dependency edges. The cross-cutting
-          wiring vocabulary lives in <code>MMCA.Common.Aspire.Hosting</code> as fifteen fluent helpers (sixteen methods,
+          wiring vocabulary lives in <code>MMCA.Common.Aspire.Hosting</code> as sixteen fluent helpers (seventeen methods,
           because <code>WithBroker</code> has one overload per broker resource). Here is the shape of a service declaration
           (representative, condensed from ADC&#39;s AppHost):</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Representative: the broker is chosen once, then every service host attaches it</span>
@@ -397,8 +397,9 @@ conferenceService.WithJwksDiscovery(identityService, gateway);</code></pre>
           code change between them.</p>
           <p>A dashboard is only as readable as the trail through it, and one id ties that trail together.
           <code>CorrelationIdMiddleware</code> reads an <code>X-Correlation-ID</code> header off each request, cut to 64 characters (the
-          width of the persisted correlation columns); when the client sends none, it falls back to the current
-          W3C trace id, then to ASP.NET Core&#39;s <code>TraceIdentifier</code>. It sets that
+          width of the persisted correlation columns). When the client sends none, sends a blank value, or sends
+          one with a control or non-ASCII character (which Kestrel would refuse to echo), it falls back to the
+          current W3C trace id, then to ASP.NET Core&#39;s <code>TraceIdentifier</code>. It sets that
           id on a scoped <code>ICorrelationContext</code> and echoes it on the response header, and the CQRS logging
           decorators stamp the same id into every log scope they open. So one id lines up a request&#39;s logs, its
           response header, and its distributed trace: the first thing you reach for when a call that crossed the
@@ -443,13 +444,14 @@ conferenceService.WithJwksDiscovery(identityService, gateway);</code></pre>
     .ValidateOnStart();</code></pre>
           <p><code>ValidateOnStart()</code> is the load-bearing link. <code>ValidateDataAnnotations()</code> on its own defers evaluation to
           the first resolution, which for a section only a background service reads can be minutes after the replica
-          started taking traffic; pairing the two converts &quot;configured wrong&quot; into &quot;did not start&quot;. Thirty-one
+          started taking traffic; pairing the two converts &quot;configured wrong&quot; into &quot;did not start&quot;. Thirty-two
           framework sections bind with both links: the nineteen Infrastructure sections (connection strings, SMTP,
           persistence, outbox, login protection, password reset, refresh sessions, message bus, JWKS, tenancy, cache,
           query-cache pipeline, scheduler, audit trail, internal commands, two-factor, email confirmation, permission
           grants, push notifications), plus idempotency, JWT, API rate limiting, the UI&#39;s API settings, UI rate
           limiting, the Blazor circuit limit, the health-report cache, the host-edge security headers, the gateway
-          settings, gateway rate limiting, and the optional AI package&#39;s settings and content policy, including the
+          settings, gateway rate limiting, the gRPC service-token settings, and the optional AI package&#39;s settings
+          and content policy, including the
           ones behind opt-in features. Two of them, UI rate limiting and the Blazor circuit limit, bind through
           <code>BindConfiguration(...)</code> instead of <code>Bind(GetSection(...))</code>, and the security headers attach the
           validation chain first and bind their section only when the host passes its configuration. Two Blazor-host sections, the CSP settings and the same-origin API proxy settings,

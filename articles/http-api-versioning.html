@@ -125,7 +125,7 @@
         <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
         <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
         <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
-        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · Refresh tokens that rotate per device</a></li>
         <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
         <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
         <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
@@ -290,17 +290,17 @@
           header (<code>ServiceInfoVersioningContractTestsBase.cs:39</code>), and that the v2.0 response returns the evolved
           shape and carries an <code>api-supported-versions</code> header (<code>ServiceInfoVersioningContractTestsBase.cs:55</code>).
           Because the controller ships in <code>MMCA.Common.API</code>, the whole test body is identical across repos: each
-          consumer&#39;s subclass supplies only its fixture. It is one of the seven runtime conformance bases
-          <code>MMCA.Common.Testing</code> ships for a host to subclass (ADR-058), and today it is subclassed on one host
+          consumer&#39;s subclass supplies only its fixture. It is one of the seven runtime contract bases ADR-058
+          records in <code>MMCA.Common.Testing</code>&#39;s conformance suite, and today it is subclassed on one host
           per repo: ADC&#39;s Conference service
           (<code>MMCA.ADC.Conference.IntegrationTests/Contract/ApiVersioningTests.cs:15</code>) and Store&#39;s Catalog service
           (<code>MMCA.Store.Catalog.IntegrationTests/Contract/ApiVersioningTests.cs:16</code>). This is the rubric §9 fitness
           check, and the same invariant-over-discipline posture the framework prefers (ADR-015): without a second
           working version, everything above would be asserted rather than proven.</p>
           <p><strong>Every REST host adopts it the same way.</strong> The extracted services call <code>AddCommonApiVersioning</code> in
-          their startup: ADC&#39;s Conference (<code>MMCA.ADC.Conference.Service/Program.cs:220</code>), Identity (<code>:154</code>),
-          Engagement (<code>:150</code>), and Notification (<code>:139</code>) hosts, Store&#39;s Catalog (<code>:140</code>), Sales (<code>:147</code>), and
-          Identity (<code>:134</code>) hosts, and the monolith reference host
+          their startup: ADC&#39;s Conference (<code>MMCA.ADC.Conference.Service/Program.cs:220</code>), Identity (<code>:155</code>),
+          Engagement (<code>:150</code>), and Notification (<code>:139</code>) hosts, Store&#39;s Catalog (<code>:140</code>), Sales (<code>:148</code>), and
+          Identity (<code>:135</code>) hosts, and the monolith reference host
           (<code>MMCA.Helpdesk.Web/Program.cs:35</code>). One call per host, and the reader, default, and reporting choices
           cannot drift apart between services. The discovery exemplar is narrower than the registration: only ADC&#39;s
           Conference and Store&#39;s Catalog hosts ship a <code>ServiceInfoController</code> subclass today.</p>
@@ -332,13 +332,19 @@
           when no <code>v1</code> document was registered (<code>:65-71</code>), and is a no-op in Production (<code>:62</code>). So the <code>2.0</code>
           <code>ServiceInfo</code> action is served and exercised by the fitness contract above but appears in no
           generated document, and the only document any host&#39;s contract test pins is <code>/openapi/v1.json</code>
-          (<code>Conformance/OpenApiContractTestsBase.cs:31</code>). ADC and Store also write that document to disk at
+          (<code>Conformance/OpenApiContractTestsBase.cs:51</code>). ADC and Store also write that document to disk at
           build time and commit it per service host (four in ADC, three in Store, for example
           <code>MMCA.ADC.Conference.Service/openapi/MMCA.ADC.Conference.Service.json</code>), and an &quot;OpenAPI documents are
           current&quot; CI step fails a PR whose document changed without being committed (<code>MMCA.ADC/.github/workflows/deploy.yml:305</code>,
-          <code>MMCA.Store/.github/workflows/deploy.yml:291</code>). That makes the contract diffable in review, but it
-          stays a development and CI artifact: never served in production, and not a place the <code>2.0</code> shape is
-          asserted (the committed Conference document carries <code>/ServiceInfo</code> and no <code>ServiceInfoV2Response</code>).</li>
+          <code>MMCA.Store/.github/workflows/deploy.yml:291</code>). All seven consumer OpenAPI contract tests also opt into
+          a committed-baseline diff: each overrides <code>BaselineDocumentPath</code> (<code>OpenApiContractTestsBase.cs:80</code>;
+          ADC Conference&#39;s <code>Contract/OpenApiContractTests.cs:29</code>, for example) to point at an
+          <code>openapi-baseline.json</code> beside the test, and <code>OpenApiBreakingChangeDetector</code>
+          (<code>Conformance/OpenApiBreakingChangeDetector.cs:38</code>) fails the test on a breaking change, never on an
+          additive or documentation-only one (<code>OpenApiContractTestsBase.cs:21-28</code>). That makes the contract
+          diffable in review and guarded against breaking drift, but it stays a development and CI artifact:
+          never served in production, and not a place the <code>2.0</code> shape is asserted (the committed Conference
+          document and the Conference baseline each carry <code>/ServiceInfo</code> and no <code>ServiceInfoV2Response</code>).</li>
           </ul>
           <p>The trade the framework makes is clear: stable, version-free URLs and a non-breaking rollout, paid for
           with a version that lives in headers rather than the path, and a proof-of-life second version on the
