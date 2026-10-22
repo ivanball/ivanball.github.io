@@ -11,7 +11,8 @@ extension exemption no longer applies under the same-origin API proxy prefix, pr
 the configured prefix, and ADC's replica count, container size and per-IP window widen under `conferenceMode`;
 see Revision below). Revised 2026-10-07: under `conferenceMode` ADC's UI runs a fixed four replicas rather than
 scaling up to four, ADR-079 is cited as the service pipeline the UI host composes around rather than one it
-joins, and anchors refreshed after the v1.233.0 release.
+joins, and anchors refreshed after the v1.233.0 release. Revised 2026-10-21: anchors refreshed after the
+v1.250.0 release.
 
 ## Context
 [ADR-019](019-rate-limiting.md) layers rate limiting, and [ADR-088](088-gateway-edge-responsibilities.md)
@@ -106,7 +107,7 @@ host owns, in both ADC and Store, using one framework kit.
   also carries `/hubs`, mirroring the Gateway's own bypass list, so a host that ever fronts a SignalR hub on this
   origin is covered by declaration rather than by accident (`:44-56`), and the same hub traffic arriving through
   the proxy is exempt at `{SameOriginApiProxy:PathPrefix}/hubs` (`:85`), with the prefix read through the proxy's
-  own options so the limiter and the proxy cannot disagree (`:198-204`; v1.232.0, `MMCA.Common/CHANGELOG.md:62`).
+  own options so the limiter and the proxy cannot disagree (`:198-204`; v1.232.0, `MMCA.Common/CHANGELOG.md:381`).
   Because these are the kit's defaults, both hosts exempt them, and both use-site comments name `/hubs`
   (`MMCA.Store.UI.Web/Program.cs:225-228`, ADC's at `MMCA.ADC.UI.Web/Program.cs:218-220`). `/_blazor`
   deliberately has no extension and no exemption from the per-IP window, because the negotiate endpoint is
@@ -119,7 +120,7 @@ host owns, in both ADC and Store, using one framework kit.
   pipeline with `UseCommonUiForwardedHeaders()` (`MMCA.ADC.UI.Web/Program.cs:210`,
   `MMCA.Store.UI.Web/Program.cs:200`), defined in `MMCA.Common.API`
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/CommonForwardedHeadersExtensions.cs:24-25`, shipped in
-  v1.211.0, `MMCA.Common/CHANGELOG.md:602-605`). It applies `CommonForwardedHeaders.Create()`: `X-Forwarded-For`,
+  v1.211.0, `MMCA.Common/CHANGELOG.md:921-924`). It applies `CommonForwardedHeaders.Create()`: `X-Forwarded-For`,
   `X-Forwarded-Proto` and `X-Forwarded-Host` by default, with the known-proxy and known-network allow-lists
   cleared because cloud ingress reaches the container from addresses in neither default list
   (`.../MMCA.Common.API/Startup/CommonForwardedHeaders.cs:14-20,33-34,42-53`). The service pipeline's
@@ -140,7 +141,7 @@ host owns, in both ADC and Store, using one framework kit.
   `MMCA.Common.UI.Web/Hardening/BlazorCircuitLimitExtensions.cs:28-41,51-61`).
 
 - **One framework kit, consumed by both hosts, with the same section names and the same shape.** The kit
-  ships in `MMCA.Common.UI.Web` from v1.206.0 (`MMCA.Common/CHANGELOG.md:840-852`) and binds
+  ships in `MMCA.Common.UI.Web` from v1.206.0 (`MMCA.Common/CHANGELOG.md:1159-1168`) and binds
   `UiRateLimiting` (`MMCA.Common.UI.Web/Hardening/UiRateLimitingSettings.cs:36`) and `BlazorCircuitLimits`
   (`MMCA.Common.UI.Web/Hardening/BlazorCircuitLimitSettings.cs:20`). It ships the limiter **enabled** by
   default with one escape hatch for a load or capacity proof driven from a single runner IP
@@ -160,7 +161,7 @@ host owns, in both ADC and Store, using one framework kit.
   and present to this limiter as a SINGLE client IP (`MMCA.ADC.UI.Web/appsettings.json:15-21`, restated at
   `MMCA.ADC.UI.Web/Program.cs:146-147`). A conference-day deployment widens it again: the `conferenceMode`
   parameter overrides the window to **12000 per minute per replica** through the environment
-  (`MMCA.ADC/infra/main.bicep:2651-2654`). Every value is also written out explicitly in each host's
+  (`MMCA.ADC/infra/main.bicep:2810`). Every value is also written out explicitly in each host's
   `appsettings.json`, so the deployed posture is stated rather than inherited
   (`MMCA.ADC.UI.Web/appsettings.json:19-24,28-32`, `MMCA.Store.UI.Web/appsettings.json:23-28,38-42`).
 
@@ -187,8 +188,8 @@ host owns, in both ADC and Store, using one framework kit.
   conference day peaked near 67 concurrent users, and its UI container scales between one and two replicas
   by default and runs a fixed four under `conferenceMode` (the floor is raised to the ceiling), which also
   doubles the container to 0.5 vCPU / 1 GiB (`MMCA.ADC.UI.Web/appsettings.json:25-27`,
-  `MMCA.ADC/infra/main.bicep:2691-2692` defined at `:191-192`, resources at `:2599` defined at `:182`, the
-  `uiApp` container app at `:2563`).
+  `MMCA.ADC/infra/main.bicep:2847-2848` defined at `:191-192`, resources at `:2755` defined at `:182`, the
+  `uiApp` container app at `:2719`).
 - **Binding is validated at startup, and the hot path does not pay for it.** Both sections go through
   `ValidateDataAnnotations().ValidateOnStart()`, and the limiter then closes over the already-bound instance
   rather than resolving `IOptions` on every request, precisely because an out-of-range value has already failed
@@ -198,7 +199,7 @@ host owns, in both ADC and Store, using one framework kit.
 ## Trade-offs
 - **Both ceilings are per replica, in memory.** The effective allowance is the configured number multiplied by
   the replica count (two at most for ADC's UI by default, a fixed four under `conferenceMode`,
-  `MMCA.ADC/infra/main.bicep:192,2691-2692`), so two replicas carry an abuse ceiling of 400 circuits and four carry 800,
+  `MMCA.ADC/infra/main.bicep:192,2847-2848`), so two replicas carry an abuse ceiling of 400 circuits and four carry 800,
   against a real peak of well under 100. That is the same trade the Gateway kit documents and is accepted for
   the same reason: an edge limiter has to answer in microseconds on every request, and a shared counter would
   put a network round trip in front of the whole site
@@ -224,7 +225,7 @@ host owns, in both ADC and Store, using one framework kit.
   default widening buys a margin over one NAT'd venue at the cost of letting a single scripted client burn four
   times as many requests before it is shed, and the conference-day override to 12000 per minute makes that forty
   times the storefront's window for the day (`MMCA.ADC.UI.Web/appsettings.json:15-21`,
-  `MMCA.ADC/infra/main.bicep:2654`, `MMCA.Common.UI.Web/Hardening/UiRateLimitingSettings.cs:52-55`).
+  `MMCA.ADC/infra/main.bicep:2810`, `MMCA.Common.UI.Web/Hardening/UiRateLimitingSettings.cs:52-55`).
 
 ## Revision (2026-09-25): one framework kit, one forwarded-header posture
 The hardening kit this record decides now lives once, in `MMCA.Common.UI.Web/Hardening/`, first shipped in
@@ -289,6 +290,18 @@ exemption rules and both hosts' configuration are unchanged, and both consumers 
    `:218-220` (use-site comment), `:221` (`UseUiRateLimiting`), `:75,139` (ADR-088 comments);
    `MMCA.Common/CHANGELOG.md:62` (v1.232.0 proxy-prefix entry), `:602-605` (v1.211.0 forwarded headers),
    `:840-852` (v1.206.0 kit).
+
+## Revision (2026-10-21)
+Re-verified against current source. The three layers, their defaults, both hosts' configuration and ADC's
+`conferenceMode` posture (a fixed four UI replicas at 0.5 vCPU / 1 GiB, one to two at 0.25 vCPU / 0.5 GiB by
+default, and the 12000-per-minute window) are unchanged; both consumers now pin `MMCA.Common.UI.Web` 1.250.0
+(`MMCA.ADC/Directory.Packages.props:128`, `MMCA.Store/Directory.Packages.props:20`). Only anchors moved.
+
+1. Anchors re-verified against current source: `MMCA.ADC/infra/main.bicep:2810` (conference-day
+   `UiRateLimiting__PermitLimit` override, previously cited at `:2651-2654`, which now holds the Gateway's own
+   window), `:2719` (`uiApp`), `:2755` (resources, defined at `:182`), `:2847-2848` (UI scale, defined at
+   `:191-192`); `MMCA.Common/CHANGELOG.md:381` (v1.232.0 proxy-prefix and hub-exemption entry), `:921-924`
+   (v1.211.0 forwarded headers), `:1159-1168` (v1.206.0 kit).
 
 ## Related
 [ADR-019](019-rate-limiting.md) (the layered rate-limiting posture this adds a layer to),

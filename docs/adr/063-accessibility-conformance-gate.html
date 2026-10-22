@@ -262,7 +262,10 @@
           <code>ProfileManagementTests</code> base is named precisely (<code>AdcE2ETestBase</code>); no decision changed. Revised
           2026-10-07: the CI workflow prune of that day folded <code>cross-browser-freshness</code> into a single <code>freshness</code> job
           that the <code>deploy</code> needs list names, so the record now cites it as a step of that job, and the CI and
-          deploy anchors are refreshed after that prune; no decision changed.</p>
+          deploy anchors are refreshed after that prune; no decision changed. Revised 2026-10-21: the gallery
+          count is re-measured (nineteen assertions across twelve classes, adding the role administration scans),
+          the gallery no longer uses the pager exception, and the CI, deploy, theme and Helpdesk anchors are
+          refreshed; no decision changed.</p>
           <h2 id="context">Context</h2>
           <p>Accessibility was documented before it was enforced. The narrative guide
           (<a href="../guides/common-ACCESSIBILITY.html">common-ACCESSIBILITY.md</a>, rubric section 21) named WCAG 2.1 AA
@@ -322,48 +325,50 @@
           the axe scans across a <code>chromium, firefox, webkit</code> matrix (<code>:232</code>), one engine per leg via
           <code>E2E_BROWSER</code> (<code>:291</code>), with <code>fail-fast: false</code> so each engine reports independently (<code>:230</code>). All
           three contexts block merges (<code>MMCA.Common/CONTRIBUTING.md:63-64</code>, enumerated in the branch-protection
-          payload at <code>:198-200</code>).</li>
+          payload at <code>:202-204</code>).</li>
           <li><strong>Both deployed apps gate the deploy on it.</strong> The <code>e2e-gate</code> jobs
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:792</code>, <code>MMCA.Store/.github/workflows/deploy.yml:751</code>) call the
-          reusable <code>e2e.yml</code> workflow (ADC <code>:804</code>, Store <code>:762</code>) chromium-only (ADC <code>:806</code>, Store <code>:764</code>) against
-          the full Aspire stack, and the <code>deploy</code> job waits on that gate (ADC <code>:1145</code>, Store <code>:1083</code>). The same
-          <code>deploy</code> needs list also carries the <code>freshness</code> job (ADC <code>:1145</code>, Store <code>:1083</code>), whose
-          <code>cross-browser-freshness</code> step (ADC <code>:909</code>, Store <code>:856</code>) launches no browser: it asserts that the
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:807</code>, <code>MMCA.Store/.github/workflows/deploy.yml:753</code>) call the
+          reusable <code>e2e.yml</code> workflow (ADC <code>:819</code>, Store <code>:764</code>) chromium-only (ADC <code>:821</code>, Store <code>:766</code>) against
+          the full Aspire stack, and the <code>deploy</code> job waits on that gate (ADC <code>:1160</code>, Store <code>:1098</code>). The same
+          <code>deploy</code> needs list also carries the <code>freshness</code> job (ADC <code>:1160</code>, Store <code>:1098</code>), whose
+          <code>cross-browser-freshness</code> step (ADC <code>:924</code>, Store <code>:858</code>) launches no browser: it asserts that the
           scheduled firefox and webkit <code>e2e.yml</code> legs (Monday firefox, Thursday webkit) each have a recent
           successful run, so engine coverage beyond chromium gates the deploy by recency rather than per commit
-          (ADC rationale at <code>:893-908</code>, Store at <code>:848-855</code>).</li>
+          (ADC rationale at <code>:908-923</code>, Store at <code>:850-857</code>).</li>
           <li><strong>The gate already owns design-token decisions.</strong> Contrast values in the shared theme are set to
           what the scan will accept, with the ratio recorded in place: light-palette <code>WarningContrastText</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Theme/MMCATheme.cs:36</code>, rationale at <code>:28-34</code>,
-          caught by a gated admin-order-list scan on a chip), dark-palette <code>PrimaryContrastText</code> (<code>:66</code>,
-          rationale at <code>:63-65</code>, caught by the gated dark-mode scan), dark <code>WarningContrastText</code> (<code>:85</code>) and
-          <code>ErrorContrastText</code> (<code>:93</code>), and the brand secondary itself, moved to Teal 700 for a 5.3:1 light
+          caught by a gated admin-order-list scan on a chip), dark-palette <code>PrimaryContrastText</code> (<code>:71</code>,
+          rationale at <code>:68-70</code>, caught by the gated dark-mode scan), dark <code>WarningContrastText</code> (<code>:90</code>) and
+          <code>ErrorContrastText</code> (<code>:98</code>), and the brand secondary itself, moved to Teal 700 for a 5.3:1 light
           surface ratio (<code>.../MMCA.Common.UI/Theme/BrandColors.cs:26</code>, rationale at <code>:22-24</code>).</li>
           </ul>
           <p>Adoption differs per repo and is uneven on purpose. <strong>MMCA.Common</strong> scans its own backend-less gallery:
-          seventeen assertions across eleven classes over <code>GalleryAxeTestBase</code>
+          nineteen assertions across twelve classes over <code>GalleryAxeTestBase</code>
           (<code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/Infrastructure/GalleryAxeTestBase.cs:14</code>),
-          covering login (<code>LoginPageE2ETests.cs:34</code>), register (<code>RegisterPageE2ETests.cs:36</code>), the primitives
-          showcase (<code>ComponentsPageE2ETests.cs:80</code>), both dark-mode states (<code>DarkModeE2ETests.cs:30,:40</code>), the
-          notification pages, whose five scans open with the gallery&#39;s one use of the pager exception on the
-          history table (<code>NotificationPagesE2ETests.cs:32</code>) and continue with strict scans of the inbox (<code>:44</code>), its
-          two deep-link states (an unknown notification id at <code>:61</code>, a known one at <code>:74</code>), and the compose page
-          (<code>:86</code>), the virtualized grid page, whose windowed markup is scanned under the strict options like every
+          every one of them under the strict <code>AxeOptions.Wcag21Aa</code> (the gallery does not use the pager
+          exception), covering login (<code>LoginPageE2ETests.cs:34</code>), register (<code>RegisterPageE2ETests.cs:36</code>), the
+          primitives showcase (<code>ComponentsPageE2ETests.cs:80</code>), both dark-mode states (<code>DarkModeE2ETests.cs:30,:40</code>),
+          the notification pages, whose five scans cover the history table (<code>NotificationPagesE2ETests.cs:31</code>), the
+          inbox (<code>:43</code>), its two deep-link states (an unknown notification id at <code>:60</code>, a known one at <code>:73</code>), and
+          the compose page (<code>:85</code>), the role administration list and editor of
+          <a href="116-identity-completions-opt-in.html">ADR-116</a> (<code>Administration/RoleAdminPagesE2ETests.cs:31</code> and <code>:43</code>, class at
+          <code>:15</code>), the virtualized grid page, whose windowed markup is scanned under the strict options like every
           other gallery page (<code>GridPageE2ETests.cs:82</code>, class at <code>:16</code>), and the password-recovery
           pages added with <a href="091-cache-backed-password-reset.html">ADR-091</a>: forgot-password in both its form state and
           its confirmation state, which replaces the form and is therefore a distinct rendering
           (<code>ForgotPasswordPageE2ETests.cs:46</code> and <code>:60</code>), plus reset-password (<code>ResetPasswordPageE2ETests.cs:48</code>).
           Two shell-level classes cover states no page-specific test reaches: <code>Layout/ShellPagesE2ETests.cs:31</code>
           (class at <code>:16</code>) asserts the strict options over the three framework-owned shell routes in one theory
-          (<code>/</code>, <code>/not-found</code>, <code>/forbidden</code>), so the seventeen assertions scan nineteen page states in total, and
+          (<code>/</code>, <code>/not-found</code>, <code>/forbidden</code>), so the nineteen assertions scan twenty-one page states in total, and
           <code>Layout/MobileNavKeyboardE2ETests.cs:36</code> (class at <code>:16</code>) scans the home page at a 390x844 phone
           viewport with the hamburger menu open, the one state the rest of the suite misses because it runs at
           desktop width.
           The notification and sessions scans are the signed-in ones: both the notification pages and the shared
           devices/sessions page (<code>SessionsPageE2ETests.cs:34</code>, class at <code>:13</code>) carry a real <code>[Authorize]</code>, so those
           tests seed the gallery&#39;s cookie-toggled fake authentication scheme before navigating
-          (<code>NotificationPagesE2ETests.cs:92</code>, <code>SessionsPageE2ETests.cs:39</code>) while the login, register, components,
-          grid, shell and mobile-nav scans stay deliberately anonymous. The sessions scan covers the populated
+          (<code>NotificationPagesE2ETests.cs:91</code>, <code>SessionsPageE2ETests.cs:39</code>) while the login, register, components,
+          role administration, grid, shell and mobile-nav scans stay deliberately anonymous. The sessions scan covers the populated
           table, its current-device marker, and the per-device sign-out buttons under the strict options.
           <strong>MMCA.Store</strong> subclasses all four Identity bases
           (<code>Tests/E2E/MMCA.Store.E2E.Tests/Workflows/Identity/UserLoginTests.cs:5</code>,
@@ -378,7 +383,7 @@
           scans (13 through <code>ScanGridAsync</code>, 32 strict) and Store&#39;s
           <code>Tests/E2E/MMCA.Store.E2E.Tests/Workflows/AccessibilityTests.cs:18</code> holds 32 (9 grid, 23 strict).
           <strong>MMCA.Helpdesk adopts none of it</strong>: it pins the package version
-          (<code>MMCA.Helpdesk/Directory.Packages.props:94</code>) but no project references it, and the repo has no E2E
+          (<code>MMCA.Helpdesk/Directory.Packages.props:93</code>) but no project references it, and the repo has no E2E
           test project at all (<code>Tests/</code> holds only <code>Architecture</code> and <code>Modules</code>), so the seed has no browser
           accessibility gate today.</p>
           <h2 id="rationale">Rationale</h2>
@@ -422,8 +427,8 @@
           not machine-checkable and are covered by the manual screen-reader checklist in
           <a href="../guides/common-ACCESSIBILITY.html">common-ACCESSIBILITY.md</a>, which is a periodic human pass, not a gate.</li>
           <li><strong>The deploy gate is ui-scoped and may legitimately skip.</strong> Both apps gate <code>e2e-gate</code> on a <code>ui</code> change
-          filter (ADC <code>deploy.yml:803</code>, Store <code>deploy.yml:761</code>), and <code>deploy</code> accepts <code>success</code> or <code>skipped</code> for it
-          (ADC <code>:1182</code>, Store <code>:1116</code>), so a backend-only or infra-only deploy ships without a browser scan. That
+          filter (ADC <code>deploy.yml:818</code>, Store <code>deploy.yml:763</code>), and <code>deploy</code> accepts <code>success</code> or <code>skipped</code> for it
+          (ADC <code>:1197</code>, Store <code>:1131</code>), so a backend-only or infra-only deploy ships without a browser scan. That
           is the intended cost trade (a backend change cannot alter rendered markup) with the post-deploy smoke
           gate as backstop, but it does mean &quot;deployed&quot; does not always mean &quot;axe ran on this commit&quot;.</li>
           <li><strong>Consumer breadth is hand-maintained.</strong> Nothing forces a new page into <code>AccessibilityTests</code>, so
@@ -477,11 +482,38 @@
           Store <code>:764</code>); the <code>deploy</code> needs lists (ADC <code>:1145</code>, Store <code>:1083</code>) and their <code>success</code>-or-<code>skipped</code>
           acceptance of <code>e2e-gate</code> (ADC <code>:1182</code>, Store <code>:1116</code>).</li>
           </ol>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. No decision or rationale changed: the target is still
+          <code>AxeOptions.Wcag21Aa</code>, Common still requires all three engines (<code>MMCA.Common/CONTRIBUTING.md:63-64</code>),
+          and both apps still gate the deploy on a chromium-only <code>e2e-gate</code> plus the <code>cross-browser-freshness</code>
+          recency step. What moved is the gallery&#39;s inventory, plus the line anchors.</p>
+          <ol>
+          <li>The gallery count is re-measured from source: nineteen assertions across twelve classes (was
+          seventeen across eleven), scanning twenty-one page states. The new class is
+          <code>Administration/RoleAdminPagesE2ETests.cs</code> (class at <code>:15</code>), whose two anonymous strict scans cover
+          the role administration list (<code>:31</code>) and editor (<code>:43</code>) of
+          <a href="116-identity-completions-opt-in.html">ADR-116</a>.</li>
+          <li>The notification history scan no longer uses the pager exception: all five notification scans,
+          history included, assert the strict <code>AxeOptions.Wcag21Aa</code> (<code>NotificationPagesE2ETests.cs:31</code>), and no
+          gallery test uses <code>Wcag21AaExceptMudPagerCombobox</code>, so the exception&#39;s only callers are now the
+          consumers&#39; <code>ScanGridAsync</code> pages. The narrative no longer calls it &quot;the gallery&#39;s one use&quot;.</li>
+          <li>Anchors re-verified against current source: the branch-protection payload
+          (<code>CONTRIBUTING.md:202-204</code>); the notification scans (<code>NotificationPagesE2ETests.cs:43</code>, <code>:60</code>, <code>:73</code>,
+          <code>:85</code>) and their cookie seeding (<code>:91</code>); the ADC and Store <code>e2e-gate</code> jobs
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:807</code>, <code>MMCA.Store/.github/workflows/deploy.yml:753</code>), their
+          <code>ui</code> filter (ADC <code>:818</code>, Store <code>:763</code>), reusable <code>e2e.yml</code> call (ADC <code>:819</code>, Store <code>:764</code>) and
+          chromium-only browsers (ADC <code>:821</code>, Store <code>:766</code>); the <code>deploy</code> needs lists naming <code>freshness</code> and
+          <code>e2e-gate</code> (ADC <code>:1160</code>, Store <code>:1098</code>) and their <code>success</code>-or-<code>skipped</code> acceptance (ADC <code>:1197</code>,
+          Store <code>:1131</code>); the <code>cross-browser-freshness</code> step (ADC <code>:924</code>, Store <code>:858</code>) with its rationale
+          comment (ADC <code>:908-923</code>, Store <code>:850-857</code>); the dark-palette <code>MMCATheme.cs</code> contrast tokens
+          (<code>PrimaryContrastText</code> <code>:71</code>, rationale <code>:68-70</code>; <code>WarningContrastText</code> <code>:90</code>; <code>ErrorContrastText</code>
+          <code>:98</code>); and the MMCA.Helpdesk pin (<code>Directory.Packages.props:93</code>), still referenced by no project.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-015 (architecture fitness functions: the structural tier this parallels at the browser tier, and the
           same invariant-over-discipline posture), ADR-058 (runtime conformance suites shipped as subclassable
           bases in a package: the pattern this record applies to accessibility, one tier further out),
-          ADR-028 (dark theme: the dark palette&#39;s contrast tokens, <code>MMCATheme.cs:66,:85,:93</code>, exist in the form they
+          ADR-028 (dark theme: the dark palette&#39;s contrast tokens, <code>MMCATheme.cs:71,:90,:98</code>, exist in the form they
           do because the gated dark-mode scan rejected the defaults), and the how-to companion
           <a href="../guides/common-ACCESSIBILITY.html">common-ACCESSIBILITY.md</a> (scanned-state inventory, manual
           screen-reader checklist, and the tracked limitations).</p>
@@ -503,6 +535,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

@@ -34,6 +34,8 @@ Revised 2026-10-07: ADC's `cross-service-freshness` gate is now a step of one co
 anchors are refreshed after the v1.233.0 release.
 Revised 2026-10-19: the Helpdesk broker registration is a `Register` step of
 `AddMmcaApplicationPipeline`; anchor re-pointed (see Revision below).
+Revised 2026-10-21: anchors refreshed after the Common Aspire hosting, both Bicep templates and both
+deploy workflows grew; no change in what they show.
 ## Context
 ADR-003 decides that integration events leave an aggregate through the outbox and are published by
 `OutboxProcessor` via `IMessageBus`, and it settles the *dispatch* question ("in-process for the
@@ -63,12 +65,12 @@ carry a dedicated test tier for the transport that only production uses.
   domain code names a transport.
 - **Local development defaults to RabbitMQ, wired by the AppHost.** `AddMessageBroker()` provisions
   the RabbitMQ container with the management plugin
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:160-165`), and the
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:172-177`), and the
   `WithBroker` overload taking a `RabbitMQServerResource` attaches it to a project resource with
-  `WithReference` + `WaitFor` and sets `MessageBus__Provider=RabbitMq` (`:252-262`). Every extracted
+  `WithReference` + `WaitFor` and sets `MessageBus__Provider=RabbitMq` (`:264-274`). Every extracted
   service gets a broker: ADC's four
   (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:128,157,200,228`) and Store's three
-  (`MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:162,188,234`), each through
+  (`MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:162,189,250`), each through
   `WithSelectedBroker(withBroker)`. The RabbitMQ branch is framework code: `BrokerSelection.AddSelectedBroker`
   calls `AddMessageBroker().WithLifetime(ContainerLifetime.Persistent)`
   (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/BrokerSelection.cs:70-72`). The developer
@@ -76,10 +78,10 @@ carry a dedicated test tier for the transport that only production uses.
 - **The same local stack can run the production transport, per developer and opt-in.** A second
   `WithBroker` overload takes a `ServiceBusEmulatorResource` and sets
   `MessageBus__Provider=AzureServiceBus` plus the emulator's AMQP connection string and
-  `MessageBus__EmulatorAdminEndpoint` (`Extensions.cs:280-292`, the setting it binds to at
+  `MessageBus__EmulatorAdminEndpoint` (`Extensions.cs:292-304`, the setting it binds to at
   `MessageBusSettings.cs:49`). The resource is framework code too: `AddServiceBusEmulatorBroker`
   runs the pinned `azure-messaging/servicebus-emulator:2.0.1` container against the AppHost's
-  existing SQL Server rather than a second engine (`Extensions.cs:201-238`, image tag at `:107`).
+  existing SQL Server rather than a second engine (`Extensions.cs:213-250`, image tag at `:119`).
   The infrastructure side keys off one marker and nothing else: when the connection string carries
   `UseDevelopmentEmulator=true`, `ConfigureBrokerTransport` delegates the host build to
   `ServiceBusEmulatorSupport` (`IsEmulatorConnectionString`, then `ConfigureEmulatorHost`), which
@@ -102,13 +104,13 @@ carry a dedicated test tier for the transport that only production uses.
   nor its warm-up.
 - **Production is Azure Service Bus, injected by Bicep.** Each service container app receives
   `MessageBus__Provider=AzureServiceBus` plus a `MessageBus__ConnectionString` secret reference:
-  ADC at `MMCA.ADC/infra/main.bicep:1791-1792` (identity, `:1675`), `:2016-2017` (conference,
-  `:1922`), `:2160-2161` (engagement, `:2075`), `:2313-2314` (notification, `:2210`); Store at
-  `MMCA.Store/infra/main.bicep:1512-1513` (identity, `:1420`), `:1678-1679` (catalog, `:1599`),
-  `:1813-1814` (sales, `:1723`). Every service in both repos reads its own per-service secret: Store
+  ADC at `MMCA.ADC/infra/main.bicep:1947-1948` (identity, `:1825`), `:2172-2173` (conference,
+  `:2078`), `:2316-2317` (engagement, `:2231`), `:2469-2470` (notification, `:2366`); Store at
+  `MMCA.Store/infra/main.bicep:1601-1602` (identity, `:1508`), `:1769-1770` (catalog, `:1690`),
+  `:1905-1906` (sales, `:1814`). Every service in both repos reads its own per-service secret: Store
   names a distinct secret reference per app, while ADC keeps the plain name
   `service-bus-connection-string` and resolves it to the Key Vault secret belonging to that one
-  service (`MMCA.ADC/infra/main.bicep:1586-1608`). The images are the same ones the AppHost runs locally; only the two environment variables
+  service (`MMCA.ADC/infra/main.bicep:1736-1758`). The images are the same ones the AppHost runs locally; only the two environment variables
   differ.
 - **One resolution order for the connection string.** `ResolveBrokerConnectionString` prefers an
   explicit `MessageBus:ConnectionString`, then `ConnectionStrings:rabbitmq`, then
@@ -127,24 +129,24 @@ carry a dedicated test tier for the transport that only production uses.
   delayed-message-exchange plugin the Aspire container does not ship
   (`DependencyInjection.Messaging.cs:283-290`, posture documented in the remarks at `:251-258`).
 - **Service Bus Standard tier and `Manage` rights are forced by the topology MassTransit builds.**
-  Both namespaces are `Standard`/`Standard` (`MMCA.ADC/infra/main.bicep:1089-1092`,
-  `MMCA.Store/infra/main.bicep:999-1002`) because `UsingAzureServiceBus` configures a topic per
+  Both namespaces are `Standard`/`Standard` (`MMCA.ADC/infra/main.bicep:1239-1242`,
+  `MMCA.Store/infra/main.bicep:1078-1081`) because `UsingAzureServiceBus` configures a topic per
   message type plus a subscription per consumer, and Basic supports queues only
-  (`MMCA.ADC/infra/main.bicep:1080-1081`, `MMCA.Store/infra/main.bicep:991-993`). There is no shared
+  (`MMCA.ADC/infra/main.bicep:1230-1231`, `MMCA.Store/infra/main.bicep:1070-1072`). There is no shared
   client rule: each container app owns a namespace authorization rule of its own, and every one of
   them carries `Send` + `Listen` + **`Manage`**. ADC declares four (`identity-service`,
   `conference-service`, `engagement-service`, `notification-service` at
-  `MMCA.ADC/infra/main.bicep:1129`, `:1141`, `:1153`, `:1165`, rights at `:1133-1137` and repeated
+  `MMCA.ADC/infra/main.bicep:1279`, `:1291`, `:1303`, `:1315`, rights at `:1283-1287` and repeated
   identically on the other three); Store declares three (`catalog-app`, `sales-app`, `identity-app`
-  at `MMCA.Store/infra/main.bicep:1035`, `:1047`, `:1059`, rights at `:1039-1043`). `Manage` is on
+  at `MMCA.Store/infra/main.bicep:1114`, `:1126`, `:1138`, rights at `:1118-1122`). `Manage` is on
   all seven so `ConfigureEndpoints` can provision that topology at startup; without it the first
   publish fails with an Unauthorized topology error, which is why neither template drops it
-  (`MMCA.ADC/infra/main.bicep:1102-1114`, `MMCA.Store/infra/main.bicep:1025-1034`). Neither repo
+  (`MMCA.ADC/infra/main.bicep:1252-1264`, `MMCA.Store/infra/main.bicep:1104-1113`). Neither repo
   sources a connection string from `RootManageSharedAccessKey`, so a later move to managed identity
   can revoke these without touching the namespace root: each service reads its own
   `listKeys().primaryConnectionString` variable, four of them under a four-line rationale comment in
   ADC (`MMCA.ADC/infra/main.bicep:227-230`, variables at `:231-234`) and three under a five-line one
-  in Store (`MMCA.Store/infra/main.bicep:154-158`, variables at `:159-161`).
+  in Store (`MMCA.Store/infra/main.bicep:158-162`, variables at `:163-165`).
 - **Tests use the transport the tier is testing.** A per-service integration host configures no
   provider, so `AddBrokerMessaging` short-circuits and the in-process bus stands
   (`DependencyInjection.Messaging.cs:52-55`). The cross-service round-trip tier runs the real broker: the
@@ -180,11 +182,11 @@ carry a dedicated test tier for the transport that only production uses.
   Store's `servicebus-emulator-smoke` job in
   `MMCA.Store/.github/workflows/cross-service-tests.yml`), and each repo's `cross-service-freshness`
   deploy gate requires BOTH the `cross-service` job and the `servicebus-emulator-smoke` job to have
-  concluded success in the same nightly run (ADC `MMCA.ADC/.github/workflows/deploy.yml:885-888`, Store
-  `MMCA.Store/.github/workflows/deploy.yml:840-843`). In both repos the gate is a step (ADC `:870`,
-  Store `:825`) of one consolidated `freshness` job (ADC `:817`, Store `:774`), and the deploy asserts
-  `needs.freshness.result == 'success'` (ADC `:1179`, with `freshness` in `deploy.needs` at `:1145`;
-  Store `:1113`). ADC
+  concluded success in the same nightly run (ADC `MMCA.ADC/.github/workflows/deploy.yml:900-903`, Store
+  `MMCA.Store/.github/workflows/deploy.yml:842-845`). In both repos the gate is a step (ADC `:885`,
+  Store `:827`) of one consolidated `freshness` job (ADC `:832`, Store `:776`), and the deploy asserts
+  `needs.freshness.result == 'success'` (ADC `:1194`, with `freshness` in `deploy.needs` at `:1160`;
+  Store `:1128`, `deploy.needs` at `:1098`). ADC
   promoted the tier on 2026-08-31 (TD-17)
   and Store followed immediately after, so the transport only production runs is a deploy
   precondition in both apps. Both gates count per-JOB conclusions rather than the run conclusion, so a
@@ -231,12 +233,12 @@ broker, so extraction later is an AppHost change rather than a code change.
   close it: it is opt-in and off by default, so the inner loop a developer actually runs is still the
   divergent one unless they set `ADC_BROKER=servicebus` or `STORE_BROKER=servicebus`.
 - **The production transport is gated nightly, not per commit.** Both emulator jobs are authoritative
-  and both `cross-service-freshness` gates require them (`MMCA.ADC/.github/workflows/deploy.yml:885-888`
+  and both `cross-service-freshness` gates require them (`MMCA.ADC/.github/workflows/deploy.yml:900-903`
   and the Store equivalent), so a Service-Bus-only regression blocks the next deploy rather than the
   merge that introduced it: the tier needs a Docker daemon the gating jobs do not have, so it runs on
   the weekday nightly and reaches the deploy chain through a recency check. The residual is the window
   between a merge and the nightly that judges it, plus the recency tolerance itself (5 days on ADC, to
-  absorb the weekday-only cadence, `MMCA.ADC/.github/workflows/deploy.yml:883`). The sanctioned way
+  absorb the weekday-only cadence, `MMCA.ADC/.github/workflows/deploy.yml:898`). The sanctioned way
   past a red job is a fix or a dispatched green run, never re-adding `continue-on-error`; the one
   escape hatch is `deploy.yml`'s break-glass `skip_freshness_gates` input (ADC `:13`,
   `MMCA.Store/.github/workflows/deploy.yml:26`), which forces a written
@@ -249,10 +251,10 @@ broker, so extraction later is an AppHost change rather than a code change.
 - **`Manage` rights are broad, and splitting the credential did not narrow them.** Every per-service
   rule can create and delete entities anywhere in the namespace, which is the price of letting
   `ConfigureEndpoints` build the topology instead of declaring every topic in Bicep
-  (`MMCA.ADC/infra/main.bicep:1129-1175`, `MMCA.Store/infra/main.bicep:1035-1069`). Both templates
+  (`MMCA.ADC/infra/main.bicep:1279-1325`, `MMCA.Store/infra/main.bicep:1114-1148`). Both templates
   record the residual next to the rules: a compromised container still holds namespace-wide
   `Send` + `Listen` + `Manage`, so per-service rules buy credential separation and revocability, not
-  privilege reduction (`MMCA.ADC/infra/main.bicep:1116-1128`, `MMCA.Store/infra/main.bicep:1025-1034`).
+  privilege reduction (`MMCA.ADC/infra/main.bicep:1266-1278`, `MMCA.Store/infra/main.bicep:1104-1113`).
 - **Provider selection is per host and silent when missing.** A service that never receives
   `MessageBus__Provider` keeps the in-process bus and publishes nothing to the broker, without an
   error (`DependencyInjection.Messaging.cs:52-55`); correctness depends on auditing the AppHost and the Bicep
@@ -371,6 +373,34 @@ composes its application pipeline through `AddMmcaApplicationPipeline`
 module discovery (`:125-133`) so its `Replace` calls still win over the loader's. Helpdesk still
 configures no `MessageBus:Provider` and stays on `InProcess`; the Adoption paragraph's dead `:130`
 anchor is re-pointed to `:139`.
+
+## Revision (2026-10-21)
+Re-verified against current source. The transport decision, the three provider values, the
+RabbitMQ and emulator `WithBroker` overloads, the pinned `servicebus-emulator:2.0.1` image, the
+Standard-tier namespaces, the seven per-service rules with `Send` + `Listen` + `Manage`, the
+per-service `listKeys()` variables and the same-run, two-job deploy gate are unchanged. Only line
+anchors moved.
+
+1. Anchors re-verified against current source: `AddMessageBroker`
+   `MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:172-177`, the RabbitMQ
+   `WithBroker` overload `:264-274`, the emulator overload `:292-304`, `AddServiceBusEmulatorBroker`
+   `:213-250` with `ServiceBusEmulatorImageTag` at `:119`; Store AppHost service attachments
+   `MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:162`, `:189`, `:250` (selection still
+   `:78`); ADC Bicep container apps `MMCA.ADC/infra/main.bicep:1825`, `:2078`, `:2231`, `:2366`,
+   broker env pairs `:1947-1948`, `:2172-2173`, `:2316-2317`, `:2469-2470`, per-service Key Vault
+   secrets `:1736-1758`, Standard sku `:1239-1242`, Basic rationale `:1230-1231`, rules `:1279`,
+   `:1291`, `:1303`, `:1315` (declarations `:1279-1325`, rights `:1283-1287`), `Manage` rationale
+   `:1252-1264`, residual risk `:1266-1278` (the `listKeys` comment `:227-230` and variables
+   `:231-234` did not move); Store Bicep container apps `MMCA.Store/infra/main.bicep:1508`, `:1690`,
+   `:1814`, broker env pairs `:1601-1602`, `:1769-1770`, `:1905-1906`, Standard sku `:1078-1081`,
+   Basic rationale `:1070-1072`, rules `:1114`, `:1126`, `:1138` (declarations `:1114-1148`, rights
+   `:1118-1122`), `Manage` rationale and residual `:1104-1113`, `listKeys` comment `:158-162` and
+   variables `:163-165`; ADC `MMCA.ADC/.github/workflows/deploy.yml` `freshness` job `:832`,
+   `cross-service-freshness` step `:885`, 5-day window `:898`, required jobs `:900-903`,
+   `deploy.needs` `:1160`, assert `:1194` (break-glass input still `:13`); Store
+   `MMCA.Store/.github/workflows/deploy.yml` `freshness` job `:776`, step `:827`, required jobs
+   `:842-845`, `deploy.needs` `:1098`, assert `:1128` (break-glass input still `:26`). The earlier
+   revisions' anchors were accurate on their dates and stay as written.
 
 ## Related
 ADR-003 (the outbox that feeds `IMessageBus`; this ADR picks the transport underneath it), ADR-016

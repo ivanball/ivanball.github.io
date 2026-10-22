@@ -20,12 +20,13 @@ write just before the save (SEC-Common-77), and ADC's Conference module register
 `AddEntityCrud` aggregate, `Partner`. Revised 2026-10-01: the generic update gets the transactional,
 permission and timeout steps only when a derived command opts in. Revised 2026-10-06: the payment
 override now runs on the shared mutate workflow with its provider call inside `MutateAsync`, so the
-generic-path boundary is the generic update path, not the presence of a provider call.
+generic-path boundary is the generic update path, not the presence of a provider call. Revised
+2026-10-21: anchors refreshed after the controller base and the consumer DI registrations shifted.
 
 ## Context
 ADR-034 records the read side of the generic resource layer and stops one verb short. Its
 `AggregateRootEntityControllerBase` ships `[HttpPost]` create and `[HttpDelete("{id}")]`
-(`Source/Presentation/MMCA.Common.API/Controllers/AggregateRootEntityControllerBase.cs:59`, `:85`),
+(`Source/Presentation/MMCA.Common.API/Controllers/AggregateRootEntityControllerBase.cs:75`, `:107`),
 and the framework already carried a generic delete command and handler. Update was the verb every
 aggregate still hand-wrote.
 
@@ -186,13 +187,13 @@ Ship the generic write side as four additive pieces plus a registration helper.
 - **Nothing in the framework opts a consumer in: every registration is a line the module writes.**
   Adoption is per aggregate and partial. ADC's Conference module registers it for four aggregates,
   `Category`, `Activity`, `Sponsor` and `Partner`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:149-151`,
-  and `Partner` at `:152`),
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:155-157`,
+  and `Partner` at `:158`),
   Store's Catalog for `Product` (one call per field-scoped update request) and `Category`
   (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/DependencyInjection.cs:101-104`,
   `:105`, `:112`),
   and Store's Identity for `Customer`
-  (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/DependencyInjection.cs:78-80`),
+  (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/DependencyInjection.cs:84-86`),
   each call placed after the convention scan so `TryAdd` leaves the hand-written handlers those
   modules keep (the create verbs, Catalog's `DeleteCategoryHandler` and `DeleteProductHandler`, and
   `CategoryAssignParentUpdateHandler`, a subclass of `UpdateEntityHandler`, at
@@ -436,3 +437,19 @@ handlers that `TryAdd` leaves in place now also names Store Catalog's `DeletePro
   `MMCA.Store.Sales.Application/DependencyInjection.cs:87-88`; ADC `ChangePasswordHandler.cs:24`.
 - Anchors in the current-state sections (Context, Decision 3, Rationale) were re-verified against
   current source and moved where the code had shifted.
+
+## Revision (2026-10-21)
+
+Re-verified against current source. No decision, behavior or adoption changed: the same four ADC
+Conference aggregates, the same Store Catalog and Identity registrations, and the same create and
+delete actions on the four-parameter controller base. Only line positions moved. Anchors inside the
+2026-08-30, 2026-10-01 and 2026-10-06 Revisions are left as recorded.
+
+1. Anchors re-verified against current source: the base controller's `[HttpPost]` and
+   `[HttpDelete("{id}")]` (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AggregateRootEntityControllerBase.cs:75`,
+   `:107`); ADC Conference `AddEntityCrud` for `Category`, `Activity` and `Sponsor`
+   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:155-157`)
+   and `Partner` (`:158`), and `AddEntityUpdate<UpdateSpeakerCommand, ...>` (`:167`); Store Identity
+   `AddEntityCrud` for `Customer`
+   (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/DependencyInjection.cs:84-86`).
+   The Store Catalog anchors (`:101-104`, `:105`, `:112`) are unchanged.

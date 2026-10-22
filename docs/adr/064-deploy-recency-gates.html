@@ -274,10 +274,13 @@
           Revised 2026-10-06: the job-reading gates now page an unfiltered run listing and filter completed runs client-side (MMCA.Common v1.220.0), and every citation is re-anchored.
           Revised 2026-10-07: the four gates now run as the four steps of one <code>freshness</code> job that skips a docs-only push, <code>backend-test-gate</code> is retired in both repos, and the success-only lookup filters client-side (see Revision below).
           Revised 2026-10-07: the Rationale&#39;s API-cost sentence now states the bounded read count and the
-          per-repo job timeout, and the Decision notes that both CONTRIBUTING files still name the gates as jobs.</p>
+          per-repo job timeout, and the Decision notes that both CONTRIBUTING files still name the gates as jobs.
+          Revised 2026-10-21: both CONTRIBUTING files now name the single <code>freshness</code> job and its four steps,
+          the broker-step comments are restated (neither mentions an advisory job; they differ in two places),
+          and every <code>deploy.yml</code> anchor is re-pointed.</p>
           <h2 id="context">Context</h2>
           <p>A production rollout in both deployed apps waits on a list of jobs in <code>deploy.needs</code>
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:1145</code>, <code>MMCA.Store/.github/workflows/deploy.yml:1083</code>). Most of
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:1160</code>, <code>MMCA.Store/.github/workflows/deploy.yml:1098</code>). Most of
           those jobs have the change itself as their subject: a supply-chain audit (ADR-038), a FinOps
           cost check, a chromium end-to-end run against the booted stack. They answer &quot;is this build good.&quot;</p>
           <p>Four kinds of verification cannot answer that question inside a deploy, because they cannot run
@@ -287,12 +290,12 @@
           load run drives sustained traffic at production read endpoints
           (<code>MMCA.ADC/.github/workflows/load-test.yml:3-6</code>). The Testcontainers broker round-trip needs a Docker
           daemon that the gating jobs deliberately do not have
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:863-866</code>, <code>MMCA.Store/.github/workflows/deploy.yml:820-823</code>).
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:880-881</code>, <code>MMCA.Store/.github/workflows/deploy.yml:824-826</code>).
           The firefox and webkit end-to-end legs cost roughly
           twenty minutes per engine and were taken off the per-deploy gate in 2026-07 for exactly that reason,
           leaving the deploy-path <code>e2e-gate</code> chromium-only
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:893-896</code>,
-          <code>MMCA.Store/.github/workflows/deploy.yml:848-850</code>). Each therefore lives on its own schedule: weekly
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:908-911</code>,
+          <code>MMCA.Store/.github/workflows/deploy.yml:850-852</code>). Each therefore lives on its own schedule: weekly
           Monday for the drill (<code>MMCA.ADC/.github/workflows/dr-drill.yml:32</code>,
           <code>MMCA.Store/.github/workflows/dr-drill.yml:33</code>), monthly for the load test
           (<code>load-test.yml:23</code>, Store <code>:21</code>), weeknights for the broker tier
@@ -314,30 +317,30 @@
           <li><p><strong>Four recency gates run as the four steps of one <code>freshness</code> job in <code>deploy.needs</code>, beside the
           result-based gates.</strong> The job is listed with <code>changes</code>, <code>supply-chain</code>, <code>cost-guard</code>, <code>e2e-gate</code>,
           <code>foundation</code> and <code>build-images</code>, plus <code>ai-eval-gate</code> in ADC only, which is why ADC&#39;s list carries 8
-          entries and Store&#39;s 7 (<code>MMCA.ADC/.github/workflows/deploy.yml:1145</code>,
-          <code>MMCA.Store/.github/workflows/deploy.yml:1083</code>). The job runs on <code>ubuntu-latest</code> holding
+          entries and Store&#39;s 7 (<code>MMCA.ADC/.github/workflows/deploy.yml:1160</code>,
+          <code>MMCA.Store/.github/workflows/deploy.yml:1098</code>). The job runs on <code>ubuntu-latest</code> holding
           <code>actions: read</code> and <code>contents: read</code> only, with a 5-minute timeout in ADC and 10 in Store
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:817-824</code>, <code>MMCA.Store/.github/workflows/deploy.yml:774-781</code>).
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:832-839</code>, <code>MMCA.Store/.github/workflows/deploy.yml:776-783</code>).
           Each step keeps its gate&#39;s name as both <code>name</code> and <code>id</code>: <code>dr-freshness</code>, <code>load-freshness</code>,
           <code>cross-service-freshness</code> and <code>cross-browser-freshness</code>
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:830-831,849-850,870-871,909-910</code>,
-          <code>MMCA.Store/.github/workflows/deploy.yml:788-789,806-807,825-826,856-857</code>). The last three carry
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:845-846,864-865,885-886,924-925</code>,
+          <code>MMCA.Store/.github/workflows/deploy.yml:790-791,808-809,827-828,858-859</code>). The last three carry
           <code>if: ${{ !cancelled() }}</code>, so they still run and report after an earlier step fails
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:851,872,911</code>,
-          <code>MMCA.Store/.github/workflows/deploy.yml:808,827,858</code>). Every step calls one shared composite action,
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:866,887,926</code>,
+          <code>MMCA.Store/.github/workflows/deploy.yml:810,829,860</code>). Every step calls one shared composite action,
           <code>ivanball/MMCA.Common/.github/actions/freshness-gate</code>
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:835,854,877,917</code>,
-          <code>MMCA.Store/.github/workflows/deploy.yml:792,811,832,864</code>), so the gate logic has one implementation
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:850,869,892,932</code>,
+          <code>MMCA.Store/.github/workflows/deploy.yml:794,813,834,866</code>), so the gate logic has one implementation
           (<code>MMCA.Common/.github/actions/freshness-gate/action.yml</code>).</p>
           </li>
           <li><p><strong>Each gate asks the Actions API for the newest proof of one workflow and fails on its age.</strong> The
           window is the action&#39;s <code>window-days</code> input: <code>8</code> for the weekly DR drill
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:839</code>, <code>MMCA.Store/.github/workflows/deploy.yml:796</code>), <code>35</code>
-          for the monthly k6 run (<code>:858</code> / <code>:815</code>), <code>5</code> for the weekday-nightly broker tier (ADC <code>:883</code>, Store
-          <code>:838</code>, widened from 3 on 2026-07-18 to tolerate a weekend or holiday, a note carried at
-          <code>:881</code> in ADC and <code>:836</code> in Store), and <code>10</code> for the two alternating weekly browser crons
-          (ADC <code>:922</code>, Store <code>:872</code>, a seven-day per-engine cadence plus slack for a skipped night or a
-          late re-run, reasoned inline at <code>:899-902</code> in ADC and <code>:868-871</code> in Store). The DR and load
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:854</code>, <code>MMCA.Store/.github/workflows/deploy.yml:798</code>), <code>35</code>
+          for the monthly k6 run (<code>:873</code> / <code>:817</code>), <code>5</code> for the weekday-nightly broker tier (ADC <code>:898</code>, Store
+          <code>:840</code>, widened from 3 on 2026-07-18 to tolerate a weekend or holiday, a note carried at
+          <code>:896-897</code> in ADC and <code>:838-839</code> in Store), and <code>10</code> for the two alternating weekly browser crons
+          (ADC <code>:937</code>, Store <code>:874</code>, a seven-day per-engine cadence plus slack for a skipped night or a
+          late re-run, reasoned inline at <code>:914-917</code> in ADC and <code>:870-873</code> in Store). The DR and load
           gates pass no <code>required-jobs</code>, so the action pages an unfiltered run listing of <code>dr-drill.yml</code> and
           <code>load-test.yml</code> respectively, keeps the runs that completed with conclusion <code>success</code> (filtered
           client-side) and reads the newest one&#39;s <code>updated_at</code>
@@ -356,7 +359,7 @@
           </li>
           <li><p><strong>The broker gate keys off the jobs, not the run conclusion.</strong> It passes the two broker job names as
           <code>required-jobs</code> with <code>required-jobs-mode: same-run</code> and <code>max-runs: &#39;25&#39;</code>
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:885-889</code>, <code>MMCA.Store/.github/workflows/deploy.yml:840-844</code>),
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:900-904</code>, <code>MMCA.Store/.github/workflows/deploy.yml:842-846</code>),
           so the action enumerates completed runs of <code>cross-service-tests.yml</code> (any conclusion) and, for each,
           asks the jobs API which jobs concluded <code>success</code>, stopping at the first run where all the named jobs
           did (<code>MMCA.Common/.github/actions/freshness-gate/action.yml:186-216</code>). The listing is requested
@@ -369,17 +372,18 @@
           emulator topology plus AMQP round-trip, so the production transport is a deploy precondition too
           (ADR-066). The reasoning for reading jobs rather than the run is recorded inline in both repos: a
           skip-if-unchanged guard can make a run conclude <code>success</code> with the test jobs skipped and no
-          round-trip executed (<code>MMCA.ADC/.github/workflows/deploy.yml:875-876</code>,
-          <code>MMCA.Store/.github/workflows/deploy.yml:830-831</code>). Store&#39;s comment adds that an advisory job can
-          fail a run that holds a genuine proof (<code>MMCA.Store/.github/workflows/deploy.yml:831</code>), but neither
-          repo&#39;s <code>cross-service-tests.yml</code> carries an advisory job today: its jobs are <code>should-run</code>,
+          round-trip executed (<code>MMCA.ADC/.github/workflows/deploy.yml:890-891</code>,
+          <code>MMCA.Store/.github/workflows/deploy.yml:832</code>). Both comments also count a completed run of any
+          conclusion, &quot;so a cancelled-but-proven run still counts&quot;
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:888-889</code>, <code>MMCA.Store/.github/workflows/deploy.yml:830</code>). Neither
+          mentions an advisory job, and neither repo&#39;s <code>cross-service-tests.yml</code> carries an advisory job today: its jobs are <code>should-run</code>,
           <code>cross-service</code> and <code>servicebus-emulator-smoke</code>
           (<code>MMCA.ADC/.github/workflows/cross-service-tests.yml:51,79,142</code>,
           <code>MMCA.Store/.github/workflows/cross-service-tests.yml:54,85,141</code>).</p>
           </li>
           <li><p><strong>The cross-browser gate resolves each engine separately, for the same reason.</strong> It passes
           <code>E2E (firefox)</code> and <code>E2E (webkit)</code> as <code>required-jobs</code> with <code>required-jobs-mode: per-job</code>
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:924-928</code>, <code>MMCA.Store/.github/workflows/deploy.yml:874-878</code>),
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:939-943</code>, <code>MMCA.Store/.github/workflows/deploy.yml:876-880</code>),
           so the action walks completed <code>e2e.yml</code> runs newest first once per engine, takes the first run in
           which that engine&#39;s job concluded <code>success</code>, and age-checks each engine&#39;s proof on its own; any
           engine that is stale or missing sets the <code>fail</code> flag, so both are reported before the step exits 1
@@ -388,16 +392,16 @@
           and the newest webkit proof normally come from different runs and there is no single run to point at,
           and the scheduled non-chromium legs are <code>continue-on-error</code>, so a run can conclude <code>success</code> with an
           engine red (<code>MMCA.ADC/.github/workflows/e2e.yml:147</code>, <code>MMCA.Store/.github/workflows/e2e.yml:149</code>).
-          ADC records both properties inline (<code>MMCA.ADC/.github/workflows/deploy.yml:899-900,904-906</code>); Store&#39;s
-          comments record only the alternation (<code>MMCA.Store/.github/workflows/deploy.yml:850,859-860</code>).</p>
+          ADC records both properties inline (<code>MMCA.ADC/.github/workflows/deploy.yml:914-915,919-921,927-929</code>);
+          Store&#39;s comments record only the alternation (<code>MMCA.Store/.github/workflows/deploy.yml:852,861-862</code>).</p>
           </li>
           <li><p><strong>Break-glass exists as a dispatch input pair and refuses to fire without a written reason.</strong>
           <code>workflow_dispatch</code> carries <code>skip_freshness_gates</code> (boolean, default <code>false</code>) and
           <code>skip_justification</code> (string, default empty)
           (<code>MMCA.ADC/.github/workflows/deploy.yml:13-20</code>, <code>MMCA.Store/.github/workflows/deploy.yml:26-33</code>).
           Every step passes both to the action as <code>skip</code> and <code>skip-justification</code>
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:841-842,860-861,890-891,929-930</code>,
-          <code>MMCA.Store/.github/workflows/deploy.yml:798-799,817-818,845-846,879-880</code>), which maps them into its
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:856-857,875-876,905-906,944-945</code>,
+          <code>MMCA.Store/.github/workflows/deploy.yml:800-801,819-820,847-848,881-882</code>), which maps them into its
           step environment (<code>MMCA.Common/.github/actions/freshness-gate/action.yml:93-94</code>) and, when the flag
           is true with an empty justification, emits <code>::error::</code> and exits 1
           (<code>MMCA.Common/.github/actions/freshness-gate/action.yml:100-103</code>). With a justification it writes a
@@ -410,56 +414,56 @@
           push.</strong> <code>inputs</code> is empty outside a dispatch, so <code>${FG_SKIP:-false}</code> reads <code>false</code>
           (<code>MMCA.Common/.github/actions/freshness-gate/action.yml:100</code>), and the <code>freshness</code> job carries
           <code>if: github.event_name != &#39;pull_request&#39; &amp;&amp; needs.changes.outputs.code == &#39;true&#39;</code>
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:819</code>, <code>MMCA.Store/.github/workflows/deploy.yml:778</code>): the
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:834</code>, <code>MMCA.Store/.github/workflows/deploy.yml:780</code>): the
           gates run on a push or manual dispatch that changes code, and a docs-only push skips them along with
           the deploy, whose condition also requires <code>needs.changes.outputs.code == &#39;true&#39;</code>
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:1176</code>, <code>MMCA.Store/.github/workflows/deploy.yml:1110</code>).</p>
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:1191</code>, <code>MMCA.Store/.github/workflows/deploy.yml:1125</code>).</p>
           </li>
           <li><p><strong>A break-glass skip still reports success, which is what the deploy condition demands.</strong> The deploy
           runs under <code>always()</code> with explicit per-need results and requires <code>success</code> from the <code>freshness</code> job
           by name; only a conditional gate may be <code>skipped</code>
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:1172-1183</code>,
-          <code>MMCA.Store/.github/workflows/deploy.yml:1106-1116</code>). Store allows it for <code>e2e-gate</code> alone, which runs
-          only when the diff touches the UI (<code>MMCA.Store/.github/workflows/deploy.yml:761</code>); ADC allows it for
-          <code>e2e-gate</code> (<code>MMCA.ADC/.github/workflows/deploy.yml:803</code>) and for <code>ai-eval-gate</code>, which runs only when
-          the diff touches the scoring code (<code>MMCA.ADC/.github/workflows/deploy.yml:511</code>). A code deploy that
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:1187-1198</code>,
+          <code>MMCA.Store/.github/workflows/deploy.yml:1121-1131</code>). Store allows it for <code>e2e-gate</code> alone, which runs
+          only when the diff touches the UI (<code>MMCA.Store/.github/workflows/deploy.yml:763</code>); ADC allows it for
+          <code>e2e-gate</code> (<code>MMCA.ADC/.github/workflows/deploy.yml:818</code>) and for <code>ai-eval-gate</code>, which runs only when
+          the diff touches the scoring code (<code>MMCA.ADC/.github/workflows/deploy.yml:525</code>). A code deploy that
           skips <code>e2e-gate</code> is still tested: the test gate is the pull request&#39;s <code>build-and-test</code>, because
           branch protection enforces admins and requires an up-to-date branch, so the merged tree is the
-          PR-tested tree (<code>MMCA.ADC/.github/workflows/deploy.yml:798-800,1146-1148</code>,
-          <code>MMCA.Store/.github/workflows/deploy.yml:757-759,1084-1086</code>). Exiting 0 inside the step is what keeps
+          PR-tested tree (<code>MMCA.ADC/.github/workflows/deploy.yml:813-815,1161-1163</code>,
+          <code>MMCA.Store/.github/workflows/deploy.yml:759-761,1099-1101</code>). Exiting 0 inside the step is what keeps
           break-glass compatible with that contract, and both repos say so in the comment above the condition
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:1166-1167</code>,
-          <code>MMCA.Store/.github/workflows/deploy.yml:1100-1102</code>).</p>
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:1181-1182</code>,
+          <code>MMCA.Store/.github/workflows/deploy.yml:1115-1117</code>).</p>
           </li>
-          <li><p><strong>Deploy-time only, and deliberately not a required merge check.</strong> Both repos document the freshness
-          gates as push-only jobs that run after merge and must not be added to branch protection, since a job
-          that never runs on a pull request would block every merge
-          (<code>MMCA.ADC/CONTRIBUTING.md:42-44,111-113</code>, <code>MMCA.Store/CONTRIBUTING.md:42-43,118-120</code>). In both
+          <li><p><strong>Deploy-time only, and deliberately not a required merge check.</strong> Both repos document the
+          <code>freshness</code> job (the four gates) as push-only, run after merge and never added to branch protection,
+          since a job that never runs on a pull request would block every merge
+          (<code>MMCA.ADC/CONTRIBUTING.md:42-45,112-113</code>, <code>MMCA.Store/CONTRIBUTING.md:42-45,120-121</code>). In both
           files the push-only half is the earlier passage and the &quot;do not require these jobs&quot; sentence is the
-          later one. Neither enumeration is exhaustive: ADC&#39;s at <code>CONTRIBUTING.md:42-44</code> stops at
-          <code>cross-service-freshness</code> and Store&#39;s at <code>:42-43</code> names only <code>dr-freshness</code> and <code>load-freshness</code>, so
-          the generic &quot;the freshness gates&quot; sentence (<code>MMCA.ADC/CONTRIBUTING.md:111</code>,
-          <code>MMCA.Store/CONTRIBUTING.md:118</code>) is what covers <code>cross-browser-freshness</code> in both. Both files still
-          treat the gates as jobs: the earlier passages name them by their step ids, and the later sentence
-          lists &quot;the freshness gates&quot; among the push-only jobs; the one job that actually runs is <code>freshness</code> (<code>MMCA.ADC/.github/workflows/deploy.yml:817</code>,
-          <code>MMCA.Store/.github/workflows/deploy.yml:774</code>).</p>
+          later one. Both match the workflow: the earlier passage names the single <code>freshness</code> job and all
+          four of its steps (<code>dr-freshness</code>, <code>load-freshness</code>, <code>cross-service-freshness</code> and
+          <code>cross-browser-freshness</code>), and the later sentence lists <code>freshness</code> among the push-only jobs
+          (<code>MMCA.ADC/CONTRIBUTING.md:112</code>, <code>MMCA.Store/CONTRIBUTING.md:120</code>), which is the one job that runs
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:832</code>, <code>MMCA.Store/.github/workflows/deploy.yml:776</code>).</p>
           </li>
           </ul>
           <p><strong>Adoption is the two deployed apps, and all four gates are the same shape in both.</strong> The
           <code>deploy.needs</code> lists are not identical, because ADC carries <code>ai-eval-gate</code> and Store does not:
-          8 entries in ADC against 7 in Store (<code>MMCA.ADC/.github/workflows/deploy.yml:1145</code>,
-          <code>MMCA.Store/.github/workflows/deploy.yml:1083</code>). The <code>freshness</code> job and <code>e2e-gate</code> are common to the
+          8 entries in ADC against 7 in Store (<code>MMCA.ADC/.github/workflows/deploy.yml:1160</code>,
+          <code>MMCA.Store/.github/workflows/deploy.yml:1098</code>). The <code>freshness</code> job and <code>e2e-gate</code> are common to the
           two lists. There is no per-repo gate body: both repos call
           the same MMCA.Common action, so every message is identical apart from that scan bound, and the only per-repo difference in the
           gate inputs is the cross-browser scan bound, 40 completed <code>e2e.yml</code> runs in ADC against 50 in Store
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:928</code>, <code>MMCA.Store/.github/workflows/deploy.yml:878</code>). The job
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:943</code>, <code>MMCA.Store/.github/workflows/deploy.yml:880</code>). The job
           timeout differs too, 5 minutes in ADC against 10 in Store
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:821</code>, <code>MMCA.Store/.github/workflows/deploy.yml:777</code>). The
-          broker-step comments explaining the job read differ by one clause, Store&#39;s added note about an
-          advisory job (<code>MMCA.ADC/.github/workflows/deploy.yml:875-876</code>, <code>MMCA.Store/.github/workflows/deploy.yml:830-831</code>);
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:836</code>, <code>MMCA.Store/.github/workflows/deploy.yml:779</code>). The
+          broker-step comments explaining the job read differ in two places: ADC&#39;s opens with a &quot;Shared
+          composite action (ADR-038).&quot; sentence and Store&#39;s closes with the clause &quot;and a cancelled run can
+          still hold a genuine proof&quot; (<code>MMCA.ADC/.github/workflows/deploy.yml:888-891</code>,
+          <code>MMCA.Store/.github/workflows/deploy.yml:830-833</code>);
           ADC&#39;s backlog items TD-02 and TD-17 survive only in comments, in ADC
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:863,1151</code>) and in the Store step header that mirrors them
-          (<code>MMCA.Store/.github/workflows/deploy.yml:820</code>); the header comments above each step still
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:878,1166</code>) and in the Store step header that mirrors them
+          (<code>MMCA.Store/.github/workflows/deploy.yml:822</code>); the header comments above each step still
           differ in wording.
           <strong>MMCA.Helpdesk has no
           deploy pipeline at all</strong>: its <code>.github/workflows/</code> holds four files, <code>ci.yml</code>, the two Claude
@@ -491,8 +495,8 @@
           five listing pages per gate in the success and same-run modes, and per required job in the per-job
           mode the cross-browser gate uses, plus one jobs read per scanned run per required job,
           <code>MMCA.Common/.github/actions/freshness-gate/action.yml:164,190,193,236-239</code>) inside a job with a 5-minute
-          timeout in ADC and 10 in Store (<code>MMCA.ADC/.github/workflows/deploy.yml:821</code>,
-          <code>MMCA.Store/.github/workflows/deploy.yml:777</code>) buys the same guarantee at effectively zero marginal
+          timeout in ADC and 10 in Store (<code>MMCA.ADC/.github/workflows/deploy.yml:836</code>,
+          <code>MMCA.Store/.github/workflows/deploy.yml:779</code>) buys the same guarantee at effectively zero marginal
           cost, which is exactly why the gate is affordable enough to keep enabled.</li>
           <li><strong>Fail on absence, because a vacuous gate is worse than none.</strong> A gate that passes when it finds
           nothing reads as evidence while proving nothing, so an empty query result exits 1 rather than 0.</li>
@@ -504,9 +508,9 @@
           <li><strong>An unenforced proof rots quietly.</strong> Moving firefox and webkit off the per-deploy gate saved the
           minutes but left nothing asserting those legs still passed, so cross-engine coverage could sit red
           for weeks while deploys kept shipping green
-          (<code>MMCA.Store/.github/workflows/deploy.yml:851-852</code>). A recency gate restores enforcement for two
+          (<code>MMCA.Store/.github/workflows/deploy.yml:853-854</code>). A recency gate restores enforcement for two
           Actions API queries rather than by putting roughly forty minutes of browser time back on every UI
-          deploy (<code>MMCA.ADC/.github/workflows/deploy.yml:895-896</code>).</li>
+          deploy (<code>MMCA.ADC/.github/workflows/deploy.yml:910-911</code>).</li>
           <li><strong>A justified skip beats an undocumented one.</strong> The alternative to break-glass is not &quot;no skip,&quot; it
           is someone commenting the gate out or force-merging around it. Requiring a non-empty reason, then
           printing it in the step summary and as a run annotation, ties the decision to the exact deploy that
@@ -515,15 +519,15 @@
           monthly one, 5 over a weekday-only nightly, 10 over a weekly per-engine cron: each tolerates one
           missed or delayed run without tolerating a dead schedule. Store&#39;s comment states the boundary
           explicitly for the newest window: 7 plus 1 would red the deploy on any single-week hiccup, and a
-          wider one would let an engine rot for two full cycles (<code>MMCA.Store/.github/workflows/deploy.yml:868-871</code>).</li>
+          wider one would let an engine rot for two full cycles (<code>MMCA.Store/.github/workflows/deploy.yml:870-873</code>).</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
           <li><strong>An unrelated stale proof blocks an unrelated deploy.</strong> A one-line hotfix does not ship when the
           monthly k6 cron did not fire, and the failure surfaces after merge: the <code>freshness</code> job goes red and
           <code>deploy</code> is left skipped by its explicit per-need condition
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:1172-1183</code>,
-          <code>MMCA.Store/.github/workflows/deploy.yml:1106-1116</code>). The coupling is deliberate, and the cost is a
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:1187-1198</code>,
+          <code>MMCA.Store/.github/workflows/deploy.yml:1121-1131</code>). The coupling is deliberate, and the cost is a
           blocked rollout at whatever moment the schedule happened to lapse.</li>
           <li><strong>Break-glass is auditable but human-judged.</strong> Only non-emptiness is checked: nothing rates the
           reason, there is no second approver, no expiry and no tracked follow-up beyond the step-summary
@@ -541,10 +545,10 @@
           <code>-gt</code> (<code>MMCA.Common/.github/actions/freshness-gate/action.yml:143,145</code>), so a proof up to a day
           older than the stated number still passes.</li>
           <li><strong>The job-reading gates scan a bounded history.</strong> The broker gate walks at most the 25 most recent
-          completed runs (<code>MMCA.ADC/.github/workflows/deploy.yml:889</code>,
-          <code>MMCA.Store/.github/workflows/deploy.yml:844</code>) and the cross-browser gate at most 40 in ADC and 50 in
-          Store (<code>MMCA.ADC/.github/workflows/deploy.yml:928</code>,
-          <code>MMCA.Store/.github/workflows/deploy.yml:878</code>); the action rejects a <code>max-runs</code> outside 1 to 100
+          completed runs (<code>MMCA.ADC/.github/workflows/deploy.yml:904</code>,
+          <code>MMCA.Store/.github/workflows/deploy.yml:846</code>) and the cross-browser gate at most 40 in ADC and 50 in
+          Store (<code>MMCA.ADC/.github/workflows/deploy.yml:943</code>,
+          <code>MMCA.Store/.github/workflows/deploy.yml:880</code>); the action rejects a <code>max-runs</code> outside 1 to 100
           (<code>MMCA.Common/.github/actions/freshness-gate/action.yml:119-120</code>). Past the bound they fail closed
           with a message that names it, &quot;no completed &lt;workflow&gt; run among the newest &lt;N&gt; in which &lt;jobs&gt;
           executed and passed&quot; (<code>MMCA.Common/.github/actions/freshness-gate/action.yml:214</code>). Each scanned run
@@ -656,6 +660,38 @@
           <li>Anchors re-verified against current source: the weeknight broker cron is
           <code>MMCA.ADC/.github/workflows/cross-service-tests.yml:32</code> (Store <code>:35</code> unchanged).</li>
           </ol>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. The four gates, their windows (<code>8</code>, <code>35</code>, <code>5</code>, <code>10</code>), scan
+          bounds (25 for the broker gate; 40 in ADC and 50 in Store for the cross-browser gate), job timeouts
+          (5 minutes in ADC, 10 in Store), the <code>deploy.needs</code> counts (8 in ADC, 7 in Store) and the
+          break-glass contract are unchanged. Two descriptions moved.</p>
+          <ol>
+          <li>Both <code>CONTRIBUTING.md</code> files now name the single <code>freshness</code> job and all four of its steps
+          (<code>MMCA.ADC/CONTRIBUTING.md:42-45</code>, <code>MMCA.Store/CONTRIBUTING.md:42-45</code>), and the &quot;do not require
+          the push-only jobs&quot; sentence lists <code>freshness</code> (<code>MMCA.ADC/CONTRIBUTING.md:112</code>,
+          <code>MMCA.Store/CONTRIBUTING.md:120</code>). The Decision no longer says the enumerations are incomplete or
+          that the files treat the gates as jobs.</li>
+          <li>The broker-step comments are restated. Neither mentions an advisory job; both count a completed
+          run of any conclusion &quot;so a cancelled-but-proven run still counts&quot;
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:888-889</code>, <code>MMCA.Store/.github/workflows/deploy.yml:830</code>). They
+          differ in two places: ADC&#39;s leading &quot;Shared composite action (ADR-038).&quot; sentence
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:888</code>) and Store&#39;s trailing clause &quot;and a cancelled run can
+          still hold a genuine proof&quot; (<code>MMCA.Store/.github/workflows/deploy.yml:833</code>).</li>
+          <li>Anchors re-verified against current source: <code>deploy.needs</code> ADC <code>:1160</code>, Store <code>:1098</code>; deploy
+          condition ADC <code>1187-1198</code> (code check <code>:1191</code>), Store <code>1121-1131</code> (<code>:1125</code>); PR-tested-tree
+          comments ADC <code>1161-1163</code>, Store <code>1099-1101</code>; break-glass-exits-success comments ADC <code>1181-1182</code>,
+          Store <code>1115-1117</code>; <code>freshness</code> job ADC <code>832-839</code> (<code>if</code> <code>:834</code>, timeout <code>:836</code>), Store <code>776-783</code>
+          (timeout <code>:779</code>, <code>if</code> <code>:780</code>); step name/id, <code>!cancelled()</code>, <code>uses</code>, <code>window-days</code>,
+          <code>required-jobs</code> blocks and skip inputs as cited in the Decision; e2e-gate <code>if</code> ADC <code>:818</code>, Store
+          <code>:763</code>, with the untested-skip comments at ADC <code>813-815</code> and Store <code>759-761</code>; <code>ai-eval-gate</code> <code>if</code>
+          ADC <code>:525</code>; Docker note ADC <code>880-881</code>, Store <code>824-826</code>; chromium-only note ADC <code>908-911</code>, Store
+          <code>850-852</code>; TD-02/TD-17 comments ADC <code>:878,1166</code>, Store <code>:822</code>; cross-browser alternation ADC
+          <code>914-915,927-929</code> and continue-on-error <code>919-921</code>, Store alternation <code>852,861-862</code>; Store 7+1
+          boundary <code>870-873</code> and &quot;sit red for weeks&quot; <code>853-854</code>; ADC &quot;roughly 40 minutes&quot; <code>910-911</code> (all in
+          the respective <code>.github/workflows/deploy.yml</code>). First-party MMCA.Common actions remain referenced
+          at <code>@main</code> (ADC <code>:495,609,624</code> plus the four freshness steps; Store <code>:512,559,573</code> plus the four
+          freshness steps) while third-party actions stay SHA-pinned (ADC <code>:79</code>, Store <code>:88</code>).</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-009 (states the recovery objectives and requires that a restore be drilled and recorded; this
           record decides that a deploy is blocked on how recently that drill, and the capacity and broker proofs
@@ -679,6 +715,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

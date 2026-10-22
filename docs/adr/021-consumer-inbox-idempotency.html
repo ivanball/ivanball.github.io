@@ -269,7 +269,9 @@
           that saves on the consumer&#39;s own scope; the framework&#39;s <code>ScopedIntegrationEventHandlerBase</code> handlers
           save on a scope of their own, so for them the row is written by <code>CompleteAsync</code> after they succeed
           and the crash window stays open; see the Revision (2026-10-06) at the end).
-          Revised 2026-10-07: anchors refreshed after the v1.233.0 release.</p>
+          Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
+          Revised 2026-10-21: anchors refreshed after the ADC Identity, ADC Engagement and Store Sales
+          consumer registrations moved; no decision or inventory change.</p>
           <h2 id="context">Context</h2>
           <p>ADR-003 makes integration-event delivery <strong>at-least-once</strong>: the outbox guarantees a published event
           is not lost, and the MassTransit broker redelivers on consumer failure. At-least-once means a
@@ -343,17 +345,17 @@
           migration. Adoption inventory as of 2026-10-01: <strong>five of the seven service hosts consume from the
           broker</strong> and so use their inbox for real, three in ADC and two in Store. ADC Identity consumes
           <code>SpeakerLinkedToUser</code> and
-          <code>SpeakerUnlinkedFromUser</code> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:330-331</code>),
+          <code>SpeakerUnlinkedFromUser</code> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:335-336</code>),
           ADC Conference consumes <code>UserRegistered</code> and <code>UserDeleted</code>
           (<code>MMCA.ADC.Conference.Service/ConferenceBrokerConsumers.cs:34-35</code>) and chains a third broker consumer
           beside them, <code>RegisterOutputCacheEvictionConsumer()</code> (<code>MMCA.ADC.Conference.Service/ConferenceBrokerConsumers.cs:37</code>), and ADC
           Engagement consumes four events, <code>AttendeeCheckedIn</code>, <code>SessionFeedbackSubmitted</code>,
-          <code>EventFeedbackSubmitted</code> and <code>UserDeleted</code> (<code>MMCA.ADC.Engagement.Service/Program.cs:293-296</code>), the
+          <code>EventFeedbackSubmitted</code> and <code>UserDeleted</code> (<code>MMCA.ADC.Engagement.Service/Program.cs:294-297</code>), the
           first of which is ADC&#39;s first <strong>self-consumption</strong> over the broker: Engagement publishes
           <code>AttendeeCheckedIn</code> and consumes it back, which is precisely the shape a redelivery would double-count,
           so the inbox is load-bearing there rather than decorative. Store Sales consumes three events,
           <code>ProductVariantChanged</code>, <code>ProductInfoChanged</code> and <code>CustomerErased</code>
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:261</code>, <code>:266</code>, <code>:271</code>), and Store
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:262</code>, <code>:267</code>, <code>:272</code>), and Store
           Catalog consumes <code>OrderFulfilled</code> and <code>CustomerErased</code> plus the output-cache eviction event
           (<code>MMCA.Store.Catalog.Service/Program.cs:274</code>, <code>:283</code>, <code>:290</code>), which makes Catalog both publisher and
           consumer of that eviction event and therefore exactly the redelivery-doubles-work shape the inbox
@@ -671,6 +673,33 @@
           <code>ScopedIntegrationEventHandlerBase.cs:14-16</code> and <code>:51</code>; the ADC Identity, ADC Conference, Store
           Sales and Store Catalog consumer registrations; and the seven <code>EnableInbox</code> appsettings lines.</li>
           </ol>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. No decision changed: the inbox still resolves ON for a broker
+          transport, the row is still staged by <code>TryBeginAsync</code> and closed out by <code>CompleteAsync</code>, the unique
+          <code>IX_InboxMessages_MessageId</code> index is still the race guard, and the consumer inventory is unchanged
+          (the same consumers are registered on the same five of the seven service hosts, and every host sets
+          <code>EnableInbox: true</code>). Three live-section consumer-registration anchors moved; older Revision
+          sections keep their original anchors.</p>
+          <ol>
+          <li>Current locations for facts recorded in older Revisions: in
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Inbox/EfInboxStore.cs</code>,
+          <code>TryBeginAsync</code> is at <code>:68</code>, <code>CompleteAsync</code> at <code>:78</code>, <code>Abandon</code> at <code>:109</code> and <code>SaveStagedAsync</code>
+          at <code>:152</code> (its <code>DbUpdateException</code> catch at <code>:167</code>). <code>ApplicationDbContext</code> calls
+          <code>ConfigureInbox</code> at <code>.../Persistence/DbContexts/ApplicationDbContext.cs:427</code> and defines it at
+          <code>:727</code> (<code>IX_InboxMessages_MessageId</code> at <code>:735</code>, <code>IX_InboxMessages_ProcessedOn</code> at <code>:740</code>).</li>
+          <li>Anchors re-verified against current source: ADC Identity registers <code>SpeakerLinkedToUser</code> and
+          <code>SpeakerUnlinkedFromUser</code> at <code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:335-336</code>;
+          ADC Engagement registers its four consumers (same set and order) at
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:294-297</code>; Store Sales registers
+          <code>ProductVariantChanged</code>, <code>ProductInfoChanged</code> and <code>CustomerErased</code> at
+          <code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:262</code>, <code>:267</code> and <code>:272</code>. The
+          Decision cites those. The other live anchors hold as written:
+          <code>ConferenceBrokerConsumers.cs:34-35</code> and <code>:37</code>; Store Catalog <code>Program.cs:274</code>, <code>:283</code> and <code>:290</code>;
+          <code>DependencyInjection.Messaging.cs:202-209</code>, <code>:52-55</code> and <code>:118</code>;
+          <code>.../Messaging/MessageBusSettings.cs:141</code> and <code>:161-164</code>; <code>IntegrationEventConsumer.cs:77-81</code> and
+          <code>:123</code>; <code>ScopedIntegrationEventHandlerBase.cs:14-16</code> and <code>:51</code>; the three Store <code>InitialCreate</code>
+          migration lines; and the seven <code>EnableInbox</code> appsettings lines.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -694,6 +723,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             </ul>
           </nav>
         </aside>

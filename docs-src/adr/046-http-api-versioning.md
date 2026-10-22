@@ -21,6 +21,7 @@ Revised 2026-10-01 for v1.217.0 (the host registers the single `v1` OpenAPI docu
 v1.217.0) below).
 Revised 2026-10-06: the registration also adds `ApiVersionReportingResultFilter` as a global MVC filter so output-cached responses keep the version headers; re-anchored the citations.
 Revised 2026-10-07: anchors re-verified against current source after the v1.233.0 release, no decision change.
+Revised 2026-10-21: anchors refreshed after host `Program.cs` edits moved four `AddCommonApiVersioning` call sites and the OpenAPI contract-test anchor, no decision change.
 
 ## Context
 The framework's REST surface is served by controllers hosted in extracted service processes behind a
@@ -123,11 +124,11 @@ proves two live versions coexist.
   costs nothing and still protects any other consumer of the API descriptions from the same null.
 - **Every REST host adopts it the same way.** The extracted services call `AddCommonApiVersioning`
   in their startup: ADC's Conference
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:219`) and Identity
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:154`) hosts, Store's Catalog host
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:220`) and Identity
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:155`) hosts, Store's Catalog host
   (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:140`), and the same call is made
   by the other extracted hosts (ADC Engagement `Program.cs:150`, ADC Notification `Program.cs:139`,
-  Store Sales `Program.cs:147`, Store Identity `Program.cs:134`) and by the monolith reference host
+  Store Sales `Program.cs:148`, Store Identity `Program.cs:135`) and by the monolith reference host
   (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:35`).
 
 Application controllers beyond `ServiceInfo` declare `[ApiVersion("1.0")]` today: the second version
@@ -169,7 +170,7 @@ resource has yet needed to evolve its shape.
   action) is served and exercised by the fitness contract above but appears in no generated document.
   The framework baseline and each consumer's contract test fetch `/openapi/v1.json`
   (`MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/OpenApi/OpenApiBaselineTests.cs`,
-  `Source/Hosting/MMCA.Common.Testing/Conformance/OpenApiContractTestsBase.cs:31`). A host that later
+  `Source/Hosting/MMCA.Common.Testing/Conformance/OpenApiContractTestsBase.cs:51`). A host that later
   needs a second documented version registers a second document itself; the framework no longer
   generates one per version.
 
@@ -303,6 +304,30 @@ revisions (host registrations, the design-time skip helper, both `deploy.yml` ga
    `OpenApiContractTestsBase.cs:31`, `EntityControllerBase.cs:31-33`, and the `AddCommonApiVersioning`
    host call sites (ADC Conference `Program.cs:219`, Identity `:154`, Engagement `:150`, Notification
    `:139`; Store Catalog `:140`, Sales `:147`, Identity `:134`; Helpdesk Web `Program.cs:35`).
+
+## Revision (2026-10-21)
+
+Re-verified against current source. No decision, rationale or trade-off changed. Four
+`AddCommonApiVersioning` host call sites and the OpenAPI contract-test anchor in Trade-offs had moved,
+so the 2026-10-07 statement that every Decision and Trade-offs anchor resolves no longer held; those
+anchors are re-pointed in place below. Line numbers cited inside the earlier dated revisions (host
+OpenAPI registrations, the design-time skip helper, both `deploy.yml` gates and both
+`Directory.Build.props` blocks) are left as recorded.
+
+1. The Trade-offs citation for the contract test's `/openapi/v1.json` fetch now points at the
+   `OpenApiDocumentPath` default (`OpenApiContractTestsBase.cs:51`) rather than the class declaration
+   line; the class itself is declared at `OpenApiContractTestsBase.cs:32`.
+2. Anchors re-verified against current source: the `AddCommonApiVersioning` host call sites (ADC
+   Conference `Program.cs:220`, Identity `:155`, Engagement `:150`, Notification `:139`; Store Catalog
+   `:140`, Sales `:148`, Identity `:135`; Helpdesk Web `Program.cs:35`), `AddCommonApiVersioning`
+   (`WebApplicationBuilderExtensions.cs:39`, options `:46`-`:48`, explorer `:49`-`:53`, result filter
+   `:60`), `AddCommonOpenApi` (`WebApplicationBuilderExtensions.cs:101`), `MapCommonOpenApi`
+   (`OpenApiEndpointExtensions.cs:60`, guard `:62`, throw `:67`, `.AllowAnonymous()` `:74`),
+   `ApiVersionReportingResultFilter.cs:21`, `ServiceInfoControllerBase.cs:30`, `:39`, `:40`, `:45`,
+   `:46`, `:51`, `:54`, both subclasses (`ServiceInfoController.cs:17`, `:18`, `:19`, `:23` in ADC
+   Conference and Store Catalog), `ServiceInfoVersioningContractTestsBase.cs:20`, `:39`, `:55`,
+   `ApiVersioningTests.cs:14`, `OpenApiBaselineTests.cs` (present), `OpenApiContractTestsBase.cs:51`
+   and `EntityControllerBase.cs:31-33`.
 
 ## Related
 ADR-010 (integration-event schema versioning: the asynchronous, `SchemaVersion`-carried,

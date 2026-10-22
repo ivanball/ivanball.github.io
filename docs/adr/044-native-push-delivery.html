@@ -245,7 +245,9 @@
           credentials and enabling the <code>NativePush</code> configuration section. Revised 2026-10-01 (UI.Maui
           ships credentialed FCM/APNs token providers and token-rotation re-registration; see Revision below).
           Revised 2026-10-06: the device DELETE route is <code>/Notifications/Devices/{installationId}</code>.
-          Revised 2026-10-07: anchors refreshed after the v1.233.0 release.</p>
+          Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
+          Revised 2026-10-21: anchors refreshed after the releases that moved the device controller, the
+          registration service and the registrar.</p>
           <h2 id="context">Context</h2>
           <p>ADR-024 established two notification channels: a durable per-user <code>UserNotification</code> inbox (the
           source of truth) and a transient SignalR push behind <code>IPushNotificationSender</code>. Both stop at the
@@ -277,7 +279,7 @@
           audit status (<code>Sent</code>/<code>Failed</code>) stays owned by the SignalR leg: the inbox remains the source
           of truth, and a hub outage must not fail the command or the other channels.</li>
           <li><strong><code>DevicesController</code> (PUT <code>/Notifications/Devices</code>, DELETE <code>/Notifications/Devices/{installationId}</code>,
-          <code>DevicesController.cs:22,31,55</code>)</strong> ships in <code>MMCA.Common.API</code> via
+          <code>DevicesController.cs:22,35,60</code>)</strong> ships in <code>MMCA.Common.API</code> via
           the existing <code>AddNotificationControllers</code> application part, <code>[Authorize]</code> for any signed-in
           user and feature-gated with the same <code>Notification.PushNotifications</code> flag as the rest of the
           pipeline. Ownership is stamped server-side from the current user; installation ids are
@@ -289,7 +291,7 @@
           call is authenticated) and <code>IPushDeviceTokenProvider</code> (the platform token extension point). UI.Maui
           ships <code>MauiPushRegistrationService</code> (stable installation id in <code>IDevicePreferences</code>, sync
           over the named API client, with a <code>SemaphoreSlim</code> serializing registration passes,
-          <code>MauiPushRegistrationService.cs:24,41</code>). The token provider defaults to
+          <code>MauiPushRegistrationService.cs:27,44</code>). The token provider defaults to
           <code>NullPushDeviceTokenProvider</code> (TryAdd, <code>MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:62</code>);
           the opt-in <code>AddMauiPushDeviceTokenProvider()</code> (<code>MMCA.Common.UI.Maui/DependencyInjection.cs:124-132</code>)
           replaces it with <code>FcmPushDeviceTokenProvider</code> on Android (gated on the <code>Push:Fcm</code> section,
@@ -315,7 +317,7 @@
           telemetry is the observability surface; the inbox remains the recovery path.</li>
           <li>A delete verifies ownership before it acts: the registrar reads the installation and checks
           the <code>user:{id}</code> tag <code>UpsertAsync</code> stamped on it
-          (<code>AzureNotificationHubDeviceRegistrar.cs:68-74</code>), so an id belonging to someone else deletes
+          (<code>AzureNotificationHubDeviceRegistrar.cs:84-92</code>), so an id belonging to someone else deletes
           nothing. That costs an extra hub round trip per delete, and the response cannot tell a caller
           which case it hit: an unknown id and a foreign one both answer success, deliberately, so the
           endpoint is not an existence oracle for other users&#39; installation ids.</li>
@@ -364,6 +366,21 @@
           (each ahead of <code>SignOutLocallyAsync</code> at <code>:101</code> and <code>:144</code>), and <code>UnregisterPushAsync</code> is now defined
           at <code>AuthUIService.cs:361</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. The decision is unchanged: Notification Hubs, <code>user:{id}</code> tags,
+          the Null-by-default sender and registrar, the owner-scoped idempotent DELETE, and the unregister leg
+          running before the local sign-out. Only anchors in the live sections moved.</p>
+          <ol>
+          <li>Anchors re-verified against current source: <code>DevicesController</code> routes are now
+          <code>DevicesController.cs:22,35,60</code> (<code>[Route]</code> at <code>:22</code>, <code>[HttpPut]</code> at <code>:35</code>,
+          <code>[HttpDelete(&quot;{installationId}&quot;)]</code> at <code>:60</code>); the registration <code>SemaphoreSlim</code> and its <code>WaitAsync</code>
+          are <code>MauiPushRegistrationService.cs:27,44</code>; and the delete ownership check (read the installation,
+          check the <code>user:{id}</code> tag, then delete) is <code>AzureNotificationHubDeviceRegistrar.cs:84-92</code>, with the
+          unknown-id success path at <code>:95-99</code>. <code>AddMauiPushDeviceTokenProvider()</code> stays at
+          <code>MMCA.Common.UI.Maui/DependencyInjection.cs:124-132</code>, the unregister calls at <code>AuthUIService.cs:90,143</code>
+          (defined at <code>:361</code>), and the handler&#39;s native leg and at-least-once remarks at
+          <code>SendPushNotificationHandler.cs:141-154</code> and <code>:21-30</code>.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -381,6 +398,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             </ul>
           </nav>
         </aside>

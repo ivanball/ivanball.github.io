@@ -8,6 +8,7 @@ the stored hash length. The record's decision is unchanged (one interface, one i
 only); the Decision and Trade-offs passages describing the read path are rewritten to match.
 Revised 2026-10-01: anchor refresh only.
 Revised 2026-10-06: the app-side forwarding passage now names the seeder service-locate, and the legacy-removal search cite is narrowed to the one matching test line.
+Revised 2026-10-21: the unknown-account timing burn is described as a discarded `HashPassword` of the submitted password rather than a verify against 64/32-byte dummy material, and the call-site anchors are refreshed.
 
 ## Context
 ADR-032 recorded a hasher with two verification paths: PBKDF2-HMAC-SHA512 for new credentials, and an
@@ -39,8 +40,8 @@ path through it, in both directions.
   has the single implementation `PasswordHasher`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordHasher.cs:12`), registered
   with `TryAddSingleton`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:314`) inside the
-  `AddServices` helper (`:294`) that `AddInfrastructure` (`:57`) calls unconditionally (`:234`).
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:320`) inside the
+  `AddServices` helper (`:300`) that `AddInfrastructure` (`:57`) calls unconditionally (`:239`).
   `TryAdd` semantics keep a host's own prior registration, so the framework supplies the default
   rather than forcing it, and the type is stateless (three private `const` fields and no instance
   state, `PasswordHasher.cs:15`, `:18`, `:24`), which is what makes the singleton lifetime safe.
@@ -94,19 +95,22 @@ path through it, in both directions.
 - **Every framework call site runs through the one path.** Login verification
   (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:161`) and
   registration hashing (`:255`) live in the shared base (`:64`, hasher parameter at `:66`), which
-  also equalizes timing for an unknown account by burning a verification against canonical-shaped
-  dummy material, `VerifyPassword(password, new byte[64], new byte[32])` (`:624`, in
-  `BurnPasswordVerificationCost` at `:615`): that call depends on the guard admitting exactly the
-  64/32 shape, so the burn still costs a full derivation rather than short-circuiting;
+  also equalizes timing for a login that never reaches the real verification by running one
+  throwaway derivation, `_ = passwordHasher.HashPassword(password)` (`:630`, in
+  `BurnPasswordVerificationCost` at `:623`, which returns early for a blank password at `:625-628`).
+  The burn hashes rather than verifies on purpose: hashing and verifying each run the hasher's key
+  derivation once, while a verify against fixed decoy material would short-circuit at the length
+  guard as soon as the decoy's sizes stopped matching the hasher's own, reopening the timing gap
+  (`:615-622`);
   change-password verifies then hashes in `ChangePasswordHandlerBase<TUser, TCommand>`
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:42`,
-  hasher parameter at `:44`, verify at `:95`, hash at `:104`); reset-password hashes in
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:56`,
+  hasher parameter at `:58`, verify at `:109`, hash at `:118`); reset-password hashes in
   `ResetPasswordHandlerBase<TUser, TCommand>`
-  (`.../UseCases/ResetPassword/ResetPasswordHandlerBase.cs:41`, hasher parameter at `:43`, hashing at
-  `:94`); and seeding hashes
+  (`.../UseCases/ResetPassword/ResetPasswordHandlerBase.cs:42`, hasher parameter at `:44`, hashing at
+  `:110`); and seeding hashes
   in `IdentityModuleDbSeederBase<TUser>`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Seeding/IdentityModuleDbSeederBase.cs:39`,
-  `:104`). No file under either app's `Source/` invokes the hasher: ADC and Store only obtain it and
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Seeding/IdentityModuleDbSeederBase.cs:57`,
+  hasher parameter at `:59`, `PasswordHasher` property at `:80`, hashing at `:136`). No file under either app's `Source/` invokes the hasher: ADC and Store only obtain it and
   forward it to a Common base, either as a constructor parameter
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:52,61`,
   `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/AuthenticationService.cs:28,35`)
@@ -184,6 +188,24 @@ current source: the `TryAddSingleton` registration (`DependencyInjection.cs:304`
 - Anchors re-verified against current source: `DependencyInjection.cs` (`:314`, `:294`, `:57`,
   `:234`), `AuthenticationServiceBase.cs` (`:64`, `:66`, `:161`, `:255`, `:615`, `:624`), and the ADC
   and Store `AuthenticationService.cs` parameter and forward lines (`:52,61` and `:28,35`).
+
+## Revision (2026-10-21)
+Re-verified against current source. The decision (one interface, one implementation, PBKDF2 only,
+the canonical-material guard) is unchanged; the description of the unknown-account timing burn
+moved, and the remaining call-site anchors shifted.
+1. The timing burn in `AuthenticationServiceBase.BurnPasswordVerificationCost` now discards a
+   `HashPassword` of the submitted password
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:630`) instead
+   of verifying against 64/32-byte dummy material, and skips a blank password (`:625-628`). Its
+   remarks (`:615-622`) give the reason: a verify against fixed decoy material short-circuits at the
+   hasher's size guard once the sizes stop matching. The Decision no longer says the burn depends on
+   the guard admitting the 64/32 shape.
+2. The seeding cite now names the primary-constructor hasher parameter (`IdentityModuleDbSeederBase.cs:59`),
+   the `PasswordHasher` property (`:80`) and the hashing call (`:136`).
+3. Anchors re-verified against current source: `DependencyInjection.cs` (`:320`, `:300`, `:57`,
+   `:239`), `AuthenticationServiceBase.cs` (`:64`, `:66`, `:161`, `:255`, `:623`, `:630`),
+   `ChangePasswordHandlerBase.cs` (`:56`, `:58`, `:109`, `:118`), `ResetPasswordHandlerBase.cs`
+   (`:42`, `:44`, `:110`) and `IdentityModuleDbSeederBase.cs` (`:57`).
 
 ## Related
 [ADR-032](032-password-hashing.md) (the superseded record: the same hasher, its parameters and its

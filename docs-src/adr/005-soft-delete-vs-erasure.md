@@ -9,6 +9,7 @@ anonymous surface; Store's public review list is served through a contract that 
 Updated 2026-10-01 (corrected the `DeleteChildren` composition description; citations refreshed).
 Revised 2026-10-06: Store's public review contract carries no reviewer name either, and the interceptor and controller anchors were refreshed.
 Revised 2026-10-19: the framework guard runs in both directions (a reverse rule and a sample-coverage fact in `PiiConventionTestsBase`, v1.246.0), and ADC and Store both adopt it. Same date: ADC's `Speaker` becomes `IAnonymizable` with a `[Pii]` email that the cross-service `UserDeleted` erasure anonymizes before unlinking.
+Revised 2026-10-21: ADC's Engagement module records each erased account in an `ErasedUser` row and refuses a later question, vote or upvote from it after the `UserDeleted` erasure ran; other Engagement write paths keyed to the caller's id (bookmark create, badge, room check-in, sponsor visit) run no such check.
 ## Context
 The framework's default deletion model is **soft-delete**: `AuditableBaseEntity.Delete()` sets `IsDeleted = true` and EF Core global query filters exclude the row from normal queries. The row (including any personal data it holds) stays in the database indefinitely, which is exactly what audit, referential integrity, and "undelete" (BR-135) require.
 
@@ -23,7 +24,7 @@ Separate the two concerns and provide an extension point for each, rather than o
    - **The deletion is stamped like any other audit fact.** `IAuditableEntity` carries `DeletedOn` and `DeletedBy` beside `CreatedOn/By` and `LastModifiedOn/By` (`MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IAuditableEntity.cs:26,29`, implemented at `.../Entities/AuditableBaseEntity.cs:39,45`), so "when was this deleted, and by whom" is answerable from the row rather than from an audit-trail lookup (ADR-075). The domain does not write them: the clock and the current user live in infrastructure, so `AuditSaveChangesInterceptor` stamps them from the `IsDeleted` **transition** (`.../MMCA.Common.Infrastructure/Persistence/Interceptors/AuditSaveChangesInterceptor.cs:125-144`, called at `:87` and `:96`, prior value read at `:121-123`) and clears them on the reverse one (`Undelete`, BR-135, `AuditableBaseEntity.cs:89`). Driving it from the transition rather than from the value is what keeps a later update to an already-deleted row from re-stamping it, exactly as `CreatedOn/By` survive every update (`AuditSaveChangesInterceptor.cs:15-19`, `:126-128`, early return at `:137-140`, `CreatedOn/By` pinned at `:91-92`; the domain-side note at `AuditableBaseEntity.cs:60-64`).
    - **Cascading to children is a framework helper, not a loop per aggregate.** `AuditableAggregateRootEntity.DeleteChildren<TChild, TChildId>(children)` (`.../Domain/Entities/AuditableAggregateRootEntity.cs:275-294`) deletes every still-active child and aggregates the failures into one `Result` via `Result.Combine` (ADR-013, `:293`). Already-deleted children are skipped rather than reported, so re-deleting a parent is idempotent with respect to its children instead of surfacing an `AlreadyDeleted` error a caller cannot act on (`:285-288`, reasoning at `:253-257`). An aggregate composes it as `Result.Combine(DeleteChildren<OrderLine, OrderLineIdentifierType>(_lines), base.Delete())` (`:264`), so a failing child fails the whole cascade's `Result`. Both arguments are evaluated before `Combine` runs (`MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/Result.cs:124`), so the root's in-memory `IsDeleted` is set even when a child fails; what keeps the cascade atomic is that the caller does not save a failed `Result`.
    - **A hard delete is a reviewable exception, enforced by a fitness rule.** `ArchitectureRules.HardDeletesOnlyInAllowedTypes` (`.../Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Domain/ArchitectureRules.SoftDelete.cs:62`, surfaced through `.../Bases/Domain/SoftDeleteEnforcementTestsBase.cs:17,29-31`, whose `AllowedHardDeleteTypes` is empty by default and therefore bans hard deletes outright until a repo names its exceptions, `:27`) fails the build when EF Core's erasing members (`DbSet.Remove`/`RemoveRange`, `DbContext.Remove`/`RemoveRange`, `ExecuteDelete`/`ExecuteDeleteAsync`: `ArchitectureRules.SoftDelete.cs:10-11`, scoped to the entity-set declaring types at `:18-24`) are called from a type outside the repo's allowlist, which is the short list of places where erasing a row IS the requirement: retention purge jobs, outbox and audit-trail cleanup, and the erasure handlers below (`:26-34`, `SoftDeleteEnforcementTestsBase.cs:21-26`). Neither NetArchTest nor reflection can see a call inside a method body, so the rule reads IL through the Mono.Cecil that NetArchTest already carries and matches callees by full name, which keeps the testing package's zero-reference stance toward EF Core (`ArchitectureRules.SoftDelete.cs:36-43`, the callee test at `:124`). It sees only direct calls: a hard delete reached through a repo-owned interface is caught at the implementing type, so that implementation goes on the allowlist and the abstraction stays usable (`:51-56`).
-2. **Erasure is an explicit, additive capability.** Aggregates that store personal data implement `IAnonymizable` (`MMCA.Common.Domain.Interfaces`). An application-layer erasure handler loads the aggregate, calls `Anonymize()` (idempotent, returns `Result`), and saves: overwriting personal fields in place so foreign keys and the audit trail survive. Fields that must remain retrievable are persisted through the AES-256-GCM `EncryptedStringConverter`.
+2. **Erasure is an explicit, additive capability.** Aggregates that store personal data implement `IAnonymizable` (`MMCA.Common.Domain.Interfaces`). An application-layer erasure handler loads the aggregate, calls `Anonymize()` (idempotent, returns `Result`), and saves: overwriting personal fields in place so foreign keys and the audit trail survive. Fields that must remain retrievable are persisted through the AES-256-GCM `EncryptedStringConverter`. An erasure that runs on a consuming side reaches only the rows that exist when it runs, while an access token outlives the account it was issued for, so a consumer can record the erasure and refuse later writes from that id on each write path that checks the record (ADC Engagement's `ErasedUser`, which three write paths check, Revision 2026-10-21).
 3. **Outbox retention is bounded.** `OutboxCleanupService` purges processed outbox rows older than `Outbox:RetentionDays` (default 7; set `0` to disable) across every relational data source, so event payloads are not retained indefinitely.
 4. **A build-time guard backs the per-entity opt-in.** Domain properties holding data-subject personal data are marked `[Pii]` (`MMCA.Common.Domain.Attributes.PiiAttribute`, property-targeted). A fitness function (`ArchitectureRules.EntitiesWithPiiImplementAnonymizable`, surfaced through `PiiConventionTestsBase`) **fails the build** if any Domain entity declaring a `[Pii]` property does not implement `IAnonymizable`, so "this aggregate holds personal data but has no erasure path" is caught by tooling, not by review. The companion `PiiRedactor` (`MMCA.Common.Domain.Privacy`) masks the same `[Pii]`-marked members when an entity is written to a log or telemetry attribute, so personal data does not leak through diagnostics. The same base also runs the guard in reverse: whatever `Anonymize()` overwrites must carry `[Pii]` (Revision 2026-10-19).
 
@@ -38,6 +39,7 @@ The framework provides the **extension points** (`IAnonymizable`, `OutboxCleanup
 ## Trade-offs
 - Erasure is opt-in per entity, but the opt-in is **guarded**: an aggregate exposing a `[Pii]`-marked property that does not implement `IAnonymizable` fails the architecture fitness test, so the "holds personal data but is not erasable" gap surfaces at build time rather than in a manual personal-data inventory. The residual risk shifts to *marking*: an entity that holds personal data on an **unmarked** property is invisible to the guard, so consumers still own the discipline of applying `[Pii]` to genuine data-subject fields.
 - Anonymization is irreversible by design and is not the same operation as undelete.
+- The late-write guard is per write path, not per account: ADC Engagement refuses only in the three handlers that call `ErasedUserGuard` (question, vote, upvote), so any other write that takes the caller's user id stays open to a token that outlives its account until it calls the guard too. The exposure is a residual, not the normal path: the shared deleted-user marker already answers 401 on every host while it is readable (ADR-047), so such a write lands only when the best-effort marker write failed or the shared cache read failed open within the access token's remaining lifetime (Revision 2026-10-21).
 - The framework cannot, on its own, make a consumer compliant: the consumer must still wire the erasure handler, the data-subject request flow, and access/export. This ADR provides the extension points, not the policy.
 - The default 7-day outbox retention is a **behavior change**: consumers upgrading the framework begin purging processed outbox rows older than 7 days unless they set `Outbox:RetentionDays = 0`.
 - The `DeletedOn`/`DeletedBy` stamps are **two new nullable columns on every auditable table**, so adopting the framework version that introduced them costs one scaffolded migration per consumer database. They are additive (expand only, no ADR-057 override needed) and they are not backfilled: rows soft-deleted before the migration keep null stamps forever, so the pair answers "who deleted this" only from that point on.
@@ -146,3 +148,59 @@ created with none and an update passes the stored value through
 The Trade-offs residual narrows accordingly: a field that `Anonymize()` overwrites can no longer go
 unmarked. A personal-data field that the erasure never touches is still invisible to both directions,
 so marking discipline remains the consumer's for those.
+
+## Revision (2026-10-21)
+Re-verified against current source. Decisions 1, 3 and 4 are unchanged; Decision 2 gains one
+sentence and the Trade-offs one bullet, both recording the late-write guard on the consuming side
+of the `UserDeleted` erasure in ADC and its limits.
+
+1. **ADC Engagement keeps an `ErasedUser` record per erased account.** The aggregate holds the user
+   id and the erasure time only, no name, email or other personal data
+   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Domain/ErasedUsers/ErasedUser.cs:19`,
+   `:22`, `:25`, rationale at `:8-16`), with a unique index on `UserId`
+   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/Persistence/EntityConfiguration/ErasedUsers/ErasedUserConfiguration.cs:29-30`;
+   table added by `MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Engagement/Migrations/20261020142915_AddErasedUsers.cs:15`).
+   One consumer of `UserDeleted` writes it, `UserDeletedSessionQuestionsHandler`
+   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/SessionQuestions/IntegrationEventHandlers/UserDeletedSessionQuestionsHandler.cs:33`),
+   in the same save as the question-text erasure and upvote deletion (`:72`, `:79`), stamped with
+   the event's `DeletedOn` (`:106`). `RecordErasureAsync` (`:94`) checks for an existing record
+   first (`:101`) and adds one only when absent (`:112`), so a redelivery writes nothing and a
+   concurrent duplicate fails the unique index and is retried into that state.
+2. **The write handlers check it.** `ErasedUserGuard.EnsureNotErasedAsync`
+   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/ErasedUsers/ErasedUserGuard.cs:26`)
+   asks whether a record exists for the caller (`:33`) and fails with `Error.Forbidden` (`:38`)
+   under the code `Engagement.AccountErased` (`:18`). Three handlers call it before writing:
+   submitting a question (`.../SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs:66-68`),
+   toggling an upvote (`.../SessionQuestions/UseCases/ToggleUpvote/ToggleUpvoteHandler.cs:33-35`)
+   and casting a poll vote (`.../LivePolls/UseCases/CastVote/CastVoteHandler.cs:36-38`). Without
+   it, a question, vote or upvote that the erased account's still-valid access token sends after
+   the erasure ran would carry the erased user id (and, for a question, free text) that no erasure
+   revisits.
+3. **Coverage elsewhere.** No other ADC handler reads `ErasedUser`. The leaderboard opt-in relies
+   on its own terminal marker instead: an erased, soft-deleted opt-in row refuses reactivation with
+   `Points.AccountErased`
+   (`.../Points/UseCases/SetLeaderboardParticipation/SetLeaderboardParticipationHandler.cs:92-97`).
+   Four Engagement write paths keyed to the caller's id run no check at all. Two of them recreate
+   rows the erasure removes: `UserDeletedBookmarksHandler` soft-deletes the account's bookmarks
+   (`.../UserSessionBookmarks/IntegrationEventHandlers/UserDeletedBookmarksHandler.cs:46`), yet
+   `CreateBookmarkHandler` creates or reactivates one for `command.UserId`
+   (`.../UserSessionBookmarks/UseCases/Create/CreateBookmarkHandler.cs:56`); and
+   `UserDeletedBadgeHandler` soft-deletes the attendee badge
+   (`.../CheckIns/IntegrationEventHandlers/UserDeletedBadgeHandler.cs:46`), yet
+   `GetOrCreateMyBadgeHandler` mints one for the caller
+   (`.../CheckIns/UseCases/GetOrCreateMyBadge/GetOrCreateMyBadgeHandler.cs:29`, `:41`). The room
+   check-in and sponsor-visit handlers also write under the caller's id
+   (`.../CheckIns/UseCases/RecordRoomCheckIn/RecordRoomCheckInHandler.cs:58`,
+   `.../CheckIns/UseCases/RecordSponsorVisit/RecordSponsorVisitHandler.cs:50`). These paths are
+   reachable only behind the first line of defence failing: the erasure writes the shared
+   deleted-user marker, best effort, for the 15-minute access-token lifetime
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/DeleteUser/DeleteUserHandlerBase.cs:166`,
+   `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/SoftDeletedUserCache.cs:32`), and
+   `SoftDeletedUserMiddleware` answers 401 on every host, Engagement included, while it reads
+   that marker
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/SoftDeletedUserMiddleware.cs:105-111`),
+   failing open when the shared cache read throws (`:95-103`). So a still-valid token can bring
+   back an erased bookmark or badge row for the erased id only when the marker write failed or the
+   cache read failed open before that token lapsed; the `ErasedUser` guard exists to close that
+   same residual for questions, votes and upvotes.
+   Store has no equivalent record or guard (no match in `MMCA.Store/Source`).

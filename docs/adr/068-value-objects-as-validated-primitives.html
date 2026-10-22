@@ -249,9 +249,10 @@
           Revised 2026-09-25 (the shipped <code>OwnsAddress</code> helper named beside <code>OwnsMoney</code>: Store&#39;s <code>Customer.Address</code>
           maps through it; the Store, ADC and <code>EntityTypeBuilderExtensions</code> anchors refreshed). As of
           2026-10-01 Store follows that call with a second <code>OwnsOne</code> block that overrides the helper&#39;s unicode
-          facet, and the <code>with</code>-expression path around the <code>Money</code> sugar is named (see Revision below).
+          facet (superseded 2026-10-21: that block is gone), and the <code>with</code>-expression path around the <code>Money</code> sugar is named (see Revision below).
           Revised 2026-10-06: a serialized <code>Money.Zero()</code> now JSON round-trips, because both currency converters read the empty code back as the sentinel and <code>Money</code>&#39;s JSON read refuses that sentinel beside a non-zero amount, so the 2026-10-01 round-trip flag is resolved; anchors refreshed. Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
-          Revised 2026-10-19: the primitive Start/End exception names Store&#39;s discount window beside ADC&#39;s pairs, and the order rule is named per entity (Session uses its own strict-after rule).</p>
+          Revised 2026-10-19: the primitive Start/End exception names Store&#39;s discount window beside ADC&#39;s pairs, and the order rule is named per entity (Session uses its own strict-after rule).
+          Revised 2026-10-21: <code>OwnsAddress</code> keeps the provider&#39;s Unicode default on its six columns (v1.247.0) and Store&#39;s <code>Customer.Address</code> maps through it alone, with no second <code>OwnsOne</code> override block; anchors refreshed.</p>
           <h2 id="context">Context</h2>
           <p>A domain model has two kinds of small type: the <strong>identity</strong> of a thing, and a <strong>value</strong> the thing
           carries. ADR-048 recorded the identity half: identifiers stay primitives named through a global-using
@@ -295,7 +296,7 @@
           <code>internal</code> (<code>Currency.cs:25</code>), but that does not make <code>Currency</code> sealed against unchecked values:
           <code>Currency.Code</code> (<code>Currency.cs:36</code>) and <code>Money.Amount</code>/<code>Money.Currency</code> (<code>Money.cs:32,36</code>) are public
           <code>init</code> accessors, shipped in the public API with the record clone method
-          (<code>Source/Core/MMCA.Common.Shared/PublicAPI.Shipped.txt:575,581,583,768,774</code>), so an external
+          (<code>Source/Core/MMCA.Common.Shared/PublicAPI.Shipped.txt:575,581,583,771,777</code>), so an external
           <code>with</code> expression (<code>Currency.Usd with { Code = &quot;XYZ&quot; }</code>, <code>Money.Zero() with { Amount = 5m }</code>)
           produces a currency <code>FromCode</code> never checked or a non-zero <code>None</code>-currency <code>Money</code> without going
           through <code>Create</code>. The JSON guard described under serialization below does not close this path,
@@ -304,7 +305,7 @@
           (<code>Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Domain/ArchitectureRules.Entities.cs:53-79</code>) walks every
           concrete class in the Domain and Shared layers and fails the build when a public static <code>Create</code>
           exists with no overload returning <code>Result&lt;TSelf&gt;</code>, generalizing the aggregate-root rule to value
-          objects (ADR-015).</li>
+          objects, following the ADR-015 fitness-function approach.</li>
           <li><strong>Shared constraints live in a static <code>*Invariants</code> class beside the type.</strong>
           <code>EmailInvariants.EnsureEmailIsValid</code> (<code>EmailInvariants.cs:23</code>),
           <code>PhoneNumberInvariants.EnsurePhoneNumberIsValid</code> (<code>PhoneNumberInvariants.cs:26</code>) and
@@ -322,11 +323,13 @@
           flattens <code>Money</code> into a <code>decimal(18,2)</code> amount column (precision pinned at <code>:78</code>) plus a
           three-character non-unicode ISO 4217 code column (<code>:76-88</code>) and sets the navigation&#39;s requiredness
           from one parameter (<code>:91</code>). Its sibling
-          <code>OwnsAddress</code> (<code>:131</code>, shipped in v1.192.0, <code>MMCA.Common/CHANGELOG.md:1464</code>) flattens <code>Address</code> into
-          six non-unicode columns whose lengths come from <code>AddressInvariants</code> and of which only <code>AddressLine1</code>
-          is required (<code>:142-171</code>), names them from an optional prefix (<code>AddressLine1</code>, <code>AddressCity</code>, and so on
-          by default, <code>:133</code>, joined at <code>:191-194</code>) and defaults the navigation to optional (<code>:134</code>, applied at
-          <code>:174</code>). A single-string value
+          <code>OwnsAddress</code> (<code>:133</code>, shipped in v1.192.0, <code>MMCA.Common/CHANGELOG.md:1783</code>) flattens <code>Address</code> into
+          six columns whose lengths come from <code>AddressInvariants</code> and of which only <code>AddressLine1</code> is required
+          (<code>:142-168</code>); they keep the provider&#39;s Unicode default (<code>nvarchar</code> on SQL Server), because <code>Address</code>
+          accepts free text in any script (contract at <code>:114-118</code>; the forced non-unicode facet was removed
+          as a breaking change in v1.247.0, <code>MMCA.Common/CHANGELOG.md:70</code>). It names the columns from an
+          optional prefix (<code>AddressLine1</code>, <code>AddressCity</code>, and so on by default, <code>:135</code>, joined at <code>:187-190</code>)
+          and defaults the navigation to optional (<code>:136</code>, applied at <code>:170</code>). A single-string value
           maps through <code>HasConversion</code> instead, so the backing column stays a plain string column and adopting
           the value object on a property that used to be a <code>string</code> is not a migration: <code>EmailValueConverter</code>
           and <code>NullableEmailValueConverter</code>
@@ -355,7 +358,7 @@
           <code>CurrencyJsonConverter.cs:26-27</code>), so a serialized <code>Money.Zero()</code> round-trips. Because the
           <code>[JsonConstructor]</code> bypasses <code>Create</code>, <code>Money</code> implements <code>IJsonOnDeserialized</code> (<code>Money.cs:22,70-76</code>)
           and throws <code>JsonException</code> when a non-zero amount arrives with the sentinel (shipped in v1.232.0,
-          <code>MMCA.Common/CHANGELOG.md:55</code>). <code>DateRange</code> and <code>DateTimeRange</code> carry no serialization annotations.</li>
+          <code>MMCA.Common/CHANGELOG.md:374</code>). <code>DateRange</code> and <code>DateTimeRange</code> carry no serialization annotations.</li>
           <li><strong>gRPC is mapped by hand, not inferred.</strong> <code>Money</code> crosses a service boundary as a purpose-built
           <code>MoneyV1</code> message with a <strong>string</strong> amount (proto has no decimal) and a currency code
           (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Contracts/Protos/product_variants.proto:115,117,120</code>),
@@ -378,17 +381,15 @@
           (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Domain/Customers/Customer.cs:40</code>) and maps
           <code>Customer.Email</code> through <code>EmailValueConverter</code> (<code>CustomerConfiguration.cs:34</code>) with <code>Customer.Address</code>
           through the shipped <code>OwnsAddress</code> helper under its default prefix (<code>CustomerConfiguration.cs:42</code>),
-          followed by a second <code>OwnsOne</code> block on the same navigation that marks all six columns <code>IsUnicode()</code>
-          and so overrides the helper&#39;s non-unicode facet while keeping its names, lengths and requiredness
-          (<code>:47-55</code>), and
+          as its only <code>Address</code> mapping, and
           <code>User.Email</code> the same way as <code>Customer.Email</code> (<code>UserConfiguration.cs:25</code>).
           ADC types <code>User.Email</code> as <code>Email</code>
           (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:52</code>, validated through
-          <code>Email.Create</code> at <code>:224</code> and passed to the constructor at <code>:238</code>, with the same pair repeated on the
-          social-login path <code>CreateExternal</code> at <code>:272,283</code>) with
+          <code>Email.Create</code> at <code>:234</code> and passed to the constructor at <code>:250</code>, with the same pair repeated on the
+          social-login path <code>CreateExternal</code> (<code>:276</code>) at <code>:284,295</code>) with
           the same converter (<code>.../Identity.Infrastructure/.../UserConfiguration.cs:21</code>) and two optional
           Conference emails through <code>NullableEmailValueConverter</code>: a speaker&#39;s
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:31</code>, mapped at
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:41</code>, mapped at
           <code>.../Conference.Infrastructure/Persistence/EntityConfiguration/Speakers/SpeakerConfiguration.cs:43</code>)
           and an event&#39;s organizer contact
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/Event.cs:59</code>, validated
@@ -535,12 +536,31 @@
           guards Event and Activity only, while Session uses the strict-after
           <code>SessionInvariants.EnsureEndsAtIsAfterStartsAt</code>
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/SessionInvariants.cs:149</code>).</p>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. No decision changed; the value-object set, the factory shape, the
+          <code>OwnsMoney</code> mapping and every adoption site hold. One mapping fact moved and anchors drifted.
+          (1) <code>OwnsAddress</code> no longer forces <code>IsUnicode(false)</code>: its six columns take the provider&#39;s Unicode
+          default (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeBuilderExtensions.cs:114-118</code>,
+          v1.247.0, <code>MMCA.Common/CHANGELOG.md:70</code>), and the EF mapping bullet now says so. <code>OwnsMoney</code>&#39;s code
+          column stays non-unicode (<code>EntityTypeBuilderExtensions.cs:86</code>). (2) Store&#39;s <code>Customer.Address</code> maps
+          through <code>OwnsAddress</code> alone
+          (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Infrastructure/Persistence/EntityConfiguration/CustomerConfiguration.cs:42</code>);
+          the second <code>OwnsOne</code> block with its <code>IsUnicode()</code> override is gone, so the Decision no longer
+          describes it and the 2026-10-01 Status note about it no longer holds. (3) The ADR-015 reference is
+          worded as the fitness-function approach the rule follows
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Domain/ArchitectureRules.Entities.cs:53</code>),
+          since ADR-015 records the mechanism in general rather than this rule. (4) Anchors re-verified against
+          current source: <code>PublicAPI.Shipped.txt:575,581,583,771,777</code>; <code>EntityTypeBuilderExtensions.cs:133</code>
+          (<code>OwnsAddress</code>), <code>:135-136</code>, <code>:142-168</code>, <code>:170</code>, <code>:187-190</code>; <code>MMCA.Common/CHANGELOG.md:374</code> (inside
+          <code>[1.232.0]</code>) and <code>:1783</code> (inside <code>[1.192.0]</code>); ADC <code>User.cs:234,250</code> and <code>CreateExternal</code> at
+          <code>:276</code>, <code>:284,295</code>; <code>Speaker.cs:41</code>.</p>
           <h2 id="related">Related</h2>
           <p>ADR-048 (the deliberate opposite call for identifiers: primitives behind aliases, wrapper structs
           rejected, because identifiers cross process boundaries constantly and carry no invariant), ADR-115
           (the wrapper struct shipped as an opt-in capability, with aliases still the default), ADR-013
-          (the <code>Result</code> pattern these factories implement below the aggregate level), ADR-015 (the fitness
-          function that enforces the <code>Create</code>-returns-<code>Result</code> shape on value objects too).</p>
+          (the <code>Result</code> pattern these factories implement below the aggregate level), ADR-015 (the
+          architecture fitness-function approach that <code>DomainFactoriesReturnResult</code> follows to enforce the
+          <code>Create</code>-returns-<code>Result</code> shape on value objects too).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -560,6 +580,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-19">Revision (2026-10-19)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

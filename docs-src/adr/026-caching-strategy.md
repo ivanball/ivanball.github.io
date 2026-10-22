@@ -41,6 +41,10 @@ Conference's eleven-of-twelve count is scoped to its public-read policies beside
 Revised 2026-10-07: with Redis configured, the 30-second local expiration is also the cross-replica
 backstop, because a `HybridCacheService` removal does not reach other replicas' L1 copies; anchors
 refreshed after the v1.233.0 release.
+Revised 2026-10-21: `ICacheService`'s own comments now agree that no shipped `IncrementAsync` is
+atomic or uses Redis `INCR`, so the interface caveat is retired; all seven services declare a `NoCache`
+output-cache base, the two adopters included; the role-claim types are matched case-sensitively and
+only role values case-insensitively; anchors refreshed.
 
 ## Context
 The framework needs caching in two distinct places. Inside the application pipeline, query results
@@ -79,20 +83,20 @@ Cache in two tiers, each with its own substrate.
   later" extension point as `InProcessMessageBus` vs `BrokerMessageBus` (ADR-003/006/008). Since
   ADR-077 a third implementation exists, `HybridCacheService` (L1 in-process plus L2 distributed), and
   it is the one substrate that is **not** auto-selected: a host opts into it explicitly with
-  `AddCommonHybridCache(...)` (`MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:139`), which
+  `AddCommonHybridCache(...)` (`MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:141`), which
   replaces the registration this call made. That call, unlike the Redis wrappers in Trade-offs below,
   has no guard of its own, so the framework pairs it with a guarded helper,
   `AddCommonHybridCacheWhenRedisConfigured(configuration, connectionName = "redis")`
-  (`MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:200`), which calls it only when the named
-  connection string is non-empty (`:206-208`) and otherwise leaves the registration untouched. Every
+  (`MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:202`), which calls it only when the named
+  connection string is non-empty (`:208-211`) and otherwise leaves the registration untouched. Every
   one of the seven ADC and Store services opts in through that helper: ADC Conference
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:203`), Notification
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:204`), Notification
   (`.../MMCA.ADC.Notification.Service/Program.cs:119`), Engagement
   (`.../MMCA.ADC.Engagement.Service/Program.cs:116`), Identity
-  (`.../MMCA.ADC.Identity.Service/Program.cs:138`), Store Catalog
+  (`.../MMCA.ADC.Identity.Service/Program.cs:139`), Store Catalog
   (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:108`), Sales
-  (`.../MMCA.Store.Sales.Service/Program.cs:113`) and Identity
-  (`.../MMCA.Store.Identity.Service/Program.cs:102`). So `HybridCacheService` is the live
+  (`.../MMCA.Store.Sales.Service/Program.cs:114`) and Identity
+  (`.../MMCA.Store.Identity.Service/Program.cs:103`). So `HybridCacheService` is the live
   `ICacheService` wherever Redis is configured, and the two-way swap above is what runs where it is
   not: local runs, tests, and any host that wires no Redis.
 - **Prefix invalidation, implemented per store.** `IMemoryCache` has no key-enumeration API, so
@@ -121,8 +125,8 @@ Cache in two tiers, each with its own substrate.
   `HybridCacheService` with Redis configured: a removal clears L2 and this process's L1, but other
   replicas' L1 copies keep serving the removed value until their local expiration lapses, for up to
   `Cache:LocalCacheDuration` (30 seconds by default,
-  `MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:66`; the L1 lifetime is the shorter of the
-  entry TTL and that ceiling, `:330-335`) (`:192-195` for `RemoveAsync`, `:210-212` for
+  `MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:69`; the L1 lifetime is the shorter of the
+  entry TTL and that ceiling, `:403-409`) (`:253-258` for `RemoveAsync`, `:263-280` for
   `RemoveByPrefixAsync`).
 
 ### Tier 2: an HTTP output-cache edge
@@ -132,9 +136,11 @@ Cache in two tiers, each with its own substrate.
   `MMCA.Common.API/Startup/Pipeline/MiddlewarePipelineBuilder.cs:132-133` under the name
   `MiddlewarePipelineStepNames.OutputCache`
   (`MMCA.Common.API/Startup/Pipeline/MiddlewarePipelineStepNames.cs:65`). The pipeline ships no
-  policies. Each service registers its own `AddOutputCache(...)`: most declare a `NoCache` base policy
-  (Identity, Sales, Engagement, Notification), while the read-heavy public services declare real
-  cacheable policies. ADC
+  policies. Each service registers its own `AddOutputCache(...)`, and all seven declare a `NoCache`
+  base policy (for example `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:231` and
+  `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:151`); Identity, Sales, Engagement
+  and Notification stop there, while the read-heavy public services add real cacheable named policies
+  on top of that base. ADC
   Conference and Store Catalog are the adopters today, with named policies and `[OutputCache]` on their
   public read controllers.
 - **Public-read policies cache authenticated requests too (amended by ADR-040).** The framework UI
@@ -148,7 +154,7 @@ Cache in two tiers, each with its own substrate.
   whose `CacheRequestAsync` caches GET/HEAD regardless of the caller's auth state
   (`MMCA.Common.API/Caching/PublicEndpointOutputCachePolicy.cs:81-87`, via the private helpers
   `IsCacheableRequest` / `IsBypassedCaller` at
-  `MMCA.Common.API/Caching/PublicEndpointOutputCachePolicy.cs:134` and `:141`). ADC Conference and Store Catalog
+  `MMCA.Common.API/Caching/PublicEndpointOutputCachePolicy.cs:139` and `:146`). ADC Conference and Store Catalog
   register these policies on their public read controllers; ADR-040 records that the built-in default
   policy served 0% of logged-in (bearer-carrying) traffic on conference day.
 - **One adopter exempts a privileged role from the cache.** `AddPublicEndpointPolicy` has a second
@@ -158,17 +164,17 @@ Cache in two tiers, each with its own substrate.
   policies use the plain overload and cache every caller alike
   (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:152`, `:153`, `:159`, `:162`).
   ADC Conference uses the bypass overload for eleven of its twelve public-read policies
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:269-270`, `:276-283` and `:300`), passing an
-  `adminBypassRoles` array projected from `ConferenceReadAudience.PrivilegedRoles` (`:268`), the same
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:270-271`, `:277-284` and `:301`), passing an
+  `adminBypassRoles` array projected from `ConferenceReadAudience.PrivilegedRoles` (`:269`), the same
   list the API layer's visibility checks read, because those roles receive an elevated payload
   (unpublished rows) that must never be stored under a key the public shares. So "cache authenticated
   requests too" holds for the attendee and anonymous traffic that is the conference-day load, and stops
-  at the privileged reader. The one public-read policy with no bypass list, `NowNextCache` (`:286`),
+  at the privileged reader. The one public-read policy with no bypass list, `NowNextCache` (`:287`),
   returns the same payload to every role. Conference also registers a thirteenth named policy,
-  `ConferenceCache`, through the plain built-in `AddPolicy` (`:237-238`), not through
+  `ConferenceCache`, through the plain built-in `AddPolicy` (`:238-239`), not through
   `AddPublicEndpointPolicy`: it keeps the built-in default semantics (no caching for an
   `Authorization`-carrying request) because a permission-gated controller also references it, and
-  a public-read policy must never back a permission-gated endpoint (`:232-236`).
+  a public-read policy must never back a permission-gated endpoint (`:233-237`).
 - **The output-cache store itself is Redis-backed wherever a service runs more than one replica.**
   `AddOutputCache` defaults to a per-replica in-memory store, so a tag eviction reaches only the replica
   that served the mutation. Both adopters register a shared store through the framework wrapper
@@ -176,7 +182,7 @@ Cache in two tiers, each with its own substrate.
   (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Caching/RedisCachingExtensions.cs:91`), which holds
   the framework's single `AddStackExchangeRedisOutputCache(...)` call (`:99`) and no-ops when the named
   connection string is blank (`:94`). Both adopters call the wrapper unconditionally and lean on that
-  no-op: ADC Conference (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:195`) and
+  no-op: ADC Conference (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:196`) and
   Store Catalog (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:99`).
   `AddOutputCache` registers its store with `TryAdd`, so the explicit registration wins regardless of
   call order, and with no Redis configured the in-memory store still applies, which is correct at a
@@ -194,11 +200,11 @@ switch on, and it is recorded here so a reader is not surprised by it in the UI 
   (`:50`), `Set` (`:59`, plus a generation-checked overload at `:70`), `InvalidatePrefix` (`:78`) and
   `Clear` (`:85`); the default implementation
   (`MMCA.Common.UI/Services/Caching/UiReadCache.cs:18`) is a lock-guarded dictionary with lazy expiry,
-  registered scoped by `AddUIShared` (`MMCA.Common.UI/DependencyInjection.cs:76`, `TryAddScoped`),
+  registered scoped by `AddUIShared` (`MMCA.Common.UI/DependencyInjection.cs:77`, `TryAddScoped`),
   which is one instance per Blazor Server circuit and one per app lifetime on WebAssembly and MAUI.
 - **The key is the relative URL, path plus the full query, deliberately the same key shape Tier 2
   uses.** `PublicEndpointOutputCachePolicy` sets `CacheVaryByRules.QueryKeys = "*"`
-  (`MMCA.Common.API/Caching/PublicEndpointOutputCachePolicy.cs:96`), so mirroring it means the two
+  (`MMCA.Common.API/Caching/PublicEndpointOutputCachePolicy.cs:101`), so mirroring it means the two
   layers agree on what "the same read" is: a filter, page or sort change misses on both sides instead
   of being answered stale by one of them (`MMCA.Common.UI/Services/Api/EntityServiceBase.cs:239-241`).
 - **Freshness is stated in configuration.** `UiReadCacheOptions`
@@ -252,13 +258,13 @@ switch on, and it is recorded here so a reader is not surprised by it in the UI 
   bounds cross-replica staleness rather than removing it: with Redis configured each replica still
   holds an L1 copy, and an eviction on one replica leaves the others' copies serving for up to
   `Cache:LocalCacheDuration` (`MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:30-32`,
-  `:192-195`; see the next bullet).
+  `:253-258`; see the next bullet).
 - **Distributed prefix invalidation needs the multiplexer, and every service registers it through one
   framework wrapper.** Both distributed substrates can only scan-and-delete by prefix when an
   `IConnectionMultiplexer` is in the container: `DistributedCacheService`, and the one that runs once
   Redis is configured, `HybridCacheService.RemoveByPrefixAsync`
-  (`MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:219-237`), which without a multiplexer
-  warns once and returns (`:221-228`). Putting it there is no longer each host's business:
+  (`MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:281-300`), which without a multiplexer
+  warns once and returns (`:283-291`). Putting it there is no longer each host's business:
   `builder.AddRedisCaching()`
   (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Caching/RedisCachingExtensions.cs:57`) registers the
   distributed cache (`:64`) and the client (`:65`) together, both with `DisableHealthChecks = true`, and
@@ -272,10 +278,10 @@ switch on, and it is recorded here so a reader is not surprised by it in the UI 
   `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:185`, Notification
   `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:111`, Engagement
   `MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:108`, Identity
-  `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:130`; Store Catalog
+  `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:131`; Store Catalog
   `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:89`, Sales
-  `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:104`, Identity
-  `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:93`. Only
+  `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:105`, Identity
+  `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:94`. Only
   `AddCommonHybridCache()`, which has no guard of its own, is reached conditionally, through the
   guarded `AddCommonHybridCacheWhenRedisConfigured(...)` helper (Tier 1 above). Those
   seven are the whole set: a sweep of both repos' `Source/` trees finds no eighth `AddRedisCaching` call and no direct
@@ -284,20 +290,20 @@ switch on, and it is recorded here so a reader is not surprised by it in the UI 
   on write. Eviction does not reach every copy, though: with Redis configured the live substrate is
   `HybridCacheService`, and another replica's L1 copy keeps serving a removed value, for a single key
   or a prefix alike, until its local expiration lapses (for up to `Cache:LocalCacheDuration`, 30 seconds by
-  default, `MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:192-195` and `:210-212`); a read
-  that must see a removal everywhere goes through `GetFromSharedStoreAsync` (`:154`). So the 30-second
+  default, `MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:253-258` and `:263-280`); a read
+  that must see a removal everywhere goes through `GetFromSharedStoreAsync` (`:216`). So the 30-second
   bound is the cross-replica backstop in hybrid mode as well as the whole answer in memory mode, where
   prefix removal self-heals within seconds instead.
 - **Distributed mode pays serialization and a network hop.** Values cross the wire as JSON; large or
   hot objects cost more than the in-process path.
 - **Counter increments are not atomic, and that is the accepted position.**
   `ICacheService.IncrementAsync` is a default interface member implemented as a read-modify-write
-  (`MMCA.Common.Application/Interfaces/ICacheService.cs:108`), and `DistributedCacheService` overrides it
+  (`MMCA.Common.Application/Interfaces/ICacheService.cs:112`), and `DistributedCacheService` overrides it
   with the same read-modify-write shape rather than Redis `INCR`
   (`MMCA.Common.Infrastructure/Caching/DistributedCacheService.cs:153`). With Redis configured the
   override that runs is `HybridCacheService.IncrementAsync`
-  (`MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:264`), also a read-modify-write, with both
-  legs on L2 only (remarks at `:243-248`). The reason is a storage
+  (`MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:326`), also a read-modify-write, with both
+  legs on L2 only (remarks at `:303-325`). The reason is a storage
   format mismatch, documented at the implementation
   (`MMCA.Common.Infrastructure/Caching/DistributedCacheService.cs:134-152`): `INCR` writes a Redis
   string, while `StackExchangeRedisCache` stores every entry as a Redis hash (`absexp` / `sldexp` /
@@ -306,13 +312,11 @@ switch on, and it is recorded here so a reader is not surprised by it in the UI 
   login, in the ADR-029 case). A counter has to live in the same storage format as the reads that
   consult it, so readability wins over atomicity here: the ADR-029 brute-force and rate-limit counters
   can undercount under genuinely concurrent increments, and an occasional lost increment is the accepted
-  cost of a counter that is always readable. One caveat for a reader who goes to the interface first:
-  its `<remarks>` still anticipates the opposite outcome (backing stores that can do better with Redis
-  `INCR` override it, `MMCA.Common.Application/Interfaces/ICacheService.cs:103-107`, the sentence at
-  `:106`), and its `<summary>` opens with "Atomically increments" (`:94`). No implementation
-  does, and the one that could deliberately does not, for the storage-format reason above. Read that
-  comment as an option the framework declined, not as a description of a shipped override; the
-  implementation's own `<remarks>` is the accurate one.
+  cost of a counter that is always readable. The interface says the same thing: its `<summary>` states
+  the member is not atomic in any shipped implementation
+  (`MMCA.Common.Application/Interfaces/ICacheService.cs:93-100`), and its `<remarks>` records that no
+  shipped implementation overrides it with Redis `INCR`, for the storage-format reason above
+  (`:105-111`, the sentence at `:108-110`).
 - **Output caching is opt-in per service.** A read-heavy service that forgets to register a real
   `AddOutputCache` policy gets no edge caching (the `NoCache` base is the safe default), the same
   audit-the-inventory caveat as other opt-in capabilities (ADR-019/020/021). Adopting a policy is only
@@ -320,7 +324,7 @@ switch on, and it is recorded here so a reader is not surprised by it in the UI 
   Redis output-cache store (Tier 2 above), which is what a multi-replica adopter needs for tag eviction
   to reach every replica (ADR-040).
 - **The optional client tier is an inventory item, and the inventory is empty.** `IUiReadCache` is
-  registered wherever a host calls `AddUIShared` (`MMCA.Common.UI/DependencyInjection.cs:76`), but a UI
+  registered wherever a host calls `AddUIShared` (`MMCA.Common.UI/DependencyInjection.cs:77`), but a UI
   service reads through it only if its own constructor forwards the optional parameter
   (`MMCA.Common.UI/Services/Api/EntityServiceBase.cs:47`), so registration on its own changes nothing and
   no build, test or startup notices the difference. That is Tier 2's audit-the-inventory caveat one
@@ -988,3 +992,51 @@ citations were added.
    session). The 2026-08-18 anchors for `RegisterOutputCacheEvictionConsumer`,
    `RegisterUpcastedIntegrationEventConsumer<TEvent>` and the `MMCA.Common.OutputCache` meter
    subscription are already re-pointed in the Revision (2026-10-06) and are left as written there.
+
+## Revision (2026-10-21)
+Re-verified against current source. The two tiers, the substrate selection, the seven-service Redis
+and hybrid wiring, ADC Conference's eleven-of-twelve bypass count, Store Catalog's four plain policies
+and the client tier are unchanged. The interface comment the counter trade-off warned about is fixed,
+two descriptions were corrected, and anchors moved in most cited files.
+
+1. **The `ICacheService` caveat is retired.** The counter trade-off told a reader that the interface's
+   `<summary>` opened with "Atomically increments" and its `<remarks>` anticipated a Redis `INCR`
+   override. Both now match shipped behavior: the `<summary>` says the member is not atomic in any
+   shipped implementation (`MMCA.Common.Application/Interfaces/ICacheService.cs:93-100`) and the
+   `<remarks>` says no shipped implementation overrides it with `INCR` (`:105-111`, the sentence at
+   `:108-110`). The trade-off itself holds: the default member (`:112`),
+   `DistributedCacheService.IncrementAsync`
+   (`MMCA.Common.Infrastructure/Caching/DistributedCacheService.cs:153`) and
+   `HybridCacheService.IncrementAsync` (`MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:326`)
+   are all read-modify-write. The Status sentences of 2026-08-23 and the 2026-10-07 item 2 describe the
+   comments as they were then.
+2. **Every service declares the `NoCache` base, the adopters included.** Tier 2 read as if only
+   Identity, Sales, Engagement and Notification declared it. ADC Conference
+   (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:231`) and Store Catalog
+   (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:151`) declare it too and add their
+   named policies on top.
+3. **Role claim types are matched case-sensitively.** The Revision (2026-09-07) says `GetRoleValues`
+   reads `ClaimTypes.Role`, `role` and `roles` case-insensitively. It matches those three claim types
+   with `StringComparison.Ordinal`
+   (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/ClaimsPrincipalExtensions.cs:64-66`); only
+   `HasRole` compares role values case-insensitively (`StringComparer.OrdinalIgnoreCase`, `:77`).
+   The policy applies `HasRole` through `Array.Exists` in `IsBypassedCaller`
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/PublicEndpointOutputCachePolicy.cs:146-147`).
+4. **Anchors re-verified against current source:** `AddCommonHybridCache` at
+   `MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:141`,
+   `AddCommonHybridCacheWhenRedisConfigured` at `:202`, its guard at `:208-211`; the hybrid opt-in
+   calls at ADC Conference `Program.cs:204`, ADC Identity `:139`, Store Sales `:114` and Store
+   Identity `:103`; the `AddRedisCaching` calls at ADC Identity `Program.cs:131`, Store Sales `:105`
+   and Store Identity `:94`; `AddRedisOutputCaching` at ADC Conference `Program.cs:196`; ADC
+   Conference `adminBypassRoles` at `:269`, its bypass policies at `:270-271`, `:277-284` and `:301`,
+   `NowNextCache` at `:287`, `ConferenceCache`'s `AddPolicy` at `:238-239` and its comment at
+   `:233-237`; `HybridCacheService` `LocalCacheDefault` at
+   `MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:69`, the shorter-of rule in `WriteOptions`
+   at `:403-409`, `RemoveAsync` remarks at `:253-258`, `RemoveByPrefixAsync` remarks at `:263-280` and
+   method at `:281-300` (the no-multiplexer warn-once at `:283-291`), `GetFromSharedStoreAsync` at
+   `:216`, `IncrementAsync` remarks at `:303-325`; `PublicEndpointOutputCachePolicy`'s
+   `QueryKeys = "*"` at `MMCA.Common.API/Caching/PublicEndpointOutputCachePolicy.cs:101`,
+   `IsCacheableRequest` at `:139`, `IsBypassedCaller` at `:146`; `AddUIShared`'s `IUiReadCache`
+   registration at `MMCA.Common.UI/DependencyInjection.cs:77`. The tenant vary-by stamp (2026-09-07),
+   the eviction-consumer anchors and the `MMCA.Common.OutputCache` meter subscription (2026-08-18 and
+   2026-10-06) sit in historical revisions and are left as written there.

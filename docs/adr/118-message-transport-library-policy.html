@@ -251,14 +251,15 @@
           support-horizon dates gain the hedge ADR-016 already carries; and the unreconciled overlap with
           ADR-016&#39;s still-live <strong>Transport exit options</strong> section is recorded under <strong>Related</strong>. The pin, the
           decision and the replacement order are unchanged. Revised 2026-10-07: anchors refreshed after the
-          v1.233.0 release.</p>
+          v1.233.0 release. Revised 2026-10-21: the circuit-breaker description now matches source (it wraps
+          the <code>IMessageBus</code> publish, which is the broker hop only in broker mode), and anchors are refreshed.</p>
           <h2 id="context">Context</h2>
           <p>MassTransit is the only message-broker library in this workspace, and it is pinned to 8.5.11 across
           all three of its packages (<code>MMCA.Common/Directory.Packages.props:124-126</code>, the pin comment at
           <code>:119-123</code>). Two consumers declare a
           <code>MassTransit.Azure.ServiceBus.Core</code> entry of their own at the same 8.5.11 patch for their Service Bus
           emulator test tier (<code>MMCA.ADC/Directory.Packages.props:65</code>,
-          <code>MMCA.Store/Directory.Packages.props:89</code>), so the workspace carries five pinned MassTransit entries,
+          <code>MMCA.Store/Directory.Packages.props:92</code>), so the workspace carries five pinned MassTransit entries,
           not three. The pin is a policy
           rather than a lag: v9 was announced in April 2025 and shipped in January 2026 as a commercial,
           source-available product with a runtime licence key (those two dates are the vendor&#39;s own public
@@ -266,8 +267,8 @@
           every broker-enabled service host crashes, which is a failure mode a build cannot see because CI
           never starts a broker. That is why the ceiling is a fitness function rather than a comment:
           <code>MassTransit_MustNotExceed_MajorVersion8</code>
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/DependencyVersionTestsBase.cs:25</code>)
-          parses <code>Directory.Packages.props</code> and fails the build at an exclusive major ceiling of 9 (<code>:31</code>),
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/DependencyVersionTestsBase.cs:26</code>)
+          parses <code>Directory.Packages.props</code> and fails the build at an exclusive major ceiling of 9 (<code>:32</code>),
           and MMCA.Common subclasses it
           (<code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/DependencyVersionTests.cs:9</code>).
           A blanket package update bumped the version to 9.1.2 once before and reintroduced the crash. The
@@ -297,9 +298,11 @@
           is the broker&#39;s.</li>
           <li><strong>The publish and consume leg is the only part MassTransit owns.</strong> <code>OutboxProcessor</code> resolves
           <code>IMessageBus</code> from the per-row scope
-          (<code>.../Persistence/Outbox/Processing/OutboxProcessor.cs:680</code>) and publishes every integration event
-          through it (<code>PublishAsync</code> at <code>:687</code>), and only the broker hop is wrapped in the circuit breaker
-          (<code>:685-689</code>, the comment saying so at <code>:682-684</code>)
+          (<code>.../Persistence/Outbox/Processing/OutboxProcessor.cs:774</code>) and publishes every integration event
+          through it (<code>PublishAsync</code> at <code>:783</code>), and only that <code>IMessageBus</code> publish is wrapped in the
+          circuit breaker (<code>:781-785</code>, the comment saying so at <code>:776-780</code>). In broker mode that publish is
+          the broker hop; on a monolith the default <code>InProcessMessageBus</code> runs the integration-event
+          handlers inside the same breaker (the field doc at <code>:102-105</code>)
           (<a href="087-broker-poison-message-handling.html">ADR-087</a>).</li>
           </ul>
           <p>The abstractions that stand between application code and the library are already in place and are
@@ -318,7 +321,7 @@
           <code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/Fixtures/ServiceBusEmulatorFixtureBase.cs</code>. Domain,
           Application and Shared hold the interfaces alone, and that is build-gated:
           <code>MicroserviceExtractionTestsBase</code>
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Layering/MicroserviceExtractionTestsBase.cs:13</code>)
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Layering/MicroserviceExtractionTestsBase.cs:8</code>)
           bans MassTransit, gRPC and Protobuf from the Domain, Application and Shared layers
           (<code>.../Rules/Layering/ArchitectureRules.Transport.cs:21</code>); other layers are not checked, and
           Infrastructure, <code>*.Service</code> and <code>*.Contracts</code> are the edges the transport is meant to live at
@@ -389,7 +392,7 @@
           since 2026-08-31 (TD-17), and <code>deploy.yml</code>&#39;s cross-service-freshness gate requires it to have
           concluded success alongside the <code>cross-service</code> job in the same qualifying nightly
           (<code>MMCA.ADC/.github/workflows/cross-service-tests.yml:142</code>, the gating rationale at <code>:116-126</code>;
-          the gate&#39;s <code>required-jobs</code> at <code>MMCA.ADC/.github/workflows/deploy.yml:885-887</code>), so
+          the gate&#39;s <code>required-jobs</code> at <code>MMCA.ADC/.github/workflows/deploy.yml:900-902</code>), so
           a candidate arm that regresses Service Bus topology or the AMQP round-trip blocks the next deploy.</p>
           </li>
           </ol>
@@ -468,6 +471,31 @@
           at <code>MMCA.ADC/.github/workflows/deploy.yml:885-887</code> (<code>required-jobs-mode: same-run</code> at <code>:888</code>).
           The Store anchor inside the 2026-10-01 revision is left as written.</li>
           </ol>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. No decision, trigger, replacement order or rationale changed:
+          all five MassTransit entries are still at 8.5.11, the build gate&#39;s ceiling is still major 9, and
+          the Service Bus emulator smoke is still authoritative and deploy-gated. One description in Context
+          moved with the code. Three of the four anchor groups the 2026-10-07 revision re-pointed have moved
+          again (the Store entry, the <code>OutboxProcessor</code> publish leg and the <code>deploy.yml</code> gate); the ADC
+          <code>servicebus-emulator-smoke</code> job is still at <code>cross-service-tests.yml:142</code> with its TD-17 rationale
+          at <code>:116-126</code>. That revision is left as written.</p>
+          <ol>
+          <li>The publish-leg bullet in Context no longer says only the broker hop is wrapped. The breaker in
+          <code>OutboxProcessor.DeliverAsync</code> wraps the <code>IMessageBus</code> publish
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:781-785</code>),
+          and its comment (<code>:776-780</code>) and field doc (<code>:102-105</code>) state that with broker messaging this is
+          the broker hop, while on a monolith the default <code>InProcessMessageBus</code> runs the integration-event
+          handlers inside the same breaker, so failing handlers can open it too.</li>
+          <li>Anchors re-verified against current source: the Store <code>MassTransit.Azure.ServiceBus.Core</code> entry
+          <code>MMCA.Store/Directory.Packages.props:92</code> (still 8.5.11; ADC still at
+          <code>MMCA.ADC/Directory.Packages.props:65</code>); <code>MassTransit_MustNotExceed_MajorVersion8</code> at
+          <code>DependencyVersionTestsBase.cs:26</code> with <code>exclusiveMajorCeiling: 9</code> at <code>:32</code>; <code>IMessageBus</code>
+          resolved at <code>OutboxProcessor.cs:774</code>, <code>PublishAsync</code> at <code>:783</code>; and the
+          <code>cross-service-freshness</code> gate&#39;s <code>required-jobs</code> at <code>MMCA.ADC/.github/workflows/deploy.yml:900-902</code>
+          (<code>required-jobs-mode: same-run</code> at <code>:903</code>). The <code>MicroserviceExtractionTestsBase</code> citation in
+          Context now names the class declaration (<code>MicroserviceExtractionTestsBase.cs:8</code>) rather than the
+          <code>CoreLayers_ShouldNotDependOn_Transport</code> test at <code>:13</code>; neither line moved.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a> (the lockstep release policy this pin is
           enforced under; its 2026-08-28 amendment first sketched exit options, and this record owns the
@@ -479,8 +507,8 @@
           library talks to it),
           <a href="003-outbox-dual-dispatch.html">ADR-003</a> (the outbox this record refuses to hand to a library),
           <a href="021-consumer-inbox-idempotency.html">ADR-021</a> (the inbox, for the same reason),
-          <a href="087-broker-poison-message-handling.html">ADR-087</a> (the circuit breaker on the one leg the library
-          owns),
+          <a href="087-broker-poison-message-handling.html">ADR-087</a> (the circuit breaker around the <code>IMessageBus</code>
+          publish, which is the library-owned broker hop in broker mode),
           <a href="010-integration-event-schema-versioning.html">ADR-010</a> and
           <a href="090-event-upcaster-registration.html">ADR-090</a> (the contract and upcaster rules a transport swap must
           not disturb),
@@ -503,6 +531,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

@@ -240,7 +240,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-027-multi-locale-internationalization-supersedes-adr-011">ADR-027: Multi-Locale Internationalization (Supersedes ADR-011)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, 2026-07-09, 2026-07-29, and 2026-09-15: the MudBlazor localization interceptor is replaced so no dependency assigns the current culture on a hybrid head; corrected 2026-08-01: the pseudo-locale CI gate is required on all three browser engines, and the hybrid applier sets only the thread defaults; revised 2026-10-01: four statements corrected to match the code; revised 2026-10-06: displayed times follow the viewer&#39;s clock except a conference schedule, which follows the event&#39;s own time zone (Decision 11), and client-synthesized HTTP failures localize by error code; revised 2026-10-07: when the caller supplies a localizer, a code-keyed client failure resolves from the framework&#39;s own <code>SharedResource</code> pair before the English fallback, and the stale &quot;only coverage collection is chromium-only&quot; note on the pseudo-locale gate is removed). <strong>Supersedes <a href="011-single-locale-i18n.html">ADR-011</a></strong> (single-locale by design).</p>
+          <p>Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, 2026-07-09, 2026-07-29, and 2026-09-15: the MudBlazor localization interceptor is replaced so no dependency assigns the current culture on a hybrid head; corrected 2026-08-01: the pseudo-locale CI gate is required on all three browser engines, and the hybrid applier sets only the thread defaults; revised 2026-10-01: four statements corrected to match the code; revised 2026-10-06: displayed times follow the viewer&#39;s clock except a conference schedule, which follows the event&#39;s own time zone (Decision 11), and client-synthesized HTTP failures localize by error code; revised 2026-10-07: when the caller supplies a localizer, a code-keyed client failure resolves from the framework&#39;s own <code>SharedResource</code> pair before the English fallback, and the stale &quot;only coverage collection is chromium-only&quot; note on the pseudo-locale gate is removed). Revised 2026-10-21: Decision 10 names the server-side account-email caller of <code>SupportedCultures.ResolveClosest</code>, the <code>Http.{status}</code> key count is corrected to eleven, and anchors are refreshed. <strong>Supersedes <a href="011-single-locale-i18n.html">ADR-011</a></strong> (single-locale by design).</p>
           <h2 id="context">Context</h2>
           <p>ADR-011 recorded single-locale (en-US) as a deliberate, <em>revisitable</em> non-goal and sketched what
           re-introducing i18n would entail. That revisit has now happened: the framework adds first-class
@@ -460,7 +460,11 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Globalization/SupportedCultures.cs:51</code>, called from
           <code>.../MMCA.Common.UI.Maui/Globalization/MauiCultureStore.cs:43</code>); web heads keep the parent-culture
           matching of ASP.NET request localization (<code>UseCommonRequestLocalization</code>,
-          <code>.../MMCA.Common.API/Startup/WebApplicationExtensions.cs:73-93</code>). The active culture still reaches the services as <code>Accept-Language</code>: the
+          <code>.../MMCA.Common.API/Startup/WebApplicationExtensions.cs:73-93</code>). The one other caller is
+          server-side: the account emails resolve a recipient&#39;s stored preference through it and run the
+          composition under that <code>CurrentUICulture</code>, restoring the previous culture afterwards
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/Emails/UserEmailResources.cs:34</code>,
+          restored at <code>:43</code>). The active culture still reaches the services as <code>Accept-Language</code>: the
           hybrid head already shares <code>CultureDelegatingHandler</code> through <code>AddUIShared</code>, so once
           <code>CurrentUICulture</code> is right, localized backend errors follow with no extra wiring.</p>
           </li>
@@ -468,7 +472,7 @@
           zone (added 2026-10-06).</strong> Instants are stored and serialized in UTC. <code>MMCA.Common.UI</code> renders
           them on the viewer&#39;s clock through <code>ViewerTimeZone</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Culture/ViewerTimeZone.cs:18</code>, registered
-          by <code>AddUIShared</code> at <code>.../MMCA.Common.UI/DependencyInjection.cs:190</code>): it reads the browser&#39;s IANA
+          by <code>AddUIShared</code> at <code>.../MMCA.Common.UI/DependencyInjection.cs:198</code>): it reads the browser&#39;s IANA
           zone once per scope through JS interop and resolves it with <code>TimeZoneInfo</code> (<code>:49-87</code>, <code>:122-125</code>);
           until then, during SSR prerender, on a host without JS, or for an id the runtime does not know,
           every conversion uses UTC (<code>:32</code>). The server&#39;s own zone is never used, because on Blazor Server
@@ -576,6 +580,28 @@
           and <code>:376-385</code>; <code>LocalizeError</code> at <code>:350-373</code> with its code branches at <code>:360-370</code> (were
           <code>:339-365</code> and <code>:346-362</code>).</li>
           </ol>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. No decision or rationale changed; Decision 10 now names the
+          second caller of <code>SupportedCultures.ResolveClosest</code>, and one count recorded on 2026-10-07 is corrected.</p>
+          <ol>
+          <li>Decision 10: besides the hybrid head (<code>MauiCultureStore.cs:43</code>), the account emails call
+          <code>SupportedCultures.ResolveClosest</code> on the server to run their composition in the recipient&#39;s
+          stored culture
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/Emails/UserEmailResources.cs:34</code>, previous
+          culture restored at <code>:43</code>), so the 2026-10-01 statement that only the hybrid head calls it no
+          longer holds. No caller exists in ADC, Store or Helpdesk source.</li>
+          <li>Decision 9: the framework <code>SharedResource</code> pair carries eleven <code>Http.{status}</code> keys (400, 401,
+          403, 404, 408, 409, 429, 500, 502, 503, 504), not the twelve recorded on 2026-10-07.</li>
+          <li>Anchors re-verified against current source: <code>ViewerTimeZone</code> registration at
+          <code>.../MMCA.Common.UI/DependencyInjection.cs:198</code> (was <code>:190</code>); <code>Http.Status</code>
+          (<code>.../MMCA.Common.UI/Resources/SharedResource.resx:796</code>), the <code>Http.{status}</code> keys (<code>:799-829</code>),
+          <code>Http.TransportFailure</code> (<code>:832</code>) and <code>Http.Timeout</code> (<code>:835</code>), at the same lines in
+          <code>SharedResource.es.resx</code> (the 2026-10-07 <code>:799</code>, <code>:802-832</code>, <code>:835</code>, <code>:838</code> are stale);
+          <code>Common.Error.Load</code> at <code>SharedResource.resx:79-80</code> and <code>Common.Button.Cancel</code> at <code>:265-266</code> (the
+          2026-10-01 <code>:82-83</code> and <code>:268</code> are stale); the MudBlazor 9.11.0 pin at
+          <code>MMCA.Common/Directory.Packages.props:183</code> (the 2026-10-01 <code>:180</code> and 2026-10-06 <code>:176</code> are
+          stale).</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="011-single-locale-i18n.html">ADR-011</a> (superseded), <a href="013-result-pattern.html">ADR-013</a> (the <code>Error.Code</code>
           this localizes on), <a href="015-architecture-fitness-functions.html">ADR-015</a> (the i18n gates now live here: the <code>MA0076</code> culture-less
@@ -604,6 +630,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

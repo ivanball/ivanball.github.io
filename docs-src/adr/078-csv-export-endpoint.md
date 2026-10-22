@@ -1,7 +1,7 @@
 # ADR-078: CSV Export as a Dedicated Endpoint, Not Content Negotiation
 
 ## Status
-Accepted (2026-08-13; revised 2026-08-18, 2026-08-31, 2026-09-19, 2026-10-01, 2026-10-06). The endpoint ships in the MMCA.Common
+Accepted (2026-08-13; revised 2026-08-18, 2026-08-31, 2026-09-19, 2026-10-01, 2026-10-06, 2026-10-07, 2026-10-21). The endpoint ships in the MMCA.Common
 "enterprise capability wave" release (v1.150.0), its scoping hook in v1.151.0, and the widened
 read hook that supersedes that hook in v1.165.0; all three consumers run on pins that carry them.
 Every controller deriving from `EntityControllerBase` gains the route automatically, under that
@@ -11,6 +11,7 @@ export is fail-closed, and a derivative that declares no row scope and does not 
 `AllowUnscopedExport` answers 403 `Export.RowScopeRequired`.
 Revised 2026-10-06: the export is fail-closed since v1.218.0 (an unscoped derivative must opt in through `AllowUnscopedExport` or get 403), and since v1.219.0 each page is rendered into memory and written to the response with awaited writes only.
 Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
+Revised 2026-10-21: anchors refreshed after the v1.250.0 release.
 
 ## Context
 The request is "export what you filtered". The generic entity surface of
@@ -29,13 +30,13 @@ that make that the wrong shape here.
 - **The output cache does not vary by `Accept`.** `PublicEndpointOutputCachePolicy`
   ([ADR-040](040-authenticated-output-caching-for-public-reads.md)) sets
   `context.CacheVaryByRules.QueryKeys = "*"`
-  (`Source/Presentation/MMCA.Common.API/Caching/PublicEndpointOutputCachePolicy.cs:96`). The key has
+  (`Source/Presentation/MMCA.Common.API/Caching/PublicEndpointOutputCachePolicy.cs:101`). The key has
   exactly one other dimension, and it is not a header: when `ITenantContext` resolves a tenant the policy
   stamps that tenant into `CacheVaryByRules.VaryByValues[TenantVaryByKey]`
-  (`PublicEndpointOutputCachePolicy.cs:102-105`, the `"t"` key constant at `:50`), and an unresolved
+  (`PublicEndpointOutputCachePolicy.cs:107-111`, the `"t"` key constant at `:50`), and an unresolved
   tenant adds nothing. A caller holding one of the policy's configured bypass roles is out of the cache
   altogether rather than in a different entry: the policy leaves `AllowCacheLookup` and
-  `AllowCacheStorage` false for that request (`:86-90`, `IsBypassedCaller` at `:141-142`). Nothing in
+  `AllowCacheStorage` false for that request (`:86-90`, `IsBypassedCaller` at `:146-147`). Nothing in
   the policy varies by `Accept`. On any endpoint carrying that policy, a CSV request and a JSON request
   to the same URL with the same query string, from the same tenant and a non-bypass caller, are the same
   cache entry, so a CSV request can be served a stored JSON body with a `Content-Type` that no longer
@@ -258,12 +259,12 @@ Helpdesk subclasses no `OpenApiContractTestsBase` and has no snapshots to move.
   their read predicates as specifications through the same hooks (`EventsController.GetExportSpecification()`
   at `Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Events/EventsController.cs:72-73`,
   `Controllers/Sessions/SessionQuestionAnswersController.cs:109`, and async overrides on
-  `Controllers/Sessions/SessionsController.cs:75`, `Controllers/Speakers/SpeakersController.cs:109`,
+  `Controllers/Sessions/SessionsController.cs:76`, `Controllers/Speakers/SpeakersController.cs:110`,
   `Controllers/Sponsors/SponsorsController.cs:69` among others), opt their privileged readers in through
-  `AllowUnscopedExport` (for example `EventsController.cs:80`, `SessionsController.cs:93`,
+  `AllowUnscopedExport` (for example `EventsController.cs:80`, `SessionsController.cs:94`,
   `SessionQuestionAnswersController.cs:121`), and keep their `Forbid` gates on
   bulk export anyway (`Controllers/Events/EventsController.cs:147-150`,
-  `Controllers/Sessions/SessionsController.cs:258-261`): a deliberate
+  `Controllers/Sessions/SessionsController.cs:259-262`): a deliberate
   privileged-reader-only policy on a whole-catalog file, not a gap in what the framework can scope.
   v1.151.0 also hardened the formatter: binary and collection properties produce no column instead of
   rendering type names (`IsExportableType`, `EntityCsvExporter.cs:239-242`, which excludes `byte[]`, `ReadOnlyMemory<byte>` and
@@ -353,6 +354,25 @@ neutralization and the ADC privileged-reader `Forbid` gates all hold as written.
    and `Controllers/Sessions/SessionsController.cs:258-261`. The CHANGELOG anchors in the 2026-10-06
    revision have since moved (v1.218.0 fail-closed export at `MMCA.Common/CHANGELOG.md:314`,
    `AllowUnscopedExport` at `:329`; v1.219.0 awaited writes at `:294`) and stay as written there.
+
+## Revision (2026-10-21)
+Re-verified against current source. No decision, default or rationale changed: the cache policy still
+varies by query string and resolved tenant only (never by `Accept`), bypass-role callers still skip
+lookup and storage, and ADC's Conference controllers still scope reads, opt privileged readers in and
+keep their `Forbid` gates on bulk export. Only line anchors moved.
+
+1. Anchors re-verified against current source: in
+   `MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/PublicEndpointOutputCachePolicy.cs`,
+   `QueryKeys = "*"` at `:101`, the tenant lookup and `VaryByValues` stamp at `:107-111`, and
+   `IsBypassedCaller` at `:146-147` (`:86-90` and `TenantVaryByKey` at `:50` unchanged); in
+   `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/`, the async
+   `GetReadSpecificationAsync` overrides at `Sessions/SessionsController.cs:76` and
+   `Speakers/SpeakersController.cs:110`, `AllowUnscopedExport` at `SessionsController.cs:94`, and the
+   `Forbid` gate at `SessionsController.cs:259-262` (`EventsController.cs:72-73`, `:80` and `:147-150`,
+   `SponsorsController.cs:69`, `SessionQuestionAnswersController.cs:109` and `:121` unchanged). The
+   CHANGELOG anchors cited in the 2026-10-06 and 2026-10-07 revisions have moved again and stay as
+   written there: v1.218.0 is at `MMCA.Common/CHANGELOG.md:623` (fail-closed `ExportAsync` entry at
+   `:633`, `AllowUnscopedExport` added at `:648`) and v1.219.0 at `:593` (awaited writes at `:613`).
 
 ## Related
 [ADR-034](034-generic-entity-query-layer.md) (the generic entity surface and query contract this extends,

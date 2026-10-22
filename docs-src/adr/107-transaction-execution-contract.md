@@ -13,6 +13,9 @@ Revised 2026-10-06: the commit phase also releases the internal-command processo
 and drops it on every other path, MMCA.ADC's count is six with `DeleteSessionAssetCommand`, and three more ADC
 direct callers are listed.
 Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
+Revised 2026-10-21: since v1.247.0 every thrown exception, not only a cancellation, rolls back best-effort and
+rethrows the original even when the rollback itself throws, a sixth commit-ambiguity test pins that, and anchors
+are refreshed after the v1.250.0 release.
 
 ## Context
 Every transactional write in this workspace funnels through one method. `IUnitOfWork.ExecuteInTransactionAsync`
@@ -20,7 +23,7 @@ Every transactional write in this workspace funnels through one method. `IUnitOf
 Application-layer name for it, `UnitOfWork` forwards straight through
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/UnitOfWork.cs:91-94`), and the implementation is
 `DbContextFactory.ExecuteInTransactionAsync`
-(`.../Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:551`, contract at
+(`.../Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:577`, contract at
 `.../Factory/IDbContextFactory.cs:70`). Two kinds of caller reach it: the ADR-014 pipeline, whose
 `TransactionalCommandDecorator` calls it for any command carrying `ITransactional`
 (`.../Application/UseCases/Decorators/TransactionalCommandDecorator.cs:33`), and a handler or service that calls it
@@ -35,9 +38,9 @@ and a failure of the commit itself must not be retried at all because its outcom
 
 The neighbouring records decide around this without deciding it. ADR-014 decides that the Transactional decorator
 wraps a command and rolls back on failure, including on a returned failed `Result`. ADR-006 lists "no cross-database
-FKs or transactions" as a trade-off of database-per-service (`006-database-per-service.md:56`). ADR-054 cites
+FKs or transactions" as a trade-off of database-per-service (`006-database-per-service.md:71`). ADR-054 cites
 "transactions are per data source and best-effort sequential" as a given it builds compensation on top of
-(`054-saga-compensation-and-reconciliation.md:131`). Nothing in ADR-001 through ADR-106 records the execution,
+(`054-saga-compensation-and-reconciliation.md:219-220`). Nothing in ADR-001 through ADR-106 records the execution,
 retry and ambiguity contract itself, which is the layer all three depend on.
 
 ## Decision
@@ -48,14 +51,14 @@ work, the commit phase is deliberately outside the retry, and a commit whose out
 1. **One entry point, per-scope state.** `IDbContextFactory` and `IUnitOfWork` are both registered scoped
    (`.../Infrastructure/DependencyInjection.cs:108`, `:130`), and the transaction flag is an instance field
    (`DbContextFactory.cs:87`), so the whole contract below is per request scope. `BeginTransaction` enlists every
-   transaction-capable context and skips one already carrying a transaction (`:460-470`, `:468`); a context
+   transaction-capable context and skips one already carrying a transaction (`:486-496`, `:494`); a context
    materialized later in the same scope is enlisted on creation (`:119-120`).
 
 2. **A re-entrant call joins the ambient transaction instead of nesting.** When the flag is already set, the method
-   awaits the operation and returns its result directly (`:562-563`). Begin, commit, rollback and the deferred-event
-   flush belong to the outermost call alone (`:504-506`), because an inner commit would make the outer scope's
+   awaits the operation and returns its result directly (`:588-589`). Begin, commit, rollback and the deferred-event
+   flush belong to the outermost call alone (`:530-533`), because an inner commit would make the outer scope's
    earlier work durable ahead of its own decision. Before this, an `ITransactional` command whose handler also
-   opened a transaction hit an `InvalidOperationException` from EF (`:555-561`). Two tests pin the behavior:
+   opened a transaction hit an `InvalidOperationException` from EF (`:581-587`). Two tests pin the behavior:
    `ExecuteInTransactionAsync_Nested_DoesNotThrowAndCommitsOnce` and
    `ExecuteInTransactionAsync_NestedInnerSucceedsButOuterFails_RollsBackEverything`
    (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/DbContexts/DbContextFactoryTransactionTests.cs:133`,
@@ -64,37 +67,41 @@ work, the commit phase is deliberately outside the retry, and a commit whose out
 3. **The whole delegate is the retriable unit, and each attempt starts from a clean change tracker.** The strategy
    comes from the first transaction-capable context, or from a default context created on the spot so one exists
    before the handler's first repository call; that default context's engine goes through the data-source resolver
-   (`ResolveLogical`) rather than being taken literally as SQL Server (`:571-572`). The delegate is invoked inside
-   `strategy.ExecuteAsync` (`:578-586`). From the second attempt on, `ResetForRetry` runs first (`:580-581`): it
-   drops deferred dispatch and calls `ChangeTracker.Clear()` on every context (`:836-843`). Without it, entities the
+   (`ResolveLogical`) rather than being taken literally as SQL Server (`:597-598`). The delegate is invoked inside
+   `strategy.ExecuteAsync` (`:604-612`). From the second attempt on, `ResetForRetry` runs first (`:606-607`): it
+   drops deferred dispatch and calls `ChangeTracker.Clear()` on every context (`:868-875`). Without it, entities the
    failed attempt added are still `Added` and the retry inserts them a second time, with a duplicate outbox row per
-   event (`:525-530`). Anything the commit depends on therefore has to be produced inside the delegate, once per
+   event (`:551-556`). Anything the commit depends on therefore has to be produced inside the delegate, once per
    attempt.
 
 4. **A returned failed `Result` rolls back exactly like a thrown exception.** The attempt inspects the result and
-   calls `RollbackTransaction()` when `IsFailure` is true (`:615-621`), which is the ADR-013 accommodation: a
+   calls `RollbackTransaction()` when `IsFailure` is true (`:641-648`), which is the ADR-013 accommodation: a
    framework that mandates Result-over-exceptions cannot let a handler that saves and then fails a later invariant
-   leave the partial mutation committed. A thrown exception rolls back and rethrows (`:664-668`), and a cancellation
-   takes a guarded path that falls back to dropping deferred work when the rollback itself throws on an
-   already-closed connection (`:647-663`). On a successful result, `FlushEnrolledCommandsBeforeCommitAsync` runs
-   ahead of the commit (`:625`): when every pending change is an `Added` `InternalCommandMessage` (an internal
+   leave the partial mutation committed. A thrown exception, cancellation and failure alike, goes through one catch
+   that rolls back best-effort and rethrows the original exception (`:673-681`): `RollbackBestEffort` swallows a
+   rollback that itself throws (the connection may already be closed or the transaction zombied by the fault being
+   reported), clears the transaction flag and drops every context's deferred work, which is what a successful
+   rollback would have done (`:689-701`). Rethrowing the original matters because the execution strategy judges
+   retriability on the exception it sees, so a rollback error must never replace the transient one. On a successful
+   result, `FlushEnrolledCommandsBeforeCommitAsync` runs
+   ahead of the commit (`:651`): when every pending change is an `Added` `InternalCommandMessage` (an internal
    command scheduled after the handler's last save and enrolled on the context), it saves them inside the
    transaction so they commit with the caller's change, and any other unsaved tracked change throws
    `InvalidOperationException`, which the same catch turns into a rollback, because committing would silently
-   discard it while the unit reported success (`:681-707`).
+   discard it while the unit reported success (`:713-739`, the throw at `:730-736`).
 
-5. **The commit is never retried.** `TryCommit` returns its failure instead of throwing it (`:601-605`, `:627-629`)
+5. **The commit is never retried.** `TryCommit` returns its failure instead of throwing it (`:627-631`, `:653-655`)
    so the execution strategy sees a completed attempt, and the failure is thrown outside the strategy afterwards
-   (`:592-593`). Throwing inside would not work: the strategy classifies retriability by walking the whole inner
-   exception chain, so even a wrapper carrying the transient commit error would be retried (`:588-591`). The reason
+   (`:618-619`). Throwing inside would not work: the strategy classifies retriability by walking the whole inner
+   exception chain, so even a wrapper carrying the transient commit error would be retried (`:614-617`). The reason
    the commit is excluded is that its outcome is unknowable, since a commit can fail after the database applied it
    but before the acknowledgement reached the client, and a retry against a possibly-durable commit duplicates every
-   write including the outbox rows (`:532-538`, and on the exception type at
+   write including the outbox rows (`:558-564`, and on the exception type at
    `.../Factory/TransactionCommitAmbiguousException.cs:9-13`).
 
 6. **The failure names what each physical source did.** `TryCommit` snapshots the enlisted contexts in commit order,
    commits them in turn, and on a throw builds the ambiguity from three groups: the sources already committed, the
-   one that threw, and the ones after it in the order that never committed (`DbContextFactory.cs:719-751`).
+   one that threw, and the ones after it in the order that never committed (`DbContextFactory.cs:751-783`).
    `TransactionCommitAmbiguousException` is public and sealed (`TransactionCommitAmbiguousException.cs:22`) and
    exposes `CommittedSources` (`:76`), `AmbiguousSource` (`:85`) and `RolledBackSources` (`:93`); its message is the
    default ambiguity text plus a "Per-source outcome" clause that omits empty groups, so a single-source failure
@@ -104,19 +111,19 @@ work, the commit phase is deliberately outside the retry, and a commit whose out
 7. **Rollback after a commit failure is best-effort in the literal sense.** `AbandonAfterCommitFailure` rolls back
    whatever is still open and swallows a rollback that itself throws, on the grounds that the transaction is already
    zombied or the connection is gone and the commit ambiguity is the failure worth reporting
-   (`DbContextFactory.cs:760-781`). A source listed in `RolledBackSources` therefore wrote nothing that survives
+   (`DbContextFactory.cs:792-813`, the swallow at `:807-811`). A source listed in `RolledBackSources` therefore wrote nothing that survives
    (`TransactionCommitAmbiguousException.cs:88-91`).
 
 8. **Deferred in-process dispatch is flushed only after a successful commit, and dropped on every other path.**
    Handlers deferred while a transaction is open are flushed per context immediately after the commit succeeds
-   (`DbContextFactory.cs:639-643`, `.../Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:160`).
-   `RollbackTransaction` drops them (`DbContextFactory.cs:484-495`, `DomainEventSaveChangesInterceptor.cs:177`), and
-   so do `ResetForRetry` between attempts and `AbandonAfterCommitFailure` after an ambiguous commit (`:840`,
-   `:766`). The processor wake owed by internal commands enrolled in the unit follows the same rule:
+   (`DbContextFactory.cs:665-669`, `.../Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:160`).
+   `RollbackTransaction` drops them (`DbContextFactory.cs:510-521`, `DomainEventSaveChangesInterceptor.cs:177`), and
+   so do `ResetForRetry` between attempts and `AbandonAfterCommitFailure` after an ambiguous commit (`:872`,
+   `:798`). The processor wake owed by internal commands enrolled in the unit follows the same rule:
    `EnrolledCommandWake.Release` runs right after a successful commit and ahead of the event flush, so a throwing
-   in-process handler cannot swallow it (`DbContextFactory.cs:631-634`, and `:481` in `CommitTransaction`), and
+   in-process handler cannot swallow it (`DbContextFactory.cs:657-660`, and `:507` in `CommitTransaction`), and
    every drop path above goes through `DropDeferredWork`, which drops the owed wake together with the deferred
-   dispatch (`:850-854`; the remark at `:519-523`). The consequence is stated on the exception: after an ambiguous commit the outbox rows are the only delivery
+   dispatch (`:882-886`; the remark at `:546-549`). The consequence is stated on the exception: after an ambiguous commit the outbox rows are the only delivery
    record that survives, and the outbox processor delivers them if the commit did land
    (`TransactionCommitAmbiguousException.cs:16-19`).
 
@@ -124,22 +131,23 @@ work, the commit phase is deliberately outside the retry, and a commit whose out
    sources the commits are sequential, so a failure on the second leaves the first durable: the ambiguity is a
    partial commit rather than an unknown one, and the caller's replay is what reconciles it. A marker written inside
    each source's transaction that a replay could read to learn what landed would close this, and the code says it is
-   not built because a single transactional source needs none (`DbContextFactory.cs:539-549`). Reporting the
+   not built because a single transactional source needs none (`DbContextFactory.cs:565-575`). Reporting the
    per-source outcome is what makes the partial state observable in the meantime.
 
 10. **Cosmos is outside the mechanism entirely.** `SupportsTransactions` is true only for a relational engine
-    (`context.Engine.Capabilities.IsRelational`, `DbContextFactory.cs:860-861`), so it is false for a Cosmos
-    context, and begin, commit and rollback all filter on it (`:468`, `:475`, `:487`), so a
+    (`context.Engine.Capabilities.IsRelational`, `DbContextFactory.cs:892-893`), so it is false for a Cosmos
+    context, and begin, commit and rollback all filter on it (`:494`, `:501`, `:513`), so a
     Cosmos context in the same scope is neither enlisted nor rolled back and is never named in an ambiguity report.
 
 11. **Recovery belongs to the caller, and today that means the ADR-017 idempotency filter.** The remarks say so
-    (`:536-537`), and the exception is part of the frozen public surface
+    (`:562-563`), and the exception is part of the frozen public surface
     (`.../MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:531-539`), which is what makes it a contract a caller can
     bind to rather than an internal detail. No framework or consumer code catches it: across the four repos the type
     is referenced in code only by the two files that define it and by
-    `.../MMCA.Common.Infrastructure.Tests/Persistence/DbContexts/DbContextFactoryCommitAmbiguityTests.cs`, whose five
+    `.../MMCA.Common.Infrastructure.Tests/Persistence/DbContexts/DbContextFactoryCommitAmbiguityTests.cs`, whose six
     cases pin the no-rerun wrapper, the dropped dispatch, the ordinary commit path, the still-retried pre-commit
-    failure and the per-source report (`:73`, `:108`, `:132`, `:152`, `:171`). The one consumer mention is prose:
+    failure, the original failure surviving a rollback that throws, and the per-source report (`:73`, `:108`,
+    `:132`, `:152`, `:171`, `:193`). The one consumer mention is prose:
     Store's `CheckOutHandler` remarks name it and hand recovery to the `[Idempotent]` filter
     (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutHandler.cs:108-115`).
 
@@ -158,7 +166,7 @@ work, the commit phase is deliberately outside the retry, and a commit whose out
     ("Deliberately NOT `ITransactional`": `VerifyPaymentCommand.cs:11`, `ProcessPaymentWebhookCommand.cs:9`,
     `CheckOutCommand.cs:9`, `BulkSetInventoryCommand.cs:11`), and MMCA.Helpdesk has none. Direct callers are the
     framework's own `EFRefreshSessionStore` rotation
-    (`.../Infrastructure/Persistence/Auth/EFRefreshSessionStore.cs:134`), ADC's `AuthenticationService` for both
+    (`.../Infrastructure/Persistence/Auth/EFRefreshSessionStore.cs:184`), ADC's `AuthenticationService` for both
     registration and external login
     (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:86`, `:221`), ADC's
     `RefreshFromSessionizeHandler` (`RefreshFromSessionizeHandler.cs:149`), `DeleteSessionHandler` and
@@ -202,14 +210,14 @@ work, the commit phase is deliberately outside the retry, and a commit whose out
   display name, so their latency never holds database locks, `CheckOutHandler.cs:24-31`), the code does that
   pre-flight before opening the transaction (`:54-78`), and the write-phase remarks explain why the whole
   read-execute-write unit runs inside (`:99-107`) and why a commit failure is not retried (`:108-115`, citing this
-  record for the behavior MMCA.Common shipped in v1.135.0, `MMCA.Common/CHANGELOG.md:3991`, and that Store consumes at
-  v1.233.0, `MMCA.Store/Directory.Packages.props:11`). That is discipline, not enforcement: nothing checks that a
+  record for the behavior MMCA.Common shipped in v1.135.0, `MMCA.Common/CHANGELOG.md:4310`, and that Store consumes at
+  v1.250.0, `MMCA.Store/Directory.Packages.props:11`). That is discipline, not enforcement: nothing checks that a
   new handler keeps its commit dependencies inside the delegate.
 - **Cosmos participation is silent.** A Cosmos context in a transactional scope is skipped without a warning
-  (`DbContextFactory.cs:860-861`), so a future host mixing engines gets partial atomicity with no signal at the call
+  (`DbContextFactory.cs:892-893`), so a future host mixing engines gets partial atomicity with no signal at the call
   site.
 - **The commit-order snapshot makes source order load-bearing.** `TryCommit` enumerates the context dictionary and
-  that enumeration order is the commit order (`DbContextFactory.cs:725-728`), so which source is durable after a
+  that enumeration order is the commit order (`DbContextFactory.cs:755-760`), so which source is durable after a
   partial failure is determined by materialization order rather than by anything the caller declared.
 
 ## Revision (2026-10-01)
@@ -255,6 +263,40 @@ rules are unchanged, every live `DbContextFactory.cs` anchor still holds, and MM
    `MMCA.Common/CHANGELOG.md:3991`; Store consumes MMCA.Common v1.233.0
    (`MMCA.Store/Directory.Packages.props:11`).
 
+## Revision (2026-10-21)
+Re-verified against current source. The re-entrant, retriable, commit-once, ambiguity and deferred-dispatch
+rules are unchanged; the exception path of an attempt moved, a test was added, and nearly every
+`DbContextFactory.cs` anchor shifted (only `:87` and `:119-120` held).
+
+1. Decision item 4 now describes one exception path for every throw. Since v1.247.0
+   (`MMCA.Common/CHANGELOG.md:45`, entry `:98`, M229) a single catch handles cancellation and failure alike
+   (`DbContextFactory.cs:673-681`) and calls `RollbackBestEffort` (`:689-701`), which swallows a throwing
+   rollback, clears the transaction flag and drops every context's deferred work, then the original exception is
+   rethrown so the execution strategy judges retriability on it rather than on the rollback error. The guarded
+   path is no longer cancellation-only.
+2. Decision item 11 counts six commit-ambiguity cases, adding
+   `ExecuteInTransactionAsync_OperationFailsAndRollbackThrows_StrategySeesTheOriginalFailure`
+   (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/DbContexts/DbContextFactoryCommitAmbiguityTests.cs:171`);
+   the per-source report case is now at `:193`.
+3. The Related entry for ADR-009 says "five-retry budget": the strategy sets `maxRetryCount: 5`
+   (`.../Persistence/DbContexts/SQLServerDbContext.cs:64`), which ADR-009 records as 5 retries
+   (`009-resilience-and-recovery-objectives.md:135-136`).
+4. Anchors re-verified against current source: in `DbContextFactory.cs`, `ExecuteInTransactionAsync` `:577`,
+   `BeginTransaction` `:486-496` (skip filter `:494`), the join `:588-589`, the re-entrancy remark `:530-533` and
+   comment `:581-587`, the resolver `:597-598`, `strategy.ExecuteAsync` `:604-612`, the reset call `:606-607`,
+   `ResetForRetry` `:868-875`, the duplicate-outbox remark `:551-556`, the failed-`Result` rollback `:641-648`,
+   the enrolled-command flush call `:651` and definition `:713-739` (throw `:730-736`), the returned commit failure
+   `:653-655` (doc `:627-631`), the throw past the strategy `:618-619` and its comment `:614-617`, the ambiguity
+   remark `:558-564`, the caller-owns-recovery remark `:562-563`, `TryCommit` `:751-783` (snapshot `:755-760`),
+   `AbandonAfterCommitFailure` `:792-813` (swallow `:807-811`), the post-commit flush `:665-669`, the wake release
+   `:657-660` and `:507` in `CommitTransaction`, `RollbackTransaction` `:510-521`, the drops `:872` and `:798`,
+   `DropDeferredWork` `:882-886`, the wake remark `:546-549`, the witness-row remark `:565-575`,
+   `SupportsTransactions` `:892-893` and the begin, commit and rollback filters `:494`, `:501`, `:513`; the
+   `EFRefreshSessionStore` rotation calls `ExecuteInTransactionAsync` at `EFRefreshSessionStore.cs:184`; the
+   v1.135.0 CHANGELOG heading is at `MMCA.Common/CHANGELOG.md:4310`; Store consumes MMCA.Common v1.250.0
+   (`MMCA.Store/Directory.Packages.props:11`); the ADR-006 trade-off is at `006-database-per-service.md:71` and the
+   ADR-054 premise at `054-saga-compensation-and-reconciliation.md:219-220`.
+
 ## Related
 [ADR-014](014-cqrs-decorator-pipeline.md) (the Transactional decorator that is the main caller, and whose
 2026-07-19 revision decided the failed-`Result` rollback this record implements),
@@ -268,4 +310,4 @@ dispatch that does not),
 [ADR-013](013-result-pattern.md) (Result-over-exceptions, the reason a returned failure has to roll back),
 [ADR-017](017-request-idempotency.md) (the `[Idempotent]` replay this contract names as the caller's recovery),
 [ADR-009](009-resilience-and-recovery-objectives.md) (the resilience posture the retrying execution strategy and its
-five-attempt budget sit inside).
+five-retry budget sit inside).

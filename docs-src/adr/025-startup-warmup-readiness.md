@@ -13,7 +13,9 @@ adds cannot reach `/health/ready` (see Context and Decision). Revised 2026-09-19
 `/health/ready` are served from a short-TTL single-flight report cache (`MapCachedHealthChecks` over
 `CachedHealthReportProvider`, 5 seconds by default), so an anonymous flood costs one probe round per
 window rather than one per request; `/alive` stays uncached (see Decision). Revised 2026-10-07: anchors
-refreshed after the v1.233.0 release.
+refreshed after the v1.233.0 release. Revised 2026-10-21: the built-in OIDC task is recorded as waking and
+JIT-warming the authority's discovery route, not a connection the JwtBearer middleware shares, and the
+single-digit-millisecond first-fetch claim is dropped; per-host warm-up anchors refreshed.
 
 ## Context
 On the Azure Container Apps Consumption plan a replica that has been idle is CPU-throttled, and a
@@ -95,16 +97,23 @@ gets it.
   `OperationCanceledException` during host shutdown, so stopping the host is not mistaken for a task
   failure.
 - **A built-in task that pre-warms OIDC discovery.** `OpenIdConnectMetadataWarmupTask` fetches
-  `{Authority}/.well-known/openid-configuration` over the shared `IHttpClientFactory`, warming DNS, TCP,
-  TLS, and the connection pool (and the authority's own discovery cache). It no-ops when no
-  `Authentication:JwtBearer:Authority` is configured. The JwtBearer middleware caches discovery
-  separately, so its own first fetch still runs; the intent recorded on the task itself
-  (`Source/Hosting/MMCA.Common.Aspire/Warmup/OpenIdConnectMetadataWarmupTask.cs:14-20`) is that over a
-  now-warm connection that fetch completes in single-digit milliseconds.
+  `{Authority}/.well-known/openid-configuration` through a named client from the shared
+  `IHttpClientFactory` (`Source/Hosting/MMCA.Common.Aspire/Warmup/OpenIdConnectMetadataWarmupTask.cs:47-48`),
+  which wakes and JIT-warms the authority's discovery route (the gateway, or Identity when there is no
+  gateway, as the AppHost wires it at
+  `Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:344-347`). The authority keeps no discovery cache to warm: it rebuilds the document from configuration
+  on every request
+  (`Source/Presentation/MMCA.Common.API/Startup/Endpoints/OidcDiscoveryEndpointExtensions.cs:60-86`).
+  The connection the task opens lives only in its own named-client pool, and nothing else reuses it.
+  It no-ops when no `Authentication:JwtBearer:Authority` is configured (`:32-36`). The JwtBearer
+  middleware's `ConfigurationManager` caches discovery separately and fetches through its own default
+  backchannel `HttpClient` (no `Backchannel` or `BackchannelHttpHandler` is configured anywhere in
+  source), so its first fetch still runs, with its own handshakes over a connection of its own: what it
+  gains is an authority that is already awake, not a shared warm connection (remarks at `:14-22`).
 - **A shipped base class for warming the host's own request path.** `SelfHttpWarmupTaskBase`
   (`Source/Hosting/MMCA.Common.Aspire/Warmup/SelfHttpWarmupTaskBase.cs:28`, public API at
   `Source/Hosting/MMCA.Common.Aspire/PublicAPI.Shipped.txt:129-131`) is the second warm-up family: where the
-  OIDC task warms one outbound connection, this replays a short list of hot read paths against the host's
+  OIDC task wakes one remote dependency (the authority), this replays a short list of hot read paths against the host's
   own Kestrel endpoint, so the cost paid down is the full inbound path (ingress connection, Kestrel,
   output cache, routing, authentication, handler, EF Core, SQL) rather than a single dependency
   (`:11-22`). A derived task supplies only a name and its `WarmupPaths` (`:49`, `:59`); the mechanism is
@@ -121,27 +130,30 @@ gets it.
   the rest of the subsystem: caught, logged at warning level, never fatal (`:141-146`, `:205-207`). Both
   production apps subclass and register it: ADC in Conference
   (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/SelfHttpOutputCacheWarmupTask.cs:22`, registered
-  at `Program.cs:313`), Engagement (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/SelfHttpWarmupTask.cs:23`,
-  `Program.cs:160`) and Identity (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/SelfHttpWarmupTask.cs:23`,
-  `Program.cs:174`); Store in Catalog
+  at `Program.cs:314`), Engagement (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/SelfHttpWarmupTask.cs:23`,
+  `Program.cs:160`) and Identity (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/SelfHttpWarmupTask.cs:25`,
+  `Program.cs:175`); Store in Catalog
   (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/SelfHttpOutputCacheWarmupTask.cs:23`,
   `Program.cs:184`), Identity (`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/SelfHttpOutputCacheWarmupTask.cs:25`,
-  `Program.cs:145`) and Sales (`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/SelfHttpOutputCacheWarmupTask.cs:26`,
-  `Program.cs:158`).
+  `Program.cs:146`) and Sales (`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/SelfHttpOutputCacheWarmupTask.cs:26`,
+  `Program.cs:159`).
 - **Extensible per host.** `AddWarmupReadiness()` registers the gate, the runner, the readiness health
   check, and the built-in OIDC task; a host adds its own pre-fetches (output cache, reference data) with
   `AddWarmupTask<T>()`, which is also how a `SelfHttpWarmupTaskBase` subclass enters the run.
 
 ## Rationale
 - **Keep cold replicas out of rotation, briefly.** Gating readiness on warm-up means the platform does
-  not send a user request to a replica that is still doing its first handshakes, which is what turns a
-  cold start into a visible 5xx.
+  not send a user request to a replica whose registered warm-up tasks have not yet had their chance,
+  which is what turns a cold start into a visible 5xx. It does not cover every first handshake: the
+  JwtBearer middleware's first discovery fetch still opens its own backchannel connection after the
+  gate opens (see the OIDC task above).
 - **Availability over strict warmth.** Opening the gate even when a task fails or hangs is the
   load-bearing choice: a warm-up that depends on a temporarily unreachable dependency would otherwise pin
   the replica out of service indefinitely. Falling back to lazy retry (covered by the resilience
   pipeline) trades a possibly-slow first request for guaranteed eventual availability.
 - **Warm the path, not just the cache.** The OIDC fetch is the specific cold-start failure we saw; even
-  though the middleware re-fetches, warming the network path removes the timeout-sized first hit. This is
+  though the middleware re-fetches over its own connection, waking the authority first means that
+  fetch does not also pay the authority's own cold start. This is
   the active half of the same cold-start story ADR-004 references from the auth side.
 - **A readiness probe answers one question.** Can this replica serve a request? A cluster-topology or
   admin-mode command answers a different one, and it answers it wrongly whenever the connection is not
@@ -150,7 +162,8 @@ gets it.
   framework so a host cannot inherit an untagged one by accident, keeps the gate measuring reachability.
 - **Free for every host, cheap for the ones that do not need it.** Putting it in `AddServiceDefaults`
   makes it the default posture; the built-in task self-disables when there is no authority, so a host
-  without JwtBearer pays nothing.
+  without JwtBearer pays only for the runner and the gate (`AddWarmupReadiness` is called
+  unconditionally, `Source/Hosting/MMCA.Common.Aspire/Extensions.cs:34`; see Trade-offs).
 
 ## Trade-offs
 - **A replica can enter rotation not fully warm.** The gate is opened in a `finally` once the
@@ -186,12 +199,11 @@ gets it.
 - **Startup work on every host.** Every host runs the warm-up runner and the built-in task even if the
   benefit is marginal (the task no-ops without an authority, but the hosted service and gate still spin
   up).
-- **Middleware cache is separate.** The warm-up warms the connection, not the JwtBearer
-  `ConfigurationManager`'s discovery cache, so the very first authenticated request still triggers the
-  middleware's own fetch; the optimization is on the network path, not on eliminating the fetch. That the
-  remaining fetch is fast is the task's documented intent
-  (`Source/Hosting/MMCA.Common.Aspire/Warmup/OpenIdConnectMetadataWarmupTask.cs:14-20`), not a figure
-  measured or gated anywhere in the repo.
+- **Middleware cache and connection are separate.** The warm-up wakes the authority's discovery route,
+  not the JwtBearer `ConfigurationManager`'s discovery cache and not its backchannel connection, so
+  the very first authenticated request still triggers the middleware's own fetch over a connection of its
+  own (`Source/Hosting/MMCA.Common.Aspire/Warmup/OpenIdConnectMetadataWarmupTask.cs:14-22`). How much
+  faster that fetch runs against an already-awake authority is not measured or gated anywhere in the repo.
 
 ## Revision (2026-10-01)
 No decision or rationale changed. Citations were refreshed: the `/health/ready` predicate, the
@@ -217,6 +229,29 @@ subclasses are as recorded. Only the ADC Conference registration moved.
    `:174`, Store Catalog `Program.cs:184`, Identity `:145`, Sales `:158`, the six subclass declarations
    (ADC `:22`, `:23`, `:23`; Store `:23`, `:25`, `:26`), `Extensions.Health.cs:154-156` and
    `WarmupHostedService.cs:42`, `:53`, `:69`.
+
+## Revision (2026-10-21)
+Re-verified against current source. The readiness gate, the 120-second per-task ceiling, the PING-class
+rule and the six production `SelfHttpWarmupTaskBase` subclasses (one `AddWarmupTask` per host) are
+unchanged. What moved is the account of what the built-in OIDC task buys the JwtBearer middleware.
+
+1. The OIDC warm-up task no longer records a single-digit-millisecond intent for the middleware's first
+   fetch, and does not warm a connection the middleware shares. Its remarks
+   (`Source/Hosting/MMCA.Common.Aspire/Warmup/OpenIdConnectMetadataWarmupTask.cs:14-22`) say the middleware fetches
+   through its own default backchannel `HttpClient`: a warmed authority, not a shared warm connection.
+   What the task actually warms is the authority's discovery route (a wake and JIT warm-up): the
+   authority serves the document from a plain `MapGet` with no cache
+   (`Source/Presentation/MMCA.Common.API/Startup/Endpoints/OidcDiscoveryEndpointExtensions.cs:60-86`),
+   and nothing in source caches DNS, so the remarks' "discovery-doc cache" and "host-level DNS path" are
+   not recorded here. The Decision bullet, the Rationale "Keep cold replicas out", "Warm the path" and
+   "Free for every host" items and the "Middleware cache and connection are separate" trade-off now say so.
+2. Anchors re-verified against current source: ADC Conference
+   `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:314` (was `:313`), ADC Identity
+   `Program.cs:175` (was `:174`), ADC Identity `SelfHttpWarmupTask.cs:25` (was `:23`), Store Identity
+   `Program.cs:146` (was `:145`), Store Sales `Program.cs:159` (was `:158`),
+   `OpenIdConnectMetadataWarmupTask.cs:14-22` (was `:14-20`); unchanged and re-checked: ADC Engagement
+   `Program.cs:160`, Store Catalog `Program.cs:184`, and the subclass declarations ADC `:22`, `:23`,
+   Store `:23`, `:25`, `:26`.
 
 ## Related
 ADR-004 (the OIDC discovery document the built-in task pre-fetches, and the auth-side view of the same

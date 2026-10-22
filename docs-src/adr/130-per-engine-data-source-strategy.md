@@ -1,11 +1,15 @@
 # ADR-130: Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)
 
 ## Status
-Accepted (2026-10-01). Shipped in MMCA.Common v1.218.0 (`MMCA.Common/CHANGELOG.md:279`). Revised
+Accepted (2026-10-01). Shipped in MMCA.Common v1.218.0 (`MMCA.Common/CHANGELOG.md:623`). Revised
 2026-10-06: the release status now records v1.218.0 as shipped. Refines [ADR-018](018-polyglot-persistence.md) (engine as
 a routing decision) and [ADR-113](113-postgresql-as-a-first-class-engine.md) (the fourth engine)
 without changing [ADR-006](006-database-per-service.md) (one sealed context class per engine, one
-instance per database). Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
+instance per database). Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised
+2026-10-21: a Cosmos-default host that injects the raw-SQL executor fails at resolution (at
+container build only in Development), not unconditionally at startup, so it meets ADR-070's
+startup bar only in Development; the replaced shape is cited through its squash commit on main;
+anchors refreshed.
 
 ## Context
 MMCA.Common persists through four engines named by one shipped public enum, `DataSource`
@@ -23,7 +27,8 @@ could hold the outbox was a separate `ApplicationDbContext.SupportsOutbox` overr
 Server identity-insert path sat inside the context factory under an engine-specific name,
 `RequestIdentityInsert`. SQLite also quoted identifiers two ways: its soft-delete filter used double
 quotes while its filtered-index predicates used SQL Server brackets. The prior shape is described in
-the two MMCA.Common commits that replaced it, aa8297fb (the contract) and 23eff3a0 (the routing).
+the two MMCA.Common commits that replaced it, aa8297fb (the contract) and 23eff3a0 (the routing),
+which reached `main` squashed into e9c28d15 (PR #469, the 1.218.0 remediation wave).
 
 ## Decision
 One internal strategy object per engine answers every engine question, looked up through a static
@@ -85,7 +90,7 @@ registry keyed by the shipped enum. Call sites read engine facts; they no longer
   context creation, key mapping and the soft-delete SQL call the behaviour hooks
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/PhysicalDbContextFactory.cs:32`,
   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeConfiguration/EntityTypeConfiguration.cs:77`,
-  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/SoftDeleteFilterSql.cs:35`, `:70`).
+  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/SoftDeleteFilterSql.cs:36`, `:71`).
   The one policy constant that still names an engine is the resolver's framework default,
   `SQLServer` (`DataSourceResolver.cs:23`).
 - **Outbox support is the engine's relational flag.** `ApplicationDbContext.SupportsOutbox` is gone;
@@ -99,20 +104,22 @@ registry keyed by the shipped enum. Call sites read engine facts; they no longer
   documented at `:38-44`), and so are `IDbContextFactory`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/IDbContextFactory.cs:40`)
   and `DbContextFactory`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:322`).
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:325`).
   The engine-specific half is `IExplicitKeyInsertDialect`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/Engines/IExplicitKeyInsertDialect.cs:13`),
   which finds the per-table groups (`:21`, grouped as `ExplicitKeyInsertGroup`,
   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/Engines/ExplicitKeyInsertGroup.cs:12`)
   and builds the toggle statement (`:28`); the factory keeps the engine-neutral rounds (`:5-11`) and
-  uses the dialect only when the engine has one (`DbContextFactory.cs:293`). SQL Server is its own
+  uses the dialect only when the engine has one (`DbContextFactory.cs:296`). SQL Server is its own
   dialect (`SQLServerDataSourceEngine.cs:19`, `:49`) and emits `SET IDENTITY_INSERT [schema].[table] ON` or `OFF`
   (`:163`); the other three return `null`, so the save runs unchanged.
 - **Raw SQL is registered only where it can run.** `AddRawSqlQueryExecutor`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:400`, called at `:116`)
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:407`, called at `:116`)
   resolves the host's framework default engine and registers `IRawSqlQueryExecutor` only when that
-  engine is relational (`:409-411`). A Cosmos-default host gets no registration, so a service that
-  injects the executor fails at container validation instead of on its first statement (`:391-396`).
+  engine is relational (`:416-418`). A Cosmos-default host gets no registration, so a service that
+  injects the executor fails at resolution instead of on its first statement: at container build in
+  Development, where the default host validates the container, and on first resolution elsewhere
+  (`:397-403`).
   Both branches are tested
   (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/DependencyInjectionInfrastructureTests.cs:273`,
   `:294`).
@@ -151,10 +158,12 @@ cannot go stale. Its failure message names this record.
   (`DataSourceEngineCapabilities.cs:14-20`), and a capability gets its own member only when an engine
   genuinely answers differently (PostgreSQL's null ordering, SQL Server's required connection string,
   the three row-version strategies).
-- **Fail at startup, not at first use.** Registering the raw-SQL executor conditionally turns a
-  call-time `NotSupportedException` on Cosmos into a container-validation failure
-  (`DependencyInjection.cs:391-396`), the same fail-fast stance as
-  [ADR-070](070-fail-fast-configuration-contract.md).
+- **Fail at resolution, not at first statement.** Registering the raw-SQL executor conditionally
+  turns a call-time `NotSupportedException` on Cosmos into a resolution failure, caught at container
+  build in Development and on first resolution elsewhere (`DependencyInjection.cs:397-403`). In
+  Development that is a startup failure, the stance of
+  [ADR-070](070-fail-fast-configuration-contract.md); elsewhere it is a lazy first-use failure,
+  which ADR-070 rules out for configuration, but still earlier than the first statement.
 - **One dialect per engine.** SQLite accepts both quote forms, but a model that mixes them is two
   dialects to read and to reason about; the filter and the index predicates now agree
   (`SqliteDataSourceEngine.cs:111-115`).
@@ -165,7 +174,8 @@ cannot go stale. Its failure message names this record.
 ## Trade-offs
 - **Breaking for consumers.** The `RequestIdentityInsert` rename has no alias
   (`IUnitOfWork.cs:45`); a Cosmos-default host that injects `IRawSqlQueryExecutor` now fails at
-  startup (`DependencyInjection.cs:409`); and a SQLite consumer with migrations sees a model diff on
+  resolution (container build in Development, first resolution elsewhere,
+  `DependencyInjection.cs:397-403`, `:416-418`); and a SQLite consumer with migrations sees a model diff on
   the outbox, internal-command and push-notification filtered indexes and needs a migration.
 - **Static means not replaceable.** A consumer cannot substitute or add an engine; the registry is
   internal (`DataSourceEngines.cs:19`) and so is the contract (`IDataSourceEngine.cs:18`). That is
@@ -235,6 +245,33 @@ the call sites that read engine facts are unchanged; only line anchors moved.
    unchanged); and the `DataSourceEntrySettings` connection-string properties sit at
    `DataSourceEntrySettings.cs:22` (Cosmos), `:28` (PostgreSQL), `:40` (SQLite) and `:58`
    (SQL Server).
+
+## Revision (2026-10-21)
+Re-verified against current source. The engine contract, the registry, the capabilities table and
+the call sites that read engine facts are unchanged; the raw-SQL failure timing is stated more
+precisely, the Rationale no longer calls it the ADR-070 fail-fast stance outside Development, and
+anchors were re-pointed.
+
+1. **Raw-SQL failure timing.** A Cosmos-default host that injects `IRawSqlQueryExecutor` fails at
+   resolution rather than on its first statement: at container build in Development, where the
+   default host validates the container, and on first resolution elsewhere
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:397-403`). The
+   Decision, Rationale and Trade-offs no longer say it fails unconditionally at container
+   validation or startup. The Rationale no longer equates it with ADR-070's fail-fast stance:
+   ADR-070 validates at startup and rules out lazy first-use evaluation
+   (`Website/docs-src/adr/070-fail-fast-configuration-contract.md:63`), which outside Development
+   is what this registration does.
+2. **Commit citation.** aa8297fb and 23eff3a0 are reachable only from the feature branch; the work
+   reached `main` as squash commit e9c28d15 (PR #469), now cited alongside them in Context.
+3. Anchors re-verified against current source: the v1.218.0 release heading is
+   `MMCA.Common/CHANGELOG.md:623`, with the `RequestIdentityInsert` rename entry at `:629`, now also
+   cited in the Status block (the `:279` in the 2026-10-06 revision and the `:304` in the 2026-10-07
+   revision are left as written);
+   `DbContextFactory.cs:296` (dialect use) and `:325` (`RequestExplicitKeyInsert`);
+   `DependencyInjection.cs:407` (`AddRawSqlQueryExecutor`, still called at `:116`), `:416-418`
+   (relational check and registration) and `:397-403` (its doc comment);
+   `SoftDeleteFilterSql.cs:36` and `:71`, re-pointed from the method declarations (`:35`, `:70`,
+   unchanged) to the lines that call the behaviour hooks, matching the sibling call-line anchors.
 
 ## Related
 [ADR-006](006-database-per-service.md) (one sealed context per engine),

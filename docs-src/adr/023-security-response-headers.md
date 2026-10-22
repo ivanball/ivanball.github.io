@@ -21,6 +21,7 @@ Revised 2026-10-01 (a custom provider registered after `AddCommonSecurityHeaders
 Revised 2026-10-06 (credential paths also answer `Pragma: no-cache`, re-apply their cache headers at
 response start over a weaker downstream value, and have their prefixes validated at startup).
 Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
+Revised 2026-10-21: re-verified against current source, no content or anchor change.
 ## Context
 Every client-facing host (the YARP Gateway and the Blazor UI web host in each app) must stamp the same
 hardened HTTP response headers: `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`,
@@ -300,6 +301,21 @@ revision, so the anchors that revision recorded for it are stale, and one valida
    `:199-209` (forwarded headers), `:212-215` (security headers, no `UseHsts`) and `:218-220` (rate
    limiter). The ordering is unchanged: forwarded headers, then security headers, then rate limiting,
    then the HTTPS redirect.
+
+## Revision (2026-10-21)
+
+Re-verified against current source. No decision, rationale or trade-off changed, and no live-section
+anchor moved since the 2026-10-07 revision.
+
+1. Anchors re-verified against current source: the static default's `TryAddSingleton` registration
+   is still `MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Security/SecurityHeaders.cs:288`, the
+   register-first guidance still `:265-266` and the `ICspPolicyProvider` summary `:83-84` (interface
+   at `:86`); `AddCommonBlazorCsp` (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:67`)
+   still registers with plain `AddSingleton` at `:77`, with its call-before comment at `:56-58`. The
+   Decision defaults hold as written: `X-Frame-Options: DENY` (`SecurityHeaders.cs:25`),
+   `strict-origin-when-cross-origin` (`:28`), the `Permissions-Policy` value (`:31`), HSTS
+   `max-age=31536000; includeSubDomains` (`:51`) gated on `EnableHsts` outside Development (`:175`),
+   the static baseline (`:67-69`), and the 128-bit `{nonce}` (16 bytes, `:153`, generated at `:228`).
 
 ## Related
 ADR-019 (rate limiting, the other always-on edge protection living in the same Aspire layer), ADR-022

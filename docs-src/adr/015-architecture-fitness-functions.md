@@ -42,6 +42,11 @@ figures are re-counted. See Revision (2026-10-06) at the end.
 Revised 2026-10-07: MMCA.Common runs a second architecture map, `FrameworkModuleArchitectureMap`, over
 its own aggregates, the shipped baselines are re-counted against v1.233.0, and the anchors that moved
 are refreshed.
+Revised 2026-10-21: two rule families joined the library since v1.233.0 (Liskov substitutability,
+`SubstitutabilityTestsBase`, and a two-way `PRIVACY.md` inventory gate, `PiiInventoryTestsBase`) and
+`PiiConventionTestsBase` gained the reverse erasure checks; the shipped public API baselines are
+re-counted against v1.250.0 (8,434 declarations, every unshipped file header-only) and anchors
+refreshed after v1.250.0, the counts `FACTS.md` owns now sitting at `:81` / `:84`.
 
 ## Context
 The codebase rests on invariants that are easy to state and easy to erode by accident: clean-
@@ -690,6 +695,61 @@ anchors drifted, including some the 2026-10-06 entry said still resolve.
    `Source/Presentation/MMCA.Common.UI/Services/Notifications/NotificationHubService.cs:49-50`;
    `[HubMethodName]` at `NotificationHub.cs:127` and `:144` and `Context.ConnectionAborted` at `:136`
    and `:150` still resolve. The Status block's `FACTS.md:51` / `:54` pointers still resolve.
+
+## Revision (2026-10-21): re-counted baselines, moved anchors
+Re-verified against current source. No decision changed: the two enforcement layers plus the public
+API gate, the `MMCA.Common.UI.Maui` exclusion, the `--minimum-expected-tests 2000` floor
+(`.github/workflows/ci.yml:163`, still as the Decision cites it) and the RS rule severities are as the
+earlier entries describe. Two rule families joined the shared library after v1.233.0 and one existing
+base gained rules (the method and base counts are `MMCA.Common/FACTS.md:81`), the baselines moved with
+the v1.250.0 release (`MMCA.Common/FACTS.md:14`), and several anchors drifted, including some the
+2026-10-07 entry said still resolve.
+
+1. **The rule library grew by two bases and five rules.** All paths below sit under
+   `Source/Hosting/MMCA.Common.Testing.Architecture/`.
+   - **Liskov substitutability.** `SubstitutabilityTestsBase` (`Bases/Governance/SubstitutabilityTestsBase.cs:21`)
+     runs `SubstitutableMembersDoNotRefuseTheContract`
+     (`Rules/Governance/ArchitectureRules.Substitutability.cs:50`): no override of a base virtual or
+     abstract member, and no interface member implementation, throws `NotSupportedException` or
+     `NotImplementedException`, read from IL; a reviewed refusal is listed in `ExcludedMembers`
+     (`SubstitutabilityTestsBase.cs:31`). MMCA.Common
+     (`Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/Substitutability/CommonSubstitutabilityTests.cs:10`),
+     MMCA.ADC and MMCA.Store subclass it.
+   - **Personal-data inventory.** `PiiInventoryTestsBase` (`Bases/Privacy/PiiInventoryTestsBase.cs:33`)
+     holds the `[Pii]` markers and the `PRIVACY.md` inventory table to the same set in both directions:
+     `PiiMembersHaveInventoryRows` (`Rules/Governance/ArchitectureRules.PiiInventory.cs:23`) and
+     `PiiInventoryRowsMapToPiiMembers` (`:61`). MMCA.ADC and MMCA.Store subclass it; MMCA.Common
+     exercises it through a fixture subclass
+     (`Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/Privacy/PiiInventoryTestsBaseTests.cs:14`).
+   - **Reverse erasure checks.** The existing `PiiConventionTestsBase`
+     (`Bases/Governance/PiiConventionTestsBase.cs:19`) now also runs
+     `AnonymizableEntitiesAreCoveredBySamples` (`Rules/Governance/ArchitectureRules.Anonymization.cs:12`)
+     and `PropertiesOverwrittenByAnonymizeCarryPii` (`:49`) over its `AnonymizableSamples`
+     (`PiiConventionTestsBase.cs:31`, `:37-44`), so whatever `Anonymize()` overwrites must carry `[Pii]`.
+2. **The shipped baselines hold 8,434 declarations across 8,455 non-empty lines** in the 21
+   `PublicAPI.Shipped.txt` files, each carrying exactly one `#nullable enable` header (four of them,
+   `MMCA.Common.Application`, `MMCA.Common.Infrastructure`, `MMCA.Common.Testing.Architecture` and
+   `MMCA.Common.API`, open with a UTF-8 byte-order mark before it). The 2026-10-07 entry read 8,260
+   across 8,281 against v1.233.0. The 21-pair count stands, the `MMCA.Common` metapackage's shipped
+   file (`Source/MMCA.Common/PublicAPI.Shipped.txt:1`) is still the only header-only shipped file, and
+   all 21 `PublicAPI.Unshipped.txt` files still hold the header alone, so no unshipped declarations
+   exist today.
+3. **Anchors re-verified against current source:** the live method and base counts are
+   `MMCA.Common/FACTS.md:81` and the executed count `:84` (the re-run across Common, ADC and Store is
+   stated at `:82-83`), where the Status block's earlier sentences cite `:51` / `:54`; read `FACTS.md`
+   for the values. The `PublicApiAnalyzers` 5.6.0 `PackageVersion` is
+   `MMCA.Common/Directory.Packages.props:235` (its comment ending on `:234`). In
+   `MMCA.Common/Directory.Build.props`: the public API gate comment `:101-110` (RS0016 / RS0017 at
+   `:103-104`, the Maui rationale `:107-109`), the ItemGroup condition with the
+   `MMCA.Common.UI.Maui` exclusion `:111`, the `PackageReference` `:112`, the `AdditionalFiles`
+   `:116-117`; the RS0041 rationale `:22-26`, the `NoWarn` line `:30` and `TreatWarningsAsErrors` `:7`
+   still resolve. The v1.153.0 changelog heading is `MMCA.Common/CHANGELOG.md:3663` and its "Three new
+   build gates" bullet `:3718-3724` (PublicApiAnalyzers on `:3722`). `[HubMethodName]` at
+   `NotificationHub.cs:127` and `:144` still resolves, and `Context.ConnectionAborted` is passed at
+   `:136` and `:153` (and to the channel authorizer at `:168`); the framework client's
+   `JoinChannelMethodName` / `LeaveChannelMethodName` constants at
+   `Source/Presentation/MMCA.Common.UI/Services/Notifications/NotificationHubService.cs:49-50` still
+   resolve.
 
 ## Related
 ADR-009 (resilience gate), ADR-010 (event-version gate), ADR-016 (MassTransit pin gate, and the

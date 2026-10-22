@@ -21,6 +21,9 @@ Revised 2026-10-07: a client-synthesized failure is localized by its code throug
 localizer and, when the caller passes one, then the framework's own `SharedResource` pair before
 falling back to English, and the error-catalog rule's own summary now states that it does not read
 `Error.TooManyRequests`; anchors refreshed after the v1.232.1 release.
+Revised 2026-10-21: the error-catalog rule now recognizes `Error.TooManyRequests` (v1.247.0), so
+codes built through it are held to the uniqueness and prefix gates; the 499 handler also answers a
+`DbException` raised after the client disconnects (v1.241.0); anchors refreshed.
 
 ## Context
 Operations at every layer fail in *expected* ways: input is invalid, a domain invariant is broken, a
@@ -120,12 +123,16 @@ not exceptions.
   (which stamps a `requestId` extension from the request's trace identifier), then registers the handlers
   in a load-bearing order; ASP.NET Core runs them in registration order and stops at the first handler
   that reports the exception handled, so most-specific-first placement is the mechanism, not a comment
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:149-161`, registrations at
-  lines 154-158):
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:154-166`, registrations at
+  lines 159-163):
   - `OperationCanceledExceptionHandler` (registered first) maps a client-disconnect
     `OperationCanceledException` to the non-standard HTTP 499 Client Closed Request, so monitoring can
     tell an abandoned request apart from a server fault
-    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/OperationCanceledExceptionHandler.cs:29-30,37`).
+    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/OperationCanceledExceptionHandler.cs:38-39`,
+    status set at `:46`). It answers a `DbException` raised after the client has gone the same way,
+    because a data provider may report the cancelled command as its own exception (SqlClient raises
+    a `SqlException`); it is still logged with its stack at warning, and any other exception type, or
+    a `DbException` while the client is connected, falls through to the generic handler (`:17-22`).
   - `DomainExceptionHandler` maps a `DomainException` (a business-rule violation reaching the edge as an
     exception rather than a `Result`) to HTTP 400 Bad Request
     (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/DomainExceptionHandler.cs:27,32`).
@@ -244,11 +251,12 @@ inline and several as a list so a screen reader announces them as several items,
 `MobileInfiniteScrollList` takes one page fetcher, `FetchPageResult`, a required delegate returning
 `Task<Result<(IReadOnlyList<TItem> Items, int TotalItems)>>`
 (`.../MMCA.Common.UI/Components/Lists/MobileInfiniteScrollList.razor.cs:37`), and renders the failure's
-localized message beside its inline retry affordance (`:204-210` into `SetLoadFailed` at `:208`, the
-message read from the failed `Result` at `:304`). A tuple-returning delegate is not offered beside it: a tuple has no way to carry
+localized message beside its inline retry affordance (`:169-175` into `SetLoadFailed` at `:173`, the
+message read from the failed `Result` at `:269`). A tuple-returning delegate is not offered beside it: a tuple has no way to carry
 a failure at all, so the component would be left showing a Retry button that cannot name what it is
 retrying. The delegate is checked at initialization, so a call site that omits it throws instead of
-rendering as a load failure that can never succeed (`:97-109`).
+rendering as a load failure that can never succeed (`:94-106`, the guard at `:101`, the throw at
+`:103-104`).
 
 ### The error `Code` is a public vocabulary, gated for uniqueness (2026-09-03)
 
@@ -256,17 +264,17 @@ rendering as a load failure that can never succeed (`:97-109`).
 key ADR-027 localizes the message by, so a client switches on `Order.NotFound` and a support ticket
 quotes it. Two modules that both ship `Item.Invalid` make that vocabulary ambiguous, and the
 ambiguity only surfaces in production
-(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.ErrorCatalog.cs:33-39`).
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.ErrorCatalog.cs:32-38`).
 The catalog is therefore frozen the way ADR-010 froze integration-event schemas and ADR-015 Section B
 froze the `.proto` contracts. A Mono.Cecil IL scan reads the `Error` factory call sites it
-recognizes (`:171`, `:207-208`, the recognized members at `:19-31` and `:219-224`) across a repo's
-per-module Domain and Application assemblies only (`:185-191`). The recognized set does not
-include `Error.TooManyRequests` (`Error.cs:103`), so a call to that factory is neither checked nor
-reported as UNVERIFIABLE, and the list's own summary states that gap (`:11-15`);
-`ErrorCodesAreUnique` (`:64`) fails the build when one literal code is constructed by more than one
-declaring type (`:75`), and `ErrorCodesUseAnAllowedPrefix` (`:104`) requires the owning prefix. A
-code built at run time is reported as UNVERIFIABLE rather than passed or failed (`:212-215`,
-`:149-157`). Consumers subclass
+recognizes (`:170`, `:206-207`, the recognized members at `:17-30` and `:218-223`) across a repo's
+per-module Domain and Application assemblies only (`:184-190`). The recognized set covers every
+code-first factory, `Error.TooManyRequests` included (`:26`, the factory at `Error.cs:103-104`),
+plus the primary constructor (`ArchitectureRules.ErrorCatalog.cs:29`, described at `:11-16`);
+`ErrorCodesAreUnique` (`:63`) fails the build when one literal code is constructed by more than one
+declaring type (`:74`), and `ErrorCodesUseAnAllowedPrefix` (`:103`) requires the owning prefix. A
+code built at run time is reported as UNVERIFIABLE rather than passed or failed (`:211-214`,
+`:148-156`). Consumers subclass
 `ErrorCatalogTestsBase` (`.../Bases/Contracts/ErrorCatalogTestsBase.cs:20`, the three facts at `:46`,
 `:50`, `:54`) and allowlist a deliberately shared code (`:35-36`) rather than rename a shipped one:
 Store (`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Contracts/ErrorCatalogTests.cs:19`)
@@ -333,14 +341,14 @@ do; MMCA.Common ships no module catalog and self-tests the rules against fixture
 - **An exception reaching a page still costs it the reason.** Where a failed `Result` carries a
   localized message the page can render, an exception that escapes a consumer-supplied fetcher falls
   back to a generic resource string, because its own text is neither translatable nor safe to render
-  (`MobileInfiniteScrollList.razor.cs:226-234`, `SetLoadFailed(failure: null)` at `:233`, the
-  fallback stated at `:296-300`, `SetLoadFailed` itself at `:301-305`). Returning `Result` is what
+  (`MobileInfiniteScrollList.razor.cs:191-199`, `SetLoadFailed(failure: null)` at `:198`, the
+  fallback stated at `:261-264`, `SetLoadFailed` itself at `:266-270`). Returning `Result` is what
   makes the specific message available at all; nothing forces a call site to produce one.
 - The exception-handler registration order is load-bearing. Because ASP.NET Core stops at the first
   handler that reports the exception handled, a mis-ordered registration (for example the catch-all
   `GlobalExceptionHandler` ahead of a specific handler) would swallow the more precise status;
   `GlobalExceptionHandler` must stay registered last
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:154-158`).
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:159-163`).
 
 ## Revision (2026-10-01)
 No decision or rationale changed. Citations were re-anchored to the current source after line
@@ -409,6 +417,32 @@ v1.232.1 release (`HttpResultExecutor.cs:18-24` and `ErrorSummary.razor:8` / `:1
    checks found `ErrorHttpMapping.cs:30-31`, `ResultGrpcExtensions.cs:48-49`,
    `ErrorTypeSeverity.cs:43`, `Error.cs:103` and `:126-127`, and
    `MobileInfiniteScrollList.razor.cs:301-305` still correct.
+
+## Revision (2026-10-21)
+Re-verified against current source. The decision, the combinator surface, the ten categories, the
+severity ranking, the exception-handler order, and the `MobileInfiniteScrollList` failure behavior
+are unchanged; one gap recorded by the earlier revisions is closed, the 499 handler claims one more
+exception type, and anchors into four files moved.
+1. Changed: the error-catalog IL scan now recognizes `Error.TooManyRequests`
+   (`ArchitectureRules.ErrorCatalog.cs:26`, in the recognized list at `:17-30`), so a code built through
+   that factory is checked for uniqueness and prefix like any other, and the list's summary no longer
+   states a gap (`:11-16`). Shipped in v1.247.0 (`MMCA.Common/CHANGELOG.md:93`). The 2026-10-06
+   "Noted" item and 2026-10-07 item 2 above describe the earlier state.
+2. Moved: `SetLoadFailed`, at `MobileInfiniteScrollList.razor.cs:301-305` when the 2026-10-07 spot
+   check ran, has since moved (v1.234.1); those lines are now `ResetAsync` code, and `SetLoadFailed`
+   sits at `:266-270`.
+3. Changed: `OperationCanceledExceptionHandler` also answers 499 for a `DbException` raised after the
+   client disconnects, since a data provider may report the cancelled command as its own exception;
+   it is logged at warning with its stack, and a `DbException` while the client is connected still
+   falls through to the 500 (`OperationCanceledExceptionHandler.cs:17-22`, the type and disconnect
+   guard at `:38-39`, the 499 at `:46`). Shipped in v1.241.0 (`MMCA.Common/CHANGELOG.md:230`).
+4. Anchors re-verified against current source: `DependencyInjection.cs:154-166` (`AddProblemDetails`
+   at `:156-158`, registrations `:159-163`, `GlobalExceptionHandler` last at `:163`);
+   `OperationCanceledExceptionHandler.cs:17-22`, `:38-39`, `:46`;
+   `MobileInfiniteScrollList.razor.cs:37`, `:94-106` (guard at `:101`, throw at `:103-104`), `:169-175` (`:173`),
+   `:191-199` (`:198`), `:261-264`, `:266-270` (`:269`); `ArchitectureRules.ErrorCatalog.cs:32-38`,
+   `:63`, `:74`, `:103`, `:148-156`, `:170`, `:184-190`, `:206-207`, `:211-214`, `:218-223`;
+   `Error.cs:103-104`.
 
 ## Related
 [ADR-007](007-grpc-extraction.md) (Result over the wire via gRPC, the second edge the shared severity

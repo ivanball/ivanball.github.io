@@ -12,7 +12,8 @@ action; citations re-anchored). Revised 2026-10-06 (the consumers call the share
 default success mode; the omitted 2026-10-01 entry is added here; anchors re-verified). Revised
 2026-10-07: the consumer load-freshness gate is a step of a single `freshness` job, which
 `deploy.needs` lists, and the shared action, which the consumers pin at `@main`, filters runs
-client-side; anchors re-verified against current source.
+client-side; anchors re-verified against current source. Revised 2026-10-21: anchors refreshed
+after the consumer deploy workflows, `CONTRIBUTING.md` and `release.yml` shifted.
 
 ## Context
 Rubric section 12 asks for hot-path efficiency that is **measured, not assumed**
@@ -87,7 +88,7 @@ benchmark-to-benchmark ratio floors where it is not.
 
 - **The job is a required merge gate, not advisory.** It is listed among the eight required contexts
   in `MMCA.Common/CONTRIBUTING.md:68-71` and in the reproducible ruleset payload there
-  (`CONTRIBUTING.md:203`), and the live branch protection on `ivanball/MMCA.Common` returns the same
+  (`CONTRIBUTING.md:207`), and the live branch protection on `ivanball/MMCA.Common` returns the same
   context (read 2026-07-28 via
   `gh api repos/ivanball/MMCA.Common/branches/main/protection --jq '.required_status_checks.contexts[]'`).
   Moving a number therefore requires editing the baseline in the same PR, and raising a ceiling to
@@ -109,20 +110,20 @@ artifact for backend hot paths is a k6 load test against deployed read endpoints
 on a schedule and on demand, not on a pull request (`MMCA.ADC/.github/workflows/load-test.yml:13-23`,
 `MMCA.Store/.github/workflows/load-test.yml:11-21`). Both consumers gate every production deploy on
 that run's recency: a `load-freshness` step fails the deploy when the latest successful `load-test.yml`
-run is older than 35 days (ADC `MMCA.ADC/.github/workflows/deploy.yml:849-850`, window at `:858`;
-Store `MMCA.Store/.github/workflows/deploy.yml:806-807`, window at `:815`). The step is one of four
-inside a single `freshness` job (ADC `deploy.yml:817`, Store `deploy.yml:774`) and runs unless the
-job is cancelled (ADC `deploy.yml:851`, Store `deploy.yml:808`), so it reports even when an earlier
+run is older than 35 days (ADC `MMCA.ADC/.github/workflows/deploy.yml:864-865`, window at `:873`;
+Store `MMCA.Store/.github/workflows/deploy.yml:808-809`, window at `:817`). The step is one of four
+inside a single `freshness` job (ADC `deploy.yml:832`, Store `deploy.yml:776`) and runs unless the
+job is cancelled (ADC `deploy.yml:866`, Store `deploy.yml:810`), so it reports even when an earlier
 freshness step fails. Both steps call the shared composite action
-`ivanball/MMCA.Common/.github/actions/freshness-gate@main` (ADC `deploy.yml:854`, Store
-`deploy.yml:811`) in its default success mode (no `required-jobs` input), which lists the workflow's
+`ivanball/MMCA.Common/.github/actions/freshness-gate@main` (ADC `deploy.yml:869`, Store
+`deploy.yml:813`) in its default success mode (no `required-jobs` input), which lists the workflow's
 runs with no server-side status filter, keeps the completed ones whose conclusion is success on the
 client, and takes the newest
 (`MMCA.Common/.github/actions/freshness-gate/action.yml:158-183,222-231`), then fails when its age in
 whole days exceeds the window (`action.yml:139-149`). The `deploy` job lists `freshness` in `needs`
-(ADC `deploy.yml:1145`, Store `deploy.yml:1083`). A break-glass skip exists and refuses to fire
+(ADC `deploy.yml:1160`, Store `deploy.yml:1098`). A break-glass skip exists and refuses to fire
 without a written justification (`action.yml:99-104`; the deploy workflows pass `skip` and
-`skip-justification` at ADC `deploy.yml:860-861`, Store `deploy.yml:817-818`).
+`skip-justification` at ADC `deploy.yml:875-876`, Store `deploy.yml:819-820`).
 That makes the k6 run a standing precondition of shipping, not a per-PR measurement: it proves
 capacity was checked within the window, not that the change being deployed kept it. MMCA.Helpdesk
 has neither. The client-side
@@ -188,7 +189,7 @@ counterpart, a Core Web Vitals budget asserted per deploy inside the chromium e2
 - **The gate runs on pull requests only.** CI has no `push: main` trigger
   (`MMCA.Common/.github/workflows/ci.yml:14-16`), and `release.yml` does not run `build/perfgate` (it
   only mentions the project in two NuGet cache-key comments,
-  `MMCA.Common/.github/workflows/release.yml:52,188`), so a release tag is not re-verified against
+  `MMCA.Common/.github/workflows/release.yml:52,190`), so a release tag is not re-verified against
   the baseline.
 - **A green context does not always mean the benchmarks ran.** On a documentation-only PR the heavy
   steps are skipped by the `changes` classifier while all required contexts still post green, which
@@ -242,6 +243,20 @@ shape of the consumer gate and the query inside the shared action.
    `release.yml:52,188`; ADC `deploy.yml:854,858,860-861`, Store `deploy.yml:811,815,817-818`;
    `action.yml:99-104` (justification refusal), `:139-149` (age check); and ADR-015's "not runtime
    behavior" sentence at `015-architecture-fitness-functions.md:93`.
+
+## Revision (2026-10-21)
+Re-verified against current source. No decision or rationale changed: the eight required contexts,
+the release workflow's non-use of `build/perfgate`, and the consumer `freshness` job (four steps,
+`load-freshness` second, success mode with no `required-jobs` input, 35-day window, break-glass skip
+with a mandatory justification) are as recorded. Only line anchors moved.
+
+1. Anchors re-verified against current source: `CONTRIBUTING.md:207` (the Performance gate context
+   in the ruleset payload; the eight-gates list at `:60,68-71` is unchanged); `release.yml:52,190`
+   (the two cache-key comments; no step invokes perfgate); ADC
+   `MMCA.ADC/.github/workflows/deploy.yml:832` (job), `:864-865` (step name and id), `:866`
+   (`!cancelled()`), `:869` (action), `:873` (window), `:875-876` (skip inputs), `:1160`
+   (`deploy.needs`); Store `MMCA.Store/.github/workflows/deploy.yml:776`, `:808-809`, `:810`,
+   `:813`, `:817`, `:819-820`, `:1098`. The anchors in the earlier revisions are kept as recorded.
 
 ## Related
 ADR-015 (structural fitness functions, which explicitly stop at structure and registration; this is

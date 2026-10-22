@@ -251,7 +251,8 @@
           default success mode; the omitted 2026-10-01 entry is added here; anchors re-verified). Revised
           2026-10-07: the consumer load-freshness gate is a step of a single <code>freshness</code> job, which
           <code>deploy.needs</code> lists, and the shared action, which the consumers pin at <code>@main</code>, filters runs
-          client-side; anchors re-verified against current source.</p>
+          client-side; anchors re-verified against current source. Revised 2026-10-21: anchors refreshed
+          after the consumer deploy workflows, <code>CONTRIBUTING.md</code> and <code>release.yml</code> shifted.</p>
           <h2 id="context">Context</h2>
           <p>Rubric section 12 asks for hot-path efficiency that is <strong>measured, not assumed</strong>
           (<code>Website/docs-src/governance/ArchitectureEvaluationCriteria.md:386</code>). MMCA.Common has a
@@ -321,7 +322,7 @@
           </li>
           <li><p><strong>The job is a required merge gate, not advisory.</strong> It is listed among the eight required contexts
           in <code>MMCA.Common/CONTRIBUTING.md:68-71</code> and in the reproducible ruleset payload there
-          (<code>CONTRIBUTING.md:203</code>), and the live branch protection on <code>ivanball/MMCA.Common</code> returns the same
+          (<code>CONTRIBUTING.md:207</code>), and the live branch protection on <code>ivanball/MMCA.Common</code> returns the same
           context (read 2026-07-28 via
           <code>gh api repos/ivanball/MMCA.Common/branches/main/protection --jq &#39;.required_status_checks.contexts[]&#39;</code>).
           Moving a number therefore requires editing the baseline in the same PR, and raising a ceiling to
@@ -343,20 +344,20 @@
           on a schedule and on demand, not on a pull request (<code>MMCA.ADC/.github/workflows/load-test.yml:13-23</code>,
           <code>MMCA.Store/.github/workflows/load-test.yml:11-21</code>). Both consumers gate every production deploy on
           that run&#39;s recency: a <code>load-freshness</code> step fails the deploy when the latest successful <code>load-test.yml</code>
-          run is older than 35 days (ADC <code>MMCA.ADC/.github/workflows/deploy.yml:849-850</code>, window at <code>:858</code>;
-          Store <code>MMCA.Store/.github/workflows/deploy.yml:806-807</code>, window at <code>:815</code>). The step is one of four
-          inside a single <code>freshness</code> job (ADC <code>deploy.yml:817</code>, Store <code>deploy.yml:774</code>) and runs unless the
-          job is cancelled (ADC <code>deploy.yml:851</code>, Store <code>deploy.yml:808</code>), so it reports even when an earlier
+          run is older than 35 days (ADC <code>MMCA.ADC/.github/workflows/deploy.yml:864-865</code>, window at <code>:873</code>;
+          Store <code>MMCA.Store/.github/workflows/deploy.yml:808-809</code>, window at <code>:817</code>). The step is one of four
+          inside a single <code>freshness</code> job (ADC <code>deploy.yml:832</code>, Store <code>deploy.yml:776</code>) and runs unless the
+          job is cancelled (ADC <code>deploy.yml:866</code>, Store <code>deploy.yml:810</code>), so it reports even when an earlier
           freshness step fails. Both steps call the shared composite action
-          <code>ivanball/MMCA.Common/.github/actions/freshness-gate@main</code> (ADC <code>deploy.yml:854</code>, Store
-          <code>deploy.yml:811</code>) in its default success mode (no <code>required-jobs</code> input), which lists the workflow&#39;s
+          <code>ivanball/MMCA.Common/.github/actions/freshness-gate@main</code> (ADC <code>deploy.yml:869</code>, Store
+          <code>deploy.yml:813</code>) in its default success mode (no <code>required-jobs</code> input), which lists the workflow&#39;s
           runs with no server-side status filter, keeps the completed ones whose conclusion is success on the
           client, and takes the newest
           (<code>MMCA.Common/.github/actions/freshness-gate/action.yml:158-183,222-231</code>), then fails when its age in
           whole days exceeds the window (<code>action.yml:139-149</code>). The <code>deploy</code> job lists <code>freshness</code> in <code>needs</code>
-          (ADC <code>deploy.yml:1145</code>, Store <code>deploy.yml:1083</code>). A break-glass skip exists and refuses to fire
+          (ADC <code>deploy.yml:1160</code>, Store <code>deploy.yml:1098</code>). A break-glass skip exists and refuses to fire
           without a written justification (<code>action.yml:99-104</code>; the deploy workflows pass <code>skip</code> and
-          <code>skip-justification</code> at ADC <code>deploy.yml:860-861</code>, Store <code>deploy.yml:817-818</code>).
+          <code>skip-justification</code> at ADC <code>deploy.yml:875-876</code>, Store <code>deploy.yml:819-820</code>).
           That makes the k6 run a standing precondition of shipping, not a per-PR measurement: it proves
           capacity was checked within the window, not that the change being deployed kept it. MMCA.Helpdesk
           has neither. The client-side
@@ -423,7 +424,7 @@
           <li><strong>The gate runs on pull requests only.</strong> CI has no <code>push: main</code> trigger
           (<code>MMCA.Common/.github/workflows/ci.yml:14-16</code>), and <code>release.yml</code> does not run <code>build/perfgate</code> (it
           only mentions the project in two NuGet cache-key comments,
-          <code>MMCA.Common/.github/workflows/release.yml:52,188</code>), so a release tag is not re-verified against
+          <code>MMCA.Common/.github/workflows/release.yml:52,190</code>), so a release tag is not re-verified against
           the baseline.</li>
           <li><strong>A green context does not always mean the benchmarks ran.</strong> On a documentation-only PR the heavy
           steps are skipped by the <code>changes</code> classifier while all required contexts still post green, which
@@ -478,6 +479,20 @@
           <code>action.yml:99-104</code> (justification refusal), <code>:139-149</code> (age check); and ADR-015&#39;s &quot;not runtime
           behavior&quot; sentence at <code>015-architecture-fitness-functions.md:93</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. No decision or rationale changed: the eight required contexts,
+          the release workflow&#39;s non-use of <code>build/perfgate</code>, and the consumer <code>freshness</code> job (four steps,
+          <code>load-freshness</code> second, success mode with no <code>required-jobs</code> input, 35-day window, break-glass skip
+          with a mandatory justification) are as recorded. Only line anchors moved.</p>
+          <ol>
+          <li>Anchors re-verified against current source: <code>CONTRIBUTING.md:207</code> (the Performance gate context
+          in the ruleset payload; the eight-gates list at <code>:60,68-71</code> is unchanged); <code>release.yml:52,190</code>
+          (the two cache-key comments; no step invokes perfgate); ADC
+          <code>MMCA.ADC/.github/workflows/deploy.yml:832</code> (job), <code>:864-865</code> (step name and id), <code>:866</code>
+          (<code>!cancelled()</code>), <code>:869</code> (action), <code>:873</code> (window), <code>:875-876</code> (skip inputs), <code>:1160</code>
+          (<code>deploy.needs</code>); Store <code>MMCA.Store/.github/workflows/deploy.yml:776</code>, <code>:808-809</code>, <code>:810</code>,
+          <code>:813</code>, <code>:817</code>, <code>:819-820</code>, <code>:1098</code>. The anchors in the earlier revisions are kept as recorded.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-015 (structural fitness functions, which explicitly stop at structure and registration; this is
           their runtime-cost counterpart), ADR-038 (the other build-gating control set, applied to supply-chain
@@ -503,6 +518,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

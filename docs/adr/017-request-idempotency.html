@@ -254,7 +254,8 @@
           fail open; see Revision below). Revised 2026-10-07: the shared <code>[Idempotent]</code> inventory is
           corrected (email confirmation, entity create and update, notifications and legal acceptance carry
           it too, not only the password-reset pair) and the shared admin lock/unlock POSTs are recorded as
-          declared by each consumer override rather than by the base.</p>
+          declared by each consumer override rather than by the base. Revised 2026-10-21: anchors refreshed
+          after the shared auth, entity-create and user-admin controller declarations moved; no content change.</p>
           <h2 id="context">Context</h2>
           <p>Write endpoints (POST / PUT / PATCH) are exposed to <strong>client retries and double-submits</strong>: a flaky
           network, an impatient user double-clicking, or a resilience pipeline re-issuing a request can cause the
@@ -505,6 +506,27 @@
           buffering guard at <code>:122-123</code> and <code>ReadIdempotencyKey</code> at <code>:164-171</code> (blank to null at <code>:170</code>);
           the passthrough tests remain at <code>IdempotencyFilterPassthroughTests.cs:46</code>, <code>:68</code> and <code>:85</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. The Decision, Rationale and Trade-offs are unchanged, and the
+          inventory recorded in the Revision (2026-10-07) still holds in substance: every POST on
+          <code>AuthControllerBase</code> is <code>[NonIdempotent]</code>, the shared bases listed there declare <code>[Idempotent]</code>,
+          <code>UsersAdminControllerBase</code> still carries neither marker on lock and unlock, and both consumers still
+          override those two actions with <code>[NonIdempotent]</code>. Only anchors moved. That section is left as written.</p>
+          <ol>
+          <li>Anchors re-verified against current source: in
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AuthControllerBase.cs</code>, login <code>:69-70</code>
+          and register <code>:93-94</code> are unchanged, refresh is at <code>:124-125</code>, revoke at <code>:152-153</code> and the
+          per-session revoke at <code>:216-217</code>; the entity create POST is at
+          <code>.../Controllers/AggregateRootEntityControllerBase.cs:75-76</code>; the <code>UsersAdminControllerBase</code> lock
+          and unlock POSTs are at <code>.../Controllers/Administration/UsersAdminControllerBase.cs:103</code> and <code>:123</code>;
+          the consumer overrides are at
+          <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Controllers/UsersAdminController.cs:34</code> and
+          <code>:43</code>, and
+          <code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.API/Controllers/AdminUsersController.cs:103</code>
+          and <code>:111</code>. <code>NotificationsController</code> has a single <code>[Idempotent]</code>, on its POST
+          (<code>.../Controllers/Notifications/NotificationsController.cs:43-44</code>); the separate <code>:30</code> anchor
+          recorded earlier names no declaration and is dropped.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-003 (handler idempotency for outbox/event consumers, a distinct concern), ADR-013 (Result is the
           response the filter caches/replays), ADR-014 (the filter keeps the handler thin), ADR-009 (the resilience
@@ -535,6 +557,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

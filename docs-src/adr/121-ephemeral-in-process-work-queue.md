@@ -5,6 +5,7 @@ Accepted (2026-09-11). Supersedes [ADR-052](052-background-job-execution.md).
 Revised 2026-10-01: the scoring trigger's feature gate and failure path, and ADR-025's place among the framework hosted services.
 Revised 2026-10-06: the scoring trigger's event-existence 404 and the handler's current retry remarks.
 Revised 2026-10-07: the live drain's bounded shutdown flush (complete the queue, then publish what remains within a 5-second budget) and its `WaitToReadAsync` loop.
+Revised 2026-10-21: anchors refreshed after the live drain, upvote handler and question submit handler moved.
 
 ## Context
 ADR-052 ran two different kinds of work through one mechanism: ephemeral broadcasts that must not
@@ -66,8 +67,8 @@ starts an untracked `Task` from a request, and nothing that must run lands here.
 - **A `BackgroundService` drain per queue**, `SingleReader` (`LiveChannelPublishQueue.cs:37`),
   consuming with a `WaitToReadAsync(stoppingToken)` loop. The live drain also tests the stopping
   token before each `TryRead`
-  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/Live/LiveChannelPublishProcessor.cs:85-86`,
-  test and `TryRead` at `:90`; the `BackgroundService` base at `:43`, registered by
+  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/Live/LiveChannelPublishProcessor.cs:85-90`,
+  test and `TryRead` at `:94`; the `BackgroundService` base at `:44`, registered by
   `AddHostedService<LiveChannelPublishProcessor>()` at
   `MMCA.ADC.Engagement.Infrastructure/DependencyInjection.cs:23`). The test and the read are two
   separate steps, so a stop that lands between them still dequeues one item onto a cancelled token.
@@ -75,27 +76,27 @@ starts an untracked `Task` from a request, and nothing that must run lands here.
   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/Caching/BookmarkCacheEvictionProcessor.cs:56-60`).
   Because it is a hosted service the
   host owns the work. The drain is a singleton, so it resolves scoped services through
-  `IServiceScopeFactory` per item (`CreateAsyncScope` at `LiveChannelPublishProcessor.cs:126`).
+  `IServiceScopeFactory` per item (`CreateAsyncScope` at `LiveChannelPublishProcessor.cs:130`).
 - **Shutdown flushes rather than drops, inside one bounded budget.** The live drain overrides
-  `StopAsync` (`LiveChannelPublishProcessor.cs:52-78`): it completes the queue first (`:56`), so the
+  `StopAsync` (`LiveChannelPublishProcessor.cs:53-82`): it completes the queue first (`:57`), so the
   remaining items are a finite set, then gives the whole stop one `ShutdownDrainBudget` of 5 seconds
-  (`:49`, applied at `:58`). Within that budget it cancels the stopping token and waits for
-  `ExecuteAsync` to return (`base.StopAsync` at `:63`). That cancellation aborts the publish in
-  progress rather than letting it finish: the drain publishes on the stopping token (`:92`),
+  (`:50`, applied at `:59`). Within that budget it cancels the stopping token and waits for
+  `ExecuteAsync` to return (`base.StopAsync` at `:67`). That cancellation aborts the publish in
+  progress rather than letting it finish: the drain publishes on the stopping token (`:96`),
   `BestEffort` passes it through and rethrows the cancellation
   (`MMCA.Common/Source/Core/MMCA.Common.Application/Services/BestEffort.cs:57-63`), and the gRPC
   adapter forwards it to the call and turns `Cancelled` into an `OperationCanceledException`
   (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Contracts/LiveChannelPublisherGrpcAdapter.cs:49-53`).
   That item was already dequeued, so it is lost. Then, only if
   the worker has let go of the single reader, publishes the remaining items in FIFO order on its own
-  token (`DrainRemainingAsync` at `:70`, defined at `:105`), because the stopping token is already
+  token (`DrainRemainingAsync` at `:74`, defined at `:109`), because the stopping token is already
   cancelled. Anything still queued when the budget runs out is counted and logged as a `Warning`
-  (`:73-77`, message at `:136-139`) and abandoned. The flush is best effort: it narrows the loss at a
+  (`:77-81`, message at `:140-143`) and abandoned. The flush is best effort: it narrows the loss at a
   deploy or scale-in, it does not make the queue durable.
 - **One failure posture per drain, stated once.** Each item runs inside `BestEffort.ExecuteAsync`
-  (`LiveChannelPublishProcessor.cs:121`) so one failed publish cannot kill the loop, and shutdown
+  (`LiveChannelPublishProcessor.cs:125`) so one failed publish cannot kill the loop, and shutdown
   cancellation is handled on its own arm that returns quietly instead of recording an error
-  (`:96-101`, with a second arm for an exhausted budget in `DrainRemainingAsync` at `:114-117`).
+  (`:100-105`, with a second arm for an exhausted budget in `DrainRemainingAsync` at `:118-121`).
 - **Post-commit work is enqueued after the write is durable, never beside it.** The failure this
   rules out is enqueuing while the write can still be undone, which leaves the queued work describing
   state that never persisted. Two shapes satisfy it and both are in use:
@@ -105,9 +106,9 @@ starts an untracked `Task` from a request, and nothing that must run lands here.
     (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/LivePolls/DomainEventHandlers/LivePollVoteChangedHandler.cs:41`)
     and enqueues at `:79`; `SessionQuestionUpvoteChangedHandler` implements
     `IDomainEventHandler<SessionQuestionUpvoteChanged>`
-    (`.../SessionQuestions/DomainEventHandlers/SessionQuestionUpvoteChangedHandler.cs:42`) and
-    enqueues at `:80`. Both are singletons that open their own scope (`:53`, `:54`) and wrap the work
-    in `BestEffort.ExecuteAsync` (`:51`, `:52`).
+    (`.../SessionQuestions/DomainEventHandlers/SessionQuestionUpvoteChangedHandler.cs:44`) and
+    enqueues at `:87`. Both are singletons that open their own scope (`:53`, `:56`) and wrap the work
+    in `BestEffort.ExecuteAsync` (`:51`, `:54`).
   - *From the command handler side of a non-transactional command, once its save has returned.*
     `TransactionalCommandDecorator` wraps only commands implementing `ITransactional` and passes
     everything else straight through
@@ -127,12 +128,12 @@ starts an untracked `Task` from a request, and nothing that must run lands here.
     branch (`:140`, `:154`).
   - *One site keeps the ordering by hand, and the rule is stated in its own terms.*
     `SubmitQuestionHandler` implements `ICommandHandler<SubmitQuestionCommand, Result<SessionQuestionDTO>>`
-    directly (`.../SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs:38`), so it owns its
+    directly (`.../SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs:39`), so it owns its
     sequence. Its save is not inline: the count-decide-insert-save sequence runs inside
-    `CreateUnderClaimAsync` under a per-`(session, user)` `IDistributedLock` claim (`:147-149`,
-    `SaveChangesAsync` at `:184`), and `HandleAsync` calls that helper at `:91`, logs at `:97` and
-    awaits `EnqueueSubmittedAsync(question)` at `:99`, whose `BestEffort.ExecuteAsync` body
-    (`:205-206`) writes the queue at `:217-218` (approved) and `:232-233` (pending count). The rule a
+    `CreateUnderClaimAsync` (`:148`) under a per-`(session, user)` `IDistributedLock` claim (`:154`,
+    `SaveChangesAsync` at `:190`), and `HandleAsync` calls that helper at `:97`, logs at `:103` and
+    awaits `EnqueueSubmittedAsync(question)` at `:105`, whose `BestEffort.ExecuteAsync` body
+    (`:211-212`) writes the queue at `:223` (approved) and `:238` (pending count). The rule a
     future edit has to keep is therefore **the enqueue stays below the `CreateUnderClaimAsync` call**,
     not below a save statement in the same method.
 - **Work that must run does not go here.** Anything expensive, paid, long-running or not
@@ -172,7 +173,7 @@ Two implementations exist: `LiveChannelPublishQueue` / `LiveChannelPublishProces
   crash, a stop that outlasts the budget, or a write after the queue is completed still loses
   items, and even a stop well inside the budget loses the item being published when it lands,
   because the stopping token cancels that publish and nothing retries it
-  (`LiveChannelPublishProcessor.cs:63`, `:92`, `:96-101`). Accepted because
+  (`LiveChannelPublishProcessor.cs:67`, `:96`, `:100-105`). Accepted because
   every job left here is ephemeral by definition. Work that must survive a crash belongs in the
   outbox (ADR-003) or the internal-command queue (ADR-114), not here.
 - **Drops are silent at the call site.** The producer has no way to know, and the counter
@@ -183,7 +184,7 @@ Two implementations exist: `LiveChannelPublishQueue` / `LiveChannelPublishProces
   needs its own queue rather than a wider reader, or ordering is lost.
 - **One post-save ordering is remembered rather than enforced.** The three base-class handlers cannot
   express the wrong order, but `SubmitQuestionHandler` can: an edit that lifted its enqueue above the
-  `CreateUnderClaimAsync` call (`SubmitQuestionHandler.cs:91`, `:99`) would broadcast a question that
+  `CreateUnderClaimAsync` call (`SubmitQuestionHandler.cs:97`, `:105`) would broadcast a question that
   may never have persisted, and no test or analyzer catches that shape.
 - **Choosing this over ADR-114 is a per-job judgement.** Putting must-run work on a `DropOldest`
   channel loses it silently, and putting a broadcast through a durable command pays a row, a poll
@@ -254,6 +255,32 @@ drain's loop and shutdown behavior, which the Decision, Rationale and Trade-offs
    `DropWrite` channel (`BookmarkCacheEvictionSignal.cs:27-30`), the domain event handler and
    command handler enqueue lines, and the `MutateEntityHandlerBase` (`:339`, `:322`, `:325`) and
    `TransactionalCommandDecorator` (`:30`) lines.
+
+## Revision (2026-10-21)
+Re-verified against current source. The decision, rationale and trade-offs are unchanged, and so
+is every behavior they describe (the live drain's stop test, bounded shutdown flush and cancellation
+arms, the post-commit enqueue in both shapes, and the `SubmitQuestionHandler` ordering rule); only
+line numbers moved in the live drain, the upvote handler and `SubmitQuestionHandler`.
+1. Anchors re-verified against current source: in
+   `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/Live/LiveChannelPublishProcessor.cs`,
+   the `BackgroundService` base (`:44`), `ShutdownDrainBudget` (`:50`), `StopAsync` (`:53-82`),
+   `Complete()` (`:57`), the budget source (`:59`), `base.StopAsync` (`:67`), the
+   `DrainRemainingAsync` call (`:74`, defined at `:109`), the abandon check (`:77-81`) and its
+   message (`:140-143`), `ExecuteAsync` and its `WaitToReadAsync` loop (`:85-90`), the stop test
+   and `TryRead` (`:94`), the publish on the stopping token (`:96`), the cancellation arm
+   (`:100-105`), the `DrainRemainingAsync` arm (`:118-121`), `BestEffort.ExecuteAsync` (`:125`) and
+   `CreateAsyncScope` (`:130`); in
+   `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/SessionQuestions/DomainEventHandlers/SessionQuestionUpvoteChangedHandler.cs`,
+   the `IDomainEventHandler` declaration (`:44`), `BestEffort.ExecuteAsync` (`:54`),
+   `CreateAsyncScope` (`:56`) and `Enqueue` (`:87`); in
+   `.../SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs`, the `ICommandHandler`
+   declaration (`:39`), `CreateUnderClaimAsync` (defined at `:148`, claim at `:154`),
+   `SaveChangesAsync` (`:190`), the helper call (`:97`), the log (`:103`), the
+   `EnqueueSubmittedAsync` call (`:105`, body at `:211-212`) and the queue writes (`:223`, `:238`).
+   Unchanged and confirmed: `LivePollVoteChangedHandler.cs` (`:41`, `:51`, `:53`, `:79`) and the
+   gRPC adapter's token forwarding and `Cancelled` mapping
+   (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Contracts/LiveChannelPublisherGrpcAdapter.cs:49-53`,
+   forward at `:49`, catch at `:51`, rethrow at `:53`).
 
 ## Related
 [ADR-114](114-internal-commands-durable-job-queue.md) (the durable, leased, retrying queue that owns

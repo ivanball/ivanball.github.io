@@ -282,7 +282,8 @@
           line numbers. Nothing in the decision changes.</p>
           <p><strong>Revised 2026-10-01:</strong> both consumers now turn active destination probing off; see the Revision (2026-10-01) below.</p>
           <p>Revised 2026-10-06: the edge correlation middleware now sanitizes a caller-supplied id, the gateway config filters are recorded as fixed for the process lifetime, and the citations are refreshed; see the Revision (2026-10-06) below.
-          Revised 2026-10-07: anchors refreshed after the v1.233.0 release; see the Revision (2026-10-07) below.</p>
+          Revised 2026-10-07: anchors refreshed after the v1.233.0 release; see the Revision (2026-10-07) below.
+          Revised 2026-10-21: <code>AddMmcaGateway</code> now fail-fast validates the nested gateway settings on both overloads, ADC&#39;s route-table comment now agrees with its no-fallback host, and anchors are refreshed after the v1.250.0 release; see the Revision (2026-10-21) below.</p>
           <h2 id="context">Context</h2>
           <p><a href="008-service-extraction-topology.html">ADR-008</a> made the Gateway the only client entry point and gave it
           three jobs: the route-to-service map, CORS, and forwarding the caller&#39;s <code>Authorization</code> header. Nothing
@@ -400,7 +401,7 @@
           to Stripe is a retry and eventually a disabled endpoint, which silently stops every payment update
           (<a href="084-stripe-webhook-ingress.html">ADR-084</a>); and ADC&#39;s SignalR hub route (<code>/hubs/{**catch-all}</code>,
           bypassed by the <code>&quot;/hubs&quot;</code> prefix at
-          <code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:25</code>, route at <code>:254-258</code>), because a
+          <code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:25</code>, route at <code>:256-260</code>), because a
           negotiate-plus-reconnect storm from one office&#39;s shared address is exactly the pattern a per-IP window
           misreads as abuse (<a href="039-live-channel-push.html">ADR-039</a>).</p>
           <p><strong>A request with no attributable client IP is not limited.</strong> It gets
@@ -457,8 +458,8 @@
           A configured secret shorter than 32 characters fails at registration
           (<code>GatewayRateLimitingSettings.cs:153</code>). The secret is deployment data on both sides of the boundary:
           each consumer injects <code>GatewayRateLimiting__TrustedCallerSecret</code> into gateway and UI container alike
-          from Key Vault (<code>MMCA.ADC/infra/main.bicep:2491</code> and <code>:2650</code>, <code>MMCA.Store/infra/main.bicep:1958-1959</code> and
-          <code>:2084</code>), and the client half is framework code, <code>AddTrustedCallerHeader</code>
+          from Key Vault (<code>MMCA.ADC/infra/main.bicep:2647</code> and <code>:2806</code>, <code>MMCA.Store/infra/main.bicep:2052-2053</code> and
+          <code>:2178</code>), and the client half is framework code, <code>AddTrustedCallerHeader</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:121</code>, attaching
           <code>TrustedCallerHandler</code>, <code>Security/TrustedCallerHandler.cs:35</code>, at <code>:156</code>). It exempts a component you
           deployed, never a browser, so it must never reach client-side code.
@@ -485,21 +486,27 @@
           to a startup task.</p>
           <p><strong>4. One call composes the YARP-level extension points (2026-08-27).</strong> <code>AddMmcaGateway</code> has two
           overloads on <code>IReverseProxyBuilder</code>
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gateway/GatewayReverseProxyExtensions.cs:47</code> taking
-          <code>IConfiguration</code>, <code>:68</code> taking a <code>GatewaySettings</code> instance), and both funnel into one <code>Wire</code> method
-          (<code>:86</code>) that registers, in order: the named per-route rate-limiter policies (<code>:88</code>), the cluster
-          profile config filter that owns each cluster&#39;s <code>HttpRequest</code> version policy (<code>:91</code>), the health-check
-          defaults filter (<code>:92</code>), and the trace-header transform (<code>:93</code>). Filter order carries no meaning and
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gateway/GatewayReverseProxyExtensions.cs:48</code> taking
+          <code>IConfiguration</code>, <code>:74</code> taking a <code>GatewaySettings</code> instance), and both funnel into one <code>Wire</code> method
+          (<code>:92</code>) that first validates the settings with <code>GatewaySettingsValidator.ThrowIfInvalid</code> (<code>:97</code>) and
+          then registers, in order: the named per-route rate-limiter policies (<code>:98</code>), the cluster profile
+          config filter that owns each cluster&#39;s <code>HttpRequest</code> version policy (<code>:101</code>), the health-check
+          defaults filter (<code>:102</code>), and the trace-header transform (<code>:103</code>). Filter order carries no meaning and
           the type says so: the two filters own disjoint parts of a cluster and neither reads what the other
-          wrote (<code>:37-41</code>). Settings bind from the <code>&quot;MmcaGateway&quot;</code> section (<code>GatewaySettings.cs:15</code>) through
-          <code>ValidateDataAnnotations().ValidateOnStart()</code> (<code>GatewayReverseProxyExtensions.cs:54-57</code>), the same
-          ADR-070 contract the rate-limit settings honor, and the per-route policies are additionally validated
+          wrote (<code>:39-41</code>). Settings bind from the <code>&quot;MmcaGateway&quot;</code> section (<code>GatewaySettings.cs:15</code>) through
+          <code>ValidateDataAnnotations().ValidateOnStart()</code> (<code>GatewayReverseProxyExtensions.cs:55-58</code>), the same
+          ADR-070 contract the rate-limit settings honor. Because <code>ValidateDataAnnotations</code> does not recurse
+          into the nested trace-header and health-check objects, the configuration overload also registers
+          <code>GatewaySettingsValidator</code> as an <code>IValidateOptions&lt;GatewaySettings&gt;</code> (<code>:62-63</code>, reasoning at
+          <code>:60-61</code>), and the registration-time <code>ThrowIfInvalid</code> in <code>Wire</code> covers BOTH overloads, so a blank
+          trace-header name fails at startup rather than throwing on every proxied request (<code>:94-96</code>). The
+          per-route policies are additionally validated
           at registration with <code>Validator.ValidateObject</code>
           (<code>RateLimiting/GatewayRoutePolicyExtensions.cs:62</code>, reasoning at <code>:45-46</code>), because the limiter
           factory closes over each policy object (<code>:76</code>), so a bad value would otherwise surface only at the
           first throttled request.</p>
           <p><strong>It registers services and maps nothing, and it does not load the route table.</strong> The host still
-          calls <code>MapReverseProxy()</code> and <code>UseRateLimiter()</code> itself (<code>GatewayReverseProxyExtensions.cs:42-45</code>),
+          calls <code>MapReverseProxy()</code> and <code>UseRateLimiter()</code> itself (<code>GatewayReverseProxyExtensions.cs:44-45</code>),
           and <code>LoadFromConfig</code> stays the host&#39;s call because which section owns the routes, and whether they
           come from configuration at all, is a host decision (<code>:15-20</code>). That keeps
           <a href="089-gateway-topology-owned-by-configuration.html">ADR-089</a>&#39;s &quot;the route table is the consumer&#39;s data&quot;
@@ -577,11 +584,11 @@
           bicep. It is not needed, because <strong>every cluster fronts exactly one destination</strong>: an Aspire
           service-discovery name (<code>http://identity</code>, <code>http://conference</code>) that ACA ingress resolves and
           balances across the replicas behind it. ADC declares five clusters with one destination each
-          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:261-269</code>, <code>:270-278</code>, <code>:279-287</code>,
-          <code>:288-292</code>, <code>:293-297</code>) and Store three (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:146-154</code>,
+          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:263-271</code>, <code>:272-280</code>, <code>:281-289</code>,
+          <code>:290-294</code>, <code>:295-299</code>) and Store three (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:146-154</code>,
           <code>:155-163</code>, <code>:164-168</code>), resolved through <code>AddServiceDiscoveryDestinationResolver</code>
           (ADC <code>Program.cs:151</code>, Store <code>Program.cs:141</code>) against the bicep address book
-          (<code>MMCA.ADC/infra/main.bicep:2468-2471</code>). The shape is not incidental: both repositories <strong>pin it as
+          (<code>MMCA.ADC/infra/main.bicep:2624-2627</code>). The shape is not incidental: both repositories <strong>pin it as
           an invariant</strong>, asserting that each cluster contains a single destination
           (<code>MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/RouteMapTests.cs:251-253</code>,
           <code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/RouteMapTests.cs:315-317</code>). A second destination in
@@ -592,8 +599,10 @@
           either host. Retries live in the client the user is waiting on, where
           <code>EntityServiceBase</code> runs a Polly exponential-backoff-with-jitter policy declared on its base
           <code>AuthenticatedServiceBase</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/AuthenticatedServiceBase.cs:27</code>,
-          built by <code>BuildRetryPolicy</code> at <code>:170-173</code>; executed in <code>EntityServiceBase.cs</code> at
-          <code>:365</code> and <code>:393</code>), while the server-to-server budget is deliberately one retry beyond the initial attempt
+          built by <code>BuildRetryPolicy</code> at <code>:201-204</code>, backoff with jitter at <code>:184-186</code>; executed in
+          <code>EntityServiceBase.cs</code> at <code>:365</code> and <code>:393</code>), and that policy itself refuses to resend a POST or PATCH
+          without an <code>Idempotency-Key</code> once it may have been sent (<code>IsRetryableException</code>, <code>:175-179</code>, rule
+          at <code>:167-174</code>), while the server-to-server budget is deliberately one retry beyond the initial attempt
           (<code>.../MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:30</code>, the up-to-16x storm argument at
           <code>:22-26</code>). The decisive reason is <a href="017-request-idempotency.html">ADR-017</a>: the <code>Idempotency-Key</code> is
           minted client-side and held constant across that client&#39;s own attempts, and it appears nowhere in
@@ -683,12 +692,12 @@
           misdiagnose the next incident. They are also tuned differently on purpose: the readiness probe is
           the tighter budget because it gates traffic to the whole process.</li>
           <li><strong><code>AddMmcaGateway</code>&#39;s configuration overload closes over an eagerly-bound copy too</strong>
-          (<code>GatewayReverseProxyExtensions.cs:59</code>), so the per-route limiter policies never see an
+          (<code>GatewayReverseProxyExtensions.cs:65</code>), so the per-route limiter policies never see an
           <code>IOptionsMonitor</code> reload, exactly as the Aspire kit&#39;s limiter does not. The config filters share
           that shape: each copies <code>IOptions&lt;GatewaySettings&gt;.Value</code> into a readonly field at construction
           (<code>Configuration/GatewayClusterProfileConfigFilter.cs:27</code>,
           <code>Configuration/GatewayHealthCheckDefaultsConfigFilter.cs:19</code>), and the code states that the filters
-          close over the settings for the process lifetime (<code>GatewayReverseProxyExtensions.cs:73-75</code>). A
+          close over the settings for the process lifetime (<code>GatewayReverseProxyExtensions.cs:79-81</code>). A
           change to <code>MmcaGateway</code> settings, filter-owned or limit, is therefore a restart; only the YARP
           route table itself hot-reloads.</li>
           <li><strong>The delegations are correct today because of facts nothing enforces framework-side.</strong> Load
@@ -1064,6 +1073,60 @@
           </ul>
           </li>
           </ol>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. Nothing in the decision changes: the edge responsibilities, the
+          three declines, the delegations and the four bypass tiers hold as recorded. One validation path is
+          added to the Decision, one flagged discrepancy is retired, and the pin and anchors moved with the
+          v1.250.0 release.</p>
+          <ol>
+          <li><strong><code>AddMmcaGateway</code> validates the nested settings, on both overloads.</strong> <code>Wire</code> now runs
+          <code>GatewaySettingsValidator.ThrowIfInvalid(settings)</code> before registering anything
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gateway/GatewayReverseProxyExtensions.cs:97</code>, reasoning
+          at <code>:94-96</code>), and the configuration overload adds the same validator as an
+          <code>IValidateOptions&lt;GatewaySettings&gt;</code> (<code>:62-63</code>), because <code>ValidateDataAnnotations</code> does not recurse
+          into the nested trace-header and health-check objects (<code>:60-61</code>). A blank trace-header name now
+          fails at startup instead of throwing on every proxied request. Decision item 4 is corrected to
+          record this third validation path.</li>
+          <li><strong>ADC&#39;s route-table comment now agrees with the host.</strong> The comment flagged in the 2026-10-01
+          revision and restated in the 2026-10-07 revision now says the framework fallback policy is
+          deliberately not registered and that an undeclared route inherits the anonymous default rather
+          than failing closed (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:72-79</code>), matching
+          the plain <code>AddAuthorization()</code> at <code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:114</code>
+          (reasoning at <code>:110-113</code>). The flag is retired; those revisions stay as written.</li>
+          <li><strong>The client retry policy refuses an unsafe replay.</strong> <code>IsRetryableException</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/AuthenticatedServiceBase.cs:175-179</code>,
+          rule at <code>:167-174</code>) retries a POST or PATCH without an <code>Idempotency-Key</code> only when it failed before
+          it was sent, which reinforces the ADR-017 reason the proxy-hop retry delegation gives. The
+          delegation paragraph now records it.</li>
+          <li>Anchors re-verified against current source:<ul>
+          <li>The <code>MMCA.Common.Gateway</code> pin is 1.250.0 in both consumers
+          (<code>MMCA.ADC/Directory.Packages.props:120</code>, <code>MMCA.Store/Directory.Packages.props:14</code>), still in
+          lockstep with the rest of the framework, superseding the 1.233.0 figure and the ADC <code>:121</code>
+          anchor in the 2026-10-07 revision.</li>
+          <li><code>GatewayRateLimiting__TrustedCallerSecret</code> is injected at <code>MMCA.ADC/infra/main.bicep:2647</code>
+          (gateway) and <code>:2806</code> (UI), and at <code>MMCA.Store/infra/main.bicep:2052-2053</code> (gateway) and <code>:2178</code>
+          (UI), superseding the anchors in the 2026-10-07 revision (Decision refreshed).</li>
+          <li>ADC&#39;s service-discovery address book is <code>MMCA.ADC/infra/main.bicep:2624-2627</code> (Decision
+          refreshed).</li>
+          <li><code>AddMmcaGateway</code> overloads at <code>GatewayReverseProxyExtensions.cs:48</code> and <code>:74</code>, <code>Wire</code> at <code>:92</code>,
+          route policies <code>:98</code>, cluster profile filter <code>:101</code>, health-check defaults filter <code>:102</code>,
+          trace-header transform <code>:103</code>, options validation <code>:55-58</code>, filter-order remark <code>:39-41</code>,
+          maps-nothing remark <code>:44-45</code>; the eager copy at <code>:65</code> and the process-lifetime comment at
+          <code>:79-81</code> (Decision and Trade-offs refreshed).</li>
+          <li>ADC&#39;s <code>/hubs</code> route at <code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:256-260</code> and
+          its five clusters at <code>:263-271</code>, <code>:272-280</code>, <code>:281-289</code>, <code>:290-294</code>, <code>:295-299</code> (Decision
+          refreshed); the <code>/hubs</code> bypass prefix at <code>:25</code> holds.</li>
+          <li><code>BuildRetryPolicy</code> at <code>AuthenticatedServiceBase.cs:201-204</code>, the jittered backoff at
+          <code>:184-186</code> (Decision refreshed).</li>
+          <li>The kit&#39;s release entry is <code>MMCA.Common/CHANGELOG.md:1142</code> (<code>[1.206.0]</code>), superseding <code>:823</code>
+          in the 2026-10-07 revision.</li>
+          <li>ADC&#39;s health-report cache explanation is at
+          <code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:92-98</code> (<code>:90</code> is the
+          <code>AddGatewayDownstreamHealthChecks</code> call), superseding <code>:90-96</code> in the 2026-10-01 revision;
+          <code>appsettings.json:40-42</code> holds.</li>
+          </ul>
+          </li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="008-service-extraction-topology.html">ADR-008</a> (the record that made the Gateway the only entry point
           and gave it routing, CORS and auth forwarding; this is the first record to add cross-cutting behavior
@@ -1105,6 +1168,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

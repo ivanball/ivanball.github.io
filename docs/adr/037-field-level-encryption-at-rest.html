@@ -242,7 +242,10 @@
           <h2 id="status">Status</h2>
           <p>Accepted (2026-07-06; revised 2026-07-24, 2026-07-25, 2026-08-15, 2026-08-18). Revised 2026-08-18: the
           versioned-envelope converter is no longer unpublished, it is included in v1.153.0; adoption stays zero.
-          Revised 2026-10-07: anchors refreshed after the v1.233.0 release.</p>
+          Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
+          Revised 2026-10-21: key rotation step 3 now requires <code>MarkForReEncryption</code> (a plain load-and-save does not
+          re-encrypt), the audit trail redacts encrypted properties, and a re-encryption test suite and the
+          audit-trail test harness also wire the converter (v1.247.0); production adoption stays zero.</p>
           <h2 id="context">Context</h2>
           <p>Transparent database encryption (TDE) protects the data files as a whole, but it decrypts
           transparently for anyone who can query the database, so a leaked backup restored on a compromised
@@ -256,10 +259,10 @@
           Neither covers the case of a field that must stay <strong>retrievable in plaintext to the application</strong> yet
           be <strong>unreadable in the database itself</strong>: an at-rest, reversible, column-level confidentiality control.
           ADR-005 already names this converter as the mechanism for erasure fields &quot;that must remain retrievable&quot;
-          (<code>Website/docs-src/adr/005-soft-delete-vs-erasure.md:25</code>), and <code>SECURITY.md:36</code> lists it in the security model, so the
+          (<code>Website/docs-src/adr/005-soft-delete-vs-erasure.md:27</code>), and <code>SECURITY.md:36</code> lists it in the security model, so the
           capability is referenced across the docs but was never recorded as a decision.</p>
           <p>The framework ships the plumbing for this, an EF Core value converter that encrypts and decrypts string
-          columns transparently, and it is covered by unit tests. It is <strong>not yet adopted</strong>: no entity
+          columns transparently, and it is covered by unit tests. It is <strong>not yet adopted</strong>: no production entity
           configuration in any of the four repositories wires it, so zero production columns are encrypted today.
           This ADR records the decision and the extension point while being explicit about that posture, the same
           &quot;shipped in the framework, tested, but latent until the first adoption&quot; honesty ADR-018 records for
@@ -269,89 +272,94 @@
           rest with authenticated encryption, applied per property in an entity configuration.</p>
           <ol>
           <li><p><strong>A sealed EF value converter.</strong> <code>EncryptedStringConverter</code>
-          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Encryption/EncryptedStringConverter.cs:72</code>) is a
+          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Encryption/EncryptedStringConverter.cs:76</code>) is a
           <code>ValueConverter&lt;string, string&gt;</code> in the <code>MMCA.Common.Infrastructure.Persistence.Encryption</code> namespace
-          (<code>EncryptedStringConverter.cs:6</code>). It encrypts on write and decrypts on read, so application and domain
+          (<code>EncryptedStringConverter.cs:7</code>). It encrypts on write and decrypts on read, so application and domain
           code keep an ordinary <code>string</code> property and never see ciphertext. It is applied per property:
           <code>builder.Property(e =&gt; e.SocialSecurityNumber).HasConversion(new EncryptedStringConverter(encryptionKey))</code>
-          (<code>EncryptedStringConverter.cs:15</code>, <code>:16</code>). The documented example targets a stored-only field rather
+          (<code>EncryptedStringConverter.cs:16</code>, <code>:17</code>). The documented example targets a stored-only field rather
           than a lookup key, for the reason recorded in the 2026-07-24 revision below.</p>
           </li>
           <li><p><strong>AES-256-GCM authenticated encryption.</strong> Both directions use <code>AesGcm</code>
-          (<code>EncryptedStringConverter.cs:200</code>, <code>:235</code>), which provides confidentiality <strong>and</strong> integrity. Every key
+          (<code>EncryptedStringConverter.cs:230</code>, <code>:265</code>), which provides confidentiality <strong>and</strong> integrity. Every key
           must be exactly 32 bytes (256 bits), enforced on both construction paths: the single-key path
-          null-checks the array (<code>ArgumentNullException.ThrowIfNull</code>, <code>EncryptedStringConverter.cs:129</code>) and throws
-          <code>ArgumentException</code> on any other length (<code>EncryptedStringConverter.cs:130</code>, <code>:132</code>), and the key-ring path
-          applies the same rule per entry (<code>EncryptedStringConverter.cs:166</code>, <code>:168</code>). <code>GenerateKey()</code> produces a
+          null-checks the array (<code>ArgumentNullException.ThrowIfNull</code>, <code>EncryptedStringConverter.cs:159</code>) and throws
+          <code>ArgumentException</code> on any other length (<code>EncryptedStringConverter.cs:160</code>, <code>:162</code>), and the key-ring path
+          applies the same rule per entry (<code>EncryptedStringConverter.cs:196</code>, <code>:198</code>). <code>GenerateKey()</code> produces a
           cryptographically random 32-byte key via <code>RandomNumberGenerator.GetBytes(KeySize)</code>
-          (<code>EncryptedStringConverter.cs:125</code>, with <code>KeySize = 32</code> at <code>:84</code>). The envelope sizes are fixed constants: <code>VersionSize = 1</code>
-          (<code>EncryptedStringConverter.cs:75</code>), <code>NonceSize = 12</code> (96 bits, NIST recommended,
-          <code>EncryptedStringConverter.cs:78</code>) and <code>TagSize = 16</code> (128 bits, <code>EncryptedStringConverter.cs:81</code>).</p>
+          (<code>EncryptedStringConverter.cs:129</code>, with <code>KeySize = 32</code> at <code>:88</code>). The envelope sizes are fixed constants: <code>VersionSize = 1</code>
+          (<code>EncryptedStringConverter.cs:79</code>), <code>NonceSize = 12</code> (96 bits, NIST recommended,
+          <code>EncryptedStringConverter.cs:82</code>) and <code>TagSize = 16</code> (128 bits, <code>EncryptedStringConverter.cs:85</code>).</p>
           </li>
           <li><p><strong>A versioned, self-describing storage envelope, Base64 in a string column.</strong> Encrypt resolves the
-          current key (<code>EncryptedStringConverter.cs:190</code>), writes UTF-8 plaintext bytes
-          (<code>EncryptedStringConverter.cs:192</code>), draws a fresh random nonce (<code>EncryptedStringConverter.cs:193</code>),
-          runs <code>AesGcm.Encrypt</code> (<code>EncryptedStringConverter.cs:201</code>), then concatenates
-          <code>[key version (1)] [nonce (12)] [ciphertext (N)] [tag (16)]</code> (<code>EncryptedStringConverter.cs:203</code> through
-          <code>:208</code>) and Base64-encodes the result (<code>EncryptedStringConverter.cs:210</code>). Decrypt reverses it:
-          <code>FromBase64String</code> (<code>EncryptedStringConverter.cs:218</code>), a length guard that throws
+          current key (<code>EncryptedStringConverter.cs:220</code>), writes UTF-8 plaintext bytes
+          (<code>EncryptedStringConverter.cs:222</code>), draws a fresh random nonce (<code>EncryptedStringConverter.cs:223</code>),
+          runs <code>AesGcm.Encrypt</code> (<code>EncryptedStringConverter.cs:231</code>), then concatenates
+          <code>[key version (1)] [nonce (12)] [ciphertext (N)] [tag (16)]</code> (<code>EncryptedStringConverter.cs:233</code> through
+          <code>:238</code>) and Base64-encodes the result (<code>EncryptedStringConverter.cs:240</code>). Decrypt reverses it:
+          <code>FromBase64String</code> (<code>EncryptedStringConverter.cs:248</code>), a length guard that throws
           <code>CryptographicException</code> when the input is shorter than version plus nonce plus tag
-          (<code>EncryptedStringConverter.cs:220</code>, <code>:221</code>), the version byte read from position 0
-          (<code>EncryptedStringConverter.cs:223</code>), spans that slice out the nonce, ciphertext, and tag
-          (<code>EncryptedStringConverter.cs:227</code>, <code>:229</code>, <code>:230</code>), <code>AesGcm.Decrypt</code> which validates the tag while
-          decrypting (<code>EncryptedStringConverter.cs:236</code>), and a UTF-8 decode (<code>EncryptedStringConverter.cs:238</code>).
+          (<code>EncryptedStringConverter.cs:250</code>, <code>:251</code>), the version byte read from position 0
+          (<code>EncryptedStringConverter.cs:253</code>), spans that slice out the nonce, ciphertext, and tag
+          (<code>EncryptedStringConverter.cs:257</code>, <code>:259</code>, <code>:260</code>), <code>AesGcm.Decrypt</code> which validates the tag while
+          decrypting (<code>EncryptedStringConverter.cs:266</code>), and a UTF-8 decode (<code>EncryptedStringConverter.cs:268</code>).
           The envelope is transparent to application code: a stored value carries everything needed to read it back
           except the key material itself.</p>
           </li>
           <li><p><strong>A key ring, with one version nominated as current.</strong> The converter can be constructed over an
           <code>IReadOnlyDictionary&lt;byte, byte[]&gt;</code> of versioned keys plus the version to write with
-          (<code>EncryptedStringConverter.cs:109</code>). Writes always use the current version
-          (<code>EncryptedStringConverter.cs:116</code>); reads resolve their key from the version byte in the stored value
-          itself (<code>EncryptedStringConverter.cs:224</code>), so a value written under an older version keeps decrypting
+          (<code>EncryptedStringConverter.cs:113</code>). Writes always use the current version
+          (<code>EncryptedStringConverter.cs:120</code>); reads resolve their key from the version byte in the stored value
+          itself (<code>EncryptedStringConverter.cs:254</code>), so a value written under an older version keeps decrypting
           for as long as that version stays registered. A version with no key registered throws
           <code>CryptographicException</code> naming only the version number, never key material
-          (<code>EncryptedStringConverter.cs:225</code>). The ring is validated once at construction
-          (<code>EncryptedStringConverter.cs:146</code>): not null (<code>:150</code>), not empty (<code>:152</code>), no null entry (<code>:159</code>),
-          every key exactly 32 bytes (<code>:166</code>), and the nominated current version actually present (<code>:174</code>). It is
-          then defensively copied into a <code>FrozenDictionary</code> (<code>EncryptedStringConverter.cs:181</code>), so mutating the
+          (<code>EncryptedStringConverter.cs:255</code>). The ring is validated once at construction
+          (<code>EncryptedStringConverter.cs:176</code>): not null (<code>:180</code>), not empty (<code>:182</code>), no null entry (<code>:189</code>),
+          every key exactly 32 bytes (<code>:196</code>), and the nominated current version actually present (<code>:204</code>). It is
+          then defensively copied into a <code>FrozenDictionary</code> (<code>EncryptedStringConverter.cs:211</code>), so mutating the
           dictionary the caller passed in cannot change which keys the converter uses. The original single-key
-          <code>byte[]</code> constructor remains (<code>EncryptedStringConverter.cs:94</code>) and is now sugar for a one-entry ring at
-          version 1 (<code>EncryptedStringConverter.cs:87</code>, <code>:137</code>).</p>
+          <code>byte[]</code> constructor remains (<code>EncryptedStringConverter.cs:98</code>) and is now sugar for a one-entry ring at
+          version 1 (<code>EncryptedStringConverter.cs:91</code>, <code>:167</code>).</p>
           </li>
           <li><p><strong>The version byte is authenticated, not merely stored.</strong> The version is passed to AES-GCM as associated
-          data on encrypt (<code>EncryptedStringConverter.cs:198</code>, <code>:201</code>) and on decrypt
-          (<code>EncryptedStringConverter.cs:231</code>, <code>:236</code>), so the authentication tag covers it. Rewriting the version
+          data on encrypt (<code>EncryptedStringConverter.cs:228</code>, <code>:231</code>) and on decrypt
+          (<code>EncryptedStringConverter.cs:261</code>, <code>:266</code>), so the authentication tag covers it. Rewriting the version
           byte of a stored value fails decryption rather than silently selecting a different key, and it fails even
           when the substituted version happens to map to the same key (test at
           <code>Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Encryption/EncryptedStringConverterTests.cs:226</code>, which
           registers one key under two versions and still gets a <code>CryptographicException</code>).</p>
           </li>
           <li><p><strong>Ciphertext is non-deterministic.</strong> A fresh random nonce per encryption
-          (<code>EncryptedStringConverter.cs:193</code>) means the same plaintext encrypts to different ciphertext on every
+          (<code>EncryptedStringConverter.cs:223</code>) means the same plaintext encrypts to different ciphertext on every
           write (proven at <code>EncryptedStringConverterTests.cs:38</code>, and distinct plaintexts differ at
           <code>EncryptedStringConverterTests.cs:24</code>). The consequence is deliberate: an encrypted column cannot be
           equality-filtered, index-seeked, sorted, or joined on in the database.</p>
           </li>
           <li><p><strong>Empty and null values pass through unencrypted.</strong> Both directions short-circuit on a null-or-empty
-          string (<code>EncryptedStringConverter.cs:186</code>, <code>:215</code>), so a NULL or empty column stays as-is rather than
+          string (<code>EncryptedStringConverter.cs:216</code>, <code>:245</code>), so a NULL or empty column stays as-is rather than
           becoming ciphertext (tests at <code>EncryptedStringConverterTests.cs:82</code> and <code>:95</code>).</p>
           </li>
           <li><p><strong>Key management is the consumer&#39;s responsibility, supplied as a constructor argument.</strong> The converter
-          takes raw key material on construction, either a single <code>byte[]</code> (<code>EncryptedStringConverter.cs:94</code>) or a
-          whole ring (<code>EncryptedStringConverter.cs:109</code>); there is no DI registration, no options type, and no
-          key-provider abstraction in the Infrastructure layer (a grep of <code>MMCA.Common.Infrastructure</code> for
-          encryption options or a key-provider interface finds only the converter itself). The adopting entity
-          configuration passes the keys in. The XML documentation directs consumers to store them in Azure Key
-          Vault, user-secrets, or environment variables, never hardcoded (<code>EncryptedStringConverter.cs:34</code>, <code>:35</code>,
-          <code>:36</code>).</p>
+          takes raw key material on construction, either a single <code>byte[]</code> (<code>EncryptedStringConverter.cs:98</code>) or a
+          whole ring (<code>EncryptedStringConverter.cs:113</code>); there is no DI registration, no options type, and no
+          key provider for this converter (the framework&#39;s other key types, such as the JWKS signing-key provider
+          and the Data Protection key ring, do not supply or manage its keys). The adopting entity configuration passes the
+          keys in. The XML documentation directs consumers to store them in Azure Key Vault, user-secrets, or
+          environment variables, never hardcoded (<code>EncryptedStringConverter.cs:35</code>, <code>:36</code>). One other
+          Infrastructure type does recognize the converter: the audit-trail interceptor records its redaction
+          token, never the value, for any property whose value converter is an <code>EncryptedStringConverter</code>
+          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:636</code>
+          through <code>:639</code>, documented at <code>:56</code> through <code>:58</code>), because the change tracker hands it the decrypted
+          plaintext and recording that would put in clear text exactly what the column encrypts. That needs no
+          marker on the property.</p>
           </li>
           <li><p><strong>Stateless and context-free by design.</strong> The converter holds nothing but the frozen ring captured at
           construction, and key-version resolution is data-driven from the stored envelope
-          (<code>EncryptedStringConverter.cs:223</code>, <code>:224</code>), never from the <code>DbContext</code>. That is not an oversight: an EF
+          (<code>EncryptedStringConverter.cs:253</code>, <code>:254</code>), never from the <code>DbContext</code>. That is not an oversight: an EF
           value converter runs inside the provider&#39;s materialization path as a pair of compiled expressions
-          (<code>EncryptedStringConverter.cs:116</code>, <code>:117</code>) and has no access to the context, the current user, or any
+          (<code>EncryptedStringConverter.cs:120</code>, <code>:121</code>) and has no access to the context, the current user, or any
           ambient request scope. Per-tenant or per-request key selection is therefore deliberately out of scope for
-          this converter (<code>EncryptedStringConverter.cs:62</code> through <code>:70</code>); a design that needs it wants a
+          this converter (<code>EncryptedStringConverter.cs:67</code> through <code>:73</code>); a design that needs it wants a
           <code>SaveChanges</code> interceptor or application-layer encryption above EF Core, where the request context is
           still reachable.</p>
           </li>
@@ -369,32 +377,47 @@
           (<code>EncryptedStringConverterTests.cs:205</code>), the tampered-version-byte failure
           (<code>EncryptedStringConverterTests.cs:226</code>), the four ring-validation guards
           (<code>EncryptedStringConverterTests.cs:244</code>, <code>:250</code>, <code>:259</code>, <code>:268</code>), and the defensive copy
-          (<code>EncryptedStringConverterTests.cs:281</code>). Adoption, however, is still zero: a ripgrep across all four
-          repositories (<code>MMCA.Common</code>, <code>MMCA.Store</code>, <code>MMCA.ADC</code>, <code>MMCA.Helpdesk</code>) finds
-          <code>new EncryptedStringConverter(</code> only in the converter&#39;s own XML-doc example
-          (<code>EncryptedStringConverter.cs:16</code>) and in that test file. No <code>*Configuration.cs</code> in any repo calls
-          <code>.HasConversion(new EncryptedStringConverter(...))</code>, and Store, ADC, and Helpdesk contain no reference to
-          the type at all. The encrypt/decrypt path is exercised by tests, not by any live column.</p>
+          (<code>EncryptedStringConverterTests.cs:281</code>). Two further suites wire it into a real EF model:
+          <code>EncryptedStringConverterReEncryptionTests</code>
+          (<code>Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Encryption/EncryptedStringConverterReEncryptionTests.cs:26</code>)
+          saves a row under version 1 against an SQLite table, then rewrites it under version 2 through
+          <code>MarkForReEncryption</code> (<code>HasConversion</code> at <code>:84</code>, converters at <code>:90</code> and <code>:96</code>), and the audit-trail
+          test harness maps an encrypted property
+          (<code>Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/AuditTrail/AuditTrailTestHarness.cs:264</code>) that
+          <code>AuditTrailSaveChangesInterceptorTests</code> uses to prove the redaction
+          (<code>Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/AuditTrail/AuditTrailSaveChangesInterceptorTests.cs:383</code>,
+          asserting the redaction token at <code>:394</code>, <code>:395</code>).
+          Production adoption, however, is still zero: across all four repositories (<code>MMCA.Common</code>, <code>MMCA.Store</code>,
+          <code>MMCA.ADC</code>, <code>MMCA.Helpdesk</code>), <code>new EncryptedStringConverter(</code> appears only in the converter&#39;s own XML-doc
+          example (<code>EncryptedStringConverter.cs:17</code>) and in those three test files. No <code>*Configuration.cs</code> in any
+          repo calls <code>.HasConversion(new EncryptedStringConverter(...))</code>, and Store, ADC, and Helpdesk contain no
+          reference to the type at all. The encrypt/decrypt path is exercised by tests, not by any live column.</p>
           </li>
           </ol>
           <h2 id="rationale">Rationale</h2>
           <ul>
           <li><strong>Authenticated, not merely confidential.</strong> AES-GCM binds a 128-bit tag to the ciphertext
-          (<code>EncryptedStringConverter.cs:81</code>, <code>:201</code>), so a tampered or truncated value fails to decrypt via the tag
-          check in <code>AesGcm.Decrypt</code> (<code>EncryptedStringConverter.cs:236</code>) rather than silently returning corrupted
+          (<code>EncryptedStringConverter.cs:85</code>, <code>:231</code>), so a tampered or truncated value fails to decrypt via the tag
+          check in <code>AesGcm.Decrypt</code> (<code>EncryptedStringConverter.cs:266</code>) rather than silently returning corrupted
           plaintext, and a value too short to even hold a version, nonce and tag is rejected up front
-          (<code>EncryptedStringConverter.cs:220</code>). At-rest integrity comes for free with confidentiality.</li>
+          (<code>EncryptedStringConverter.cs:250</code>). At-rest integrity comes for free with confidentiality.</li>
           <li><strong>The envelope should describe itself, and the description should be authenticated.</strong> A stored value that
           carries its own key version needs no side table, no column convention, and no deployment-ordered guess
-          about which key wrote it: the reader is told (<code>EncryptedStringConverter.cs:223</code>). Passing that byte as
-          associated data (<code>EncryptedStringConverter.cs:198</code>, <code>:231</code>) closes the obvious follow-on question, because
+          about which key wrote it: the reader is told (<code>EncryptedStringConverter.cs:253</code>). Passing that byte as
+          associated data (<code>EncryptedStringConverter.cs:228</code>, <code>:261</code>) closes the obvious follow-on question, because
           a self-describing envelope whose description is unauthenticated is an invitation to rewrite the
           description. One byte of overhead buys both properties.</li>
           <li><strong>Rotation has to be possible without a maintenance window.</strong> Reads resolving their key from the data and
           writes using the current version turn key rotation into four independent steps (add the new key as current
           while keeping the old one registered, deploy, re-encrypt rows in the background at whatever pace the table
           allows, then retire the old version) rather than one bulk re-encryption that has to complete before the
-          application can come back up (<code>EncryptedStringConverter.cs:45</code> through <code>:61</code>).</li>
+          application can come back up (<code>EncryptedStringConverter.cs:47</code> through <code>:65</code>). Step 3 is load, call
+          <code>EncryptedStringConverter.MarkForReEncryption(entry)</code> (<code>EncryptedStringConverter.cs:143</code>), then save:
+          a plain load-and-save does <strong>not</strong> re-encrypt, because change tracking compares the decrypted plaintext
+          against its snapshot, so an untouched property is left out of the UPDATE and keeps its old version byte
+          (<code>EncryptedStringConverter.cs:56</code> through <code>:60</code>). <code>MarkForReEncryption</code> marks every property of the
+          entry mapped through the converter as modified and returns how many it marked (<code>:148</code> through <code>:154</code>);
+          an owned type is a separate entry and has to be passed on its own (<code>:138</code>, <code>:139</code>).</li>
           <li><strong>Breaking the format now is free, and will not be later.</strong> The un-versioned layout had no decode path to
           preserve because it has no readers: this ADR has recorded zero adopted columns since 2026-07-06. A format
           break costs nothing while adoption is zero and costs a migration for every encrypted row afterwards, so
@@ -403,48 +426,54 @@
           size, and storage layout are decided once in a single shared type, so a future hardening is one edit that
           every eventual adopter inherits rather than per-app crypto scattered across modules.</li>
           <li><strong>Non-determinism is the right confidentiality default.</strong> A random nonce per write
-          (<code>EncryptedStringConverter.cs:193</code>) defeats equality and frequency analysis over the ciphertext, which a
+          (<code>EncryptedStringConverter.cs:223</code>) defeats equality and frequency analysis over the ciphertext, which a
           deterministic scheme would leak; the cost is queryability, which is the correct trade for a genuinely
           sensitive column that the application reads by primary key rather than by the encrypted value.</li>
           <li><strong>Transparent at the EF boundary.</strong> Because the conversion lives on the property mapping
-          (<code>EncryptedStringConverter.cs:13</code>), entities keep <code>string</code> properties and no handler, DTO, or domain code
+          (<code>EncryptedStringConverter.cs:14</code>, example at <code>:16</code>, <code>:17</code>), entities keep <code>string</code> properties and no handler, DTO, or domain code
           changes when a column becomes encrypted.</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
           <li><strong>Latent today, proven by tests rather than production.</strong> The plumbing is complete and unit-tested, but
-          no entity configuration wires it, so the encrypt/decrypt round-trip, the tag-validated integrity path, and
-          the key-length guard are exercised only by <code>EncryptedStringConverterTests</code> and not by any deployed column.
+          no production entity configuration wires it, so the encrypt/decrypt round-trip, the tag-validated integrity path, and
+          the key-length guard are exercised only by tests (<code>EncryptedStringConverterTests</code>, plus the SQLite-backed
+          <code>EncryptedStringConverterReEncryptionTests.cs:26</code> and the audit-trail harness at
+          <code>AuditTrailTestHarness.cs:264</code>) and not by any deployed column.
           ADR-005 names this converter as the mechanism for erasure fields that must remain retrievable
-          (<code>Website/docs-src/adr/005-soft-delete-vs-erasure.md:25</code>), but that pairing is available, not yet applied. This is the same
+          (<code>Website/docs-src/adr/005-soft-delete-vs-erasure.md:27</code>), but that pairing is available, not yet applied. This is the same
           shipped-but-unadopted posture ADR-018 records for polyglot persistence.</li>
-          <li><strong>Encrypted columns are not queryable.</strong> The random nonce (<code>EncryptedStringConverter.cs:193</code>) makes
+          <li><strong>Encrypted columns are not queryable.</strong> The random nonce (<code>EncryptedStringConverter.cs:223</code>) makes
           ciphertext non-deterministic, so there is no equality filter, index seek, sort, or join on an encrypted
           column. A field that must be both encrypted and looked up needs a separate deterministic scheme or a blind
           index, neither of which this converter provides.</li>
           <li><strong>Key management is still entirely the consumer&#39;s; the ring is a mechanism, not a service.</strong> The converter
-          takes raw key material (<code>EncryptedStringConverter.cs:94</code>, <code>:109</code>) and holds whatever ring it was handed,
-          frozen at construction (<code>EncryptedStringConverter.cs:181</code>). There is no key-provider abstraction, no Key
-          Vault integration, and no automatic refresh: adding a version means constructing a new converter, which in
+          takes raw key material (<code>EncryptedStringConverter.cs:98</code>, <code>:113</code>) and holds whatever ring it was handed,
+          frozen at construction (<code>EncryptedStringConverter.cs:211</code>). The converter has no key provider, no Key
+          Vault integration of its own, and no automatic refresh: adding a version means constructing a new converter, which in
           practice means a deployment. Losing a key still makes every row written under that version permanently
           unrecoverable, and the ring makes that failure mode more granular rather than less likely. Envelope
           encryption over a key-encryption key remains out of scope.</li>
           <li><strong>Rotation is enabled, not automated.</strong> The format and the ring make a zero-downtime rotation possible
-          (<code>EncryptedStringConverter.cs:45</code> through <code>:61</code>), but the re-encryption pass itself is the adopter&#39;s to
-          write and to run, and nothing in the framework reports how many rows still carry an old version. Retiring a
+          (<code>EncryptedStringConverter.cs:47</code> through <code>:65</code>), but the re-encryption pass itself is the adopter&#39;s to
+          write and to run. The framework supplies only the per-entry primitive, <code>MarkForReEncryption</code>
+          (<code>EncryptedStringConverter.cs:143</code>), whose return value is the number of properties it marked on that
+          entry, not a count of rows left; nothing in the framework reports how many rows still carry an old
+          version. A pass written as a plain load-and-save silently rewrites nothing and leaves every row on the old
+          version (<code>EncryptedStringConverter.cs:58</code> through <code>:60</code>). Retiring a
           version early throws <code>CryptographicException</code> on every unconverted row
-          (<code>EncryptedStringConverter.cs:225</code>), which is the loud failure rather than the silent one, but it is still
+          (<code>EncryptedStringConverter.cs:255</code>), which is the loud failure rather than the silent one, but it is still
           an outage for that column.</li>
           <li><strong>One byte caps the ring at 256 live versions.</strong> The version prefix is a single <code>byte</code>
-          (<code>EncryptedStringConverter.cs:75</code>, <code>:109</code>). That is ample for annual or quarterly rotation over any
+          (<code>EncryptedStringConverter.cs:79</code>, <code>:113</code>). That is ample for annual or quarterly rotation over any
           realistic system lifetime, and it is a deliberate trade of headroom for a one-byte envelope, but versions
           wrap rather than grow: a scheme that rotates far more often would have to reuse retired numbers, and reused
           numbers are exactly the ambiguity the version byte exists to prevent.</li>
           <li><strong>Per-property wiring, not a global switch.</strong> Encryption is opted into one <code>HasConversion</code> call at a time
-          in each entity configuration (<code>EncryptedStringConverter.cs:13</code>), so a column that should be encrypted but is
+          in each entity configuration (<code>EncryptedStringConverter.cs:14</code>, example at <code>:16</code>, <code>:17</code>), so a column that should be encrypted but is
           never wired silently stays plaintext, the same audit-the-inventory caveat as ADR-005.</li>
           <li><strong>Storage and CPU overhead.</strong> Every value grows by 29 bytes (1-byte key version plus 12-byte nonce plus
-          16-byte tag, <code>EncryptedStringConverter.cs:75</code>, <code>:78</code>, <code>:81</code>) before Base64 inflation, and every read and
+          16-byte tag, <code>EncryptedStringConverter.cs:79</code>, <code>:82</code>, <code>:85</code>) before Base64 inflation, and every read and
           write performs an AES-GCM operation.</li>
           <li><strong>Malformed-input coverage stops short of a ciphertext bit-flip.</strong> Integrity rests on AES-GCM&#39;s tag (a
           property of the primitive). The suite now covers the short-value guard
@@ -455,7 +484,7 @@
           </ul>
           <h2 id="related">Related</h2>
           <p>ADR-005 (soft-delete vs erasure: the other sensitive-data control, which names this converter as the
-          mechanism for erasure fields that must stay retrievable, <code>Website/docs-src/adr/005-soft-delete-vs-erasure.md:25</code>), ADR-032
+          mechanism for erasure fields that must stay retrievable, <code>Website/docs-src/adr/005-soft-delete-vs-erasure.md:27</code>), ADR-032
           (password hashing: the one-way credential counterpart in the same Infrastructure layer, which already calls
           this converter &quot;the at-rest counterpart to hashing credentials&quot;), ADR-018 (polyglot persistence: the
           shipped, tested, but unadopted precedent this record mirrors). This ADR backs the one-line &quot;Field encryption&quot;
@@ -551,6 +580,46 @@
           heading at <code>MMCA.Common/CHANGELOG.md:3426</code>), and <code>EncryptedStringConverter</code> still has no match
           anywhere in the changelog. The earlier anchors are left as recorded.</li>
           </ol>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. The algorithm, envelope, key ring, authenticated version byte,
+          non-determinism, constructor-supplied key management, statelessness and zero production adoption are
+          unchanged. What moved is the rotation procedure, a second Infrastructure type that recognizes the
+          converter, and the test footprint, all shipped in v1.247.0 (<code>MMCA.Common/CHANGELOG.md:45</code>).</p>
+          <ol>
+          <li>Rotation step 3 is no longer &quot;re-encrypt in the background&quot; alone. A plain load-and-save does not
+          re-encrypt, because change tracking compares the decrypted plaintext against its snapshot and leaves an
+          untouched property out of the UPDATE (<code>EncryptedStringConverter.cs:56</code> through <code>:60</code>; also
+          <code>MMCA.Common/UPGRADING.md:258</code>). The new public static
+          <code>EncryptedStringConverter.MarkForReEncryption(EntityEntry)</code> (<code>EncryptedStringConverter.cs:143</code>,
+          <code>Source/Core/MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:1026</code>, <code>MMCA.Common/CHANGELOG.md:57</code>) marks every converter-mapped property of
+          an entry modified and returns how many it marked. The Rationale rotation bullet and the &quot;Rotation is
+          enabled, not automated&quot; trade-off now say so; the loop over rows is still the adopter&#39;s to write and
+          nothing reports the rows left on an old version.</li>
+          <li>Decision item 8: the audit-trail interceptor records its redaction token for any property mapped
+          through the converter
+          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:639</code>,
+          <code>MMCA.Common/CHANGELOG.md:101</code>), so the earlier statement that a grep finds &quot;only the converter itself&quot;
+          is replaced. Still no options type, key provider for this converter, or DI registration.</li>
+          <li>Decision item 10 and the &quot;Latent today&quot; trade-off: <code>new EncryptedStringConverter(</code> also appears in
+          <code>EncryptedStringConverterReEncryptionTests.cs:90</code>, <code>:96</code> (a SQLite-backed rotation test at <code>:26</code>) and
+          <code>AuditTrailTestHarness.cs:264</code>, not only in <code>EncryptedStringConverterTests</code>. Store, ADC and Helpdesk
+          still contain no reference, and no production <code>*Configuration.cs</code> wires it. The audit-trail redaction
+          is proven by <code>AuditTrailSaveChangesInterceptorTests.cs:383</code>.</li>
+          <li>The converter is now named in the changelog (<code>MMCA.Common/CHANGELOG.md:57</code>, <code>:101</code>, both under
+          <code>[1.247.0]</code>), which supersedes the &quot;no match anywhere in the changelog&quot; statement in the 2026-10-07
+          revision; the <code>[1.153.0]</code> entry (<code>MMCA.Common/CHANGELOG.md:3663</code>, running to <code>[1.152.0]</code> at <code>:3745</code>)
+          still does not name it.</li>
+          <li>Anchors re-verified against current source: class <code>EncryptedStringConverter.cs:76</code>, namespace <code>:7</code>,
+          usage <code>:14</code> with the example at <code>:16</code>, <code>:17</code>; key guidance <code>:35</code>, <code>:36</code>; rotation remarks <code>:47</code> through
+          <code>:65</code>; statelessness remarks <code>:67</code> through <code>:73</code>; constants <code>:79</code>, <code>:82</code>, <code>:85</code>, <code>:88</code>, <code>:91</code>; ctors
+          <code>:98</code>, <code>:113</code>; lambdas <code>:120</code>, <code>:121</code>; <code>GenerateKey</code> <code>:129</code>; single-key guards <code>:159</code>, <code>:160</code>, <code>:162</code>,
+          ring <code>:167</code>; <code>ValidateAndFreeze</code> <code>:176</code> (<code>:180</code>, <code>:182</code>, <code>:189</code>, <code>:196</code>, <code>:198</code>, <code>:204</code>, <code>:211</code>);
+          encrypt <code>:216</code>, <code>:220</code>, <code>:222</code>, <code>:223</code>, <code>:228</code>, <code>:230</code>, <code>:231</code>, <code>:233</code> through <code>:238</code>, <code>:240</code>; decrypt
+          <code>:245</code>, <code>:248</code>, <code>:250</code>, <code>:251</code>, <code>:253</code> through <code>:255</code>, <code>:257</code>, <code>:259</code> through <code>:261</code>, <code>:265</code>, <code>:266</code>,
+          <code>:268</code>. The three live ADR-005 citations now point at
+          <code>Website/docs-src/adr/005-soft-delete-vs-erasure.md:27</code>, where Decision item 2 still names the
+          converter. <code>EncryptedStringConverterTests.cs</code> anchors (<code>:24</code>, <code>:38</code>, <code>:82</code>, <code>:95</code>, <code>:226</code>) still hold.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -573,6 +642,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             </ul>
           </nav>
         </aside>

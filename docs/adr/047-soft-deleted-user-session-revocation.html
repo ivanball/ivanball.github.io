@@ -251,7 +251,10 @@
           lives 15 minutes while a &quot;not deleted&quot; answer still caches for 30 seconds, and the marker is honored
           on every host, including one with no validator. Revised 2026-10-07: a &quot;not deleted&quot; answer is no
           longer cached at all and the marker is read from the shared store, so an Identity host runs the
-          validator query on every authenticated request and the 30-second window is gone.</p>
+          validator query on every authenticated request and the 30-second window is gone. Revised
+          2026-10-21: the shared erasure base now also revokes and anonymizes the account&#39;s refresh sessions
+          before the save, both middleware write-failure tests exercise a failed marker write, and anchors are
+          refreshed.</p>
           <h2 id="context">Context</h2>
           <p>Soft-delete is the framework&#39;s default deletion model (ADR-005): <code>AuditableBaseEntity.Delete()</code> sets
           <code>IsDeleted = true</code> and EF global query filters hide the row, but the record survives for audit,
@@ -316,7 +319,7 @@
           (<code>TUser : AuditableAggregateRootEntity&lt;UserIdentifierType&gt;</code>, <code>SoftDeletedUserValidator.cs:21</code>). Each
           app closes it over its own <code>User</code> at registration and writes no subclass of its own
           (<code>services.TryAddScoped&lt;ISoftDeletedUserValidator, SoftDeletedUserValidator&lt;User&gt;&gt;()</code> at
-          <code>MMCA.ADC.Identity.Application/DependencyInjection.cs:38</code> and
+          <code>MMCA.ADC.Identity.Application/DependencyInjection.cs:41</code> and
           <code>MMCA.Store.Identity.Application/DependencyInjection.cs:47</code>). The query bypasses the soft-delete
           global query filter deliberately, because a plain read would hide the very row it needs to find.</li>
           <li><strong>Only the deleted answer is cached, and it is read from the shared store.</strong> The key shape and the
@@ -331,7 +334,8 @@
           middleware builds the key (<code>SoftDeletedUserMiddleware.cs:82</code>) and reads it through
           <code>ICacheService.GetFromSharedStoreAsync&lt;bool?&gt;</code> (<code>:91-93</code>), never from a replica&#39;s local copy
           (<code>:88-90</code>): <code>HybridCacheService</code> overrides that member so the read skips its process-local tier
-          (<code>Source/Core/MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:140-165</code>), while the
+          (<code>Source/Core/MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:216-235</code>, its remarks at
+          <code>:201-215</code>), while the
           interface default falls back to <code>GetAsync</code> for a store with no local tier
           (<code>Source/Core/MMCA.Common.Application/Interfaces/ICacheService.cs:60-66</code>). A cached <code>true</code>
           short-circuits to 401 with no database call (<code>SoftDeletedUserMiddleware.cs:105-112</code>), before the
@@ -347,7 +351,7 @@
           and falls through to the validator query (<code>SoftDeletedUserMiddleware.cs:95-103</code>), a validator failure
           is logged and the request proceeds (<code>:143-150</code>), and a failed marker write for a deleted user only
           costs the next request another lookup (<code>:163-168</code>). <code>HybridCacheService.GetFromSharedStoreAsync</code> is
-          itself fail-soft (<code>HybridCacheService.cs:167-172</code>), so with that cache a read fault reaches the
+          itself fail-soft (<code>HybridCacheService.cs:229-234</code>), so with that cache a read fault reaches the
           middleware as a miss rather than an exception. The class states the reasoning in its own remarks
           (<code>SoftDeletedUserMiddleware.cs:22-36</code>): failing
           closed would turn any cache or database blip into a total outage for every authenticated request,
@@ -376,12 +380,13 @@
           non-deleted pass and a live deleted 401 (<code>:145</code>, <code>:170</code>); and a cached-deleted 401 and a cached
           non-deleted pass (the legacy-written entry), both with no database call (<code>:187</code>, <code>:205</code>). Six sit
           under the fail-open policy: a cache read failure with a deleted or a live user (<code>:227</code>, <code>:246</code>),
-          cache and validator both failing (<code>:274</code>), a validator failure (<code>:297</code>), and two cache write
-          failures (<code>:320</code>, <code>:349</code>). Only <code>:349</code> exercises a failed write: <code>:320</code> arms a throwing <code>SetAsync</code>
-          for a live user (<code>:325-332</code>), and the middleware never writes for a live user, so that test proves
-          only the live pass. Three pin the shared-store behavior: the marker is read from the shared store and
-          never through <code>GetAsync</code> (<code>:374</code>), a live user is not written back (<code>:396</code>), and a deleted user
-          still writes the marker for <code>MarkerDuration</code> (<code>:420</code>).</p>
+          cache and validator both failing (<code>:274</code>), a validator failure (<code>:297</code>), and two marker-write
+          failures for a deleted user (<code>:323</code>, <code>:355</code>). Both arm a throwing <code>SetAsync</code> against a user the
+          validator finds deleted, so both exercise a failed write: <code>:323</code> also asserts the next delegate is
+          never called and the write was attempted once for <code>MarkerDuration</code> (<code>:346-350</code>), while <code>:355</code>
+          asserts only the 401 (<code>:373</code>). Three pin the shared-store behavior: the marker is read from the
+          shared store and never through <code>GetAsync</code> (<code>:380</code>), a live user is not written back (<code>:402</code>), and a
+          deleted user still writes the marker for <code>MarkerDuration</code> (<code>:426</code>).</p>
           <p><strong>The marker write is part of the shared erasure workflow, so the window is uniform.</strong> Without a
           marker an Identity-hosting service still rejects a soft-deleted account on its next request, through
           the uncached validator query (<code>SoftDeletedUserMiddleware.cs:133-141</code>), unless a cached <code>false</code>
@@ -391,43 +396,51 @@
           request on every host, and spares the Identity host the query. That write is not left to each app&#39;s
           delete handler: it is a step of <code>DeleteUserHandlerBase.HandleAsync</code>, the shared account-erasure workflow in
           <code>MMCA.Common.Application</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/DeleteUser/DeleteUserHandlerBase.cs:144-153</code>),
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/DeleteUser/DeleteUserHandlerBase.cs:164-173</code>),
           so every app that derives from the base gets the identical revocation window with no per-app code.</p>
           <ul>
           <li><strong>The base requires the cache to do it.</strong> <code>ICacheService</code> is a constructor parameter of the base
-          (<code>DeleteUserHandlerBase.cs:62-65</code>), so an app cannot derive from it and silently skip the marker;
-          the compiler asks for the dependency.</li>
-          <li><strong>It runs after the save and before the app&#39;s tail.</strong> The order is
-          <code>SaveChangesAsync</code> (<code>:139</code>), then <code>SoftDeletedUserCache.MarkDeletedAsync(cacheService, command.UserId, cancellationToken)</code> (<code>:146-148</code>; <code>SoftDeletedUserCache.MarkDeletedAsync</code> at
-          <code>SoftDeletedUserCache.cs:56-64</code>), then the queued <code>afterCommit</code> actions (<code>:155-158</code>). The save is
+          (<code>DeleteUserHandlerBase.cs:76</code>, in the primary constructor at <code>:74-79</code>), so an app cannot derive
+          from it and silently skip the marker; the compiler asks for the dependency.</li>
+          <li><strong>It runs after the save and before the post-save <code>afterCommit</code> tail.</strong> The order is the app&#39;s
+          <code>OnAfterSoftDeleteAsync</code> hook (<code>:137</code>; the base documents it as &quot;the app&#39;s erasure tail&quot; at
+          <code>:194</code>), then <code>Anonymize</code> (<code>:144</code>), then
+          <code>RefreshSessionRevocation.RevokeAndAnonymizeAllAsync</code> (<code>:155-157</code>), which revokes and anonymizes
+          the account&#39;s refresh sessions in the same unit of work when the host registered an optional
+          <code>IRefreshSessionStore</code> (<code>:78</code>; its parameter documentation at <code>:66-72</code>), then <code>SaveChangesAsync</code>
+          (<code>:159</code>), then <code>SoftDeletedUserCache.MarkDeletedAsync(cacheService, command.UserId, cancellationToken)</code> (<code>:166-168</code>; <code>SoftDeletedUserCache.MarkDeletedAsync</code> at
+          <code>SoftDeletedUserCache.cs:56-64</code>), then the queued <code>afterCommit</code> actions (<code>:175-178</code>). The save is
           the commit only when the command is not <code>ITransactional</code>; under an <code>ITransactional</code> command the
           marker and the <code>afterCommit</code> actions run before the transaction commits (the base summary,
-          <code>DeleteUserHandlerBase.cs:18-21</code>). ADC&#39;s <code>DeleteUserCommand</code> is <code>ITransactional</code>
+          <code>DeleteUserHandlerBase.cs:19-22</code>). ADC&#39;s <code>DeleteUserCommand</code> is <code>ITransactional</code>
           (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/DeleteUser/DeleteUserCommand.cs:22</code>),
           so there the marker precedes the commit; Store&#39;s is not
           (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/DeleteUser/DeleteUserCommand.cs:17</code>),
           so there it follows the commit. The base&#39;s own
-          remarks give the reason (<code>:35-39</code>): the app&#39;s tail is unbounded work (deleting a blob, calling
-          storage) that can be slow or throw, and every second it takes is a second the deleted account&#39;s
-          token still works, so revoking first bounds the exposure to the cache round trip regardless of what
-          the app queued behind it.</li>
+          remarks give the reason (<code>:37-40</code>): the post-save <code>afterCommit</code> tail is unbounded app work
+          (deleting a blob, calling storage) that can be slow or throw, and every second it takes is a second
+          the deleted account&#39;s token still works, so revoking first bounds the exposure to the cache round
+          trip regardless of what the app queued behind it. Neither deployed app queues an <code>afterCommit</code>
+          action today (ADC schedules its blob delete inside the transaction instead, below), so the ordering
+          guards future app work rather than any current tail.</li>
           <li><strong>It is best effort, and deliberately so.</strong> A non-cancellation exception is caught and logged as a
           warning via the base&#39;s own private <code>SoftDeletedMarkerFailed</code> logger message
-          (<code>DeleteUserHandlerBase.cs:150-153</code>, the call at <code>:152</code>; declared at <code>:199-200</code>)
+          (<code>DeleteUserHandlerBase.cs:170-173</code>, the call at <code>:172</code>; declared at <code>:219-220</code>)
           rather than failing an erasure that has already been saved. A failed write costs only the
           shortening on hosts without a validator: there the token keeps working until it expires, as the
-          base&#39;s remarks say (<code>DeleteUserHandlerBase.cs:25-33</code>). An Identity-hosting service still rejects
+          base&#39;s remarks say (<code>DeleteUserHandlerBase.cs:30-34</code>). An Identity-hosting service still rejects
           the account on its next request through the validator query, as described above.</li>
           <li><strong>Apps are told not to write it themselves.</strong> The <code>afterCommit</code> parameter&#39;s own documentation says
           the base already wrote the marker ahead of the tail, so a subclass must not queue a second write
-          (<code>DeleteUserHandlerBase.cs:179-186</code>).</li>
+          (<code>DeleteUserHandlerBase.cs:199-206</code>).</li>
           </ul>
           <p>Both deployed apps therefore revoke at the same speed. MMCA.ADC&#39;s <code>DeleteUserHandler</code>
           (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/DeleteUser/DeleteUserHandler.cs</code>)
-          carries no marker code of its own (its remarks at <code>:25-27</code> defer to the base). Its
+          carries no marker code of its own (its remarks at <code>:27-29</code> defer to the base) and forwards the
+          <code>ICacheService</code> it takes (<code>:34</code>) to the base (<code>:38</code>). Its
           <code>OnAfterSoftDeleteAsync</code> tail raises the cross-service <code>UserDeleted</code> integration event on the
-          aggregate (<code>:59</code>) and schedules the avatar blob delete as a durable internal command enrolled in the
-          erasure transaction (<code>:68-71</code>, <code>:76-86</code>; ADR-114) rather than queuing it post-commit; MMCA.Store&#39;s
+          aggregate (<code>:62</code>) and schedules the avatar blob delete as a durable internal command enrolled in the
+          erasure transaction (<code>:71-74</code>, <code>:79-89</code>; ADR-114) rather than queuing it post-commit; MMCA.Store&#39;s
           handler (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/DeleteUser/DeleteUserHandler.cs</code>)
           keeps its linked-<code>Customer</code> cascade and gains the marker behavior purely by forwarding the new
           <code>ICacheService</code> constructor parameter to the base. Neither app contains a marker write.</p>
@@ -465,7 +478,7 @@
           lifetime should write its own marker with a matching duration (<code>SoftDeletedUserCache.cs:27-29</code>).</li>
           <li><strong>The marker only covers erasures that go through the shared base.</strong> The framework now both
           supplies the key and TTL (<code>SoftDeletedUserCache.MarkDeletedAsync</code>, <code>SoftDeletedUserCache.cs:56-64</code>)
-          and calls it on the app&#39;s behalf (<code>DeleteUserHandlerBase.cs:146-148</code>), so no app can forget it. What
+          and calls it on the app&#39;s behalf (<code>DeleteUserHandlerBase.cs:166-168</code>), so no app can forget it. What
           the base cannot cover is a soft-delete that never reaches it: an administrative <code>IsDeleted = true</code>
           applied by a migration, a support script or any handler other than a <code>DeleteUserHandlerBase</code>
           subclass writes no marker. Those deletions still revoke on the next request on an
@@ -475,7 +488,7 @@
           Uniformity here is uniformity across the <em>erasure use case</em>, not across every path that can set the
           flag.</li>
           <li><strong>A cache fault silently degrades the window rather than failing.</strong> The write is swallowed and
-          logged at Warning (<code>DeleteUserHandlerBase.cs:150-153</code>), which is the right trade for an
+          logged at Warning (<code>DeleteUserHandlerBase.cs:170-173</code>), which is the right trade for an
           already-committed irreversible erasure, but it means the shortened window is a best-effort property:
           the caller gets a success result either way, and only the log says whether revocation was actually
           accelerated.</li>
@@ -751,6 +764,41 @@
           re-checked: <code>SoftDeletedUserCache.cs:32</code>, <code>:45-46</code>, <code>:56-64</code>, and <code>DeleteUserHandlerBase.cs</code>
           <code>:62-65</code>, <code>:139</code>, <code>:144-153</code>, <code>:155-158</code>, <code>:179-186</code>, <code>:199-200</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. The middleware, the pipeline position, the shared-store marker
+          read, the fail-open policy and the shared marker write are unchanged. What moved is the erasure
+          workflow ahead of the save, the description of the two write-failure tests, and the anchors.</p>
+          <ol>
+          <li><strong>The erasure base revokes refresh sessions before the save.</strong> <code>DeleteUserHandlerBase</code> takes an
+          optional <code>IRefreshSessionStore</code> (<code>DeleteUserHandlerBase.cs:78</code>, documented at <code>:66-72</code>) and calls
+          <code>RefreshSessionRevocation.RevokeAndAnonymizeAllAsync</code> (<code>:155-157</code>) before <code>SaveChangesAsync</code>
+          (<code>:159</code>), so the revocation and the anonymized session rows commit with the erasure. ADC forwards
+          the store to the base (<code>DeleteUserHandler.cs:37-38</code>), as does Store
+          (<code>MMCA.Store.Identity.Application/Users/UseCases/DeleteUser/DeleteUserHandler.cs:35</code>). The
+          ordering bullet now names that step; the marker still follows the save and precedes the
+          <code>afterCommit</code> actions.</li>
+          <li><strong>Both write-failure tests exercise a failed write.</strong> The live-user write test the 2026-10-07
+          revision described no longer exists. The two tests are
+          <code>InvokeAsync_DeletedUserAndMarkerWriteThrows_StillReturns401</code>
+          (<code>SoftDeletedUserMiddlewareTests.cs:323</code>) and <code>InvokeAsync_CacheWriteThrowsForDeletedUser_Returns401</code>
+          (<code>:355</code>); each arms a throwing <code>SetAsync</code> for a user the validator finds deleted (<code>:328-335</code>,
+          <code>:360-367</code>). The count stays nineteen. The Decision paragraph is corrected.</li>
+          <li><strong>Anchors re-verified against current source:</strong> ADC registration
+          <code>MMCA.ADC.Identity.Application/DependencyInjection.cs:41</code> (from <code>:38</code>; Store&#39;s <code>:47</code> holds);
+          <code>HybridCacheService.GetFromSharedStoreAsync</code> <code>:216-235</code> with remarks <code>:201-215</code> (from <code>:140-165</code>)
+          and its fail-soft catch <code>:229-234</code> (from <code>:167-172</code>); <code>DeleteUserHandlerBase.cs</code> <code>ICacheService</code>
+          parameter <code>:76</code> in the constructor <code>:74-79</code> (from <code>:62-65</code>), <code>SaveChangesAsync</code> <code>:159</code> (from
+          <code>:139</code>), marker try/catch <code>:164-173</code> (from <code>:144-153</code>) with the call <code>:166-168</code> (from <code>:146-148</code>)
+          and the log <code>:170-173</code>, <code>:172</code> (from <code>:150-153</code>, <code>:152</code>), <code>afterCommit</code> loop <code>:175-178</code> (from
+          <code>:155-158</code>), summary <code>:19-22</code> (from <code>:18-21</code>), best-effort remarks <code>:30-34</code> (from <code>:25-33</code>),
+          ordering remarks <code>:37-40</code> (from <code>:35-39</code>), <code>afterCommit</code> documentation <code>:199-206</code> (from
+          <code>:179-186</code>), <code>SoftDeletedMarkerFailed</code> declaration <code>:219-220</code> (from <code>:199-200</code>); ADC
+          <code>DeleteUserHandler.cs</code> remarks marker sentence <code>:27-29</code> (from <code>:25-27</code>), <code>UserDeleted</code> <code>:62</code> (from
+          <code>:59</code>), schedule <code>:71-74</code> (from <code>:68-71</code>), <code>ScheduleAvatarBlobDeletionAsync</code> <code>:79-89</code> (from
+          <code>:76-86</code>); tests <code>:380</code>, <code>:402</code>, <code>:426</code> (from <code>:374</code>, <code>:396</code>, <code>:420</code>). Unchanged and re-checked:
+          tests <code>:25</code>, <code>:44</code>, <code>:68</code>, <code>:88</code>, <code>:106</code>, <code>:127</code>, <code>:145</code>, <code>:170</code>, <code>:187</code>, <code>:205</code>, <code>:227</code>, <code>:246</code>,
+          <code>:274</code>, <code>:297</code>.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -773,6 +821,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             </ul>
           </nav>
         </aside>

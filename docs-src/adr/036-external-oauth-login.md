@@ -11,6 +11,8 @@ Revised 2026-09-19 (Apple joins Google and GitHub as a third config-gated provid
 link runs three guards rather than two, token issuance goes through the shared refresh-session
 workflow, and an external create carries the provider's assertion into the new account's
 confirmation state).
+Revised 2026-10-21: anchors refreshed after the `User.cs` and `ChangePasswordHandlerBase.cs` lines
+moved.
 ## Context
 The framework's Identity story so far is entirely first-party: a user registers with an email and
 password, the credentials are hashed (ADR-032), and Identity mints its own RS256 JWT pair. Every auth
@@ -109,7 +111,7 @@ a local `User`.
   argument and rides the `UserRegistered` event. It also settles the account's confirmation state
   (ADR-116): a verified assertion starts the account confirmed
   (`IsEmailConfirmed = emailVerified`,
-  `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:288`), while a provider
+  `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:300`), while a provider
   that asserts nothing starts it unconfirmed and it receives a confirmation link like a local
   registration. In the link and create cases the exchange then calls `IssueTokensAsync`
   (`AuthenticationService.cs:338`), which opens a refresh **session** for the device through the
@@ -286,6 +288,27 @@ Anchor refresh only: no decision or rationale changed.
   `IExternalLoginEmailVerifier.cs:11`, `HttpContextExternalLoginEmailVerifier.cs:17` / `:33`,
   Identity.API `DependencyInjection.cs:56`, `IAuthenticationService.cs:139`) were re-verified
   against current source and still hold.
+
+## Revision (2026-10-21)
+Re-verified against current source. No decision or rationale changed: the by-email link guards, the
+external create, and the empty-credential refusals behave as recorded; only `User.cs` and
+`ChangePasswordHandlerBase.cs` lines moved, and two 2026-09-07 anchors that the 2026-10-06 refresh
+never carried forward are re-pointed here.
+
+1. Anchors re-verified against current source:
+   - `IsEmailConfirmed = emailVerified` sits in the `User.CreateExternal` object initializer at
+     `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:300` (factory declared
+     at `:276`); the Decision citation is re-pointed in place.
+   - `User.HasLocalPassword` (`PasswordHash.Length > 0`) is at `User.cs:177`, with its reasoning in
+     the XML-doc summary at `:169-176`.
+   - The change-password refusal for an account with no stored credential is
+     `MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:96`
+     (SECURITY comment `:92-95`), still ahead of the lockout check (`:103`) and the verify (`:109`).
+   - In ADC's `AuthenticationService.cs`, the SEC-ADC-01 pre-registration takeover reasoning is at
+     `:383-389` and the `Auth.ExternalLinkRequiresLocalSignIn` refusal message at `:394`.
+   - The Decision and Trade-offs citations into `AuthenticationService.cs` (`:214`, `:221`, `:226`,
+     `:235-236`, `:254`, `:258`, `:264`, `:286-287`, `:293`, `:338`, `:359`, `:362-363`, `:372-373`,
+     `:378`, `:390`, `:393`, `:398`) still hold.
 
 ## Related
 ADR-004 (the RS256/JWKS token this flow exchanges the external identity *for*, and validates

@@ -8,6 +8,7 @@ are capped per user, the backplane channel is namespaced per application, and AD
 reads to the audience-visible states).
 Revised 2026-09-25 (re-anchored the backplane-prefix citation, which now lives in the
 `DependencyInjection.Notifications.cs` partial, and the ADC poll manage endpoint).
+Revised 2026-10-21: anchors refreshed after the ADC live poll manage endpoint moved.
 ## Context
 
 Conference-day features (live polls, session Q&A, live result counters) need sub-second fan-out of
@@ -144,3 +145,18 @@ on 2026-09-07. Two anchors recorded in that section have moved:
   reads the cap at `:63`, compares at `:69` and throws `HubException` at `:74`.
 
 Anchors were re-verified against current source.
+
+## Revision (2026-10-21)
+Re-verified against current source. No content change: the channel model, the per-user connection
+cap, its default and the ADC live poll read scope are as recorded on 2026-09-07 and 2026-10-06. One
+anchor recorded on 2026-09-07 has moved since the 2026-10-06 refresh: the manage endpoint now
+carries a doc comment above its route attribute.
+
+1. Anchors re-verified against current source:
+   - The ADC poll manage endpoint (`GET /api/livepolls/manage`) is now declared at
+     `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:186`.
+   - The 2026-10-06 anchors still hold: the `MaxConnectionsPerUser` default of 20 at
+     `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/PushNotificationSettings.cs:46`
+     (`Range(0, 10_000)` at `:45`), and the refusal in `NotificationHub.OnConnectedAsync`
+     (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/NotificationHub.cs:61`),
+     which reads the cap at `:63`, compares at `:69` and throws `HubException` at `:74`.

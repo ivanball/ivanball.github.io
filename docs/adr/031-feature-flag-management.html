@@ -255,7 +255,8 @@
           Decision and Rationale describe the bodies as they are. See the Revision (2026-10-01) at the end.)</p>
           <p>Revised 2026-10-06: the CQRS disabled failure no longer names the flag; its message is the generic
           wording the edge handler uses, and clients branch on the <code>Feature.Disabled</code> code. See the Revision
-          (2026-10-06) at the end.</p>
+          (2026-10-06) at the end. Revised 2026-10-21: anchors refreshed after the <code>DisabledFeatureHandler</code>
+          statement moved down one line.</p>
           <h2 id="context">Context</h2>
           <p>The apps need to decouple <em>release</em> from <em>deploy</em>: ship code dark, flip a kill switch, or roll a feature
           out to a percentage of users without a redeploy. A flag has to be enforceable at <strong>two</strong> different points
@@ -273,7 +274,7 @@
           <ul>
           <li><strong>HTTP edge:</strong> <code>[FeatureGate(&quot;X&quot;)]</code> (<code>Microsoft.FeatureManagement.Mvc</code>) on a controller or action. When
           <code>X</code> is off, <code>DisabledFeatureHandler</code> returns an <strong>RFC 9457 ProblemDetails <code>404</code></strong> (&quot;Feature not
-          available&quot;, <code>MMCA.Common.API/FeatureManagement/DisabledFeatureHandler.cs:18-26</code>). The body is built by
+          available&quot;, <code>MMCA.Common.API/FeatureManagement/DisabledFeatureHandler.cs:19-27</code>). The body is built by
           hand, so it does not carry the <code>ApiControllerBase.HandleFailure</code> shape (title &quot;Operation failed&quot; plus
           an <code>errors</code> extension, <code>MMCA.Common.API/Controllers/ApiControllerBase.cs:50-58</code>).</li>
           <li><strong>CQRS pipeline:</strong> a command/query implements <code>IFeatureGated</code> (exposing <code>FeatureName</code>). The
@@ -435,6 +436,20 @@
           <li>Anchors in the live sections were re-verified against current source; <code>BuildErrorsExtension</code> is at
           <code>ErrorHttpMapping.cs:62-70</code>.</li>
           </ul>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. The decision is unchanged: both surfaces answer <code>404</code>, the edge
+          writes its own &quot;Feature not available&quot; ProblemDetails, and both decorators return the generic
+          <code>Feature.Disabled</code> failure that does not name the flag. Only the edge handler&#39;s anchor moved.</p>
+          <ol>
+          <li>Anchors re-verified against current source: the <code>DisabledFeatureHandler</code> result statement is at
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/FeatureManagement/DisabledFeatureHandler.cs:19-27</code>
+          (Title at <code>:22</code>, Detail at <code>:23</code>); the decorators&#39; <code>Error.NotFoundError(&quot;Feature.Disabled&quot;, ...)</code>
+          is at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/FeatureGateCommandDecorator.cs:60-62</code>
+          and <code>FeatureGateQueryDecorator.cs:59-61</code>; the <code>AddAPI</code> registration at <code>DependencyInjection.cs:105-107</code>,
+          <code>HandleFailure</code>&#39;s body at <code>ApiControllerBase.cs:50-58</code> and <code>BuildErrorsExtension</code> at
+          <code>ErrorHttpMapping.cs:62-70</code> are unchanged.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -455,6 +470,7 @@
             <li><a href="#revision-2026-09-11">Revision (2026-09-11)</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             </ul>
           </nav>
         </aside>

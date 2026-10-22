@@ -253,7 +253,9 @@
           ceiling sampled on all three pages.
           Revised 2026-10-07: both apps removed <code>backend-test-gate</code> from their deploys, so ADC&#39;s deploy now
           carries two conditional gates (<code>e2e-gate</code>, <code>ai-eval-gate</code>) and Store&#39;s one (<code>e2e-gate</code>), and
-          MMCA.Common&#39;s <code>ui-e2e</code> job no longer uploads an E2E coverage file, only Playwright traces on failure.</p>
+          MMCA.Common&#39;s <code>ui-e2e</code> job no longer uploads an E2E coverage file, only Playwright traces on failure.
+          Revised 2026-10-21: anchors refreshed after later edits to both apps&#39; <code>deploy.yml</code> files and the
+          Helpdesk package pins.</p>
           <h2 id="context">Context</h2>
           <p>Rubric section 23 asks for client-side performance that is measured rather than assumed, naming Core
           Web Vitals (LCP, INP, CLS) or an equivalent as the evidence
@@ -348,12 +350,12 @@
           <code>dotnet test --project ...E2E.Tests.csproj</code> with no filter (ADC <code>.github/workflows/e2e.yml:334-337</code>,
           Store <code>:394-397</code>) and points <code>WEB_VITALS_OUTPUT_DIR</code> at the uploaded diagnostics directory (ADC
           <code>:312</code>, Store <code>:383</code>). <code>deploy.yml</code> calls that workflow chromium-only as <code>e2e-gate</code> (ADC
-          <code>deploy.yml:792-807</code>, chromium at <code>:806</code>; Store <code>:751-765</code>, chromium at <code>:764</code>), and the <code>deploy</code>
-          job both lists it in <code>needs</code> (ADC <code>:1145</code>, Store <code>:1083</code>) and requires it to be <code>success</code> or
-          <code>skipped</code> (ADC <code>:1182</code>, Store <code>:1116</code>). A
+          <code>deploy.yml:799-822</code>, chromium at <code>:821</code>; Store <code>:753-767</code>, chromium at <code>:766</code>), and the <code>deploy</code>
+          job both lists it in <code>needs</code> (ADC <code>:1160</code>, Store <code>:1098</code>) and requires it to be <code>success</code> or
+          <code>skipped</code> (ADC <code>:1197</code>, Store <code>:1131</code>). A
           front-end performance budget is therefore a production precondition on the same footing as the SBOM,
           the cost guard and the freshness gates, and <code>deploy.yml</code> says so where the k6 gate is defined (ADC
-          <code>:847-848</code>, Store <code>:804-805</code>).</li>
+          <code>:862-863</code>, Store <code>:806-807</code>).</li>
           <li><strong>The framework measures its own UI, under the good band and a tighter INP ceiling.</strong>
           <code>WebVitalsE2ETests</code>
           (<code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/WebVitals/WebVitalsE2ETests.cs:17</code>) measures the
@@ -381,7 +383,7 @@
           (<code>:66-73</code>), and the exact text of the sample line (<code>:32-43</code>).</li>
           </ul>
           <p>Adoption is the two deployed apps plus the framework gallery. <strong>MMCA.Helpdesk has neither</strong>: it pins
-          the package (<code>MMCA.Helpdesk/Directory.Packages.props:94</code>) but has no E2E test project at all, so the
+          the package (<code>MMCA.Helpdesk/Directory.Packages.props:93</code>) but has no E2E test project at all, so the
           seed carries no worked example of a client-side budget, the same gap ADR-063 records for
           accessibility.</p>
           <h2 id="rationale">Rationale</h2>
@@ -417,14 +419,14 @@
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
           <li><strong>The gate is ui-scoped and may legitimately skip.</strong> Both apps gate <code>e2e-gate</code> on a <code>ui</code> change
-          filter (ADC <code>deploy.yml:803</code>, Store <code>:761</code>) and <code>deploy</code> accepts <code>skipped</code> for it (ADC <code>:1182</code>,
-          Store <code>:1116</code>), so a backend-only or infra-only deploy ships with no Web Vitals measurement of that
-          commit. The test gate on such a deploy is the pull request&#39;s required checks (ADC <code>:798-800</code>,
-          Store <code>:757-759</code>), which run no browser, so they leave this budget unmeasured on those deploys.
+          filter (ADC <code>deploy.yml:818</code>, Store <code>:763</code>) and <code>deploy</code> accepts <code>skipped</code> for it (ADC <code>:1197</code>,
+          Store <code>:1131</code>), so a backend-only or infra-only deploy ships with no Web Vitals measurement of that
+          commit. The test gate on such a deploy is the pull request&#39;s required checks (ADC <code>:813-817</code>,
+          Store <code>:759-762</code>), which run no browser, so they leave this budget unmeasured on those deploys.
           Same intended cost trade as the accessibility gate, and the same caveat: &quot;deployed&quot;
           does not always mean &quot;the budget ran on this commit&quot;.</li>
           <li><strong>It never runs on a pull request.</strong> The E2E project is in neither solution filter and the gate is
-          push/dispatch only (ADC <code>deploy.yml:803</code>, Store <code>:761</code>), so a regression is caught between merge and
+          push/dispatch only (ADC <code>deploy.yml:818</code>, Store <code>:763</code>), so a regression is caught between merge and
           rollout, not before merge.</li>
           <li><strong>The measured configuration is not the production one.</strong> CI pins the UI to <code>InteractiveServer</code>
           (ADC <code>e2e.yml:226</code>, Store <code>:229</code>), so the numbers describe Server-mode prerender-then-hydrate under
@@ -449,7 +451,7 @@
           The gallery is the only other place in the adoption set that drives one, on each of its three
           pages (<code>WebVitalsE2ETests.cs:88-116</code>).</li>
           <li><strong>The green-run artifact is written but not kept.</strong> Both workflows upload the diagnostics bundle
-          only on failure (ADC <code>e2e.yml:360-365</code>, Store <code>:457-462</code>), and MMCA.Common&#39;s <code>ui-e2e</code> job sets no
+          only on failure (ADC <code>e2e.yml:360-365</code>, Store <code>:458-463</code>), and MMCA.Common&#39;s <code>ui-e2e</code> job sets no
           <code>WEB_VITALS_OUTPUT_DIR</code> at all (its test step sets only <code>E2E_HEADLESS</code> and <code>E2E_BROWSER</code>,
           <code>ci.yml:289-291</code>) and uploads no Web Vitals artifact of its own (its one upload is Playwright
           traces, on failure only, <code>ci.yml:294-300</code>), so the JSON
@@ -521,6 +523,20 @@
           Store <code>deploy.yml</code> <code>e2e-gate</code> <code>:751-765</code> (chromium <code>:764</code>), <code>needs</code> <code>:1083</code>, success-or-skipped
           <code>:1116</code>, Web Vitals comment <code>:804-805</code>; MMCA.Common <code>ci.yml</code> <code>ui-e2e</code> <code>:223</code>, matrix <code>:232</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. The decision, the budget, the measurement flow, the chromium-only
+          ui-scoped <code>e2e-gate</code>, ADC&#39;s two conditional gates and Store&#39;s one are unchanged, as is Helpdesk&#39;s
+          lack of any E2E test project. Only line anchors moved, after later edits to both <code>deploy.yml</code> files
+          and the Helpdesk package pins; the dated revisions above keep the anchors they were written with.</p>
+          <ol>
+          <li>Anchors re-verified against current source: ADC <code>deploy.yml</code> <code>e2e-gate</code> <code>:799-822</code> (ui-scoped
+          <code>if</code> <code>:818</code>, chromium <code>:821</code>, PR-checks comment <code>:813-817</code>), Web Vitals comment <code>:862-863</code>,
+          <code>needs</code> <code>:1160</code>, success-or-skipped <code>:1197-1198</code>, <code>ai-eval-gate</code> defined at <code>:523</code>; Store
+          <code>deploy.yml</code> <code>e2e-gate</code> <code>:753-767</code> (ui-scoped <code>if</code> <code>:763</code>, chromium <code>:766</code>, PR-checks comment
+          <code>:759-762</code>), Web Vitals comment <code>:806-807</code>, <code>needs</code> <code>:1098</code>, one-conditional-gate comment
+          <code>:1119-1120</code>, success-or-skipped <code>:1131</code>; Store <code>e2e.yml</code> failure-only upload <code>:458-463</code>;
+          <code>MMCA.Helpdesk/Directory.Packages.props:93</code>.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="063-accessibility-conformance-gate.html">ADR-063</a> (the structural sibling: the same package, the same
           Playwright suite and the same deploy gate, applied to WCAG 2.1 AA instead of load performance),
@@ -551,6 +567,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

@@ -3,6 +3,7 @@
 ## Status
 Accepted (2026-07-28; revised 2026-08-14). Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 Revised 2026-10-19: ADC Conference and Engagement gain module conformance tests, so seven of the eight modules are checked (only Helpdesk Tickets is not).
+Revised 2026-10-21: ADC `ConferenceModule` registers three stubs (adding the `IUserConferenceExportService` export stub), `DisabledEventLiveValidationService` fails open across five members, the empty-export stub list names the Conference and Store Catalog export stubs, and host anchors are refreshed.
 
 ## Context
 The framework's headline claim is that an application is built as a modular monolith and later
@@ -51,10 +52,10 @@ rather than by absence.
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/ModuleHostExtensions.cs:51-53,84-90`),
   which is how the service hosts pass it: Store
   (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:125-127`,
-  `MMCA.Store.Identity.Service/Program.cs:119-121`, `MMCA.Store.Sales.Service/Program.cs:132-134`) and
-  ADC (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:265-267`,
-  `MMCA.ADC.Conference.Service/Program.cs:371-373`, `MMCA.ADC.Engagement.Service/Program.cs:213-215`,
-  `MMCA.ADC.Notification.Service/Program.cs:195-197`) each name the single assembly of the one module
+  `MMCA.Store.Identity.Service/Program.cs:120-122`, `MMCA.Store.Sales.Service/Program.cs:133-135`) and
+  ADC (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:266-268`,
+  `MMCA.ADC.Conference.Service/Program.cs:373-375`, `MMCA.ADC.Engagement.Service/Program.cs:214-216`,
+  `MMCA.ADC.Notification.Service/Program.cs:196-198`) each name the single assembly of the one module
   that host enables, so an extracted service's scan surface equals its own module. Helpdesk calls
   `DiscoverAndRegister` with its one module assembly inside a `Register` step of its
   `AddMmcaApplicationPipeline` call
@@ -93,11 +94,12 @@ rather than by absence.
   collection, which deliberately skips the BR-49 / BR-91 eligibility checks
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Sessions/DisabledSessionBookmarkValidationService.cs:30-39`);
   `DisabledEventLiveValidationService`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/Live/DisabledEventLiveValidationService.cs:23-64`)
-  fails open across all four of the members it has grown to: an always-open live window for an event
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/Live/DisabledEventLiveValidationService.cs:23-75`)
+  fails open across all five of the members it has grown to: an always-open live window for an event
   (`:25-27`) and for a session (`:29-43`), every sponsor reported as belonging to a published event
-  under a default id and an empty name (`:45-51`), and a room's own id echoed back as the current
-  session with an empty title (`:53-63`).
+  under a default id and an empty name (`:45-51`), a room's own id echoed back as the current
+  session with an empty title (`:53-63`), and an empty overlapping-session set, so a per-time-slot
+  rule is skipped rather than rejecting every check-in (`:65-74`).
   The dependent's code path does not branch on "is the module here": it resolves the interface and
   gets a documented degraded answer.
 - **`Dependencies` declares the graph; `RequiresDependencies` decides whether a gap is fatal.** The
@@ -152,8 +154,9 @@ Store has two data-subject export edges into Identity, Sales and Catalog, which 
 (`MMCA.Store.Identity.API/IdentityModule.cs:40,45`). **MMCA.ADC has four:**
 `IdentityModule` (leaf, stubs `IAttendeeQueryService`,
 `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/IdentityModule.cs:13-25`), `ConferenceModule`
-(no declared dependencies, two stubs,
-`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/ConferenceModule.cs:15-30`),
+(no declared dependencies, three stubs including the `IUserConferenceExportService` export contract,
+`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/ConferenceModule.cs:16-32`, the stubs at
+`:24-26`),
 `EngagementModule` (`["Conference"]`, strict, two stubs,
 `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/EngagementModule.cs:14-35`) and
 `NotificationModule` (`["Identity"]`, strict, one stub,
@@ -170,7 +173,7 @@ Catalog enables `Catalog` and disables both peers with no remote declarations
 `Sales` and declares `["Catalog", "Identity"]` as `RemoteDependencies`
 (`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:27-34`), then registers typed
 gRPC clients for the two contracts after the loader returns
-(`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:246-247`); because the host names
+(`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:241,247-248`); because the host names
 only its own module assembly, the peer modules are never discovered there and their stubs are never
 registered. ADC Engagement declares
 `["Conference"]` remote (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/appsettings.json:38-46`)
@@ -179,7 +182,7 @@ and ADC Notification declares `["Identity"]` remote
 Conference enables one module and declares nothing remote
 (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/appsettings.json:21-26`) even though it wires
 Engagement's `IBookmarkCountService` as a gRPC client
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:418`), because
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:420`), because
 `ConferenceModule` never declares Engagement in `Dependencies`.
 
 ## Rationale
@@ -196,7 +199,7 @@ Engagement's `IBookmarkCountService` as a gRPC client
   branch for "peer not present", which is precisely why a module's non-hosting layers are identical
   in-process and extracted (`ModuleLoader.cs:119`, `CatalogModule.cs:31-32`). An extracted host,
   which never discovers its peers, registers a real cross-process adapter for the same contract
-  instead (`Sales.Service/Program.cs:246-247`).
+  instead (`Sales.Service/Program.cs:247-248`).
 - **Two strictness levels, chosen per module.** A module that genuinely cannot function without a
   peer opts into `RequiresDependencies = true` and fails fast (`SalesModule.cs:36`,
   `EngagementModule.cs:23`, `NotificationModule.cs:24`); everything else tolerates a missing peer and
@@ -228,7 +231,9 @@ Engagement's `IBookmarkCountService` as a gRPC client
   empty exports
   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/Exports/DisabledUserEngagementExportService.cs:7-12`,
   `MMCA.ADC/Source/Modules/Notification/MMCA.ADC.Notification.Shared/UserNotifications/DisabledUserNotificationExportService.cs:7-12`,
-  `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Shared/Exports/DisabledUserSalesExportService.cs:10-11`).
+  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Exports/DisabledUserConferenceExportService.cs:7-12`,
+  `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Shared/Exports/DisabledUserSalesExportService.cs:10-11`,
+  `MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Exports/DisabledUserCatalogExportService.cs:7-12`).
   The export stubs are the sharpest case: because the stub answers successfully, the consuming
   section reports itself `Complete` with nothing in it rather than unavailable
   (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/ExportUserData/SalesUserDataExportSection.cs:52-56`),
@@ -238,10 +243,10 @@ Engagement's `IBookmarkCountService` as a gRPC client
   (`DependencyInjection.cs:224-231`, `ModuleLoader.cs:334-335,343-344`).
 - **The dependency graph is a hand-written declaration, not a derived fact.** ADC Conference consumes
   Engagement's `IBookmarkCountService` over gRPC without listing Engagement in `Dependencies`
-  (`ConferenceModule.cs:15-30` versus `Conference.Service/Program.cs:418`), and Store Identity
+  (`ConferenceModule.cs:16-32` versus `Conference.Service/Program.cs:420`), and Store Identity
   consumes the Sales and Catalog export services over gRPC while `IdentityModule` declares no
   `Dependencies` at all (`MMCA.Store.Identity.API/IdentityModule.cs:16-47` versus
-  `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:265,276`), so neither the
+  `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:273,284`), so neither the
   topological sort nor the `RequiresDependencies` check knows about those edges. Nothing derives
   `Dependencies` from the interfaces a module actually resolves. What is pinned is the declaration
   against a written expectation: `ModuleConformanceTestsBase<TModule>` asserts `Name`, `Dependencies`,
@@ -251,7 +256,7 @@ Engagement's `IBookmarkCountService` as a gRPC client
   That turns a silent edit of a declaration into a red test, but it is opt-in per module and seven of
   the eight subclass it today: every Store module (Catalog, Identity and Sales) and every ADC module
   (Conference, Engagement, Identity and Notification,
-  `MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.API.Tests/ConferenceModuleTests.cs:9`,
+  `MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.API.Tests/ConferenceModuleTests.cs:10`,
   `MMCA.ADC/Tests/Modules/Engagement/MMCA.ADC.Engagement.API.Tests/EngagementModuleTests.cs:9`).
   Only Helpdesk Tickets has no subclass, so its declaration alone is still unchecked.
 - **The one guard against a forgotten cross-process rewire is unadopted.** `ValidateRemoteDependencies`
@@ -349,6 +354,43 @@ It runs inside a `Register` step of `services.AddMmcaApplicationPipeline(...)`
 between `AddApplication()` and `AddApplicationDecorators()` by construction. The scan input is
 unchanged (one named assembly, `typeof(TicketsModule).Assembly` at `:132`); the Decision's dead
 `:116-124` anchor is re-pointed.
+
+## Revision (2026-10-21)
+Re-verified against current source. The decision, the strictness rules and the undeclared
+Conference-to-Engagement gRPC edge are unchanged (`ConferenceModule` still declares no
+`Dependencies`); the Conference module's stub set and the live-validation stub grew, and the host
+anchors moved (by one to eight lines; the Store Sales gRPC client block gained a `:241` anchor).
+
+1. `ConferenceModule` registers three stubs, not two: `ISessionBookmarkValidationService`,
+   `IEventLiveValidationService` and the data-subject export contract `IUserConferenceExportService`
+   backed by `DisabledUserConferenceExportService`
+   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/ConferenceModule.cs:24-26`, class at
+   `:16-32`;
+   `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Exports/DisabledUserConferenceExportService.cs:7-12`).
+   `ConferenceModuleTests.AssertDisabledStubs` asserts all three
+   (`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.API.Tests/ConferenceModuleTests.cs:20-46`,
+   the export stub at `:42-45`).
+2. `DisabledEventLiveValidationService` has five fail-open members: the fifth,
+   `GetOverlappingSessionIdsAsync`, answers an empty overlapping-session set
+   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/Live/DisabledEventLiveValidationService.cs:65-74`,
+   class at `:23-75`).
+3. The Trade-offs list of empty-export stubs now names the two it omitted:
+   `DisabledUserConferenceExportService` (above) and Store's `DisabledUserCatalogExportService`
+   (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Exports/DisabledUserCatalogExportService.cs:7-12`).
+4. Anchors re-verified against current source: the `AddModuleHost` calls in Store Identity
+   (`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:120-122`), Store Sales
+   (`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:133-135`), ADC Identity
+   (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:266-268`), ADC Conference
+   (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:373-375`), ADC Engagement
+   (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:214-216`) and ADC Notification
+   (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:196-198`); the Store Sales
+   gRPC clients registered after `.Register(moduleHost.RegisterModules)`
+   (`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:241,247-248`); the Store Identity
+   export clients (`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:273,284`); the
+   ADC Conference bookmark-count client
+   (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:420`); and the
+   `ConferenceModuleTests` class (`ConferenceModuleTests.cs:10`, with `ExpectedName` at `:12`,
+   `ExpectedDependencies` at `:16` and `ExpectedRequiresDependencies` at `:18`).
 
 ## Related
 ADR-008 (the extraction topology that consumes this model: "a service is the monolith with one module

@@ -251,7 +251,8 @@
           those paths now retry and dead-letter; <code>IEmailSender</code> itself is unchanged).
           Revised 2026-10-01 (the opt-in dedup key is scoped to the sender; see Revision below).
           Revised 2026-10-06: the dedup race is recorded as propagate-and-roll-back under the <code>ITransactional</code> send, not catch-and-requery.
-          Revised 2026-10-07: the hub client connects WebSockets-only with negotiation skipped, in both connection modes, so a multi-replica hub needs no session affinity and there is no SSE or long-polling fallback.</p>
+          Revised 2026-10-07: the hub client connects WebSockets-only with negotiation skipped, in both connection modes, so a multi-replica hub needs no session affinity and there is no SSE or long-polling fallback.
+          Revised 2026-10-21: the ADC Notification scale block is read correctly (its two preconditions make more than one replica safe, and <code>maxReplicas: 2</code> is right-sizing for measured load, not a backplane limit); anchors refreshed.</p>
           <h2 id="context">Context</h2>
           <p>The framework needs to deliver user-facing notifications (an organizer broadcasting a schedule change,
           a per-user alert). Two delivery models each fail on their own. A pure real-time push over a WebSocket
@@ -318,7 +319,7 @@
           (<code>SendPushNotificationHandler.cs:137-154</code>), an OS-level native-push channel that reaches devices the
           SignalR hub cannot (the app backgrounded or killed). It is best-effort by the same logic as the live
           push (a throw is logged, never fatal, and the SignalR leg has already decided the audit status), and it
-          defaults to <code>NullNativePushSender</code> (<code>MMCA.Common.Infrastructure</code>, <code>DependencyInjection.cs:330</code>), so it
+          defaults to <code>NullNativePushSender</code> (<code>MMCA.Common.Infrastructure</code>, <code>DependencyInjection.cs:336</code>), so it
           stays inert until a native hub is configured. The design of that channel is ADR-044&#39;s scope; this ADR
           keeps its own on the inbox and SignalR channels, so the &quot;Two-Channel&quot; title names the durable and
           transient channels this record governs, not a hard cap on the number of delivery legs.</li>
@@ -568,6 +569,30 @@
           the live sections are as recorded on 2026-10-06; anchors inside earlier Revision sections are left
           as recorded.</li>
           </ol>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. The two-channel model, the dedup and transactional posture, the
+          WebSockets-only hub client and the backplane are unchanged; what moved is one live anchor and the
+          reading of the ADC Notification scale block recorded on 2026-10-07.</p>
+          <ol>
+          <li><strong>The ADC scale block&#39;s preconditions gate scale-out, not the value 2.</strong> The Notification container
+          app&#39;s comment says the negotiate-free client and the two-replica backplane proof together make
+          &quot;more than one replica&quot; safe, and that if the proof is removed or the client negotiates again the
+          cap goes back to 1 (<code>MMCA.ADC/infra/main.bicep:2525-2538</code>). It separately states that
+          <code>maxReplicas: 2</code> is right-sizing for the measured peak concurrency, not a backplane limit
+          (<code>:2541</code>), with the scale rule at <code>:2544</code>. The 2026-10-07 phrasing that the two preconditions are
+          for <code>maxReplicas: 2</code> is read in that sense. The backplane proof is <code>TwoReplicaHubFanOutTests</code>
+          (<code>MMCA.ADC/Tests/Integration/MMCA.ADC.CrossService.IntegrationTests/CrossService/TwoReplicaHubFanOutTests.cs:35</code>),
+          and the <code>signalr-backplane-errors</code> alert entry is at <code>MMCA.ADC/infra/main.bicep:627-632</code> (key at
+          <code>:628</code>).</li>
+          <li>Anchors re-verified against current source: the <code>NullNativePushSender</code> default in the Decision moves
+          to <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:336</code>. The other live
+          anchors (<code>SendPushNotificationHandler.cs</code>, <code>SendPushNotificationCommand.cs:23</code>,
+          <code>PushNotificationConfiguration.cs:69-73</code>, <code>PushNotificationSettings.cs:11,14</code>,
+          <code>SignalRExtensions.cs:25</code>, <code>DependencyInjection.Notifications.cs:41-70</code>, <code>NotificationHub.cs</code>,
+          <code>NotificationHubService.cs</code> and <code>WebApplicationBuilderExtensions.Authentication.cs:151</code>, <code>:179</code>)
+          are as recorded. The 2026-10-06 and 2026-10-07 statements that the live anchors were current are
+          superseded by this one; anchors inside earlier Revision sections are left as recorded.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -589,6 +614,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             </ul>
           </nav>
         </aside>

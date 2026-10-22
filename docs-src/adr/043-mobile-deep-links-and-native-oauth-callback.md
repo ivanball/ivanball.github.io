@@ -39,8 +39,8 @@ browser. The checked-in
 activities and their intent filters are attributes in code, which .NET for Android merges into the
 generated manifest at build time. The SERVED fingerprint has landed as well:
 `AppAssociation:AndroidCertFingerprints` now carries the production Play App Signing SHA-256
-fingerprint (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:83-85`, the single value at
-`:84`, inside the `AppAssociation` section at `:81-87`) in place of the former
+fingerprint (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:92-94`, the single value at
+`:93`, inside the `AppAssociation` section at `:90-96`) in place of the former
 `REPLACE_WITH_PLAY_APP_SIGNING_SHA256_FINGERPRINT` placeholder, and the helper copies that array
 verbatim into the document's `sha256_cert_fingerprints`
 (`Source/Presentation/MMCA.Common.API/Startup/Endpoints/AppAssociationEndpointExtensions.cs:63`), so the
@@ -63,6 +63,9 @@ release, and the hostname trade-off no longer calls the `MainActivity` cutover c
 note, since it now names the same three binary spots.
 Revised 2026-10-15: both platform link sets now also claim `/engage/`, the self-service sponsor-visit
 and room check-in QR landing pages, so those printed codes open in the app; see Revision below.
+Revised 2026-10-21: the hostname trade-off now names the architecture test that keeps the three
+binary host spots in agreement and the gateway default-domain URLs also embedded in the MAUI
+binary, and two MMCA.ADC anchors are refreshed; see Revision below.
 ## Context
 Three mobile flows all need a URL to leave the web world and land inside the MAUI app:
 
@@ -142,15 +145,28 @@ single-use code and the UI exchanges it out-of-band via POST.
   recreated and would force store resubmissions. Three places in the ADC repo put the host string
   inside the app binary: `PublicSite:BaseUrl` in the MAUI head's
   `appsettings.json` (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/appsettings.json:33`, compiled in as an
-  `EmbeddedResource` per `MMCA.ADC.UI.csproj:134`), a raw literal in the iOS associated-domains
+  `EmbeddedResource` per `MMCA.ADC.UI.csproj:139`), a raw literal in the iOS associated-domains
   array (`Platforms/iOS/Entitlements.plist:11`), and the `PublicWebHost` compile-time constant that
   feeds the Android intent-filter attribute (`Platforms/Android/MainActivity.cs:44`). Only the first
   is read through configuration; the two native manifests take literals, because neither an
-  entitlement nor an attribute argument can read config. A cutover is therefore a three-spot edit
-  plus a rebuild, not a setting change (the comment at `MainActivity.cs:41-43` names the same three
-  binary spots), plus the two verification commands in
-  `MMCA.ADC/Docs/MobileReleaseRunbook.md:48` and `:52`, which repeat the host but ship nothing; a
-  custom domain is the durable fix.
+  entitlement nor an attribute argument can read config. Moving the UI host alone (for example to a
+  custom domain) is therefore a three-spot edit plus a rebuild, not a setting change (the comment at
+  `MainActivity.cs:41-43` names the same three binary spots), plus the two verification commands in
+  `MMCA.ADC/Docs/MobileReleaseRunbook.md:48` and `:52`, which repeat the host but ship nothing.
+  Recreating the environment touches more: the same embedded `appsettings.json` also carries the
+  gateway's default-domain host in `Legal:TermsUrl` (`:24`), `Legal:PrivacyUrl` (`:25`),
+  `Legal:DeleteAccountUrl` (`:27`) and `Api:ApiEndpoint` (`:30`), so an environment recreation is a
+  seven-value edit plus a rebuild. A custom domain for the UI host takes only the three UI-host
+  spots off the default domain; the gateway host stays in the binary either way. Part of this
+  cannot drift apart silently:
+  `MobileHostParityTests.PublicSiteAndAppLinkHosts_AreIdentical_AndTheApiSharesTheirEnvironment`
+  (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Ui/MobileHostParityTests.cs:25`)
+  asserts that the `PublicWebHost` constant and the iOS `applinks` host equal the
+  `PublicSite:BaseUrl` host, and that `Api:ApiEndpoint` sits in the same Container Apps environment
+  (`MobileHostParityTests.cs:45-49`), failing the architecture test tier that `MMCA.ADC.CI.slnf:59`
+  runs. It reads only `Api:ApiEndpoint` and `PublicSite:BaseUrl` from `appsettings.json`
+  (`MobileHostParityTests.cs:33-34`), so a cutover that misses one of the three `Legal` URLs still
+  passes.
 - A custom-scheme URI's host and path are attacker-choosable on a device with a hostile app
   registered for the same scheme (scheme hijack). Accepted: the redirect carries only a two-minute
   single-use code (`OAuthControllerBase.cs:75`) plus the client's own `state` value, the exchange is
@@ -476,3 +492,29 @@ a prefix neither link set claimed, so a camera scan opened the browser instead o
 Both platforms pick the change up only from a build that carries it (MAUI 1.9.8, build 98); iOS also
 needs the host to serve the updated association file, which ships with the same web deploy. The
 decision, the allowlist behavior and every other anchor are unchanged.
+
+## Revision (2026-10-21)
+Re-verified against current source. The decision, the allowlist behavior, the served real Play App
+Signing fingerprint, the path-scoped link sets and the three binary host spots are unchanged; the
+hostname trade-off gains two facts it omitted, and two MMCA.ADC anchors moved.
+
+1. **The hostname trade-off names its enforcement and the gateway host.** An architecture test,
+   `MobileHostParityTests`
+   (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Ui/MobileHostParityTests.cs:25`),
+   asserts that `MainActivity.PublicWebHost` and the iOS `applinks` host equal the
+   `PublicSite:BaseUrl` host and that `Api:ApiEndpoint` shares their Container Apps environment, so
+   a cutover that misses one of those four spots fails the architecture test tier in
+   `MMCA.ADC.CI.slnf:59`. The MAUI head's embedded `appsettings.json` also holds the gateway
+   default-domain host in `Legal:TermsUrl`, `Legal:PrivacyUrl` and `Legal:DeleteAccountUrl`
+   (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/appsettings.json:24`, `:25` and `:27`) and
+   `Api:ApiEndpoint` (`:30`), which an environment recreation would change as well, making it a
+   seven-value edit. The test reads only `Api:ApiEndpoint` and `PublicSite:BaseUrl`
+   (`MobileHostParityTests.cs:33-34`), so a missed `Legal` URL is not caught.
+2. **Anchors re-verified against current source:** the served fingerprint's `AppAssociation`
+   section is at `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:90-96`, with
+   `AndroidCertFingerprints` at `:92-94` and its single SHA-256 value at `:93` (still a real
+   fingerprint, not the placeholder); the MAUI head's `EmbeddedResource` line is
+   `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MMCA.ADC.UI.csproj:139` (still the only one in the file);
+   `PublicSite:BaseUrl` is still `MMCA.ADC.UI/appsettings.json:33` and the `MainActivity` cutover
+   comment still `:41-43` with `PublicWebHost` at `:44`. Every live citation above is updated; the
+   dated entries keep the values they recorded.

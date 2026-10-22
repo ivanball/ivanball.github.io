@@ -15,13 +15,14 @@ application namespace; see Revision below). Revised 2026-10-06: ADC's service ce
 Revised 2026-10-07: adoption is five call sites, the fifth being the framework's OAuth exchange-code
 redemption in `OAuthControllerBase`, which ADC's OAuth controller wires with the lock.
 Revised 2026-10-19: adoption is six call sites, the sixth being Store's Stripe webhook registration, whose check-then-act on Stripe's endpoint list now runs under the lock; point 12 no longer says Store takes none.
+Revised 2026-10-21: anchors refreshed after the AddCaching, SubmitQuestionHandler, OutboxProcessor and ADC Bicep line shifts.
 
 ## Context
 Both deployed apps run more than one replica of every service. ADC's Conference container app
-(`MMCA.ADC/infra/main.bicep:1922`) scales with `minReplicas: 1` and
-`maxReplicas: conferenceScaledMaxReplicas` (scale at `:2067`), which is 2 by default and 4 in
-conference mode (`:192`); Identity and Engagement scale the same way (`:1914`, `:2202`) and
-Notification at a fixed `maxReplicas: 2` (`:2388`). Anything in the framework that
+(`MMCA.ADC/infra/main.bicep:2078`) scales with `minReplicas: 1` and
+`maxReplicas: conferenceScaledMaxReplicas` (scale at `:2223`), which is 2 by default and 4 in
+conference mode (`:192`); Identity and Engagement scale the same way (`:2070`, `:2358`) and
+Notification at a fixed `maxReplicas: 2` (`:2544`). Anything in the framework that
 relies on "only one of these runs at a time" therefore runs once per replica unless the exclusion
 lives somewhere all the replicas can see.
 
@@ -30,8 +31,8 @@ The in-process tools do not reach that far. A `SemaphoreSlim`, or the striped `K
 callers inside one process only. The framework already had a second, stronger answer for durable
 queue work: a database claim-lease. `OutboxProcessor` stamps `LockedUntil` and a `LockToken` in a
 conditional `ExecuteUpdateAsync` so exactly one replica wins a row
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:330`,
-claim at `:357-361`), and `ScheduledJobRunner` does the same on `ScheduledJobEntry`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:343`,
+claim at `:370-374`), and `ScheduledJobRunner` does the same on `ScheduledJobEntry`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Scheduling/ScheduledJobRunner.cs:410`, claim at
 `:437-445`). That pattern needs a row to claim.
 
@@ -111,9 +112,9 @@ persistence can enforce.**
 
 8. **Registration rides with the cache, and is unconditional.** `AddCaching`
    (`Infrastructure/DependencyInjection.Caching.cs:26`, reached from `AddInfrastructure` at
-   `Infrastructure/DependencyInjection.cs:140`) `TryAddSingleton`s an `IDistributedLock` (`DependencyInjection.Caching.cs:86`):
-   `RedisDistributedLock` when an `IConnectionMultiplexer` resolves (`DependencyInjection.Caching.cs:88-95`),
-   `InProcessDistributedLock` otherwise (`DependencyInjection.Caching.cs:97-99`).
+   `Infrastructure/DependencyInjection.cs:140`) `TryAddSingleton`s an `IDistributedLock` (`DependencyInjection.Caching.cs:88`):
+   `RedisDistributedLock` when an `IConnectionMultiplexer` resolves (`DependencyInjection.Caching.cs:91-96`),
+   `InProcessDistributedLock` otherwise (`DependencyInjection.Caching.cs:99-101`).
    `TryAdd` means a host that registered its own implementation first keeps it. Both branches are
    asserted (`Infrastructure.Tests/DependencyInjectionTests.cs:81-83`, `:94-96`). In production the
    multiplexer comes from `AddRedisCaching`
@@ -141,7 +142,7 @@ persistence can enforce.**
 
 11. **The choose-between rule.** Work that already owns a durable row uses the claim-lease: the
     outbox and the scheduler both stamp `LockedUntil` plus a `LockToken` in a conditional update whose
-    predicate is the exclusion (`OutboxProcessor.cs:357-361`, `ScheduledJobRunner.cs:437-445`), which
+    predicate is the exclusion (`OutboxProcessor.cs:370-374`, `ScheduledJobRunner.cs:437-445`), which
     survives a Redis outage and needs no extra dependency. `IDistributedLock` is for a section whose
     state is not a row it can conditionally update: a cache entry, an external paid API call, a pass
     over rows it does not own. Inventing a row purely to hold a lease is not the answer for those, and
@@ -149,10 +150,10 @@ persistence can enforce.**
 
 12. **Adoption is exactly these six call sites.** The third is ADC's question submit cap:
     `SubmitQuestionHandler` takes the lock as a constructor dependency
-    (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs:34`)
+    (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs:35`)
     and serializes the per-(session, user) open-question cap, whose count-then-insert is not one
-    atomic statement, under a claim keyed `session-question:submit:{sessionId}:{userId}` (`:108`,
-    taken at `:148`) with a 30 second TTL (`:49`) and a 2 second wait (`:57`); a submit that cannot
+    atomic statement, under a claim keyed `session-question:submit:{sessionId}:{userId}` (`:114`,
+    taken at `:153-154`) with a 30 second TTL (`:50`) and a 2 second wait (`:58`); a submit that cannot
     get in within the wait is answered with the same cap failure the count itself would have
     returned, so contention never surfaces as a fault. The fourth is the framework's password-reset
     token redemption: `PasswordResetTokenService` takes the lock as a constructor dependency
@@ -237,8 +238,8 @@ persistence can enforce.**
   `adc` and the same `Cache:KeyPrefix` of `adc:`
   (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/appsettings.json:38`, `:45`, and the same in the
   Identity, Engagement and Notification service hosts) and share one Redis instance
-  (`MMCA.ADC/infra/main.bicep:1434`, injected per app as `ConnectionStrings__redis` at `:1759`,
-  `:1999`, `:2136`, `:2290`). Two ADC
+  (`MMCA.ADC/infra/main.bicep:1584`, injected per app as `ConnectionStrings__redis` at `:1909`,
+  `:2155`, `:2292`, `:2446`). Two ADC
   services choosing the same logical key would collide, and today only the callers' key shapes
   prevent it.
 - **409 is a real cost to a caller.** The idempotency filter answers a duplicate whose original is
@@ -317,6 +318,24 @@ wraps the reconcile in `TryAcquireAsync` on `stripe:webhook-registration:{expect
 `MMCA.Store/Tests/Modules/Sales/MMCA.Store.Sales.Infrastructure.Tests/Services/StripeWebhookRegistrationServiceTests.cs:221`,
 `:260`). Point 12 and the Trade-offs consumer count now name six call sites; MMCA.Helpdesk still takes
 none.
+
+## Revision (2026-10-21)
+Re-verified against current source. The primitive, its contract, both implementations, the
+registration, the six call sites and the choose-between rule are unchanged; only anchors moved.
+1. Anchors re-verified against current source:
+   - Registration: `TryAddSingleton<IDistributedLock>` at `DependencyInjection.Caching.cs:88`, the
+     Redis branch at `:91-96` and the in-process fallback at `:99-101`.
+   - Outbox claim-lease: `ClaimEligibleAsync` at `OutboxProcessor.cs:343`, its conditional
+     `ExecuteUpdateAsync` stamping `LockedUntil` and `LockToken` at `:370-374`, over the predicate
+     from `FilterClaimable` (`:422`) or `FilterUnblocked` (`:437`) chosen at `:366-368`.
+   - Question submit (point 12): the lock constructor dependency at `SubmitQuestionHandler.cs:35`,
+     the claim key at `:114`, the acquisition at `:153-154`, the 30 second TTL at `:50` and the
+     2 second wait at `:58`.
+   - ADC Bicep: the Conference app at `MMCA.ADC/infra/main.bicep:2078` with its scale at `:2223`,
+     the Identity and Engagement scale lines at `:2070` and `:2358`, Notification's fixed
+     `maxReplicas: 2` at `:2544`, the Redis resource at `:1584`, and the per-app
+     `ConnectionStrings__redis` injections at `:1909`, `:2155`, `:2292` and `:2446`;
+     `conferenceScaledMaxReplicas` stays at `:192`.
 
 ## Related
 [ADR-017](017-request-idempotency.md) (the HTTP idempotency filter, the first consumer, whose

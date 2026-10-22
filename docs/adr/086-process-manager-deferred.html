@@ -250,7 +250,8 @@
           Revised 2026-10-07: the in-process provider is not MassTransit, so a state machine needs a broker
           provider (or a new in-process MassTransit registration) to ride, and the EF saga repository would be
           a fourth MassTransit package that the v8 pin gate covers only once its id is added; the deferral
-          stands.</p>
+          stands. Revised 2026-10-21: anchors refreshed after the 2026-10-07 change to
+          <code>DependencyVersionTestsBase</code> moved the pin gate&#39;s lines; the deferral stands.</p>
           <h2 id="context">Context</h2>
           <p><a href="054-saga-compensation-and-reconciliation.html">ADR-054</a> decided how this workspace achieves
           cross-boundary consistency without two-phase commit: <strong>choreography</strong>. Each step of a workflow raises
@@ -473,6 +474,21 @@
           <code>RefreshSessionCleanupService.cs:53</code>, <code>PermissionGrantRefreshService.cs:36</code>,
           <code>InternalCommandCleanupService.cs:46</code>, <code>OutboxCleanupService.cs:49</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. No decision, rationale or trade-off changed: the deferral, its
+          trigger, the coordinator&#39;s shape, the v8 licensing constraint and the absence evidence all hold. Only
+          the build-gate anchors cited by the 2026-10-07 Revision moved; that Revision is kept as written.</p>
+          <ol>
+          <li>Anchors re-verified against current source: the pin gate&#39;s fixed list of exactly three ids,
+          <code>MassTransitPackageIds</code>, now sits at
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/DependencyVersionTestsBase.cs:18-23</code>
+          (the ids at <code>:20-22</code>), the test method at <code>:26</code> and its loop at <code>:28-37</code>, replacing the
+          2026-10-07 Revision&#39;s <code>:17-22</code> and <code>:27-35</code>. The gate runs in MMCA.Common through
+          <code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/DependencyVersionTests.cs:9</code>.
+          The pin itself holds at 8.5.11 for all three packages (<code>MMCA.Common/Directory.Packages.props:124-126</code>),
+          and the arm call holds at <code>CheckOutHandler.cs:180</code>, delegating to
+          <code>CheckOutDeadlineScheduler.cs:55</code> for the scheduling.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="054-saga-compensation-and-reconciliation.html">ADR-054</a> (the accepted mechanism this record defers an
           alternative to: choreographed compensation, the persisted aggregate marker, and the reconciliation
@@ -508,6 +524,7 @@
             <li><a href="#revision-2026-09-11-the-first-per-instance-deadline-exists-and-it-is-not-a-state-machine">Revision (2026-09-11): the first per-instance deadline exists, and it is not a state machine</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

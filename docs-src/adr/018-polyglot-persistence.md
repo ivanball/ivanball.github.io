@@ -31,6 +31,7 @@ Revised 2026-10-06: per-engine behavior now lives in an internal engine registry
 (`DataSourceEngines`), and Cosmos's missing outbox follows from its non-relational capability rather
 than a `SupportsOutbox` member.
 Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
+Revised 2026-10-21: anchors refreshed against the Common v1.250.0 source (Aspire data-source helpers).
 
 ## Context
 ADR-006 (database-per-service) splits storage along the **Name** axis: several physically separate
@@ -134,7 +135,7 @@ per entity configuration.
 7. **The host surface reads the same two shapes.** The Aspire AppHost helpers
    `With{SQLServer,PostgreSQL,Cosmos,Sqlite}DataSource` inject the `DataSources__{logicalName}__*`
    environment variables for the source they attach
-   (`Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:493`, `:523`, `:552-553`, `:577`). The
+   (`Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:540`, `:570`, `:599-600`, `:624`). The
    database health checks enumerate the top-level section and every named
    entry, deduplicated by connection string, so each physical relational database (SQL Server,
    PostgreSQL or SQLite) contributes exactly one readiness check and the entries that collapse onto one
@@ -301,3 +302,16 @@ re-verified when they were not.
    (connection-string reads), `:219-277` (default seed), `:255` and `:287-288` (top-level migrations
    assembly), `DataSourceEntrySettings.cs:37`, `:55`, `:64` (per-entry migrations assemblies), and
    `DomainEventSaveChangesInterceptor.cs:257` (relational outbox gate).
+
+## Revision (2026-10-21)
+
+Re-verified against current source. No decision changed: the four Aspire AppHost helpers
+`With{SQLServer,PostgreSQL,Cosmos,Sqlite}DataSource` still inject the
+`DataSources__{logicalName}__*` environment variables for the source they attach. Only their line
+anchors moved.
+
+1. Anchors re-verified against current source: Decision item 7 now cites the environment-variable
+   writes in `Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs`: SQL Server at `:540`
+   (helper declared at `:530`), PostgreSQL at `:570` (declared at `:560`), Cosmos at `:599-600`
+   (connection string plus database name, declared at `:589`), and SQLite at `:624` (declared at
+   `:614`).

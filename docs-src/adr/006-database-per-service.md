@@ -12,6 +12,11 @@ SQL Server / Cosmos / SQLite / PostgreSQL; the one-instance-per-database rule be
 Revised 2026-10-06: the `AtlDevCon` bacpac was deleted on 2026-10-03, so no pre-cutover rollback
 copy exists; the four live `ADC_*` databases rely on their own PITR plus LTR.
 Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
+Revised 2026-10-21: the Decision bullet now names `PostgreSQLDbContext` among the per-engine
+contexts, attributes once-per-key caching to the scoped `DbContextFactory` (not
+`PhysicalDbContextFactory`), and scopes the no-per-module-context rule to concrete runtime contexts
+(abstract per-module `ModuleApplicationDbContext` DbSet holders exist);
+`infra/main.bicep` anchors refreshed.
 
 ## Context
 When the modules were first extracted into independently-deployable services, all services in an
@@ -30,10 +35,14 @@ Adopt **database-per-service**: each service owns its own physical database with
 `OutboxMessages` table.
 
 - **One sealed concrete context class *per engine*, one instance per database.** We do **not**
-  introduce per-module DbContext classes (see the "Don't split SQLServerDbContext" convention). The
-  default engine is SQL Server (`SQLServerDbContext`); ADR-018 later added `SqliteDbContext` and
-  `CosmosDbContext`, each a sealed subclass of the abstract `ApplicationDbContext`. The right context
-  class is materialized once per `DataSourceKey(Engine, Name)` by `PhysicalDbContextFactory`; entities
+  introduce a per-module concrete (runtime) DbContext class. Each module may declare an abstract
+  `ModuleApplicationDbContext` that only lists its `DbSet`s (for example
+  `MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Infrastructure/Persistence/DbContexts/ModuleApplicationDbContext.cs:14`),
+  but nothing subclasses it at runtime (rule stated at `MMCA.Helpdesk/AGENTS.md:74`). The default engine is SQL Server (`SQLServerDbContext`); ADR-018
+  later added `SqliteDbContext` and `CosmosDbContext`, and ADR-113 added `PostgreSQLDbContext`, each
+  a sealed subclass of the abstract `ApplicationDbContext`. The singleton `PhysicalDbContextFactory`
+  creates a new raw context on every `Create(DataSourceKey)` call; the scoped `DbContextFactory`
+  caches one instance per `DataSourceKey(Engine, Name)` for the scope; entities
   route to a physical source by logical name (`[UseDatabase]` / module namespace) via
   `DataSourceResolver`, and to an engine by configuration base class (`[UseDataSource]`, ADR-018).
   The forbidden split is *per-module*, not per-engine.
@@ -44,7 +53,7 @@ Adopt **database-per-service**: each service owns its own physical database with
   longer declares it. That bacpac was itself deleted permanently on 2026-10-03 (blob soft delete and
   versioning were off), so there is no restore path to the pre-cutover `AtlDevCon` data; its contents
   had already been copied into the per-service databases at cutover, and those four databases keep
-  their own PITR plus LTR (`MMCA.ADC/infra/main.bicep:937`, `MMCA.ADC/infra/main.bicep:982`,
+  their own PITR plus LTR (`MMCA.ADC/infra/main.bicep:1080`, `MMCA.ADC/infra/main.bicep:1132`,
   `MMCA.ADC/infra/POST-CUTOVER-atldevcon-downgrade.md:103`, `MMCA.ADC/infra/DISASTER-RECOVERY.md:27`).
 - **Per-source outbox.** Each database has its own `OutboxMessages`; the `OutboxProcessor` drains
   only the sources its host owns, so no service ever sees another's rows.
@@ -87,3 +96,33 @@ no `AtlDevCon` database or bacpac, and PITR plus LTR as the only restore path. O
    `serviceDatabaseLtr` policy (weekly `P4W`, monthly `P12M`, yearly `P1Y`) at
    `MMCA.ADC/infra/main.bicep:982` (was `:966`); `MMCA.ADC/infra/POST-CUTOVER-atldevcon-downgrade.md:103`
    and `MMCA.ADC/infra/DISASTER-RECOVERY.md:27` are unchanged.
+
+## Revision (2026-10-21)
+Re-verified against current source. The decision is unchanged: one sealed context class per engine,
+one instance per database, four per-service `ADC_*` databases with PITR plus LTR as the only restore
+path. The Decision bullet now names all four engine contexts and assigns the per-key cache to the
+right factory; the `infra/main.bicep` anchors moved again. The 2026-10-06 and 2026-10-07 revisions
+above keep the anchors they recorded.
+
+1. The per-engine context set in the Decision bullet now includes `PostgreSQLDbContext`
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/PostgreSQLDbContext.cs:23`,
+   ADR-113) alongside `SQLServerDbContext.cs:15`, `SqliteDbContext.cs:12` and `CosmosDbContext.cs:15`,
+   all sealed over the abstract `ApplicationDbContext.cs:46`.
+2. Once-per-key materialization belongs to the scoped `DbContextFactory`: its
+   `Dictionary<DataSourceKey, ApplicationDbContext>` at
+   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:74`
+   is checked at `DbContextFactory.cs:103` before calling the singleton `PhysicalDbContextFactory`
+   (`PhysicalDbContextFactory.cs:19`), whose `Create` at `PhysicalDbContextFactory.cs:25-33` builds a
+   new context on every call.
+3. The no-per-module-context rule now says no per-module *concrete* context class: every consumer
+   module declares an abstract `ModuleApplicationDbContext` that only lists its `DbSet`s (for example
+   `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/DbContexts/ModuleApplicationDbContext.cs:22`,
+   `MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Infrastructure/Persistence/DbContexts/ModuleApplicationDbContext.cs:14`),
+   and none is subclassed at runtime. The rule points at `MMCA.Helpdesk/AGENTS.md:74`, which states it
+   in that form, instead of a convention name that has no source of its own.
+4. Anchors re-verified against current source: the `AtlDevCon` archived-and-dropped note with the
+   2026-10-03 bacpac deletion at `MMCA.ADC/infra/main.bicep:1080` (deletion sentence at `:1085`;
+   was `:937`), the `serviceDatabaseLtr` policy at `MMCA.ADC/infra/main.bicep:1132` (weekly `P4W`,
+   monthly `P12M`, yearly `P1Y` at `:1137-1139`; was `:982`);
+   `MMCA.ADC/infra/POST-CUTOVER-atldevcon-downgrade.md:103` and `MMCA.ADC/infra/DISASTER-RECOVERY.md:27`
+   are unchanged.

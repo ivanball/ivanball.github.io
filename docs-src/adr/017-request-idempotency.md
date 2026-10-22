@@ -15,7 +15,8 @@ to the request body with a 422 on reuse, replays carry `Location` and `ETag`, an
 fail open; see Revision below). Revised 2026-10-07: the shared `[Idempotent]` inventory is
 corrected (email confirmation, entity create and update, notifications and legal acceptance carry
 it too, not only the password-reset pair) and the shared admin lock/unlock POSTs are recorded as
-declared by each consumer override rather than by the base.
+declared by each consumer override rather than by the base. Revised 2026-10-21: anchors refreshed
+after the shared auth, entity-create and user-admin controller declarations moved; no content change.
 
 ## Context
 Write endpoints (POST / PUT / PATCH) are exposed to **client retries and double-submits**: a flaky
@@ -272,6 +273,27 @@ of their anchors. Those sections are left as written.
    with `complete` at `:145`; in `IdempotencyFilter.cs` the no-key `next()` is at `:132-136`, the
    buffering guard at `:122-123` and `ReadIdempotencyKey` at `:164-171` (blank to null at `:170`);
    the passthrough tests remain at `IdempotencyFilterPassthroughTests.cs:46`, `:68` and `:85`.
+
+## Revision (2026-10-21)
+Re-verified against current source. The Decision, Rationale and Trade-offs are unchanged, and the
+inventory recorded in the Revision (2026-10-07) still holds in substance: every POST on
+`AuthControllerBase` is `[NonIdempotent]`, the shared bases listed there declare `[Idempotent]`,
+`UsersAdminControllerBase` still carries neither marker on lock and unlock, and both consumers still
+override those two actions with `[NonIdempotent]`. Only anchors moved. That section is left as written.
+
+1. Anchors re-verified against current source: in
+   `MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AuthControllerBase.cs`, login `:69-70`
+   and register `:93-94` are unchanged, refresh is at `:124-125`, revoke at `:152-153` and the
+   per-session revoke at `:216-217`; the entity create POST is at
+   `.../Controllers/AggregateRootEntityControllerBase.cs:75-76`; the `UsersAdminControllerBase` lock
+   and unlock POSTs are at `.../Controllers/Administration/UsersAdminControllerBase.cs:103` and `:123`;
+   the consumer overrides are at
+   `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Controllers/UsersAdminController.cs:34` and
+   `:43`, and
+   `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.API/Controllers/AdminUsersController.cs:103`
+   and `:111`. `NotificationsController` has a single `[Idempotent]`, on its POST
+   (`.../Controllers/Notifications/NotificationsController.cs:43-44`); the separate `:30` anchor
+   recorded earlier names no declaration and is dropped.
 
 ## Related
 ADR-003 (handler idempotency for outbox/event consumers, a distinct concern), ADR-013 (Result is the

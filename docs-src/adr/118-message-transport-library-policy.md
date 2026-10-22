@@ -12,7 +12,8 @@ Service Bus emulator smoke is restated as authoritative rather than advisory; th
 support-horizon dates gain the hedge ADR-016 already carries; and the unreconciled overlap with
 ADR-016's still-live **Transport exit options** section is recorded under **Related**. The pin, the
 decision and the replacement order are unchanged. Revised 2026-10-07: anchors refreshed after the
-v1.233.0 release.
+v1.233.0 release. Revised 2026-10-21: the circuit-breaker description now matches source (it wraps
+the `IMessageBus` publish, which is the broker hop only in broker mode), and anchors are refreshed.
 
 ## Context
 MassTransit is the only message-broker library in this workspace, and it is pinned to 8.5.11 across
@@ -20,7 +21,7 @@ all three of its packages (`MMCA.Common/Directory.Packages.props:124-126`, the p
 `:119-123`). Two consumers declare a
 `MassTransit.Azure.ServiceBus.Core` entry of their own at the same 8.5.11 patch for their Service Bus
 emulator test tier (`MMCA.ADC/Directory.Packages.props:65`,
-`MMCA.Store/Directory.Packages.props:89`), so the workspace carries five pinned MassTransit entries,
+`MMCA.Store/Directory.Packages.props:92`), so the workspace carries five pinned MassTransit entries,
 not three. The pin is a policy
 rather than a lag: v9 was announced in April 2025 and shipped in January 2026 as a commercial,
 source-available product with a runtime licence key (those two dates are the vendor's own public
@@ -28,8 +29,8 @@ record, not something this repository can assert). A v9 bus fails its startup li
 every broker-enabled service host crashes, which is a failure mode a build cannot see because CI
 never starts a broker. That is why the ceiling is a fitness function rather than a comment:
 `MassTransit_MustNotExceed_MajorVersion8`
-(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/DependencyVersionTestsBase.cs:25`)
-parses `Directory.Packages.props` and fails the build at an exclusive major ceiling of 9 (`:31`),
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/DependencyVersionTestsBase.cs:26`)
+parses `Directory.Packages.props` and fails the build at an exclusive major ceiling of 9 (`:32`),
 and MMCA.Common subclasses it
 (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/DependencyVersionTests.cs:9`).
 A blanket package update bumped the version to 9.1.2 once before and reintroduced the crash. The
@@ -60,9 +61,11 @@ are not MassTransit's:
   is the broker's.
 - **The publish and consume leg is the only part MassTransit owns.** `OutboxProcessor` resolves
   `IMessageBus` from the per-row scope
-  (`.../Persistence/Outbox/Processing/OutboxProcessor.cs:680`) and publishes every integration event
-  through it (`PublishAsync` at `:687`), and only the broker hop is wrapped in the circuit breaker
-  (`:685-689`, the comment saying so at `:682-684`)
+  (`.../Persistence/Outbox/Processing/OutboxProcessor.cs:774`) and publishes every integration event
+  through it (`PublishAsync` at `:783`), and only that `IMessageBus` publish is wrapped in the
+  circuit breaker (`:781-785`, the comment saying so at `:776-780`). In broker mode that publish is
+  the broker hop; on a monolith the default `InProcessMessageBus` runs the integration-event
+  handlers inside the same breaker (the field doc at `:102-105`)
   ([ADR-087](087-broker-poison-message-handling.md)).
 
 The abstractions that stand between application code and the library are already in place and are
@@ -81,7 +84,7 @@ and the five consumer files under `Messaging/Consumers/`: `IntegrationEventConsu
 `MMCA.Common/Source/Hosting/MMCA.Common.Testing/Fixtures/ServiceBusEmulatorFixtureBase.cs`. Domain,
 Application and Shared hold the interfaces alone, and that is build-gated:
 `MicroserviceExtractionTestsBase`
-(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Layering/MicroserviceExtractionTestsBase.cs:13`)
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Layering/MicroserviceExtractionTestsBase.cs:8`)
 bans MassTransit, gRPC and Protobuf from the Domain, Application and Shared layers
 (`.../Rules/Layering/ArchitectureRules.Transport.cs:21`); other layers are not checked, and
 Infrastructure, `*.Service` and `*.Contracts` are the edges the transport is meant to live at
@@ -148,7 +151,7 @@ so the pin is a dated decision rather than an open-ended hold.**
    since 2026-08-31 (TD-17), and `deploy.yml`'s cross-service-freshness gate requires it to have
    concluded success alongside the `cross-service` job in the same qualifying nightly
    (`MMCA.ADC/.github/workflows/cross-service-tests.yml:142`, the gating rationale at `:116-126`;
-   the gate's `required-jobs` at `MMCA.ADC/.github/workflows/deploy.yml:885-887`), so
+   the gate's `required-jobs` at `MMCA.ADC/.github/workflows/deploy.yml:900-902`), so
    a candidate arm that regresses Service Bus topology or the AMQP round-trip blocks the next deploy.
 
 ## Rationale
@@ -226,6 +229,31 @@ after the 2026-10-06 revision and are re-pointed in place.
    at `MMCA.ADC/.github/workflows/deploy.yml:885-887` (`required-jobs-mode: same-run` at `:888`).
    The Store anchor inside the 2026-10-01 revision is left as written.
 
+## Revision (2026-10-21)
+Re-verified against current source. No decision, trigger, replacement order or rationale changed:
+all five MassTransit entries are still at 8.5.11, the build gate's ceiling is still major 9, and
+the Service Bus emulator smoke is still authoritative and deploy-gated. One description in Context
+moved with the code. Three of the four anchor groups the 2026-10-07 revision re-pointed have moved
+again (the Store entry, the `OutboxProcessor` publish leg and the `deploy.yml` gate); the ADC
+`servicebus-emulator-smoke` job is still at `cross-service-tests.yml:142` with its TD-17 rationale
+at `:116-126`. That revision is left as written.
+
+1. The publish-leg bullet in Context no longer says only the broker hop is wrapped. The breaker in
+   `OutboxProcessor.DeliverAsync` wraps the `IMessageBus` publish
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:781-785`),
+   and its comment (`:776-780`) and field doc (`:102-105`) state that with broker messaging this is
+   the broker hop, while on a monolith the default `InProcessMessageBus` runs the integration-event
+   handlers inside the same breaker, so failing handlers can open it too.
+2. Anchors re-verified against current source: the Store `MassTransit.Azure.ServiceBus.Core` entry
+   `MMCA.Store/Directory.Packages.props:92` (still 8.5.11; ADC still at
+   `MMCA.ADC/Directory.Packages.props:65`); `MassTransit_MustNotExceed_MajorVersion8` at
+   `DependencyVersionTestsBase.cs:26` with `exclusiveMajorCeiling: 9` at `:32`; `IMessageBus`
+   resolved at `OutboxProcessor.cs:774`, `PublishAsync` at `:783`; and the
+   `cross-service-freshness` gate's `required-jobs` at `MMCA.ADC/.github/workflows/deploy.yml:900-902`
+   (`required-jobs-mode: same-run` at `:903`). The `MicroserviceExtractionTestsBase` citation in
+   Context now names the class declaration (`MicroserviceExtractionTestsBase.cs:8`) rather than the
+   `CoreLayers_ShouldNotDependOn_Transport` test at `:13`; neither line moved.
+
 ## Related
 [ADR-016](016-lockstep-versioning-masstransit-pin.md) (the lockstep release policy this pin is
 enforced under; its 2026-08-28 amendment first sketched exit options, and this record owns the
@@ -237,8 +265,8 @@ record governs),
 library talks to it),
 [ADR-003](003-outbox-dual-dispatch.md) (the outbox this record refuses to hand to a library),
 [ADR-021](021-consumer-inbox-idempotency.md) (the inbox, for the same reason),
-[ADR-087](087-broker-poison-message-handling.md) (the circuit breaker on the one leg the library
-owns),
+[ADR-087](087-broker-poison-message-handling.md) (the circuit breaker around the `IMessageBus`
+publish, which is the library-owned broker hop in broker mode),
 [ADR-010](010-integration-event-schema-versioning.md) and
 [ADR-090](090-event-upcaster-registration.md) (the contract and upcaster rules a transport swap must
 not disturb),

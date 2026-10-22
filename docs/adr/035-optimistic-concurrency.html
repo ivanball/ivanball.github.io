@@ -246,7 +246,8 @@
           contracts).
           Revised 2026-10-01 (current-state corrections and refreshed citations, no decision changed).
           Revised 2026-10-06: the RowVersion mapping and the PostgreSQL/SQLite re-stamp are selected by the engine&#39;s declared <code>RowVersionStrategy</code> capability rather than by provider, and stale citations were refreshed.
-          Revised 2026-10-07: MMCA.Helpdesk also subclasses <code>ConcurrencyConventionTestsBase</code> (three consumers), MMCA.Common&#39;s own subclass is recorded as vacuous (its map declares no module layer), and stale anchors were refreshed against current source.</p>
+          Revised 2026-10-07: MMCA.Helpdesk also subclasses <code>ConcurrencyConventionTestsBase</code> (three consumers), MMCA.Common&#39;s own subclass is recorded as vacuous (its map declares no module layer), and stale anchors were refreshed against current source.
+          Revised 2026-10-21: the set-based <code>ExecuteUpdateAsync</code> path is recorded as re-stamping the client-stamped <code>RowVersion</code> itself (it bypasses the audit interceptor), and stale anchors were refreshed.</p>
           <h2 id="context">Context</h2>
           <p>Every mutable aggregate in the framework is edited through a load-modify-save handler: the update use
           case fetches the tracked entity, applies the request, and calls <code>SaveChangesAsync</code>. With one shared
@@ -284,8 +285,12 @@
           (<code>Engine.Capabilities.RowVersion == RowVersionStrategy.StoreGenerated</code>, <code>:592</code>) rather than on the
           provider: SQL Server, the one engine declaring <code>StoreGenerated</code>, maps it to a server-generated
           <code>rowversion</code> (<code>IsRowVersion</code>, <code>:602</code>), and the other relational engines map it as a plain
-          application-managed token (<code>IsConcurrencyToken</code>, <code>:606</code>). EF then includes the token in every UPDATE/DELETE <code>WHERE</code> clause
-          and raises <code>DbUpdateConcurrencyException</code> when it matches no row.</p>
+          application-managed token (<code>IsConcurrencyToken</code>, <code>:606</code>). EF then includes the token in every change-tracked (<code>SaveChanges</code>)
+          UPDATE/DELETE <code>WHERE</code> clause and raises <code>DbUpdateConcurrencyException</code> when it matches no row. The
+          set-based <code>ExecuteUpdateAsync</code> path is the exception: its <code>WHERE</code> is only the caller&#39;s predicate and
+          a non-match returns <code>0</code> rather than throwing
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IRepository.cs:479</code>;
+          see Trade-offs).</p>
           </li>
           <li><p><strong>A read carries the token; a write does not.</strong> <code>IConcurrencyAware</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/DTOs/IConcurrencyAware.cs:15</code>) declares a
@@ -375,8 +380,8 @@
           <code>MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/ArchitectureTests.cs:56</code>, where
           <code>TicketUpdateRequest</code> is the request it inspects), each supplying its own <code>IArchitectureMap</code>. A
           module with no mutable aggregate is legitimately vacuous. MMCA.Common subclasses it as well
-          (<code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Domain/ConcurrencyConventionTests.cs:12</code>,
-          over <code>CommonArchitectureMap</code>, <code>:14</code>), but that run checks nothing: the rule reads only
+          (<code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Domain/ConcurrencyConventionTests.cs:13</code>,
+          over <code>CommonArchitectureMap</code>, <code>:15</code>), but that run checks nothing: the rule reads only
           <code>ModuleApplication()</code>, which keeps layers with a non-empty module
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureMapBase.cs:42</code>, <code>:102</code>),
           and <code>CommonArchitectureMap</code> declares only framework layers
@@ -440,7 +445,7 @@
           including a non-concurrency conflict a handler reports through the <code>Result</code> channel. A thrown
           <code>DbUpdateException</code> other than <code>DbUpdateConcurrencyException</code> (<code>:132</code>) is not touched: it leaves
           the filter unhandled and the global <code>DbUpdateExceptionHandler</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:156</code>) still answers 409
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:161</code>) still answers 409
           (<code>DbUpdateExceptionHandler.cs:33</code>). The response keeps its original problem details
           and error codes, so the cause is still readable in the body, but one class of conflict wears a
           status code naming a precondition the client did not actually violate. The alternative, a dedicated
@@ -467,7 +472,12 @@
           every insert and every update
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/AuditSaveChangesInterceptor.cs:67</code>
           for the capability gate, <code>:88</code> on insert, <code>:97</code> on update, <code>StampRowVersion</code> at <code>:113-117</code>); the
-          update re-stamp is what lets the next stale writer&#39;s <code>WHERE</code> clause miss.
+          update re-stamp is what lets the next stale writer&#39;s <code>WHERE</code> clause miss. A set-based
+          <code>ExecuteUpdateAsync</code> bypasses that interceptor, so <code>EFRepository</code> re-stamps there itself: on a
+          <code>ClientStamped</code> engine, when the caller did not assign <code>RowVersion</code> and the entity maps one, it adds
+          a fresh <code>Guid.NewGuid().ToByteArray()</code> assignment to the same statement
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFRepository.cs:157</code>,
+          <code>StampRowVersion</code> at <code>:168-176</code>).
           Cosmos gets no framework concurrency token at all: <code>CosmosDbContext.OnModelCreating</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/CosmosDbContext.cs:119-146</code>)
           calls neither the base nor <code>ConfigureConcurrencyTokens</code>, and no ETag concurrency is configured
@@ -565,6 +575,25 @@
           <code>MutateEntityHandlerBase.cs:294</code> and <code>EntityServiceBase.cs:398</code> are now <code>:361</code>, <code>:300</code> and <code>:403</code>,
           the values the Decision already cites.</li>
           </ol>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. No decision changed: the token mapping, the header-only
+          transport, the three status codes, the original-value stamp and the Cosmos gap all hold as written.
+          One statement about the client-stamped re-stamp was incomplete and two anchors had moved.</p>
+          <ol>
+          <li><strong>The set-based update path re-stamps the token too.</strong> <code>EFRepository.ExecuteUpdateAsync</code> bypasses
+          <code>AuditSaveChangesInterceptor</code>, so on a <code>RowVersionStrategy.ClientStamped</code> engine it adds a fresh
+          <code>RowVersion</code> assignment to the statement unless the caller set one or the entity maps none
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFRepository.cs:157</code>,
+          <code>StampRowVersion</code> at <code>:168-176</code>). Without it a client still holding the pre-update token would
+          pass its <code>If-Match</code> check. Trade-offs now say so.</li>
+          <li>Anchors re-verified against current source: the global <code>DbUpdateExceptionHandler</code> registration
+          is at <code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:161</code> (<code>:156</code> is
+          the <code>AddProblemDetails</code> call); MMCA.Common&#39;s <code>ConcurrencyConventionTests</code> class is at
+          <code>ConcurrencyConventionTests.cs:13</code> with its <code>CommonArchitectureMap</code> at <code>:15</code>;
+          <code>AuditSaveChangesInterceptor.cs</code> still gates at <code>:67</code>, stamps at <code>:88</code> and <code>:97</code>, with
+          <code>StampRowVersion</code> at <code>:113-117</code>. Anchors inside the 2026-09-07 and 2026-10-07 Revisions are left
+          as recorded; the 2026-10-06 Revision already records the current <code>TouchConcurrencyToken</code> anchors.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-017 (HTTP request idempotency, which dedups retries of the <strong>same</strong> request, the mirror-image
           concern to two <strong>distinct</strong> edits racing here, and whose declared-intent gate sits at this same
@@ -597,6 +626,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

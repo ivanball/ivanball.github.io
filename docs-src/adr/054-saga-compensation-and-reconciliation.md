@@ -34,6 +34,7 @@ re-anchored (`CheckOutHandler`, `OrderCancelledSagaHandler`, `OrderPaymentFailed
 `Order`, `InventoryRestorationDomainService`, `appsettings.json`, `maxReplicas`).
 Revised (2026-10-01): the restoration marker and the stock increase now commit in one transaction, marker first, with the stock moved by an atomic relative update, so the Decision and Rationale bullets are corrected and a trade-off records the discarded failed `Result`; `CancelOrderHandler` retires the session through `PaymentSessionRetirement`, the reconciliation pass is gated by `PaymentProof`, and `PeriodicBackgroundService` moved with Common now subclassing it; two Revision (2026-09-11) statements are marked as no longer holding; every current-state citation is re-anchored. See the Revision below.
 Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
+Revised 2026-10-21: anchors refreshed after the Common and Store changes that moved `DbContextFactory`, `OutboxProcessor`, `appsettings.json` and `main.bicep` lines.
 
 ## Context
 Checkout spans a boundary no transaction covers. `CheckOutHandler` commits the order insert, the cart
@@ -110,13 +111,13 @@ saga-timeout backstop for steps that depend on an external system.
   `IInventoryAllocationService.IncrementAsync` (`OrderCancelledSagaHandler.cs:141-156`), a relative
   atomic `ExecuteUpdate` (`.../Infrastructure/Inventory/InventoryAllocationService.cs:97,127`). A failed
   `Result` from the delegate rolls the whole unit back, marker included
-  (`MMCA.Common/.../DbContexts/Factory/DbContextFactory.cs:615-621`). Same database, one transaction: the marker
+  (`MMCA.Common/.../DbContexts/Factory/DbContextFactory.cs:641-647`). Same database, one transaction: the marker
   cannot exist without the writes it guards, and the writes cannot land unmarked.
 - **Redelivery is the retry mechanism.** A failing in-process handler leaves its outbox row
   unprocessed (`MMCA.Common/.../Interceptors/DomainEventSaveChangesInterceptor.cs:369-400`, the catch at
   `:383-394`) and the `OutboxProcessor` re-dispatches the pure domain event on a later cycle
-  (`MMCA.Common/.../Outbox/Processing/OutboxProcessor.cs:520`, the dispatch at `:694`), with the bounded retries, backoff and
-  dead-lettering ADR-003 already defines (`OutboxProcessor.cs:534-544,568-578,858-859`). The framework packages that failure mode and only that
+  (`MMCA.Common/.../Outbox/Processing/OutboxProcessor.cs:579`, the dispatch at `:790`), with the bounded retries, backoff and
+  dead-lettering ADR-003 already defines (`OutboxProcessor.cs:593-603,627-636,1062-1063`). The framework packages that failure mode and only that
   one: `SafeDomainEventHandler<TDomainEvent>` runs the subclass inside an exception filter whose
   `LogAndRethrow` writes one error line and always returns `false`, so the exception keeps
   propagating, with `OperationCanceledException` excluded because a host shutdown is not a delivery
@@ -166,7 +167,7 @@ saga-timeout backstop for steps that depend on an external system.
   (`PaymentReconciliationService.cs:125-130`). The sweep is configuration-gated
   (`.../Payments/Reconciliation/PaymentReconciliationSettings.cs:30`, defaults of a 10-minute interval,
   a 30-minute stuck age and a 50-order batch, carried in
-  `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:97-102`).
+  `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:105-110`).
 - **The sweep gets no private path into the aggregate, and loses races on purpose.** It calls the same
   guarded transitions as the webhook handler
   (`.../Orders/UseCases/ProcessPaymentWebhook/ProcessPaymentWebhookHandler.cs:110,175`) and the
@@ -270,7 +271,7 @@ is the framework's stated answer to cross-boundary consistency, not because it i
   `OrderCancelledSagaHandler.cs:174`). A refused `MarkInventoryRestored` ends the same way
   (`OrderCancelledSagaHandler.cs:130-135`). A failed `IncrementAsync` after the marker save also
   returns a failed `Result` with a Warning (`OrderCancelledSagaHandler.cs:148-155`), which rolls the
-  marker back with the transaction (`DbContextFactory.cs:615-621`). All three are returns, not throws:
+  marker back with the transaction (`DbContextFactory.cs:641-647`). All three are returns, not throws:
   the handler discards the transaction's `Result` (`OrderCancelledSagaHandler.cs:55`), so the event
   counts as handled and its outbox row is marked processed. Nothing redelivers it, and that order's
   stock stays unrestored until someone acts on the Warning.
@@ -287,7 +288,7 @@ is the framework's stated answer to cross-boundary consistency, not because it i
   swallow its failures itself.
 - **The sweep is not replica-leased.** The outbox processor claims rows with a lease before working
   them (ADR-003); the sweep takes no such claim, so at the configured `maxReplicas: 2`
-  (`MMCA.Store/infra/main.bicep:1860`, the `salesApp` scale block) two replicas can pick the same stuck order and each spend a
+  (`MMCA.Store/infra/main.bicep:1954`, the `salesApp` scale block) two replicas can pick the same stuck order and each spend a
   Stripe status call. Correctness holds through the concurrency token; the duplicated external call
   does not deduplicate.
 - **Every compensating action needs its own marker.** There is no generic mechanism: the ADR-021
@@ -434,6 +435,27 @@ retries, backoff and dead-lettering. Only the Common line numbers moved.
    increment and backoff re-lease at `:534-544`, the retries-exhausted dead-letter metric at
    `:568-578`, `ComputeRetryBackoffSeconds` at `:858-859`). The Revision (2026-09-11) citations of
    `CheckOutHandler` keep the line numbers of that date, as the Revision (2026-10-01) states.
+
+## Revision (2026-10-21)
+
+Re-verified against current source. No behaviour changed: a failed `Result` from the transaction
+delegate still rolls the whole unit back, the enrolled internal-command rows are still flushed just
+before the commit, the `OutboxProcessor` still redelivers with bounded retries, backoff and
+dead-lettering, the shipped defaults are unchanged (unpaid-order window 30 minutes, a 10-minute poll,
+a 30-minute stuck age, a 50-order batch), and `maxReplicas` is still 2. Only line numbers moved.
+
+1. Anchors re-verified against current source: `DbContextFactory` (the failed-`Result` rollback now
+   `:641-647`, `FlushEnrolledCommandsBeforeCommitAsync` called at `:651` and defined at `:713`),
+   `OutboxProcessor` (the per-row `DeliverAsync` call at `:579`, its `dispatcher.DispatchAsync` at
+   `:790`, the retry increment and backoff re-lease at `:593-603`, the retries-exhausted dead-letter
+   metric at `:627-636`, `ComputeRetryBackoffSeconds` at `:1062-1063`), the Sales.Service
+   `appsettings.json` (`UnpaidOrderExpiry` at `:101-104`, `PaymentReconciliation` at `:105-110`),
+   `maxReplicas: 2` in the `salesApp` scale block (`main.bicep:1954`), `SalesModule`
+   (`UnpaidOrderExpirySettings` bound at `:61-64`, `PaymentReconciliationSettings` at `:66-69`,
+   `PaymentReconciliationSettingsValidator` registered at `:73-74`, its equality check at
+   `PaymentReconciliationSettingsValidator.cs:33-37`) and `CheckOutHandler` (the transaction at
+   `:80`, `deadlineScheduler.ArmAsync` at `:180`). The citations inside the dated Revisions above
+   keep the line numbers of their dates.
 
 ## Related
 ADR-003 (the outbox delivery and retry this leans on for compensation redelivery; this record says

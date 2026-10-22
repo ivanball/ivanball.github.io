@@ -7,7 +7,8 @@ on this framework, and stamps each foreign key with where its delete behavior ca
 Revised 2026-09-19: the rule is adopted end to end. All eight migrations were authored and merged on
 2026-09-11 (four in ADC, three in Store, one in Helpdesk), and all three applications subclass the
 shipped fitness-function base, so the Decision and Trade-offs record adopted state instead of
-pending work.
+pending work. Revised 2026-10-21: anchors refreshed after MMCA.Common moved the convention
+registration and the permission-grant and internal-command hard deletes.
 
 ## Context
 EF Core picks a delete behavior for you. A required relationship gets `Cascade`, an optional one gets
@@ -32,8 +33,8 @@ application code. The genuine hard deletes are narrow and deliberate: the framew
 jobs against leaf tables (audit trail retention at
 `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailCleanupJob.cs:158-161`,
 refresh sessions at `.../Persistence/Auth/RefreshSessionCleanupService.cs:127`, permission grants at
-`.../Persistence/Auth/EFPermissionGrantStore.cs:134-136`, internal commands at
-`.../Persistence/InternalCommands/Administration/InternalCommandAdministration.cs:218-221` and
+`.../Persistence/Auth/EFPermissionGrantStore.cs:145-148`, internal commands at
+`.../Persistence/InternalCommands/Administration/InternalCommandAdministration.cs:223-225` and
 `.../Persistence/InternalCommands/Administration/InternalCommandCleanupService.cs:112` and `:147`,
 outbox messages at `.../Persistence/Outbox/Administration/OutboxCleanupService.cs:105`, `:161` and
 `:177`), ADC's session-score replacement
@@ -77,7 +78,7 @@ opt-in with a stated reason, and the finished model records which of the two eac
 5. **It is registered on the one base context, after the other two finalizing conventions.**
    `ApplicationDbContext.ConfigureConventions`
    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:378`)
-   adds it at `:399`, deliberately last of the three, so it never stamps a relationship the
+   adds it at `:400`, deliberately last of the three, so it never stamps a relationship the
    cross-source degrade convention has already removed. Because there is one context class per engine
    over one abstract base ([ADR-006](006-database-per-service.md)), that single registration reaches
    every module, every database and every repo.
@@ -178,6 +179,19 @@ hard delete behave as recorded.
   `OutboxCleanupService.cs:105`/`:161`/`:177`, `SessionScoringRunner.cs:170`, and
   `AuditSaveChangesInterceptor.cs:101-102` (the `Deleted` case falls through to the default
   pass-through). Test-file and remaining anchors were re-checked and are unchanged.
+
+## Revision (2026-10-21)
+Re-verified against current source. No decision, rationale or trade-off changed: the convention is
+still registered last of the three finalizing conventions, and both moved hard deletes are still
+set-based deletes against leaf tables. Only line anchors in the live sections moved.
+1. The permission-grant revoke now removes the grant for every stored spelling of the role
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Auth/EFPermissionGrantStore.cs:139`)
+   in one set-based delete (`:145-148`, `ExecuteDeleteAsync` at `:147`); it remains a leaf-table hard
+   delete, so the Context list is unaffected in substance.
+2. Anchors re-verified against current source: `ApplicationDbContext.cs:378` with the registration
+   at `:400` (degrade `:387`, soft-delete unique index `:393`), `EFPermissionGrantStore.cs:145-148`,
+   and `InternalCommandAdministration.cs:223-225`. The earlier dated revisions keep the anchors that
+   were accurate on their own dates.
 
 ## Related
 [ADR-006](006-database-per-service.md) (one context class per engine over one abstract base, which is

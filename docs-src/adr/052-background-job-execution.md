@@ -9,7 +9,11 @@ ephemeral half continues unchanged in ADR-121; the body below is left in place a
 Previously: Accepted (2026-07-24). Revised 2026-08-23 (post-commit enqueue is recorded as two patterns, not one)
 and 2026-08-31 (three of the four command-handler enqueue sites inherit the save-then-enqueue
 ordering from a shared base class instead of writing it) and 2026-09-19 (the fourth site moved its
-save into a distributed-lock helper): see the revisions at the end.
+save into a distributed-lock helper): see the revisions at the end. Revised 2026-10-21: the
+drain now loops `WaitToReadAsync` plus `TryRead` and, on shutdown, drains what is still queued
+within a 5-second budget, logging what it abandons; the producer API is a void `Enqueue` rather
+than `TryEnqueue`; the session-scoring queue no longer exists in source; and the bookmark
+cache-eviction signal is a second, coalescing (`DropWrite`) instance.
 
 ## Context
 Some requests trigger work that cannot run inside the request: an AI scoring pass over an event's
@@ -46,22 +50,24 @@ starts an untracked `Task` from a request.
   interface both resolving to the **one** instance (`TryAddSingleton<TQueue>()` plus
   `TryAddSingleton<IQueue>(sp => sp.GetRequiredService<TQueue>())`). Registering them separately
   would give producers a queue nobody drains.
-- **A `BackgroundService` drain per queue**, `SingleReader`, consuming with
-  `ReadAllAsync(stoppingToken)`. Because it is a hosted service the host owns the work: shutdown
-  cancels it and waits for it to unwind. The drain resolves scoped services through
+- **A `BackgroundService` drain per queue**, `SingleReader`, consuming with a `WaitToReadAsync`
+  plus `TryRead` loop on the stopping token. Because it is a hosted service the host owns the work:
+  shutdown completes the queue, cancels the loop, and drains what is still queued within a bounded
+  budget, logging whatever it abandons. The drain resolves scoped services through
   `IServiceScopeFactory` per item, since it is itself a singleton.
 - **The full mode encodes what the work is worth.**
   - *Ephemeral* work uses `BoundedChannelFullMode.DropOldest`: under backpressure the freshest
-    broadcast is worth more than the oldest and the request path must never block. Note that
-    `TryWrite` then **always** returns true (it evicts to make room), so a caller cannot learn from
-    its return value that anything was dropped; the channel's `itemDropped` callback is the only
-    real signal and must be wired to a counter and a log.
-  - *Expensive* work uses `Wait` with a non-blocking `TryWrite`, so a full queue **refuses** the
-    request rather than silently discarding an earlier one, and the caller is told.
-- **Expensive work deduplicates by its natural key**, with the claim taken before the write and
-  released by the drain only when the run finishes. The dedup window therefore covers execution, not
-  just the wait in the queue. A duplicate request gets an explicit refusal (409), not a silent
-  coalesce.
+    broadcast is worth more than the oldest and the request path must never block. Until the queue
+    is completed at shutdown, `TryWrite` then returns true (it evicts to make room), so a caller
+    cannot learn from its return value that anything was dropped; the channel's `itemDropped`
+    callback is the only real signal and must be wired to a counter and a log. After completion a
+    write is refused silently.
+  - *Coalescing* work uses `BoundedChannelFullMode.DropWrite` on a capacity of one: a request made
+    while one is already pending is absorbed into it, because the pending item already covers it.
+  - *Expensive* work no longer uses this pattern. The `Wait` mode, in-queue dedup by natural key and
+    the 409 refusal for a duplicate were retired with the session-scoring queue; scoring runs as a
+    durable internal command (ADR-114) that takes a distributed claim per event and skips a run
+    another replica already holds.
 - **One failure posture per drain, stated once.** The drain catches per item so one failed run cannot
   kill the loop, and handles shutdown cancellation separately from failure so a graceful restart is
   not recorded as an error.
@@ -80,19 +86,21 @@ starts an untracked `Task` from a request.
     keeps the ordering as statement order, where the enqueue call has to stay below the save.
 
 Two implementations exist: `LiveChannelPublishQueue` / `LiveChannelPublishProcessor` (ephemeral,
-DropOldest, ADR-039) and `SessionScoringQueue` / `SessionScoringProcessor` (expensive, Wait, dedup
-by event id).
+DropOldest, ADR-039) and `BookmarkCacheEvictionSignal` / `BookmarkCacheEvictionProcessor`
+(coalescing, DropWrite, capacity one, a paced drain of Conference cache-eviction broadcasts). The
+expensive instance (`SessionScoringQueue` / `SessionScoringProcessor`,
+Wait, dedup by event id) no longer exists in source; session scoring runs as a durable internal
+command (ADR-114).
 
 ## Rationale
 - **The host lifetime is the point.** A `BackgroundService` is the only in-process shape the host can
   cancel and await. Everything else in the decision follows from wanting that.
-- **The queue is where the policy lives.** Capacity, full mode and dedup are properties of the work,
-  and putting them in the queue type means a caller cannot get them wrong: it calls `TryEnqueue` and
-  reads the outcome.
-- **Refusal beats silent coalescing for paid work.** An organizer who clicks twice should learn the
-  run is already going, not have the second click vanish into a queue.
-- **Single reader gives ordering for free**, which the live-channel case needs per session, and
-  serializes expensive runs so two of them cannot contend for the same external rate limit.
+- **The queue is where the policy lives.** Capacity and full mode are properties of the work, and
+  putting them in the queue type means a caller cannot get them wrong: it calls `Enqueue`, which
+  returns nothing, and the queue applies capacity and full mode on its behalf.
+- **Single reader gives ordering for free**, which the live-channel case needs per session. Paid
+  work, which wanted refusal rather than silent coalescing and a serialized run, left this pattern
+  for durable internal commands (ADR-114).
 
 ## Trade-offs
 - **In-process only.** The queue does not survive a restart and does not span replicas. Accepted
@@ -232,3 +240,65 @@ creation and the save moved together into a private helper that runs under a cro
    30-second time to live (`:50`) as the crash backstop. With no Redis configured the lock falls
    back to its in-process implementation, so exclusion is per replica again (`:134-140`), which is
    the same honest limit the "dedup is per replica" trade-off above states for in-process dedup.
+
+## Revision (2026-10-21)
+Re-verified against current source. **The ephemeral half and the post-commit rule are unchanged:**
+the live-channel queue is still a bounded `DropOldest` channel with a single reader, drained by one
+hosted service that opens a scope per item, and every enqueue still sits below the save. What moved
+is how the drain consumes and stops, the producer API, and the expensive instance, which is gone.
+
+1. **The drain no longer uses `ReadAllAsync`.** `LiveChannelPublishProcessor.ExecuteAsync` loops
+   `WaitToReadAsync` plus `TryRead`, checking the stopping token before every dequeue
+   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/Live/LiveChannelPublishProcessor.cs:89-97`),
+   and still catches shutdown cancellation apart from failure (`:100`). A `StopAsync` override
+   (`:53-82`) completes the queue and cancels the worker, which aborts and loses the in-flight
+   publish (`:62-66`); only if the worker has returned within `ShutdownDrainBudget` (5 seconds,
+   `:50`) does it drain the remaining items (`:72`), and it logs the count it abandons (`:77-80`). The per-item
+   scope is at `:130`. The Decision bullet now states this.
+2. **The producer API is `void Enqueue`, not `TryEnqueue`.** `LiveChannelPublishQueue.Enqueue`
+   discards the `TryWrite` result
+   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/Live/LiveChannelPublishQueue.cs:56-60`);
+   `Complete` (`:66`) closes the writer at shutdown, and the channel is `DropOldest` with
+   `SingleReader` (`:36-37`). The Rationale bullet now states this.
+3. **The session-scoring queue and drain no longer exist.** Neither `SessionScoringQueue` nor
+   `SessionScoringProcessor` appears under `MMCA.ADC/Source`, and no channel there uses
+   `BoundedChannelFullMode.Wait`. Scoring runs as a durable internal command (ADR-114), as the
+   Status states. The scoring handler takes a distributed claim per event and skips a run another
+   replica holds
+   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsInternalCommandHandler.cs:84`,
+   log message at `:132`), so the Decision and Rationale no longer state `Wait`, in-queue dedup or
+   a 409 refusal as live policy.
+4. **A second instance of the pattern exists, with a third full mode.** `BookmarkCacheEvictionSignal`
+   is a bounded channel of capacity one with `DropWrite` and `SingleReader`
+   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/UserSessionBookmarks/Services/BookmarkCacheEvictionSignal.cs:27-33`),
+   registered as a singleton
+   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/DependencyInjection.cs:58`)
+   and drained by the hosted `BookmarkCacheEvictionProcessor`
+   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/Caching/BookmarkCacheEvictionProcessor.cs:35`,
+   `WaitToReadAsync` plus `TryRead` at `:56-60`; `AddHostedService` at
+   `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/DependencyInjection.cs:24`).
+   The Decision now names two implementations and the coalescing full mode, and the `TryWrite`
+   note is qualified by `Complete`, after which a live-channel write is refused
+   (`LiveChannelPublishQueue.cs:51-54`, `:66`).
+5. **`SubmitQuestionHandler` now waits briefly for the claim.** `TryAcquireAsync` receives
+   `ClaimWait` (2 seconds,
+   `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs:58`)
+   and only then refuses. The substance of the Revision (2026-09-19) holds: the save is inside the
+   claim helper and the enqueue follows it.
+6. **`MutateEntityHandlerCore` has a no-op path.** When the mutation reports `SaveSkipped`
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Crud/MutateEntityHandlerBase.cs:310`),
+   neither the save nor the post-save hooks run; otherwise save-then-hook ordering is still
+   structural.
+7. Anchors re-verified against current source (the dated revisions above keep their original
+   anchors as written):
+   - `TransactionalCommandDecorator.cs`: passthrough check at `:30`.
+   - `MutateEntityHandlerBase.cs`: `MutateEntityHandlerCore` at `:52`, `SaveChangesAsync` at `:322`,
+     `LogMutated` at `:324`, `OnMutatedAsync` at `:325`, `MutateEntityHandlerBase` at `:339` (DTO
+     variant at `:362`).
+   - `SubmitQuestionHandler.cs`: class at `:32`, `IDistributedLock` parameter at `:35`,
+     `ICommandHandler` base at `:39`, `ClaimTimeToLive` at `:50`, `CreateUnderClaimAsync` call at
+     `:97` and definition at `:148`, log at `:103`, `EnqueueSubmittedAsync` call at `:105`,
+     `ClaimKey` at `:113`, `TryAcquireAsync` at `:154`, `SaveChangesAsync` at `:190`, `BestEffort`
+     body at `:211-212`, queue writes at `:223` and `:238`.
+   - `SessionQuestionUpvoteChangedHandler.cs`: `IDomainEventHandler` at `:44`, `BestEffort` at
+     `:54`, scope at `:56`, enqueue at `:87`.

@@ -290,7 +290,11 @@
           2026-10-06 (the And/Or/Not combinators now refuse a shaped <code>QuerySpecification</code> with an
           <code>ArgumentException</code>, so composition is criteria-only by enforcement; ADC&#39;s narrowing is restated as
           forty-four sites across twenty-seven files, one of them an API controller; see the Revision
-          (2026-10-06) at the end).</p>
+          (2026-10-06) at the end). Revised 2026-10-21: ADC&#39;s narrowing grew to fifty sites across thirty-one
+          files, its raw-queryable allowlist shrank to seven files with no Identity entry (thirteen across
+          Common and ADC), ADC composes at five fluent sites including the first production <code>.Not()</code>, and the
+          Store specification-taking <code>CountAsync</code> caller the Revision (2026-10-01) recorded no longer exists;
+          see the Revision (2026-10-21) at the end.</p>
           <h2 id="context">Context</h2>
           <p>Every read an application handler performs has to come from somewhere, and the shape of that contract
           decides whether the module can still be lifted into its own service later (ADR-007, ADR-008). The
@@ -335,7 +339,7 @@
           <li><strong>The raw queryables live on the composite only.</strong> <code>Table</code>, <code>TableNoTracking</code>,
           <code>TableNoTrackingSingleQuery</code>, and <code>TableNoTrackingSplitQuery</code> are declared on <code>IReadRepository</code>
           (<code>IRepository.cs:338</code>, <code>:341</code>, <code>:344</code>, <code>:347</code>) and implemented as EF <code>DbSet</code> expressions
-          (<code>EFReadRepository.cs:526</code>, <code>:529</code>, <code>:532</code>, <code>:535</code>). They are deliberately absent from
+          (<code>EFReadRepository.cs:524</code>, <code>:527</code>, <code>:530</code>, <code>:533</code>). They are deliberately absent from
           <code>IEntityReader</code> and <code>IEntityQuerier</code>, so a handler that declares the narrow dependency cannot reach
           a queryable at all.</li>
           <li><strong>Application code must not touch those queryables, and a fitness rule fails the build.</strong>
@@ -384,10 +388,13 @@
           no hand-written class. Composition is used in production: ADC&#39;s paged session read ANDs the
           public-session specification with the speaker-scoped one rather than substituting, because dropping
           the public filter would leak non-accepted sessions to non-privileged callers
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionsController.cs:113</code>,
-          <code>:135</code>, rationale at <code>:108-110</code>). Every composing call site writes the fluent form, three in
-          MMCA.ADC, for example <code>publicSpecification.And(...)</code> (<code>SessionsController.cs:135</code>), and two in
-          MMCA.Store
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionsController.cs:114</code>,
+          <code>:136</code>, rationale at <code>:108-112</code>). Every composing call site writes the fluent form, five in
+          MMCA.ADC, four <code>.And()</code> calls, for example <code>publicSpecification.And(...)</code>
+          (<code>SessionsController.cs:136</code>), and one <code>.Not()</code> on the Identity user-list read, the first
+          production caller of <code>Not</code>
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UserListEntityQueryService.cs:172</code>),
+          and two in MMCA.Store
           (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ReviewsController.cs:106</code>,
           <code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Reviews/DomainEventHandlers/ProductReviewChangedHandler.cs:111</code>),
           and the hand-built
@@ -399,7 +406,7 @@
           <code>:131</code>). The other two reads on the interface take a raw predicate rather than a specification,
           <code>GetAllForLookupAsync</code> (<code>:87-91</code>) and <code>ExistsAsync</code> (<code>:143-146</code>).
           <code>EntityQueryService</code> passes the specification&#39;s <code>Criteria</code> into the query parameters
-          (<code>Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:321</code> on the list path, <code>:570</code>
+          (<code>Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:322</code> on the list path, <code>:599</code>
           in <code>BuildQueryAsync</code>) alongside the dynamic filters, sorting, and paging. Cross-source predicates are produced the same way:
           <code>CrossSourceSpecification.BuildAsync</code>
           (<code>Source/Core/MMCA.Common.Application/Specifications/CrossSourceSpecification.cs:39</code>) resolves the
@@ -420,14 +427,13 @@
           rule also ships with a documented exemption list, <code>AllowedFiles</code>
           (<code>RawQueryableConventionTestsBase.cs:38</code>), used as an adoption ratchet (<code>:24-27</code>): MMCA.Common
           exempts six files, the generic query pipeline itself (<code>EntityQueryService.cs</code>, which builds its base
-          query from <code>Table</code> / <code>TableNoTracking</code> at <code>EntityQueryService.cs:334</code> and <code>:562-564</code>) plus five Notifications
-          handlers (<code>RawQueryableConventionTests.cs:26-36</code>), and MMCA.ADC exempts nine, the Engagement live
-          layer and bookmark aggregations, the Identity user-list projection, the Identity
-          <code>UserAdministrationService.cs</code> (<code>:54</code>), and the Notification GDPR export
-          (<code>MMCA.ADC/.../RawQueryableConventionTests.cs:33-58</code>).</p>
+          query from <code>Table</code> / <code>TableNoTracking</code> at <code>EntityQueryService.cs:335</code> and <code>:591-593</code>) plus five Notifications
+          handlers (<code>RawQueryableConventionTests.cs:26-36</code>), and MMCA.ADC exempts seven, the Engagement live
+          layer and bookmark aggregations and the Notification GDPR export
+          (<code>MMCA.ADC/.../RawQueryableConventionTests.cs:33-49</code>); no Identity file remains on its list.</p>
           <p>The interface split is shipped and, since 2026-08-21, consumed. MMCA.ADC declares the narrow
-          interfaces at forty-four read-only sites across twenty-seven files, twenty-six of them Application
-          files plus one API controller local
+          interfaces at fifty read-only sites across thirty-one files, thirty of them Application files plus
+          one API controller local
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs:142</code>):
           helper parameters narrowed to
           <code>IEntityReader</code> where the helper only looks up or checks existence (for example
@@ -454,7 +460,7 @@
           (<code>MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Application/Tickets/UseCases/GetById/GetTicketByIdHandler.cs:24</code>,
           with the reason written next to it at <code>:22-23</code>), so the seed teaches the narrowing rather than only
           describing it in the comments its template staging script carries
-          (<code>MMCA.Helpdesk/build/templates/stage.ps1:659</code>, <code>:1405</code>).</p>
+          (<code>MMCA.Helpdesk/build/templates/stage.ps1:670</code>, <code>:1416</code>).</p>
           <p>What has not changed is the wiring, and that is deliberate. <code>IUnitOfWork</code> hands out only the
           composites (<code>IRepository</code> at
           <code>Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IUnitOfWork.cs:19</code>, <code>IReadRepository</code>
@@ -482,7 +488,7 @@
           in a query and compiled in memory by <code>IsSatisfiedBy</code> (<code>Specification.cs:9-11</code>, <code>:32</code>), so an
           authorization predicate can be asserted in a domain test with no database at all.</li>
           <li><strong>Composability keeps filters additive.</strong> ANDing an authorization scope onto a business filter is a
-          single-expression construction (<code>SessionsController.cs:133-135</code>) instead of a second hand-written query path,
+          single-expression construction (<code>SessionsController.cs:134-136</code>) instead of a second hand-written query path,
           which is what makes &quot;never substitute the public filter&quot; a cheap rule to follow.</li>
           <li><strong>A textual scan was chosen deliberately over IL analysis.</strong> NetArchTest and reflection cannot see
           member usage inside method bodies, and the testing package carries no IL or Roslyn dependency on
@@ -508,7 +514,7 @@
           (<code>RawQueryableConventionTestsBase.cs:17-22</code>).</li>
           <li><strong>Coverage is partial by construction.</strong> Three of the four repositories run the rule; MMCA.Helpdesk
           currently does not, so its Application layer relies on review alone.</li>
-          <li><strong>The exemptions are real coupling, not paperwork.</strong> The fifteen allowlisted files across
+          <li><strong>The exemptions are real coupling, not paperwork.</strong> The thirteen allowlisted files across
           MMCA.Common and MMCA.ADC are EF-coupled on purpose (aggregations and projections the focused
           surface cannot express); each is intra-module or framework-owned, but every one of them would need
           rework if its module moved behind a transport boundary.</li>
@@ -853,6 +859,47 @@
           <code>DependencyInjection.cs</code>, <code>SessionsController.cs</code>, <code>EventQuestionAnswersController.cs</code>,
           <code>AuthenticationService.cs</code> and <code>CategoryAssignParentUpdateHandler.cs</code> citations moved.</li>
           </ul>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. The decision, the read-interface split, the composition rules
+          and the fitness rule are unchanged; the consumer counts, the allowlists and one caller note moved.</p>
+          <ol>
+          <li><strong>ADC&#39;s narrowing is restated.</strong> <code>IEntityReader&lt;</code> / <code>IEntityQuerier&lt;</code> now appear fifty times
+          across thirty-one files under <code>MMCA.ADC/Source</code>: thirty Application files plus the API controller
+          local, still at <code>SessionSelectionController.cs:142</code>. The Decision paragraph is restated to that;
+          its example anchors (<code>SessionRoomScheduling.cs:45</code>, <code>UserRegisteredHandler.cs:149</code>, <code>:186</code>,
+          <code>PublicConferenceVisibility.cs:40</code>, <code>:75</code>, <code>:126</code>, <code>:151</code>) still hold.</li>
+          <li><strong>ADC&#39;s raw-queryable allowlist shrank to seven files.</strong> <code>AllowedFiles</code>
+          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Cqrs/RawQueryableConventionTests.cs:33-49</code>,
+          entries <code>:37-48</code>) holds the four Engagement live-layer builders and handlers, the two bookmark
+          aggregations and the Notification GDPR export. The Identity user-list projection and
+          <code>UserAdministrationService.cs</code> are no longer on it. MMCA.Common still exempts six
+          (<code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Cqrs/RawQueryableConventionTests.cs:28-36</code>),
+          so the two repositories exempt thirteen, not fifteen; the Decision and the Trade-offs entry are
+          restated.</li>
+          <li><strong>ADC composes at five sites, and <code>Not</code> has its first production caller.</strong> Four fluent <code>.And()</code>
+          calls (<code>SessionsController.cs:136</code>, <code>SpeakersController.cs:187</code>,
+          <code>PublicConferenceVisibility.cs:149</code>, <code>UserListEntityQueryService.cs:111</code>) and one <code>.Not()</code>
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UserListEntityQueryService.cs:172</code>).
+          With Store&#39;s two (<code>ReviewsController.cs:106</code>, <code>ProductReviewChangedHandler.cs:111</code>) the
+          consumers have seven composing call sites, and consumer Source (MMCA.ADC, MMCA.Store,
+          MMCA.Helpdesk) still holds no hand-built <code>AndSpecification</code>, <code>OrSpecification</code> or
+          <code>NotSpecification</code> construction (the only Source constructions are the fluent extension bodies,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Domain/Specifications/SpecificationExtensions.cs:59</code>,
+          <code>:79</code>, <code>:95</code>). The Revision (2026-10-01) statement that
+          <code>Not</code> has no caller no longer holds; <code>Or</code> and <code>GetPageByCursorAsync</code> still have none in MMCA.ADC,
+          MMCA.Store or MMCA.Helpdesk Source.</li>
+          <li><strong>The specification-taking <code>CountAsync</code> has no caller again.</strong> The Revision (2026-10-01) cited a
+          MMCA.Store call at <code>UserAdministrationService.cs:67</code>; MMCA.Store Source now has no <code>CountAsync</code>
+          call at all, and every <code>CountAsync</code> call in MMCA.ADC Source passes a predicate (for example
+          <code>GetUserBookmarksHandler.cs:58</code>, whose argument is a lambda assigned at <code>:50</code> and <code>:54</code>). The
+          specification-taking <code>AnyAsync</code> callers are unchanged (<code>SubmitReviewHandler.cs:59</code>,
+          <code>GetReviewEligibilityHandler.cs:40</code>).</li>
+          <li>Anchors re-verified against current source: raw queryables at <code>EFReadRepository.cs:524</code>, <code>:527</code>,
+          <code>:530</code>, <code>:533</code>; <code>EntityQueryService.cs</code> criteria at <code>:322</code> and <code>:599</code>, base query at <code>:335</code> and
+          <code>:591-593</code>; <code>SessionsController.cs</code> method at <code>:114</code>, <code>.And</code> at <code>:136</code>, leak rationale
+          <code>:108-112</code>, Rationale ternary <code>:134-136</code>; <code>stage.ps1</code> comments at <code>:670</code> and <code>:1416</code>. Anchors
+          inside the earlier Revision sections are left as historical records.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -874,6 +921,7 @@
             <li><a href="#revision-2026-08-31">Revision (2026-08-31)</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             </ul>
           </nav>
         </aside>

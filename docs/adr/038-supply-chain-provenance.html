@@ -249,7 +249,8 @@
           Revised 2026-09-22 (build-provenance attestations on every released nupkg; the audit and SBOM gates are shared composite actions consumed by ADC and Store; see the Revision below).
           Revised 2026-10-01 (current-state sections re-anchored to the composite actions; see the Revision below).
           Revised 2026-10-06: the SQLitePCLRaw pin is recorded at its current version (3.0.5) and both projects that reference it, and <code>wasm-payload-budget</code> joins the first-party actions consumers reference by branch.
-          Revised 2026-10-07: anchors refreshed after the v1.233.0 release, and the 2026-09-07 record of two <code>dotnet-coverage</code> installs is updated: the second install has since been removed, leaving the single pinned install in CI <code>build-and-test</code>.</p>
+          Revised 2026-10-07: anchors refreshed after the v1.233.0 release, and the 2026-09-07 record of two <code>dotnet-coverage</code> installs is updated: the second install has since been removed, leaving the single pinned install in CI <code>build-and-test</code>.
+          Revised 2026-10-21: the accept-list is no longer empty; it holds five ImageSharp 3.1.12 advisories, each with a reachability argument, and the consumer and SQLitePCLRaw anchors are refreshed.</p>
           <h2 id="context">Context</h2>
           <p>MMCA.Common is a published framework: on every <code>v*</code> tag (release.yml:3-5) it packs its NuGet packages
           and pushes them to both GitHub Packages (release.yml:119-120) and nuget.org through OIDC trusted
@@ -298,13 +299,23 @@
           <code>Directory.Build.props</code>. Because <code>dotnet list --vulnerable</code> ignores <code>NuGetAuditSuppress</code>, the action
           re-derives that accept-list itself by reading only the <code>Include</code> value of each
           <code>&lt;NuGetAuditSuppress&gt;</code> element in <code>Directory.Build.props</code>, so a <code>GHSA-*</code> id mentioned in a comment
-          does not silence anything (action.yml:74-83). The accepted-advisory list is currently empty: the one prior entry, the SQLite
-          advisory GHSA-2m69-gcr7-jv3q (CVE-2025-6965), was suppressed from 2026-06-19 while SQLitePCLRaw
+          does not silence anything (action.yml:74-83). The action accepts the bare-id form or the
+          advisory-URL form (action.yml:81); only the URL form, which NuGet restore honors, satisfies both
+          gates (action.yml:74-76), and every current entry uses it (Directory.Build.props:48-52). The accept-list
+          currently holds five entries, all for <code>SixLabors.ImageSharp</code> 3.1.12 (Directory.Build.props:47-53,
+          pin at Directory.Packages.props:144): advisories published 2026-10-07 and patched only in 4.1.2,
+          which the v3 license pin rules out. The adjacent comment (Directory.Build.props:33-46) gives each
+          one&#39;s reachability argument: GHSA-j9gm-c75j-xc9q and GHSA-jjfr-hcj7-qf5w (TIFF encoder; nothing
+          encodes TIFF), GHSA-wmxv-xphr-5c9g (TIFF decoder; not registered), GHSA-j3p4-wp97-rph4
+          (HistogramEqualization; never called), and GHSA-gwg2-r3hj-4w44 (ICC profile parsing), the one
+          reachable in principle through an authenticated avatar upload and accepted as a bounded
+          denial-of-service risk until a patched 3.x or a v4 license exists. The earlier SQLite
+          advisory GHSA-2m69-gcr7-jv3q (CVE-2025-6965) was suppressed from 2026-06-19 while SQLitePCLRaw
           shipped no patched build. SQLitePCLRaw 2.1.12 (published 2026-07-14) delivered the patched build, so
           the suppression was removed on 2026-07-20 and replaced with a direct fix: a
           <code>SQLitePCLRaw.bundle_e_sqlite3</code> pin tracked in <code>Directory.Packages.props</code>, currently at version 3.0.5
           (Directory.Packages.props:58, rationale comment :54-57), referenced directly by
-          <code>MMCA.Common.Infrastructure</code> (MMCA.Common.Infrastructure.csproj:40-42) and by <code>MMCA.Common.Aspire</code>
+          <code>MMCA.Common.Infrastructure</code> (MMCA.Common.Infrastructure.csproj:43-45) and by <code>MMCA.Common.Aspire</code>
           (MMCA.Common.Aspire.csproj:69-73, for the copy <code>AspNetCore.HealthChecks.Sqlite</code> pulls in) so the
           patched version flows to consumers through the published package graph, the same pattern used for
           the MessagePack pin. This complements the build-time audit: <code>NuGetAudit</code> with <code>NuGetAuditMode=all</code>
@@ -330,10 +341,11 @@
           (ArchitectureEvaluationCriteria.md:852).</li>
           <li><strong>One accept-list, re-applied where the tool ignores it.</strong> The audit keeps <code>Directory.Build.props</code>
           as the only place an advisory is accepted, and re-reads that file in CI precisely because
-          <code>dotnet list --vulnerable</code> does not honor <code>NuGetAuditSuppress</code> (.github/actions/nuget-vulnerability-audit/action.yml:74-78). A <code>NuGetAuditSuppress</code>
+          <code>dotnet list --vulnerable</code> does not honor <code>NuGetAuditSuppress</code> (.github/actions/nuget-vulnerability-audit/action.yml:5). A <code>NuGetAuditSuppress</code>
           item is the sanctioned way to accept an advisory, paired with a dated rationale in an adjacent
           comment, so a reviewer sees every accepted advisory in one place rather than a blanket suppression.
-          No suppressions are active today: the accept-list is empty after the 2026-07-20/21 SQLite fix.</li>
+          Five suppressions are active today, all for ImageSharp 3.1.12, each with its reachability
+          argument in the adjacent comment (Directory.Build.props:33-53).</li>
           <li><strong>Build-gates-invariants, at the supply-chain layer.</strong> SBOM, audit, and source mapping turn
           &quot;remember to check the dependencies&quot; into red builds, the same lever ADR-015 uses for the layer and
           event rules and ADR-016 uses for the MassTransit pin.</li>
@@ -348,8 +360,9 @@
           signature verification of the pushed packages. That is a possible follow-up, not a claim made here.</li>
           <li><strong>Accept-list drift is possible.</strong> A <code>NuGetAuditSuppress</code> entry silences the audit for that id until
           someone removes it, and its accompanying rationale comment is a review reminder, not an automated
-          expiry. No entries are active today, but the mechanism carries this cost whenever an advisory is
-          accepted.</li>
+          expiry. The five active ImageSharp entries carry exactly this cost: the rationale comment&#39;s only
+          revisit instruction (&quot;Revisit both on the next ImageSharp release&quot;) sits in the GHSA-gwg2-r3hj-4w44
+          bullet (Directory.Build.props:43-46), and nothing enforces a revisit for any of the five.</li>
           <li><strong>Audit granularity is text-matched.</strong> The audit action matches vulnerable rows and <code>GHSA-*</code> ids by
           parsing tool output (.github/actions/nuget-vulnerability-audit/action.yml:85-91). It is deliberately simple and depends on the <code>dotnet list</code>
           output shape rather than a structured feed.</li>
@@ -493,6 +506,32 @@
           </ul>
           </li>
           </ol>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. The four controls, the single accept-list re-applied by the
+          audit action, and the four first-party actions referenced <code>@main</code> by both consumers are unchanged.
+          What moved is the content of the accept-list: it is no longer empty.</p>
+          <ol>
+          <li><strong>Five ImageSharp advisories are accepted.</strong> <code>MMCA.Common/Directory.Build.props:47-53</code> holds five
+          active <code>NuGetAuditSuppress</code> entries in advisory-URL form (<code>:48-52</code>): GHSA-j9gm-c75j-xc9q,
+          GHSA-jjfr-hcj7-qf5w, GHSA-wmxv-xphr-5c9g, GHSA-j3p4-wp97-rph4 and GHSA-gwg2-r3hj-4w44, all
+          against <code>SixLabors.ImageSharp</code> 3.1.12 (<code>Directory.Packages.props:144</code>), published 2026-10-07 and
+          patched only in 4.1.2, which the v3 license pin rules out. The rationale comment
+          (<code>Directory.Build.props:33-46</code>) argues reachability per advisory and accepts GHSA-gwg2-r3hj-4w44
+          as reachable in principle, a bounded denial-of-service risk. The audit action matches the
+          advisory-URL form (<code>.github/actions/nuget-vulnerability-audit/action.yml:74-82</code>), so the entries
+          are in force in CI and in the release <code>publish</code> job as well as in restore. Decision 3, Rationale
+          and Trade-offs now say so in place of &quot;the accept-list is empty&quot;.</li>
+          <li>Anchors re-verified against current source:<ul>
+          <li><code>MMCA.Common.Infrastructure.csproj</code>: security-pin comment <code>:43-44</code>, <code>SQLitePCLRaw.bundle_e_sqlite3</code>
+          reference <code>:45</code>. <code>MMCA.Common.Aspire.csproj:69-73</code> and <code>Directory.Packages.props:58</code> (comment
+          from <code>:54</code>) hold.</li>
+          <li>Consumers: <code>MMCA.Store/.github/workflows/deploy.yml</code> <code>wasm-payload-budget</code> <code>:512</code>, audit <code>:559</code>,
+          SBOM <code>:573</code>, <code>freshness-gate</code> <code>:794</code>, <code>:813</code>, <code>:834</code>, <code>:866</code>;
+          <code>MMCA.ADC/.github/workflows/deploy.yml</code> <code>wasm-payload-budget</code> <code>:495</code>, audit <code>:609</code>, SBOM <code>:624</code>,
+          <code>freshness-gate</code> <code>:850</code>, <code>:869</code>, <code>:892</code>, <code>:932</code>.</li>
+          </ul>
+          </li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-016 (lockstep versioning + the MassTransit-v8 license pin; this record extends dependency
           governance from versioning and licensing into supply-chain provenance and integrity), ADR-015
@@ -521,6 +560,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

@@ -11,6 +11,9 @@ avatar-only scope statement below is superseded by
 [ADR-123](123-speaker-session-assets.md)).
 Revised 2026-10-01 (avatar blob deletion is a durable internal command rather than an inline
 storage call; see Revision below).
+Revised 2026-10-21: the image processor registers only the JPEG, PNG, WebP and GIF decoders and
+nulls the EXIF, XMP and IPTC profiles rather than all metadata, and five ImageSharp advisories
+are accepted under a standing audit suppression.
 ## Context
 The MAUI capability program (ADR-042) brought MediaPicker/camera within reach, and ADC amended
 BR-116 to include user avatar photos. That needs binary blob storage (the databases store
@@ -29,11 +32,15 @@ directly against the Azure SDK inside a module, unusable by the next consumer an
   DefaultAzureCredential/managed-identity auth, the production path, or `ConnectionString` for
   local Azurite). The container is provisioned by infrastructure, never created by the app.
 - **`IImageProcessor`** (Application) with `ImageSharpImageProcessor` (Infrastructure, always
-  registered - it has no external dependency): decode, auto-orient, center-crop to an exact
-  square, strip ALL metadata, re-encode as JPEG. Full re-encode is the security boundary: only
-  pixels survive, killing EXIF GPS and polyglot payloads in one move. Undecodable content is a
-  validation failure, not an exception. ImageSharp ships under the Six Labors Split License
-  (Apache 2.0 terms for open-source / small-revenue use, which covers this project).
+  registered - it has no external dependency): decode with only the JPEG, PNG, WebP and GIF
+  decoders registered, auto-orient, center-crop to an exact square, null the EXIF, XMP and IPTC
+  profiles, re-encode as JPEG. Full re-encode is the security boundary: the output is a fresh
+  encode of the decoded first frame, which kills EXIF GPS and any polyglot payload outside the
+  metadata profiles. The ICC profile is not cleared, and the ImageSharp JPEG encoder writes an ICC
+  profile into its output, so bytes carried inside an uploaded ICC profile are not shown to be
+  removed. Undecodable content, including any format whose decoder is
+  not registered (TIFF, BMP), is a validation failure, not an exception. ImageSharp ships under
+  the Six Labors Split License (Apache 2.0 terms for open-source / small-revenue use, which covers this project).
 - **`IMediaPickerService`** (UI capability, ADR-042 pattern): native photo pick/capture with the
   permission flow encapsulated; cancelled/denied returns null. Web heads keep the Null default
   (`IsSupported == false`) and render an `InputFile` instead - an affordance switch, not a
@@ -57,8 +64,11 @@ directly against the Azure SDK inside a module, unusable by the next consumer an
   bounded by cache TTLs.
 - `DefaultAzureCredential` in production means the storage account needs a data-plane role
   (Storage Blob Data Contributor) for the app identity - a bicep-level grant, not a secret.
-- ImageSharp joins the Infrastructure dependency set (vuln-audited like everything else); the
-  license note above must be revisited if the project's revenue posture changes.
+- ImageSharp joins the Infrastructure dependency set and is vuln-audited, but not like everything
+  else: five ImageSharp 3.1.12 advisories are accepted as standing `NuGetAuditSuppress` entries, each
+  with its reachability argument, and every repo carries its own copy of the five, so the lists
+  move together (see the 2026-10-21 revision). The license note above must
+  be revisited if the project's revenue posture changes.
 
 ## Revision (2026-09-07)
 The 2 MB compressed upload cap bounds the bytes on the wire; it does not bound what those bytes
@@ -153,3 +163,43 @@ load-bearing ones have moved to:
   `MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Crud/MutateEntityHandlerBase.cs:322-325`.
 
 Anchors were re-verified against current source on this date.
+
+## Revision (2026-10-21)
+Re-verified against current source. The storage abstraction, the avatar contract, the decoded-size
+guard and the durable blob deletion are unchanged; the image processor's decoder set, its metadata
+handling and the ImageSharp audit posture are corrected in the Decision and Consequences above.
+
+1. **Decoder allowlist.** `CreateDecoderOptions`
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Storage/ImageSharpImageProcessor.cs:127-138`)
+   builds a configuration holding only the JPEG, PNG, WebP and GIF modules (`:129-133`), so every
+   other format ImageSharp ships, TIFF and BMP among them, fails as `UnknownImageFormatException`
+   before any of its decoder code runs, and that exception becomes the `Image.Undecodable`
+   validation failure (`:103-108`). The header read takes `maxFrames: uint.MaxValue` (`:52`); the
+   decode takes `maxFrames: 1` (`:70`), so only the first frame of an animated file is decoded.
+2. **Metadata handling.** After auto-orient and the square crop (`:84-90`) the processor nulls
+   `ExifProfile`, `XmpProfile` and `IptcProfile` (`:92-94`) and re-encodes with
+   `JpegEncoder { Quality = 85 }` (`:99`). Nothing in MMCA.Common source clears the ICC profile, and
+   the ImageSharp 3.1.12 JPEG encoder writes the image's metadata profiles, ICC included
+   (`JpegEncoderCore.WriteProfiles` and `WriteIccProfile`), so "strip ALL metadata" and "only pixels
+   survive" overstated what the code does; the Decision now names the three profiles and scopes the
+   polyglot claim to payloads outside the metadata profiles.
+3. **Audit posture.** Five ImageSharp 3.1.12 advisories are accepted as `NuGetAuditSuppress`
+   entries in `MMCA.Common/Directory.Build.props:48-52`, each with its reachability argument in the
+   comment at `:33-46`: the two TIFF encoder advisories and the HistogramEqualization one are
+   unreachable because nothing encodes TIFF or calls that processor, the BigTIFF decoder one
+   because the TIFF decoder is not registered, and the ICC CLUT parsing one is recorded as reachable
+   in principle through an avatar upload carrying an ICC profile and accepted as a bounded
+   denial-of-service risk. The CI audit step re-applies the same list. Each consumer carries its
+   own copy of the same five entries (`MMCA.ADC/Directory.Build.props:55-59`,
+   `MMCA.Store/Directory.Build.props:55-59`, `MMCA.Helpdesk/Directory.Build.props:30-34`), so the
+   audit posture is four lists that must change together.
+4. Anchors re-verified against current source:
+   - Decoded-size guard: the `Image.IdentifyAsync` header read is at
+     `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Storage/ImageSharpImageProcessor.cs:52`,
+     `MaxDecodedPixels` (50,000,000) at `:31`, `MaxDecodedDimension` (20,000) at `:38` with the
+     long-thin rationale in its doc comment at `:33-37`, the header check at `:54`, the post-decode
+     re-check at `:74`, and the `TooLargeToDecode` predicate at `:147-150`.
+   - The erasure path schedules the blob delete inside the transaction at
+     `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/DeleteUser/DeleteUserHandler.cs:64-74`,
+     through `ScheduleAvatarBlobDeletionAsync` (`:79-89`), and a failed schedule fails the erasure
+     (`:88`).

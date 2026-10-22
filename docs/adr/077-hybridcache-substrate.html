@@ -243,7 +243,7 @@
           <p>Accepted (2026-08-13). <strong>Amends <a href="026-caching-strategy.html">ADR-026</a></strong>: Tier 1&#39;s substrate gains a third
           implementation beside <code>MemoryCacheService</code> and <code>DistributedCacheService</code>. It is opt-in through
           <code>AddCommonHybridCache(...)</code>; with no call the default path is byte-identical to today, so the release is
-          non-breaking. Revised 2026-10-01 (single-use records read through an L1-bypassing <code>GetFromSharedStoreAsync</code>, and consumers opt in through a Redis-guarded wrapper; see Revision below). Revised 2026-10-06: the ADR-029 registration counter also reads through <code>GetFromSharedStoreAsync</code>, so the member is no longer single-use-only. Revised 2026-10-07: the login-lockout flag and the soft-deleted-user marker also read through <code>GetFromSharedStoreAsync</code> (seven callers), and the source anchors are refreshed after the v1.233.0 release.</p>
+          non-breaking. Revised 2026-10-01 (single-use records read through an L1-bypassing <code>GetFromSharedStoreAsync</code>, and consumers opt in through a Redis-guarded wrapper; see Revision below). Revised 2026-10-06: the ADR-029 registration counter also reads through <code>GetFromSharedStoreAsync</code>, so the member is no longer single-use-only. Revised 2026-10-07: the login-lockout flag and the soft-deleted-user marker also read through <code>GetFromSharedStoreAsync</code> (seven callers), and the source anchors are refreshed after the v1.233.0 release. Revised 2026-10-21: the <code>HybridCacheService</code> <code>TryGetAsync</code> override (presence probe flags and thrown miss sentinel) is now recorded, and the source anchors are refreshed against current source.</p>
           <p><strong>Scope note (2026-08-18).</strong> This record is Tier 1 only: the Status and Context sections above scope it to
           ADR-026&#39;s Tier 1 substrate, and the Related entry for ADR-040 leaves the Tier 2 output-cache edge untouched.
           The cross-service output-cache eviction shipped on 2026-08-18
@@ -300,14 +300,14 @@
           <p><code>ICacheService</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/ICacheService.cs</code>, <code>GetAsync</code> at <code>:17</code>,
           <code>SetAsync</code> at <code>:75</code>, <code>RemoveAsync</code> at <code>:85</code>, <code>RemoveByPrefixAsync</code> at <code>:91</code>) gains
-          <code>GetOrCreateAsync&lt;T&gt;(key, factory, expiration?, cancellationToken)</code> (<code>:148</code>) as a <strong>default interface member</strong>,
-          following the <code>IncrementAsync</code> precedent at <code>:108</code> precisely because that precedent proved the shape is
+          <code>GetOrCreateAsync&lt;T&gt;(key, factory, expiration?, cancellationToken)</code> (<code>:152</code>) as a <strong>default interface member</strong>,
+          following the <code>IncrementAsync</code> precedent at <code>:112</code> precisely because that precedent proved the shape is
           non-breaking: no existing implementer, in the framework or in a consumer, has to change. The same
           interface also carries two further default members, <code>TryGetAsync</code> (<code>:34</code>) and <code>GetFromSharedStoreAsync</code>
-          (<code>:65</code>). The default implementation is a presence check through <code>TryGetAsync</code> (<code>:158</code>), so a cached
-          <code>default(T)</code> counts as a hit, then take the key&#39;s stripe (<code>:162</code>) from the <code>CacheKeyLocks</code> holder over a
-          <code>KeyedSemaphoreStripe</code> (<code>:192-195</code>, the <code>QueryCacheKeyLocks</code> pattern), double-check with <code>TryGetAsync</code>
-          (<code>:166</code>), call the factory, set. Every backing store therefore gets the
+          (<code>:65</code>). The default implementation is a presence check through <code>TryGetAsync</code> (<code>:162</code>), so a cached
+          <code>default(T)</code> counts as a hit, then take the key&#39;s stripe (<code>:166</code>) from the <code>CacheKeyLocks</code> holder over a
+          <code>KeyedSemaphoreStripe</code> (<code>:196-199</code>, the <code>QueryCacheKeyLocks</code> pattern), double-check with <code>TryGetAsync</code>
+          (<code>:170</code>), call the factory, set. Every backing store therefore gets the
           process-local stampede protection the query decorator already has, and <code>HybridCacheService</code> can override
           the member with its native two-level primitive.</p>
           <h3 id="hybridcacheservice"><code>HybridCacheService</code></h3>
@@ -317,10 +317,10 @@
           <code>(HybridCache hybrid, ILogger&lt;HybridCacheService&gt; logger, IConnectionMultiplexer? connectionMultiplexer = null, CacheKeyNamespace? keyNamespace = null, IOptions&lt;CacheSettings&gt;? cacheSettings = null)</code>
           (<code>:48-53</code>), the last three optional because a host without Redis still resolves the service, prefix eviction
           is the only operation that needs the multiplexer, and a directly constructed instance falls back to
-          <code>new CacheSettings()</code> (<code>:104</code>) for its TTL policy. The registration passes all three explicitly rather than
-          leaving them to the container, the settings included (<code>DependencyInjection.Caching.cs:178</code>), so a registered service
+          <code>new CacheSettings()</code> (<code>:119</code>) for its TTL policy. The registration passes all three explicitly rather than
+          leaving them to the container, the settings included (<code>DependencyInjection.Caching.cs:180</code>), so a registered service
           reads its durations from the bound <code>Cache</code> section rather than from the defaults. It is <code>partial</code> for the
-          <code>LoggerMessage</code> source generator (<code>:360-373</code>), not because the type is split across hand-written files.</p>
+          <code>LoggerMessage</code> source generator (<code>:434-447</code>), not because the type is split across hand-written files.</p>
           <ul>
           <li><strong><code>GetAsync</code> is a read that never writes.</strong> It calls <code>HybridCache.GetOrCreateAsync</code> with
           <code>HybridCacheEntryFlags.DisableUnderlyingData</code> (a shipped 9.0 GA API), which suppresses the factory and
@@ -328,23 +328,29 @@
           replica&#39;s L1, so the next read of that key costs no hop. The call is wrapped fail-soft: any fault logs a
           warning, self-heal-deletes the key, and returns the default.</li>
           <li><strong><code>SetAsync</code> maps expiration to both levels</strong>, with <code>LocalCacheExpiration</code> set to
-          <code>min(local ceiling, expiration)</code> (<code>:335</code>), the local ceiling being <code>Cache:LocalCacheDuration</code>
-          (<code>CacheSettings.cs:42</code>) when set and otherwise the 30-second <code>LocalCacheDefault</code> (<code>HybridCacheService.cs:66</code>), read at
-          <code>HybridCacheService.cs:330</code>. A shorter caller TTL applies at both levels; a longer one still leaves the L1 copy bounded at
+          <code>min(local ceiling, expiration)</code> (<code>:409</code>), the local ceiling being <code>Cache:LocalCacheDuration</code>
+          (<code>CacheSettings.cs:42</code>) when set and otherwise the 30-second <code>LocalCacheDefault</code> (<code>HybridCacheService.cs:69</code>), read at
+          <code>HybridCacheService.cs:404</code>. A shorter caller TTL applies at both levels; a longer one still leaves the L1 copy bounded at
           the local ceiling.</li>
           <li><strong><code>IncrementAsync</code> bypasses L1 on both legs</strong> (<code>DisableLocalCacheRead | DisableLocalCacheWrite</code>), keeping
           today&#39;s L2-only read-modify-write semantics exactly. A counter served from a replica&#39;s local cache
           ignores the other replicas&#39; increments, which on the ADR-029 brute-force path means a lockout that never
           triggers. ADR-026 accepted an occasional lost increment; it did not accept a counter that reads its own
           stale copy for up to 30 seconds.</li>
-          <li><strong><code>GetFromSharedStoreAsync</code> reads from L2 alone.</strong> The override (<code>:154-173</code>) uses
-          <code>SharedStoreReadOptions</code> (<code>:86-91</code>), the read-only flag plus <code>DisableLocalCacheRead | DisableLocalCacheWrite</code>,
+          <li><strong><code>TryGetAsync</code> reports presence from whether the factory ran.</strong> <code>HybridCache</code> has no
+          presence-reporting read, so the override (<code>:174-199</code>) calls <code>GetOrCreateAsync</code> with a factory that
+          throws a tagged <code>KeyNotFoundException</code> (<code>:182</code>, caught as &quot;not found&quot; at <code>:189</code>) and a third flag set,
+          <code>PresenceProbeOptions</code> (<code>DisableDistributedCacheWrite</code>, <code>:103-106</code>), used by no other call so a probe
+          is never joined with a real get-or-create on the same key. A hit, L1 or L2 promoted into L1, never runs
+          the factory, so a cached <code>default(T)</code> is still found; faults are fail-soft like <code>GetAsync</code>.</li>
+          <li><strong><code>GetFromSharedStoreAsync</code> reads from L2 alone.</strong> The override (<code>:216-235</code>) uses
+          <code>SharedStoreReadOptions</code> (<code>:89-94</code>), the read-only flag plus <code>DisableLocalCacheRead | DisableLocalCacheWrite</code>,
           so a record another replica already consumed (or a value another replica changed) is a miss or the shared
           value here rather than a stale local copy. Four single-use records read through it: the OAuth
           exchange code
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/OAuthControllerBase.cs:273</code>), the
           password-reset token (<code>PasswordResetTokenService.cs:128</code>), the email-confirmation token
-          (<code>EmailConfirmationTokenService.cs:90</code>) and the two-factor time step (<code>TwoFactorAuthenticator.cs:105</code>).
+          (<code>EmailConfirmationTokenService.cs:90</code>) and the two-factor time step (<code>TwoFactorAuthenticator.cs:121</code>).
           So does one counter: the ADR-029 per-IP registration limit reads its count through it
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:141</code>), because
           <code>IncrementAsync</code> writes L2 only and a plain <code>GetAsync</code> would let a replica&#39;s L1 copy pin the first count it
@@ -361,7 +367,7 @@
           call, so both evict through one implementation and the existing Redis-tier tests over
           <code>DistributedCacheService</code> prove the extraction is behavior-identical. The scan pattern is the
           caller&#39;s prefix qualified into this keyspace, <code>{namespace}hc:{prefix}*</code>
-          (<code>HybridCacheService.cs:219-238</code>, built at <code>:233</code>), this service&#39;s own keyspace and no other. The
+          (<code>HybridCacheService.cs:281-300</code>, built at <code>:295</code>), this service&#39;s own keyspace and no other. The
           delete is a caller-supplied callback, and here it is <code>hybrid.RemoveAsync</code> rather than a raw key delete,
           because a raw delete would clear L2 and leave the calling replica&#39;s L1 copy serving the value it just
           invalidated.</li>
@@ -375,12 +381,12 @@
           the L1 benefit for free, because their reads go through <code>GetAsync</code>.</p>
           <h3 id="registration-is-one-opt-in-call">Registration is one opt-in call</h3>
           <p><code>AddCommonHybridCache(Action&lt;HybridCacheOptions&gt;? configure = null)</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:139</code>) calls a bare
-          <code>AddHybridCache()</code> (<code>:141</code>) and sets the defaults through
-          <code>AddOptions&lt;HybridCacheOptions&gt;().Configure&lt;IOptions&lt;CacheSettings&gt;&gt;</code> (<code>:147-161</code>) from the bound <code>Cache</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:141</code>) calls a bare
+          <code>AddHybridCache()</code> (<code>:143</code>) and sets the defaults through
+          <code>AddOptions&lt;HybridCacheOptions&gt;().Configure&lt;IOptions&lt;CacheSettings&gt;&gt;</code> (<code>:149-163</code>) from the bound <code>Cache</code>
           section (<code>Expiration</code> from <code>DefaultDuration</code>, <code>LocalCacheExpiration</code> from <code>LocalCacheDuration</code> or the
-          30-second <code>LocalCacheDefault</code>), running the host&#39;s <code>configure</code> hook last, then <code>RemoveAll&lt;ICacheService&gt;()</code>
-          (<code>:165</code>) and an <code>AddSingleton&lt;ICacheService&gt;</code> <strong>factory</strong> (<code>:166-179</code>), not the two-generic-argument
+          30-second <code>LocalCacheDefault</code>), running the host&#39;s <code>configure</code> hook last (<code>:162</code>), then <code>RemoveAll&lt;ICacheService&gt;()</code>
+          (<code>:167</code>) and an <code>AddSingleton&lt;ICacheService&gt;</code> <strong>factory</strong> (<code>:168-181</code>), not the two-generic-argument
           <code>AddSingleton&lt;ICacheService, HybridCacheService&gt;</code> form: the lambda resolves the logger (falling back to
           <code>NullLogger</code> when none is registered), the optional <code>IConnectionMultiplexer</code>, the <code>CacheKeyNamespace</code> and the
           <code>IOptions&lt;CacheSettings&gt;</code> itself and hands them to the constructor, rather than leaving the optional
@@ -395,9 +401,9 @@
           <p><code>Microsoft.Extensions.Caching.Hybrid</code> is pinned in <code>Directory.Packages.props</code> and referenced by
           <code>MMCA.Common.Infrastructure</code>, with lock files regenerated across the solution <strong>and</strong> the out-of-slnx Redis
           tests project (<a href="038-supply-chain-provenance.html">ADR-038</a>). Consumers opt in through the guarded wrapper
-          <code>AddCommonHybridCacheWhenRedisConfigured(configuration)</code> (<code>DependencyInjection.Caching.cs:200-212</code>), which
-          calls <code>AddCommonHybridCache</code> only when the <code>redis</code> connection string is set: ADC calls it in its four service
-          hosts (for example <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:203</code>) and Store in its
+          <code>AddCommonHybridCacheWhenRedisConfigured(configuration)</code> (<code>DependencyInjection.Caching.cs:202-214</code>), which
+          calls <code>AddCommonHybridCache</code> only when the <code>redis</code> connection string is set (<code>:208</code>): ADC calls it in its four service
+          hosts (for example <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:204</code>) and Store in its
           three (for example <code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:108</code>); MMCA.Helpdesk
           does not (no Redis, so it stays on the memory substrate).</p>
           <h2 id="rationale">Rationale</h2>
@@ -504,6 +510,30 @@
           <code>LoginProtectionService.cs:141</code> for the registration count. The <code>DependencyInjection.Caching.cs</code>,
           <code>DistributedCacheService.cs</code>, <code>CacheSettings.cs:42</code> and consumer <code>Program.cs</code> anchors are unchanged.</li>
           </ol>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. The disjoint <code>hc:</code> keyspace, opt-in registration through the
+          Redis-guarded wrapper, the counter-path L1 bypass, the constructor shape, the seven
+          <code>GetFromSharedStoreAsync</code> callers and the consumer adoption (four ADC hosts, three Store hosts, none in
+          MMCA.Helpdesk) are unchanged. What moved is one undocumented mechanism and most line anchors.</p>
+          <ol>
+          <li><code>HybridCacheService</code> overrides <code>TryGetAsync</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:174-199</code>) with a
+          third flag set, <code>PresenceProbeOptions</code> (<code>DisableDistributedCacheWrite</code>, <code>:103-106</code>), and a factory that
+          throws a tagged <code>KeyNotFoundException</code> as the miss signal (<code>:182</code>, caught at <code>:189</code>). The Decision&#39;s
+          <code>HybridCacheService</code> bullets now describe it.</li>
+          <li>Anchors re-verified against current source: <code>ICacheService.cs</code> <code>IncrementAsync</code> <code>:112</code>,
+          <code>GetOrCreateAsync</code> <code>:152</code>, presence check <code>:162</code>, stripe <code>:166</code>, double-check <code>:170</code>, <code>CacheKeyLocks</code>
+          <code>:196-199</code> (<code>GetAsync</code> <code>:17</code>, <code>TryGetAsync</code> <code>:34</code>, <code>GetFromSharedStoreAsync</code> <code>:65</code>, <code>SetAsync</code> <code>:75</code>,
+          <code>RemoveAsync</code> <code>:85</code>, <code>RemoveByPrefixAsync</code> <code>:91</code> unchanged); <code>HybridCacheService.cs</code> <code>LocalCacheDefault</code>
+          <code>:69</code>, <code>SharedStoreReadOptions</code> <code>:89-94</code>, <code>new CacheSettings()</code> <code>:119</code>, <code>GetFromSharedStoreAsync</code>
+          override <code>:216-235</code>, <code>RemoveByPrefixAsync</code> <code>:281-300</code> (pattern built at <code>:295</code>), local ceiling read at
+          <code>:404</code> and applied at <code>:409</code>, <code>LoggerMessage</code> partials <code>:434-447</code>; <code>TwoFactorAuthenticator.cs:121</code>;
+          <code>DependencyInjection.Caching.cs</code> <code>AddCommonHybridCache</code> <code>:141</code>, <code>AddHybridCache</code> <code>:143</code>, options
+          pipeline <code>:149-163</code> (host hook at <code>:162</code>), <code>RemoveAll</code> <code>:167</code>, factory <code>:168-181</code> (settings passed at
+          <code>:180</code>), wrapper <code>:202-214</code> (Redis guard at <code>:208</code>); <code>MMCA.ADC.Conference.Service/Program.cs:204</code>.
+          <code>DistributedCacheService.cs:153</code>, <code>CacheSettings.cs:42</code>, <code>TryAddSingleton</code> <code>:59</code>,
+          <code>MMCA.Store.Catalog.Service/Program.cs:108</code> and the other six caller anchors are unchanged.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="026-caching-strategy.html">ADR-026</a> (amended by this record: its Tier 1 substrate gains a third
           implementation, its 30-second default TTL becomes the local-cache bound as well, its prefix-invalidation
@@ -536,6 +566,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

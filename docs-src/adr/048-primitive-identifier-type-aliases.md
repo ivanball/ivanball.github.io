@@ -27,6 +27,9 @@ the Conference and ADC/Store `Directory.Build.props` citations were re-anchored;
 Revised 2026-10-06: the Status block now lists the 2026-10-01 revision, and the Common
 `Directory.Build.props` and `AuthenticationServiceBase` citations were re-anchored; see the Revision
 (2026-10-06) at the end.
+Revised 2026-10-21: Engagement's alias file now declares eleven aliases, `UserSessionBookmarkIdentifierType`
+having been added, so the workspace total is 49 aliases across 10 files, 47 of them `int`; the three
+`Directory.Build.props` alias-block citations were re-anchored. See the Revision (2026-10-21) at the end.
 **Revisited by [ADR-085](085-identifier-type-aliases-revisited.md) (2026-08-18)**: the wrapper-struct
 alternative this record deferred was re-evaluated, priced, and deferred again, now against named
 revisit triggers instead of open-endedly. The decision below is unchanged; see the Revision
@@ -88,8 +91,8 @@ not as a wrapper struct.
 - **Aliases are linked solution-wide via `Directory.Build.props`.** Each `GlobalUsings.*.cs` file is
   pulled into every project with a `<Compile Include ... Link=... />` block, so the alias is visible
   everywhere without a project reference: Common
-  (`MMCA.Common/Directory.Build.props:131-141`), ADC
-  (`MMCA.ADC/Directory.Build.props:125-139`), Store (`MMCA.Store/Directory.Build.props:129-140`). Adding a
+  (`MMCA.Common/Directory.Build.props:153-163`), ADC
+  (`MMCA.ADC/Directory.Build.props:138-152`), Store (`MMCA.Store/Directory.Build.props:138-149`). Adding a
   solution-wide alias is a new `GlobalUsings.*.cs` plus a matching `<Compile Include>` line, nothing more.
 - **The alias flows unchanged through every layer.** Tracing the ADC `User` aggregate: the domain
   entity is `User : AuditableAggregateRootEntity<UserIdentifierType>`
@@ -313,3 +316,39 @@ No decision and no rationale changed.
   is re-anchored (the `:85` recorded in the Revision (2026-09-11) stays as recorded on that date).
 - Every other anchor in the Context and Decision sections was re-verified against current source and
   holds.
+
+## Revision (2026-10-21)
+Re-verified against current source. No decision and no rationale changed, and both `Guid`-backed aliases
+are where the Revision (2026-09-19) put them. One count moved because Engagement gained an alias, and the
+`Directory.Build.props` alias link blocks moved without their content changing.
+
+1. Engagement's alias file declares **eleven** aliases, `UserSessionBookmarkIdentifierType = int` having
+   been added at the end of the list
+   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/MMCA.ADC.Engagement.GlobalUsings.IdentifierType.cs:4-14`).
+2. Recounting every `GlobalUsings.*IdentifierType.cs` file in the four repositories, one
+   `global using X = <primitive>;` line counting as one alias, gives **49 aliases across 10 files**: Common
+   Domain 1 (`MMCA.Common/Source/Core/MMCA.Common.Domain/GlobalUsings.IdentifierType.cs:1`) and Common
+   Shared 2 (`MMCA.Common/Source/Core/MMCA.Common.Shared/GlobalUsings.NotificationIdentifierType.cs:1-2`);
+   ADC Notification 2
+   (`MMCA.ADC/Source/Modules/Notification/MMCA.ADC.Notification.Shared/MMCA.ADC.Notification.GlobalUsings.IdentifierType.cs:1-2`),
+   Identity 1
+   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/MMCA.ADC.Identity.GlobalUsings.IdentifierType.cs:2`),
+   Engagement 11 and Conference 19
+   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:7-25`);
+   Store Catalog 6
+   (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/MMCA.Store.Catalog.GlobalUsings.IdentifierType.cs:3-8`),
+   Identity 2
+   (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Shared/MMCA.Store.Identity.GlobalUsings.IdentifierType.cs:3-4`)
+   and Sales 3
+   (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Shared/MMCA.Store.Sales.GlobalUsings.IdentifierType.cs:5-7`);
+   and Helpdesk Tickets 2
+   (`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Shared/MMCA.Helpdesk.Tickets.GlobalUsings.IdentifierType.cs:6,8`).
+   **47 of the 49 resolve to `int`**; the two `Guid` aliases are unchanged, `SessionAssetIdentifierType`
+   and `SpeakerIdentifierType` (Conference file lines 17 and 23). The census in the Revision (2026-09-19)
+   above is superseded by this one.
+3. Anchors re-verified against current source: the Decision's `Directory.Build.props` alias link blocks
+   are at `MMCA.Common/Directory.Build.props:153-163` (the Common.Domain `UserIdentifierType` block at
+   153-157 and the Common.Shared notification block at 159-163), `MMCA.ADC/Directory.Build.props:138-152`
+   (four `<Compile Include>` entries: Identity, Conference, Engagement, Notification) and
+   `MMCA.Store/Directory.Build.props:138-149` (three: Catalog, Sales, Identity). The `:131-141` recorded
+   in the Revision (2026-10-06) stays as recorded on that date.

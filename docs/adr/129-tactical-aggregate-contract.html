@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-129: The Tactical Aggregate Contract · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-10-01).">
+  <meta name="description" content="Accepted (2026-10-01). Revised 2026-10-21: anchors refreshed after the ADC Speaker aggregate moved its child-access call sites.">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/129-tactical-aggregate-contract.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-129: The Tactical Aggregate Contract">
-  <meta property="og:description" content="Accepted (2026-10-01).">
+  <meta property="og:description" content="Accepted (2026-10-01). Revised 2026-10-21: anchors refreshed after the ADC Speaker aggregate moved its child-access call sites.">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/129-tactical-aggregate-contract.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Principal Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-129: The Tactical Aggregate Contract">
-  <meta name="twitter:description" content="Accepted (2026-10-01).">
+  <meta name="twitter:description" content="Accepted (2026-10-01). Revised 2026-10-21: anchors refreshed after the ADC Speaker aggregate moved its child-access call sites.">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"129 · The Tactical Aggregate Contract","item":"https://ivanball.github.io/docs/adr/129-tactical-aggregate-contract.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
@@ -240,7 +240,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-129-the-tactical-aggregate-contract">ADR-129: The Tactical Aggregate Contract</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-10-01).</p>
+          <p>Accepted (2026-10-01). Revised 2026-10-21: anchors refreshed after the ADC <code>Speaker</code> aggregate moved its child-access call sites.</p>
           <h2 id="context">Context</h2>
           <p>Every entity in the four repos is written the same way: a sealed class over a framework base, a
           private constructor, a static <code>Create(...)</code> returning <code>Result&lt;T&gt;</code>, private setters, named mutation
@@ -326,8 +326,8 @@
           finds a comment through <code>GetChildOrNotFound</code> (<code>:144</code>). <code>TicketInvariants</code> is the static class
           (<code>MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/Tickets/TicketInvariants.cs:16</code>,
           <code>Result.Combine</code> at <code>:27</code>, <code>:33</code>, <code>:40</code>). The ADC and Store aggregates use the same members, for
-          example <code>Speaker</code> (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:394</code>,
-          <code>:454</code>, <code>:474</code>) and <code>Product</code>
+          example <code>Speaker</code> (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:437</code>,
+          <code>:497</code>, <code>:517</code>) and <code>Product</code>
           (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/Product.cs:407</code>, <code>:455</code>, <code>:474</code>).</li>
           <li><strong>Adoption: the three application repos subclass the full base unchanged.</strong> MMCA.ADC
           (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Domain/EntityConventionTests.cs:3-6</code>),
@@ -394,6 +394,18 @@
           <code>SetItems</code>, <code>RemoveChildOrNotFound</code> and <code>GetChildOrNotFound</code> call sites (<code>Speaker.cs:394</code>, <code>:454</code>,
           <code>:474</code>).</li>
           </ul>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. The contract is unchanged: ADC <code>Speaker</code> still uses the same
+          child-access members as Helpdesk <code>Ticket</code> and Store <code>Product</code>, and the Store <code>Product</code> anchors still
+          hold (<code>SetItems</code> at <code>Product.cs:407</code>, <code>RemoveChildOrNotFound</code> at <code>:455</code>, <code>GetChildOrNotFound</code> at
+          <code>:474</code>). Only the ADC <code>Speaker</code> anchors moved.</p>
+          <ol>
+          <li>Anchors re-verified against current source: the ADC <code>Speaker</code> examples in the Decision now point
+          at the real call sites, <code>SetItems</code> at
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:437</code>,
+          <code>RemoveChildOrNotFound</code> at <code>:497</code> and <code>GetChildOrNotFound</code> at <code>:517</code> (the same members also
+          appear at <code>:511</code> and <code>:423</code>). The earlier <code>:394</code>, <code>:454</code> and <code>:474</code> no longer land on these calls.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="013-result-pattern.html">ADR-013</a> (the <code>Result&lt;T&gt;</code> factories this contract requires),
           <a href="068-value-objects-as-validated-primitives.html">ADR-068</a> (value-object factories and the static
@@ -420,6 +432,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

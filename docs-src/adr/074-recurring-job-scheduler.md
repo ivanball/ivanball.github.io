@@ -4,7 +4,8 @@
 Accepted (2026-08-13; revised 2026-08-14, 2026-08-18, 2026-08-31, 2026-10-01). Revised 2026-10-06: the
 smart-wait and cron-validation statements now match the runner's actual behavior. Revised 2026-10-07:
 the consumer-adoption statement now names every host that calls `AddScheduledJobs` and the combined
-audit-trail migrations that create the table. The implementation lands in the MMCA.Common "enterprise capability wave" release
+audit-trail migrations that create the table. Revised 2026-10-21: anchors refreshed after the outbox
+claim path and the `ConfigureScheduler` mapping moved in source. The implementation lands in the MMCA.Common "enterprise capability wave" release
 and is opt-in: a host calls `AddScheduledJobs(configuration)` and sets `Scheduler:Enabled`. Until it does,
 the framework creates no table and starts no runner.
 
@@ -32,11 +33,11 @@ scheduling product (Hangfire or Quartz.NET) or to extend the durable polling loo
 ### The scheduler is the outbox claim-lease pattern applied to cron, not Hangfire and not Quartz.NET
 A persistent job store plus a single-runner claim lease, reusing the exact idiom the outbox proved. The
 outbox claims a batch with an `ExecuteUpdateAsync` that sets `LockedUntil` and `LockToken` in one statement
-(`.../Persistence/Outbox/Processing/OutboxProcessor.cs:357-361`, inside `ClaimEligibleAsync`, `:330`) over a shared
+(`.../Persistence/Outbox/Processing/OutboxProcessor.cs:370-374`, inside `ClaimEligibleAsync`, `:343`) over a shared
 `FilterClaimable` predicate that admits only eligible, unprocessed rows whose `LockedUntil` is null or already
-in the past (`:409-415`; a batch carrying an ordering key claims through `FilterUnblocked`, which composes it,
-`:353-355`, `:429`), then re-reads the claimed
-set by `LockToken` so a partial claim processes only its own rows (`:369-374`). A due job is claimed the same way, so two replicas can
+in the past (`:422-428`; a batch carrying an ordering key claims through `FilterUnblocked`, which composes it,
+`:366-368`, `:442`), then re-reads the claimed
+set by `LockToken` so a partial claim processes only its own rows (`:382-390`). A due job is claimed the same way, so two replicas can
 never run the same occurrence, and a replica that dies mid-run releases its job when the lease expires.
 
 Hangfire would have brought its own schema, its own storage abstraction, a dashboard surface to authorize
@@ -66,7 +67,7 @@ carries `JobName` (the primary key), `CronExpression`, `NextRunOn`, `LastRunOn`,
 self-stamps nothing, it is never soft-deleted, and no global query filter reaches it. That falls out of the
 mapping rather than being asserted: the soft-delete filter is applied only to entity types assignable to
 `IAuditableEntity` (`.../Persistence/DbContexts/ApplicationDbContext.cs:457`, `:466`), and
-`ConfigureScheduler` maps the table with no `HasQueryFilter` call of its own (`:803-839`). That is the
+`ConfigureScheduler` maps the table with no `HasQueryFilter` call of its own (`:809-845`). That is the
 `OutboxMessage` precedent: infrastructure rows are not domain rows.
 
 The table lives in the **Default** source and only there. The outbox exists once per relational database
@@ -250,6 +251,19 @@ with v1.232.1.
    above are left as written: their `OutboxProcessor.cs` anchors and the `ApplicationDbContext.cs` `:824`
    and `:805-841` anchors are stale, while their `ScheduledJobRunner.cs`, `SchedulerSettings.cs` and
    `ApplicationDbContext.cs:457`/`:466` anchors are current.
+
+## Revision (2026-10-21)
+Re-verified against current source. No decision, rationale, trade-off or adoption statement changed; the
+claim lease, the partial-claim re-read, the soft-delete exclusion and the `ConfigureScheduler` mapping
+behave as described, and the consumer-adoption host set is unchanged. Only anchors in the body moved.
+
+1. Anchors re-verified against current source: the outbox claim `ExecuteUpdateAsync`
+   (`OutboxProcessor.cs:370-374`, setting `LockedUntil` and `LockToken` at `:372`) inside
+   `ClaimEligibleAsync` (`:343`), `FilterClaimable` (`:422-428`), the keyed `FilterUnblocked` branch
+   (`:366-368`) composing it (`:442`), the partial-claim re-read by `LockToken` (`:382-390`), and
+   `ConfigureScheduler` (`ApplicationDbContext.cs:809-845`, `LastError` 2048-character cap at `:831`). The
+   soft-delete filter anchors (`ApplicationDbContext.cs:457`, `:466`) are current. The earlier revision
+   entries above are left as written.
 
 ## Related
 [ADR-003](003-outbox-dual-dispatch.md) (the outbox whose claim-lease idiom and smart wait this reuses

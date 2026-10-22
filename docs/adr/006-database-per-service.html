@@ -250,7 +250,12 @@
           SQL Server / Cosmos / SQLite / PostgreSQL; the one-instance-per-database rule below is unchanged.
           Revised 2026-10-06: the <code>AtlDevCon</code> bacpac was deleted on 2026-10-03, so no pre-cutover rollback
           copy exists; the four live <code>ADC_*</code> databases rely on their own PITR plus LTR.
-          Revised 2026-10-07: anchors refreshed after the v1.233.0 release.</p>
+          Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
+          Revised 2026-10-21: the Decision bullet now names <code>PostgreSQLDbContext</code> among the per-engine
+          contexts, attributes once-per-key caching to the scoped <code>DbContextFactory</code> (not
+          <code>PhysicalDbContextFactory</code>), and scopes the no-per-module-context rule to concrete runtime contexts
+          (abstract per-module <code>ModuleApplicationDbContext</code> DbSet holders exist);
+          <code>infra/main.bicep</code> anchors refreshed.</p>
           <h2 id="context">Context</h2>
           <p>When the modules were first extracted into independently-deployable services, all services in an
           app still pointed at a <strong>single shared SQL database</strong> with a single <code>OutboxMessages</code> table. That
@@ -266,10 +271,14 @@
           <code>OutboxMessages</code> table.</p>
           <ul>
           <li><strong>One sealed concrete context class <em>per engine</em>, one instance per database.</strong> We do <strong>not</strong>
-          introduce per-module DbContext classes (see the &quot;Don&#39;t split SQLServerDbContext&quot; convention). The
-          default engine is SQL Server (<code>SQLServerDbContext</code>); ADR-018 later added <code>SqliteDbContext</code> and
-          <code>CosmosDbContext</code>, each a sealed subclass of the abstract <code>ApplicationDbContext</code>. The right context
-          class is materialized once per <code>DataSourceKey(Engine, Name)</code> by <code>PhysicalDbContextFactory</code>; entities
+          introduce a per-module concrete (runtime) DbContext class. Each module may declare an abstract
+          <code>ModuleApplicationDbContext</code> that only lists its <code>DbSet</code>s (for example
+          <code>MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Infrastructure/Persistence/DbContexts/ModuleApplicationDbContext.cs:14</code>),
+          but nothing subclasses it at runtime (rule stated at <code>MMCA.Helpdesk/AGENTS.md:74</code>). The default engine is SQL Server (<code>SQLServerDbContext</code>); ADR-018
+          later added <code>SqliteDbContext</code> and <code>CosmosDbContext</code>, and ADR-113 added <code>PostgreSQLDbContext</code>, each
+          a sealed subclass of the abstract <code>ApplicationDbContext</code>. The singleton <code>PhysicalDbContextFactory</code>
+          creates a new raw context on every <code>Create(DataSourceKey)</code> call; the scoped <code>DbContextFactory</code>
+          caches one instance per <code>DataSourceKey(Engine, Name)</code> for the scope; entities
           route to a physical source by logical name (<code>[UseDatabase]</code> / module namespace) via
           <code>DataSourceResolver</code>, and to an engine by configuration base class (<code>[UseDataSource]</code>, ADR-018).
           The forbidden split is <em>per-module</em>, not per-engine.</li>
@@ -280,7 +289,7 @@
           longer declares it. That bacpac was itself deleted permanently on 2026-10-03 (blob soft delete and
           versioning were off), so there is no restore path to the pre-cutover <code>AtlDevCon</code> data; its contents
           had already been copied into the per-service databases at cutover, and those four databases keep
-          their own PITR plus LTR (<code>MMCA.ADC/infra/main.bicep:937</code>, <code>MMCA.ADC/infra/main.bicep:982</code>,
+          their own PITR plus LTR (<code>MMCA.ADC/infra/main.bicep:1080</code>, <code>MMCA.ADC/infra/main.bicep:1132</code>,
           <code>MMCA.ADC/infra/POST-CUTOVER-atldevcon-downgrade.md:103</code>, <code>MMCA.ADC/infra/DISASTER-RECOVERY.md:27</code>).</li>
           <li><strong>Per-source outbox.</strong> Each database has its own <code>OutboxMessages</code>; the <code>OutboxProcessor</code> drains
           only the sources its host owns, so no service ever sees another&#39;s rows.</li>
@@ -327,6 +336,36 @@
           <code>MMCA.ADC/infra/main.bicep:982</code> (was <code>:966</code>); <code>MMCA.ADC/infra/POST-CUTOVER-atldevcon-downgrade.md:103</code>
           and <code>MMCA.ADC/infra/DISASTER-RECOVERY.md:27</code> are unchanged.</li>
           </ol>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. The decision is unchanged: one sealed context class per engine,
+          one instance per database, four per-service <code>ADC_*</code> databases with PITR plus LTR as the only restore
+          path. The Decision bullet now names all four engine contexts and assigns the per-key cache to the
+          right factory; the <code>infra/main.bicep</code> anchors moved again. The 2026-10-06 and 2026-10-07 revisions
+          above keep the anchors they recorded.</p>
+          <ol>
+          <li>The per-engine context set in the Decision bullet now includes <code>PostgreSQLDbContext</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/PostgreSQLDbContext.cs:23</code>,
+          ADR-113) alongside <code>SQLServerDbContext.cs:15</code>, <code>SqliteDbContext.cs:12</code> and <code>CosmosDbContext.cs:15</code>,
+          all sealed over the abstract <code>ApplicationDbContext.cs:46</code>.</li>
+          <li>Once-per-key materialization belongs to the scoped <code>DbContextFactory</code>: its
+          <code>Dictionary&lt;DataSourceKey, ApplicationDbContext&gt;</code> at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:74</code>
+          is checked at <code>DbContextFactory.cs:103</code> before calling the singleton <code>PhysicalDbContextFactory</code>
+          (<code>PhysicalDbContextFactory.cs:19</code>), whose <code>Create</code> at <code>PhysicalDbContextFactory.cs:25-33</code> builds a
+          new context on every call.</li>
+          <li>The no-per-module-context rule now says no per-module <em>concrete</em> context class: every consumer
+          module declares an abstract <code>ModuleApplicationDbContext</code> that only lists its <code>DbSet</code>s (for example
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/DbContexts/ModuleApplicationDbContext.cs:22</code>,
+          <code>MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Infrastructure/Persistence/DbContexts/ModuleApplicationDbContext.cs:14</code>),
+          and none is subclassed at runtime. The rule points at <code>MMCA.Helpdesk/AGENTS.md:74</code>, which states it
+          in that form, instead of a convention name that has no source of its own.</li>
+          <li>Anchors re-verified against current source: the <code>AtlDevCon</code> archived-and-dropped note with the
+          2026-10-03 bacpac deletion at <code>MMCA.ADC/infra/main.bicep:1080</code> (deletion sentence at <code>:1085</code>;
+          was <code>:937</code>), the <code>serviceDatabaseLtr</code> policy at <code>MMCA.ADC/infra/main.bicep:1132</code> (weekly <code>P4W</code>,
+          monthly <code>P12M</code>, yearly <code>P1Y</code> at <code>:1137-1139</code>; was <code>:982</code>);
+          <code>MMCA.ADC/infra/POST-CUTOVER-atldevcon-downgrade.md:103</code> and <code>MMCA.ADC/infra/DISASTER-RECOVERY.md:27</code>
+          are unchanged.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -344,6 +383,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             </ul>
           </nav>
         </aside>

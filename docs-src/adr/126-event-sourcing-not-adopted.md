@@ -9,7 +9,7 @@ to revisit. The current-state persistence model recorded in [ADR-003](003-outbox
 mechanism. Revised 2026-10-01: citations re-anchored. Revised 2026-10-06: the ADR-075 history claim
 is scoped to opted-in entities, with retention purging only where the host runs the scheduler. Revised 2026-10-07: the rationale acknowledges ADC's append-only points ledger and why it
 is not event sourcing, and the Marten rejection separates framework PostgreSQL support (ADR-113)
-from production, where no deployment runs a PostgreSQL server.
+from production, where no deployment runs a PostgreSQL server. Revised 2026-10-21: anchors refreshed after Common and ADC source commits moved the outbox, inbox, provider and snapshot lines.
 
 ## Context
 Event sourcing keeps an append-only log of the facts that happened to an aggregate and treats that log
@@ -44,11 +44,11 @@ and the stored event identity
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:15`, the
 identity at `:40`), the table is mapped on every relational source
 (`.../DbContexts/ApplicationDbContext.cs:668`, and per service database in ADC at
-`MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Conference/Migrations/SQLServerDbContextModelSnapshot.cs:1590`),
+`MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Conference/Migrations/SQLServerDbContextModelSnapshot.cs:1596`),
 the processor drains it
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:56`),
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:58`),
 and the consume edge de-duplicates it
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Inbox/EfInboxStore.cs:41`). A
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Inbox/EfInboxStore.cs:43`). A
 processed outbox row is a delivered message; nothing reads it back and no code path rebuilds state
 from one.
 
@@ -104,7 +104,7 @@ statement anywhere that the combination was declined.
   ([ADR-113](113-postgresql-as-a-first-class-engine.md),
   `MMCA.Common/Directory.Packages.props:63`), and the provider ships in every consumer as a direct
   dependency of `MMCA.Common.Infrastructure`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj:47`), but no
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj:50`), but no
   production deployment runs a PostgreSQL server and no production entity routes to a
   non-SQL-Server engine ([ADR-018](018-polyglot-persistence.md)). So Marten would add no engine to the
   framework, but it would add a deployed PostgreSQL server for the adopting module's database
@@ -173,6 +173,19 @@ source commits on 2026-10-07 shifted the lines they cited.
    (`SQLServerDbContextModelSnapshot.cs:1590`). The earlier values `:453`, `:465`, `:667`, `:53`,
    `EfInboxStore.cs:38` and snapshot `:1589` (and the 2026-10-01 `:57`) are superseded by these;
    `EventType` (`OutboxMessage.cs:40`) and the save (`ApplicationDbContext.cs:194`) hold.
+
+## Revision (2026-10-21)
+Re-verified against current source. The decision (event sourcing not adopted), the rationale and the
+revisit trigger are unchanged; four body anchors moved after source commits shifted the lines they
+cited. The ADC `OutboxMessages` table still exists per service database, and the PostgreSQL provider
+is still a direct dependency of `MMCA.Common.Infrastructure`.
+1. Anchors re-verified against current source: ADC's `OutboxMessages` table mapping
+   (`SQLServerDbContextModelSnapshot.cs:1596`, previously `:1590`, which now holds the
+   `IX_OutboxMessages_Pending` index), `OutboxProcessor` class declaration
+   (`.../Outbox/Processing/OutboxProcessor.cs:58`, previously `:56`), `EfInboxStore` class declaration
+   (`.../Persistence/Inbox/EfInboxStore.cs:43`, previously `:41`), and the Npgsql provider reference
+   (`MMCA.Common.Infrastructure.csproj:50`, previously `:47`). `MMCA.Common/Directory.Packages.props:63`
+   holds.
 
 ## Related
 [ADR-003](003-outbox-dual-dispatch.md) (at-least-once delivery of domain events, the mechanism a

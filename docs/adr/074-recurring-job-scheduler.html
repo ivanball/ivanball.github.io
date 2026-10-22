@@ -243,7 +243,8 @@
           <p>Accepted (2026-08-13; revised 2026-08-14, 2026-08-18, 2026-08-31, 2026-10-01). Revised 2026-10-06: the
           smart-wait and cron-validation statements now match the runner&#39;s actual behavior. Revised 2026-10-07:
           the consumer-adoption statement now names every host that calls <code>AddScheduledJobs</code> and the combined
-          audit-trail migrations that create the table. The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release
+          audit-trail migrations that create the table. Revised 2026-10-21: anchors refreshed after the outbox
+          claim path and the <code>ConfigureScheduler</code> mapping moved in source. The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release
           and is opt-in: a host calls <code>AddScheduledJobs(configuration)</code> and sets <code>Scheduler:Enabled</code>. Until it does,
           the framework creates no table and starts no runner.</p>
           <h2 id="context">Context</h2>
@@ -266,11 +267,11 @@
           <h3 id="the-scheduler-is-the-outbox-claim-lease-pattern-applied-to-cron-not-hangfire-and-not-quartznet">The scheduler is the outbox claim-lease pattern applied to cron, not Hangfire and not Quartz.NET</h3>
           <p>A persistent job store plus a single-runner claim lease, reusing the exact idiom the outbox proved. The
           outbox claims a batch with an <code>ExecuteUpdateAsync</code> that sets <code>LockedUntil</code> and <code>LockToken</code> in one statement
-          (<code>.../Persistence/Outbox/Processing/OutboxProcessor.cs:357-361</code>, inside <code>ClaimEligibleAsync</code>, <code>:330</code>) over a shared
+          (<code>.../Persistence/Outbox/Processing/OutboxProcessor.cs:370-374</code>, inside <code>ClaimEligibleAsync</code>, <code>:343</code>) over a shared
           <code>FilterClaimable</code> predicate that admits only eligible, unprocessed rows whose <code>LockedUntil</code> is null or already
-          in the past (<code>:409-415</code>; a batch carrying an ordering key claims through <code>FilterUnblocked</code>, which composes it,
-          <code>:353-355</code>, <code>:429</code>), then re-reads the claimed
-          set by <code>LockToken</code> so a partial claim processes only its own rows (<code>:369-374</code>). A due job is claimed the same way, so two replicas can
+          in the past (<code>:422-428</code>; a batch carrying an ordering key claims through <code>FilterUnblocked</code>, which composes it,
+          <code>:366-368</code>, <code>:442</code>), then re-reads the claimed
+          set by <code>LockToken</code> so a partial claim processes only its own rows (<code>:382-390</code>). A due job is claimed the same way, so two replicas can
           never run the same occurrence, and a replica that dies mid-run releases its job when the lease expires.</p>
           <p>Hangfire would have brought its own schema, its own storage abstraction, a dashboard surface to authorize
           and host, and a licensing posture that varies by storage provider. Quartz.NET would have brought a large
@@ -296,7 +297,7 @@
           self-stamps nothing, it is never soft-deleted, and no global query filter reaches it. That falls out of the
           mapping rather than being asserted: the soft-delete filter is applied only to entity types assignable to
           <code>IAuditableEntity</code> (<code>.../Persistence/DbContexts/ApplicationDbContext.cs:457</code>, <code>:466</code>), and
-          <code>ConfigureScheduler</code> maps the table with no <code>HasQueryFilter</code> call of its own (<code>:803-839</code>). That is the
+          <code>ConfigureScheduler</code> maps the table with no <code>HasQueryFilter</code> call of its own (<code>:809-845</code>). That is the
           <code>OutboxMessage</code> precedent: infrastructure rows are not domain rows.</p>
           <p>The table lives in the <strong>Default</strong> source and only there. The outbox exists once per relational database
           because an outbox row must be written in the same transaction as the aggregate that produced it
@@ -474,6 +475,19 @@
           and <code>:805-841</code> anchors are stale, while their <code>ScheduledJobRunner.cs</code>, <code>SchedulerSettings.cs</code> and
           <code>ApplicationDbContext.cs:457</code>/<code>:466</code> anchors are current.</li>
           </ol>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. No decision, rationale, trade-off or adoption statement changed; the
+          claim lease, the partial-claim re-read, the soft-delete exclusion and the <code>ConfigureScheduler</code> mapping
+          behave as described, and the consumer-adoption host set is unchanged. Only anchors in the body moved.</p>
+          <ol>
+          <li>Anchors re-verified against current source: the outbox claim <code>ExecuteUpdateAsync</code>
+          (<code>OutboxProcessor.cs:370-374</code>, setting <code>LockedUntil</code> and <code>LockToken</code> at <code>:372</code>) inside
+          <code>ClaimEligibleAsync</code> (<code>:343</code>), <code>FilterClaimable</code> (<code>:422-428</code>), the keyed <code>FilterUnblocked</code> branch
+          (<code>:366-368</code>) composing it (<code>:442</code>), the partial-claim re-read by <code>LockToken</code> (<code>:382-390</code>), and
+          <code>ConfigureScheduler</code> (<code>ApplicationDbContext.cs:809-845</code>, <code>LastError</code> 2048-character cap at <code>:831</code>). The
+          soft-delete filter anchors (<code>ApplicationDbContext.cs:457</code>, <code>:466</code>) are current. The earlier revision
+          entries above are left as written.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="003-outbox-dual-dispatch.html">ADR-003</a> (the outbox whose claim-lease idiom and smart wait this reuses
           verbatim, and whose at-least-once posture it inherits along with the idempotency obligation on job bodies),
@@ -507,6 +521,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

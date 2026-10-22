@@ -1,7 +1,7 @@
 # ADR-033: Resource-Ownership Authorization (Row-Level + Action Filter)
 
 ## Status
-Accepted (2026-07-02, revised 2026-07-25, 2026-08-01, 2026-08-31, 2026-09-10). Revised 2026-10-01 (the fail-closed owner gate and the per-record ownership check are now framework code in `OwnershipHelper`; see Revision below). Revised 2026-10-06: the CSV export's fail-closed `AllowUnscopedExport` opt-in, which lets only the bypass role export an unscoped table, is now recorded in Adoption. Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
+Accepted (2026-07-02, revised 2026-07-25, 2026-08-01, 2026-08-31, 2026-09-10). Revised 2026-10-01 (the fail-closed owner gate and the per-record ownership check are now framework code in `OwnershipHelper`; see Revision below). Revised 2026-10-06: the CSV export's fail-closed `AllowUnscopedExport` opt-in, which lets only the bypass role export an unscoped table, is now recorded in Adoption. Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised 2026-10-21: the bypass check is `ICurrentUserService.IsInRole` over every role claim (v1.234.0), not a compare against the first role claim, and the bypass role is a required host-named argument with no `Admin` default.
 
 ## Context
 ADR-020 added a permission (capability) layer over RBAC: it answers "what may this **role** do",
@@ -25,8 +25,8 @@ the shipped resource-ownership axis that sits beside ADR-020, not inside it.
 
 ## Decision
 Provide a row/resource-level ownership axis in `MMCA.Common.API` (the `Authorization` folder), with two
-enforcement points keyed on the caller's owner claim (`customer_id` by default) and a configurable
-bypass role (`Admin` by default).
+enforcement points keyed on the caller's owner claim (`customer_id` by default) and a bypass role the
+host always names (the framework declares no default role).
 
 - **Single-resource action filter.** `OwnerOrAdminFilter`
   (`Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:31`) is a sealed
@@ -55,28 +55,35 @@ bypass role (`Admin` by default).
   `BookmarksController.cs:85`, `:106`).
 - **Collection ownership specification.** `OwnershipHelper`
   (`Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:11`) is a static helper.
-  `GetOwnershipSpecification<TSpec, TId>` returns `null` for the bypass role (`OwnershipHelper.cs:48`),
-  and otherwise reads the caller's id claim (`GetClaimValue<TId>(claimType)`, `OwnershipHelper.cs:51`)
-  and builds a `Specification` via the supplied factory (`OwnershipHelper.cs:52`); a convenience
-  overload defaults the claim to `"customer_id"` (`OwnershipHelper.cs:65`, `OwnershipHelper.cs:70`). The
+  `GetOwnershipSpecification<TSpec, TId>` (`OwnershipHelper.cs:41`) returns `null` for the bypass
+  role (`OwnershipHelper.cs:52-55`), and otherwise reads the caller's id claim
+  (`GetClaimValue<TId>(claimType)`, `OwnershipHelper.cs:57`) and builds a `Specification` via the
+  supplied factory, or returns `null` when the claim does not resolve (`OwnershipHelper.cs:58`); a
+  convenience overload defaults the claim to `"customer_id"` (`OwnershipHelper.cs:71`,
+  `OwnershipHelper.cs:76`). Both overloads take the bypass role as a required argument. The
   returned spec is a `Specification<TEntity, TId>` (`Source/Core/MMCA.Common.Domain/Specifications/Specification.cs:15`)
   whose `Criteria` expression (`Specification.cs:23`) the existing query pipeline (`IEntityQueryService`)
   translates to SQL, so a non-admin list query returns only the caller's rows. A `null` spec (bypass
   role) applies no filter.
 - **Framework gates for the ambiguous `null` and for one record.** The same helper ships
-  `RequireResolvableOwner<TId>` (`OwnershipHelper.cs:91-104`), which succeeds for the bypass role or a
-  parsable owner claim and otherwise returns `Error.Forbidden` (a 403, `OwnershipHelper.cs:174-175`),
-  and `ValidateOwnershipAsync<TId>` (`OwnershipHelper.cs:133-157`), the per-mutation check: the bypass
-  role passes without a lookup (`OwnershipHelper.cs:146`), a missing owner claim is refused with
-  `Error.Forbidden` before any lookup (`OwnershipHelper.cs:151-153`), and a caller who does not own the
-  record gets `Error.NotFound`, a 404 (`OwnershipHelper.cs:167-171`), supplied by a caller-provided
+  `RequireResolvableOwner<TId>` (`OwnershipHelper.cs:97-110`), which succeeds for the bypass role or a
+  parsable owner claim and otherwise returns `Error.Forbidden` (a 403, `OwnershipHelper.cs:107-109`,
+  built by the private `AccessDenied` at `OwnershipHelper.cs:180-181`), and
+  `ValidateOwnershipAsync<TId>` (`OwnershipHelper.cs:139-163`), the per-mutation check: the bypass
+  role passes without a lookup (`OwnershipHelper.cs:152-155`), a missing owner claim is refused with
+  `Error.Forbidden` before any lookup (`OwnershipHelper.cs:157-160`), and a caller who does not own the
+  record gets `Error.NotFound`, a 404, from the private `CheckOwnershipAsync`
+  (`OwnershipHelper.cs:162`, `:165-178`, the `NotFound` at `:175-177`), supplied by a caller-provided
   existence predicate.
 - **The bypass role is the single override on both.** `OwnershipHelper.IsAdmin`
-  (`Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:18`) compares
-  `ICurrentUserService.Role` (`Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Auth/ICurrentUserService.cs:22`)
-  to its `bypassRole` argument (`"Admin"` by default) case-insensitively (`OwnershipHelper.cs:21`). Both
-  enforcement points consult it, so a caller in the bypass role sees and touches any resource through
-  either path.
+  (`Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:24`) returns
+  `ICurrentUserService.IsInRole(bypassRole)` (`OwnershipHelper.cs:27`), which checks every role claim
+  the caller holds case-insensitively
+  (`Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Auth/ICurrentUserService.cs:88-89`),
+  not only `ICurrentUserService.Role`, the first role claim (`ICurrentUserService.cs:22`). The
+  `bypassRole` argument is required and has no default: the host names its own role. Both
+  enforcement points consult it, so a caller holding the bypass role among any of its roles sees and
+  touches any resource through either path.
 - **The filter denies by default.** When the owner parameter cannot be resolved (absent, non-int, or
   carried inside a bound model whose `ToString()` does not parse), the request is rejected. The
   filter originally fell through to the action in that case, which meant it silently stopped
@@ -130,26 +137,26 @@ opts in unconditionally (`CustomersController.cs:48`), because its export is alr
 mutating routes; it runs an explicit per-mutation ownership check, a private `ValidateOwnershipAsync`
 (`OrdersController.cs:386-402`) that delegates to `OwnershipHelper.ValidateOwnershipAsync`
 (`OrdersController.cs:390`), which lets the bypass role through via `IsAdmin`
-(`OwnershipHelper.cs:146`). The only ownership logic the controller supplies is the existence predicate
+(`OwnershipHelper.cs:152-155`). The only ownership logic the controller supplies is the existence predicate
 (`OrdersController.cs:394-396`). Its two denial branches return different statuses on purpose:
 
-- **Missing owner claim** (the caller carries no `customer_id`, checked at `OwnershipHelper.cs:151-153`):
-  `Error.Forbidden`, a 403 (`OwnershipHelper.cs:174-175`). Nothing was looked up, so there is no
+- **Missing owner claim** (the caller carries no `customer_id`, checked at `OwnershipHelper.cs:157-160`):
+  `Error.Forbidden`, a 403 (`OwnershipHelper.cs:180-181`). Nothing was looked up, so there is no
   resource whose existence a 403 could leak; this matches the filter's own missing-claim `ForbidResult`.
 - **Owner mismatch** (the claim is present but the order is someone else's, the existence check at
   `OrdersController.cs:394-396`): `Error.NotFound`, a 404 rather than a 403
-  (`OwnershipHelper.cs:167-171`), so the response does not reveal that another customer's order exists.
+  (`OwnershipHelper.cs:175-177`), so the response does not reveal that another customer's order exists.
 
 **A `null` specification means two different things, so the collection reads gate on it.** Store's two
 row-scoped controllers each carry a private `RequireResolvableOwner()` wrapper
 (`MMCA.Store/.../Sales.API/Controllers/ShoppingCartsController.cs:79-84`, `OrdersController.cs:80-85`)
-that delegates to the shared `OwnershipHelper.RequireResolvableOwner` (`OwnershipHelper.cs:91-104`) and
+that delegates to the shared `OwnershipHelper.RequireResolvableOwner` (`OwnershipHelper.cs:97-110`) and
 maps a failure through `HandleFailure`.
 `OwnershipHelper.GetOwnershipSpecification` returns `null` both for an admin (scoping deliberately
 skipped) and for a non-admin whose `customer_id` claim cannot be resolved, and only the first may query
 unscoped. The gate lets the bypass role and any caller with a resolvable claim through, and answers
 everyone else with `Error.Forbidden`, a 403 through the same `Result`/HTTP edge as the rest
-(`OwnershipHelper.cs:101-103`, `:174-175`). It runs on every collection read and
+(`OwnershipHelper.cs:107-109`, `:180-181`). It runs on every collection read and
 on the CSV export (`ShoppingCartsController.cs:100`, `:120`, `:182`; `OrdersController.cs:95`, `:129`,
 `:166`, `:229`). This is the concrete mitigation for the "claim-based ownership trusts the token"
 trade-off below: claim-less Customer tokens are issuable in practice, because customer linking on
@@ -225,7 +232,7 @@ value before the filter runs.
   which for a non-admin returns `null` and therefore no scoping, so callers must not treat a missing
   claim as "admin"). Store's two row-scoped controllers close that with the `RequireResolvableOwner()`
   gate recorded in Adoption, but the helper's return value is still ambiguous by itself
-  (`OwnershipHelper.cs:46-52`), so every new collection read still opts in to the gate rather than
+  (`OwnershipHelper.cs:52-58`), so every new collection read still opts in to the gate rather than
   inheriting it; the opt-in is one call to the shared `OwnershipHelper.RequireResolvableOwner`, not a
   copy kept per controller.
 - **The filter assumes the owner parameter equals the owning id.** `OwnerOrAdminFilter` compares its
@@ -398,3 +405,29 @@ specification, the fail-closed `RequireResolvableOwner<TId>` gate and the per-re
    `MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:35`. The live
    `OwnershipHelper` anchors (`:18`, `:21`, `:46-52`, `:65`, `:70`, `:91-104`, `:133-157`,
    `:167-171`, `:174-175`) are unchanged.
+
+## Revision (2026-10-21)
+Re-verified against current source. The filter, the ownership specification, the fail-closed
+`RequireResolvableOwner<TId>` gate, the per-record `ValidateOwnershipAsync<TId>` check and their
+403/404 split read as recorded. Who counts as the bypass role moved, so this is not an anchor-only
+refresh, and Revision 2026-10-07's "enforcement behavior is unchanged" no longer holds for `IsAdmin`.
+
+1. **`IsAdmin` checks every role claim.** `OwnershipHelper.IsAdmin` (`OwnershipHelper.cs:24`) returns
+   `currentUserService.IsInRole(bypassRole)` (`OwnershipHelper.cs:27`), which matches any role claim
+   case-insensitively (`ICurrentUserService.cs:88-89`). It no longer compares `ICurrentUserService.Role`,
+   the first role claim only (`ICurrentUserService.cs:22`), so a caller holding the bypass role as a
+   second role is now privileged on both enforcement points, agreeing with an inline `IsInRole` check.
+   Shipped in MMCA.Common v1.234.0 (`MMCA.Common/CHANGELOG.md:324`, under the header at `:313`).
+2. **The bypass role has no `Admin` default.** `IsAdmin` and both `GetOwnershipSpecification`
+   overloads take `bypassRole` as a required argument (`OwnershipHelper.cs:24`, `:45`, `:74`); the
+   `= "Admin"` default was removed in v1.201.0 (`MMCA.Common/CHANGELOG.md:1439-1441`, under the header
+   at `:1366`). Decision now says the host always names the role.
+3. Anchors re-verified against current source: `GetOwnershipSpecification<TSpec, TId>`
+   (`OwnershipHelper.cs:41`, bypass `:52-55`, claim read `:57`, factory or `null` `:58`, the
+   trade-off's ambiguity range `:52-58`), the convenience overload (`:71`, `customer_id` delegation
+   `:76`), `RequireResolvableOwner<TId>` (`:97-110`, success-or-403 `:107-109`),
+   `ValidateOwnershipAsync<TId>` (`:139-163`, bypass `:152-155`, missing claim `:157-160`, delegation
+   `:162` to the private `CheckOwnershipAsync` at `:165-178` with its `Error.NotFound` at `:175-177`),
+   and the private `AccessDenied` that builds `Error.Forbidden` (`:180-181`). The v1.216.0 changelog
+   entry recorded in Revisions 2026-10-01, 2026-10-06 and 2026-10-07 is now
+   `MMCA.Common/CHANGELOG.md:711`, under the `[1.216.0]` header at `:694`.

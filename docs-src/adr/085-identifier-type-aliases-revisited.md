@@ -12,7 +12,9 @@ aliases, not one; see the Revision (2026-09-19) at the end). Revised 2026-10-01 
 migration-surface census was re-measured and the wrapper-capability bullet was corrected on the
 object-mapper file; see the Revision (2026-10-01) at the end). Revised 2026-10-06: the
 migration-surface census was re-measured to 3,945 lines across 1,227 files (see the Revision
-(2026-10-06) at the end).
+(2026-10-06) at the end). Revised 2026-10-21: the alias count rose to 49 (47 `int`) with ADC
+Engagement's `ErasedUserIdentifierType`, and the migration-surface census was re-measured to 4,069
+lines across 1,250 files (see the Revision (2026-10-21) at the end).
 **Revisits [ADR-048](048-primitive-identifier-type-aliases.md)**, which stays
 Accepted and unchanged in substance: the aliases remain the identifier model. What changes is the
 shape of the deferral. ADR-048 left the wrapper-struct alternative "considered and left unbuilt" with
@@ -39,23 +41,23 @@ at once (specification-first reads, keyset pagination, projection pushdown; see
 going to ride along with unrelated churn, that was the wave to fold it into. It did not, and this
 record says why.
 
-Three facts frame the decision, all counted in the four repositories' `Source` trees on 2026-09-19:
+Three facts frame the decision, all counted in the four repositories' `Source` trees on 2026-10-21:
 
-- **48 aliases live in 10 files across the four repos.** MMCA.Common declares 3 (`UserIdentifierType`
+- **49 aliases live in 10 files across the four repos.** MMCA.Common declares 3 (`UserIdentifierType`
   in `Source/Core/MMCA.Common.Domain/GlobalUsings.IdentifierType.cs:1` plus the two push-notification
   aliases in `Source/Core/MMCA.Common.Shared/GlobalUsings.NotificationIdentifierType.cs:1-2`);
-  MMCA.ADC declares 32 across Conference (19, alias file `:7-25`), Engagement (10, `:4-13`),
+  MMCA.ADC declares 33 across Conference (19, alias file `:7-25`), Engagement (11, `:4-14`),
   Identity (1, `:2`) and Notification (2, `:1-2`); MMCA.Store declares 11 across Catalog (6,
   `MMCA.Store.Catalog.GlobalUsings.IdentifierType.cs:3-8`), Sales (3, `:5-7`) and Identity (2, `:3-4`);
   MMCA.Helpdesk declares 2 in Tickets
   (`MMCA.Helpdesk.Tickets.GlobalUsings.IdentifierType.cs:6,8`).
-- **46 of the 48 resolve to `int`.** Both exceptions are `System.Guid` and both sit in ADC's
+- **47 of the 49 resolve to `int`.** Both exceptions are `System.Guid` and both sit in ADC's
   Conference module
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs`):
   `SpeakerIdentifierType` (`:23`), which Sessionize forces, and `SessionAssetIdentifierType` (`:17`),
   whose identifier is a path segment of a public blob name and therefore has to be unguessable rather
   than sequential (`:4-5`). So for every practical purpose the whole workspace has **one** identifier
-  CLR type, and the compiler sees 46 synonyms for it.
+  CLR type, and the compiler sees 47 synonyms for it.
 - **The wrapper struct exists as a framework capability and nothing uses it.** The generator packages
   are still absent (a sweep of the four repositories for `Vogen` finds no package reference, no
   project file entry, no using), but the wrapper primitives themselves ship in MMCA.Common:
@@ -69,7 +71,7 @@ Three facts frame the decision, all counted in the four repositories' `Source` t
   nullable twin `:56`) and is applied from `ApplicationDbContext.ConfigureConventions`
   (`Persistence/DbContexts/ApplicationDbContext.cs:402-409`). All of it is wired by one DI call,
   `AddStronglyTypedIds`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:376`), and shape-checked
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:382`), and shape-checked
   by a fitness rule, `StronglyTypedIdsAreReadonlyRecordStructs`
   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Domain/ArchitectureRules.StronglyTypedIds.cs:34`).
   That capability is [ADR-115](115-strongly-typed-identifiers-opt-in.md), and it is opt-in: no
@@ -115,14 +117,14 @@ switching.
 That radius is measurable, and the measurement only means something with its counting rule stated.
 An **alias token** here is any `*IdentifierType` token other than the framework's own generic
 parameter `TIdentifierType`, counted in the `.cs` and `.razor` files of the four `Source` trees on
-2026-10-06, with tests, `bin` and `obj` excluded, one hit per source line that carries at least one
-such token. On that rule the aliases appear on **3,945 lines across 1,227 files**: 319 in 124 files in
-MMCA.Common, 2,318 in 702 files in MMCA.ADC, 1,244 in 370 files in MMCA.Store, and 64 in 31 files in
-MMCA.Helpdesk. (Counting every token rather than every line raises the total to 4,180 and leaves the
-file count unchanged.) Excluding `TIdentifierType` is what makes the framework figure honest: 759 of
-MMCA.Common's 1,078 `IdentifierType` lines carry only that generic parameter, which a wrapper
+2026-10-21, with tests, `bin` and `obj` excluded, one hit per source line that carries at least one
+such token. On that rule the aliases appear on **4,069 lines across 1,250 files**: 343 in 124 files in
+MMCA.Common, 2,430 in 727 files in MMCA.ADC, 1,232 in 368 files in MMCA.Store, and 64 in 31 files in
+MMCA.Helpdesk. (Counting every token rather than every line raises the total and leaves the file
+count unchanged.) Excluding `TIdentifierType` is what makes the framework figure honest: 762 of
+MMCA.Common's 1,115 `IdentifierType` lines carry only that generic parameter, which a wrapper
 migration re-satisfies with a new type argument rather than rewrites call
-site by call site. Every one of the 3,945 is a signature, a property, a generic argument, or a DTO
+site by call site. Every one of the 4,069 is a signature, a property, a generic argument, or a DTO
 field that a wrapper migration would have to either change or prove it can leave alone. Because
 MMCA.Common is a published package family released in lockstep
 ([ADR-016](016-lockstep-versioning-masstransit-pin.md)), the framework share of that count
@@ -158,7 +160,7 @@ Absent all three, this stays a recorded, priced deferral rather than an open que
 - **The cost is paid once and the benefit accrues per defect avoided, and the defect count is
   currently zero.** No production incident in any of the four repos has been traced to a swapped
   identifier. That is not proof of safety, and this record does not claim it is; it is the only
-  evidence available, and it does not support a 1,227-file change.
+  evidence available, and it does not support a 1,250-file change.
 - **A partial migration is worse than either endpoint.** Wrapping some identifiers and not others
   produces a codebase where the absence of a compiler error means nothing, because the reader cannot
   tell whether a given call site is protected or merely un-migrated. The change is therefore
@@ -188,7 +190,7 @@ Absent all three, this stays a recorded, priced deferral rather than an open que
   identifier assignment, so with no wrapper declared it matches nothing. Trigger 1 therefore depends on a
   production defect being *traced* to a transposition, and a wrong-user check-in is exactly the kind
   of defect that gets written off as a scanning mistake instead.
-- **The migration price rises with the codebase.** The 3,945 lines counted here are a snapshot
+- **The migration price rises with the codebase.** The 4,069 lines counted here are a snapshot
   and the number only grows. Deferring on cost grounds means the cost argument gets stronger every
   release, which is the classic shape of a decision that is never revisited on its merits.
 - **Trigger 3 is not measured.** No count of cross-module scalar identifier references is maintained,
@@ -336,3 +338,28 @@ No decision, trigger, rationale or trade-off changed.
 - **`AddStronglyTypedIds` now declares at `DependencyInjection.cs:376`**; the `:366` recorded on
   2026-10-01 falls inside its XML doc block. The Context bullet carries the current anchor.
 - Line anchors in the live sections were re-verified against current source.
+
+## Revision (2026-10-21)
+Re-verified against current source. No decision, trigger, rationale or trade-off changed; the alias
+count and the migration-surface census moved, and two Context anchors were re-pointed.
+
+1. **The alias count is 49 across the same 10 files, 47 of them `int`.** ADC's Engagement module
+   gained `ErasedUserIdentifierType = int`
+   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/MMCA.ADC.Engagement.GlobalUsings.IdentifierType.cs:6`),
+   taking Engagement to eleven (`:4-14`) and ADC to thirty-three. Common (3), Store (11) and
+   Helpdesk (2) are unmoved, and the two `Guid` aliases still sit at
+   `MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:17` and `:23`. The new alias is the
+   database-generated key of Engagement's own `ErasedUser` aggregate
+   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Domain/ErasedUsers/ErasedUser.cs:18-19`),
+   not a cross-module reference. The cross-module scalar it adds is `ErasedUser.UserId`, typed with
+   the existing `UserIdentifierType` (`ErasedUser.cs:22`): one more reference of the kind trigger 3
+   watches, but trigger 3 stays unmeasured and none of the three triggers is recorded as fired.
+2. **The migration-surface census is re-measured on the same rule**: **4,069 lines across 1,250
+   files** (Common 343/124, ADC 2,430/727, Store 1,232/368, Helpdesk 64/31), and `MMCA.Common/Source`
+   now carries 1,115 `IdentifierType` lines, 762 of them the generic parameter alone (the other 10
+   non-alias lines are the `IdentifierTypes` registry members, not identifier signatures). Store's
+   share shrank slightly while ADC's grew. The token total was not re-measured in this pass, so the
+   Decision states the line count only. The Decision, Rationale and Trade-offs figures follow it.
+3. Anchors re-verified against current source: `AddStronglyTypedIds` now declares at
+   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:382` (the Context bullet
+   carries it); the Engagement alias range is `:4-14`.

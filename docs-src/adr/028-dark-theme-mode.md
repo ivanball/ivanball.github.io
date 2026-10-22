@@ -4,6 +4,7 @@
 Accepted (2026-06-27; revised 2026-07-15; revised 2026-08-31; revised 2026-10-01).
 Revised 2026-10-06: the first-paint flash is scoped to web heads and the MAUI first-frame mode source is recorded.
 Revised 2026-10-19: the MAUI host pre-paint script ships from MMCA.Common.UI (`theme-prepaint.js`, v1.246.0) and both MAUI heads load it.
+Revised 2026-10-21: the Android status-bar fallback is recorded as part of the shared `theme-prepaint.js` (Store's host page has no inline script), the per-consumer `MauiHostShellTests` theme host-page fitness tests are credited at their actual scope (only Store's checks the pre-paint script), and the `BrandColorTokenTests` coverage claim is stated as what it checks.
 
 ## Context
 `MMCATheme` (`MMCA.Common.UI/Theme/MMCATheme.cs`) has always defined a complete, brand-tuned `PaletteDark`
@@ -31,7 +32,7 @@ intended end state but is not yet wired for theme on web heads (see Decision 3).
 
 2. **A `ThemeService` (`MMCA.Common.UI`) owns the preference**, registered in `AddUIShared`. It holds the
    current mode, reads/writes a **non-HttpOnly cookie + localStorage**, and raises a change event that
-   `MmcaThemeProviders` (`MmcaThemeProviders.razor:52`) and every `ThemeToggle` (`ThemeToggle.razor:16`)
+   `MmcaThemeProviders` (`MmcaThemeProviders.razor:56`) and every `ThemeToggle` (`ThemeToggle.razor:16`)
    subscribe to, so the shared providers component and the app-bar toggle stay in sync; the layout
    itself subscribes to nothing. First-visit default is the OS `prefers-color-scheme`, read
    via a small JS interop call (`theme.js` `systemPrefersDark()` ->
@@ -58,9 +59,24 @@ intended end state but is not yet wired for theme on web heads (see Decision 3).
    `MmcaThemeProviders.razor:77-99`); every selector requires `data-mmca-theme`, so web heads, which
    do not load the script, are untouched. Both MAUI heads load it as the first script in `<head>`
    (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/wwwroot/index.html:8`,
-   `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/wwwroot/index.html:15`). Store keeps one inline script
-   of its own beside it, the Android status-bar height fallback (`index.html:16-23`), which is not a
-   theme concern.
+   `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/wwwroot/index.html:13`), and neither head carries an
+   inline script. The same file also carries a second, non-theme block: the Android status-bar
+   height fallback that turns the `MmcaStatusBar/<px>` user-agent token into
+   `--mmca-status-bar-fallback` (`theme-prepaint.js:45-56`). Each head carries a repo-local fitness
+   test, `MauiHostShellTests.HostPage_DoesNotPaintALightBackgroundBeforeTheThemeApplies`, that fails
+   when the host page would paint the default light surface before the theme applies, but only
+   Store's knows about the pre-paint script. Store's
+   (`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Ui/MauiHostShellTests.cs:21-49`)
+   accepts any one of three routes (`:47`): a transparent `html`/`body`, a
+   `prefers-color-scheme: dark` aware one, or the pre-paint seed, which holds when the script runs
+   ahead of every stylesheet, Common's `app.css` is linked, and no host-local `html`/`body` rule
+   paints a background outside a `data-mmca-theme` selector (`:40-45`). Store's host `app.css` has
+   no `html`/`body` rule, so the seed is the route in use there. ADC's
+   (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Ui/MauiHostShellTests.cs:42-58`)
+   accepts only the first two routes (`:56`) and does not check the script: ADC's host `app.css`
+   keeps a `prefers-color-scheme` aware `html`/`body` fallback surface
+   (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/wwwroot/app.css:26-36`), so the test passes through that
+   rule and removing `theme-prepaint.js` from ADC's `index.html` would not fail it.
 
 4. **The toggle ships in the shared `MainLayout`**, next to the i18n culture switcher, in the app-bar
    `appbar-icon-actions` slot, so every consumer gets both controls without per-host wiring.
@@ -82,8 +98,18 @@ intended end state but is not yet wired for theme on web heads (see Decision 3).
 - **Reusing the i18n cookie/profile machinery** means one persistence model for both user preferences,
   instead of two subtly different ones. Theme and locale are the same shape of problem, so the no-flash SSR
   bootstrap built for locale is the template theme will follow when it is wired.
-- **The palette already existed**, so the cost is wiring + persistence, not design, and `BrandColorTokenTests`
-  already guards the C# to CSS token sync, so the dark surfaces stay on-brand.
+- **The palette already existed**, so the cost is wiring + persistence, not design. `BrandColorTokenTests`
+  guards the C# to CSS sync of the five `Primary*`/`Secondary*` brand tokens
+  (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Theme/BrandColorTokenTests.cs:34-50`), fails on
+  a raw `Primary*`/`Secondary*` hex in any MMCA.Common.UI stylesheet outside an `app.css` token
+  definition (`:52-92`), and pins the theme palettes to `BrandColors` on the C# side: the light
+  primary and the secondary family, including `PaletteDark.Secondary` (`:94-110`), and the dark
+  palette's background and primary (`:112-119`). The surface colors are restated by hand in two
+  places no test compares to `BrandColors.LightBackground`/`DarkBackground` (`BrandColors.cs:66`,
+  `:136`): the pre-paint tokens `--mmca-prepaint-background-light/dark`
+  (`MMCA.Common.UI/wwwroot/app.css:96-97`) and the `#FAFBFC`/`#1A2027` fallbacks in ADC's host
+  `app.css` (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/wwwroot/app.css:28`, `:34`), so either copy can
+  drift unnoticed.
 - **Defaulting to the OS preference** respects the user's system setting on first visit while letting an
   explicit choice win and follow them across devices.
 
@@ -131,9 +157,37 @@ and the `OnChange` subscription are re-cited at `MmcaThemeProviders.razor:34`, `
 - The `MmcaThemeProviders` read of `IInitialThemeModeSource` is re-cited at `MmcaThemeProviders.razor:50`
   (was `:47`); the registration at `MMCA.Common.UI.Maui/DependencyInjection.cs:68` is unchanged.
 
+## Revision (2026-10-21)
+Re-verified against current source. The binding, the `ThemeService` preference model, the MAUI
+first-frame source and the web-head flash scope are unchanged; what moved is the Store host page,
+which no longer carries any inline script, and the fitness-test coverage of the theme host wiring.
+1. Decision 3: Store's Android status-bar fallback is no longer an inline script in its host page;
+   it ships in Common's `theme-prepaint.js:45-56` beside the theme block, and Store's `index.html`
+   loads only external scripts (`:13`, `:27-29`). The 2026-10-19 note that Store keeps its
+   status-bar fallback inline no longer holds.
+2. Decision 3 and Related: each consumer guards its theme host page with a repo-local
+   `MauiHostShellTests` fitness test, superseding the 2026-10-06 statement that no fitness test
+   asserts theme wiring. Only Store's (`MMCA.Store.Architecture.Tests/Ui/MauiHostShellTests.cs:21-49`)
+   recognizes the pre-paint script, as one of three accepted routes (`:40-47`); ADC's
+   (`MMCA.ADC.Architecture.Tests/Ui/MauiHostShellTests.cs:42-58`) passes on its host `app.css`
+   `prefers-color-scheme` fallback (`MMCA.ADC.UI/wwwroot/app.css:26-36`) and does not check the
+   script. The shared `MMCA.Common.Testing.Architecture` package still has no theme base.
+3. Rationale: `BrandColorTokenTests` is now described at its actual scope: the five
+   `Primary*`/`Secondary*` C# to CSS tokens (`BrandColorTokenTests.cs:34-50`), the raw brand-hex
+   scan over the MMCA.Common.UI stylesheets (`:52-92`), and the C#-side palette checks
+   (`:94-119`). The surface colors restated by hand in the pre-paint tokens (`app.css:96-97`) and
+   in ADC's host `app.css` (`:28`, `:34`) are not compared to `BrandColors.cs:66` and `:136` by
+   any test.
+4. Anchors re-verified against current source: `MmcaThemeProviders.razor:56` (`OnChange`,
+   superseding `:52`), Store `index.html:13` (superseding `:15`); `MmcaThemeProviders.razor:14`,
+   `:36`, `:38`, `:50`, `:77-99`, ADC `index.html:8`, `app.css:100-126` and
+   `theme-prepaint.js:14-43` unchanged.
+
 ## Related
 [ADR-027](027-multi-locale-i18n.md) (shares the cookie source-of-truth and the `User` preference migration,
 and is the model for the theme no-flash SSR bootstrap that is not yet wired),
 [ADR-022](022-browser-session-cookie-auth.md) (the SSR cookie-read pattern),
-[ADR-015](015-architecture-fitness-functions.md) (the fitness-function framework; no theme host-wiring
-assertion exists in it today).
+[ADR-015](015-architecture-fitness-functions.md) (the fitness-function framework; the shared
+`MMCA.Common.Testing.Architecture` package carries no theme base, and the theme host-page assertion
+lives in each consumer's own `MauiHostShellTests`, of which only Store's checks the pre-paint script,
+see Decision 3).

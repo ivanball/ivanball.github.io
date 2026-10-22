@@ -7,6 +7,8 @@ credentials and enabling the `NativePush` configuration section. Revised 2026-10
 ships credentialed FCM/APNs token providers and token-rotation re-registration; see Revision below).
 Revised 2026-10-06: the device DELETE route is `/Notifications/Devices/{installationId}`.
 Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
+Revised 2026-10-21: anchors refreshed after the releases that moved the device controller, the
+registration service and the registrar.
 
 ## Context
 ADR-024 established two notification channels: a durable per-user `UserNotification` inbox (the
@@ -40,7 +42,7 @@ may not exist when the code ships.
   audit status (`Sent`/`Failed`) stays owned by the SignalR leg: the inbox remains the source
   of truth, and a hub outage must not fail the command or the other channels.
 - **`DevicesController` (PUT `/Notifications/Devices`, DELETE `/Notifications/Devices/{installationId}`,
-  `DevicesController.cs:22,31,55`)** ships in `MMCA.Common.API` via
+  `DevicesController.cs:22,35,60`)** ships in `MMCA.Common.API` via
   the existing `AddNotificationControllers` application part, `[Authorize]` for any signed-in
   user and feature-gated with the same `Notification.PushNotifications` flag as the rest of the
   pipeline. Ownership is stamped server-side from the current user; installation ids are
@@ -52,7 +54,7 @@ may not exist when the code ships.
   call is authenticated) and `IPushDeviceTokenProvider` (the platform token extension point). UI.Maui
   ships `MauiPushRegistrationService` (stable installation id in `IDevicePreferences`, sync
   over the named API client, with a `SemaphoreSlim` serializing registration passes,
-  `MauiPushRegistrationService.cs:24,41`). The token provider defaults to
+  `MauiPushRegistrationService.cs:27,44`). The token provider defaults to
   `NullPushDeviceTokenProvider` (TryAdd, `MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:62`);
   the opt-in `AddMauiPushDeviceTokenProvider()` (`MMCA.Common.UI.Maui/DependencyInjection.cs:124-132`)
   replaces it with `FcmPushDeviceTokenProvider` on Android (gated on the `Push:Fcm` section,
@@ -77,7 +79,7 @@ may not exist when the code ships.
   telemetry is the observability surface; the inbox remains the recovery path.
 - A delete verifies ownership before it acts: the registrar reads the installation and checks
   the `user:{id}` tag `UpsertAsync` stamped on it
-  (`AzureNotificationHubDeviceRegistrar.cs:68-74`), so an id belonging to someone else deletes
+  (`AzureNotificationHubDeviceRegistrar.cs:84-92`), so an id belonging to someone else deletes
   nothing. That costs an extra hub round trip per delete, and the response cannot tell a caller
   which case it hit: an unknown id and a foreign one both answer success, deliberately, so the
   endpoint is not an existence oracle for other users' installation ids.
@@ -125,3 +127,18 @@ both `LogoutAsync` and `RevokeAllSessionsAsync`. Only one anchor moved.
 1. Anchors re-verified against current source: the unregister calls stay at `AuthUIService.cs:90,143`
    (each ahead of `SignOutLocallyAsync` at `:101` and `:144`), and `UnregisterPushAsync` is now defined
    at `AuthUIService.cs:361`.
+
+## Revision (2026-10-21)
+Re-verified against current source. The decision is unchanged: Notification Hubs, `user:{id}` tags,
+the Null-by-default sender and registrar, the owner-scoped idempotent DELETE, and the unregister leg
+running before the local sign-out. Only anchors in the live sections moved.
+
+1. Anchors re-verified against current source: `DevicesController` routes are now
+   `DevicesController.cs:22,35,60` (`[Route]` at `:22`, `[HttpPut]` at `:35`,
+   `[HttpDelete("{installationId}")]` at `:60`); the registration `SemaphoreSlim` and its `WaitAsync`
+   are `MauiPushRegistrationService.cs:27,44`; and the delete ownership check (read the installation,
+   check the `user:{id}` tag, then delete) is `AzureNotificationHubDeviceRegistrar.cs:84-92`, with the
+   unknown-id success path at `:95-99`. `AddMauiPushDeviceTokenProvider()` stays at
+   `MMCA.Common.UI.Maui/DependencyInjection.cs:124-132`, the unregister calls at `AuthUIService.cs:90,143`
+   (defined at `:361`), and the handler's native leg and at-least-once remarks at
+   `SendPushNotificationHandler.cs:141-154` and `:21-30`.

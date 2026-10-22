@@ -259,11 +259,12 @@
           <code>AddEntityCrud</code> aggregate, <code>Partner</code>. Revised 2026-10-01: the generic update gets the transactional,
           permission and timeout steps only when a derived command opts in. Revised 2026-10-06: the payment
           override now runs on the shared mutate workflow with its provider call inside <code>MutateAsync</code>, so the
-          generic-path boundary is the generic update path, not the presence of a provider call.</p>
+          generic-path boundary is the generic update path, not the presence of a provider call. Revised
+          2026-10-21: anchors refreshed after the controller base and the consumer DI registrations shifted.</p>
           <h2 id="context">Context</h2>
           <p>ADR-034 records the read side of the generic resource layer and stops one verb short. Its
           <code>AggregateRootEntityControllerBase</code> ships <code>[HttpPost]</code> create and <code>[HttpDelete(&quot;{id}&quot;)]</code>
-          (<code>Source/Presentation/MMCA.Common.API/Controllers/AggregateRootEntityControllerBase.cs:59</code>, <code>:85</code>),
+          (<code>Source/Presentation/MMCA.Common.API/Controllers/AggregateRootEntityControllerBase.cs:75</code>, <code>:107</code>),
           and the framework already carried a generic delete command and handler. Update was the verb every
           aggregate still hand-wrote.</p>
           <p>That gap is small for an application with four aggregates and expensive for the shape this release
@@ -425,13 +426,13 @@
           <li><strong>Nothing in the framework opts a consumer in: every registration is a line the module writes.</strong>
           Adoption is per aggregate and partial. ADC&#39;s Conference module registers it for four aggregates,
           <code>Category</code>, <code>Activity</code>, <code>Sponsor</code> and <code>Partner</code>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:149-151</code>,
-          and <code>Partner</code> at <code>:152</code>),
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:155-157</code>,
+          and <code>Partner</code> at <code>:158</code>),
           Store&#39;s Catalog for <code>Product</code> (one call per field-scoped update request) and <code>Category</code>
           (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/DependencyInjection.cs:101-104</code>,
           <code>:105</code>, <code>:112</code>),
           and Store&#39;s Identity for <code>Customer</code>
-          (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/DependencyInjection.cs:78-80</code>),
+          (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/DependencyInjection.cs:84-86</code>),
           each call placed after the convention scan so <code>TryAdd</code> leaves the hand-written handlers those
           modules keep (the create verbs, Catalog&#39;s <code>DeleteCategoryHandler</code> and <code>DeleteProductHandler</code>, and
           <code>CategoryAssignParentUpdateHandler</code>, a subclass of <code>UpdateEntityHandler</code>, at
@@ -662,6 +663,21 @@
           <li>Anchors in the current-state sections (Context, Decision 3, Rationale) were re-verified against
           current source and moved where the code had shifted.</li>
           </ul>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. No decision, behavior or adoption changed: the same four ADC
+          Conference aggregates, the same Store Catalog and Identity registrations, and the same create and
+          delete actions on the four-parameter controller base. Only line positions moved. Anchors inside the
+          2026-08-30, 2026-10-01 and 2026-10-06 Revisions are left as recorded.</p>
+          <ol>
+          <li>Anchors re-verified against current source: the base controller&#39;s <code>[HttpPost]</code> and
+          <code>[HttpDelete(&quot;{id}&quot;)]</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AggregateRootEntityControllerBase.cs:75</code>,
+          <code>:107</code>); ADC Conference <code>AddEntityCrud</code> for <code>Category</code>, <code>Activity</code> and <code>Sponsor</code>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:155-157</code>)
+          and <code>Partner</code> (<code>:158</code>), and <code>AddEntityUpdate&lt;UpdateSpeakerCommand, ...&gt;</code> (<code>:167</code>); Store Identity
+          <code>AddEntityCrud</code> for <code>Customer</code>
+          (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/DependencyInjection.cs:84-86</code>).
+          The Store Catalog anchors (<code>:101-104</code>, <code>:105</code>, <code>:112</code>) are unchanged.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -681,6 +697,7 @@
             <li><a href="#revision-2026-08-30-the-five-surfaces-that-complete-the-write-side">Revision (2026-08-30): the five surfaces that complete the write side</a></li>
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             </ul>
           </nav>
         </aside>

@@ -240,7 +240,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-106-c-extension-members-as-the-public-di-registration-surface">ADR-106: C# Extension Members as the Public DI Registration Surface</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-09-01; counts re-measured 2026-10-01). Revised 2026-10-06: counts re-measured against current source, and ADC&#39;s broker selection is now credited to the framework rather than to an ADC block. Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised 2026-10-19: the Helpdesk host examples re-pointed after the host moved to <code>AddMmcaApplicationPipeline</code>.</p>
+          <p>Accepted (2026-09-01; counts re-measured 2026-10-01). Revised 2026-10-06: counts re-measured against current source, and ADC&#39;s broker selection is now credited to the framework rather than to an ADC block. Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised 2026-10-19: the Helpdesk host examples re-pointed after the host moved to <code>AddMmcaApplicationPipeline</code>. Revised 2026-10-21: counts re-measured (42 DI blocks, 117 extension blocks, 300 baseline lines), the Trade-offs package count made precise (17 packages with a baselined extension surface), and anchors refreshed.</p>
           <h2 id="context">Context</h2>
           <p>Every host in this workspace boots the same way: a <code>Program.cs</code> calls a short list of <code>Add*</code> methods
           on <code>IServiceCollection</code>, one per layer, and all of the framework&#39;s wiring sits behind those names.
@@ -263,11 +263,11 @@
           <code>AddInfrastructure</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:49</code>, method at <code>:57</code>),
           <code>AddAPI</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:28</code>, method at
-          <code>:45</code>) and <code>AddUIShared</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:33</code>,
-          method at <code>:39</code>) take the identical shape. The framework says so on the types themselves:
+          <code>:45</code>) and <code>AddUIShared</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:34</code>,
+          method at <code>:40</code>) take the identical shape. The framework says so on the types themselves:
           Infrastructure&#39;s DI class documents itself as using &quot;C# preview extension types to add methods
           directly to <code>IServiceCollection</code>&quot; (<code>Infrastructure/DependencyInjection.cs:40-41</code>) and UI&#39;s repeats it
-          for <code>AddUIShared</code> (<code>UI/DependencyInjection.cs:29</code>).</p>
+          for <code>AddUIShared</code> (<code>UI/DependencyInjection.cs:30</code>).</p>
           <p>Compiling that requires a preview language version, and every repo in the workspace sets one:
           <code>LangVersion preview</code> in <code>MMCA.Common/Directory.Build.props:6</code>, <code>MMCA.Store/Directory.Build.props:9</code>,
           <code>MMCA.ADC/Directory.Build.props:9</code> and <code>MMCA.Helpdesk/Directory.Build.props:12</code>, each beside the same
@@ -295,8 +295,8 @@
           Helpdesk files are identical), so the compiler that interprets <code>preview</code> is whichever 10.0.x SDK
           is installed.</p>
           </li>
-          <li><p><strong>Forty-one <code>extension(IServiceCollection services)</code> blocks are the DI surface.</strong> Measured on
-          2026-10-06 across <code>MMCA.Common/Source</code>, there are 41 such blocks in 41 files, spread over thirteen
+          <li><p><strong>Forty-two <code>extension(IServiceCollection services)</code> blocks are the DI surface.</strong> Measured on
+          2026-10-21 across <code>MMCA.Common/Source</code>, there are 42 such blocks in 42 files, spread over thirteen
           packages: Application (<code>Application/DependencyInjection.cs:26</code>,
           <code>Application/DependencyInjection.ModuleScanning.cs:15</code>, <code>Application/DependencyInjection.Crud.cs:16</code>,
           <code>Application/DependencyInjection.Extensibility.cs:11</code>,
@@ -313,14 +313,15 @@
           <code>API/Caching/OutputCacheEvictionExtensions.cs:95</code>, <code>API/Startup/MiniProfilerExtensions.cs:11</code>,
           <code>API/Startup/WebApplicationBuilderExtensions.cs:32</code>,
           <code>API/Startup/WebApplicationBuilderExtensions.Authentication.cs:27</code>,
-          <code>API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:321</code>), UI (<code>UI/DependencyInjection.cs:33</code>,
+          <code>API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:321</code>), UI (<code>UI/DependencyInjection.cs:34</code>,
           <code>UI/Notifications/DependencyInjection.cs:14</code>,
           <code>UI/Services/Capabilities/DependencyInjection.cs:25</code>), UI.Web
           (<code>UI.Web/DependencyInjection.cs:22</code>, <code>UI.Web/Hardening/BlazorCircuitLimitExtensions.cs:43</code>,
           <code>UI.Web/Hardening/UiRateLimitingExtensions.cs:166</code>,
           <code>UI.Web/SameOriginProxy/SameOriginApiProxyServiceExtensions.cs:39</code>), UI.Maui
           (<code>UI.Maui/DependencyInjection.cs:36</code>), Grpc
-          (<code>Grpc/DependencyInjection.cs:27</code>), Aspire (<code>Aspire/Extensions.cs:113</code>,
+          (<code>Grpc/DependencyInjection.cs:27</code>,
+          <code>Grpc/Authentication/ServiceTokenServiceCollectionExtensions.cs:25</code>), Aspire (<code>Aspire/Extensions.cs:115</code>,
           <code>Aspire/GatewayCorsExtensions.cs:18</code>, <code>Aspire/Security/SecurityHeaders.cs:260</code>,
           <code>Aspire/Gateway/GatewayRateLimitingExtensions.cs:258</code>,
           <code>Aspire/Gateway/GatewayHealthCheckExtensions.cs:97</code>), Gateway
@@ -328,20 +329,20 @@
           (<code>Testing/Support/FeatureManagementTestExtensions.cs:12</code>,
           <code>Testing/Support/RateLimiterTestExtensions.cs:13</code>,
           <code>Testing/Fixtures/CrossServiceHostIsolation.cs:32</code>).
-          A plain text search finds 45 occurrences of that exact receiver, because four of them are
+          A plain text search finds 46 occurrences of that exact receiver, because four of them are
           analyzer-suppression justification strings rather than declarations
           (<code>Infrastructure/DependencyInjection.Messaging.cs:201</code>, <code>:224</code>, <code>:263</code>,
           <code>Infrastructure/DependencyInjection.Jobs.cs:145</code>).</p>
           </li>
-          <li><p><strong>The idiom reaches well past DI.</strong> The same measurement finds 112 <code>extension</code> blocks across 92
-          files under <code>MMCA.Common/Source</code>. Receivers include <code>WebApplicationBuilder</code>
+          <li><p><strong>The idiom reaches well past DI.</strong> The same measurement finds 117 <code>extension</code> blocks across 96
+          files under <code>MMCA.Common/Source</code>, generic receivers included. Receivers include <code>WebApplicationBuilder</code>
           (<code>API/Startup/ModuleHostExtensions.cs:24</code>, <code>Aspire/Logging/SerilogHostExtensions.cs:29</code>),
           <code>WebApplication</code> (<code>API/Startup/WebApplicationExtensions.cs:37</code>), <code>IEndpointRouteBuilder</code>
           (<code>API/Startup/Endpoints/JwksEndpointExtensions.cs:22</code>,
           <code>API/SessionCookies/SessionCookieEndpoints.cs:21</code>),
           <code>IApplicationBuilder</code> (<code>Gateway/ForwardedHeadersExtensions.cs:25</code>),
           <code>IDistributedApplicationBuilder</code> and <code>IResourceBuilder&lt;ProjectResource&gt;</code>
-          (<code>Aspire.Hosting/Extensions.cs:126</code>, <code>:340</code>, <code>:410</code>), <code>IPage</code> and <code>ILocator</code>
+          (<code>Aspire.Hosting/Extensions.cs:138</code>, <code>:352</code>, <code>:422</code>, <code>:457</code>), <code>IPage</code> and <code>ILocator</code>
           (<code>Testing.E2E/Infrastructure/PageExtensions.cs:62</code>, <code>:360</code>), <code>Assembly</code>, <code>Type</code> and
           <code>PropertyInfo</code> (<code>Testing.Architecture/RuleHelpers.cs:16</code>, <code>:48</code>, <code>:122</code>), and generic receivers
           such as <code>IReadRepository&lt;TEntity, TIdentifierType&gt;</code>
@@ -372,13 +373,13 @@
           </li>
           <li><p><strong>The public-API gate records every extension member twice.</strong> RS0016 and RS0017 stay at error
           severity and every packable Source project declares its surface in <code>PublicAPI.Shipped.txt</code>
-          (<code>MMCA.Common/Directory.Build.props:79-96</code>, gate item group at <code>:89</code>, rules described at
-          <code>:81</code>). For an extension member the baseline holds a container line plus a member line, and a
+          (<code>MMCA.Common/Directory.Build.props:101-118</code>, gate item group at <code>:111</code>, rules described at
+          <code>:103-104</code>). For an extension member the baseline holds a container line plus a member line, and a
           separate classic static line carrying a <code>this</code> parameter. <code>AddApplication</code> appears as
           <code>MMCA.Common.Application.DependencyInjection.extension(...IServiceCollection!).AddApplication()</code>
           (<code>Application/PublicAPI.Shipped.txt:260</code>, container at <code>:259</code>) and as
           <code>static MMCA.Common.Application.DependencyInjection.AddApplication(this ...IServiceCollection! services)</code>
-          (<code>:1241</code>). Across the repo there are 290 <code>.extension</code> lines in 17 <code>PublicAPI.Shipped.txt</code> files,
+          (<code>:1239</code>). Across the repo there are 300 <code>.extension</code> lines in 17 <code>PublicAPI.Shipped.txt</code> files,
           covering 17 packages, and none in any <code>PublicAPI.Unshipped.txt</code>. Gateway&#39;s surface is shipped like
           the rest: both shapes of <code>UseCommonForwardedHeaders</code> sit in <code>Gateway/PublicAPI.Shipped.txt:12</code> and
           <code>:98</code>, and its <code>PublicAPI.Unshipped.txt</code> is a single line.</p>
@@ -387,8 +388,8 @@
           <code>IsIdValueGenerated</code> is declared as an extension property on <code>Type</code>
           (<code>Domain/Extensions/EntityTypeExtensions.cs:11</code>) and is recorded as
           <code>...EntityTypeExtensions.extension(System.Type!).IsIdValueGenerated.get -&gt; bool</code>
-          (<code>Domain/PublicAPI.Shipped.txt:111</code>) with the classic counterpart
-          <code>static ...EntityTypeExtensions.get_IsIdValueGenerated(System.Type! entityType) -&gt; bool</code> (<code>:293</code>).
+          (<code>Domain/PublicAPI.Shipped.txt:113</code>) with the classic counterpart
+          <code>static ...EntityTypeExtensions.get_IsIdValueGenerated(System.Type! entityType) -&gt; bool</code> (<code>:296</code>).
           A method emits <code>Name(this T x)</code>; a property emits <code>get_Name(T x)</code>. Those are different members.</p>
           </li>
           <li><p><strong>The MAUI package uses the idiom but sits outside the gate.</strong> <code>MMCA.Common.UI.Maui</code> declares three
@@ -396,7 +397,7 @@
           <code>UI.Maui/HostingDependencyInjection.cs:17</code> on <code>MauiAppBuilder</code>,
           <code>UI.Maui/WindowLifecycleExtensions.cs:24</code> on <code>Window</code>) and is the one project excluded
           from the public-API analyzer, because it lives outside <code>MMCA.Common.slnx</code> and builds only on the
-          windows MAUI job (<code>MMCA.Common/Directory.Build.props:89</code>, reason at <code>:85-87</code>, naming ADR-042). Its
+          windows MAUI job (<code>MMCA.Common/Directory.Build.props:111</code>, reason at <code>:107-109</code>, naming ADR-042). Its
           extension surface is therefore unbaselined.</p>
           </li>
           <li><p><strong>Analyzer fallout is carried as documented suppressions, not by changing the code shape.</strong>
@@ -417,14 +418,16 @@
           otherwise flag the skeleton members an <code>extension(T)</code> block leaves in a Domain assembly, whose
           <code>NotSupportedException</code> nobody typed. It skips any method carrying
           <code>System.Runtime.CompilerServices.ExtensionMarkerAttribute</code> (constant at <code>:8</code>, filter at <code>:92</code>,
-          predicate at <code>:179-182</code>, documented at <code>:161-178</code>).</p>
+          predicate at <code>:184-187</code> with the marker clause at <code>:185</code>, documented at <code>:166-183</code>). The same
+          predicate also skips explicit interface implementations on compiler-generated types, the other
+          body shape no developer wrote.</p>
           </li>
           <li><p><strong>The exit path is a mechanical rewrite that does not reach callers.</strong> If the feature changed
           shape, each block would be flattened back to classic static extension methods: a
           <code>public R M(...)</code> inside <code>extension(T x)</code> becomes <code>public static R M(this T x, ...)</code>, with the
           method names, parameters and return types unchanged. That is exactly the form the baselines
           already record on their <code>static ...(this ...)</code> lines
-          (<code>Application/PublicAPI.Shipped.txt:1241-1253</code>), so the public API a
+          (<code>Application/PublicAPI.Shipped.txt:1239-1251</code>), so the public API a
           consumer binds to would not move and no <code>Program.cs</code> line would change. The single exception is
           the extension property in Decision point 8, whose classic form is <code>get_IsIdValueGenerated(Type)</code>
           rather than a <code>this</code>-marked method.</p>
@@ -433,7 +436,7 @@
           <h2 id="rationale">Rationale</h2>
           <ul>
           <li><strong>One <code>Add*</code> name per layer is the point of the surface.</strong> A host reads as a list of layers
-          (<code>Program.cs:78</code>, <code>:79</code>, <code>:101</code>, <code>:132</code>), and grouping the registrations by receiver in a single
+          (<code>Program.cs:77</code>, <code>:99</code>, <code>:121</code>), and grouping the registrations by receiver in a single
           block is what keeps the declaration site organized by what it extends rather than by a repeated
           <code>this IServiceCollection services</code> parameter on every method.</li>
           <li><strong>The compiler already emits the classic shape, so the exposure is smaller than the word &quot;preview&quot;
@@ -444,7 +447,7 @@
           (<code>Directory.Build.props:26</code>) mean any change to an extension member, including one caused by a
           compiler change to the emitted shape, shows up as a text diff in <code>PublicAPI.Shipped.txt</code> before a
           package is published, which is the same protection ADR-015 gives every other member.</li>
-          <li><strong>Consistency across four repos beats a mixed idiom.</strong> With 112 blocks in the framework and 41 more
+          <li><strong>Consistency across four repos beats a mixed idiom.</strong> With 117 blocks in the framework and 41 more
           across ADC, Store and Helpdesk, a partial adoption would mean a reader has to know which of two
           declaration styles a given <code>Add*</code> uses. The property is set once per repo in
           <code>Directory.Build.props</code> and the shape is uniform.</li>
@@ -457,14 +460,14 @@
           <ul>
           <li><strong>A preview language feature under a floating SDK is a moving target.</strong> No <code>global.json</code> pins an
           SDK version and CI installs <code>dotnet-version: &#39;10.0.x&#39;</code> (<code>MMCA.Common/.github/workflows/ci.yml:101</code>
-          and ten more, <code>release.yml:50</code>, <code>:186</code>), so the compiler and the analyzers that interpret these
+          and ten more, <code>release.yml:50</code>, <code>:188</code>, <code>load-tests.yml:44</code>), so the compiler and the analyzers that interpret these
           blocks can change on any patch release with no repo edit. That is not hypothetical: the IDE0051
           suppressions record behavior that differs between SDK 10.0.201 and the 10.0.104 the same comment
           names (<code>Infrastructure/DependencyInjection.Messaging.cs:224</code>).</li>
           <li><strong>Method to property inside a block is a binary break, and it does not look like one.</strong> Both are
           members of the same block and the source edit is two words, but the emitted classic member changes
-          from <code>Name(this T)</code> to <code>get_Name(T)</code> (<code>Domain/PublicAPI.Shipped.txt:111</code> beside <code>:293</code>, against
-          <code>Application/PublicAPI.Shipped.txt:260</code> beside <code>:1241</code>). RS0017 catches the removal at build time in
+          from <code>Name(this T)</code> to <code>get_Name(T)</code> (<code>Domain/PublicAPI.Shipped.txt:113</code> beside <code>:296</code>, against
+          <code>Application/PublicAPI.Shipped.txt:260</code> beside <code>:1239</code>). RS0017 catches the removal at build time in
           MMCA.Common; a consumer that had already compiled against the old member does not get that warning.</li>
           <li><strong>Analyzers do not fully understand the shape.</strong> CA1708 is wrong on every block it flags (27
           type-level suppressions) and IDE0051 is wrong across the block boundary (nine more). Each
@@ -472,18 +475,19 @@
           ones carry an explicit &quot;remove this once Roslyn fixes it&quot; that nothing enforces.</li>
           <li><strong>Anything reflecting over the assemblies has to special-case the marker attribute.</strong> The
           architecture fitness rule already does
-          (<code>Testing.Architecture/Rules/Domain/ArchitectureRules.DomainThrows.cs:8</code>, <code>:179-182</code>). Any future
+          (<code>Testing.Architecture/Rules/Domain/ArchitectureRules.DomainThrows.cs:8</code>, <code>:184-187</code>). Any future
           rule, source generator or documentation tool that walks methods in a framework assembly inherits
           the same requirement, and the failure mode is a false positive on a body no developer wrote.</li>
-          <li><strong>The public-API baselines are roughly doubled for this surface.</strong> 290 shipped
+          <li><strong>The public-API baselines are roughly doubled for this surface.</strong> 300 shipped
           <code>.extension</code> lines sit alongside their <code>static ...(this ...)</code> counterparts, so a single new
           registration method costs two or three baseline lines instead of one, and a reviewer reading a
           baseline diff sees the same member twice.</li>
           <li><strong>The one package with no gate is the one with the least coverage.</strong> <code>MMCA.Common.UI.Maui</code>&#39;s three
           blocks (<code>UI.Maui/DependencyInjection.cs:36</code>, <code>UI.Maui/HostingDependencyInjection.cs:17</code>,
           <code>UI.Maui/WindowLifecycleExtensions.cs:24</code>) are
-          excluded from RS0016/RS0017 (<code>Directory.Build.props:89</code>), so a reshape there would reach a
-          published package without the text diff that protects the other eighteen.</li>
+          excluded from RS0016/RS0017 (<code>Directory.Build.props:111</code>), so a reshape there would reach a
+          published package without the text diff that protects the 17 packages whose extension surface is
+          baselined.</li>
           <li><strong>The declaration reads as an instance method that is not one.</strong>
           <code>public IServiceCollection AddApplication()</code> (<code>Application/DependencyInjection.cs:32</code>) has no
           visible receiver parameter; the receiver comes from the enclosing block header six lines up. That
@@ -552,6 +556,41 @@
           <code>:104</code> and the broker registration as a <code>Register</code> step at <code>:139</code>; Decision point 6 uses the
           <code>AddInfrastructure</code> call site (<code>:77</code>) as its plain-extension example.</li>
           </ol>
+          <h2 id="revision-2026-10-21">Revision (2026-10-21)</h2>
+          <p>Re-verified against current source. No decision, rationale or trade-off changed: the DI surface is
+          still written as <code>extension(T)</code> blocks under <code>LangVersion preview</code> and both emitted shapes are still
+          baselined. Three counts grew, one count in Trade-offs was made precise, and several anchors moved.</p>
+          <ol>
+          <li>The <code>extension(IServiceCollection services)</code> blocks number 42 in 42 files (still thirteen
+          packages), adding <code>Grpc/Authentication/ServiceTokenServiceCollectionExtensions.cs:25</code>; a plain text
+          search finds 46 hits, the four extra still being the justification strings at
+          <code>Infrastructure/DependencyInjection.Messaging.cs:201</code>, <code>:224</code>, <code>:263</code> and
+          <code>Infrastructure/DependencyInjection.Jobs.cs:145</code>.</li>
+          <li>The framework declares 117 <code>extension</code> blocks in 96 files under <code>MMCA.Common/Source</code> (anchored
+          search, generic receivers included). <code>Aspire.Hosting/Extensions.cs</code> holds five of them
+          (<code>:138</code>, <code>:253</code>, <code>:352</code>, <code>:422</code>, <code>:457</code>).</li>
+          <li>The shipped baselines hold 300 <code>.extension</code> lines (generic <code>.extension&lt;T&gt;(</code> lines included) in 17
+          <code>PublicAPI.Shipped.txt</code> files, still none unshipped.</li>
+          <li>Trade-offs named &quot;the other eighteen&quot; projects behind the public-API gate. 21 Source projects
+          carry a <code>PublicAPI.Shipped.txt</code> and are gated (every packable project except <code>MMCA.Common.UI.Maui</code>,
+          <code>Directory.Build.props:111</code>), and 18 of them declare extension blocks, but the blocks in
+          <code>Testing.Architecture</code> are internal (<code>Testing.Architecture/RuleHelpers.cs:14</code>), so the text diff
+          protects 17 packages: the same 17 <code>PublicAPI.Shipped.txt</code> files that hold the 300 <code>.extension</code>
+          lines in item 3. The text now names those 17 packages.</li>
+          <li><code>IsCompilerSynthesized</code> in
+          <code>Testing.Architecture/Rules/Domain/ArchitectureRules.DomainThrows.cs:184-187</code> now also skips
+          explicit interface implementations on compiler-generated types; the <code>ExtensionMarkerAttribute</code>
+          clause (<code>:185</code>) is unchanged.</li>
+          <li>Anchors re-verified against current source: <code>UI/DependencyInjection.cs:34</code> (block), <code>:40</code>
+          (<code>AddUIShared</code>), <code>:30</code> (doc line); <code>Aspire/Extensions.cs:115</code>; the Helpdesk layer calls the Rationale
+          cites at <code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:77</code>, <code>:99</code>, <code>:121</code>;
+          <code>MMCA.Common/Directory.Build.props:101-118</code> (gate block, rules at <code>:103-104</code>, item group and UI.Maui
+          exclusion at <code>:111</code>, reason at <code>:107-109</code>); <code>Application/PublicAPI.Shipped.txt:1239</code> (classic
+          <code>AddApplication</code>, block <code>:1239-1251</code> ending at <code>VerifyDecoratorPipeline</code>);
+          <code>Domain/PublicAPI.Shipped.txt:113</code> and <code>:296</code>; the <code>DomainThrows</code> doc comment at <code>:166-183</code>;
+          <code>dotnet-version: &#39;10.0.x&#39;</code> in <code>MMCA.Common/.github/workflows/release.yml</code> at <code>:50</code> and <code>:188</code> (the
+          2026-10-07 entry&#39;s <code>:186</code> is superseded), plus <code>load-tests.yml:44</code>.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="015-architecture-fitness-functions.html">ADR-015</a> (the RS0016/RS0017 baseline that freezes both
           emitted shapes of every extension member, and the fitness-rule tier that had to learn about
@@ -583,6 +622,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-19">Revision (2026-10-19)</a></li>
+            <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>
