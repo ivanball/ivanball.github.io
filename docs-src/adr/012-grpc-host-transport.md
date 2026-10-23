@@ -8,6 +8,7 @@ Revised 2026-10-01 (stale line anchors refreshed; no decision changed).
 Revised 2026-10-06: Store Sales dev ports corrected to 5266/5265/5267 with their Hyper-V/WinNAT rationale, and anchors re-verified.
 Revised 2026-10-07: Context now lists both apps' current gRPC edges (including Store's authorized Identity -> Sales and Identity -> Catalog export edges), Profile B's HTTPS/ALPN gRPC and single-argument JWKS bullets are marked historical, and ADC anchors refreshed after the v1.233.0 release.
 Revised 2026-10-21: Context now lists ADC's Identity -> Conference export edge, and anchors refreshed across both apps' Program.cs, AppHost and Bicep files.
+Revised 2026-10-23: the east-west gRPC values moved into `HttpResilienceDefaults` (`Grpc`-prefixed) with their own 8s/20s timeouts instead of reusing the outbound-HTTP 30s/90s, and `AddTypedGrpcClient` gained a per-client override.
 ## Update (2026-06-22): Store converged to Profile A
 Store originally chose Profile B, but its cross-service gRPC failed in Azure Container Apps. With
 `Http1AndHttp2` Kestrel + `transport: 'auto'` ingress on a **cleartext** endpoint there is no ALPN, so
@@ -423,18 +424,26 @@ addresses a peer directly and never passes the gateway, so none of those active 
 the client-side circuit breaker is the only thing on that path that notices a peer going bad. It is
 therefore stated explicitly rather than left at the standard resilience handler's library defaults.
 
-The values live in `GrpcResilienceDefaults`
-(`MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/GrpcResilienceDefaults.cs`):
+The values live in `HttpResilienceDefaults` as its `Grpc`-prefixed members
+(`MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:58-94`), applied by
+`AddTypedGrpcClient` (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:141-163`):
 
 | Knob | Value | Why |
 |------|-------|-----|
-| `FailureRatio` | 0.5 | An in-cluster peer is healthy or hard-down; a tighter ratio trips on ordinary replica-rollover blips |
-| `MinimumThroughput` | 10 | Keeps one failed call against a low-traffic service from opening the breaker |
-| `BreakDuration` | 10 s | About one container-replica restart, so recovery is not gated on the breaker |
+| `FailureRatio` | 0.5 | An in-cluster peer is healthy or hard-down; a tighter ratio trips on ordinary replica-rollover blips (`HttpResilienceDefaults.cs:82`) |
+| `MinimumThroughput` | 10 | Keeps one failed call against a low-traffic service from opening the breaker (`:88`) |
+| `BreakDuration` | 10 s | About one container-replica restart, so recovery is not gated on the breaker (`:94`) |
 
-Attempt timeout, total request timeout, sampling duration and the one-retry budget are re-exposed
-from `HttpResilienceDefaults`, so the east-west path cannot drift from the outbound-HTTP path that
-`MMCA.Common.Aspire`'s `ConfigureHttpClientDefaults` applies.
+The timeouts are the east-west path's own rather than the outbound-HTTP 30 s / 90 s: an 8 s attempt
+timeout and a 20 s total request timeout (`:73`, `:76`), about ten times the slowest measured
+east-west gRPC p99 of 784 ms (`:68-72`), so a hung peer no longer holds its caller for a minute and
+a half (`:58-61`). The sampling duration (60 s, `:19`) and the one-retry budget (`:33`) are shared
+with the outbound-HTTP path that `MMCA.Common.Aspire`'s `ConfigureHttpClientDefaults` applies. A
+consumer whose edge is legitimately slower passes `AddTypedGrpcClient`'s optional
+`configureResilience` callback, which runs after the defaults and so only needs to set what differs
+(`DependencyInjection.cs:98-100`, `:165-166`); it must keep the sampling duration at least twice the
+attempt timeout, which the resilience library validates when the client is first resolved
+(`:91-96`).
 
 **Keep-alive stays as configured, with no per-service knob.** The typed client forces its primary
 handler to a `SocketsHttpHandler` (the global HTTP defaults can wrap the primary handler in a way

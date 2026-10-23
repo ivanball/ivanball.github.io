@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 132 ADRs</summary>
+        <summary>All 133 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -232,6 +232,7 @@
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
+        <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
           </ol>
         </nav>
       </details>
@@ -249,7 +250,8 @@
           Revised 2026-10-01: broker wiring and Aspire meter citations moved, and the meter-count sentence corrected.
           Revised 2026-10-06: the circuit-breaker search now names its one non-breaker hit in <code>HttpResultExecutor.cs</code>.
           Revised 2026-10-07: the breaker scope now notes that monolith integration events pass through it via <code>InProcessMessageBus</code> (so failing in-process handlers can open it), the database posture names both relational engines and the Sqlite and Cosmos contexts that run on the provider default, the circuit-open log latch is stated per data source, and <code>OutboxProcessor.cs</code> anchors are refreshed.
-          Revised 2026-10-21: the source comments now document that monolith integration events run inside the breaker (the Decision no longer calls the inline comment distributed-only), the circuit-open Warning text is corrected to &quot;Message bus circuit is open&quot;, the per-batch log latch is re-anchored in <code>DispatchRowsAsync</code>, and anchors are refreshed.</p>
+          Revised 2026-10-21: the source comments now document that monolith integration events run inside the breaker (the Decision no longer calls the inline comment distributed-only), the circuit-open Warning text is corrected to &quot;Message bus circuit is open&quot;, the per-batch log latch is re-anchored in <code>DispatchRowsAsync</code>, and anchors are refreshed.
+          Revised 2026-10-23: the east-west gRPC breaker values moved into <code>HttpResilienceDefaults</code> (<code>Grpc</code>-prefixed), so the database-breaker search re-anchors the gRPC defaults and handler citations there; the broker breaker is unchanged.</p>
           <h2 id="context">Context</h2>
           <p>Delivery in this workspace has always been at-least-once with retries on both legs: the outbox
           retries a failed publish with jittered exponential backoff and eventually dead-letters
@@ -382,10 +384,9 @@
           queueing on it. It is <strong>not</strong> being made. A repository-wide search for <code>CircuitBreaker</code>,
           <code>BrokenCircuitException</code> and <code>ResiliencePipeline</code> across <code>Source</code> finds the outbox breaker above and
           otherwise only the HTTP and gRPC standard resilience handlers and the defaults they read
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:129,148-151</code>,
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:141,160-163</code>,
           <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:170-179</code>,
-          <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:16</code>,
-          <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/GrpcResilienceDefaults.cs:21</code>,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:19,82,88,94</code>,
           <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:49,52</code>), plus one doc comment that
           names <code>BrokenCircuitException</code> as a client-side transport fault the UI result executor classifies
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/HttpResultExecutor.cs:124</code>, in the

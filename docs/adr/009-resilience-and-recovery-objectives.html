@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 132 ADRs</summary>
+        <summary>All 133 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -232,6 +232,7 @@
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
+        <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
           </ol>
         </nav>
       </details>
@@ -262,6 +263,9 @@
           <p>Revised 2026-10-21: the gRPC retry predicate is stated as before-send connection failures only, the
           outbox breaker is recorded as also wrapping in-process integration handlers on a monolith, and the
           database posture is recorded for PostgreSQL as well as SQL Server.</p>
+          <p>Revised 2026-10-23: the east-west gRPC values moved into <code>HttpResilienceDefaults</code> (<code>Grpc</code>-prefixed)
+          with their own 8s/20s timeouts instead of the outbound-HTTP 30s/90s, <code>AddTypedGrpcClient</code> gained a
+          per-client override, and the <code>ResilienceHandlerTests</code> anchors are refreshed.</p>
           <h2 id="context">Context</h2>
           <p>The framework already supplies the <em>mechanisms</em> for surviving partial failure: a standard Polly
           resilience handler (timeout / retry / circuit breaker), the outbox for at-least-once delivery
@@ -282,14 +286,18 @@
           the global HTTP defaults&#39; timeouts, retry budget and sampling window from <code>HttpResilienceDefaults</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:170-179</code>), and
           switches the retry off for POST and PATCH (<code>:177</code>), the same two verbs the Aspire defaults exclude.
-          <code>AddTypedGrpcClient</code> reads <code>GrpcResilienceDefaults</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:129-152</code>), which re-exposes
-          those same timeouts and retry budget
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/GrpcResilienceDefaults.cs:15-24</code>) but states
-          its own breaker shape (<code>:27-33</code>) and retries only a failure to reach the peer before the request
-          was sent: an <code>HttpRequestException</code> whose <code>HttpRequestError</code> is a name-resolution, connect or TLS
-          handshake failure (<code>DependencyInjection.cs:142-147</code>). This is enforced by a fitness function
-          (<code>ResilienceHandlerTests</code> in <code>MMCA.Common.Grpc.Tests</code>) so the policy cannot silently regress.</li>
+          <code>AddTypedGrpcClient</code> reads the <code>Grpc</code>-prefixed members of the same <code>HttpResilienceDefaults</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:141-167</code>). Its timeouts
+          are the east-west path&#39;s own, not the outbound-HTTP 30s/90s: an 8-second attempt and a 20-second
+          total, about ten times the slowest measured east-west gRPC p99 of 784 ms
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:68-76</code>). It shares
+          the HTTP path&#39;s retry budget and breaker sampling window (<code>:33</code>, <code>:19</code>), states its own breaker
+          shape (<code>:78-94</code>), and retries only a failure to reach the peer before the request was sent: an
+          <code>HttpRequestException</code> whose <code>HttpRequestError</code> is a name-resolution, connect or TLS handshake
+          failure (<code>DependencyInjection.cs:154-159</code>). An optional per-client <code>configureResilience</code> callback
+          runs after those defaults, so it wins only where it sets a value (<code>:98-100</code>, <code>:165-166</code>). This is
+          enforced by a fitness function (<code>ResilienceHandlerTests</code> in <code>MMCA.Common.Grpc.Tests</code>) so the
+          policy cannot silently regress.</li>
           <li><strong>Consumers must declare recovery objectives.</strong> Each consuming app documents, in its own
           <code>infra/DISASTER-RECOVERY.md</code>: RTO/RPO per failure scenario, the backup/restore mechanism, and an
           <strong>explicit, written</strong> acceptance of single-region risk (or a multi-region failover plan).
@@ -342,11 +350,14 @@
           <ul>
           <li>The named gate (<code>ResilienceHandlerTests</code>, <code>MMCA.Common.Grpc.Tests</code>) asserts every option the gRPC
           client path (<code>AddTypedGrpcClient</code>) configures
-          (<code>MMCA.Common/Tests/Presentation/MMCA.Common.Grpc.Tests/ResilienceHandlerTests.cs:53-77</code>), pins the
-          <code>GrpcResilienceDefaults</code> values (<code>:140-150</code>), ties its timeouts and retry budget to
-          <code>HttpResilienceDefaults</code> (<code>:153-160</code>), and checks the retry predicate at runtime (<code>:81-96</code>), with a
-          theory proving that only the three before-send <code>HttpRequestError</code> values are retried
-          (<code>:99-123</code>). Choosing the values is still a review concern; a silent change to them is not. A
+          (<code>MMCA.Common/Tests/Presentation/MMCA.Common.Grpc.Tests/ResilienceHandlerTests.cs:53-77</code>), proves
+          the per-client override runs after the defaults and that omitting it keeps them (<code>:80-112</code>), pins
+          the <code>Grpc</code>-prefixed <code>HttpResilienceDefaults</code> values (<code>:176-185</code>), asserts the gRPC timeouts stay
+          tighter than the HTTP ones while leaving room for both attempts (<code>:188-195</code>) and that the
+          configured options pass the library&#39;s sampling-window validation (<code>:199-211</code>), and checks the retry
+          predicate at runtime (<code>:116-131</code>), with a theory proving that only the three before-send
+          <code>HttpRequestError</code> values are retried (<code>:134-158</code>). Choosing the values is still a review concern;
+          a silent change to them is not. A
           separate fault-injection
           test (<code>ResilienceCircuitBreakerFaultInjectionTests</code>, same project) drives sustained failures and
           proves the circuit breaker actually trips and short-circuits. <code>AddTypedServiceClient</code> has its own
@@ -359,8 +370,10 @@
           <code>MMCA.Store/infra/DISASTER-RECOVERY.md:212</code>), so it is not the operative mitigation: drill recency
           is enforced from <code>dr-drill.yml</code> run history by each consumer&#39;s <code>dr-freshness</code> deploy gate
           (<code>MMCA.ADC/.github/workflows/deploy.yml:845-857</code>, <code>MMCA.Store/.github/workflows/deploy.yml:790-801</code>).</li>
-          <li>A gRPC client that needs bespoke timeouts must override the standard handler explicitly rather than
-          opt out of resilience entirely: intentional friction.</li>
+          <li>A gRPC client that needs bespoke timeouts passes <code>AddTypedGrpcClient</code>&#39;s <code>configureResilience</code>
+          callback, which adjusts the standard handler after the defaults
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:98-100</code>, <code>:166</code>); there is
+          still no switch that opts the client out of resilience entirely: intentional friction.</li>
           </ul>
           <h2 id="revision-2026-08-18">Revision (2026-08-18)</h2>
           <p>This record&#39;s first Decision point scoped resilience to &quot;every outbound <code>HttpClient</code> and gRPC client
@@ -473,11 +486,10 @@
           posture recorded on 2026-08-18 all stand as written.</p>
           <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
           <p>No decision or rationale changes; the current-state sections are brought back in line with the code.
-          Decision point 1 no longer says the gRPC client matches the global HTTP defaults outright: it reads
-          <code>GrpcResilienceDefaults</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:127-142</code>), which shares the
-          HTTP timeouts and retry budget
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/GrpcResilienceDefaults.cs:15-24</code>) but sets an
+          Decision point 1 no longer says the gRPC client matches the global HTTP defaults outright: at that
+          date it read a separate gRPC defaults class
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:127-142</code>), which then shared
+          the HTTP timeouts and retry budget (both since superseded: see the 2026-10-23 status line) but set an
           explicit breaker (a 0.5 failure ratio, a minimum throughput of 10 and a 10-second break, <code>:27-33</code>)
           because an east-west call bypasses the Gateway&#39;s health checks, and retries only an
           <code>HttpRequestException</code> (<code>DependencyInjection.cs:137</code>) because every gRPC call is a POST. The
