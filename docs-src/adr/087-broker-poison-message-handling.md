@@ -11,6 +11,7 @@ Revised 2026-10-01: broker wiring and Aspire meter citations moved, and the mete
 Revised 2026-10-06: the circuit-breaker search now names its one non-breaker hit in `HttpResultExecutor.cs`.
 Revised 2026-10-07: the breaker scope now notes that monolith integration events pass through it via `InProcessMessageBus` (so failing in-process handlers can open it), the database posture names both relational engines and the Sqlite and Cosmos contexts that run on the provider default, the circuit-open log latch is stated per data source, and `OutboxProcessor.cs` anchors are refreshed.
 Revised 2026-10-21: the source comments now document that monolith integration events run inside the breaker (the Decision no longer calls the inline comment distributed-only), the circuit-open Warning text is corrected to "Message bus circuit is open", the per-batch log latch is re-anchored in `DispatchRowsAsync`, and anchors are refreshed.
+Revised 2026-10-23: the east-west gRPC breaker values moved into `HttpResilienceDefaults` (`Grpc`-prefixed), so the database-breaker search re-anchors the gRPC defaults and handler citations there; the broker breaker is unchanged.
 
 ## Context
 Delivery in this workspace has always been at-least-once with retries on both legs: the outbox
@@ -157,10 +158,9 @@ The obvious symmetric move is a breaker on the query path, so a failing database
 queueing on it. It is **not** being made. A repository-wide search for `CircuitBreaker`,
 `BrokenCircuitException` and `ResiliencePipeline` across `Source` finds the outbox breaker above and
 otherwise only the HTTP and gRPC standard resilience handlers and the defaults they read
-(`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:129,148-151`,
+(`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:141,160-163`,
 `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:170-179`,
-`MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:16`,
-`MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/GrpcResilienceDefaults.cs:21`,
+`MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:19,82,88,94`,
 `MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:49,52`), plus one doc comment that
 names `BrokenCircuitException` as a client-side transport fault the UI result executor classifies
 (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/HttpResultExecutor.cs:124`, in the
