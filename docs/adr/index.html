@@ -95,7 +95,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 132 ADRs</summary>
+        <summary>All 133 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html" aria-current="page">Overview</a></li>
@@ -231,6 +231,7 @@
         <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
+        <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
           </ol>
         </nav>
       </details>
@@ -240,7 +241,7 @@
           <h1 id="architecture-decision-records">Architecture Decision Records</h1>
           <p>Accepted ADRs explaining <em>why</em> the core cross-cutting patterns exist. Read these before changing a
           pattern they describe: they capture context and trade-offs that aren&#39;t obvious from the code.</p>
-          <p><strong>132 accepted ADRs</strong>, 001-132, numbered contiguously with one row per ADR in the table below.
+          <p><strong>133 accepted ADRs</strong>, 001-133, numbered contiguously with one row per ADR in the table below.
           This file owns the ADR count and range (<code>MMCA.Common/FACTS.md</code>): read them here rather than
           recounting, and when you add an ADR, update this line with its row. <code>tools/adr-index.ps1</code> in this
           repo re-derives both from the files and fails if this line, the table, or a link drifts from them;
@@ -760,8 +761,8 @@
           </tr>
           <tr>
           <td><a href="102-pbkdf2-only-password-hashing.html">102</a></td>
-          <td>PBKDF2-only password hashing</td>
-          <td>Supersedes <a href="032-password-hashing.html">ADR-032</a> by deleting the half of it that selected an algorithm from the data. One framework <code>IPasswordHasher</code>, one implementation, <code>TryAddSingleton</code> on a stateless type: PBKDF2-HMAC-SHA512, 32-byte salt, 64-byte digest, 600,000 iterations, <code>FixedTimeEquals</code> compare. <code>VerifyPassword</code> has <strong>no branch</strong>: it recomputes with the one algorithm and compares, so <code>LegacyHmacSaltSize</code>, <code>ComputeLegacyHash</code> and every <code>HMACSHA512</code> usage are gone from <code>Source/</code> in all four repos. The removal was safe because the production credential stores were checked and held no legacy-format rows, and it is now asserted in the opposite direction: a test builds a 128-byte-salt HMAC digest and requires the <strong>correct</strong> password to fail verification, alongside known-answer tests, reflection pins on the three constants and an IL-shape rule that the type still depends on <code>Rfc2898DeriveBytes</code> and <code>CryptographicOperations</code>. All four call sites (login, registration, change-password, reset-password, seeding) stay in Common bases; neither app&#39;s <code>Source/</code> invokes the hasher. Costs: a legacy row that ever reaches production fails login indistinguishably from a wrong password and needs a reset, with nothing detecting it; the work factor is a compile-time constant, and since verification recomputes with that same constant and stores no per-record parameters, raising it invalidates every stored hash; the format carries no version marker; and verification derives to the stored hash length rather than to <code>HashSize</code>. Revised 2026-10-06: the app-side forwarding passage now names the seeder service-locate, and the legacy-removal search cite is narrowed to the one matching test line. Revised 2026-10-21: the unknown-account timing burn is described as a discarded <code>HashPassword</code> of the submitted password rather than a verify against 64/32-byte dummy material, and the call-site anchors are refreshed.</td>
+          <td>PBKDF2-only password hashing (superseded)</td>
+          <td><del>Supersedes <a href="032-password-hashing.html">ADR-032</a> by deleting the half of it that selected an algorithm from the data. One framework <code>IPasswordHasher</code>, one implementation, <code>TryAddSingleton</code> on a stateless type: PBKDF2-HMAC-SHA512, 32-byte salt, 64-byte digest, 600,000 iterations, <code>FixedTimeEquals</code> compare. <code>VerifyPassword</code> has <strong>no branch</strong>: it recomputes with the one algorithm and compares, so <code>LegacyHmacSaltSize</code>, <code>ComputeLegacyHash</code> and every <code>HMACSHA512</code> usage are gone from <code>Source/</code> in all four repos. The removal was safe because the production credential stores were checked and held no legacy-format rows, and it is now asserted in the opposite direction: a test builds a 128-byte-salt HMAC digest and requires the <strong>correct</strong> password to fail verification, alongside known-answer tests, reflection pins on the three constants and an IL-shape rule that the type still depends on <code>Rfc2898DeriveBytes</code> and <code>CryptographicOperations</code>. All four call sites (login, registration, change-password, reset-password, seeding) stay in Common bases; neither app&#39;s <code>Source/</code> invokes the hasher. Costs: a legacy row that ever reaches production fails login indistinguishably from a wrong password and needs a reset, with nothing detecting it; the work factor is a compile-time constant, and since verification recomputes with that same constant and stores no per-record parameters, raising it invalidates every stored hash; the format carries no version marker; and verification derives to the stored hash length rather than to <code>HashSize</code>. Revised 2026-10-06: the app-side forwarding passage now names the seeder service-locate, and the legacy-removal search cite is narrowed to the one matching test line. Revised 2026-10-21: the unknown-account timing burn is described as a discarded <code>HashPassword</code> of the submitted password rather than a verify against 64/32-byte dummy material, and the call-site anchors are refreshed.</del> <strong>Superseded by <a href="133-versioned-password-hash-work-factor.html">ADR-133</a>.</strong></td>
           </tr>
           <tr>
           <td><a href="103-bunit-component-test-tier.html">103</a></td>
@@ -912,6 +913,11 @@
           <td><a href="132-build-strictness-analyzer-policy.html">132</a></td>
           <td>Build strictness and analyzer policy</td>
           <td>All four .NET repos set TreatWarningsAsErrors, CodeAnalysisTreatWarningsAsErrors, AnalysisLevel latest and EnforceCodeStyleInBuild, reference five analyzer packages (Meziantou, VS Threading, Roslynator, SonarAnalyzer, StyleCop) from root props, and default every analyzer diagnostic to error in a root <code>.editorconfig</code> shared above a <code># REPO-SPECIFIC DELTAS</code> marker; <code>compare-analyzer-config.ps1</code> checks that block line by line and a post-edit hook prompts the comparison. CI asserts <code>--minimum-expected-tests</code> on most test jobs (not the ADC and Store browser E2E) and enforces unit-tier line-coverage floors in Common, ADC and Store (Helpdesk has none). The policy predates this record, its first written decision. Revised 2026-10-21: the four repos now pin identical analyzer versions (the pins stay per repo), Common&#39;s source-only PublicApiAnalyzers group is recorded, and the props, workflow and coverage-gate anchors are re-pointed.</td>
+          </tr>
+          <tr>
+          <td><a href="133-versioned-password-hash-work-factor.html">133</a></td>
+          <td>Versioned password hash work factor (supersedes 102)</td>
+          <td><code>PasswordHasher</code> writes a 69-byte versioned hash: a <code>0x01</code> version byte, a 4-byte big-endian iteration count, then the 64-byte PBKDF2-HMAC-SHA512 digest, so every record carries its own work factor. New hashes use 210,000 iterations, the OWASP figure for PBKDF2-HMAC-SHA512 (the old 600,000 is its SHA-256 figure, and hashing was the measured CPU bottleneck at the ADC 2026 venue, where anonymous failed logins pay the same cost). Header-less 64-byte hashes still verify at 600,000; a stored count outside 100,000 to 2,000,000 or an unknown version byte verifies nothing. <code>IPasswordHasher.NeedsRehash</code> (a default member answering false) flags an outdated record, and <code>AuthenticationServiceBase</code> re-derives it after a successful sign-in, best effort and on its own save, for a <code>User</code> that implements <code>IPasswordRehashableUser</code> (ADC and Store do, raising no domain event; <code>ChangePassword</code> still raises <code>UserPasswordChanged</code>). No schema migration: both consumers map the hash column without a max length. Rejected: a separate iterations column, changing the constant without a stored count, Argon2id. Costs: until a legacy account signs in once, a wrong password against it costs 600,000 iterations against 210,000 for an unknown address, a timing difference accepted because registration already reveals whether an address exists; the upgrade is opt-in per <code>User</code>.</td>
           </tr>
           </tbody></table></div>
           <h2 id="writing-a-new-adr">Writing a new ADR</h2>

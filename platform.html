@@ -120,7 +120,7 @@
         <div class="stats">
           <!-- BEGIN platform-stats -->
           <div class="stat"><div class="num">22</div><div class="label">NuGet packages</div></div>
-          <div class="stat"><div class="num">132</div><div class="label">Architecture Decision Records</div></div>
+          <div class="stat"><div class="num">133</div><div class="label">Architecture Decision Records</div></div>
           <div class="stat"><div class="num">141</div><div class="label">Architecture fitness tests</div></div>
           <div class="stat"><div class="num">3</div><div class="label">Reference applications</div></div>
           <!-- END platform-stats -->
@@ -422,7 +422,7 @@
           <p class="eyebrow">Why, not just what</p>
           <h2>Architecture Decision Records</h2>
           <!-- BEGIN adr-count -->
-          <p>132 ADRs capture the context and trade-offs behind each cross-cutting pattern, so the design is teachable, not tribal knowledge. Every entry below links to the full record.</p>
+          <p>133 ADRs capture the context and trade-offs behind each cross-cutting pattern, so the design is teachable, not tribal knowledge. Every entry below links to the full record.</p>
           <!-- END adr-count -->
         </div>
         <div class="adr-list">
@@ -528,7 +528,7 @@
           <a class="adr" href="docs/adr/099-generic-write-side-entity-commands.html"><span class="adr-num">099</span><span><span class="adr-title">Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</span><span class="adr-sum">Accepted (2026-08-29, framework v1.170.0). Extends ADR-034, which gave every entity a generic read surface plus create and delete, by completing the…</span></span></a>
           <a class="adr" href="docs/adr/100-outbox-opt-in-resolved-from-messaging-mode.html"><span class="adr-num">100</span><span><span class="adr-title">The Outbox Is Resolved from the Messaging Mode, Not Always On</span><span class="adr-sum">Accepted (2026-08-29, framework v1.170.0). Amends ADR-003 (the outbox runs when the transport needs it, rather than in every host unconditionally) and…</span></span></a>
           <a class="adr" href="docs/adr/101-common-metapackage.html"><span class="adr-num">101</span><span><span class="adr-title">An MMCA.Common Metapackage for the Core Six</span><span class="adr-sum">Accepted (2026-08-29, framework v1.170.0). Extends ADR-053 (the metapackage ships to both registries from the same tag, through the same workflow) and…</span></span></a>
-          <a class="adr" href="docs/adr/102-pbkdf2-only-password-hashing.html"><span class="adr-num">102</span><span><span class="adr-title">PBKDF2-Only Password Hashing</span><span class="adr-sum">Accepted (2026-08-31). Supersedes ADR-032. Revised 2026-09-11: verification now carries a canonical-material length guard (it rejects any stored hash…</span></span></a>
+          <a class="adr" href="docs/adr/102-pbkdf2-only-password-hashing.html"><span class="adr-num">102</span><span><span class="adr-title">PBKDF2-Only Password Hashing</span><span class="adr-sum">Superseded by ADR-133 (2026-10-23). Originally Accepted (2026-08-31), superseding ADR-032. The fixed, unstored 600,000-iteration work factor and…</span></span></a>
           <a class="adr" href="docs/adr/103-bunit-component-test-tier.html"><span class="adr-num">103</span><span><span class="adr-title">bUnit Component-Test Tier as a Shipped Package</span><span class="adr-sum">Accepted (2026-08-31). Revised 2026-09-03: one trade-off overstated how far the AngleSharp advisory pin travels. See Revision (2026-09-03) at the end.…</span></span></a>
           <a class="adr" href="docs/adr/104-smart-enums-as-opt-in-capability.html"><span class="adr-num">104</span><span><span class="adr-title">Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</span><span class="adr-sum">Accepted (2026-08-31). Revised 2026-09-09: ADR-115 copies this record&#39;s posture verbatim for strongly typed identifiers: shipped, tested, wired into…</span></span></a>
           <a class="adr" href="docs/adr/105-data-residency-build-gate.html"><span class="adr-num">105</span><span><span class="adr-title">The Published Data-Residency Claim as a Build Gate</span><span class="adr-sum">Accepted (2026-09-01). Revised 2026-10-01 (region matching is a whole-token comparison rather than plain containment; see Revision below). Revised…</span></span></a>
@@ -559,6 +559,7 @@
           <a class="adr" href="docs/adr/130-per-engine-data-source-strategy.html"><span class="adr-num">130</span><span><span class="adr-title">Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</span><span class="adr-sum">Accepted (2026-10-01). Shipped in MMCA.Common v1.218.0 (MMCA.Common/CHANGELOG.md:623). Revised 2026-10-06: the release status now records v1.218.0 as…</span></span></a>
           <a class="adr" href="docs/adr/131-same-origin-api-proxy.html"><span class="adr-num">131</span><span><span class="adr-title">Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</span><span class="adr-sum">Accepted (2026-10-01). Shipped in MMCA.Common v1.218.0. Revised 2026-10-06: v1.218.0 is released, ADC adopted it through 1.218.1, HTTP/2 WebSocket…</span></span></a>
           <a class="adr" href="docs/adr/132-build-strictness-analyzer-policy.html"><span class="adr-num">132</span><span><span class="adr-title">Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</span><span class="adr-sum">Accepted (2026-10-07). The policy predates this record: all four .NET repos have built this way for some time, and this is the first written decision…</span></span></a>
+          <a class="adr" href="docs/adr/133-versioned-password-hash-work-factor.html"><span class="adr-num">133</span><span><span class="adr-title">Versioned Password Hash Work Factor</span><span class="adr-sum">Accepted (2026-10-23). Supersedes ADR-102. The change is the MMCA.Common v1.252.0 entry of the framework changelog (MMCA.Common/CHANGELOG.md:7, :16,…</span></span></a>
           <!-- END adr-list -->
         </div>
 
@@ -584,9 +585,9 @@
         <div class="grid grid--2">
           <!-- BEGIN library-cards -->
           <a class="card card--link" href="docs/index.html">
-            <span class="kicker kicker--accent">197 documents</span>
+            <span class="kicker kicker--accent">198 documents</span>
             <h3>Open the reference library</h3>
-            <p>Every collection indexed in one place: 132 Architecture Decision Records, the 39-document onboarding guide, 7 governance artifacts, and 19 guides and specifications.</p>
+            <p>Every collection indexed in one place: 133 Architecture Decision Records, the 39-document onboarding guide, 7 governance artifacts, and 19 guides and specifications.</p>
             <div class="card-foot"><span class="go">Browse the collections →</span></div>
           </a>
           <!-- END library-cards -->

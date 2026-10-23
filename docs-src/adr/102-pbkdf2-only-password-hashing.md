@@ -1,7 +1,11 @@
 # ADR-102: PBKDF2-Only Password Hashing
 
 ## Status
-Accepted (2026-08-31). Supersedes [ADR-032](032-password-hashing.md).
+**Superseded by [ADR-133](133-versioned-password-hash-work-factor.md) (2026-10-23).** Originally
+Accepted (2026-08-31), superseding [ADR-032](032-password-hashing.md). The fixed, unstored
+600,000-iteration work factor and header-less format this record describes have since been replaced:
+new hashes carry a version byte and their own iteration count, and ADR-133 carries the current
+decision. The body below is retained unchanged as the historical record of the single-path design.
 Revised 2026-09-11: verification now carries a canonical-material length guard (it rejects any stored
 hash or salt that is not exactly `HashSize`/`SaltSize` bytes) and derives to `HashSize` rather than to
 the stored hash length. The record's decision is unchanged (one interface, one implementation, PBKDF2
