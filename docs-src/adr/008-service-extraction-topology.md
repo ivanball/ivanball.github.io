@@ -20,7 +20,7 @@ federation bypasses the Gateway in production; see Revision below). Revised 2026
 cross-service tier's cadence is corrected to weeknights only (a scheduled night is skipped when
 `main` has not moved since the last successful run), the single arm-deploy step is scoped to
 `main.bicep`, and anchors are refreshed after the v1.233.0 release. Revised 2026-10-21: anchors
-refreshed after the v1.250.0 consumer sweep.
+refreshed after the v1.250.0 consumer sweep. Revised 2026-10-24: anchors refreshed against current source.
 
 ## Context
 ADC began as a modular monolith: one `MMCA.ADC.WebAPI` host loaded every module (Identity, Conference,
@@ -85,8 +85,8 @@ and front them with a single **YARP reverse-proxy Gateway** (`MMCA.ADC.Gateway`,
   asynchronous flows over the outbox to MassTransit broker (ADR-003, ADR-006). Token validation is
   federated via JWKS (ADR-004): locally the AppHost points each service at Identity through the Gateway
   (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:373-375`), while in production each service
-  sets its JWT authority to Identity's internal URL directly (`MMCA.ADC/infra/main.bicep:2159`, `:2295`,
-  `:2449`). Each service owns its own database (ADR-006).
+  sets its JWT authority to Identity's internal URL directly (`MMCA.ADC/infra/main.bicep:2194`, `:2330`,
+  `:2484`). Each service owns its own database (ADR-006).
 - **Transport stays at the edge, enforced.** `MicroserviceExtractionTests` in the architecture suite
   forbid gRPC / MassTransit / Protobuf dependencies in any Domain, Application, or Shared assembly, so the
   core stays host-agnostic and the split stays reversible.
@@ -139,8 +139,8 @@ first of all to demonstrate and continuously exercise the extraction path end to
 nothing runs is a claim. They are not the output of a scale, team or deploy-cadence trigger. The
 conference peaked at roughly 67 concurrent users (Context above), one team owns every module, and all
 six deployables still ship in a single pipeline run from one template
-(`MMCA.ADC/infra/main.bicep:1825`, `:2078`, `:2231`, `:2366`, `:2556`, `:2719`, deployed together by a
-single `azure/arm-deploy` step for `main.bicep` at `MMCA.ADC/.github/workflows/deploy.yml:1448-1454`), so the
+(`MMCA.ADC/infra/main.bicep:1860`, `:2113`, `:2266`, `:2401`, `:2591`, `:2754`, deployed together by a
+single `azure/arm-deploy` step for `main.bicep` at `MMCA.ADC/.github/workflows/deploy.yml:1449-1455`), so the
 independent-deploy benefit this record lists is available rather than taken. What ADC does buy with the split is proof under load that the path
 works: transport stays out of Domain, Application and Shared under a build gate
 (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Layering/MicroserviceExtractionTests.cs:3`), and the
@@ -221,6 +221,18 @@ numbers moved; the dated revisions above keep their anchors as written.
    `:2078`, `:2231`, `:2366`, `:2556` and `:2719`; the `main.bicep` arm-deploy step at
    `MMCA.ADC/.github/workflows/deploy.yml:1448-1454` and the `foundation.bicep` arm-deploy step at
    `:987`.
+
+## Revision (2026-10-24)
+Re-verified against current source. No content changed: production still points the JWT authority at
+Identity's internal URL, and exactly six container apps still deploy from one `main.bicep`
+arm-deploy step. Only line numbers moved; the dated revisions above keep their anchors as written.
+
+1. Anchors re-verified against current source: production JWT authority at
+   `MMCA.ADC/infra/main.bicep:2194`, `:2330` and `:2484`; the six container apps at `:1860`
+   (Identity), `:2113` (Conference), `:2266` (Engagement), `:2401` (Notification), `:2591` (Gateway)
+   and `:2754` (UI); the `main.bicep` arm-deploy step at
+   `MMCA.ADC/.github/workflows/deploy.yml:1449-1455` and the `foundation.bicep` arm-deploy step at
+   `:988`.
 
 ## Related
 ADR-003 (outbox dual dispatch), ADR-004 (cross-service token validation via JWKS), ADR-006 (database

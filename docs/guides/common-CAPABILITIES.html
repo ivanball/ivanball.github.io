@@ -256,6 +256,96 @@
           <td>bUnit component-test base with MudBlazor provider handles, mutable auth state, capturing HTTP doubles, markup snapshots (<a href="../adr/103-bunit-component-test-tier.html">ADR-103</a>).</td>
           </tr>
           </tbody></table></div>
+          <h2 id="support-tiers">Support tiers</h2>
+          <p>Every configuration axis the startup summary names (data source engines, message bus, cache, tenancy; <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/StartupConfigurationSummaryService.cs:137</code>) compiles and is unit-tested, but not every value carries the same evidence. <strong>Tier 1</strong> is production-proven (deployed by ADC or Store), <strong>Tier 2</strong> is exercised in CI against a real engine or end to end, and <strong>Tier 3</strong> compiles and is unit-tested only; an adopter choosing a Tier 2 or Tier 3 value is running ahead of the first-party consumers and should plan their own integration testing for it. Where the evidence read does not settle a tier, the row says so rather than rounding up.</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Axis</th>
+          <th>Value</th>
+          <th>Tier</th>
+          <th>Evidence</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>Data source</td>
+          <td><code>SQLServer</code></td>
+          <td>1</td>
+          <td>Azure SQL in both deployed consumers (<code>MMCA.ADC/infra/main.bicep:1007</code>, <code>MMCA.Store/infra/main.bicep:877</code>); also the <code>sqlserver-integration</code> Testcontainers job (<code>MMCA.Common/.github/workflows/ci.yml:806</code>, run at <code>:844</code>)</td>
+          </tr>
+          <tr>
+          <td>Data source</td>
+          <td><code>PostgreSQL</code></td>
+          <td>2</td>
+          <td><code>postgresql-integration</code> Testcontainers job (<code>MMCA.Common/.github/workflows/ci.yml:769</code>, run at <code>:804</code>); no deployed consumer</td>
+          </tr>
+          <tr>
+          <td>Data source</td>
+          <td><code>Sqlite</code></td>
+          <td>2</td>
+          <td>the <code>apphost-testing</code> job boots the sample AppHost with a SQLite file (<code>MMCA.Common/.github/workflows/ci.yml:846</code>, <code>:859</code>); no deployed consumer</td>
+          </tr>
+          <tr>
+          <td>Data source</td>
+          <td><code>CosmosDB</code></td>
+          <td>3</td>
+          <td>declared at <code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IDataSourceService.cs:9</code>; no Cosmos job in <code>ci.yml</code>, tests are unit-level (<code>Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/DbContexts/CosmosDbContextTests.cs</code>); no deployed consumer</td>
+          </tr>
+          <tr>
+          <td>Message bus</td>
+          <td><code>InProcess</code></td>
+          <td>Ambiguous (2 or 3)</td>
+          <td>the default (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:241</code>); both deployed consumers override it, and no CI job read for this table confirms an end-to-end in-process run</td>
+          </tr>
+          <tr>
+          <td>Message bus</td>
+          <td><code>RabbitMq</code></td>
+          <td>2</td>
+          <td>weeknight cross-service tiers against a Testcontainers RabbitMQ (<code>MMCA.ADC/.github/workflows/cross-service-tests.yml:106</code>, <code>MMCA.Store/.github/workflows/cross-service-tests.yml:110</code>); RabbitMQ is in the ADC E2E stack (<code>MMCA.ADC/.github/workflows/e2e.yml:320</code>); no deployed consumer</td>
+          </tr>
+          <tr>
+          <td>Message bus</td>
+          <td><code>AzureServiceBus</code></td>
+          <td>1</td>
+          <td>Service Bus namespace and <code>MessageBus__Provider</code> in both deployed consumers (<code>MMCA.ADC/infra/main.bicep:1268</code>, <code>:1982</code>; <code>MMCA.Store/infra/main.bicep:1077</code>, <code>:1606</code>)</td>
+          </tr>
+          <tr>
+          <td>Cache</td>
+          <td><code>memory</code></td>
+          <td>Ambiguous (2 or 3)</td>
+          <td>the fallback when no distributed cache is registered (<code>StartupConfigurationSummaryService.cs:112-114</code>); the deployed consumers run hybrid, and no CI job read for this table confirms a memory-only end-to-end run</td>
+          </tr>
+          <tr>
+          <td>Cache</td>
+          <td><code>distributed</code></td>
+          <td>2</td>
+          <td><code>redis-integration</code> Testcontainers job (<code>MMCA.Common/.github/workflows/ci.yml:725</code>, run at <code>:767</code>, which includes <code>DistributedCacheServiceRedisTests.cs</code>); no deployed consumer runs distributed-only</td>
+          </tr>
+          <tr>
+          <td>Cache</td>
+          <td><code>hybrid</code></td>
+          <td>1</td>
+          <td><code>ConnectionStrings__redis</code> upgrades <code>ICacheService</code> to the hybrid cache in both deployed consumers (<code>MMCA.ADC/infra/main.bicep:1589-1591</code>, <code>:1944</code>; <code>MMCA.Store/infra/main.bicep:1157</code>, <code>:1603</code>); also <code>HybridCacheServiceRedisTests.cs</code> in the <code>redis-integration</code> job</td>
+          </tr>
+          <tr>
+          <td>Tenancy</td>
+          <td><code>off</code></td>
+          <td>1</td>
+          <td><code>Enabled</code> defaults to false (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettings.cs:72</code>) and neither deployed consumer&#39;s <code>infra/main.bicep</code> sets a <code>Tenancy__</code> variable; the SQL Server integration tier also runs with tenancy off (<code>Tests/Core/MMCA.Common.Infrastructure.SQLServer.Tests/SQLServerPersistenceTests.cs:280</code>)</td>
+          </tr>
+          <tr>
+          <td>Tenancy</td>
+          <td><code>shared-database</code></td>
+          <td>Ambiguous (2 or 3)</td>
+          <td>mode named at <code>StartupConfigurationSummaryService.cs:123</code>, unit-tested at <code>Tests/Core/MMCA.Common.Infrastructure.Tests/Configuration/StartupConfigurationSummaryServiceTests.cs:162</code>; a SQLite multi-source test in the CI unit tier references tenancy, but its scope was not confirmed for this table; no deployed consumer</td>
+          </tr>
+          <tr>
+          <td>Tenancy</td>
+          <td><code>database-per-tenant</code></td>
+          <td>3 (possibly 2)</td>
+          <td>MMCA.Helpdesk configures it (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/appsettings.json:29-43</code>, tenant <code>globex</code> with its own data source), but Helpdesk is not deployed and its CI test run (<code>MMCA.Helpdesk/.github/workflows/ci.yml:104</code>) was not confirmed to boot a host against a tenant database; unit-tested at <code>StartupConfigurationSummaryServiceTests.cs:162-170</code></td>
+          </tr>
+          </tbody></table></div>
           <h2 id="getting-started-and-scaffolding">Getting started and scaffolding</h2>
           <p>From zero to a green, warning-free, tested solution before writing any business logic.</p>
           <ul>
@@ -594,6 +684,7 @@
             <p class="doc-toc-title">On this page</p>
             <ul>
             <li><a href="#package-map">Package map</a></li>
+            <li><a href="#support-tiers">Support tiers</a></li>
             <li><a href="#getting-started-and-scaffolding">Getting started and scaffolding</a></li>
             <li><a href="#architectural-core">Architectural core</a></li>
             <li><a href="#monolith-now-services-later">Monolith now, services later</a></li>
