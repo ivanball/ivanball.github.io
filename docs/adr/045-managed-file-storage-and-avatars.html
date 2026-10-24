@@ -464,10 +464,15 @@
           and the GCS XML API (<code>MMCA.Common/CHANGELOG.md:12</code>). Request and response checksums default to
           <code>WHEN_REQUIRED</code> (<code>S3FileStorageSettings.cs:65</code>, <code>:72</code>). The <code>aws-integration</code> CI job exercises it
           against LocalStack (<code>MMCA.Common/.github/workflows/ci.yml:846</code>).</li>
-          <li><strong>A lost call fails startup.</strong> A <code>FileStorage</code> section holding any non-blank value while
-          <code>IFileStorageService</code> is still the Null service fails <code>ValidateOnStart</code>, naming both calls
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/CloudAdapterTripwire.cs:28</code>,
-          <code>:46</code>-<code>:50</code>).</li>
+          <li><strong>A lost call fails the upload, not startup.</strong> File storage has no startup tripwire: a
+          <code>FileStorage</code> section is routinely shared configuration (one user-secrets id across every service
+          of a solution), so its presence does not declare that a host stores files
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/CloudAdapterTripwire.cs:21-26</code>).
+          A host that stores files and lost its adapter call fails each upload with
+          <code>FileStorage.NotConfigured</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Storage/NullFileStorageService.cs:31-35</code>).
+          v1.255.0 shipped a check on any non-blank <code>FileStorage</code> value; v1.256.0 removed it because it
+          failed services that never store files (<code>MMCA.Common/CHANGELOG.md:11</code>).</li>
           <li>The anchors into <code>MMCA.Common.Infrastructure/Storage/AzureBlobFileStorageService.cs</code> inside the
           2026-09-12 and 2026-10-06 revisions are left as recorded; that file now lives at the adapter path
           above.</li>

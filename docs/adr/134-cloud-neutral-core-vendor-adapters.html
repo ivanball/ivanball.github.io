@@ -325,12 +325,14 @@
           <li><strong>Startup tripwires fail fast when vendor configuration exists without its adapter.</strong> Two
           <code>IValidateOptions</code> validators run under <code>ValidateOnStart</code>, before any hosted service starts.
           <code>CloudAdapterTripwire</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/CloudAdapterTripwire.cs:25</code>,
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/CloudAdapterTripwire.cs:30</code>,
           registered by <code>AddInfrastructure</code> at
-          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:221-223</code>) fails a
-          non-blank <code>FileStorage</code> section whose <code>IFileStorageService</code> is still the null default (<code>:28</code>,
-          <code>:46-50</code>) and <code>NativePush:Enabled=true</code> whose <code>INativePushSender</code> is still the null default (<code>:31</code>,
-          <code>:53-58</code>), each message naming the call. <code>HostIntegrationTripwire</code>
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:221-223</code>) fails
+          <code>NativePush:Enabled=true</code> whose <code>INativePushSender</code> is still the null default (<code>:33</code>, <code>:48-53</code>),
+          naming the call. A tripwire fires only on a key that declares intent, so a <code>FileStorage</code> section,
+          which is routinely shared across a solution&#39;s services, is deliberately not checked (<code>:21-26</code>); a
+          host that lost its storage adapter fails each upload with <code>FileStorage.NotConfigured</code> instead
+          (v1.256.0, <code>MMCA.Common/CHANGELOG.md:11</code>). <code>HostIntegrationTripwire</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Integrations/HostIntegrationTripwire.cs:15</code>, <code>:31</code>,
           registered by <code>AddServiceDefaults()</code> at <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:44-46</code>)
           checks <code>APPLICATIONINSIGHTS_CONNECTION_STRING</code>, <code>KeyVault:Uri</code> and <code>DataProtection:BlobStorageUri</code>

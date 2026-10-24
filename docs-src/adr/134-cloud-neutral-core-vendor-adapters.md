@@ -85,12 +85,14 @@ guide states the rule (`MMCA.Common/AGENTS.md:145`).
 - **Startup tripwires fail fast when vendor configuration exists without its adapter.** Two
   `IValidateOptions` validators run under `ValidateOnStart`, before any hosted service starts.
   `CloudAdapterTripwire`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/CloudAdapterTripwire.cs:25`,
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/CloudAdapterTripwire.cs:30`,
   registered by `AddInfrastructure` at
-  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:221-223`) fails a
-  non-blank `FileStorage` section whose `IFileStorageService` is still the null default (`:28`,
-  `:46-50`) and `NativePush:Enabled=true` whose `INativePushSender` is still the null default (`:31`,
-  `:53-58`), each message naming the call. `HostIntegrationTripwire`
+  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:221-223`) fails
+  `NativePush:Enabled=true` whose `INativePushSender` is still the null default (`:33`, `:48-53`),
+  naming the call. A tripwire fires only on a key that declares intent, so a `FileStorage` section,
+  which is routinely shared across a solution's services, is deliberately not checked (`:21-26`); a
+  host that lost its storage adapter fails each upload with `FileStorage.NotConfigured` instead
+  (v1.256.0, `MMCA.Common/CHANGELOG.md:11`). `HostIntegrationTripwire`
   (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Integrations/HostIntegrationTripwire.cs:15`, `:31`,
   registered by `AddServiceDefaults()` at `MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:44-46`)
   checks `APPLICATIONINSIGHTS_CONNECTION_STRING`, `KeyVault:Uri` and `DataProtection:BlobStorageUri`

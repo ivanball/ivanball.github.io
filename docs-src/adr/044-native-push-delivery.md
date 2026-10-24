@@ -163,8 +163,8 @@ Null-by-default sender and registrar, the `NativePush` section enabled AND compl
    section and its keys are unchanged (`MMCA.Common/CHANGELOG.md:25`).
 3. **A lost call fails startup.** `NativePush:Enabled=true` while `INativePushSender` is still the
    Null sender fails `ValidateOnStart`, naming the call
-   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/CloudAdapterTripwire.cs:31`,
-   `:53`-`:58`).
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/CloudAdapterTripwire.cs:33`,
+   `:48`-`:53`).
 4. **Corrected in place:** the Decision bullet that named `AddNativePushNotifications(configuration)`.
    The registrar anchors inside the 2026-10-21 revision point at the file's earlier Infrastructure
    location and are left as recorded.
