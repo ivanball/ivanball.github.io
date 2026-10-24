@@ -73,12 +73,24 @@ source, so it is the gate that proves the replacement API compiles before the pa
 
 There is **no `[Obsolete]` grace period** today. Because the lockstep sweep updates every first-party
 caller in the same change set, a superseded API is removed in the release that supersedes it rather
-than marked obsolete and carried. `[Obsolete]` is used only where the compiler warning is the point
-(steering authors away from a pattern that still compiles, e.g. composed sentences that cannot be
-translated under [ADR-027](../adr/027-multi-locale-i18n.md)), not as a removal countdown.
+than marked obsolete and carried. `[Obsolete]` is reserved for cases where the compiler warning is
+the point (steering authors away from a pattern that still compiles), not a removal countdown, and
+none is in use in the framework source today.
 
-The replacement is always named in the CHANGELOG entry alongside the removal. If external adoption
-makes a grace period worthwhile, the change is to add one here first, not to assume one exists.
+The replacement is always named in the CHANGELOG entry alongside the removal. The trigger that ends
+this policy is a first external adopter: a nuget.org dependent outside the ivanball repositories, or
+a signed client engagement. When it fires, this page is revised first, before any release relies on
+the change, to adopt:
+
+- **Scheduled MAJOR releases.** Breaking changes are batched into a scheduled MAJOR release instead of
+  shipping in a MINOR.
+- **A one-release `[Obsolete]` window** for removed members and types where C# allows it. A namespace
+  move cannot carry one.
+- **The Infrastructure package split re-opened.** It is recorded as FR-1 in the
+  [remediation backlog](../governance/common-RemediationBacklog.md), which already names an external
+  adopter as its re-open trigger.
+- **Supported extension points marked** on the public base classes.
+- **Stable diagnostic IDs** for framework startup and configuration errors.
 
 ## Supply chain
 

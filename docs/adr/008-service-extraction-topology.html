@@ -260,7 +260,7 @@
           cross-service tier&#39;s cadence is corrected to weeknights only (a scheduled night is skipped when
           <code>main</code> has not moved since the last successful run), the single arm-deploy step is scoped to
           <code>main.bicep</code>, and anchors are refreshed after the v1.233.0 release. Revised 2026-10-21: anchors
-          refreshed after the v1.250.0 consumer sweep.</p>
+          refreshed after the v1.250.0 consumer sweep. Revised 2026-10-24: anchors refreshed against current source.</p>
           <h2 id="context">Context</h2>
           <p>ADC began as a modular monolith: one <code>MMCA.ADC.WebAPI</code> host loaded every module (Identity, Conference,
           Engagement, Notification) in-process via the <code>ModuleLoader</code>, sharing one database and dispatching
@@ -322,8 +322,8 @@
           asynchronous flows over the outbox to MassTransit broker (ADR-003, ADR-006). Token validation is
           federated via JWKS (ADR-004): locally the AppHost points each service at Identity through the Gateway
           (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:373-375</code>), while in production each service
-          sets its JWT authority to Identity&#39;s internal URL directly (<code>MMCA.ADC/infra/main.bicep:2159</code>, <code>:2295</code>,
-          <code>:2449</code>). Each service owns its own database (ADR-006).</li>
+          sets its JWT authority to Identity&#39;s internal URL directly (<code>MMCA.ADC/infra/main.bicep:2194</code>, <code>:2330</code>,
+          <code>:2484</code>). Each service owns its own database (ADR-006).</li>
           <li><strong>Transport stays at the edge, enforced.</strong> <code>MicroserviceExtractionTests</code> in the architecture suite
           forbid gRPC / MassTransit / Protobuf dependencies in any Domain, Application, or Shared assembly, so the
           core stays host-agnostic and the split stays reversible.</li>
@@ -377,8 +377,8 @@
           nothing runs is a claim. They are not the output of a scale, team or deploy-cadence trigger. The
           conference peaked at roughly 67 concurrent users (Context above), one team owns every module, and all
           six deployables still ship in a single pipeline run from one template
-          (<code>MMCA.ADC/infra/main.bicep:1825</code>, <code>:2078</code>, <code>:2231</code>, <code>:2366</code>, <code>:2556</code>, <code>:2719</code>, deployed together by a
-          single <code>azure/arm-deploy</code> step for <code>main.bicep</code> at <code>MMCA.ADC/.github/workflows/deploy.yml:1448-1454</code>), so the
+          (<code>MMCA.ADC/infra/main.bicep:1860</code>, <code>:2113</code>, <code>:2266</code>, <code>:2401</code>, <code>:2591</code>, <code>:2754</code>, deployed together by a
+          single <code>azure/arm-deploy</code> step for <code>main.bicep</code> at <code>MMCA.ADC/.github/workflows/deploy.yml:1449-1455</code>), so the
           independent-deploy benefit this record lists is available rather than taken. What ADC does buy with the split is proof under load that the path
           works: transport stays out of Domain, Application and Shared under a build gate
           (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Layering/MicroserviceExtractionTests.cs:3</code>), and the
@@ -459,6 +459,18 @@
           <code>MMCA.ADC/.github/workflows/deploy.yml:1448-1454</code> and the <code>foundation.bicep</code> arm-deploy step at
           <code>:987</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-24">Revision (2026-10-24)</h2>
+          <p>Re-verified against current source. No content changed: production still points the JWT authority at
+          Identity&#39;s internal URL, and exactly six container apps still deploy from one <code>main.bicep</code>
+          arm-deploy step. Only line numbers moved; the dated revisions above keep their anchors as written.</p>
+          <ol>
+          <li>Anchors re-verified against current source: production JWT authority at
+          <code>MMCA.ADC/infra/main.bicep:2194</code>, <code>:2330</code> and <code>:2484</code>; the six container apps at <code>:1860</code>
+          (Identity), <code>:2113</code> (Conference), <code>:2266</code> (Engagement), <code>:2401</code> (Notification), <code>:2591</code> (Gateway)
+          and <code>:2754</code> (UI); the <code>main.bicep</code> arm-deploy step at
+          <code>MMCA.ADC/.github/workflows/deploy.yml:1449-1455</code> and the <code>foundation.bicep</code> arm-deploy step at
+          <code>:988</code>.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-003 (outbox dual dispatch), ADR-004 (cross-service token validation via JWKS), ADR-006 (database
           per service), and ADR-007 (gRPC cross-service calls) are the facet decisions that sit under this extraction.</p>
@@ -482,6 +494,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-24">Revision (2026-10-24)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>
