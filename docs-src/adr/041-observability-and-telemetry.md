@@ -59,6 +59,7 @@ Revised 2026-10-01 (ASP.NET Core metrics are now behind a third cost knob,
 Revised 2026-10-06: the correlation middleware also discards a non-printable-ASCII id, Store's auth alert counts 401 and 429, the bootstrap logger factory lives until the host exits, and `GlobalExceptionHandler` writes its Error row only on its 500 path (cross-tenant and bad-request rejections log Warning).
 Revised 2026-10-07: Context and the rejected-alternative now separate unsampled tracing (the largest line item) from sampled traces (metrics measured larger in every recorded window), an outbox message with no stored trace context gets no `OutboxProcess` span, and the outbox, ADC bicep, ADC Conference `Program.cs` and `GlobalExceptionHandler` anchors are rebased after the v1.232.1 and v1.233.0 releases.
 Revised 2026-10-21: `StartOutboxActivity` runs once per dispatched message (a message a lease renewal found re-claimed (lost) is skipped before it), and the `Extensions.Telemetry.cs`, outbox, Store bicep and host `Program.cs` anchors are refreshed.
+Revised 2026-10-24: OTLP is the only built-in exporter; Azure Monitor moved to the `AddAzureMonitorExporter()` call in MMCA.Common.Azure ([ADR-134](134-cloud-neutral-core-vendor-adapters.md)), and the Decision's exporter bullet is corrected in place. See Revision (2026-10-24) at the end.
 
 ## Context
 The framework is a modular monolith whose modules extract into standalone services (ADR-008), so
@@ -198,13 +199,15 @@ for the CQRS and outbox paths, and expose cost knobs with fail-safe defaults.
   message that stored no trace or span id gets no `OutboxProcess` span at all
   (`OutboxProcessor.cs:1092`-`:1095`).
 
-- **Dual exporters, either or both.** `AddOpenTelemetryExporters` enables OTLP when
-  `OTEL_EXPORTER_OTLP_ENDPOINT` is present (`Extensions.Telemetry.cs:162`-`:163`, the Aspire dashboard sets it, exporter
-  wired at `Extensions.Telemetry.cs:167`) and Azure Monitor via `UseAzureMonitor` (`Extensions.Telemetry.cs:175`) when
-  `APPLICATIONINSIGHTS_CONNECTION_STRING` is present (read at `Extensions.Telemetry.cs:170`-`:171`, checked at
-  `Extensions.Telemetry.cs:173`, and set by the cloud deployment). Both can be active at once
-  (`Extensions.Telemetry.cs:158`, on the method at `:160`), so local development ships to the
-  Aspire dashboard and production ships to workspace-based Application Insights with no code change.
+- **OTLP built in, Azure Monitor by adapter.** `AddOpenTelemetryExporters` (`Extensions.Telemetry.cs:163`)
+  enables OTLP when `OTEL_EXPORTER_OTLP_ENDPOINT` is present (read at `:165`-`:166`, the Aspire dashboard
+  sets it, exporter wired at `:170`), and OTLP is the only exporter the framework wires. Azure Monitor
+  is the adapter call `AddAzureMonitorExporter()`
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureMonitorExporterExtensions.cs:42`, `UseAzureMonitor`
+  at `:63`), made after `AddServiceDefaults()` in a host whose cloud deployment sets
+  `APPLICATIONINSIGHTS_CONNECTION_STRING`. Both can be active at once, so local development ships to the
+  Aspire dashboard and production ships to workspace-based Application Insights with that one adapter
+  call per deployed host (corrected in place 2026-10-24; see the Revision (2026-10-24) at the end).
 
 ## Rationale
 - **Instrument only where auto-instrumentation is blind.** The CQRS RED histograms and the outbox
@@ -738,3 +741,25 @@ anchors; one outbox detail is narrowed.
    Revision (2026-10-07) statements that every `Extensions.Telemetry.cs` anchor held and that the
    other six service hosts' bootstrap anchors were unchanged held for that date; this item supersedes
    them.
+
+## Revision (2026-10-24)
+[ADR-134](134-cloud-neutral-core-vendor-adapters.md) moves every Azure dependency out of the core
+packages. For this record that changes one thing, the exporter: `AddServiceDefaults()` no longer wires
+Azure Monitor when `APPLICATIONINSIGHTS_CONNECTION_STRING` is set (`MMCA.Common/CHANGELOG.md:27`).
+Instrumentation, meters, sampling and the cost knobs are unchanged.
+
+1. **OTLP is the only built-in exporter.** `AddOpenTelemetryExporters`
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.Telemetry.cs:163`) reads
+   `OTEL_EXPORTER_OTLP_ENDPOINT` (`:165`-`:166`) and calls `UseOtlpExporter()` (`:170`), nothing else.
+2. **Azure Monitor is an adapter call.** `AddAzureMonitorExporter()`
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureMonitorExporterExtensions.cs:12`, `:42`) calls
+   `UseAzureMonitor()` (`:63`). It throws when called before `AddServiceDefaults()` (`:45`-`:50`),
+   because the outbox and probe filter processors must be registered ahead of the exporter
+   (`Extensions.Telemetry.cs:146`).
+3. **A missing call fails startup.** A host that receives `APPLICATIONINSIGHTS_CONNECTION_STRING`
+   without the call fails `ValidateOnStart`, naming it
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Integrations/HostIntegrationTripwire.cs:20`, `:31`;
+   the call's marker at `AzureMonitorExporterExtensions.cs:56`).
+4. **Corrected in place:** the Decision bullet "Dual exporters, either or both", which placed
+   `UseAzureMonitor` inside `AddServiceDefaults` at `Extensions.Telemetry.cs:175` with the
+   connection-string read at `:170`-`:171`. Anchors inside the earlier revisions are left as recorded.

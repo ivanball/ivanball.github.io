@@ -15,6 +15,7 @@ Revised 2026-10-06: ADC's storage Shared Key parameter is no longer documented a
 Revised 2026-10-07: Key Vault purge protection is recorded as prescribed by both out-of-band vault bootstrap runbooks rather than open, the reference sample's vault write is pinned to its own resource, and every moved ADC citation (plus four Store and Common ones) is re-anchored.
 Revised 2026-10-19: Store's vault holds fifteen secrets, one of them the HS256 gRPC service-token key named with `--`, so the HS256 and `--` statements are corrected and the identity, vault and secret-block anchors re-pointed.
 Revised 2026-10-21: anchors refreshed after the ADC and Store `main.bicep` and `deploy.yml` growth, with every remaining Decision, Rationale and Trade-offs line anchor re-verified; no decision changed.
+Revised 2026-10-24: the host-side vault read is `AddAzureKeyVaultConfiguration()` in MMCA.Common.Azure, configuration keys unchanged ([ADR-134](134-cloud-neutral-core-vendor-adapters.md)); framework anchors in Decision and Trade-offs corrected in place. See Revision (2026-10-24) at the end.
 ## Context
 A Container App can hold a credential two ways: as a literal value in the app's own `secrets`
 collection, or as a reference to a Key Vault secret that the platform resolves at runtime through an
@@ -83,8 +84,8 @@ its way to the same model.
   bound as `Grpc__ServiceToken__SigningKey` (`:1656`, `:1923`). ADC holds no HS256 secret.
 - **A second, host-side path reads the same vault as a configuration source.** Alongside the
   platform-resolved references, both templates set `KeyVault__Uri` and `AZURE_CLIENT_ID` on every app
-  whose host calls `AddCommonKeyVaultConfiguration`
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Configuration/KeyVaultConfigurationExtensions.cs:78-112`),
+  whose host calls `AddAzureKeyVaultConfiguration`
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureKeyVaultConfigurationExtensions.cs:80-118`),
   which layers the vault over `IConfiguration` at startup. Store wires all five deployables through
   two shared env entries (`MMCA.Store/infra/main.bicep:1490`, `:1500`, used at `:1563-1564`,
   `:1745-1746`, `:1882-1883`, `:2029-2030`, `:2161-2162`); ADC writes the pair inline on each of its
@@ -94,12 +95,12 @@ its way to the same model.
   `Gateway:63`, `UI.Web:44`; ADC `Identity.Service:111`, `Conference.Service:114`,
   `Engagement.Service:95`, `Notification.Service:98`, `Gateway:67`, `UI.Web:61`. The call is
   gated on `KeyVault:Uri` and does nothing at all without it, so local runs and tests take no Azure
-  dependency (`KeyVaultConfigurationExtensions.cs:80-88`). It authenticates with
+  dependency (`AzureKeyVaultConfigurationExtensions.cs:86-94`). It authenticates with
   `DefaultAzureCredential` against the same Key Vault Secrets User grant the references already use,
   which is what makes `AZURE_CLIENT_ID` load-bearing: these apps carry only a user-assigned identity,
   so an unpinned client id fails the startup read (`MMCA.Store/infra/main.bicep:1495-1499`,
   `MMCA.ADC/infra/main.bicep:2628-2632`). Secret names map `--` onto the configuration separator
-  (`KeyVaultConfigurationExtensions.cs:43-48`, `:109`). Exactly one secret carries `--`, and on
+  (`AzureKeyVaultConfigurationExtensions.cs:46-47`, `:115`). Exactly one secret carries `--`, and on
   purpose: Store's `Grpc--ServiceToken--SigningKey` (`MMCA.Store/infra/main.bicep:1420`) is named so
   that it maps onto `Grpc:ServiceToken:SigningKey`, the same key its `keyVaultUrl` reference binds,
   so both paths agree on one value. No ADC secret carries `--` (`MMCA.ADC/infra/main.bicep:1716-1820`),
@@ -216,10 +217,10 @@ consumer-by-consumer state is named.
 - **The host-side vault read is a hard startup dependency.** The configuration source is added
   synchronously in the host builder, so a vault read that cannot authenticate (an unpinned
   `AZURE_CLIENT_ID` is the documented case) crash-loops the app rather than degrading one feature
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Configuration/KeyVaultConfigurationExtensions.cs:63-69`,
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureKeyVaultConfigurationExtensions.cs:67-68`,
   `MMCA.Store/infra/main.bicep:1495-1499`). Neither template sets `KeyVault:ReloadIntervalMinutes`, so
   the vault is read once at startup and a rotated secret reaches those hosts on their next restart
-  (`KeyVaultConfigurationExtensions.cs:37-39`, `:96-107`).
+  (`AzureKeyVaultConfigurationExtensions.cs:39-40`, `:102-113`).
 - **The staged SQL half is inert until an operator acts.** Until the per-database
   `CREATE USER ... FROM EXTERNAL PROVIDER` grants are run and the flag is set, the shared SQL admin
   login is still what every service authenticates with, so password rotation is deferred rather than
@@ -431,6 +432,29 @@ anchors the 2026-10-19 revision left unverified are now re-pointed in place.
    job `MMCA.Common/.github/workflows/ci.yml:707`, compile steps `:717-723` gated at `:718` and
    `:722`, still `pull_request` only (`:14-15`). The anchors inside the dated revisions above are left
    as recorded.
+
+## Revision (2026-10-24)
+[ADR-134](134-cloud-neutral-core-vendor-adapters.md) moves the host-side Key Vault configuration source
+out of MMCA.Common.Aspire into the `MMCA.Common.Azure` adapter. The secret model (platform-resolved
+references, managed identity, one vault per deployment) is unchanged, and so are the keys.
+
+1. **The call is renamed and moved.** `AddCommonKeyVaultConfiguration()` is now
+   `AddAzureKeyVaultConfiguration()`
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureKeyVaultConfigurationExtensions.cs:23`, `:80`),
+   with the same `KeyVault:Uri` gate (`:86`-`:94`), the same `KeyVault:ReloadIntervalMinutes` knob
+   (`:102`-`:113`) and the same `DefaultAzureCredential` source (`:115`).
+2. **A lost call fails startup.** `KeyVault:Uri` set without the call fails `ValidateOnStart`, naming
+   it (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Integrations/HostIntegrationTripwire.cs:23`, `:31`;
+   the call's marker at `AzureKeyVaultConfigurationExtensions.cs:84`).
+3. **No other cloud ships a configuration source.** `MMCA.Common.Aws` registers storage and a broker
+   transport only (`MMCA.Common/Source/Hosting/MMCA.Common.Aws/AwsServiceCollectionExtensions.cs:44`,
+   `:79`).
+4. **Corrected in place:** the Decision bullet that named `AddCommonKeyVaultConfiguration` and its
+   `MMCA.Common.Aspire/Configuration/KeyVaultConfigurationExtensions.cs` anchors, and the two
+   Trade-offs anchors into the same file, now point at the adapter. The consumer `Program.cs` call
+   sites listed in the Decision name the call each consumer made when last verified; a consumer on
+   v1.255.0 or later makes the renamed call. The anchors inside the 2026-09-10 revision are left as
+   recorded.
 
 ## Related
 ADR-037 (`037-field-level-encryption-at-rest.md:108-110` directs a consumer to keep the

@@ -14,6 +14,7 @@ storage call; see Revision below).
 Revised 2026-10-21: the image processor registers only the JPEG, PNG, WebP and GIF decoders and
 nulls the EXIF, XMP and IPTC profiles rather than all metadata, and five ImageSharp advisories
 are accepted under a standing audit suppression.
+Revised 2026-10-24: the Azure Blob implementation moved to MMCA.Common.Azure and an S3-compatible implementation ships in MMCA.Common.Aws ([ADR-134](134-cloud-neutral-core-vendor-adapters.md)); see Revision (2026-10-24).
 ## Context
 The MAUI capability program (ADR-042) brought MediaPicker/camera within reach, and ADC amended
 BR-116 to include user avatar photos. That needs binary blob storage (the databases store
@@ -203,3 +204,37 @@ handling and the ImageSharp audit posture are corrected in the Decision and Cons
      `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/DeleteUser/DeleteUserHandler.cs:64-74`,
      through `ScheduleAvatarBlobDeletionAsync` (`:79-89`), and a failed schedule fails the erasure
      (`:88`).
+
+## Revision (2026-10-24)
+[ADR-134](134-cloud-neutral-core-vendor-adapters.md) moves the Azure Blob implementation out of the
+core and adds a second, S3-compatible implementation. `IFileStorageService`, its Null default and the
+`FileStorage` section are unchanged.
+
+1. **Azure Blob moved to the adapter.** `AddAzureBlobFileStorage(configuration)` keeps its name and now
+   lives in `MMCA.Common.Azure`
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureServiceCollectionExtensions.cs:41`). It still
+   registers only for a `ContainerName` plus an absolute `ServiceUri` or a `ConnectionString`
+   (`:49`-`:59`), using `DefaultAzureCredential` with a `ServiceUri` (`:63`-`:65`).
+   `AzureBlobFileStorageService` is at
+   `MMCA.Common/Source/Hosting/MMCA.Common.Azure/Storage/AzureBlobFileStorageService.cs:15`, and
+   `FileStorageSettings` is now `AzureBlobFileStorageSettings` (`Storage/AzureBlobFileStorageSettings.cs:10`).
+2. **An S3-compatible implementation.** `AddS3FileStorage(configuration)`
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Aws/AwsServiceCollectionExtensions.cs:44`) registers
+   `S3FileStorageService` (`MMCA.Common/Source/Hosting/MMCA.Common.Aws/Storage/S3FileStorageService.cs:21`)
+   bound from the same `FileStorage` section (`Storage/S3StorageClientFactory.cs:14`) through
+   `S3FileStorageSettings` (`Storage/S3FileStorageSettings.cs:13`), for Amazon S3, Cloudflare R2, MinIO
+   and the GCS XML API (`MMCA.Common/CHANGELOG.md:12`). Request and response checksums default to
+   `WHEN_REQUIRED` (`S3FileStorageSettings.cs:65`, `:72`). The `aws-integration` CI job exercises it
+   against LocalStack (`MMCA.Common/.github/workflows/ci.yml:846`).
+3. **A lost call fails the upload, not startup.** File storage has no startup tripwire: a
+   `FileStorage` section is routinely shared configuration (one user-secrets id across every service
+   of a solution), so its presence does not declare that a host stores files
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/CloudAdapterTripwire.cs:21-26`).
+   A host that stores files and lost its adapter call fails each upload with
+   `FileStorage.NotConfigured`
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Storage/NullFileStorageService.cs:31-35`).
+   v1.255.0 shipped a check on any non-blank `FileStorage` value; v1.256.0 removed it because it
+   failed services that never store files (`MMCA.Common/CHANGELOG.md:11`).
+4. The anchors into `MMCA.Common.Infrastructure/Storage/AzureBlobFileStorageService.cs` inside the
+   2026-09-12 and 2026-10-06 revisions are left as recorded; that file now lives at the adapter path
+   above.

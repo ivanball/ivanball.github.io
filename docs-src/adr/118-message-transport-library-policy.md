@@ -14,6 +14,7 @@ ADR-016's still-live **Transport exit options** section is recorded under **Rela
 decision and the replacement order are unchanged. Revised 2026-10-07: anchors refreshed after the
 v1.233.0 release. Revised 2026-10-21: the circuit-breaker description now matches source (it wraps
 the `IMessageBus` publish, which is the broker hop only in broker mode), and anchors are refreshed.
+Revised 2026-10-24: `MassTransit.AmazonSQS` 8.5.11 joins the pinned set for the SQS adapter transport, the pin and its gate unchanged ([ADR-134](134-cloud-neutral-core-vendor-adapters.md)); the trial point and the surface inventory are corrected in place. See Revision (2026-10-24) at the end.
 
 ## Context
 MassTransit is the only message-broker library in this workspace, and it is pinned to 8.5.11 across
@@ -77,11 +78,11 @@ implements the first over a MassTransit `IPublishEndpoint`
 does not reference MassTransit at all (`.../Infrastructure/Messaging/BrokerEventBus.cs:31`), because
 in broker mode its whole job is to write the outbox row and signal the processor. The whole
 `using MassTransit` surface is **nine files**: eight inside `MMCA.Common.Infrastructure`
-(`DependencyInjection.Messaging.cs`, `Messaging/BrokerMessageBus.cs`, `Messaging/ServiceBusEmulatorSupport.cs`
+(`DependencyInjection.Messaging.cs`, `Messaging/BrokerMessageBus.cs`, the `Messaging/Transports/` extension point
 and the five consumer files under `Messaging/Consumers/`: `IntegrationEventConsumer.cs`,
 `IntegrationEventConsumerExtensions.cs`, `UpcastingIntegrationEventConsumer.cs`,
 `FaultIntegrationEventConsumer.cs` and `ConsumerOriginRestore.cs`) plus the emulator test fixture
-`MMCA.Common/Source/Hosting/MMCA.Common.Testing/Fixtures/ServiceBusEmulatorFixtureBase.cs`. Domain,
+`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Azure/Fixtures/ServiceBusEmulatorFixtureBase.cs:54`; the Service Bus and SQS transports themselves sit in the adapter packages (see the Revision (2026-10-24)). Domain,
 Application and Shared hold the interfaces alone, and that is build-gated:
 `MicroserviceExtractionTestsBase`
 (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Layering/MicroserviceExtractionTestsBase.cs:8`)
@@ -142,10 +143,11 @@ so the pin is a dated decision rather than an open-ended hold.**
      commercial since 2025 for the same reason. It is named here only because it is the library most
      often suggested in the same breath, and it would be a new dependency rather than a replacement.
 
-6. **A trial ships beside the incumbent.** The trial point is an additive arm in the
-   `MessageBusProvider` switch inside `ConfigureBrokerTransport`
-   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:264`, the
-   switch at `:269`, beside the RabbitMQ arm at `:271` and the Azure Service Bus arm at `:302`), so a candidate is exercised by
+6. **A trial ships beside the incumbent.** The trial point is one more
+   `IBrokerTransport` registered by name through `AddBrokerTransport`
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:148`, resolved
+   by `ResolveBrokerTransport` at `:177`, beside the built-in RabbitMQ transport at `:179-181` and the
+   adapter transports in MMCA.Common.Azure and MMCA.Common.Aws), so a candidate is exercised by
    configuration without removing anything, and ADC's nightly Service Bus emulator smoke is where it
    runs first. That job is authoritative rather than advisory: it has carried no `continue-on-error`
    since 2026-08-31 (TD-17), and `deploy.yml`'s cross-service-freshness gate requires it to have
@@ -253,6 +255,29 @@ at `:116-126`. That revision is left as written.
    (`required-jobs-mode: same-run` at `:903`). The `MicroserviceExtractionTestsBase` citation in
    Context now names the class declaration (`MicroserviceExtractionTestsBase.cs:8`) rather than the
    `CoreLayers_ShouldNotDependOn_Transport` test at `:13`; neither line moved.
+
+## Revision (2026-10-24)
+[ADR-134](134-cloud-neutral-core-vendor-adapters.md) moves the vendor transports into adapter
+packages. The library choice, the v8 pin, the exit triggers and the replacement order are unchanged.
+
+1. **`MassTransit.AmazonSQS` stays on the v8 pin.** It is pinned at 8.5.11, documented as the same
+   version as every MassTransit entry above it
+   (`MMCA.Common/Directory.Packages.props:129`-`:130`), beside `MassTransit`, `MassTransit.RabbitMQ`
+   and `MassTransit.Azure.ServiceBus.Core` at 8.5.11 (`:125`-`:127`). MMCA.Common therefore carries
+   four MassTransit entries; the five-entry workspace count in the 2026-09-19 amendment is left as
+   recorded. Only `MMCA.Common.Aws` consumes the new entry, through `AmazonSqsTransport`
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Aws/Messaging/AmazonSqsTransport.cs:37`).
+2. **The vendor transports left the core.** The Azure Service Bus transport and its emulator helper
+   are in `MMCA.Common.Azure`
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/Messaging/AzureServiceBusTransport.cs:16`,
+   `Messaging/ServiceBusEmulatorSupport.cs:32`), and the build gate refuses a vendor MassTransit
+   transport in any core project
+   (`MMCA.Common/Source/Build/MMCA.Common.LayerEnforcement.targets:108-111`, `:126`).
+3. **Corrected in place:** Decision item 6, which placed the trial point in a `MessageBusProvider`
+   switch inside `ConfigureBrokerTransport` (neither exists now; a trial is one more registered
+   `IBrokerTransport`), and the Context surface inventory, which listed
+   `Messaging/ServiceBusEmulatorSupport.cs` in Infrastructure and the fixture under
+   `MMCA.Common.Testing`.
 
 ## Related
 [ADR-016](016-lockstep-versioning-masstransit-pin.md) (the lockstep release policy this pin is

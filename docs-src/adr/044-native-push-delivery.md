@@ -9,6 +9,7 @@ Revised 2026-10-06: the device DELETE route is `/Notifications/Devices/{installa
 Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 Revised 2026-10-21: anchors refreshed after the releases that moved the device controller, the
 registration service and the registrar.
+Revised 2026-10-24: the Notification Hubs sender and registrar moved to MMCA.Common.Azure, registered by `AddAzureNotificationHubsPush` ([ADR-134](134-cloud-neutral-core-vendor-adapters.md)); see Revision (2026-10-24).
 
 ## Context
 ADR-024 established two notification channels: a durable per-user `UserNotification` inbox (the
@@ -30,7 +31,7 @@ may not exist when the code ships.
 - **Two new Application abstractions, Null by default** (the ADR-024 pattern):
   `INativePushSender` (user-targeted and broadcast native sends) and `IPushDeviceRegistrar`
   (installation upsert/delete). `AddInfrastructure` TryAdds no-op defaults;
-  `AddNativePushNotifications(configuration)` swaps in the Azure Notification Hubs
+  `AddAzureNotificationHubsPush(configuration)` (MMCA.Common.Azure) swaps in the Azure Notification Hubs
   implementations only when the `NativePush` section is enabled AND complete
   (`ConnectionString`, `HubName`) - so hosts call it unconditionally and deployments flip the
   channel on by configuration alone.
@@ -142,3 +143,28 @@ running before the local sign-out. Only anchors in the live sections moved.
    `MMCA.Common.UI.Maui/DependencyInjection.cs:124-132`, the unregister calls at `AuthUIService.cs:90,143`
    (defined at `:361`), and the handler's native leg and at-least-once remarks at
    `SendPushNotificationHandler.cs:141-154` and `:21-30`.
+
+## Revision (2026-10-24)
+[ADR-134](134-cloud-neutral-core-vendor-adapters.md) moves the Notification Hubs implementation out of
+MMCA.Common.Infrastructure into the `MMCA.Common.Azure` adapter. The decision is unchanged: the
+Null-by-default sender and registrar, the `NativePush` section enabled AND complete as the gate, and
+`user:{id}` tags.
+
+1. **Registration renamed.** `AddNativePushNotifications(configuration)` is now
+   `AddAzureNotificationHubsPush(configuration)`
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureServiceCollectionExtensions.cs:83`), with the same
+   gate on `Enabled`, `ConnectionString` and `HubName` (`:91`-`:96`) before it registers the sender and
+   registrar (`:101`-`:102`).
+2. **Types moved.** `AzureNotificationHubNativePushSender`
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/Notifications/AzureNotificationHubNativePushSender.cs:14`)
+   and `AzureNotificationHubDeviceRegistrar` (`Notifications/AzureNotificationHubDeviceRegistrar.cs:15`)
+   live in `MMCA.Common.Azure.Notifications`, and `NativePushSettings` is now
+   `AzureNotificationHubSettings` (`Notifications/AzureNotificationHubSettings.cs:9`). The `NativePush`
+   section and its keys are unchanged (`MMCA.Common/CHANGELOG.md:25`).
+3. **A lost call fails startup.** `NativePush:Enabled=true` while `INativePushSender` is still the
+   Null sender fails `ValidateOnStart`, naming the call
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/CloudAdapterTripwire.cs:33`,
+   `:48`-`:53`).
+4. **Corrected in place:** the Decision bullet that named `AddNativePushNotifications(configuration)`.
+   The registrar anchors inside the 2026-10-21 revision point at the file's earlier Infrastructure
+   location and are left as recorded.

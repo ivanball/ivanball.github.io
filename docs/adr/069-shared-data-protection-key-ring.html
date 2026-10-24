@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 133 ADRs</summary>
+        <summary>All 134 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -233,6 +233,7 @@
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
+        <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
           </ol>
         </nav>
       </details>
@@ -249,7 +250,8 @@
           <code>conferenceScaledMaxReplicas</code>, and gate 2 is recorded as switched on for ADC and off for Store.
           Revised 2026-10-07: anchors refreshed after the v1.233.0 release, and Related now points at ADR-024
           for the WebSockets-only SignalR client that needs no session affinity. Revised 2026-10-21: anchors
-          refreshed after the ADC and Store infrastructure templates and deploy workflows moved.</p>
+          refreshed after the ADC and Store infrastructure templates and deploy workflows moved.
+          Revised 2026-10-24: the call is <code>AddAzureDataProtection()</code> in MMCA.Common.Azure, configuration keys unchanged (<a href="134-cloud-neutral-core-vendor-adapters.html">ADR-134</a>); framework anchors in the Decision corrected in place. See Revision (2026-10-24) at the end.</p>
           <h2 id="context">Context</h2>
           <p>ASP.NET Core&#39;s DataProtection default keeps the key ring <strong>in memory, per process</strong>. That is correct
           for a single-process host and wrong for a scaled-out one: every replica generates its own keys, so an
@@ -272,30 +274,30 @@
           nor user content: it is process-local state that has to become deployment-wide state. This record
           decides that, and it records which repos have adopted it.</p>
           <h2 id="decision">Decision</h2>
-          <p>Add one opt-in registration call, <code>AddCommonDataProtection</code>, that persists the key ring to a single
+          <p>Add one opt-in registration call, <code>AddAzureDataProtection</code> (MMCA.Common.Azure), that persists the key ring to a single
           Azure blob so every replica of a host shares one ring
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/DataProtection/DataProtectionExtensions.cs:52</code>).</p>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureDataProtectionExtensions.cs:53</code>).</p>
           <ul>
           <li><strong>One configuration key is the gate, and absent means do nothing.</strong>
-          <code>DataProtection:BlobStorageUri</code> is read first (<code>DataProtectionExtensions.cs:54</code>); when it is absent
-          or whitespace the method returns the builder untouched (<code>:59-62</code>), so no DataProtection services are
+          <code>DataProtection:BlobStorageUri</code> is read first (<code>AzureDataProtectionExtensions.cs:59</code>); when it is absent
+          or whitespace the method returns the builder untouched (<code>:64-67</code>), so no DataProtection services are
           registered at all. A developer machine, a test host, and the Helpdesk seed all run single-process,
           where the in-memory default is correct and an unconditional Azure dependency at startup would be a
           liability. Two tests pin that boundary: an unconfigured builder registers no <code>IDataProtectionProvider</code>
           and leaves <code>KeyManagementOptions.XmlRepository</code> null, while a configured URI replaces the default
           repository with the blob one
-          (<code>MMCA.Common/Tests/Hosting/MMCA.Common.Aspire.Tests/DataProtection/DataProtectionExtensionsTests.cs:22-37</code>,
-          <code>:39-67</code>, which asserts the replacement is the <code>Azure.Extensions.AspNetCore.DataProtection.Blobs</code>
+          (<code>MMCA.Common/Tests/Hosting/MMCA.Common.Azure.Tests/AzureDataProtectionExtensionsTests.cs:22</code>,
+          <code>:40</code>, which asserts the replacement is the <code>Azure.Extensions.AspNetCore.DataProtection.Blobs</code>
           repository specifically). Neither test needs Azure credentials: the blob client is constructed
           lazily by the repository, never at registration time.</li>
           <li><strong>Blob persistence plus an application discriminator.</strong> A configured URI wires
           <code>PersistKeysToAzureBlobStorage</code> and <code>SetApplicationName</code>
-          (<code>DataProtectionExtensions.cs:70-72</code>); the discriminator comes from <code>DataProtection:ApplicationName</code>
-          and falls back to the host application name (<code>:64-65</code>). The discriminator is what keeps two
+          (<code>AzureDataProtectionExtensions.cs:75-77</code>); the discriminator comes from <code>DataProtection:ApplicationName</code>
+          and falls back to the host application name (<code>:69-70</code>). The discriminator is what keeps two
           applications sharing one blob or one key-ring directory from reading each other&#39;s keys.</li>
           <li><strong>Encryption of the key ring at rest is a SECOND, deliberately independent gate.</strong>
           <code>DataProtection:KeyVaultKeyUri</code> is read separately and only adds <code>ProtectKeysWithAzureKeyVault</code> when
-          present (<code>:81-85</code>). The two are uncoupled on purpose (<code>:74-80</code>): blob persistence is the part that
+          present (<code>:86-90</code>). The two are uncoupled on purpose (<code>:79-85</code>): blob persistence is the part that
           fixes cross-replica cookie and antiforgery decryption, and it has to work <strong>without</strong> the Key Vault
           Crypto User role, because that role assignment is granted out of band and can lag a deployment.
           Folding the second step into the first would turn an optional hardening gap into a total
@@ -305,7 +307,7 @@
           repository variable (<code>MMCA.ADC/.github/workflows/deploy.yml:1426-1427</code>,
           <code>MMCA.Store/.github/workflows/deploy.yml:1324-1325</code>). That is repository configuration, not source:
           as read on 2026-10-06 the variable is set on the ADC repository and absent on the Store repository.</li>
-          <li><strong>One <code>DefaultAzureCredential</code> instance serves both sinks</strong> (<code>DataProtectionExtensions.cs:68</code>), so
+          <li><strong>One <code>DefaultAzureCredential</code> instance serves both sinks</strong> (<code>AzureDataProtectionExtensions.cs:73</code>), so
           they share a single token cache. A deployed host authenticates with its managed identity and a
           developer machine falls back to the local Azure CLI or Visual Studio sign-in; ADC pins <strong>which</strong>
           identity with <code>AZURE_CLIENT_ID</code> on both adopting apps (<code>MMCA.ADC/infra/main.bicep:1960</code>, <code>:2780</code>).</li>
@@ -356,7 +358,7 @@
           <code>:1500-1503</code>) are unconditional, but
           <code>DataProtection__BlobStorageUri</code> is appended only when the <code>dataProtectionStorageReady</code> parameter is
           true (default <code>false</code> at <code>:101</code>, concatenated at <code>:2163-2164</code>). The flag exists because
-          <code>AddCommonDataProtection</code> gates on the presence of the URI, never on reachability: wiring the URI
+          <code>AddAzureDataProtection</code> gates on the presence of the URI, never on reachability: wiring the URI
           before the data-plane grant exists would 403 on the first protect call rather than degrade. That
           flag has since been flipped true in production: the deploy workflow passes
           <code>&quot;dataProtectionStorageReady&quot;: {&quot;value&quot;: true}</code> in its base parameters
@@ -399,7 +401,7 @@
           ADC, so the ADC Identity and UI deploys inject <code>DataProtection__KeyVaultKeyUri</code>, and unset for
           Store, whose UI ring stays unencrypted by a Key Vault key.</li>
           <li><strong>Opt-in per host, so adoption must be audited.</strong> A scaled-out host that never calls
-          <code>AddCommonDataProtection</code> keeps the broken per-replica default and fails intermittently rather than
+          <code>AddAzureDataProtection</code> keeps the broken per-replica default and fails intermittently rather than
           loudly, the same audit-the-inventory caveat as ADR-005 / ADR-017 / ADR-021. Store was exactly that
           case until its UI host adopted the call site (2026-08-13); the caveat still binds every future
           scaled-out host that mints a DataProtection payload.</li>
@@ -561,6 +563,27 @@
           <code>:1426-1427</code>; Store <code>infra/main.bicep:104</code>, <code>:107</code>, <code>:1354</code>, <code>:2171</code> (UI) and <code>deploy.yml:1186</code>,
           <code>:1324-1325</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-24">Revision (2026-10-24)</h2>
+          <p><a href="134-cloud-neutral-core-vendor-adapters.html">ADR-134</a> moves the key-ring registration out of
+          MMCA.Common.Aspire into the <code>MMCA.Common.Azure</code> adapter. The decision, both gates and the keys are
+          unchanged.</p>
+          <ol>
+          <li><strong>The call is renamed and moved.</strong> <code>AddCommonDataProtection()</code> is now <code>AddAzureDataProtection()</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureDataProtectionExtensions.cs:20</code>, <code>:53</code>). It
+          still reads <code>DataProtection:BlobStorageUri</code> (<code>:59</code>) and does nothing without it (<code>:64</code>-<code>:67</code>), takes
+          the discriminator from <code>DataProtection:ApplicationName</code> (<code>:69</code>-<code>:70</code>), persists to the blob
+          (<code>:75</code>-<code>:77</code>), and adds Key Vault protection only for <code>DataProtection:KeyVaultKeyUri</code>
+          (<code>:86</code>-<code>:90</code>).</li>
+          <li><strong>A lost call now fails startup.</strong> <code>DataProtection:BlobStorageUri</code> set without the call fails
+          <code>ValidateOnStart</code>, naming it
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Integrations/HostIntegrationTripwire.cs:26</code>, <code>:31</code>;
+          the call&#39;s marker at <code>AzureDataProtectionExtensions.cs:57</code>). That narrows the &quot;opt-in per host&quot;
+          trade-off to hosts that never received the URI at all.</li>
+          <li><strong>Corrected in place:</strong> the Decision and Trade-offs references to <code>AddCommonDataProtection</code> and the
+          <code>MMCA.Common.Aspire/DataProtection/DataProtectionExtensions.cs</code> anchors now point at the adapter.
+          The consumer call-site sentences name the call each consumer made when last verified; a consumer on
+          v1.255.0 or later makes the renamed call. The anchors inside earlier revisions are left as recorded.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-022 (the browser session cookies whose decryption this makes replica-independent, together with
           the antiforgery tokens the SSR pages mint), ADR-008 (the multi-host topology that created the problem;
@@ -590,6 +613,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-24">Revision (2026-10-24)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

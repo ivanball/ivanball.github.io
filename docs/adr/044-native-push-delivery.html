@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 133 ADRs</summary>
+        <summary>All 134 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -233,6 +233,7 @@
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
+        <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
           </ol>
         </nav>
       </details>
@@ -248,7 +249,8 @@
           Revised 2026-10-06: the device DELETE route is <code>/Notifications/Devices/{installationId}</code>.
           Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
           Revised 2026-10-21: anchors refreshed after the releases that moved the device controller, the
-          registration service and the registrar.</p>
+          registration service and the registrar.
+          Revised 2026-10-24: the Notification Hubs sender and registrar moved to MMCA.Common.Azure, registered by <code>AddAzureNotificationHubsPush</code> (<a href="134-cloud-neutral-core-vendor-adapters.html">ADR-134</a>); see Revision (2026-10-24).</p>
           <h2 id="context">Context</h2>
           <p>ADR-024 established two notification channels: a durable per-user <code>UserNotification</code> inbox (the
           source of truth) and a transient SignalR push behind <code>IPushNotificationSender</code>. Both stop at the
@@ -268,7 +270,7 @@
           <li><strong>Two new Application abstractions, Null by default</strong> (the ADR-024 pattern):
           <code>INativePushSender</code> (user-targeted and broadcast native sends) and <code>IPushDeviceRegistrar</code>
           (installation upsert/delete). <code>AddInfrastructure</code> TryAdds no-op defaults;
-          <code>AddNativePushNotifications(configuration)</code> swaps in the Azure Notification Hubs
+          <code>AddAzureNotificationHubsPush(configuration)</code> (MMCA.Common.Azure) swaps in the Azure Notification Hubs
           implementations only when the <code>NativePush</code> section is enabled AND complete
           (<code>ConnectionString</code>, <code>HubName</code>) - so hosts call it unconditionally and deployments flip the
           channel on by configuration alone.</li>
@@ -382,6 +384,31 @@
           (defined at <code>:361</code>), and the handler&#39;s native leg and at-least-once remarks at
           <code>SendPushNotificationHandler.cs:141-154</code> and <code>:21-30</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-24">Revision (2026-10-24)</h2>
+          <p><a href="134-cloud-neutral-core-vendor-adapters.html">ADR-134</a> moves the Notification Hubs implementation out of
+          MMCA.Common.Infrastructure into the <code>MMCA.Common.Azure</code> adapter. The decision is unchanged: the
+          Null-by-default sender and registrar, the <code>NativePush</code> section enabled AND complete as the gate, and
+          <code>user:{id}</code> tags.</p>
+          <ol>
+          <li><strong>Registration renamed.</strong> <code>AddNativePushNotifications(configuration)</code> is now
+          <code>AddAzureNotificationHubsPush(configuration)</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureServiceCollectionExtensions.cs:83</code>), with the same
+          gate on <code>Enabled</code>, <code>ConnectionString</code> and <code>HubName</code> (<code>:91</code>-<code>:96</code>) before it registers the sender and
+          registrar (<code>:101</code>-<code>:102</code>).</li>
+          <li><strong>Types moved.</strong> <code>AzureNotificationHubNativePushSender</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/Notifications/AzureNotificationHubNativePushSender.cs:14</code>)
+          and <code>AzureNotificationHubDeviceRegistrar</code> (<code>Notifications/AzureNotificationHubDeviceRegistrar.cs:15</code>)
+          live in <code>MMCA.Common.Azure.Notifications</code>, and <code>NativePushSettings</code> is now
+          <code>AzureNotificationHubSettings</code> (<code>Notifications/AzureNotificationHubSettings.cs:9</code>). The <code>NativePush</code>
+          section and its keys are unchanged (<code>MMCA.Common/CHANGELOG.md:25</code>).</li>
+          <li><strong>A lost call fails startup.</strong> <code>NativePush:Enabled=true</code> while <code>INativePushSender</code> is still the
+          Null sender fails <code>ValidateOnStart</code>, naming the call
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/CloudAdapterTripwire.cs:33</code>,
+          <code>:48</code>-<code>:53</code>).</li>
+          <li><strong>Corrected in place:</strong> the Decision bullet that named <code>AddNativePushNotifications(configuration)</code>.
+          The registrar anchors inside the 2026-10-21 revision point at the file&#39;s earlier Infrastructure
+          location and are left as recorded.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -400,6 +427,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-24">Revision (2026-10-24)</a></li>
             </ul>
           </nav>
         </aside>

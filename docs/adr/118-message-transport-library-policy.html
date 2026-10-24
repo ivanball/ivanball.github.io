@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 133 ADRs</summary>
+        <summary>All 134 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -233,6 +233,7 @@
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
+        <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
           </ol>
         </nav>
       </details>
@@ -253,7 +254,8 @@
           ADR-016&#39;s still-live <strong>Transport exit options</strong> section is recorded under <strong>Related</strong>. The pin, the
           decision and the replacement order are unchanged. Revised 2026-10-07: anchors refreshed after the
           v1.233.0 release. Revised 2026-10-21: the circuit-breaker description now matches source (it wraps
-          the <code>IMessageBus</code> publish, which is the broker hop only in broker mode), and anchors are refreshed.</p>
+          the <code>IMessageBus</code> publish, which is the broker hop only in broker mode), and anchors are refreshed.
+          Revised 2026-10-24: <code>MassTransit.AmazonSQS</code> 8.5.11 joins the pinned set for the SQS adapter transport, the pin and its gate unchanged (<a href="134-cloud-neutral-core-vendor-adapters.html">ADR-134</a>); the trial point and the surface inventory are corrected in place. See Revision (2026-10-24) at the end.</p>
           <h2 id="context">Context</h2>
           <p>MassTransit is the only message-broker library in this workspace, and it is pinned to 8.5.11 across
           all three of its packages (<code>MMCA.Common/Directory.Packages.props:124-126</code>, the pin comment at
@@ -315,11 +317,11 @@
           does not reference MassTransit at all (<code>.../Infrastructure/Messaging/BrokerEventBus.cs:31</code>), because
           in broker mode its whole job is to write the outbox row and signal the processor. The whole
           <code>using MassTransit</code> surface is <strong>nine files</strong>: eight inside <code>MMCA.Common.Infrastructure</code>
-          (<code>DependencyInjection.Messaging.cs</code>, <code>Messaging/BrokerMessageBus.cs</code>, <code>Messaging/ServiceBusEmulatorSupport.cs</code>
+          (<code>DependencyInjection.Messaging.cs</code>, <code>Messaging/BrokerMessageBus.cs</code>, the <code>Messaging/Transports/</code> extension point
           and the five consumer files under <code>Messaging/Consumers/</code>: <code>IntegrationEventConsumer.cs</code>,
           <code>IntegrationEventConsumerExtensions.cs</code>, <code>UpcastingIntegrationEventConsumer.cs</code>,
           <code>FaultIntegrationEventConsumer.cs</code> and <code>ConsumerOriginRestore.cs</code>) plus the emulator test fixture
-          <code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/Fixtures/ServiceBusEmulatorFixtureBase.cs</code>. Domain,
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Azure/Fixtures/ServiceBusEmulatorFixtureBase.cs:54</code>; the Service Bus and SQS transports themselves sit in the adapter packages (see the Revision (2026-10-24)). Domain,
           Application and Shared hold the interfaces alone, and that is build-gated:
           <code>MicroserviceExtractionTestsBase</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Layering/MicroserviceExtractionTestsBase.cs:8</code>)
@@ -384,10 +386,11 @@
           often suggested in the same breath, and it would be a new dependency rather than a replacement.</li>
           </ul>
           </li>
-          <li><p><strong>A trial ships beside the incumbent.</strong> The trial point is an additive arm in the
-          <code>MessageBusProvider</code> switch inside <code>ConfigureBrokerTransport</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:264</code>, the
-          switch at <code>:269</code>, beside the RabbitMQ arm at <code>:271</code> and the Azure Service Bus arm at <code>:302</code>), so a candidate is exercised by
+          <li><p><strong>A trial ships beside the incumbent.</strong> The trial point is one more
+          <code>IBrokerTransport</code> registered by name through <code>AddBrokerTransport</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:148</code>, resolved
+          by <code>ResolveBrokerTransport</code> at <code>:177</code>, beside the built-in RabbitMQ transport at <code>:179-181</code> and the
+          adapter transports in MMCA.Common.Azure and MMCA.Common.Aws), so a candidate is exercised by
           configuration without removing anything, and ADC&#39;s nightly Service Bus emulator smoke is where it
           runs first. That job is authoritative rather than advisory: it has carried no <code>continue-on-error</code>
           since 2026-08-31 (TD-17), and <code>deploy.yml</code>&#39;s cross-service-freshness gate requires it to have
@@ -497,6 +500,29 @@
           Context now names the class declaration (<code>MicroserviceExtractionTestsBase.cs:8</code>) rather than the
           <code>CoreLayers_ShouldNotDependOn_Transport</code> test at <code>:13</code>; neither line moved.</li>
           </ol>
+          <h2 id="revision-2026-10-24">Revision (2026-10-24)</h2>
+          <p><a href="134-cloud-neutral-core-vendor-adapters.html">ADR-134</a> moves the vendor transports into adapter
+          packages. The library choice, the v8 pin, the exit triggers and the replacement order are unchanged.</p>
+          <ol>
+          <li><strong><code>MassTransit.AmazonSQS</code> stays on the v8 pin.</strong> It is pinned at 8.5.11, documented as the same
+          version as every MassTransit entry above it
+          (<code>MMCA.Common/Directory.Packages.props:129</code>-<code>:130</code>), beside <code>MassTransit</code>, <code>MassTransit.RabbitMQ</code>
+          and <code>MassTransit.Azure.ServiceBus.Core</code> at 8.5.11 (<code>:125</code>-<code>:127</code>). MMCA.Common therefore carries
+          four MassTransit entries; the five-entry workspace count in the 2026-09-19 amendment is left as
+          recorded. Only <code>MMCA.Common.Aws</code> consumes the new entry, through <code>AmazonSqsTransport</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/Messaging/AmazonSqsTransport.cs:37</code>).</li>
+          <li><strong>The vendor transports left the core.</strong> The Azure Service Bus transport and its emulator helper
+          are in <code>MMCA.Common.Azure</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/Messaging/AzureServiceBusTransport.cs:16</code>,
+          <code>Messaging/ServiceBusEmulatorSupport.cs:32</code>), and the build gate refuses a vendor MassTransit
+          transport in any core project
+          (<code>MMCA.Common/Source/Build/MMCA.Common.LayerEnforcement.targets:108-111</code>, <code>:126</code>).</li>
+          <li><strong>Corrected in place:</strong> Decision item 6, which placed the trial point in a <code>MessageBusProvider</code>
+          switch inside <code>ConfigureBrokerTransport</code> (neither exists now; a trial is one more registered
+          <code>IBrokerTransport</code>), and the Context surface inventory, which listed
+          <code>Messaging/ServiceBusEmulatorSupport.cs</code> in Infrastructure and the fixture under
+          <code>MMCA.Common.Testing</code>.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a> (the lockstep release policy this pin is
           enforced under; its 2026-08-28 amendment first sketched exit options, and this record owns the
@@ -533,6 +559,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-24">Revision (2026-10-24)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

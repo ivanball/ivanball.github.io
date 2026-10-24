@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 133 ADRs</summary>
+        <summary>All 134 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -233,6 +233,7 @@
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
+        <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
           </ol>
         </nav>
       </details>
@@ -286,7 +287,8 @@
           <code>SubstitutabilityTestsBase</code>, and a two-way <code>PRIVACY.md</code> inventory gate, <code>PiiInventoryTestsBase</code>) and
           <code>PiiConventionTestsBase</code> gained the reverse erasure checks; the shipped public API baselines are
           re-counted against v1.250.0 (8,434 declarations, every unshipped file header-only) and anchors
-          refreshed after v1.250.0, the counts <code>FACTS.md</code> owns now sitting at <code>:81</code> / <code>:84</code>.</p>
+          refreshed after v1.250.0, the counts <code>FACTS.md</code> owns now sitting at <code>:81</code> / <code>:84</code>.
+          Revised 2026-10-24: the cloud vendor boundary joins the gates as a build target plus an architecture rule pair (<a href="134-cloud-neutral-core-vendor-adapters.html">ADR-134</a>). See Revision (2026-10-24) at the end.</p>
           <h2 id="context">Context</h2>
           <p>The codebase rests on invariants that are easy to state and easy to erode by accident: clean-
           architecture layer flow (Domain depends on nothing above it), module isolation (no module reaches into
@@ -944,6 +946,30 @@
           <code>Source/Presentation/MMCA.Common.UI/Services/Notifications/NotificationHubService.cs:49-50</code> still
           resolve.</li>
           </ol>
+          <h2 id="revision-2026-10-24-the-cloud-vendor-boundary-gate-pair">Revision (2026-10-24): the cloud vendor boundary gate pair</h2>
+          <p><a href="134-cloud-neutral-core-vendor-adapters.html">ADR-134</a> makes the core packages cloud-neutral, and that
+          boundary is enforced the way the layer boundaries are: once at build time and once in the shared
+          architecture rule library. No existing rule family changed.</p>
+          <ol>
+          <li><strong>Build layer.</strong> The <code>EnforceCloudVendorBoundary</code> target
+          (<code>MMCA.Common/Source/Build/MMCA.Common.LayerEnforcement.targets:126</code>) matches on the package id of
+          every <code>PackageReference</code> a core project carries: an <code>Azure.*</code>, <code>Microsoft.Azure.*</code> or <code>AWSSDK.*</code>
+          prefix, a <code>MassTransit.Azure*</code> or <code>MassTransit.AmazonSQS</code> transport, or an adapter package
+          (<code>:108-111</code>), and fails the build with one error for a vendor reference and one for an adapter
+          reference (<code>:144</code>, <code>:146</code>).</li>
+          <li><strong>Architecture layer.</strong> <code>CloudVendorIsolationTestsBase</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Layering/CloudVendorIsolationTestsBase.cs:14</code>)
+          adds two facts, <code>CloudNeutralAssemblies_ShouldNotName_ACloudVendorType</code> (<code>:27</code>) and
+          <code>CloudNeutralAssemblies_ShouldNotReference_ACloudVendorAssembly</code> (<code>:31</code>), backed by the rules
+          <code>ArchitectureRules.CloudNeutralAssembliesNameNoVendorType</code> and
+          <code>CloudNeutralAssembliesReferenceNoVendorAssembly</code> (<code>MMCA.Common/CHANGELOG.md:15</code>). Its exemption
+          hook is empty by default (<code>CloudVendorIsolationTestsBase.cs:21</code>).</li>
+          <li><strong>Two exemptions, both database engines.</strong> <code>Microsoft.EntityFrameworkCore.Cosmos</code> in
+          MMCA.Common.Infrastructure and <code>Aspire.Hosting.Azure.CosmosDB</code> in MMCA.Common.Aspire.Hosting are the
+          only exempt references (<code>MMCA.Common.LayerEnforcement.targets:130-131</code>, rationale at <code>:115-120</code>);
+          the <code>Microsoft.Azure.Cosmos</code> namespace the first brings in is allowed in Infrastructure alone
+          (<code>:117-118</code>).</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-009 (resilience gate), ADR-010 (event-version gate), ADR-016 (MassTransit pin gate, and the
           lockstep release cadence the public API baseline is pinned to), ADR-006/007/008 (the transport and
@@ -980,6 +1006,7 @@
             <li><a href="#revision-2026-10-06-the-adr-115-rules-reach-commons-own-idempotency-gate-re-counted-baselines">Revision (2026-10-06): the ADR-115 rule&#39;s reach, Common&#39;s own idempotency gate, re-counted baselines</a></li>
             <li><a href="#revision-2026-10-07-commons-second-architecture-map-re-counted-baselines-moved-anchors">Revision (2026-10-07): Common&#39;s second architecture map, re-counted baselines, moved anchors</a></li>
             <li><a href="#revision-2026-10-21-re-counted-baselines-moved-anchors">Revision (2026-10-21): re-counted baselines, moved anchors</a></li>
+            <li><a href="#revision-2026-10-24-the-cloud-vendor-boundary-gate-pair">Revision (2026-10-24): the cloud vendor boundary gate pair</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 133 ADRs</summary>
+        <summary>All 134 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -233,6 +233,7 @@
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
+        <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
           </ol>
         </nav>
       </details>
@@ -298,7 +299,8 @@
           <code>Telemetry:DisableAspNetCoreMetrics</code>, which both production deployments turn on; see Revision below).
           Revised 2026-10-06: the correlation middleware also discards a non-printable-ASCII id, Store&#39;s auth alert counts 401 and 429, the bootstrap logger factory lives until the host exits, and <code>GlobalExceptionHandler</code> writes its Error row only on its 500 path (cross-tenant and bad-request rejections log Warning).
           Revised 2026-10-07: Context and the rejected-alternative now separate unsampled tracing (the largest line item) from sampled traces (metrics measured larger in every recorded window), an outbox message with no stored trace context gets no <code>OutboxProcess</code> span, and the outbox, ADC bicep, ADC Conference <code>Program.cs</code> and <code>GlobalExceptionHandler</code> anchors are rebased after the v1.232.1 and v1.233.0 releases.
-          Revised 2026-10-21: <code>StartOutboxActivity</code> runs once per dispatched message (a message a lease renewal found re-claimed (lost) is skipped before it), and the <code>Extensions.Telemetry.cs</code>, outbox, Store bicep and host <code>Program.cs</code> anchors are refreshed.</p>
+          Revised 2026-10-21: <code>StartOutboxActivity</code> runs once per dispatched message (a message a lease renewal found re-claimed (lost) is skipped before it), and the <code>Extensions.Telemetry.cs</code>, outbox, Store bicep and host <code>Program.cs</code> anchors are refreshed.
+          Revised 2026-10-24: OTLP is the only built-in exporter; Azure Monitor moved to the <code>AddAzureMonitorExporter()</code> call in MMCA.Common.Azure (<a href="134-cloud-neutral-core-vendor-adapters.html">ADR-134</a>), and the Decision&#39;s exporter bullet is corrected in place. See Revision (2026-10-24) at the end.</p>
           <h2 id="context">Context</h2>
           <p>The framework is a modular monolith whose modules extract into standalone services (ADR-008), so
           the same telemetry has to make sense whether a request stays in one process or crosses a gateway and
@@ -435,13 +437,15 @@
           message that stored no trace or span id gets no <code>OutboxProcess</code> span at all
           (<code>OutboxProcessor.cs:1092</code>-<code>:1095</code>).</p>
           </li>
-          <li><p><strong>Dual exporters, either or both.</strong> <code>AddOpenTelemetryExporters</code> enables OTLP when
-          <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> is present (<code>Extensions.Telemetry.cs:162</code>-<code>:163</code>, the Aspire dashboard sets it, exporter
-          wired at <code>Extensions.Telemetry.cs:167</code>) and Azure Monitor via <code>UseAzureMonitor</code> (<code>Extensions.Telemetry.cs:175</code>) when
-          <code>APPLICATIONINSIGHTS_CONNECTION_STRING</code> is present (read at <code>Extensions.Telemetry.cs:170</code>-<code>:171</code>, checked at
-          <code>Extensions.Telemetry.cs:173</code>, and set by the cloud deployment). Both can be active at once
-          (<code>Extensions.Telemetry.cs:158</code>, on the method at <code>:160</code>), so local development ships to the
-          Aspire dashboard and production ships to workspace-based Application Insights with no code change.</p>
+          <li><p><strong>OTLP built in, Azure Monitor by adapter.</strong> <code>AddOpenTelemetryExporters</code> (<code>Extensions.Telemetry.cs:163</code>)
+          enables OTLP when <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> is present (read at <code>:165</code>-<code>:166</code>, the Aspire dashboard
+          sets it, exporter wired at <code>:170</code>), and OTLP is the only exporter the framework wires. Azure Monitor
+          is the adapter call <code>AddAzureMonitorExporter()</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureMonitorExporterExtensions.cs:42</code>, <code>UseAzureMonitor</code>
+          at <code>:63</code>), made after <code>AddServiceDefaults()</code> in a host whose cloud deployment sets
+          <code>APPLICATIONINSIGHTS_CONNECTION_STRING</code>. Both can be active at once, so local development ships to the
+          Aspire dashboard and production ships to workspace-based Application Insights with that one adapter
+          call per deployed host (corrected in place 2026-10-24; see the Revision (2026-10-24) at the end).</p>
           </li>
           </ul>
           <h2 id="rationale">Rationale</h2>
@@ -945,6 +949,28 @@
           other six service hosts&#39; bootstrap anchors were unchanged held for that date; this item supersedes
           them.</li>
           </ol>
+          <h2 id="revision-2026-10-24">Revision (2026-10-24)</h2>
+          <p><a href="134-cloud-neutral-core-vendor-adapters.html">ADR-134</a> moves every Azure dependency out of the core
+          packages. For this record that changes one thing, the exporter: <code>AddServiceDefaults()</code> no longer wires
+          Azure Monitor when <code>APPLICATIONINSIGHTS_CONNECTION_STRING</code> is set (<code>MMCA.Common/CHANGELOG.md:27</code>).
+          Instrumentation, meters, sampling and the cost knobs are unchanged.</p>
+          <ol>
+          <li><strong>OTLP is the only built-in exporter.</strong> <code>AddOpenTelemetryExporters</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.Telemetry.cs:163</code>) reads
+          <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> (<code>:165</code>-<code>:166</code>) and calls <code>UseOtlpExporter()</code> (<code>:170</code>), nothing else.</li>
+          <li><strong>Azure Monitor is an adapter call.</strong> <code>AddAzureMonitorExporter()</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureMonitorExporterExtensions.cs:12</code>, <code>:42</code>) calls
+          <code>UseAzureMonitor()</code> (<code>:63</code>). It throws when called before <code>AddServiceDefaults()</code> (<code>:45</code>-<code>:50</code>),
+          because the outbox and probe filter processors must be registered ahead of the exporter
+          (<code>Extensions.Telemetry.cs:146</code>).</li>
+          <li><strong>A missing call fails startup.</strong> A host that receives <code>APPLICATIONINSIGHTS_CONNECTION_STRING</code>
+          without the call fails <code>ValidateOnStart</code>, naming it
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Integrations/HostIntegrationTripwire.cs:20</code>, <code>:31</code>;
+          the call&#39;s marker at <code>AzureMonitorExporterExtensions.cs:56</code>).</li>
+          <li><strong>Corrected in place:</strong> the Decision bullet &quot;Dual exporters, either or both&quot;, which placed
+          <code>UseAzureMonitor</code> inside <code>AddServiceDefaults</code> at <code>Extensions.Telemetry.cs:175</code> with the
+          connection-string read at <code>:170</code>-<code>:171</code>. Anchors inside the earlier revisions are left as recorded.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -973,6 +999,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-24">Revision (2026-10-24)</a></li>
             </ul>
           </nav>
         </aside>

@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 133 ADRs</summary>
+        <summary>All 134 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -233,6 +233,7 @@
         <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
+        <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
           </ol>
         </nav>
       </details>
@@ -253,7 +254,8 @@
           storage call; see Revision below).
           Revised 2026-10-21: the image processor registers only the JPEG, PNG, WebP and GIF decoders and
           nulls the EXIF, XMP and IPTC profiles rather than all metadata, and five ImageSharp advisories
-          are accepted under a standing audit suppression.</p>
+          are accepted under a standing audit suppression.
+          Revised 2026-10-24: the Azure Blob implementation moved to MMCA.Common.Azure and an S3-compatible implementation ships in MMCA.Common.Aws (<a href="134-cloud-neutral-core-vendor-adapters.html">ADR-134</a>); see Revision (2026-10-24).</p>
           <h2 id="context">Context</h2>
           <p>The MAUI capability program (ADR-042) brought MediaPicker/camera within reach, and ADC amended
           BR-116 to include user avatar photos. That needs binary blob storage (the databases store
@@ -441,6 +443,40 @@
           </ul>
           </li>
           </ol>
+          <h2 id="revision-2026-10-24">Revision (2026-10-24)</h2>
+          <p><a href="134-cloud-neutral-core-vendor-adapters.html">ADR-134</a> moves the Azure Blob implementation out of the
+          core and adds a second, S3-compatible implementation. <code>IFileStorageService</code>, its Null default and the
+          <code>FileStorage</code> section are unchanged.</p>
+          <ol>
+          <li><strong>Azure Blob moved to the adapter.</strong> <code>AddAzureBlobFileStorage(configuration)</code> keeps its name and now
+          lives in <code>MMCA.Common.Azure</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureServiceCollectionExtensions.cs:41</code>). It still
+          registers only for a <code>ContainerName</code> plus an absolute <code>ServiceUri</code> or a <code>ConnectionString</code>
+          (<code>:49</code>-<code>:59</code>), using <code>DefaultAzureCredential</code> with a <code>ServiceUri</code> (<code>:63</code>-<code>:65</code>).
+          <code>AzureBlobFileStorageService</code> is at
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/Storage/AzureBlobFileStorageService.cs:15</code>, and
+          <code>FileStorageSettings</code> is now <code>AzureBlobFileStorageSettings</code> (<code>Storage/AzureBlobFileStorageSettings.cs:10</code>).</li>
+          <li><strong>An S3-compatible implementation.</strong> <code>AddS3FileStorage(configuration)</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/AwsServiceCollectionExtensions.cs:44</code>) registers
+          <code>S3FileStorageService</code> (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/Storage/S3FileStorageService.cs:21</code>)
+          bound from the same <code>FileStorage</code> section (<code>Storage/S3StorageClientFactory.cs:14</code>) through
+          <code>S3FileStorageSettings</code> (<code>Storage/S3FileStorageSettings.cs:13</code>), for Amazon S3, Cloudflare R2, MinIO
+          and the GCS XML API (<code>MMCA.Common/CHANGELOG.md:12</code>). Request and response checksums default to
+          <code>WHEN_REQUIRED</code> (<code>S3FileStorageSettings.cs:65</code>, <code>:72</code>). The <code>aws-integration</code> CI job exercises it
+          against LocalStack (<code>MMCA.Common/.github/workflows/ci.yml:846</code>).</li>
+          <li><strong>A lost call fails the upload, not startup.</strong> File storage has no startup tripwire: a
+          <code>FileStorage</code> section is routinely shared configuration (one user-secrets id across every service
+          of a solution), so its presence does not declare that a host stores files
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/CloudAdapterTripwire.cs:21-26</code>).
+          A host that stores files and lost its adapter call fails each upload with
+          <code>FileStorage.NotConfigured</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Storage/NullFileStorageService.cs:31-35</code>).
+          v1.255.0 shipped a check on any non-blank <code>FileStorage</code> value; v1.256.0 removed it because it
+          failed services that never store files (<code>MMCA.Common/CHANGELOG.md:11</code>).</li>
+          <li>The anchors into <code>MMCA.Common.Infrastructure/Storage/AzureBlobFileStorageService.cs</code> inside the
+          2026-09-12 and 2026-10-06 revisions are left as recorded; that file now lives at the adapter path
+          above.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -460,6 +496,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-24">Revision (2026-10-24)</a></li>
             </ul>
           </nav>
         </aside>
