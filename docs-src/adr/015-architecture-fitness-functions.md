@@ -47,6 +47,7 @@ Revised 2026-10-21: two rule families joined the library since v1.233.0 (Liskov 
 `PiiConventionTestsBase` gained the reverse erasure checks; the shipped public API baselines are
 re-counted against v1.250.0 (8,434 declarations, every unshipped file header-only) and anchors
 refreshed after v1.250.0, the counts `FACTS.md` owns now sitting at `:81` / `:84`.
+Revised 2026-10-24: the cloud vendor boundary joins the gates as a build target plus an architecture rule pair ([ADR-134](134-cloud-neutral-core-vendor-adapters.md)). See Revision (2026-10-24) at the end.
 
 ## Context
 The codebase rests on invariants that are easy to state and easy to erode by accident: clean-
@@ -750,6 +751,30 @@ the v1.250.0 release (`MMCA.Common/FACTS.md:14`), and several anchors drifted, i
    `JoinChannelMethodName` / `LeaveChannelMethodName` constants at
    `Source/Presentation/MMCA.Common.UI/Services/Notifications/NotificationHubService.cs:49-50` still
    resolve.
+
+## Revision (2026-10-24): the cloud vendor boundary gate pair
+[ADR-134](134-cloud-neutral-core-vendor-adapters.md) makes the core packages cloud-neutral, and that
+boundary is enforced the way the layer boundaries are: once at build time and once in the shared
+architecture rule library. No existing rule family changed.
+
+1. **Build layer.** The `EnforceCloudVendorBoundary` target
+   (`MMCA.Common/Source/Build/MMCA.Common.LayerEnforcement.targets:126`) matches on the package id of
+   every `PackageReference` a core project carries: an `Azure.*`, `Microsoft.Azure.*` or `AWSSDK.*`
+   prefix, a `MassTransit.Azure*` or `MassTransit.AmazonSQS` transport, or an adapter package
+   (`:108-111`), and fails the build with one error for a vendor reference and one for an adapter
+   reference (`:144`, `:146`).
+2. **Architecture layer.** `CloudVendorIsolationTestsBase`
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Layering/CloudVendorIsolationTestsBase.cs:14`)
+   adds two facts, `CloudNeutralAssemblies_ShouldNotName_ACloudVendorType` (`:27`) and
+   `CloudNeutralAssemblies_ShouldNotReference_ACloudVendorAssembly` (`:31`), backed by the rules
+   `ArchitectureRules.CloudNeutralAssembliesNameNoVendorType` and
+   `CloudNeutralAssembliesReferenceNoVendorAssembly` (`MMCA.Common/CHANGELOG.md:15`). Its exemption
+   hook is empty by default (`CloudVendorIsolationTestsBase.cs:21`).
+3. **Two exemptions, both database engines.** `Microsoft.EntityFrameworkCore.Cosmos` in
+   MMCA.Common.Infrastructure and `Aspire.Hosting.Azure.CosmosDB` in MMCA.Common.Aspire.Hosting are the
+   only exempt references (`MMCA.Common.LayerEnforcement.targets:130-131`, rationale at `:115-120`);
+   the `Microsoft.Azure.Cosmos` namespace the first brings in is allowed in Infrastructure alone
+   (`:117-118`).
 
 ## Related
 ADR-009 (resilience gate), ADR-010 (event-version gate), ADR-016 (MassTransit pin gate, and the

@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>ADR-134: Cloud-Neutral Core With Vendor Adapter Packages · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-10-24). The change is the MMCA.Common v1.255.0 entry of the framework changelog (MMCA.Common/CHANGELOG.md:7, Added at :11-17, Fixed at…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/134-cloud-neutral-core-vendor-adapters.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="ADR-134: Cloud-Neutral Core With Vendor Adapter Packages">
+  <meta property="og:description" content="Accepted (2026-10-24). The change is the MMCA.Common v1.255.0 entry of the framework changelog (MMCA.Common/CHANGELOG.md:7, Added at :11-17, Fixed at…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/134-cloud-neutral-core-vendor-adapters.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Principal Software Architect">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ADR-134: Cloud-Neutral Core With Vendor Adapter Packages">
+  <meta name="twitter:description" content="Accepted (2026-10-24). The change is the MMCA.Common v1.255.0 entry of the framework changelog (MMCA.Common/CHANGELOG.md:7, Added at :11-17, Fixed at…">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"134 · Cloud-Neutral Core With Vendor Adapter Packages","item":"https://ivanball.github.io/docs/adr/134-cloud-neutral-core-vendor-adapters.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+  <script defer src="../../assets/js/search.js"></script>
+  <script defer src="../../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html" aria-current="page">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">134 · Cloud-Neutral Core With Vendor Adapter Packages</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 134 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+        <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
+        <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
+        <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+        <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
+        <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
+        <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
+        <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
+        <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
+        <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
+        <li><a href="056-blazor-render-mode-strategy.html">056 · Blazor Render-Mode Strategy for the Web Heads</a></li>
+        <li><a href="057-expand-contract-schema-evolution-gate.html">057 · Expand/Contract Schema Evolution Enforced as a CI Gate</a></li>
+        <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
+        <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
+        <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
+        <li><a href="065-scaffolding-templates.html">065 · Scaffolding templates derived from the reference app</a></li>
+        <li><a href="066-broker-transport-selection.html">066 · Broker Transport Selection and Dev/Prod Parity</a></li>
+        <li><a href="067-ui-module-shell-composition.html">067 · Shared Blazor Application Shell and IUIModule Composition</a></li>
+        <li><a href="068-value-objects-as-validated-primitives.html">068 · Value Objects as Validated Domain Primitives</a></li>
+        <li><a href="069-shared-data-protection-key-ring.html">069 · Shared DataProtection Key Ring for Scaled-Out Hosts</a></li>
+        <li><a href="070-fail-fast-configuration-contract.html">070 · Fail-Fast Configuration Contract</a></li>
+        <li><a href="071-barcode-scanning-and-qr-display.html">071 · Device Capability Pattern for Barcode Scanning and QR Display</a></li>
+        <li><a href="072-qr-badge-check-in-and-points.html">072 · QR Badge Check-In and Points Gamification in ADC</a></li>
+        <li><a href="073-multi-tenancy-model.html">073 · Multi-Tenancy (Shared-Schema Query Filter plus DB-per-Tenant Routing)</a></li>
+        <li><a href="074-recurring-job-scheduler.html">074 · Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)</a></li>
+        <li><a href="075-audit-trail.html">075 · Audit Trail (Same-Transaction Field-Level Change History)</a></li>
+        <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
+        <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
+        <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
+        <li><a href="085-identifier-type-aliases-revisited.html">085 · Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers)</a></li>
+        <li><a href="086-process-manager-deferred.html">086 · A Process Manager Is Deferred, Not Absent (Relates to ADR-054)</a></li>
+        <li><a href="087-broker-poison-message-handling.html">087 · Broker Poison-Message Handling: Second-Level Redelivery and Fault Observability</a></li>
+        <li><a href="088-gateway-edge-responsibilities.html">088 · Gateway Edge Responsibilities (and the Three It Declines)</a></li>
+        <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
+        <li><a href="090-event-upcaster-registration.html">090 · Event Upcaster Registration Extension Point</a></li>
+        <li><a href="091-cache-backed-password-reset.html">091 · Cache-Backed Password Reset</a></li>
+        <li><a href="092-web-vitals-budget-gate.html">092 · Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</a></li>
+        <li><a href="093-container-image-posture.html">093 · Container Image Build and Runtime Posture</a></li>
+        <li><a href="094-client-entity-data-access.html">094 · Client-Side Entity Data-Access Contract</a></li>
+        <li><a href="095-soft-delete-unique-indexes.html">095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)</a></li>
+        <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
+        <li><a href="097-multi-device-refresh-sessions.html">097 · Multi-Device Refresh Sessions (Hashed, Rotating, Per Device)</a></li>
+        <li><a href="098-aspire-orchestration-not-testing-or-dashboards.html">098 · Aspire for Orchestration, Not for Testing or Production Dashboards</a></li>
+        <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
+        <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
+        <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
+        <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
+        <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
+        <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
+        <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
+        <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
+        <li><a href="110-rubric-v2-category-realignment.html">110 · Rubric Version 2, Category Realignment at 34</a></li>
+        <li><a href="111-ai-session-scoring-governance.html">111 · AI Session Scoring Governance</a></li>
+        <li><a href="112-catalog-owned-effective-pricing.html">112 · Catalog Owns Effective Pricing; Sales Snapshots It at Checkout</a></li>
+        <li><a href="113-postgresql-as-a-first-class-engine.html">113 · PostgreSQL as a First-Class Engine</a></li>
+        <li><a href="114-internal-commands-durable-job-queue.html">114 · Internal Commands, a Job Queue Built on the Outbox&#39;s Machinery</a></li>
+        <li><a href="115-strongly-typed-identifiers-opt-in.html">115 · Strongly Typed Identifiers as an Opt-In Capability, Aliases Still the Default</a></li>
+        <li><a href="116-identity-completions-opt-in.html">116 · Identity Completions Ship as Opt-In Base Classes, Not as Framework Features</a></li>
+        <li><a href="117-apphost-integration-test-base.html">117 · AppHost Integration Testing as a Shipped Package</a></li>
+        <li><a href="118-message-transport-library-policy.html">118 · Message Transport Library Policy (MassTransit v8 Pin and Exit Strategy)</a></li>
+        <li><a href="119-restrict-delete-by-default.html">119 · Delete Behavior Is an Explicit Business Rule (Restrict by Default)</a></li>
+        <li><a href="120-governed-chat-client-boundary.html">120 · Governed Language-Model Boundary (MMCA.Common.AI)</a></li>
+        <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
+        <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
+        <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
+        <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
+        <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
+        <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
+        <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+        <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
+        <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
+        <li><a href="134-cloud-neutral-core-vendor-adapters.html" aria-current="page">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-134-cloud-neutral-core-with-vendor-adapter-packages">ADR-134: Cloud-Neutral Core With Vendor Adapter Packages</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-10-24). The change is the MMCA.Common v1.255.0 entry of the framework changelog
+          (<code>MMCA.Common/CHANGELOG.md:7</code>, Added at <code>:11-17</code>, Fixed at <code>:21</code>, Breaking at <code>:25-29</code>) and its
+          upgrade section (<code>MMCA.Common/UPGRADING.md:35</code>). It amends the records whose Azure integrations
+          moved: <a href="041-observability-and-telemetry.html">ADR-041</a>, <a href="044-native-push-delivery.html">ADR-044</a>,
+          <a href="045-managed-file-storage-and-avatars.html">ADR-045</a>, <a href="061-runtime-secret-management.html">ADR-061</a>,
+          <a href="066-broker-transport-selection.html">ADR-066</a>, <a href="069-shared-data-protection-key-ring.html">ADR-069</a>,
+          <a href="015-architecture-fitness-functions.html">ADR-015</a> and
+          <a href="118-message-transport-library-policy.html">ADR-118</a>; each carries a 2026-10-24 revision.</p>
+          <h2 id="context">Context</h2>
+          <p>Before v1.255.0 the core packages carried the Azure SDKs themselves: MMCA.Common.Infrastructure,
+          MMCA.Common.Aspire, MMCA.Common.API and MMCA.Common.Testing each referenced Azure packages, and
+          MMCA.Common.Testing brought Testcontainers.ServiceBus, Azure.Messaging.ServiceBus and
+          MassTransit.Azure.ServiceBus.Core into every test project that used it (<code>MMCA.Common/CHANGELOG.md:25</code>).
+          A consumer that never runs on Azure (a self-hosted deployment, or one on AWS) still restored, audited
+          and shipped those dependencies, and the broker selection was a closed enum, <code>MessageBusProvider</code>, so a
+          second cloud&#39;s transport could only be added by editing the core (<code>MMCA.Common/CHANGELOG.md:26</code>).</p>
+          <p>The framework already had a working shape for optional vendor code. The AI boundary
+          (<a href="120-governed-chat-client-boundary.html">ADR-120</a>) keeps the provider SDKs in separate packages
+          (<code>MMCA.Common.AI.Anthropic</code>, <code>MMCA.Common.AI.OpenAI</code>) and resolves a configured provider name against
+          the factories those packages register, failing at boot when the name matches none
+          (<code>MMCA.Common/Source/Core/MMCA.Common.AI/Providers/AiProviderValidator.cs:6-12</code>, <code>:16</code>). The cloud
+          integrations had no equivalent: their SDKs were unconditional references of the core.</p>
+          <h2 id="decision">Decision</h2>
+          <p><strong>The core packages reference no cloud SDK. Each vendor integration ships in an adapter package that
+          references the core, and a host opts in with one registration call per capability.</strong> The framework
+          guide states the rule (<code>MMCA.Common/AGENTS.md:145</code>).</p>
+          <ul>
+          <li><strong>Three adapter packages.</strong><ul>
+          <li><code>MMCA.Common.Azure</code>: Key Vault as a configuration source, <code>AddAzureKeyVaultConfiguration()</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureKeyVaultConfigurationExtensions.cs:23</code>, <code>:80</code>);
+          the Blob plus Key Vault DataProtection key ring, <code>AddAzureDataProtection()</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureDataProtectionExtensions.cs:20</code>, <code>:53</code>); the Azure
+          Monitor exporter, <code>AddAzureMonitorExporter()</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureMonitorExporterExtensions.cs:12</code>, <code>:42</code>, calling
+          <code>UseAzureMonitor()</code> at <code>:63</code>); Blob file storage, <code>AddAzureBlobFileStorage(configuration)</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureServiceCollectionExtensions.cs:41</code>); Notification
+          Hubs native push, <code>AddAzureNotificationHubsPush(configuration)</code> (<code>:83</code>); and the Service Bus
+          transport, <code>AddAzureServiceBusTransport()</code> (<code>:117-118</code>). The Entra ID SQL authentication provider
+          (<code>Microsoft.Data.SqlClient.Extensions.Azure</code>) arrives by referencing the package, with no call
+          (<code>MMCA.Common/CHANGELOG.md:11</code>).</li>
+          <li><code>MMCA.Common.Aws</code>: S3-compatible storage, <code>AddS3FileStorage(configuration)</code>, and the SQS/SNS
+          transport, <code>AddAmazonSqsTransport()</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/AwsServiceCollectionExtensions.cs:23</code>, <code>:44</code>, <code>:79</code>).</li>
+          <li><code>MMCA.Common.Testing.Azure</code>: the Service Bus emulator broker-parity fixture,
+          <code>ServiceBusEmulatorFixtureBase</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Azure/Fixtures/ServiceBusEmulatorFixtureBase.cs:54</code>).</li>
+          </ul>
+          </li>
+          <li><strong>Configuration sections and keys are unchanged.</strong> Only the call and the type names moved; no shim
+          or <code>[Obsolete]</code> alias is left in the core (<code>MMCA.Common/CHANGELOG.md:25</code>). Each adapter binds the
+          section the core used: Blob storage and S3 both read <code>FileStorage</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/Storage/S3StorageClientFactory.cs:14</code>), and the
+          Notification Hubs registration keeps the <code>NativePush</code> gate of <code>Enabled</code> plus a connection string and
+          hub name (<code>AzureServiceCollectionExtensions.cs:91-96</code>).</li>
+          <li><strong>The message bus provider is a string resolved against registered transports.</strong>
+          <code>MessageBusSettings.Provider</code> is a <code>string</code> defaulting to <code>InProcess</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:25</code>), and the
+          built-in names are the <code>MessageBusProviders</code> constants <code>InProcess</code> and <code>RabbitMq</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Transports/MessageBusProviders.cs:9</code>,
+          <code>:15</code>, <code>:18</code>). The extension point is <code>IBrokerTransport</code>, a <code>Name</code> plus a
+          <code>Configure(IBusRegistrationConfigurator, BrokerTransportContext)</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Transports/IBrokerTransport.cs:24</code>,
+          <code>:30</code>, <code>:40</code>; <code>BrokerTransportContext.cs:10</code>), registered through <code>AddBrokerTransport</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:148</code>, added as
+          an enumerable singleton at <code>:157</code>). <code>AddBrokerMessaging</code> (<code>:45</code>) returns early for <code>InProcess</code>
+          (<code>:54</code>), otherwise resolves the transport by name (<code>:66</code>, <code>ResolveBrokerTransport</code> at <code>:177</code>, with
+          RabbitMQ built in at <code>:179-181</code>) and hands it the bus configurator (<code>:98</code>). A name with no
+          registered transport throws there, naming the adapter package and call for the two known adapter
+          names (<code>MessageBusProviders.cs:25-29</code>; <code>DependencyInjection.Messaging.cs:199-203</code>). Every transport,
+          built in or adapter, applies the same receive policies through <code>BrokerTransportPolicies</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Transports/BrokerTransportPolicies.cs:25</code>:
+          <code>ApplyReceivePolicies</code> at <code>:37</code> and <code>:56</code>, <code>ApplyMessageRetry</code> at <code>:80</code>, <code>ApplyBackpressure</code> at
+          <code>:103</code>, <code>BuildRedeliveryIntervals</code> at <code>:131</code> and <code>:144</code>).</li>
+          <li><strong>OTLP is the only built-in exporter.</strong> <code>AddServiceDefaults()</code> turns on <code>UseOtlpExporter()</code> when
+          <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> is set
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.Telemetry.cs:166</code>, <code>:170</code>). Azure Monitor
+          is the adapter call <code>AddAzureMonitorExporter()</code>, which throws when it runs before
+          <code>AddServiceDefaults()</code> because the framework&#39;s outbox and probe filter processors must be registered
+          ahead of the exporter (<code>AzureMonitorExporterExtensions.cs:45-50</code>; <code>Extensions.Telemetry.cs:146</code>;
+          <code>MMCA.Common/CHANGELOG.md:27</code>).</li>
+          <li><strong>Startup tripwires fail fast when vendor configuration exists without its adapter.</strong> Two
+          <code>IValidateOptions</code> validators run under <code>ValidateOnStart</code>, before any hosted service starts.
+          <code>CloudAdapterTripwire</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/CloudAdapterTripwire.cs:25</code>,
+          registered by <code>AddInfrastructure</code> at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:221-223</code>) fails a
+          non-blank <code>FileStorage</code> section whose <code>IFileStorageService</code> is still the null default (<code>:28</code>,
+          <code>:46-50</code>) and <code>NativePush:Enabled=true</code> whose <code>INativePushSender</code> is still the null default (<code>:31</code>,
+          <code>:53-58</code>), each message naming the call. <code>HostIntegrationTripwire</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Integrations/HostIntegrationTripwire.cs:15</code>, <code>:31</code>,
+          registered by <code>AddServiceDefaults()</code> at <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:44-46</code>)
+          checks <code>APPLICATIONINSIGHTS_CONNECTION_STRING</code>, <code>KeyVault:Uri</code> and <code>DataProtection:BlobStorageUri</code>
+          (<code>:20</code>, <code>:23</code>, <code>:26</code>) against the <code>HostIntegrationMarker</code> each adapter call registers
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Integrations/HostIntegrationMarker.cs:10</code>,
+          names at <code>HostIntegrationNames.cs:17</code>, <code>:20</code>, <code>:23</code>; registered at
+          <code>AzureKeyVaultConfigurationExtensions.cs:84</code>, <code>AzureDataProtectionExtensions.cs:57</code>,
+          <code>AzureMonitorExporterExtensions.cs:56</code>). A section holding only blank placeholders stays silent
+          (<code>MMCA.Common/CHANGELOG.md:28</code>).</li>
+          <li><strong>The boundary is gated twice, matched on package id.</strong> The <code>EnforceCloudVendorBoundary</code> build target
+          fails a core project whose <code>PackageReference</code> is an Azure, AWS or vendor MassTransit transport
+          package, or an adapter package
+          (<code>MMCA.Common/Source/Build/MMCA.Common.LayerEnforcement.targets:108-111</code>, target at <code>:126</code>, errors at
+          <code>:144</code> and <code>:146</code>). <code>CloudVendorIsolationTestsBase</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Layering/CloudVendorIsolationTestsBase.cs:14</code>)
+          fails a core assembly that names a vendor type or references a vendor or adapter assembly
+          (<code>:26-27</code>, <code>:30-31</code>).</li>
+          <li><strong>Exactly two references are exempt, both database engines rather than cloud services.</strong>
+          <code>Microsoft.EntityFrameworkCore.Cosmos</code> in MMCA.Common.Infrastructure, because Cosmos DB is one of the
+          framework&#39;s data engines and brings <code>Microsoft.Azure.Cosmos</code> transitively, so that namespace is
+          allowed in Infrastructure alone; and <code>Aspire.Hosting.Azure.CosmosDB</code> in MMCA.Common.Aspire.Hosting,
+          the AppHost-side emulator resource that never reaches a service process
+          (<code>MMCA.Common.LayerEnforcement.targets:115-120</code>, exemptions at <code>:130-131</code>;
+          <code>CloudVendorIsolationTestsBase.cs:21</code>).</li>
+          <li><strong>S3-compatible, not S3-only.</strong> <code>AddS3FileStorage</code> targets Amazon S3, Cloudflare R2, MinIO and the
+          GCS XML API from one <code>FileStorage</code> section (<code>MMCA.Common/CHANGELOG.md:12</code>;
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/Storage/S3FileStorageSettings.cs:13</code>,
+          <code>S3FileStorageService.cs:21</code>). Request checksum calculation and response checksum validation both
+          default to <code>WHEN_REQUIRED</code> rather than the AWS SDK default
+          (<code>S3FileStorageSettings.cs:59</code>, <code>:65</code>, <code>:72</code>; <code>AwsServiceCollectionExtensions.cs:35</code>), the posture
+          that keeps the non-AWS stores working.</li>
+          <li><strong>The SQS transport works within SQS limits.</strong> <code>AmazonSqsTransport</code> registers under the provider
+          name <code>AmazonSqs</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/Messaging/AmazonSqsTransport.cs:37</code>, <code>:40</code>) and uses
+          <code>MassTransit.AmazonSQS</code> at 8.5.11, the same version as every other MassTransit pin
+          (<code>MMCA.Common/Directory.Packages.props:125-130</code>). SQS caps a message delay at 900 seconds
+          (<code>MaxDelaySeconds</code>, <code>AmazonSqsTransport.cs:43</code>), so an unconfigured redelivery list defaults to
+          <code>[60, 300, 900]</code> (<code>:55</code>, applied at <code>:128</code>) and a configured interval over 900 fails
+          <code>AddBrokerMessaging</code> instead of being silently shortened (<code>:159-161</code>). The <code>MMCA-*</code> ambient headers
+          (<code>:46</code>) travel in the MassTransit envelope body, not as SQS/SNS message attributes (<code>:30-33</code>,
+          <code>:134-135</code>), so they never compete for the 10-attribute cap (<code>MMCA.Common/CHANGELOG.md:12</code>).</li>
+          <li><strong>The adapters are exercised against real infrastructure.</strong> The <code>aws-integration</code> CI job runs
+          MMCA.Common.Aws against LocalStack through Testcontainers
+          (<code>MMCA.Common/.github/workflows/ci.yml:846-847</code>, test run at <code>:883</code>); it is not a required check
+          (<code>MMCA.Common/CHANGELOG.md:17</code>).</li>
+          </ul>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>A consumer pays only for the cloud it runs on.</strong> With the SDKs in adapters, a self-hosted or AWS
+          deployment restores, audits and ships no Azure package, and an Azure deployment carries no AWS one.</li>
+          <li><strong>The AI provider shape already worked.</strong> Optional vendor code in its own package, selected by name
+          and refused at boot when the name has no registration (<code>AiProviderValidator.cs:6-12</code>), is the model
+          the cloud adapters follow, so a reader of one boundary already knows the other.</li>
+          <li><strong>A string provider is open to extension without editing the core.</strong> A closed enum forced every new
+          transport into MMCA.Common.Infrastructure; <code>IBrokerTransport</code> lets an adapter add one, and
+          <code>BrokerTransportPolicies</code> keeps retry, redelivery and backpressure identical across all of them.</li>
+          <li><strong>Unchanged configuration keeps the move to code.</strong> A deployment&#39;s environment variables, Bicep and
+          Key Vault names stay as they are; only the package reference and the registration calls change.</li>
+          <li><strong>Silent degradation is the failure mode the tripwires remove.</strong> Before the move, the core wired
+          each integration itself. After it, a host that keeps its configuration but loses the call would
+          otherwise start with the null storage, the null push sender, no telemetry export, no vault secrets
+          or a per-replica key ring. Failing startup with the call named turns that into a deploy-time error.</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>Every Azure host gains calls it did not need before.</strong> <code>AddAzureMonitorExporter()</code> after
+          <code>AddServiceDefaults()</code> and <code>AddAzureServiceBusTransport()</code> before <code>AddBrokerMessaging</code> are new, and
+          the Key Vault, DataProtection and push calls are renamed (<code>MMCA.Common/UPGRADING.md:35</code>).</li>
+          <li><strong>Registration order matters in two places.</strong> The exporter must follow <code>AddServiceDefaults()</code>
+          (<code>AzureMonitorExporterExtensions.cs:45-50</code>), and an adapter transport must be registered before
+          <code>AddBrokerMessaging</code> resolves it (<code>DependencyInjection.Messaging.cs:148</code>, <code>:177</code>).</li>
+          <li><strong>The Cosmos engine still brings an Azure assembly into Infrastructure.</strong> <code>Microsoft.Azure.Cosmos</code>
+          arrives transitively through <code>Microsoft.EntityFrameworkCore.Cosmos</code>, so the core is cloud-neutral in
+          its cloud-service integrations, not free of every Azure assembly
+          (<code>MMCA.Common.LayerEnforcement.targets:115-118</code>).</li>
+          <li><strong>SQS redelivery is shorter than the framework default.</strong> The framework default is
+          <code>[60, 600, 3600]</code> (<code>MessageBusSettings.cs:212</code>); SQS cannot delay an hour, so its default stops at
+          900 seconds (<code>AmazonSqsTransport.cs:55</code>).</li>
+          <li><strong>The AWS tier is not a required check.</strong> A regression in MMCA.Common.Aws shows as a red
+          <code>aws-integration</code> job without blocking a merge (<code>MMCA.Common/CHANGELOG.md:17</code>).</li>
+          </ul>
+          <h2 id="alternatives-rejected">Alternatives rejected</h2>
+          <p>Weighed and rejected on 2026-10-24.</p>
+          <ul>
+          <li><strong>Leave the Azure SDKs in the core.</strong> Simplest for the Azure-hosted consumers, but every other
+          consumer keeps restoring, auditing and shipping Azure packages it never calls, and a test project
+          keeps pulling the Service Bus emulator stack through MMCA.Common.Testing. Revisit only if every
+          consumer is permanently Azure-only.</li>
+          <li><strong>Add AWS to the core next to Azure.</strong> It would serve AWS deployments without new packages, but it
+          doubles the dependency footprint every consumer carries instead of removing it, and the closed
+          provider enum would grow with each cloud. Revisit never: it worsens the problem this record solves.</li>
+          <li><strong>One package per capability per vendor</strong> (for example separate Blob, Key Vault, Service Bus and
+          Monitor packages). It gives the finest-grained dependency control, but multiplies the package count
+          the dual-registry release publishes and versions in lockstep, and the maintenance that comes with
+          each. One package per vendor with one call per capability keeps the opt-in at the call while the
+          package count stays at one per cloud. Revisit if one capability&#39;s SDK becomes heavy enough that
+          hosts using the others object to carrying it.</li>
+          </ul>
+          <h2 id="consequences">Consequences</h2>
+          <ul>
+          <li><strong>The change is breaking.</strong> The renames, moved types and new calls are mapped once in
+          <code>MMCA.Common/UPGRADING.md:35</code> (the old-to-new table and the seven-step fix per host) rather than
+          restated here; <code>Microsoft.Data.SqlClient.Extensions.Azure</code> now arrives only through
+          MMCA.Common.Azure, so any process whose SQL connection string uses <code>Authentication=Active Directory ...</code> references that package (<code>MMCA.Common/CHANGELOG.md:25</code>).</li>
+          <li><strong>A configured redelivery list now replaces the default.</strong> Making the provider a string came with
+          <code>RedeliveryIntervalsSeconds</code> becoming <code>null</code> when unconfigured
+          (<code>MessageBusSettings.cs:234</code>), which fixes the binder appending a configured list to the old
+          initializer, so <code>[0]</code> turns second-level redelivery off as documented
+          (<code>BrokerTransportPolicies.cs:124-125</code>; <code>MMCA.Common/CHANGELOG.md:21</code>).</li>
+          <li><strong>A new cloud is an adapter, not a core change.</strong> A transport implements <code>IBrokerTransport</code>, storage
+          implements <code>IFileStorageService</code>, and a tripwire message names the call, with the build and
+          architecture gates holding the core free of the new SDK.</li>
+          <li><strong>The residual Cosmos dependency stays.</strong> The two engine exemptions are the only vendor references
+          in the core; adding a third is a deliberate edit to both gates, not a drift either can miss.</li>
+          </ul>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/134-cloud-neutral-core-vendor-adapters.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#status">Status</a></li>
+            <li><a href="#context">Context</a></li>
+            <li><a href="#decision">Decision</a></li>
+            <li><a href="#rationale">Rationale</a></li>
+            <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#alternatives-rejected">Alternatives rejected</a></li>
+            <li><a href="#consequences">Consequences</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Principal Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

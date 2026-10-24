@@ -36,6 +36,7 @@ Revised 2026-10-19: the Helpdesk broker registration is a `Register` step of
 `AddMmcaApplicationPipeline`; anchor re-pointed (see Revision below).
 Revised 2026-10-21: anchors refreshed after the Common Aspire hosting, both Bicep templates and both
 deploy workflows grew; no change in what they show.
+Revised 2026-10-24: `MessageBus:Provider` is a string resolved against registered `IBrokerTransport`s, Azure Service Bus and Amazon SQS are adapter transports, and a configured redelivery list now replaces the default ([ADR-134](134-cloud-neutral-core-vendor-adapters.md)); the Decision's provider, emulator and retry bullets are corrected in place. See Revision (2026-10-24) at the end.
 ## Context
 ADR-003 decides that integration events leave an aggregate through the outbox and are published by
 `OutboxProcessor` via `IMessageBus`, and it settles the *dispatch* question ("in-process for the
@@ -54,12 +55,15 @@ Keep **one** `IMessageBus` abstraction with a **three-value transport selector**
 the deployment edge (never in application code), configure both broker transports identically, and
 carry a dedicated test tier for the transport that only production uses.
 
-- **Three provider values, one abstraction.** `MessageBusProvider` has exactly `InProcess = 0`,
-  `RabbitMq = 1`, `AzureServiceBus = 2`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:236-252`), bound
-  from the `MessageBus` section (`:14`) and defaulting to `InProcess` (`:17`). `AddBrokerMessaging`
+- **Named providers, one abstraction.** `MessageBusSettings.Provider` is a string: `InProcess` and
+  `RabbitMq` are built in
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Transports/MessageBusProviders.cs:15`,
+  `:18`) and `AzureServiceBus` names the adapter transport MMCA.Common.Azure registers (see the
+  Revision (2026-10-24) at the end). The value is bound from the `MessageBus` section
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:16`) and
+  defaults to `InProcess` (`:25`). `AddBrokerMessaging`
   returns the container untouched for `InProcess`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:52-55`); for either
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:54`); for either
   broker value it replaces `IMessageBus` with `BrokerMessageBus` (`:95`) and `IEventBus` with
   `BrokerEventBus` (`:101`), so the outbox becomes the only delivery channel. No application or
   domain code names a transport.
@@ -83,13 +87,13 @@ carry a dedicated test tier for the transport that only production uses.
   runs the pinned `azure-messaging/servicebus-emulator:2.0.1` container against the AppHost's
   existing SQL Server rather than a second engine (`Extensions.cs:213-250`, image tag at `:119`).
   The infrastructure side keys off one marker and nothing else: when the connection string carries
-  `UseDevelopmentEmulator=true`, `ConfigureBrokerTransport` delegates the host build to
+  `UseDevelopmentEmulator=true`, the Azure Service Bus transport delegates the host build to
   `ServiceBusEmulatorSupport` (`IsEmulatorConnectionString`, then `ConfigureEmulatorHost`), which
   attaches the administration client MassTransit v8 needs; otherwise it takes the production
   `cfg.Host(connectionString)` path unchanged
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:302-340`, delegation
-  at `:311-315`, production path at `:318`; the helper is
-  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/ServiceBusEmulatorSupport.cs`). Both
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/Messaging/AzureServiceBusTransport.cs:16`, delegation
+  at `:41-43`, production path at `:48`; the helper is
+  `MMCA.Common/Source/Hosting/MMCA.Common.Azure/Messaging/ServiceBusEmulatorSupport.cs:32`). Both
   consumers are wired for it, through one framework selector rather than per-repo code:
   `BrokerSelection` in `MMCA.Common.Aspire.Hosting` (shipped in v1.231.0) reads a named environment
   variable (`IsServiceBusSelected`,
@@ -114,20 +118,23 @@ carry a dedicated test tier for the transport that only production uses.
   differ.
 - **One resolution order for the connection string.** `ResolveBrokerConnectionString` prefers an
   explicit `MessageBus:ConnectionString`, then `ConnectionStrings:rabbitmq`, then
-  `ConnectionStrings:messaging` (`DependencyInjection.Messaging.cs:225-234`). Aspire's `WithReference` and
+  `ConnectionStrings:messaging` (`DependencyInjection.Messaging.cs:248`, documented at `:238`-`:239`). Aspire's `WithReference` and
   Bicep's `secretRef` therefore both land on a path the host already reads, and the transport
   selector stays separate from the credential.
-- **Retry policy is identical on both transports.** Each branch of `ConfigureBrokerTransport` calls
-  `cfg.UseMessageRetry(r => r.Exponential(...))` with the same four arguments before
-  `ConfigureEndpoints`: RabbitMQ at `DependencyInjection.Messaging.cs:292-296`, Azure Service Bus at
-  `:332-336`; both then apply the same `ApplyBackpressure(cfg, settings)` (`:297`, `:337`). The values come from one settings object: `RetryLimit` 5, `RetryMinIntervalSeconds` 1,
-  `RetryMaxIntervalSeconds` 30 (`MessageBusSettings.cs:92,99,105`). Second-level redelivery is the one
-  place the two transports diverge by design: Azure Service Bus schedules messages natively, so
-  `UseDelayedRedelivery` is applied unconditionally there (`DependencyInjection.Messaging.cs:326-330`), while
-  RabbitMQ keeps it opt-in behind `EnableDelayedRedelivery` (default `false`,
-  `MessageBusSettings.cs:195`, documented at `:184-187`) because it needs the
-  delayed-message-exchange plugin the Aspire container does not ship
-  (`DependencyInjection.Messaging.cs:283-290`, posture documented in the remarks at `:251-258`).
+- **Retry policy is identical on every transport.** Each transport calls the shared
+  `BrokerTransportPolicies.ApplyReceivePolicies`
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Transports/BrokerTransportPolicies.cs:37`,
+  `:56`), which applies delayed redelivery when the interval list is non-empty (`:62`-`:66`), then the
+  exponential `UseMessageRetry` through `ApplyMessageRetry` (`:68`, defined at `:80`, retry at `:85`),
+  then `ApplyBackpressure` (`:69`, defined at `:103`). The values come from one settings object:
+  `RetryLimit` 5, `RetryMinIntervalSeconds` 1, `RetryMaxIntervalSeconds` 30
+  (`MessageBusSettings.cs:99,106,112`). Second-level redelivery is the one place the transports diverge
+  by design: Azure Service Bus schedules messages natively, so it always asks for delayed redelivery
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/Messaging/AzureServiceBusTransport.cs:52`), while
+  RabbitMQ passes `EnableDelayedRedelivery`
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Transports/RabbitMqBrokerTransport.cs:33`;
+  default `false`, `MessageBusSettings.cs:201`) because it needs the delayed-message-exchange plugin the
+  Aspire container does not ship.
 - **Service Bus Standard tier and `Manage` rights are forced by the topology MassTransit builds.**
   Both namespaces are `Standard`/`Standard` (`MMCA.ADC/infra/main.bicep:1239-1242`,
   `MMCA.Store/infra/main.bicep:1078-1081`) because `UsingAzureServiceBus` configures a topic per
@@ -149,14 +156,14 @@ carry a dedicated test tier for the transport that only production uses.
   in Store (`MMCA.Store/infra/main.bicep:158-162`, variables at `:163-165`).
 - **Tests use the transport the tier is testing.** A per-service integration host configures no
   provider, so `AddBrokerMessaging` short-circuits and the in-process bus stands
-  (`DependencyInjection.Messaging.cs:52-55`). The cross-service round-trip tier runs the real broker: the
+  (`DependencyInjection.Messaging.cs:54`). The cross-service round-trip tier runs the real broker: the
   shared fixture base sets `MessageBus__Provider=RabbitMq` plus
   `ConnectionStrings__rabbitmq` against a Testcontainers RabbitMQ for every host it boots
   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/Fixtures/CrossServiceFixtureBase.cs:255-256`).
 - **A dedicated emulator tier exists to prove the production binding, and it gates the deploy.** The
   fixture is framework code, not a per-repo copy: `ServiceBusEmulatorFixtureBase`
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/Fixtures/ServiceBusEmulatorFixtureBase.cs`) ships in
-  `MMCA.Common.Testing` as of v1.178.0, and both consumers subclass it, supplying only their
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Azure/Fixtures/ServiceBusEmulatorFixtureBase.cs:54`) ships in
+  `MMCA.Common.Testing.Azure` (it was in `MMCA.Common.Testing` from v1.178.0 until v1.255.0), and both consumers subclass it, supplying only their
   `ReceiveQueueName`, their contract handlers through `ConfigureReceiveEndpoint`, the
   `[CollectionDefinition]` class (per test assembly by construction) and the assertions. The base owns
   everything that was hand-copied on both sides before: the pinned image (`DefaultEmulatorImage`,
@@ -228,7 +235,7 @@ broker, so extraction later is an AppHost change rather than a code change.
 ## Trade-offs
 - **Two brokers means two behaviors to keep aligned.** Configuration parity is enforced by one code
   path, but the products still differ (Service Bus supports delayed redelivery natively, the Aspire
-  RabbitMQ container does not, `DependencyInjection.Messaging.cs:251-258`), so a transport-specific behavior
+  RabbitMQ container does not, `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Transports/RabbitMqBrokerTransport.cs:33`), so a transport-specific behavior
   can still be adopted by accident. The local Service Bus emulator narrows that window but does not
   close it: it is opt-in and off by default, so the inner loop a developer actually runs is still the
   divergent one unless they set `ADC_BROKER=servicebus` or `STORE_BROKER=servicebus`.
@@ -245,7 +252,7 @@ broker, so extraction later is an AppHost change rather than a code change.
   justification into the run summary.
 - **The emulator is not Azure Service Bus.** It imposes its own quotas (the one-hour entity TTL the
   shared fixture base works around in its static constructor,
-  `MMCA.Common/Source/Hosting/MMCA.Common.Testing/Fixtures/ServiceBusEmulatorFixtureBase.cs`, plus a throttled
+  `MMCA.Common/Source/Hosting/MMCA.Common.Testing.Azure/Fixtures/ServiceBusEmulatorFixtureBase.cs:54`, plus a throttled
   admin plane and a 10-connection namespace quota), so a green
   smoke proves the binding and the topology provisioning, not production behavior at volume.
 - **`Manage` rights are broad, and splitting the credential did not narrow them.** Every per-service
@@ -257,7 +264,7 @@ broker, so extraction later is an AppHost change rather than a code change.
   privilege reduction (`MMCA.ADC/infra/main.bicep:1266-1278`, `MMCA.Store/infra/main.bicep:1104-1113`).
 - **Provider selection is per host and silent when missing.** A service that never receives
   `MessageBus__Provider` keeps the in-process bus and publishes nothing to the broker, without an
-  error (`DependencyInjection.Messaging.cs:52-55`); correctness depends on auditing the AppHost and the Bicep
+  error (`DependencyInjection.Messaging.cs:54`); correctness depends on auditing the AppHost and the Bicep
   env lists, the same inventory caveat ADR-021 carries for the inbox.
 - **The choice lives in AppHost prose that has to be maintained alongside the calls.** The note above
   ADC's Notification registration now states that `WithSelectedBroker(withBroker)` wires the
@@ -401,6 +408,51 @@ anchors moved.
    `MMCA.Store/.github/workflows/deploy.yml` `freshness` job `:776`, step `:827`, required jobs
    `:842-845`, `deploy.needs` `:1098`, assert `:1128` (break-glass input still `:26`). The earlier
    revisions' anchors were accurate on their dates and stay as written.
+
+## Revision (2026-10-24)
+[ADR-134](134-cloud-neutral-core-vendor-adapters.md) opens the transport selection to adapters. Which
+broker runs where is unchanged: in-process for monoliths, RabbitMQ locally, Azure Service Bus in
+production, injected by Bicep.
+
+1. **A string provider and a transport extension point.** `MessageBusSettings.Provider` is a `string`
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:25`); the
+   `MessageBusProvider` enum is gone, values compare case-insensitively, blank means `InProcess` and a
+   numeric value is rejected (`MMCA.Common/CHANGELOG.md:26`). `IBrokerTransport`
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Transports/IBrokerTransport.cs:24`) is
+   registered through `AddBrokerTransport`
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:148`) and
+   resolved by name in `AddBrokerMessaging` (`:66`, `ResolveBrokerTransport` at `:177`, RabbitMQ built
+   in at `:179`-`:181`). A name with no registered transport throws, naming the package and the call
+   (`MessageBusProviders.cs:25`-`:29`; `DependencyInjection.Messaging.cs:199`-`:203`).
+2. **Azure Service Bus is an adapter transport.** A host whose provider can be `AzureServiceBus` calls
+   `AddAzureServiceBusTransport()`
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureServiceCollectionExtensions.cs:117`-`:118`)
+   before `AddBrokerMessaging`; it registers `AzureServiceBusTransport`
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/Messaging/AzureServiceBusTransport.cs:16`, name at
+   `:19`), whose emulator and production host paths are the ones the Decision describes (`:41`-`:48`).
+3. **Amazon SQS/SNS is a second adapter transport.** `AddAmazonSqsTransport()`
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Aws/AwsServiceCollectionExtensions.cs:79`) registers
+   `AmazonSqsTransport` under `AmazonSqs`
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Aws/Messaging/AmazonSqsTransport.cs:37`, `:40`), configured
+   under `MessageBus:AmazonSqs` (`AmazonSqsTransportSettings.cs:8`; `MMCA.Common/CHANGELOG.md:12`). Its
+   unconfigured redelivery default is `[60, 300, 900]` (`AmazonSqsTransport.cs:55`) under the 900-second
+   SQS delay cap (`:43`), a longer configured interval fails `AddBrokerMessaging` (`:159`-`:161`), and the
+   `MMCA-*` headers travel in the envelope body rather than as message attributes (`:30`-`:33`,
+   `:134`-`:135`). No consumer selects it today.
+4. **Redelivery binding fix.** `RedeliveryIntervalsSeconds` is now `IReadOnlyList<int>?` and `null`
+   when unconfigured (`MessageBusSettings.cs:234`), with the framework default `[60, 600, 3600]` moved
+   to `DefaultRedeliveryIntervalsSeconds` (`:212`) and the effective list built by
+   `BrokerTransportPolicies.BuildRedeliveryIntervals` (`BrokerTransportPolicies.cs:131`, `:144`). The
+   configuration binder used to append a configured list to the property's initializer, so
+   `[60, 300, 900]` bound as six values and `[0]` never turned redelivery off
+   (`MMCA.Common/CHANGELOG.md:21`). A configured list now replaces the default, and `[0]` yields an
+   empty list (`BrokerTransportPolicies.cs:124`-`:125`), which skips delayed redelivery (`:62`-`:66`).
+5. **Corrected in place:** the provider bullet (the enum and its `MessageBusSettings.cs:236-252`
+   anchor), the emulator delegation (formerly inside `ConfigureBrokerTransport`, now in
+   `AzureServiceBusTransport`), the connection-string resolution anchor, the retry bullet (formerly two
+   branches of `ConfigureBrokerTransport`, now `BrokerTransportPolicies`), the `AddBrokerMessaging`
+   early-return anchor, a Trade-offs anchor, and the fixture path, now in `MMCA.Common.Testing.Azure`.
+   The anchors inside earlier revisions are left as recorded.
 
 ## Related
 ADR-003 (the outbox that feeds `IMessageBus`; this ADR picks the transport underneath it), ADR-016
