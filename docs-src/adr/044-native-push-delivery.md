@@ -10,6 +10,7 @@ Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 Revised 2026-10-21: anchors refreshed after the releases that moved the device controller, the
 registration service and the registrar.
 Revised 2026-10-24: the Notification Hubs sender and registrar moved to MMCA.Common.Azure, registered by `AddAzureNotificationHubsPush` ([ADR-134](134-cloud-neutral-core-vendor-adapters.md)); see Revision (2026-10-24).
+Revised 2026-10-25: two more delivery adapters ship, SNS mobile push over a DynamoDB registry (MMCA.Common.Aws) and FCM HTTP v1 over a Firestore registry (MMCA.Common.Gcp), and the payload builders moved into the core; see Revision (2026-10-25).
 
 ## Context
 ADR-024 established two notification channels: a durable per-user `UserNotification` inbox (the
@@ -25,19 +26,66 @@ needs credentials (a Firebase service account, an APNs auth key) that cannot liv
 may not exist when the code ships.
 
 ## Decision
-- **Azure Notification Hubs as the delivery fan-out.** One hub abstracts both platforms behind
-  one API, holds the platform credentials outside our code, and its installation model gives
-  upsert semantics with client-generated stable ids. The free tier covers conference volumes.
-- **Two new Application abstractions, Null by default** (the ADR-024 pattern):
+- **Two Application abstractions, Null by default** (the ADR-024 pattern):
   `INativePushSender` (user-targeted and broadcast native sends) and `IPushDeviceRegistrar`
-  (installation upsert/delete). `AddInfrastructure` TryAdds no-op defaults;
-  `AddAzureNotificationHubsPush(configuration)` (MMCA.Common.Azure) swaps in the Azure Notification Hubs
-  implementations only when the `NativePush` section is enabled AND complete
-  (`ConnectionString`, `HubName`) - so hosts call it unconditionally and deployments flip the
-  channel on by configuration alone.
-- **Installations are tagged `user:{id}`.** Sends target users, never raw tokens; a user's
-  every device gets the message. Tag expressions are OR-chunked at the hub's 20-tag cap
-  (`NativePushPayloads`, unit-tested), so audience size is unbounded.
+  (installation upsert/delete,
+  `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Notifications/IPushDeviceRegistrar.cs:11`,
+  `UpsertAsync` at `:29`, `DeleteAsync` at `:48`). `AddInfrastructure` TryAdds no-op defaults.
+- **Three delivery adapters, one registration call each.** Each call implements both abstractions
+  and swaps them in only when `NativePush:Enabled` is true AND its own section is complete, so hosts
+  call it unconditionally and deployments flip the channel on by configuration alone:
+  - **Azure Notification Hubs**, `AddAzureNotificationHubsPush(configuration)` (MMCA.Common.Azure),
+    gated on `ConnectionString` and `HubName`. One hub abstracts both platforms behind one API, holds
+    the platform credentials outside our code, and its installation model gives upsert semantics
+    with client-generated stable ids. The free tier covers conference volumes.
+  - **AWS SNS mobile push**, `AddAmazonSnsPush(configuration)`
+    (`MMCA.Common/Source/Hosting/MMCA.Common.Aws/AwsServiceCollectionExtensions.cs:164`), gated on
+    `NativePush:Sns` carrying `InstallationsTable`, `BroadcastTopicArn` and at least one of
+    `FcmPlatformApplicationArn` / `ApnsPlatformApplicationArn` (`:138-147`, `:170-175`). SNS keeps
+    no owner per endpoint, so a DynamoDB table is the installation registry: partition key
+    `InstallationId`, global secondary index `UserId-index` on `UserId` (`:150-152`;
+    `.../MMCA.Common.Aws/Notifications/SnsInstallationRegistry.cs:29`). The ownership and handover
+    rule is one conditional write, `attribute_not_exists(InstallationId) OR UserId = :me OR
+    PushChannel = :channel` (`SnsInstallationRegistry.cs:36`, applied at `:97`), so it holds under
+    concurrency without a lock. A broadcast is one publish to the topic every endpoint subscribes
+    to (`Notifications/SnsPushDeviceRegistrar.cs:140-143`, `Notifications/SnsNativePushSender.cs:65-74`),
+    and an endpoint SNS reports disabled or missing is removed with its row on send
+    (`SnsNativePushSender.cs:93-96`).
+  - **Google FCM HTTP v1**, `AddFirebaseCloudMessagingPush(configuration)`
+    (`MMCA.Common/Source/Hosting/MMCA.Common.Gcp/GcpServiceCollectionExtensions.cs:142`), gated on
+    `NativePush:Fcm` carrying `ProjectId`, `InstallationsCollection` and `BroadcastTopic`
+    (`:119-123`, `:148-153`), with Application Default Credentials. A Firestore collection is the
+    registry, one document per installation id, and every ownership decision is a Firestore
+    transaction (`.../MMCA.Common.Gcp/Notifications/FirestoreInstallationRegistry.cs:10-12`, `:45`).
+    Only FCM registration tokens are accepted: an APNs-platform registration fails validation with
+    `PushDevice.UnsupportedPlatform` (`Notifications/FcmPushDeviceRegistrar.cs:40-46`), so an iOS
+    client registers its FCM token on this adapter. A broadcast is one message to the FCM topic
+    (`Notifications/FcmNativePushSender.cs:95`), and a send that reports the token unregistered, or
+    names it as an invalid registration token, prunes the installation
+    (`Notifications/FcmSendOutcome.cs:25-28`, `FcmNativePushSender.cs:80`). The token target is set
+    under a scoped CS0618 suppression (`Notifications/FcmPushMessage.cs:31-39`): FirebaseAdmin 3.6+
+    deprecates `Message.Token` in favour of Firebase installation ids (FIDs), while the
+    topic-subscription APIs the broadcast depends on take registration tokens only. The exit is moving
+    registration and send to FIDs together.
+- **A lost adapter call fails startup.** `NativePush:Enabled=true` while `INativePushSender` is
+  still the Null sender fails validation with a message naming all three calls and their keys
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/CloudAdapterTripwire.cs:48-53`).
+- **Sends target users, never raw tokens**; a user's every device gets the message. On Notification
+  Hubs installations are tagged `user:{id}` and tag expressions are OR-chunked at the hub's 20-tag
+  cap (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/Notifications/NativePushUserTags.cs:11,20`,
+  unit-tested), so audience size is unbounded. The SNS and FCM registries look installations up by
+  their `UserId` field instead (`SnsInstallationRegistry.cs:127`; Firestore queries at most 30 users
+  at a time, `FirestoreInstallationRegistry.cs:23`).
+- **One payload shape in the core.** `NativePushPayloads.BuildFcmV1Payload` and `BuildApnsPayload`
+  are public in `MMCA.Common.Infrastructure.Notifications.Push`
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/NativePushPayloads.cs:11,18,40`),
+  called by the Notification Hubs sender
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/Notifications/AzureNotificationHubNativePushSender.cs:22-23`)
+  and the SNS message builder
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Aws/Notifications/SnsPushMessage.cs:29-30`). The FCM adapter
+  maps the same fields onto FirebaseAdmin's typed `Message` instead of raw JSON
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Gcp/Notifications/FcmPushMessage.cs:7-9`, `:56-76`), with a
+  test pinning the equivalence.
 - **`SendPushNotificationHandler` gains the third leg.** After the inbox write and the SignalR
   attempt, it calls `INativePushSender.SendToUsersAsync` inside its own non-fatal catch. The
   audit status (`Sent`/`Failed`) stays owned by the SignalR leg: the inbox remains the source
@@ -168,3 +216,41 @@ Null-by-default sender and registrar, the `NativePush` section enabled AND compl
 4. **Corrected in place:** the Decision bullet that named `AddNativePushNotifications(configuration)`.
    The registrar anchors inside the 2026-10-21 revision point at the file's earlier Infrastructure
    location and are left as recorded.
+
+## Revision (2026-10-25)
+MMCA.Common v1.257.0 adds two native push adapters beside Notification Hubs
+(`MMCA.Common/CHANGELOG.md:14`, `:20`). The pipeline is unchanged: the Null-by-default sender and
+registrar, the `NativePush:Enabled` gate, user-targeted sends, the owner-scoped idempotent DELETE and
+the client lifecycle. The Decision now describes three adapters.
+
+1. **SNS mobile push** (`AddAmazonSnsPush`, MMCA.Common.Aws) over a DynamoDB installation registry
+   with the `UserId-index` global secondary index, the ownership and handover rule as one conditional
+   write, a broadcast topic, and disabled-endpoint pruning on send (anchors in the Decision).
+2. **FCM HTTP v1** (`AddFirebaseCloudMessagingPush`, MMCA.Common.Gcp) over a Firestore registry
+   updated inside transactions. FCM registration tokens only: an APNs-platform registration fails
+   validation. Broadcast uses an FCM topic, and unregistered tokens are pruned on send.
+3. **Payload builders moved into the core.** `NativePushPayloads.BuildFcmV1Payload` and
+   `BuildApnsPayload` are public in `MMCA.Common.Infrastructure.Notifications.Push`, with output
+   byte-identical to the former Azure-internal builders (`MMCA.Common/CHANGELOG.md:26`). The 20-tag
+   chunking stays in the Azure adapter as `NativePushUserTags`
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/Notifications/NativePushUserTags.cs:8`); the
+   Decision bullet that credited it to `NativePushPayloads` is corrected in place.
+4. **The startup tripwire names all three calls**
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/CloudAdapterTripwire.cs:53`,
+   `MMCA.Common/CHANGELOG.md:33`).
+5. **Scoped CS0618 suppression on `Message.Token`**
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Gcp/Notifications/FcmPushMessage.cs:37-39`, rationale and
+   exit at `:31-36`): FirebaseAdmin 3.6+ deprecates tokens for FIDs, while the topic-subscription
+   APIs take tokens only. The exit is moving registration and send to FIDs together.
+6. **Rejected alternative: registry rows in each consumer's own database.** Keeping the SNS and FCM
+   installations as rows in each consumer's database was weighed on 2026-10-24 and rejected (a design
+   decision recorded here, not in source): an adapter-owned table would need a migration and a PR in every
+   consumer that enables push, and the adapter would no longer hold everything its capability needs.
+   Revisit if a consumer must keep installation data inside its own database for a residency or audit
+   reason. The registries are vendor-side resources provisioned outside the application instead
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Aws/AwsServiceCollectionExtensions.cs:150`,
+   `MMCA.Common/Source/Hosting/MMCA.Common.Gcp/GcpServiceCollectionExtensions.cs:128-129`).
+7. The Consequences entries on hub-call cost (`ceil(N/20) * 2`) and on the tag-based delete check
+   describe the Notification Hubs adapter. The SNS and FCM registrars enforce the same owner-scoped
+   delete and channel handover through the DynamoDB condition and the Firestore transaction
+   (`AwsServiceCollectionExtensions.cs:134-136`, `GcpServiceCollectionExtensions.cs:113-115`).

@@ -16,8 +16,8 @@
    ============================================================================ */
 window.PLATFORM_FACTS = {
   /* FACTS.md "Published packages" */
-  packages: 25,
-  /* The same 25 packages, grouped by the layer they serve, for the stack on
+  packages: 26,
+  /* The same 26 packages, grouped by the layer they serve, for the stack on
      platform.html. The count above is derived from this list at build time, so a
      package added here cannot leave the headline figure behind (the hand-typed
      pill list this replaced had drifted to 13 while the copy still said fifteen).
@@ -31,7 +31,7 @@ window.PLATFORM_FACTS = {
     { name: "UI", note: "Blazor shared components, MudBlazor theme, web and MAUI clients", items: ["MMCA.Common.UI", "MMCA.Common.UI.Web", "MMCA.Common.UI.Maui"] },
     { name: "Hosting", note: "Aspire service defaults, OpenTelemetry, health checks, broker wiring, YARP gateway composition", items: ["MMCA.Common.Aspire", "MMCA.Common.Aspire.Hosting", "MMCA.Common.Gateway"], edge: true },
     { name: "AI", note: "Governed language-model boundary: prompt contracts, bounds, guardrails, tool policy, usage metering; one adapter package per provider and a replay evaluation harness", items: ["MMCA.Common.AI", "MMCA.Common.AI.Anthropic", "MMCA.Common.AI.OpenAI", "MMCA.Common.AI.Testing"], edge: true },
-    { name: "Cloud adapters", note: "The core packages carry no cloud SDK: Azure (Key Vault, data protection, Azure Monitor, Blob storage, Notification Hubs, Service Bus) and AWS (S3-compatible storage, SQS/SNS) each ship as one adapter package", items: ["MMCA.Common.Azure", "MMCA.Common.Aws"], edge: true },
+    { name: "Cloud adapters", note: "The core packages carry no cloud SDK: Azure, AWS and Google Cloud each ship as one adapter package covering storage, secrets, the data protection key ring, native push, passwordless database sign-in and telemetry, plus the broker where the cloud has a MassTransit v8 transport", items: ["MMCA.Common.Azure", "MMCA.Common.Aws", "MMCA.Common.Gcp"], edge: true },
     { name: "Testing", note: "Integration bases, architecture rule library, AppHost tier, Playwright and bUnit harnesses, Service Bus emulator fixture", items: ["MMCA.Common.Testing", "MMCA.Common.Testing.Architecture", "MMCA.Common.Testing.Aspire", "MMCA.Common.Testing.Azure", "MMCA.Common.Testing.E2E", "MMCA.Common.Testing.UI"] },
     { name: "Metapackage", note: "MMCA.Common: one reference that bundles the six core packages (Shared, Domain, Application, Infrastructure, API, Aspire) so a standard app starts from a single PackageReference", items: ["MMCA.Common"] },
   ],

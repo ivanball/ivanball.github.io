@@ -119,7 +119,7 @@
         </div>
         <div class="stats">
           <!-- BEGIN platform-stats -->
-          <div class="stat"><div class="num">25</div><div class="label">NuGet packages</div></div>
+          <div class="stat"><div class="num">26</div><div class="label">NuGet packages</div></div>
           <div class="stat"><div class="num">134</div><div class="label">Architecture Decision Records</div></div>
           <div class="stat"><div class="num">161</div><div class="label">Architecture fitness tests</div></div>
           <div class="stat"><div class="num">3</div><div class="label">Reference applications</div></div>
@@ -199,8 +199,8 @@
           <li class="layer layer--edge">
             <span class="layer-name">Cloud adapters</span>
             <span>
-              <span class="pill-list"><span class="pill">MMCA.Common.Azure</span><span class="pill">MMCA.Common.Aws</span></span>
-              <span class="layer-note">The core packages carry no cloud SDK: Azure (Key Vault, data protection, Azure Monitor, Blob storage, Notification Hubs, Service Bus) and AWS (S3-compatible storage, SQS/SNS) each ship as one adapter package</span>
+              <span class="pill-list"><span class="pill">MMCA.Common.Azure</span><span class="pill">MMCA.Common.Aws</span><span class="pill">MMCA.Common.Gcp</span></span>
+              <span class="layer-note">The core packages carry no cloud SDK: Azure, AWS and Google Cloud each ship as one adapter package covering storage, secrets, the data protection key ring, native push, passwordless database sign-in and telemetry, plus the broker where the cloud has a MassTransit v8 transport</span>
             </span>
           </li>
           <li class="layer">

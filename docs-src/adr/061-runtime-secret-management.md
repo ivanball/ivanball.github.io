@@ -16,6 +16,7 @@ Revised 2026-10-07: Key Vault purge protection is recorded as prescribed by both
 Revised 2026-10-19: Store's vault holds fifteen secrets, one of them the HS256 gRPC service-token key named with `--`, so the HS256 and `--` statements are corrected and the identity, vault and secret-block anchors re-pointed.
 Revised 2026-10-21: anchors refreshed after the ADC and Store `main.bicep` and `deploy.yml` growth, with every remaining Decision, Rationale and Trade-offs line anchor re-verified; no decision changed.
 Revised 2026-10-24: the host-side vault read is `AddAzureKeyVaultConfiguration()` in MMCA.Common.Azure, configuration keys unchanged ([ADR-134](134-cloud-neutral-core-vendor-adapters.md)); framework anchors in Decision and Trade-offs corrected in place. See Revision (2026-10-24) at the end.
+Revised 2026-10-25: two more vault-as-configuration sources, `AddAwsSecretsManagerConfiguration()` (MMCA.Common.Aws) and `AddGoogleSecretManagerConfiguration()` (MMCA.Common.Gcp), with the Key Vault `--` naming rule and tripwire coverage; the Revision (2026-10-24) item 3 is superseded. See Revision (2026-10-25) at the end.
 ## Context
 A Container App can hold a credential two ways: as a literal value in the app's own `secrets`
 collection, or as a reference to a Key Vault secret that the platform resolves at runtime through an
@@ -105,6 +106,39 @@ its way to the same model.
   that it maps onto `Grpc:ServiceToken:SigningKey`, the same key its `keyVaultUrl` reference binds,
   so both paths agree on one value. No ADC secret carries `--` (`MMCA.ADC/infra/main.bicep:1716-1820`),
   so in ADC this adds a source without re-pointing any setting the apps already bind.
+- **The same host-side source exists for AWS and Google Cloud, with the Key Vault naming rule.** Each
+  is an opt-in adapter call that does nothing without its gate and leaves a startup-tripwire marker
+  when it runs. AWS is `AddAwsSecretsManagerConfiguration()`
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Aws/AwsSecretsManagerConfigurationExtensions.cs:82`), gated
+  on `SecretsManager:NamePrefix` (read at `:85`, a no-op when blank at `:91`-`:94`, marker at `:125`),
+  with optional `Region`, `ServiceUrl`, `AccessKeyId` + `SecretAccessKey` and `ReloadIntervalMinutes`
+  (`:41`-`:49`). Its provider lists the secrets under the prefix and reads them with
+  `BatchGetSecretValue` in chunks of 20
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Aws/Secrets/AwsSecretsManagerConfigurationProvider.cs:30`,
+  `:137`-`:140`), and a secret it cannot read fails startup, naming it (`:183`-`:189`). It carries one
+  VSTHRD002 pragma: `ConfigurationProvider.Load` is synchronous and the AWS SDK v4 client is async
+  only, so the first read blocks once during host construction (`:74`-`:80`). Google is
+  `AddGoogleSecretManagerConfiguration()`
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Gcp/GoogleSecretManagerConfigurationExtensions.cs:82`), gated
+  on both `GoogleSecretManager:ProjectId` and `GoogleSecretManager:NamePrefix` (`:85`-`:86`, a no-op
+  when either is blank at `:92`-`:95`, marker at `:116`), with an optional `ReloadIntervalMinutes`
+  (`:42`-`:44`). It reads the latest enabled version of each secret
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Gcp/Secrets/GoogleSecretManagerConfigurationProvider.cs:195`,
+  `:203`-`:206`, `:210`) through the client's synchronous methods, so it needs no blocking wait on a
+  task (`:24`-`:25`, the list call at `:162`). Both map names the Key Vault way, stripping the prefix
+  and mapping `--` to `:` (`AwsSecretsManagerConfigurationProvider.cs:61`-`:69`,
+  `GoogleSecretManagerConfigurationProvider.cs:74`-`:82`), so one secret set moves between clouds by
+  renaming its prefix. The tripwire checks both prefixes: `SecretsManager:NamePrefix` or
+  `GoogleSecretManager:NamePrefix` set without its call fails `ValidateOnStart`, naming it
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Integrations/HostIntegrationTripwire.cs:29`, `:40`,
+  `:78`-`:82`, `:88`-`:92`). SQL Server on RDS and on Cloud SQL has no IAM database authentication,
+  and the framework's IAM adapters cover PostgreSQL only
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Aws/Rds/RdsIamAuthenticationConfigurator.cs:12`,
+  `MMCA.Common/Source/Hosting/MMCA.Common.Gcp/CloudSql/CloudSqlIamAuthenticationConfigurator.cs:9`),
+  so a SQL Server host on RDS carries a password connection string held in Secrets Manager
+  (`MMCA.Common/CHANGELOG.md:15`), and on Cloud SQL either a password connection string from Secret
+  Manager or, on SQL Server 2022 and later, Microsoft Entra ID through the SqlClient extension in
+  MMCA.Common.Azure (`MMCA.Common/Source/Hosting/MMCA.Common.Gcp/GcpServiceCollectionExtensions.cs:80-83`).
 - **Composite connection strings are assembled at deploy time and land only in the vault.** The Redis
   string embeds a key read with `listKeys()` (`MMCA.ADC/infra/main.bicep:1615`,
   `MMCA.Store/infra/main.bicep:1194`), each broker string comes from that service's own SAS rule
@@ -454,6 +488,41 @@ references, managed identity, one vault per deployment) is unchanged, and so are
    Trade-offs anchors into the same file, now point at the adapter. The consumer `Program.cs` call
    sites listed in the Decision name the call each consumer made when last verified; a consumer on
    v1.255.0 or later makes the renamed call. The anchors inside the 2026-09-10 revision are left as
+   recorded.
+
+## Revision (2026-10-25)
+MMCA.Common v1.257.0 adds two more vault-as-configuration sources, one in the AWS adapter and one in
+the new Google Cloud adapter (`MMCA.Common/CHANGELOG.md:7`, `:12`, `:18`). The Azure secret model this
+record decides for ADC and Store is unchanged, and the Decision gains one bullet for the two sources.
+
+1. **AWS Secrets Manager.** `AddAwsSecretsManagerConfiguration()`, gated on `SecretsManager:NamePrefix`
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Aws/AwsSecretsManagerConfigurationExtensions.cs:82`, `:85`,
+   `:91`-`:94`). The AWS SDK v4 client is async only, so the provider's synchronous first load carries
+   the one VSTHRD002 pragma
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Aws/Secrets/AwsSecretsManagerConfigurationProvider.cs:78`-`:80`);
+   timed reloads never block (`:96`-`:110`) and a failed one keeps the values already loaded
+   (`:124`-`:129`).
+2. **Google Secret Manager.** `AddGoogleSecretManagerConfiguration()`, gated on
+   `GoogleSecretManager:ProjectId` + `NamePrefix`
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Gcp/GoogleSecretManagerConfigurationExtensions.cs:82`,
+   `:92`-`:95`), over the synchronous `SecretManagerServiceClient` (`:119`;
+   `MMCA.Common/Source/Hosting/MMCA.Common.Gcp/Secrets/GoogleSecretManagerConfigurationProvider.cs:24`-`:25`).
+   The service's name filter is a substring match, so each listed id is re-checked ordinally as a
+   prefix (`:17`-`:19`, `:164`).
+3. **Same naming rule, both prefixes on the tripwire.** `--` maps to `:` in both providers
+   (`AwsSecretsManagerConfigurationProvider.cs:32`, `:68`; `GoogleSecretManagerConfigurationProvider.cs:35`,
+   `:81`). The tripwire checks `SecretsManager:NamePrefix` and `GoogleSecretManager:NamePrefix`
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Integrations/HostIntegrationTripwire.cs:29`, `:40`);
+   for Google it checks the prefix rather than the project id, because the prefix is what declares that
+   the host reads its settings from Secret Manager (`:34`-`:39`).
+4. **SQL Server on RDS and Cloud SQL has no IAM sign-in.** Neither offers IAM database authentication for
+   SQL Server (`MMCA.Common/CHANGELOG.md:15`, `:21`). On RDS the password connection string is held in
+   Secrets Manager and loaded through `AddAwsSecretsManagerConfiguration()` (`:15`); on Cloud SQL it is
+   either a password connection string from Secret Manager or, on SQL Server 2022 and later, Microsoft
+   Entra ID through MMCA.Common.Azure's SqlClient extension
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Gcp/GcpServiceCollectionExtensions.cs:80-83`).
+5. **Superseded:** the Revision (2026-10-24) item 3, "No other cloud ships a configuration source",
+   which was true of v1.256.0 and no longer is. The anchors inside earlier revisions are left as
    recorded.
 
 ## Related

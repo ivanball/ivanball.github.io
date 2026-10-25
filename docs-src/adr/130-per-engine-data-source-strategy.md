@@ -9,7 +9,9 @@ instance per database). Revised 2026-10-07: anchors refreshed after the v1.233.0
 2026-10-21: a Cosmos-default host that injects the raw-SQL executor fails at resolution (at
 container build only in Development), not unconditionally at startup, so it meets ADR-070's
 startup bar only in Development; the replaced shape is cited through its squash commit on main;
-anchors refreshed.
+anchors refreshed. Revised 2026-10-25: re-checked for the PostgreSQL data-source extension point
+v1.257.0 adds; the engine strategy is unchanged and the extension point is recorded in ADR-113 (see
+Revision (2026-10-25) below).
 
 ## Context
 MMCA.Common persists through four engines named by one shipped public enum, `DataSource`
@@ -272,6 +274,17 @@ anchors were re-pointed.
    (relational check and registration) and `:397-403` (its doc comment);
    `SoftDeleteFilterSql.cs:36` and `:71`, re-pointed from the method declarations (`:35`, `:70`,
    unchanged) to the lines that call the behaviour hooks, matching the sibling call-line anchors.
+
+## Revision (2026-10-25)
+Re-checked against v1.257.0. The engine contract, the registry, the capabilities table and the call
+sites that read engine facts are unchanged. The shared `NpgsqlDataSource` that
+`INpgsqlDataSourceConfigurator` introduces is chosen inside `PostgreSQLDbContext`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/PostgreSQLDbContext.cs:63-71`),
+not by `IDataSourceEngine`, and only PostgreSQL connection strings reach a configurator
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/INpgsqlDataSourceConfigurator.cs:19-20`),
+so it adds no capability and no engine branch. The extension point, the readiness check and
+PostgreSql broker that share it, and the RDS and Cloud SQL IAM token providers that use it are
+recorded in [ADR-113](113-postgresql-as-a-first-class-engine.md) decision 10.
 
 ## Related
 [ADR-006](006-database-per-service.md) (one sealed context per engine),

@@ -37,6 +37,7 @@ Revised 2026-10-19: the Helpdesk broker registration is a `Register` step of
 Revised 2026-10-21: anchors refreshed after the Common Aspire hosting, both Bicep templates and both
 deploy workflows grew; no change in what they show.
 Revised 2026-10-24: `MessageBus:Provider` is a string resolved against registered `IBrokerTransport`s, Azure Service Bus and Amazon SQS are adapter transports, and a configured redelivery list now replaces the default ([ADR-134](134-cloud-neutral-core-vendor-adapters.md)); the Decision's provider, emulator and retry bullets are corrected in place. See Revision (2026-10-24) at the end.
+Revised 2026-10-25: `PostgreSql` is a third built-in provider, MassTransit v8's SQL transport on PostgreSQL and the broker option for Google Cloud, recorded as a new Decision bullet with a hand-written Pub/Sub transport as a rejected alternative; the Decision's `AddBrokerMessaging` anchors are re-verified. See Revision (2026-10-25) at the end.
 ## Context
 ADR-003 decides that integration events leave an aggregate through the outbox and are published by
 `OutboxProcessor` via `IMessageBus`, and it settles the *dispatch* question ("in-process for the
@@ -51,21 +52,21 @@ supplies it, what keeps the two transports behaving the same, and how the produc
 gets exercised before production sees it.
 
 ## Decision
-Keep **one** `IMessageBus` abstraction with a **three-value transport selector**, choose the value at
+Keep **one** `IMessageBus` abstraction with a **named transport selector** (three built-in values plus any registered adapter transport), choose the value at
 the deployment edge (never in application code), configure both broker transports identically, and
 carry a dedicated test tier for the transport that only production uses.
 
-- **Named providers, one abstraction.** `MessageBusSettings.Provider` is a string: `InProcess` and
-  `RabbitMq` are built in
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Transports/MessageBusProviders.cs:15`,
-  `:18`) and `AzureServiceBus` names the adapter transport MMCA.Common.Azure registers (see the
-  Revision (2026-10-24) at the end). The value is bound from the `MessageBus` section
+- **Named providers, one abstraction.** `MessageBusSettings.Provider` is a string: `InProcess`,
+  `RabbitMq` and `PostgreSql` are built in
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Transports/MessageBusProviders.cs:16`,
+  `:19`, `:27`), and `AzureServiceBus` and `AmazonSqs` name the adapter transports MMCA.Common.Azure
+  and MMCA.Common.Aws register (see the Revision (2026-10-24) at the end). The value is bound from the `MessageBus` section
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:16`) and
   defaults to `InProcess` (`:25`). `AddBrokerMessaging`
   returns the container untouched for `InProcess`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:54`); for either
-  broker value it replaces `IMessageBus` with `BrokerMessageBus` (`:95`) and `IEventBus` with
-  `BrokerEventBus` (`:101`), so the outbox becomes the only delivery channel. No application or
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:57-59`); for any
+  broker value it replaces `IMessageBus` with `BrokerMessageBus` (`:114`) and `IEventBus` with
+  `BrokerEventBus` (`:120`), so the outbox becomes the only delivery channel. No application or
   domain code names a transport.
 - **Local development defaults to RabbitMQ, wired by the AppHost.** `AddMessageBroker()` provisions
   the RabbitMQ container with the management plugin
@@ -116,9 +117,30 @@ carry a dedicated test tier for the transport that only production uses.
   `service-bus-connection-string` and resolves it to the Key Vault secret belonging to that one
   service (`MMCA.ADC/infra/main.bicep:1736-1758`). The images are the same ones the AppHost runs locally; only the two environment variables
   differ.
+- **PostgreSQL is a built-in broker for any host whose database can carry one.**
+  `MessageBus:Provider=PostgreSql` selects `PostgreSqlBrokerTransport`
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Transports/PostgreSqlBrokerTransport.cs:40`,
+  name at `:43`), returned by `ResolveBrokerTransport` without an adapter call
+  (`DependencyInjection.Messaging.cs:195-197`). It is MassTransit v8's SQL transport, which keeps
+  queues, topics, subscriptions and scheduled messages in tables and functions of one PostgreSQL
+  database, so any PostgreSQL is the broker (`PostgreSqlBrokerTransport.cs:10-14`), and it is the
+  broker option for Google Cloud, which has no MassTransit v8 Pub/Sub transport
+  (`MMCA.Common/CHANGELOG.md:24`). It reads the shared broker connection string and fails at
+  registration without one (`PostgreSqlBrokerTransport.cs:113-119`). When an
+  `INpgsqlDataSourceConfigurator` is registered the bus runs on the shared `NpgsqlDataSource` for that
+  connection string, otherwise on the string itself (`:94-102`), so an IAM token provider reaches the
+  broker too ([ADR-113](113-postgresql-as-a-first-class-engine.md) decision 10). MassTransit's schema
+  migrator opens its own connections from the connection string and cannot take that data source
+  (`:33-37`), so `MessageBus:PostgreSql:MigrateOnStartup` (default `true`,
+  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Transports/PostgreSqlTransportSettings.cs:36`)
+  lets an IAM-only host create the schema from a separate deployment step. The optional
+  `MessageBus:PostgreSql:Schema` and `Role` keys (`:20`, `:26`, section at `:11`) both default to
+  `transport` (`:14`, `:39`, `:42`). When the migration runs, its hosted service is registered ahead of
+  the bus so the tables exist before any endpoint starts (`PostgreSqlBrokerTransport.cs:54-76`, called
+  from `AddBrokerMessaging` at `DependencyInjection.Messaging.cs:78-80`).
 - **One resolution order for the connection string.** `ResolveBrokerConnectionString` prefers an
   explicit `MessageBus:ConnectionString`, then `ConnectionStrings:rabbitmq`, then
-  `ConnectionStrings:messaging` (`DependencyInjection.Messaging.cs:248`, documented at `:238`-`:239`). Aspire's `WithReference` and
+  `ConnectionStrings:messaging` (`DependencyInjection.Messaging.cs:264`). Aspire's `WithReference` and
   Bicep's `secretRef` therefore both land on a path the host already reads, and the transport
   selector stays separate from the credential.
 - **Retry policy is identical on every transport.** Each transport calls the shared
@@ -130,8 +152,10 @@ carry a dedicated test tier for the transport that only production uses.
   `RetryLimit` 5, `RetryMinIntervalSeconds` 1, `RetryMaxIntervalSeconds` 30
   (`MessageBusSettings.cs:99,106,112`). Second-level redelivery is the one place the transports diverge
   by design: Azure Service Bus schedules messages natively, so it always asks for delayed redelivery
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/Messaging/AzureServiceBusTransport.cs:52`), while
-  RabbitMQ passes `EnableDelayedRedelivery`
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/Messaging/AzureServiceBusTransport.cs:52`), as does
+  the PostgreSQL transport, whose SQL broker delays a message natively
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Transports/PostgreSqlBrokerTransport.cs:104`,
+  rationale at `:24-27`), while RabbitMQ passes `EnableDelayedRedelivery`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Transports/RabbitMqBrokerTransport.cs:33`;
   default `false`, `MessageBusSettings.cs:201`) because it needs the delayed-message-exchange plugin the
   Aspire container does not ship.
@@ -156,7 +180,7 @@ carry a dedicated test tier for the transport that only production uses.
   in Store (`MMCA.Store/infra/main.bicep:158-162`, variables at `:163-165`).
 - **Tests use the transport the tier is testing.** A per-service integration host configures no
   provider, so `AddBrokerMessaging` short-circuits and the in-process bus stands
-  (`DependencyInjection.Messaging.cs:54`). The cross-service round-trip tier runs the real broker: the
+  (`DependencyInjection.Messaging.cs:57-59`). The cross-service round-trip tier runs the real broker: the
   shared fixture base sets `MessageBus__Provider=RabbitMq` plus
   `ConnectionStrings__rabbitmq` against a Testcontainers RabbitMQ for every host it boots
   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/Fixtures/CrossServiceFixtureBase.cs:255-256`).
@@ -264,7 +288,7 @@ broker, so extraction later is an AppHost change rather than a code change.
   privilege reduction (`MMCA.ADC/infra/main.bicep:1266-1278`, `MMCA.Store/infra/main.bicep:1104-1113`).
 - **Provider selection is per host and silent when missing.** A service that never receives
   `MessageBus__Provider` keeps the in-process bus and publishes nothing to the broker, without an
-  error (`DependencyInjection.Messaging.cs:54`); correctness depends on auditing the AppHost and the Bicep
+  error (`DependencyInjection.Messaging.cs:57-59`); correctness depends on auditing the AppHost and the Bicep
   env lists, the same inventory caveat ADR-021 carries for the inbox.
 - **The choice lives in AppHost prose that has to be maintained alongside the calls.** The note above
   ADC's Notification registration now states that `WithSelectedBroker(withBroker)` wires the
@@ -275,6 +299,18 @@ broker, so extraction later is an AppHost change rather than a code change.
   (`:69-96`, the pointer at `:93-96`), and Store's `STORE_BROKER` opt-in carries its own
   (`MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:50-77`). Keeping the transport decision in
   orchestration code puts the explanation in comments, which are not checked by anything.
+
+## Alternatives rejected
+- **A hand-written Google Cloud Pub/Sub transport** (weighed 2026-10-25). An `IBrokerTransport` in
+  MMCA.Common.Gcp written directly against the Pub/Sub SDK, because MassTransit v8 ships no Pub/Sub
+  transport (`MMCA.Common/CHANGELOG.md:24`). Rejected because it would hand-write consumer dispatch,
+  retry, delayed redelivery and topology provisioning outside MassTransit for one cloud, the cost
+  [ADR-118](118-message-transport-library-policy.md) assigns its raw-SDK floor option, while the
+  built-in PostgreSQL transport already gives a Google Cloud host a broker on a PostgreSQL database
+  with the shared receive policies
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Transports/PostgreSqlBrokerTransport.cs:10-14`,
+  `:104`). Revisit if a MassTransit v8 Pub/Sub transport ships, or if a Google Cloud deployment needs
+  throughput or fan-out that a PostgreSQL broker cannot carry.
 
 ## Revision (2026-09-07)
 The transport selection is unchanged. The credential topology under it is (SEC-ADC-26 /
@@ -453,6 +489,25 @@ production, injected by Bicep.
    branches of `ConfigureBrokerTransport`, now `BrokerTransportPolicies`), the `AddBrokerMessaging`
    early-return anchor, a Trade-offs anchor, and the fixture path, now in `MMCA.Common.Testing.Azure`.
    The anchors inside earlier revisions are left as recorded.
+
+## Revision (2026-10-25)
+Which broker runs where in ADC, Store and Helpdesk is unchanged.
+
+1. **A third built-in provider.** `PostgreSql`
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Transports/MessageBusProviders.cs:27`)
+   joins `InProcess` and `RabbitMq` (`:16`, `:19`) as a built-in transport: MassTransit v8's SQL
+   transport for PostgreSQL with the shared receive policies and native delayed redelivery, on the
+   shared `NpgsqlDataSource` when an `INpgsqlDataSourceConfigurator` is registered (else the connection
+   string), and the broker option for Google Cloud (`MMCA.Common/CHANGELOG.md:24`).
+   It is recorded as a new Decision bullet, and the retry bullet now names it among the transports
+   that redeliver natively.
+2. **Rejected alternative recorded:** a hand-written Pub/Sub transport (see Alternatives rejected).
+3. **Corrected in place:** the opening sentence's "three-value" selector; the provider bullet's
+   `MessageBusProviders.cs` anchors (`:15`, `:18`, now `:16`, `:19`); the `AddBrokerMessaging`
+   early return (`DependencyInjection.Messaging.cs:54`, now `:57-59`, in the Decision, the tests
+   bullet and Trade-offs); the `BrokerMessageBus` and `BrokerEventBus` replacements (`:95`, `:101`,
+   now `:114`, `:120`); and `ResolveBrokerConnectionString` (`:248`, now `:264`, its doc-comment
+   anchor dropped). The other Decision anchors and those inside earlier revisions are left as recorded.
 
 ## Related
 ADR-003 (the outbox that feeds `IMessageBus`; this ADR picks the transport underneath it), ADR-016

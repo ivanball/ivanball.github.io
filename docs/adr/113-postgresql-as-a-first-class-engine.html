@@ -249,7 +249,11 @@
           2026-10-06: engine behavior is delegated to a <code>PostgreSQLDataSourceEngine</code> in the <code>DataSourceEngines</code>
           registry rather than per-site switch arms. Revised 2026-10-07: anchors refreshed after the
           v1.233.0 release. Revised 2026-10-21: anchors refreshed after the v1.250.0 release and the
-          Helpdesk template-staging changes.</p>
+          Helpdesk template-staging changes. Revised 2026-10-25: PostgreSQL connection customization goes
+          through <code>INpgsqlDataSourceConfigurator</code>, one shared <code>NpgsqlDataSource</code> per connection string for the
+          context, the readiness check and the PostgreSql broker, with the RDS and Cloud SQL IAM token
+          providers as its users; decisions 2 and 8 are extended and decision 10 is new. See Revision
+          (2026-10-25) at the end.</p>
           <h2 id="context">Context</h2>
           <p>The framework has shipped three database engines since its first release: SQL Server, Azure Cosmos DB
           and SQLite. Every one of them is reached the same way, because <a href="006-database-per-service.html">ADR-006</a>
@@ -308,7 +312,12 @@
           <code>PhysicalDbContextFactory</code> delegates to its <code>CreateDbContext</code>
           (<code>.../DbContexts/Factory/PhysicalDbContextFactory.cs:32</code>, <code>PostgreSQLDataSourceEngine.cs:85</code>) and
           <code>ApplyConfigurationsForEntitiesInContext</code> reads its <code>EntityConfigurationInterface</code>
-          (<code>.../DbContexts/ApplicationDbContext.cs:962</code>, <code>PostgreSQLDataSourceEngine.cs:30</code>).</p>
+          (<code>.../DbContexts/ApplicationDbContext.cs:962</code>, <code>PostgreSQLDataSourceEngine.cs:30</code>). When an
+          <code>INpgsqlDataSourceConfigurator</code> is registered, <code>UseNpgsql</code> receives the shared <code>NpgsqlDataSource</code>
+          for the physical source&#39;s connection string instead of the string itself; with none registered the
+          connection-string call is unchanged
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/PostgreSQLDbContext.cs:63-71</code>,
+          decision 10).</p>
           </li>
           <li><p><strong>The mapping is the SQL Server mapping, not PostgreSQL house style.</strong>
           <code>EntityTypeConfigurationPostgreSQL&lt;TEntity, TIdentifierType&gt;</code>
@@ -378,7 +387,12 @@
           shape <code>WithSQLServerDataSource</code> uses. <strong>No Aspire client integration is added</strong>
           (<code>Aspire.Npgsql.EntityFrameworkCore.PostgreSQL</code>), because the SQL Server path does not use one
           either: the framework owns its own context construction, and taking an Aspire client package for
-          one engine and not the others would make the two paths asymmetric for no gain.</p>
+          one engine and not the others would make the two paths asymmetric for no gain. When a configurator
+          is registered the check probes through the same shared data source, which it resolves as a keyed
+          service by connection string
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Health/PostgreSqlHealthCheckRegistration.cs:45</code>), so
+          MMCA.Common.Aspire reaches it without referencing MMCA.Common.Infrastructure
+          (<code>.../DbContexts/NpgsqlDataSources.cs:13-16</code>).</p>
           </li>
           <li><p><strong>The engine is proved against a real server, not a model.</strong>
           <code>Tests/Core/MMCA.Common.Infrastructure.PostgreSQL.Tests</code> is a Testcontainers project outside
@@ -390,6 +404,45 @@
           outbox row of an integration event and asserts it stays pending for <code>OutboxProcessor</code>
           (<code>Tests/Core/MMCA.Common.Infrastructure.PostgreSQL.Tests/PostgreSQLPersistenceTests.cs:217-260</code>). The three failures listed in the Context section are each caught by one of
           those, and by nothing in the unit tier.</p>
+          </li>
+          <li><p><strong>Connection customization is one extension point, and cloud IAM authentication is its two users.</strong>
+          <code>INpgsqlDataSourceConfigurator</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/INpgsqlDataSourceConfigurator.cs:23</code>,
+          <code>Configure</code> at <code>:27</code>) is registered through <code>AddNpgsqlDataSourceConfigurator</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Persistence.cs:24</code>), which
+          adds a keyed <code>NpgsqlDataSource</code> singleton whose key is the connection string (<code>:32-34</code>). The
+          container therefore builds one data source per distinct connection string, runs every registered
+          configurator on its builder and disposes it (<code>.../DbContexts/NpgsqlDataSources.cs:8-11</code>, <code>:42-56</code>),
+          and <code>PostgreSQLDbContext</code>, the readiness check and the PostgreSql broker transport
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Transports/PostgreSqlBrokerTransport.cs:94-102</code>,
+          <a href="066-broker-transport-selection.html">ADR-066</a>) all resolve the same instance
+          (<code>NpgsqlDataSources.cs:29-32</code>). With none registered nothing is built and every path keeps the raw
+          connection string (<code>INpgsqlDataSourceConfigurator.cs:12-13</code>, <code>NpgsqlDataSources.cs:15-16</code>); SQL
+          Server, SQLite and Cosmos sources never reach a configurator (<code>INpgsqlDataSourceConfigurator.cs:19-20</code>).
+          Two adapter calls register one: <code>AddAwsRdsIamAuthentication</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/AwsServiceCollectionExtensions.cs:107</code>, gated on
+          <code>Rds:IamAuthentication:Enabled</code>, <code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/Rds/RdsIamAuthenticationSettings.cs:11</code>, <code>:14</code>)
+          and <code>AddCloudSqlIamAuthentication</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gcp/GcpServiceCollectionExtensions.cs:90</code>, gated on
+          <code>CloudSql:IamAuthentication:Enabled</code>, <code>MMCA.Common/Source/Hosting/MMCA.Common.Gcp/CloudSql/CloudSqlIamAuthenticationSettings.cs:13</code>, <code>:16</code>).
+          Each hands Npgsql a periodic password provider
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/Rds/RdsIamAuthenticationConfigurator.cs:39</code>,
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Gcp/CloudSql/CloudSqlIamAuthenticationConfigurator.cs:54</code>)
+          that retries a failed fetch after 30 seconds (<code>RdsIamAuthenticationConfigurator.cs:27</code>,
+          <code>CloudSqlIamAuthenticationConfigurator.cs:29</code>). The RDS token refreshes every 10 minutes
+          (<code>RdsIamAuthenticationConfigurator.cs:24</code>). The Cloud SQL token, an OAuth2 access token for the
+          <code>sqlservice.login</code> scope (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gcp/CloudSql/CloudSqlAccessTokenSource.cs:15</code>),
+          refreshes every minute (<code>CloudSqlIamAuthenticationConfigurator.cs:26</code>) because Google&#39;s credential
+          hands out its cached token until fewer than 225 seconds remain and blocks for a new one only under
+          60, while Npgsql reuses whatever it was handed for the whole interval (<code>:16-21</code>). Both send the token
+          as the password, so both reject a connection string below <code>SSL Mode=Require</code>
+          (<code>RdsIamAuthenticationConfigurator.cs:110-117</code>, <code>CloudSqlIamAuthenticationConfigurator.cs:100-107</code>)
+          and expect no password in it (<code>MMCA.Common/CHANGELOG.md:15</code>, <code>:21</code>). Neither reaches SQL Server:
+          RDS and Cloud SQL offer no IAM database authentication for it
+          (<code>AwsServiceCollectionExtensions.cs:98</code>, <code>GcpServiceCollectionExtensions.cs:80</code>), so an RDS SQL
+          Server password connection string stays in Secrets Manager (<code>MMCA.Common/CHANGELOG.md:15</code>). The
+          PostgreSQL tier covers a periodic password provider and the PostgreSql broker transport
+          (<code>MMCA.Common/CHANGELOG.md:28</code>).</p>
           </li>
           </ol>
           <h3 id="rollout-the-helpdesk-canary-and-the-template-axis">Rollout: the Helpdesk canary and the template axis</h3>
@@ -531,6 +584,22 @@
           <code>Npgsql.EntityFrameworkCore.PostgreSQL</code> <code>:518</code>, Rollout 2; the <code>Aspire.Hosting.PostgreSQL</code> entry at
           <code>:480-488</code> renames cleanly and is not one of them).</li>
           </ol>
+          <h2 id="revision-2026-10-25">Revision (2026-10-25)</h2>
+          <p>The engine decision, its mapping and its rationale are unchanged. v1.257.0 gives the engine one
+          connection-customization extension point.</p>
+          <ol>
+          <li><strong>New decision 10:</strong> <code>INpgsqlDataSourceConfigurator</code> and <code>AddNpgsqlDataSourceConfigurator</code>
+          (<code>INpgsqlDataSourceConfigurator.cs:23</code>, <code>DependencyInjection.Persistence.cs:24</code>;
+          <code>MMCA.Common/CHANGELOG.md:25</code>) and their two IAM users, <code>AddAwsRdsIamAuthentication</code> and
+          <code>AddCloudSqlIamAuthentication</code> (<code>MMCA.Common/CHANGELOG.md:15</code>, <code>:21</code>).</li>
+          <li><strong>Decisions 2 and 8 extended</strong> with the shared data source the context and the readiness check
+          take when a configurator is registered (<code>PostgreSQLDbContext.cs:63-71</code>,
+          <code>PostgreSqlHealthCheckRegistration.cs:45</code>). The PostgreSql broker transport that also runs on it is
+          recorded in <a href="066-broker-transport-selection.html">ADR-066</a>, and
+          <a href="130-per-engine-data-source-strategy.html">ADR-130</a> records why the engine strategy is untouched.</li>
+          <li>The other <code>PostgreSQLDbContext.cs</code> and <code>Extensions.Health.cs</code> anchors in decisions 2 and 8 were not
+          re-verified in this pass and are left as recorded on 2026-10-21.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="006-database-per-service.html">ADR-006</a> (one sealed context per engine, one instance per database),
           <a href="018-polyglot-persistence.html">ADR-018</a> (the engine axis this record adds a member to),
@@ -563,6 +632,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-25">Revision (2026-10-25)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

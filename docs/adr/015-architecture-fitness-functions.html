@@ -288,7 +288,8 @@
           <code>PiiConventionTestsBase</code> gained the reverse erasure checks; the shipped public API baselines are
           re-counted against v1.250.0 (8,434 declarations, every unshipped file header-only) and anchors
           refreshed after v1.250.0, the counts <code>FACTS.md</code> owns now sitting at <code>:81</code> / <code>:84</code>.
-          Revised 2026-10-24: the cloud vendor boundary joins the gates as a build target plus an architecture rule pair (<a href="134-cloud-neutral-core-vendor-adapters.html">ADR-134</a>). See Revision (2026-10-24) at the end.</p>
+          Revised 2026-10-24: the cloud vendor boundary joins the gates as a build target plus an architecture rule pair (<a href="134-cloud-neutral-core-vendor-adapters.html">ADR-134</a>). See Revision (2026-10-24) at the end.
+          Revised 2026-10-25: the type-level cloud vendor rule&#39;s Azure and AWS roots lost the trailing dot that let it pass vacuously, and both vendor lists now cover Google. See Revision (2026-10-25) at the end.</p>
           <h2 id="context">Context</h2>
           <p>The codebase rests on invariants that are easy to state and easy to erode by accident: clean-
           architecture layer flow (Domain depends on nothing above it), module isolation (no module reaches into
@@ -970,6 +971,21 @@
           the <code>Microsoft.Azure.Cosmos</code> namespace the first brings in is allowed in Infrastructure alone
           (<code>:117-118</code>).</li>
           </ol>
+          <h2 id="revision-2026-10-25-the-type-level-vendor-rule-matches-again">Revision (2026-10-25): the type-level vendor rule matches again</h2>
+          <p>Fixed in v1.257.0: <code>ArchitectureRules.CloudVendorDependencies</code>, the namespace roots behind
+          <code>CloudNeutralAssembliesNameNoVendorType</code>, listed <code>Azure.</code>, <code>Microsoft.Azure.</code> and <code>Amazon.</code> with a
+          trailing dot that NetArchTest&#39;s namespace-segment matching never matches, so the type rule recorded in
+          the 2026-10-24 revision passed vacuously for every Azure and AWS type while the assembly rule and the
+          build target still held (<code>MMCA.Common/CHANGELOG.md:32</code>). The roots are dot-free now
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Layering/ArchitectureRules.CloudVendors.cs:25</code>,
+          entries <code>:29-31</code>, the reason in the comment at <code>:27</code>), Google is covered on both lists (<code>Google</code>,
+          <code>FirebaseAdmin</code>, <code>Grpc.Auth</code> and <code>MMCA.Common.Gcp</code> at <code>:32-34</code> and <code>:39</code>; the assembly prefixes,
+          which keep their dots because they are plain string prefixes, at <code>:44-46</code>, <code>:53-55</code> and <code>:60</code>), and a
+          <code>CloudVendorRulesTests</code> fact in each cloud adapter test project (Azure, Aws, Gcp) pins the type rule
+          (<code>MMCA.Common/Tests/Hosting/MMCA.Common.Azure.Tests/CloudVendorRulesTests.cs:22</code>,
+          <code>MMCA.Common/Tests/Hosting/MMCA.Common.Aws.Tests/CloudVendorRulesTests.cs:21</code>,
+          <code>MMCA.Common/Tests/Hosting/MMCA.Common.Gcp.Tests/CloudVendorRulesTests.cs:28</code>); the Azure and AWS facts
+          fail with the old entries (<code>MMCA.Common/CHANGELOG.md:32</code>).</p>
           <h2 id="related">Related</h2>
           <p>ADR-009 (resilience gate), ADR-010 (event-version gate), ADR-016 (MassTransit pin gate, and the
           lockstep release cadence the public API baseline is pinned to), ADR-006/007/008 (the transport and
@@ -1007,6 +1023,7 @@
             <li><a href="#revision-2026-10-07-commons-second-architecture-map-re-counted-baselines-moved-anchors">Revision (2026-10-07): Common&#39;s second architecture map, re-counted baselines, moved anchors</a></li>
             <li><a href="#revision-2026-10-21-re-counted-baselines-moved-anchors">Revision (2026-10-21): re-counted baselines, moved anchors</a></li>
             <li><a href="#revision-2026-10-24-the-cloud-vendor-boundary-gate-pair">Revision (2026-10-24): the cloud vendor boundary gate pair</a></li>
+            <li><a href="#revision-2026-10-25-the-type-level-vendor-rule-matches-again">Revision (2026-10-25): the type-level vendor rule matches again</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

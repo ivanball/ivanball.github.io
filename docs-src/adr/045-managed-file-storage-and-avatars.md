@@ -15,6 +15,7 @@ Revised 2026-10-21: the image processor registers only the JPEG, PNG, WebP and G
 nulls the EXIF, XMP and IPTC profiles rather than all metadata, and five ImageSharp advisories
 are accepted under a standing audit suppression.
 Revised 2026-10-24: the Azure Blob implementation moved to MMCA.Common.Azure and an S3-compatible implementation ships in MMCA.Common.Aws ([ADR-134](134-cloud-neutral-core-vendor-adapters.md)); see Revision (2026-10-24).
+Revised 2026-10-25: a Google Cloud Storage implementation ships in MMCA.Common.Gcp, so three adapters read the shared `FileStorage` section, each keyed on its own field; see Revision (2026-10-25).
 ## Context
 The MAUI capability program (ADR-042) brought MediaPicker/camera within reach, and ADC amended
 BR-116 to include user avatar photos. That needs binary blob storage (the databases store
@@ -26,12 +27,30 @@ The framework had no file-storage abstraction: anything blob-shaped would otherw
 directly against the Azure SDK inside a module, unusable by the next consumer and untestable.
 
 ## Decision
-- **`IFileStorageService`** (Application): upload-by-blob-name returning the public URI, plus
-  idempotent delete. Default is an unconfigured Null implementation whose uploads fail with a
-  clear error; `AddAzureBlobFileStorage(configuration)` swaps in the Azure Blob implementation
-  when the `FileStorage` section is complete (`ContainerName` + either `ServiceUri` for
-  DefaultAzureCredential/managed-identity auth, the production path, or `ConnectionString` for
-  local Azurite). The container is provisioned by infrastructure, never created by the app.
+- **`IFileStorageService`** (Application,
+  `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Storage/IFileStorageService.cs:15`):
+  upload-by-blob-name returning the public URI, plus idempotent delete (`:47`). Default is an
+  unconfigured Null implementation whose uploads fail with a clear error. Three adapters bind the
+  same `FileStorage` section, each keyed on a field of its own, so a shared section switches on only
+  the adapter whose key it carries:
+  - `AddAzureBlobFileStorage(configuration)` (MMCA.Common.Azure) when `ContainerName`
+    (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/Storage/AzureBlobFileStorageSettings.cs:22`) is
+    present with either `ServiceUri` for DefaultAzureCredential/managed-identity auth, the
+    production path, or `ConnectionString` for local Azurite.
+  - `AddS3FileStorage(configuration)` (MMCA.Common.Aws) when `Bucket`
+    (`MMCA.Common/Source/Hosting/MMCA.Common.Aws/Storage/S3FileStorageSettings.cs:19`) is present
+    (`MMCA.Common/Source/Hosting/MMCA.Common.Aws/AwsServiceCollectionExtensions.cs:58`), for Amazon
+    S3, Cloudflare R2, MinIO and the GCS XML API.
+  - `AddGoogleCloudStorage(configuration)` (MMCA.Common.Gcp,
+    `MMCA.Common/Source/Hosting/MMCA.Common.Gcp/GcpServiceCollectionExtensions.cs:48`) when `GcsBucket`
+    (`.../MMCA.Common.Gcp/Storage/GcsFileStorageSettings.cs:18`) is present (`:56`), over
+    Application Default Credentials with no HMAC keys (`:37-38`). A section carrying only the S3
+    `Bucket` or the Azure `ContainerName` leaves it a no-op (`:38-40`). Its delete answers success
+    for any HTTP 404 (`.../Storage/GcsFileStorageService.cs:83-87`); the filter does not tell a
+    missing object from a missing bucket, so a delete against a missing bucket also reads as success.
+
+  The container or bucket is provisioned by infrastructure, never created by the app (the GCS
+  identity needs only object create and delete, `GcpServiceCollectionExtensions.cs:42-44`).
 - **`IImageProcessor`** (Application) with `ImageSharpImageProcessor` (Infrastructure, always
   registered - it has no external dependency): decode with only the JPEG, PNG, WebP and GIF
   decoders registered, auto-orient, center-crop to an exact square, null the EXIF, XMP and IPTC
@@ -238,3 +257,26 @@ core and adds a second, S3-compatible implementation. `IFileStorageService`, its
 4. The anchors into `MMCA.Common.Infrastructure/Storage/AzureBlobFileStorageService.cs` inside the
    2026-09-12 and 2026-10-06 revisions are left as recorded; that file now lives at the adapter path
    above.
+
+## Revision (2026-10-25)
+MMCA.Common v1.257.0 adds a third implementation, Google Cloud Storage in the new `MMCA.Common.Gcp`
+adapter (`MMCA.Common/CHANGELOG.md:16-17`). `IFileStorageService`, its Null default and the shared
+`FileStorage` section are unchanged; the Decision now lists the three adapters and the field each
+keys on.
+
+1. **Three keys in one section.** Azure reads `ContainerName`, S3 reads `Bucket` and Google reads
+   `GcsBucket`, all from `FileStorage` (`SectionName` at
+   `MMCA.Common/Source/Hosting/MMCA.Common.Azure/Storage/AzureBlobFileStorageSettings.cs:13`,
+   `MMCA.Common/Source/Hosting/MMCA.Common.Aws/Storage/S3FileStorageSettings.cs:16` and
+   `MMCA.Common/Source/Hosting/MMCA.Common.Gcp/Storage/GcsFileStorageSettings.cs:15`). The `Gcs`
+   prefix keeps the shared section unambiguous (`MMCA.Common/CHANGELOG.md:17`).
+2. **Google Cloud Storage.** `AddGoogleCloudStorage(configuration)`
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Gcp/GcpServiceCollectionExtensions.cs:48`) registers
+   `GcsFileStorageService` (`MMCA.Common/Source/Hosting/MMCA.Common.Gcp/Storage/GcsFileStorageService.cs:22`)
+   over Application Default Credentials, with optional `GcsPublicBaseUrl`, `GcsServiceUrl` and
+   `GcsProjectId` (`GcpServiceCollectionExtensions.cs:34-37`). A `StorageClient` the host registered
+   first is used as is (`:40-42`).
+3. **Delete posture.** A 404 from Cloud Storage, including a missing bucket, reads as success
+   (`GcsFileStorageService.cs:83-87`), matching the delete-if-exists contract of the Blob store.
+4. **CI.** The `gcp-integration` job runs the adapter against fake-gcs-server and is not a required
+   check (`MMCA.Common/CHANGELOG.md:23`).
