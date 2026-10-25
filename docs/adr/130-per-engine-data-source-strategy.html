@@ -250,7 +250,9 @@
           2026-10-21: a Cosmos-default host that injects the raw-SQL executor fails at resolution (at
           container build only in Development), not unconditionally at startup, so it meets ADR-070&#39;s
           startup bar only in Development; the replaced shape is cited through its squash commit on main;
-          anchors refreshed.</p>
+          anchors refreshed. Revised 2026-10-25: re-checked for the PostgreSQL data-source extension point
+          v1.257.0 adds; the engine strategy is unchanged and the extension point is recorded in ADR-113 (see
+          Revision (2026-10-25) below).</p>
           <h2 id="context">Context</h2>
           <p>MMCA.Common persists through four engines named by one shipped public enum, <code>DataSource</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IDataSourceService.cs:6</code>):
@@ -576,6 +578,16 @@
           <code>SoftDeleteFilterSql.cs:36</code> and <code>:71</code>, re-pointed from the method declarations (<code>:35</code>, <code>:70</code>,
           unchanged) to the lines that call the behaviour hooks, matching the sibling call-line anchors.</li>
           </ol>
+          <h2 id="revision-2026-10-25">Revision (2026-10-25)</h2>
+          <p>Re-checked against v1.257.0. The engine contract, the registry, the capabilities table and the call
+          sites that read engine facts are unchanged. The shared <code>NpgsqlDataSource</code> that
+          <code>INpgsqlDataSourceConfigurator</code> introduces is chosen inside <code>PostgreSQLDbContext</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/PostgreSQLDbContext.cs:63-71</code>),
+          not by <code>IDataSourceEngine</code>, and only PostgreSQL connection strings reach a configurator
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/INpgsqlDataSourceConfigurator.cs:19-20</code>),
+          so it adds no capability and no engine branch. The extension point, the readiness check and
+          PostgreSql broker that share it, and the RDS and Cloud SQL IAM token providers that use it are
+          recorded in <a href="113-postgresql-as-a-first-class-engine.html">ADR-113</a> decision 10.</p>
           <h2 id="related">Related</h2>
           <p><a href="006-database-per-service.html">ADR-006</a> (one sealed context per engine),
           <a href="018-polyglot-persistence.html">ADR-018</a> (engines behind one model and the resolver),
@@ -605,6 +617,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-25">Revision (2026-10-25)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

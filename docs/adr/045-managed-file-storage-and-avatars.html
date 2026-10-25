@@ -255,7 +255,8 @@
           Revised 2026-10-21: the image processor registers only the JPEG, PNG, WebP and GIF decoders and
           nulls the EXIF, XMP and IPTC profiles rather than all metadata, and five ImageSharp advisories
           are accepted under a standing audit suppression.
-          Revised 2026-10-24: the Azure Blob implementation moved to MMCA.Common.Azure and an S3-compatible implementation ships in MMCA.Common.Aws (<a href="134-cloud-neutral-core-vendor-adapters.html">ADR-134</a>); see Revision (2026-10-24).</p>
+          Revised 2026-10-24: the Azure Blob implementation moved to MMCA.Common.Azure and an S3-compatible implementation ships in MMCA.Common.Aws (<a href="134-cloud-neutral-core-vendor-adapters.html">ADR-134</a>); see Revision (2026-10-24).
+          Revised 2026-10-25: a Google Cloud Storage implementation ships in MMCA.Common.Gcp, so three adapters read the shared <code>FileStorage</code> section, each keyed on its own field; see Revision (2026-10-25).</p>
           <h2 id="context">Context</h2>
           <p>The MAUI capability program (ADR-042) brought MediaPicker/camera within reach, and ADC amended
           BR-116 to include user avatar photos. That needs binary blob storage (the databases store
@@ -266,13 +267,33 @@
           directly against the Azure SDK inside a module, unusable by the next consumer and untestable.</p>
           <h2 id="decision">Decision</h2>
           <ul>
-          <li><strong><code>IFileStorageService</code></strong> (Application): upload-by-blob-name returning the public URI, plus
-          idempotent delete. Default is an unconfigured Null implementation whose uploads fail with a
-          clear error; <code>AddAzureBlobFileStorage(configuration)</code> swaps in the Azure Blob implementation
-          when the <code>FileStorage</code> section is complete (<code>ContainerName</code> + either <code>ServiceUri</code> for
-          DefaultAzureCredential/managed-identity auth, the production path, or <code>ConnectionString</code> for
-          local Azurite). The container is provisioned by infrastructure, never created by the app.</li>
-          <li><strong><code>IImageProcessor</code></strong> (Application) with <code>ImageSharpImageProcessor</code> (Infrastructure, always
+          <li><p><strong><code>IFileStorageService</code></strong> (Application,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Storage/IFileStorageService.cs:15</code>):
+          upload-by-blob-name returning the public URI, plus idempotent delete (<code>:47</code>). Default is an
+          unconfigured Null implementation whose uploads fail with a clear error. Three adapters bind the
+          same <code>FileStorage</code> section, each keyed on a field of its own, so a shared section switches on only
+          the adapter whose key it carries:</p>
+          <ul>
+          <li><code>AddAzureBlobFileStorage(configuration)</code> (MMCA.Common.Azure) when <code>ContainerName</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/Storage/AzureBlobFileStorageSettings.cs:22</code>) is
+          present with either <code>ServiceUri</code> for DefaultAzureCredential/managed-identity auth, the
+          production path, or <code>ConnectionString</code> for local Azurite.</li>
+          <li><code>AddS3FileStorage(configuration)</code> (MMCA.Common.Aws) when <code>Bucket</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/Storage/S3FileStorageSettings.cs:19</code>) is present
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/AwsServiceCollectionExtensions.cs:58</code>), for Amazon
+          S3, Cloudflare R2, MinIO and the GCS XML API.</li>
+          <li><code>AddGoogleCloudStorage(configuration)</code> (MMCA.Common.Gcp,
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Gcp/GcpServiceCollectionExtensions.cs:48</code>) when <code>GcsBucket</code>
+          (<code>.../MMCA.Common.Gcp/Storage/GcsFileStorageSettings.cs:18</code>) is present (<code>:56</code>), over
+          Application Default Credentials with no HMAC keys (<code>:37-38</code>). A section carrying only the S3
+          <code>Bucket</code> or the Azure <code>ContainerName</code> leaves it a no-op (<code>:38-40</code>). Its delete answers success
+          for any HTTP 404 (<code>.../Storage/GcsFileStorageService.cs:83-87</code>); the filter does not tell a
+          missing object from a missing bucket, so a delete against a missing bucket also reads as success.</li>
+          </ul>
+          <p>The container or bucket is provisioned by infrastructure, never created by the app (the GCS
+          identity needs only object create and delete, <code>GcpServiceCollectionExtensions.cs:42-44</code>).</p>
+          </li>
+          <li><p><strong><code>IImageProcessor</code></strong> (Application) with <code>ImageSharpImageProcessor</code> (Infrastructure, always
           registered - it has no external dependency): decode with only the JPEG, PNG, WebP and GIF
           decoders registered, auto-orient, center-crop to an exact square, null the EXIF, XMP and IPTC
           profiles, re-encode as JPEG. Full re-encode is the security boundary: the output is a fresh
@@ -281,19 +302,22 @@
           profile into its output, so bytes carried inside an uploaded ICC profile are not shown to be
           removed. Undecodable content, including any format whose decoder is
           not registered (TIFF, BMP), is a validation failure, not an exception. ImageSharp ships under
-          the Six Labors Split License (Apache 2.0 terms for open-source / small-revenue use, which covers this project).</li>
-          <li><strong><code>IMediaPickerService</code></strong> (UI capability, ADR-042 pattern): native photo pick/capture with the
+          the Six Labors Split License (Apache 2.0 terms for open-source / small-revenue use, which covers this project).</p>
+          </li>
+          <li><p><strong><code>IMediaPickerService</code></strong> (UI capability, ADR-042 pattern): native photo pick/capture with the
           permission flow encapsulated; cancelled/denied returns null. Web heads keep the Null default
           (<code>IsSupported == false</code>) and render an <code>InputFile</code> instead - an affordance switch, not a
-          degraded path.</li>
-          <li><strong>Avatar contract (BR-116a, applied per consumer)</strong>: one avatar per user; accept jpeg/png/webp
+          degraded path.</p>
+          </li>
+          <li><p><strong>Avatar contract (BR-116a, applied per consumer)</strong>: one avatar per user; accept jpeg/png/webp
           up to 2 MB; server re-encodes to 256x256 JPEG via <code>IImageProcessor</code> (client-declared content
           types are advisory only); blob name <code>{userId}-{random8}.jpg</code> in the infrastructure-provisioned
           public-read <code>avatars</code> container (so the URL path reads <code>avatars/{userId}-{random8}.jpg</code>);
           replacing, removing or erasing an avatar schedules a durable <code>DeleteAvatarBlobInternalCommand</code>
           (<a href="114-internal-commands-durable-job-queue.html">ADR-114</a>) rather than deleting the blob inline; the
           URL lives on the user entity as <code>[Pii]</code>, nulled on anonymize with the blob delete scheduled in
-          the same transaction; exported in the GDPR data export.</li>
+          the same transaction; exported in the GDPR data export.</p>
+          </li>
           </ul>
           <h2 id="consequences">Consequences</h2>
           <ul>
@@ -477,6 +501,29 @@
           2026-09-12 and 2026-10-06 revisions are left as recorded; that file now lives at the adapter path
           above.</li>
           </ol>
+          <h2 id="revision-2026-10-25">Revision (2026-10-25)</h2>
+          <p>MMCA.Common v1.257.0 adds a third implementation, Google Cloud Storage in the new <code>MMCA.Common.Gcp</code>
+          adapter (<code>MMCA.Common/CHANGELOG.md:16-17</code>). <code>IFileStorageService</code>, its Null default and the shared
+          <code>FileStorage</code> section are unchanged; the Decision now lists the three adapters and the field each
+          keys on.</p>
+          <ol>
+          <li><strong>Three keys in one section.</strong> Azure reads <code>ContainerName</code>, S3 reads <code>Bucket</code> and Google reads
+          <code>GcsBucket</code>, all from <code>FileStorage</code> (<code>SectionName</code> at
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/Storage/AzureBlobFileStorageSettings.cs:13</code>,
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/Storage/S3FileStorageSettings.cs:16</code> and
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Gcp/Storage/GcsFileStorageSettings.cs:15</code>). The <code>Gcs</code>
+          prefix keeps the shared section unambiguous (<code>MMCA.Common/CHANGELOG.md:17</code>).</li>
+          <li><strong>Google Cloud Storage.</strong> <code>AddGoogleCloudStorage(configuration)</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gcp/GcpServiceCollectionExtensions.cs:48</code>) registers
+          <code>GcsFileStorageService</code> (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gcp/Storage/GcsFileStorageService.cs:22</code>)
+          over Application Default Credentials, with optional <code>GcsPublicBaseUrl</code>, <code>GcsServiceUrl</code> and
+          <code>GcsProjectId</code> (<code>GcpServiceCollectionExtensions.cs:34-37</code>). A <code>StorageClient</code> the host registered
+          first is used as is (<code>:40-42</code>).</li>
+          <li><strong>Delete posture.</strong> A 404 from Cloud Storage, including a missing bucket, reads as success
+          (<code>GcsFileStorageService.cs:83-87</code>), matching the delete-if-exists contract of the Blob store.</li>
+          <li><strong>CI.</strong> The <code>gcp-integration</code> job runs the adapter against fake-gcs-server and is not a required
+          check (<code>MMCA.Common/CHANGELOG.md:23</code>).</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -497,6 +544,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-24">Revision (2026-10-24)</a></li>
+            <li><a href="#revision-2026-10-25">Revision (2026-10-25)</a></li>
             </ul>
           </nav>
         </aside>

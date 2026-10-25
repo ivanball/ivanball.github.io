@@ -300,7 +300,8 @@
           Revised 2026-10-06: the correlation middleware also discards a non-printable-ASCII id, Store&#39;s auth alert counts 401 and 429, the bootstrap logger factory lives until the host exits, and <code>GlobalExceptionHandler</code> writes its Error row only on its 500 path (cross-tenant and bad-request rejections log Warning).
           Revised 2026-10-07: Context and the rejected-alternative now separate unsampled tracing (the largest line item) from sampled traces (metrics measured larger in every recorded window), an outbox message with no stored trace context gets no <code>OutboxProcess</code> span, and the outbox, ADC bicep, ADC Conference <code>Program.cs</code> and <code>GlobalExceptionHandler</code> anchors are rebased after the v1.232.1 and v1.233.0 releases.
           Revised 2026-10-21: <code>StartOutboxActivity</code> runs once per dispatched message (a message a lease renewal found re-claimed (lost) is skipped before it), and the <code>Extensions.Telemetry.cs</code>, outbox, Store bicep and host <code>Program.cs</code> anchors are refreshed.
-          Revised 2026-10-24: OTLP is the only built-in exporter; Azure Monitor moved to the <code>AddAzureMonitorExporter()</code> call in MMCA.Common.Azure (<a href="134-cloud-neutral-core-vendor-adapters.html">ADR-134</a>), and the Decision&#39;s exporter bullet is corrected in place. See Revision (2026-10-24) at the end.</p>
+          Revised 2026-10-24: OTLP is the only built-in exporter; Azure Monitor moved to the <code>AddAzureMonitorExporter()</code> call in MMCA.Common.Azure (<a href="134-cloud-neutral-core-vendor-adapters.html">ADR-134</a>), and the Decision&#39;s exporter bullet is corrected in place. See Revision (2026-10-24) at the end.
+          Revised 2026-10-25: a second vendor exporter, <code>AddGoogleCloudTelemetryExporter()</code> in MMCA.Common.Gcp, sends traces and logs to the Google Cloud Telemetry API; metrics go through the Google-built Collector, and the collector-free metrics path is recorded as a rejected alternative. See Revision (2026-10-25) at the end.</p>
           <h2 id="context">Context</h2>
           <p>The framework is a modular monolith whose modules extract into standalone services (ADR-008), so
           the same telemetry has to make sense whether a request stays in one process or crosses a gateway and
@@ -437,15 +438,42 @@
           message that stored no trace or span id gets no <code>OutboxProcess</code> span at all
           (<code>OutboxProcessor.cs:1092</code>-<code>:1095</code>).</p>
           </li>
-          <li><p><strong>OTLP built in, Azure Monitor by adapter.</strong> <code>AddOpenTelemetryExporters</code> (<code>Extensions.Telemetry.cs:163</code>)
+          <li><p><strong>OTLP built in, vendor exporters by adapter.</strong> <code>AddOpenTelemetryExporters</code> (<code>Extensions.Telemetry.cs:163</code>)
           enables OTLP when <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> is present (read at <code>:165</code>-<code>:166</code>, the Aspire dashboard
-          sets it, exporter wired at <code>:170</code>), and OTLP is the only exporter the framework wires. Azure Monitor
-          is the adapter call <code>AddAzureMonitorExporter()</code>
+          sets it, exporter wired at <code>:170</code>), and OTLP is the only exporter the framework wires. A vendor
+          backend is one adapter call made after <code>AddServiceDefaults()</code>, and each adapter refuses to run before
+          it, because the poll-span and probe filter processors must sit ahead of the vendor exporter (the core
+          leaves its <code>ServiceDefaultsTelemetry</code> marker at <code>Extensions.Telemetry.cs:147</code>). Two adapters exist.
+          Azure Monitor is <code>AddAzureMonitorExporter()</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureMonitorExporterExtensions.cs:42</code>, <code>UseAzureMonitor</code>
-          at <code>:63</code>), made after <code>AddServiceDefaults()</code> in a host whose cloud deployment sets
-          <code>APPLICATIONINSIGHTS_CONNECTION_STRING</code>. Both can be active at once, so local development ships to the
-          Aspire dashboard and production ships to workspace-based Application Insights with that one adapter
-          call per deployed host (corrected in place 2026-10-24; see the Revision (2026-10-24) at the end).</p>
+          at <code>:63</code>), for a host whose cloud deployment sets <code>APPLICATIONINSIGHTS_CONNECTION_STRING</code>. Google
+          Cloud is <code>AddGoogleCloudTelemetryExporter()</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gcp/GoogleCloudTelemetryExporterExtensions.cs:101</code>, order
+          check at <code>:103</code>-<code>:111</code>), gated on <code>GoogleCloudTelemetry:ProjectId</code> (<code>:23</code>, read at <code>:113</code>, a no-op
+          when blank at <code>:117</code>-<code>:120</code>) with an optional <code>GoogleCloudTelemetry:Endpoint</code> (<code>:26</code>) that defaults to
+          <code>https://telemetry.googleapis.com/</code> (<code>:29</code>, validated by <code>ResolveEndpoint</code> at <code>:157</code>-<code>:168</code>). It
+          exports traces and logs only, each through its own batch processor over OTLP http/protobuf to
+          <code>v1/traces</code> and <code>v1/logs</code> (<code>:139</code>-<code>:144</code>, protocol at <code>:199</code>). Each request carries an Application
+          Default Credentials bearer token and the <code>x-goog-user-project</code> quota-project header
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gcp/Telemetry/GoogleCloudTelemetryAuthHandler.cs:18</code>,
+          stamped at <code>:54</code>-<code>:56</code>). The token is held by a hosted service that fetches the first one while the
+          host starts and refreshes it every minute, retrying a failure after 30 seconds
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gcp/Telemetry/GoogleCloudTelemetryAccessToken.cs:33</code>, <code>:36</code>,
+          <code>:46</code>-<code>:50</code>; registered at <code>GoogleCloudTelemetryExporterExtensions.cs:129</code>-<code>:131</code>), because the OTLP
+          HTTP exporter sends through the synchronous <code>HttpClient.Send</code> while Google credentials hand out
+          tokens asynchronously only (<code>GoogleCloudTelemetryAccessToken.cs:12</code>-<code>:15</code>). Until a token arrives the
+          handler refuses each export locally rather than send it unauthenticated
+          (<code>GoogleCloudTelemetryAuthHandler.cs:46</code>-<code>:51</code>). The exporter options clear their headers, so an
+          <code>OTEL_EXPORTER_OTLP_HEADERS</code> value meant for the vendor-neutral exporter never reaches Google
+          (<code>GoogleCloudTelemetryExporterExtensions.cs:200</code>, reason at <code>:188</code>-<code>:191</code>). The call stamps
+          <code>gcp.project_id</code> on the shared OpenTelemetry resource (<code>:38</code>, <code>:138</code>), which every exporter on the
+          host then also carries (<code>:74</code>-<code>:75</code>). Metrics are not exported by this call: the Telemetry API takes
+          at most 200 data points per metric request and OpenTelemetry .NET has no supported way to split one
+          <code>Metric</code> across requests, so a Google host ships metrics by pointing <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> at
+          the Google-built OpenTelemetry Collector, its batch processor configured to cap each request at 200 points
+          (<code>:78</code>-<code>:86</code>). Any of these can be active at once, so local development ships to the Aspire
+          dashboard and a deployed host ships to its cloud backend with one adapter call (corrected in place
+          2026-10-24 and extended 2026-10-25; see the Revisions (2026-10-24) and (2026-10-25) at the end).</p>
           </li>
           </ul>
           <h2 id="rationale">Rationale</h2>
@@ -692,6 +720,17 @@
           measurable price. Revisit only on a
           concrete diagnostic gap (orphan SQL spans from scheduled jobs would be one), and scope any fix to
           that path rather than to the pipeline.</li>
+          <li><strong>A collector-free metrics path: <code>AddGoogleCloudTelemetryExporter()</code> exporting metrics straight to
+          the Telemetry API beside traces and logs.</strong> Weighed 2026-10-25 and declined. The API takes at most 200
+          data points per metric request, and OpenTelemetry .NET offers no supported way to split one metric&#39;s
+          points across requests (a <code>Metric</code> cannot be constructed outside the SDK), so a host whose instruments
+          carry more than 200 time series would have whole batches rejected
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gcp/GoogleCloudTelemetryExporterExtensions.cs:78</code>-<code>:81</code>), and
+          the rejection lands at export time, after the host has started. The
+          Google-built Collector can be configured to cap each request at 200 points (<code>send_batch_max_size: 200</code>,
+          <code>:82</code>-<code>:86</code>), so metrics take that path and the
+          adapter ships traces and logs only. Revisit when OpenTelemetry .NET exposes a supported way to split
+          one metric&#39;s points across export requests, or when the Telemetry API lifts the 200-point cap.</li>
           </ul>
           <h2 id="related">Related</h2>
           <p>ADR-003 (the outbox whose dead-letter counter and poll-span filtering this defines), ADR-014 (the
@@ -971,6 +1010,42 @@
           <code>UseAzureMonitor</code> inside <code>AddServiceDefaults</code> at <code>Extensions.Telemetry.cs:175</code> with the
           connection-string read at <code>:170</code>-<code>:171</code>. Anchors inside the earlier revisions are left as recorded.</li>
           </ol>
+          <h2 id="revision-2026-10-25">Revision (2026-10-25)</h2>
+          <p>MMCA.Common v1.257.0 adds the Google Cloud adapter, and with it a second vendor exporter
+          (<code>MMCA.Common/CHANGELOG.md:7</code>, <code>:22</code>). Instrumentation, meters, sampling, the cost knobs and the
+          built-in OTLP exporter are unchanged.</p>
+          <ol>
+          <li><strong><code>AddGoogleCloudTelemetryExporter()</code> ships traces and logs to Google Cloud.</strong> It is gated on
+          <code>GoogleCloudTelemetry:ProjectId</code> with an optional <code>Endpoint</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gcp/GoogleCloudTelemetryExporterExtensions.cs:23</code>, <code>:26</code>,
+          <code>:101</code>), sends OTLP http/protobuf to <code>telemetry.googleapis.com</code> (<code>:29</code>, <code>:199</code>) with an Application
+          Default Credentials bearer token and the <code>x-goog-user-project</code> header
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gcp/Telemetry/GoogleCloudTelemetryAuthHandler.cs:18</code>,
+          <code>:54</code>-<code>:56</code>; the credential at
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Gcp/Telemetry/ApplicationDefaultTelemetryTokenSource.cs:31</code>-<code>:32</code>),
+          and holds the token in a hosted service that refreshes it every minute
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gcp/Telemetry/GoogleCloudTelemetryAccessToken.cs:33</code>). It
+          must follow <code>AddServiceDefaults()</code> and throws otherwise (<code>GoogleCloudTelemetryExporterExtensions.cs:103</code>-<code>:111</code>),
+          the same rule as the Azure Monitor adapter, and it clears the exporter headers so the vendor-neutral
+          exporter&#39;s <code>OTEL_EXPORTER_OTLP_HEADERS</code> never reach Google (<code>:200</code>). The Decision&#39;s exporter bullet
+          now records both adapters.</li>
+          <li><strong>Metrics go through the Google-built Collector.</strong> The Telemetry API caps a metric request at 200
+          data points and OpenTelemetry .NET has no supported way to split one <code>Metric</code>, so the adapter exports
+          no metrics (<code>GoogleCloudTelemetryExporterExtensions.cs:78</code>-<code>:86</code>). The direct path is recorded under
+          Alternatives rejected with its revisit condition.</li>
+          <li><strong><code>gcp.project_id</code> is set on the shared resource</strong> (<code>:38</code>, <code>:138</code>), so every exporter on a Google
+          host, the vendor-neutral one included, carries the project id Google maps the data to (<code>:32</code>-<code>:38</code>,
+          <code>:74</code>-<code>:75</code>).</li>
+          <li><strong>A lost call fails startup.</strong> <code>GoogleCloudTelemetry:ProjectId</code> set without the call fails
+          <code>ValidateOnStart</code>, naming it
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Integrations/HostIntegrationTripwire.cs:46</code>,
+          <code>:98</code>-<code>:102</code>; the call&#39;s marker at <code>GoogleCloudTelemetryExporterExtensions.cs:127</code>).</li>
+          </ol>
+          <p>Two costs come with it. <strong>A Google host has two export paths to keep healthy</strong>: the adapter for traces
+          and logs, and a Collector sidecar for metrics, configured outside this framework. And <strong>a host without
+          credentials still starts and exports nothing</strong> until a token refresh succeeds; the failure is a Warning
+          log line (<code>GoogleCloudTelemetryAccessToken.cs:108</code>-<code>:109</code>) and refused exports
+          (<code>GoogleCloudTelemetryAuthHandler.cs:46</code>-<code>:51</code>), not a startup failure.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -1000,6 +1075,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-24">Revision (2026-10-24)</a></li>
+            <li><a href="#revision-2026-10-25">Revision (2026-10-25)</a></li>
             </ul>
           </nav>
         </aside>

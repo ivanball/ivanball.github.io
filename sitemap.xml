@@ -2,17 +2,17 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://ivanball.github.io/</loc>
-    <lastmod>2026-10-24</lastmod>
+    <lastmod>2026-10-25</lastmod>
     <priority>1.0</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/resume.html</loc>
-    <lastmod>2026-10-24</lastmod>
+    <lastmod>2026-10-25</lastmod>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/platform.html</loc>
-    <lastmod>2026-10-24</lastmod>
+    <lastmod>2026-10-25</lastmod>
     <priority>0.9</priority>
   </url>
   <url>
@@ -37,7 +37,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/index.html</loc>
-    <lastmod>2026-10-24</lastmod>
+    <lastmod>2026-10-25</lastmod>
     <priority>0.8</priority>
   </url>
   <url>
@@ -112,7 +112,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/015-architecture-fitness-functions.html</loc>
-    <lastmod>2026-10-24</lastmod>
+    <lastmod>2026-10-25</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -242,7 +242,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/041-observability-and-telemetry.html</loc>
-    <lastmod>2026-10-24</lastmod>
+    <lastmod>2026-10-25</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -257,12 +257,12 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/044-native-push-delivery.html</loc>
-    <lastmod>2026-10-24</lastmod>
+    <lastmod>2026-10-25</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html</loc>
-    <lastmod>2026-10-24</lastmod>
+    <lastmod>2026-10-25</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -342,7 +342,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/061-runtime-secret-management.html</loc>
-    <lastmod>2026-10-24</lastmod>
+    <lastmod>2026-10-25</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -367,7 +367,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/066-broker-transport-selection.html</loc>
-    <lastmod>2026-10-24</lastmod>
+    <lastmod>2026-10-25</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -382,7 +382,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/069-shared-data-protection-key-ring.html</loc>
-    <lastmod>2026-10-24</lastmod>
+    <lastmod>2026-10-25</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -602,7 +602,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/113-postgresql-as-a-first-class-engine.html</loc>
-    <lastmod>2026-10-22</lastmod>
+    <lastmod>2026-10-25</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -627,7 +627,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/118-message-transport-library-policy.html</loc>
-    <lastmod>2026-10-24</lastmod>
+    <lastmod>2026-10-25</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -687,7 +687,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/130-per-engine-data-source-strategy.html</loc>
-    <lastmod>2026-10-22</lastmod>
+    <lastmod>2026-10-25</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -707,7 +707,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/134-cloud-neutral-core-vendor-adapters.html</loc>
-    <lastmod>2026-10-24</lastmod>
+    <lastmod>2026-10-25</lastmod>
     <priority>0.6</priority>
   </url>
   <url>

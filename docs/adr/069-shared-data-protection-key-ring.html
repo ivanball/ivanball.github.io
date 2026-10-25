@@ -251,7 +251,8 @@
           Revised 2026-10-07: anchors refreshed after the v1.233.0 release, and Related now points at ADR-024
           for the WebSockets-only SignalR client that needs no session affinity. Revised 2026-10-21: anchors
           refreshed after the ADC and Store infrastructure templates and deploy workflows moved.
-          Revised 2026-10-24: the call is <code>AddAzureDataProtection()</code> in MMCA.Common.Azure, configuration keys unchanged (<a href="134-cloud-neutral-core-vendor-adapters.html">ADR-134</a>); framework anchors in the Decision corrected in place. See Revision (2026-10-24) at the end.</p>
+          Revised 2026-10-24: the call is <code>AddAzureDataProtection()</code> in MMCA.Common.Azure, configuration keys unchanged (<a href="134-cloud-neutral-core-vendor-adapters.html">ADR-134</a>); framework anchors in the Decision corrected in place. See Revision (2026-10-24) at the end.
+          Revised 2026-10-25: three key-ring adapters (Azure Blob + Key Vault, AWS Parameter Store, Google Cloud Storage with optional Cloud KMS), and the startup tripwire fails when more than one key-ring gate is set; the Decision is restated across the three, the package bullet corrected, and Google&#39;s prerelease packages recorded as a rejected alternative. See Revision (2026-10-25) at the end.</p>
           <h2 id="context">Context</h2>
           <p>ASP.NET Core&#39;s DataProtection default keeps the key ring <strong>in memory, per process</strong>. That is correct
           for a single-process host and wrong for a scaled-out one: every replica generates its own keys, so an
@@ -274,9 +275,15 @@
           nor user content: it is process-local state that has to become deployment-wide state. This record
           decides that, and it records which repos have adopted it.</p>
           <h2 id="decision">Decision</h2>
-          <p>Add one opt-in registration call, <code>AddAzureDataProtection</code> (MMCA.Common.Azure), that persists the key ring to a single
-          Azure blob so every replica of a host shares one ring
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureDataProtectionExtensions.cs:53</code>).</p>
+          <p>Persist the key ring through one opt-in registration call per cloud, so every replica of a host shares
+          one ring, and let a host keep exactly one ring. Three adapters exist: <code>AddAzureDataProtection</code>
+          (MMCA.Common.Azure) persists it to a single Azure blob with optional Key Vault protection
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureDataProtectionExtensions.cs:53</code>),
+          <code>AddAwsDataProtection</code> (MMCA.Common.Aws) to Systems Manager Parameter Store
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/AwsDataProtectionExtensions.cs:57</code>), and
+          <code>AddGoogleCloudDataProtection</code> (MMCA.Common.Gcp) to one Cloud Storage object with optional Cloud KMS
+          protection (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gcp/GoogleCloudDataProtectionExtensions.cs:76</code>).
+          The bullets up to the AWS one describe the Azure adapter, the one both deployed consumers call.</p>
           <ul>
           <li><strong>One configuration key is the gate, and absent means do nothing.</strong>
           <code>DataProtection:BlobStorageUri</code> is read first (<code>AzureDataProtectionExtensions.cs:59</code>); when it is absent
@@ -332,12 +339,51 @@
           because the deploy identity deliberately lacks role-assignment rights (<code>:133</code>, <code>:1502-1504</code>,
           <code>:1512</code>). The account&#39;s blob data-plane audit explicitly covers reads of
           <code>dataprotection-keys/keys.xml</code> (<code>:1432-1434</code>).</li>
-          <li><strong>The Azure dependencies live in the Aspire package only.</strong>
-          <code>Azure.Extensions.AspNetCore.DataProtection.Blobs</code> and <code>.Keys</code> are referenced by
-          <code>MMCA.Common.Aspire</code> (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/MMCA.Common.Aspire.csproj:42-43</code>)
-          and pinned centrally (<code>MMCA.Common/Directory.Packages.props:148-149</code>), alongside a direct
-          <code>System.Security.Cryptography.Xml</code> pin that lifts that chain&#39;s transitive off a vulnerable version
-          for consumers without the ASP.NET Core framework reference (<code>Directory.Packages.props:154</code>).</li>
+          <li><strong>AWS: Parameter Store SecureString parameters.</strong> <code>AddAwsDataProtection()</code> is gated on
+          <code>DataProtection:SsmParameterPrefix</code> (<code>AwsDataProtectionExtensions.cs:59</code>, a no-op when blank at
+          <code>:65</code>-<code>:68</code>, marker at <code>:72</code>) and persists through <code>PersistKeysToAWSSystemsManager</code> from
+          <code>Amazon.AspNetCore.DataProtection.SSM</code> (<code>:80</code>; referenced at
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/MMCA.Common.Aws.csproj:22</code>, pinned at
+          <code>MMCA.Common/Directory.Packages.props:164</code>). Each key is one SecureString parameter under the prefix,
+          so KMS encrypts it at rest with no separate protection step (<code>:27</code>-<code>:29</code>). The optional
+          <code>DataProtection:KmsKeyId</code> names the KMS key, else the account&#39;s <code>aws/ssm</code> key is used (<code>:37</code>-<code>:38</code>,
+          applied at <code>:82</code>-<code>:85</code>), and the discriminator is the same <code>DataProtection:ApplicationName</code> with the
+          host application name as fallback (<code>:74</code>-<code>:75</code>).</li>
+          <li><strong>Google Cloud: one Cloud Storage object, written by the framework&#39;s own repository.</strong>
+          <code>AddGoogleCloudDataProtection()</code> is gated on <code>DataProtection:GcsObjectUri</code> in <code>gs://bucket/path/keys.xml</code>
+          form (<code>GoogleCloudDataProtectionExtensions.cs:24</code>, <code>:37</code>-<code>:41</code>; read at <code>:78</code>, a no-op when blank at
+          <code>:84</code>-<code>:87</code>, parsed at <code>:90</code>, marker at <code>:102</code>). <code>GcsXmlRepository</code> keeps the whole ring as one object,
+          the shape the Azure Blob repository uses
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gcp/DataProtection/GcsXmlRepository.cs:12</code>-<code>:15</code>), and writes
+          it read-modify-write under <code>IfGenerationMatch</code> set to the generation it read, 0 meaning create only
+          (<code>:17</code>-<code>:20</code>, <code>:84</code>-<code>:87</code>, <code>:118</code>-<code>:119</code>). A writer that loses the race gets 412, re-reads the ring
+          that now holds the winner&#39;s key and retries, up to <code>MaxAttempts</code> (10) with a linear backoff of 50 ms
+          per attempt (<code>:34</code>, <code>:90</code>-<code>:98</code>;
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Gcp/DataProtection/GcpDataProtectionBuilderExtensions.cs:21</code>),
+          and then fails, naming the object (<code>GcsXmlRepository.cs:101</code>-<code>:102</code>). The optional
+          <code>DataProtection:GcpKmsKeyName</code> encrypts each key with a Cloud KMS symmetric key
+          (<code>GoogleCloudDataProtectionExtensions.cs:25</code>, validated at <code>:93</code>-<code>:98</code>, applied at <code>:111</code>-<code>:114</code>; the
+          encryptor is wired at <code>GcpDataProtectionBuilderExtensions.cs:54</code>-<code>:59</code>), a separate optional step for
+          the reason Azure gate 2 is (<code>GoogleCloudDataProtectionExtensions.cs:63</code>-<code>:66</code>). The repository and
+          the KMS encryptor and decryptor are hand-written because Google&#39;s DataProtection packages are
+          prerelease only and a stable package cannot depend on a prerelease (NU5104)
+          (<code>MMCA.Common/Directory.Packages.props:187</code>-<code>:191</code>, <code>MMCA.Common/CHANGELOG.md:19</code>); see Alternatives
+          rejected.</li>
+          <li><strong>A host keeps exactly one key ring.</strong> Each adapter&#39;s gate set without its call fails
+          <code>ValidateOnStart</code>, naming the call
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Integrations/HostIntegrationTripwire.cs:26</code>, <code>:32</code>,
+          <code>:43</code>; checks at <code>:73</code>-<code>:77</code>, <code>:83</code>-<code>:87</code>, <code>:93</code>-<code>:97</code>), and setting more than one of
+          <code>DataProtection:BlobStorageUri</code>, <code>DataProtection:SsmParameterPrefix</code> and <code>DataProtection:GcsObjectUri</code>
+          fails startup as well (<code>:49</code>-<code>:54</code>, <code>:107</code>-<code>:112</code>): whichever registration runs last would own the
+          repository, so services that disagree on the order would mint payloads the others cannot decrypt
+          (<code>:104</code>-<code>:106</code>).</li>
+          <li><strong>Each cloud&#39;s dependencies live in its own adapter package.</strong>
+          <code>Azure.Extensions.AspNetCore.DataProtection.Blobs</code> and <code>.Keys</code> are referenced by <code>MMCA.Common.Azure</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/MMCA.Common.Azure.csproj:16</code>-<code>:17</code>, pinned at
+          <code>MMCA.Common/Directory.Packages.props:213</code>-<code>:214</code>), <code>Amazon.AspNetCore.DataProtection.SSM</code> by
+          <code>MMCA.Common.Aws</code> (above), and <code>Google.Cloud.Kms.V1</code> by <code>MMCA.Common.Gcp</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gcp/MMCA.Common.Gcp.csproj:23</code>, pinned at
+          <code>Directory.Packages.props:192</code>), so a host references only the cloud it runs on.</li>
           </ul>
           <p><strong>Both consumers have now adopted it (2026-08-13).</strong> MMCA.Store originally had no call site and no
           <code>DataProtection</code> configuration anywhere in the repo, even though its UI and Identity container apps
@@ -584,6 +630,42 @@
           The consumer call-site sentences name the call each consumer made when last verified; a consumer on
           v1.255.0 or later makes the renamed call. The anchors inside earlier revisions are left as recorded.</li>
           </ol>
+          <h2 id="alternatives-rejected">Alternatives rejected</h2>
+          <ul>
+          <li><strong>Google&#39;s own ASP.NET Core DataProtection packages (for example
+          <code>Google.Cloud.AspNetCore.DataProtection.Kms</code>) instead of a hand-written repository and encryptor.</strong>
+          Weighed 2026-10-25 and declined. They are prerelease only, and a stable <code>MMCA.Common.Gcp</code> cannot
+          depend on a prerelease package (NU5104) (<code>MMCA.Common/Directory.Packages.props:189</code>-<code>:190</code>,
+          <code>MMCA.Common/CHANGELOG.md:19</code>). The cost is code the framework now maintains: one repository
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gcp/DataProtection/GcsXmlRepository.cs:31</code>) and a KMS
+          encryptor and decryptor pair beside it. Revisit when Google publishes stable releases of those
+          packages; the adapter call and its keys can stay while the implementation moves to them.</li>
+          </ul>
+          <h2 id="revision-2026-10-25">Revision (2026-10-25)</h2>
+          <p>MMCA.Common v1.257.0 ships the key ring for two more clouds (<code>MMCA.Common/CHANGELOG.md:7</code>, <code>:13</code>,
+          <code>:19</code>). The decision for ADC and Store, both gates of the Azure adapter and its keys are unchanged.</p>
+          <ol>
+          <li><strong>Three adapters.</strong> Azure Blob + Key Vault
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureDataProtectionExtensions.cs:53</code>), AWS Parameter
+          Store SecureString parameters, gate <code>DataProtection:SsmParameterPrefix</code>, optional <code>KmsKeyId</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/AwsDataProtectionExtensions.cs:57</code>, <code>:59</code>, <code>:76</code>), and
+          one Cloud Storage object, gate <code>DataProtection:GcsObjectUri</code>, optional
+          <code>DataProtection:GcpKmsKeyName</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gcp/GoogleCloudDataProtectionExtensions.cs:24</code>-<code>:25</code>, <code>:76</code>),
+          written under <code>IfGenerationMatch</code> with a bounded retry
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gcp/DataProtection/GcsXmlRepository.cs:34</code>, <code>:87</code>). The
+          Decision&#39;s opening paragraph is restated across the three and gains one bullet per new adapter.</li>
+          <li><strong>The startup tripwire now fails when more than one key-ring gate is set</strong>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Integrations/HostIntegrationTripwire.cs:49</code>-<code>:54</code>,
+          <code>:107</code>-<code>:112</code>; <code>MMCA.Common/CHANGELOG.md:33</code>), on top of failing each gate set without its call.</li>
+          <li><strong>Google&#39;s prerelease packages are a rejected alternative</strong>, recorded above with the NU5104 reason
+          and the revisit condition.</li>
+          <li><strong>Corrected in place:</strong> the Decision bullet &quot;The Azure dependencies live in the Aspire package only&quot;.
+          Since <a href="134-cloud-neutral-core-vendor-adapters.html">ADR-134</a> the two Azure DataProtection packages are
+          referenced by <code>MMCA.Common.Azure</code>, and the direct <code>System.Security.Cryptography.Xml</code> pin that bullet
+          cited is no longer in <code>MMCA.Common/Directory.Packages.props</code>. The anchors inside earlier revisions
+          are left as recorded.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-022 (the browser session cookies whose decryption this makes replica-independent, together with
           the antiforgery tokens the SSR pages mint), ADR-008 (the multi-host topology that created the problem;
@@ -614,6 +696,8 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-24">Revision (2026-10-24)</a></li>
+            <li><a href="#alternatives-rejected">Alternatives rejected</a></li>
+            <li><a href="#revision-2026-10-25">Revision (2026-10-25)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

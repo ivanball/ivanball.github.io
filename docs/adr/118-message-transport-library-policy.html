@@ -255,7 +255,8 @@
           decision and the replacement order are unchanged. Revised 2026-10-07: anchors refreshed after the
           v1.233.0 release. Revised 2026-10-21: the circuit-breaker description now matches source (it wraps
           the <code>IMessageBus</code> publish, which is the broker hop only in broker mode), and anchors are refreshed.
-          Revised 2026-10-24: <code>MassTransit.AmazonSQS</code> 8.5.11 joins the pinned set for the SQS adapter transport, the pin and its gate unchanged (<a href="134-cloud-neutral-core-vendor-adapters.html">ADR-134</a>); the trial point and the surface inventory are corrected in place. See Revision (2026-10-24) at the end.</p>
+          Revised 2026-10-24: <code>MassTransit.AmazonSQS</code> 8.5.11 joins the pinned set for the SQS adapter transport, the pin and its gate unchanged (<a href="134-cloud-neutral-core-vendor-adapters.html">ADR-134</a>); the trial point and the surface inventory are corrected in place. See Revision (2026-10-24) at the end.
+          Revised 2026-10-25: <code>MassTransit.SqlTransport.PostgreSQL</code> 8.5.11 (Apache-2.0) joins the pinned set for the built-in PostgreSQL transport and reaches every consumer of MMCA.Common.Infrastructure with Dapper; Decision 1 now records that the build gate covers three of MMCA.Common&#39;s five MassTransit entries. See Revision (2026-10-25) at the end.</p>
           <h2 id="context">Context</h2>
           <p>MassTransit is the only message-broker library in this workspace, and it is pinned to 8.5.11 across
           all three of its packages (<code>MMCA.Common/Directory.Packages.props:124-126</code>, the pin comment at
@@ -340,9 +341,18 @@
           that is what keeps a transport swap cheap. Record the exit triggers now, and the replacement order,
           so the pin is a dated decision rather than an open-ended hold.</strong></p>
           <ol>
-          <li><p><strong>The pin stands and stays build-gated in MMCA.Common.</strong> MassTransit remains on v8 (8.5.11 today) on
-          all three packages, and <code>DependencyVersionTestsBase</code> remains the enforcement point for those three.
-          The two consumer-declared <code>MassTransit.Azure.ServiceBus.Core</code> entries are held at the same patch
+          <li><p><strong>The pin stands; the build gate in MMCA.Common covers three of its five entries.</strong> MassTransit
+          remains on v8 (8.5.11 today) on all five MMCA.Common entries: <code>MassTransit</code>, <code>MassTransit.RabbitMQ</code>
+          and <code>MassTransit.Azure.ServiceBus.Core</code> (<code>MMCA.Common/Directory.Packages.props:125-127</code>),
+          <code>MassTransit.AmazonSQS</code> (<code>:130</code>) and <code>MassTransit.SqlTransport.PostgreSQL</code> (<code>:136</code>), the last two
+          commented as tracking the same v8 line and version as the rest (<code>:129</code>, <code>:134</code>).
+          <code>DependencyVersionTestsBase</code> remains the enforcement point, but its <code>MassTransitPackageIds</code> list
+          names only the first three
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/DependencyVersionTestsBase.cs:18-23</code>)
+          and MMCA.Common&#39;s subclass does not override it
+          (<code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/DependencyVersionTests.cs:9</code>),
+          so the two transport entries are held at v8 by the lockstep sweep and the props comments, not by
+          the gate. The two consumer-declared <code>MassTransit.Azure.ServiceBus.Core</code> entries are held at the same patch
           by the lockstep sweep and the NuGet-excluded dependabot config, not by a build gate, and a
           consumer that wants its own guard overrides <code>MassTransitPackageIds</code> rather than subclassing the
           base as shipped. The ceiling is the major version only: v8 patch and minor updates are ordinary
@@ -388,9 +398,9 @@
           </li>
           <li><p><strong>A trial ships beside the incumbent.</strong> The trial point is one more
           <code>IBrokerTransport</code> registered by name through <code>AddBrokerTransport</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:148</code>, resolved
-          by <code>ResolveBrokerTransport</code> at <code>:177</code>, beside the built-in RabbitMQ transport at <code>:179-181</code> and the
-          adapter transports in MMCA.Common.Azure and MMCA.Common.Aws), so a candidate is exercised by
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:159</code>, resolved
+          by <code>ResolveBrokerTransport</code> at <code>:188</code>, beside the built-in RabbitMQ and PostgreSQL transports it
+          returns at <code>:188-197</code> and the adapter transports in MMCA.Common.Azure and MMCA.Common.Aws), so a candidate is exercised by
           configuration without removing anything, and ADC&#39;s nightly Service Bus emulator smoke is where it
           runs first. That job is authoritative rather than advisory: it has carried no <code>continue-on-error</code>
           since 2026-08-31 (TD-17), and <code>deploy.yml</code>&#39;s cross-service-freshness gate requires it to have
@@ -431,6 +441,12 @@
           in <code>MicroserviceExtractionTestsBase</code> already guarantees no consumer references the library. The
           cost lands in one package and one release, swept under
           <a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a>&#39;s lockstep policy.</li>
+          <li><strong>The PostgreSQL transport is core, so its package reaches every consumer.</strong>
+          <code>PostgreSqlBrokerTransport</code> ships in MMCA.Common.Infrastructure because any PostgreSQL is the broker
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Transports/PostgreSqlBrokerTransport.cs:10-14</code>,
+          <code>:40</code>), so every consumer of that package restores <code>MassTransit.SqlTransport.PostgreSQL</code> and the
+          Dapper it brings (<code>MMCA.Common/CHANGELOG.md:24</code>, <code>MMCA.Common/Directory.Packages.props:134-135</code>)
+          whether or not it selects the transport.</li>
           <li><strong>The emulator test tier is coupled to the choice.</strong> <code>ServiceBusEmulatorFixtureBase</code> uses the
           MassTransit v8 custom-clients <code>Host()</code> overload, so a transport swap re-writes that fixture and
           re-checks the <code>Azure.Messaging.ServiceBus</code> 7.21.0 pin it exists for.</li>
@@ -523,6 +539,30 @@
           <code>Messaging/ServiceBusEmulatorSupport.cs</code> in Infrastructure and the fixture under
           <code>MMCA.Common.Testing</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-25">Revision (2026-10-25)</h2>
+          <p>The library choice, the v8 pin, the exit triggers and the replacement order are unchanged.</p>
+          <ol>
+          <li><strong><code>MassTransit.SqlTransport.PostgreSQL</code> joins the v8 pin.</strong> It is pinned at 8.5.11
+          (<code>MMCA.Common/Directory.Packages.props:136</code>) under a comment tying it to the same v8 line and
+          version as every MassTransit entry and noting that it brings Dapper (<code>:134-135</code>); its license is
+          Apache-2.0 (<code>MMCA.Common/CHANGELOG.md:24</code>). It backs the built-in <code>PostgreSqlBrokerTransport</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Transports/PostgreSqlBrokerTransport.cs:40</code>),
+          selected by <code>MessageBus:Provider=PostgreSql</code> (<a href="066-broker-transport-selection.html">ADR-066</a>).
+          Because that transport is core, every consumer of MMCA.Common.Infrastructure now restores it and
+          Dapper (<code>MMCA.Common/CHANGELOG.md:24</code>), recorded as a new Trade-offs bullet.</li>
+          <li><strong>The build gate does not cover it.</strong> <code>MassTransitPackageIds</code> still lists <code>MassTransit</code>,
+          <code>MassTransit.RabbitMQ</code> and <code>MassTransit.Azure.ServiceBus.Core</code> only
+          (<code>DependencyVersionTestsBase.cs:20-22</code>), with no override in Common&#39;s subclass
+          (<code>DependencyVersionTests.cs:9</code>), so neither <code>MassTransit.SqlTransport.PostgreSQL</code> nor the
+          <code>MassTransit.AmazonSQS</code> entry the 2026-10-24 revision added is checked against the major-9 ceiling
+          (<code>DependencyVersionTestsBase.cs:32</code>). Decision 1 now says so; the 2026-10-24 revision&#39;s &quot;the pin
+          and its gate unchanged&quot; describes the gate&#39;s list, not its reach over the new entry.</li>
+          <li><strong>Corrected in place:</strong> Decision 1 (three packages, now five MMCA.Common entries with three gated)
+          and Decision 6&#39;s <code>DependencyInjection.Messaging.cs</code> anchors (<code>:148</code>, <code>:177</code>, <code>:179-181</code>, now <code>:159</code>,
+          <code>:188</code>, <code>:188-197</code>). The three-entry and five-entry counts in Context and their props anchors are
+          left as recorded, Decision 1 carrying the current figures, and the <code>using MassTransit</code> file count
+          in Context was not recounted in this pass.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a> (the lockstep release policy this pin is
           enforced under; its 2026-08-28 amendment first sketched exit options, and this record owns the
@@ -560,6 +600,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-24">Revision (2026-10-24)</a></li>
+            <li><a href="#revision-2026-10-25">Revision (2026-10-25)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

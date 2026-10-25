@@ -48,6 +48,7 @@ Revised 2026-10-21: two rule families joined the library since v1.233.0 (Liskov 
 re-counted against v1.250.0 (8,434 declarations, every unshipped file header-only) and anchors
 refreshed after v1.250.0, the counts `FACTS.md` owns now sitting at `:81` / `:84`.
 Revised 2026-10-24: the cloud vendor boundary joins the gates as a build target plus an architecture rule pair ([ADR-134](134-cloud-neutral-core-vendor-adapters.md)). See Revision (2026-10-24) at the end.
+Revised 2026-10-25: the type-level cloud vendor rule's Azure and AWS roots lost the trailing dot that let it pass vacuously, and both vendor lists now cover Google. See Revision (2026-10-25) at the end.
 
 ## Context
 The codebase rests on invariants that are easy to state and easy to erode by accident: clean-
@@ -775,6 +776,22 @@ architecture rule library. No existing rule family changed.
    only exempt references (`MMCA.Common.LayerEnforcement.targets:130-131`, rationale at `:115-120`);
    the `Microsoft.Azure.Cosmos` namespace the first brings in is allowed in Infrastructure alone
    (`:117-118`).
+
+## Revision (2026-10-25): the type-level vendor rule matches again
+Fixed in v1.257.0: `ArchitectureRules.CloudVendorDependencies`, the namespace roots behind
+`CloudNeutralAssembliesNameNoVendorType`, listed `Azure.`, `Microsoft.Azure.` and `Amazon.` with a
+trailing dot that NetArchTest's namespace-segment matching never matches, so the type rule recorded in
+the 2026-10-24 revision passed vacuously for every Azure and AWS type while the assembly rule and the
+build target still held (`MMCA.Common/CHANGELOG.md:32`). The roots are dot-free now
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Layering/ArchitectureRules.CloudVendors.cs:25`,
+entries `:29-31`, the reason in the comment at `:27`), Google is covered on both lists (`Google`,
+`FirebaseAdmin`, `Grpc.Auth` and `MMCA.Common.Gcp` at `:32-34` and `:39`; the assembly prefixes,
+which keep their dots because they are plain string prefixes, at `:44-46`, `:53-55` and `:60`), and a
+`CloudVendorRulesTests` fact in each cloud adapter test project (Azure, Aws, Gcp) pins the type rule
+(`MMCA.Common/Tests/Hosting/MMCA.Common.Azure.Tests/CloudVendorRulesTests.cs:22`,
+`MMCA.Common/Tests/Hosting/MMCA.Common.Aws.Tests/CloudVendorRulesTests.cs:21`,
+`MMCA.Common/Tests/Hosting/MMCA.Common.Gcp.Tests/CloudVendorRulesTests.cs:28`); the Azure and AWS facts
+fail with the old entries (`MMCA.Common/CHANGELOG.md:32`).
 
 ## Related
 ADR-009 (resilience gate), ADR-010 (event-version gate), ADR-016 (MassTransit pin gate, and the
