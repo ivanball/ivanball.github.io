@@ -254,9 +254,11 @@
           storage call; see Revision below).
           Revised 2026-10-21: the image processor registers only the JPEG, PNG, WebP and GIF decoders and
           nulls the EXIF, XMP and IPTC profiles rather than all metadata, and five ImageSharp advisories
-          are accepted under a standing audit suppression.
+          are accepted under a standing audit suppression (both superseded on 2026-10-25: the framework no
+          longer holds an image processor or those suppressions).
           Revised 2026-10-24: the Azure Blob implementation moved to MMCA.Common.Azure and an S3-compatible implementation ships in MMCA.Common.Aws (<a href="134-cloud-neutral-core-vendor-adapters.html">ADR-134</a>); see Revision (2026-10-24).
-          Revised 2026-10-25: a Google Cloud Storage implementation ships in MMCA.Common.Gcp, so three adapters read the shared <code>FileStorage</code> section, each keyed on its own field; see Revision (2026-10-25).</p>
+          Revised 2026-10-25: a Google Cloud Storage implementation ships in MMCA.Common.Gcp, so three adapters read the shared <code>FileStorage</code> section, each keyed on its own field; see Revision (2026-10-25).
+          Revised 2026-10-25 (image processing): <code>IImageProcessor</code> and its SkiaSharp implementation are ADC&#39;s Identity module&#39;s, not framework types; MMCA.Common keeps <code>IFileStorageService</code> and the dependency-free upload guards, <code>ImageContentSniffer</code> among them; see Revision (2026-10-25, image processing moves to ADC).</p>
           <h2 id="context">Context</h2>
           <p>The MAUI capability program (ADR-042) brought MediaPicker/camera within reach, and ADC amended
           BR-116 to include user avatar photos. That needs binary blob storage (the databases store
@@ -293,16 +295,34 @@
           <p>The container or bucket is provisioned by infrastructure, never created by the app (the GCS
           identity needs only object create and delete, <code>GcpServiceCollectionExtensions.cs:42-44</code>).</p>
           </li>
-          <li><p><strong><code>IImageProcessor</code></strong> (Application) with <code>ImageSharpImageProcessor</code> (Infrastructure, always
-          registered - it has no external dependency): decode with only the JPEG, PNG, WebP and GIF
-          decoders registered, auto-orient, center-crop to an exact square, null the EXIF, XMP and IPTC
-          profiles, re-encode as JPEG. Full re-encode is the security boundary: the output is a fresh
-          encode of the decoded first frame, which kills EXIF GPS and any polyglot payload outside the
-          metadata profiles. The ICC profile is not cleared, and the ImageSharp JPEG encoder writes an ICC
-          profile into its output, so bytes carried inside an uploaded ICC profile are not shown to be
-          removed. Undecodable content, including any format whose decoder is
-          not registered (TIFF, BMP), is a validation failure, not an exception. ImageSharp ships under
-          the Six Labors Split License (Apache 2.0 terms for open-source / small-revenue use, which covers this project).</p>
+          <li><p><strong><code>IImageProcessor</code></strong> is ADC&#39;s, not the framework&#39;s: the interface is declared in the Identity
+          application layer
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/IImageProcessor.cs:11</code>,
+          <code>NormalizeToSquareJpegAsync</code> at <code>:18</code>) and implemented by <code>SkiaSharpImageProcessor</code>
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Infrastructure/Services/Users/SkiaSharpImageProcessor.cs:16</code>),
+          registered as a singleton by <code>AddModuleIdentityInfrastructure</code>
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Infrastructure/DependencyInjection.cs:22-24</code>).
+          It reads the header and refuses an oversize image before any frame is allocated
+          (<code>SkiaSharpImageProcessor.cs:81-90</code>); accepts JPEG, PNG, WebP and GIF only, checked first by magic
+          bytes before any decoder parses the upload and then on the codec Skia picked (<code>:145-172</code>,
+          <code>:301-302</code>, <code>:313-314</code>); decodes the first frame only (<code>:185-202</code>); applies the EXIF orientation
+          before a centered cover crop to an exact square (<code>:224-229</code>); and encodes a quality-85 JPEG
+          (<code>:46</code>, <code>:105</code>) from the fresh pixel buffer alone, which carries no color space and no metadata
+          (<code>:103-104</code>), so EXIF GPS, XMP, IPTC, the ICC profile and any polyglot payload in the original
+          file are discarded (<code>:11-14</code>). Full re-encode is the security boundary. Undecodable content,
+          including any format outside the allowlist (Skia also decodes BMP, ICO, HEIF, AVIF and RAW,
+          <code>:146-148</code>), is the <code>Image.Undecodable</code> validation failure (<code>:338</code>), not an exception. SkiaSharp
+          is MIT-licensed and an ADC dependency (<code>MMCA.ADC/Directory.Packages.props:41-43</code>), not a framework
+          one.</p>
+          </li>
+          <li><p><strong>Dependency-free upload guards</strong> (MMCA.Common): <code>ImageContentSniffer</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Storage/ImageContentSniffer.cs:9</code>),
+          a magic-byte allowlist (<code>IsAllowedImage</code>, <code>:14</code>, over <code>IsJpeg</code>, <code>IsPng</code> and <code>IsWebP</code> at <code>:20</code>,
+          <code>:26</code>, <code>:32</code>), stays in the framework beside <code>IFileStorageService</code> and takes no image library.
+          ADC&#39;s avatar validator and handler call it
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/SetUserAvatar/SetUserAvatarCommandValidator.cs:35</code>,
+          <code>.../SetUserAvatar/SetUserAvatarHandler.cs:63</code>), and so does Store&#39;s product-image validator
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Products/UseCases/UploadImage/UploadProductImageCommandValidator.cs:71</code>).</p>
           </li>
           <li><p><strong><code>IMediaPickerService</code></strong> (UI capability, ADR-042 pattern): native photo pick/capture with the
           permission flow encapsulated; cancelled/denied returns null. Web heads keep the Null default
@@ -330,11 +350,16 @@
           bounded by cache TTLs.</li>
           <li><code>DefaultAzureCredential</code> in production means the storage account needs a data-plane role
           (Storage Blob Data Contributor) for the app identity - a bicep-level grant, not a secret.</li>
-          <li>ImageSharp joins the Infrastructure dependency set and is vuln-audited, but not like everything
-          else: five ImageSharp 3.1.12 advisories are accepted as standing <code>NuGetAuditSuppress</code> entries, each
-          with its reachability argument, and every repo carries its own copy of the five, so the lists
-          move together (see the 2026-10-21 revision). The license note above must
-          be revisited if the project&#39;s revenue posture changes.</li>
+          <li>Image decoding is an application dependency, not a framework one: <code>AddInfrastructure</code> registers
+          no image processor and MMCA.Common.Infrastructure takes no image library
+          (<code>MMCA.Common/CHANGELOG.md:17</code>), and the framework&#39;s accepted-advisory list is empty
+          (<code>MMCA.Common/Directory.Build.props:33</code>). ADC confines SkiaSharp&#39;s native libraries to the
+          projects that run it: <code>MMCA.ADC.Identity.Infrastructure</code> takes the managed assembly only
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Infrastructure/MMCA.ADC.Identity.Infrastructure.csproj:10</code>),
+          and the native packages are referenced by the Identity host
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/MMCA.ADC.Identity.Service.csproj:22-29</code>) and
+          the processor&#39;s tests
+          (<code>MMCA.ADC/Tests/Modules/Identity/MMCA.ADC.Identity.Infrastructure.Tests/MMCA.ADC.Identity.Infrastructure.Tests.csproj:12-14</code>).</li>
           </ul>
           <h2 id="revision-2026-09-07">Revision (2026-09-07)</h2>
           <p>The 2 MB compressed upload cap bounds the bytes on the wire; it does not bound what those bytes
@@ -524,6 +549,59 @@
           <li><strong>CI.</strong> The <code>gcp-integration</code> job runs the adapter against fake-gcs-server and is not a required
           check (<code>MMCA.Common/CHANGELOG.md:23</code>).</li>
           </ol>
+          <h2 id="revision-2026-10-25-image-processing-moves-to-adc">Revision (2026-10-25, image processing moves to ADC)</h2>
+          <p>Image normalization left the framework in two releases on the same day, and ADC&#39;s Identity module,
+          its only caller, now owns it. <code>IFileStorageService</code>, the avatar contract, the decoded-size guard and
+          the durable blob deletion are unchanged; the Decision and Consequences above are corrected to the
+          current ownership.</p>
+          <ol>
+          <li><strong>v1.258.0: SkiaSharp replaces ImageSharp.</strong> <code>ImageSharpImageProcessor</code> was replaced by
+          <code>SkiaSharpImageProcessor</code> with the same <code>IImageProcessor</code> behavior and the same
+          <code>MaxDecodedPixels</code> / <code>MaxDecodedDimension</code> constants, and MMCA.Common.Infrastructure took
+          <code>SkiaSharp</code> and <code>SkiaSharp.NativeAssets.Linux.NoDependencies</code> 4.153.1 in place of
+          <code>SixLabors.ImageSharp</code> (<code>MMCA.Common/CHANGELOG.md:23</code>). The five ImageSharp 3.1.12 advisories
+          accepted in 1.234.0 no longer applied, so their <code>NuGetAuditSuppress</code> entries went with it (<code>:23</code>),
+          as did <code>DependencyVersionTestsBase.ImageSharp_MustNotExceed_MajorVersion3</code> and
+          <code>ImageSharpPackageIds</code> (<code>MMCA.Common/UPGRADING.md:66-68</code>). The framework&#39;s accepted-advisory list
+          now reads none (<code>MMCA.Common/Directory.Build.props:33</code>).</li>
+          <li><strong>v1.259.0: the processor leaves the framework.</strong> <code>IImageProcessor</code> (MMCA.Common.Application) and
+          <code>SkiaSharpImageProcessor</code> (MMCA.Common.Infrastructure) were removed, <code>AddInfrastructure</code> stopped
+          registering an image processor, and MMCA.Common.Infrastructure dropped SkiaSharp
+          (<code>MMCA.Common/CHANGELOG.md:17</code>, <code>MMCA.Common/UPGRADING.md:40-44</code>). The reason is cost:
+          SkiaSharp&#39;s native libraries, about 490 MB per project (322 MB for the three Windows builds,
+          149 MB for 13 Linux builds, 16 MB for macOS), were copied into every project that referenced
+          MMCA.Common.Infrastructure, which ran consumer CI runners out of disk, while only one consumer use
+          case ever called the processor (<code>MMCA.Common/CHANGELOG.md:17</code>). UPGRADING gives the mechanical
+          fix for an application that resolves the interface: declare it in the module&#39;s application layer,
+          copy the implementation and its tests into that module&#39;s infrastructure layer, reference
+          <code>SkiaSharp</code> there with <code>ExcludeAssets=&quot;native&quot;</code> and the native packages only from the host that
+          processes images and from the processor&#39;s tests, and register it in the module
+          (<code>MMCA.Common/UPGRADING.md:46-54</code>).</li>
+          <li><strong>ADC owns it.</strong> The interface is at
+          <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/IImageProcessor.cs:11</code>; the
+          implementation is at
+          <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Infrastructure/Services/Users/SkiaSharpImageProcessor.cs:16</code>,
+          keeping <code>MaxDecodedPixels</code> (50,000,000, <code>:27</code>), <code>MaxDecodedDimension</code> (20,000, <code>:35</code>) and the
+          <code>TooLargeToDecode</code> predicate (<code>:323-327</code>). It is registered by <code>AddModuleIdentityInfrastructure</code>
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Infrastructure/DependencyInjection.cs:22-24</code>)
+          and tested by <code>SkiaSharpImageProcessorTests</code>
+          (<code>MMCA.ADC/Tests/Modules/Identity/MMCA.ADC.Identity.Infrastructure.Tests/Services/Users/SkiaSharpImageProcessorTests.cs:14</code>).
+          The infrastructure project references <code>SkiaSharp</code> with <code>ExcludeAssets=&quot;native&quot;</code>
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Infrastructure/MMCA.ADC.Identity.Infrastructure.csproj:10</code>),
+          and the native packages sit only in the Identity host
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/MMCA.ADC.Identity.Service.csproj:28-29</code>) and
+          the processor&#39;s tests
+          (<code>MMCA.ADC/Tests/Modules/Identity/MMCA.ADC.Identity.Infrastructure.Tests/MMCA.ADC.Identity.Infrastructure.Tests.csproj:13-14</code>).
+          The <code>Image.Undecodable</code> message, English and Spanish, lives in the Identity error resources
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Resources/IdentityErrorResources.resx:22</code>,
+          <code>IdentityErrorResources.es.resx:22</code>).</li>
+          <li><strong><code>ImageContentSniffer</code> stays.</strong> It is dependency-free and validates uploads in more than one
+          consumer (<code>MMCA.Common/CHANGELOG.md:17</code>, <code>MMCA.Common/UPGRADING.md:56</code>), at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Storage/ImageContentSniffer.cs:9</code>.</li>
+          <li>The anchors into <code>MMCA.Common.Infrastructure/Storage/ImageSharpImageProcessor.cs</code> inside the
+          2026-09-07, 2026-10-06 and 2026-10-21 revisions, and the ImageSharp audit posture recorded on
+          2026-10-21, are left as recorded; that file and those suppressions no longer exist in MMCA.Common.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -545,6 +623,7 @@
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-24">Revision (2026-10-24)</a></li>
             <li><a href="#revision-2026-10-25">Revision (2026-10-25)</a></li>
+            <li><a href="#revision-2026-10-25-image-processing-moves-to-adc">Revision (2026-10-25, image processing moves to ADC)</a></li>
             </ul>
           </nav>
         </aside>

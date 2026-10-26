@@ -3,16 +3,16 @@
 > Series: MMCA.Common · Article #43 · Pillar P2/P4 · Group G07 · Rubric §8,§11,§30 · ADR-045 ·
 > Status: grounded in `Website/docs-src/adr/045-managed-file-storage-and-avatars.md`,
 > `IFileStorageService.cs`, `FileUploadOptions.cs`, `NullFileStorageService.cs`,
-> `AzureBlobFileStorageService.cs`, `FileStorageSettings.cs`, `IImageProcessor.cs`,
-> `ImageSharpImageProcessor.cs`, `ImageContentSniffer.cs`, `IMediaPickerService.cs`,
-> `DeleteBlobInternalCommandHandlerBase.cs`, Infrastructure `DependencyInjection.cs` and
-> `DependencyInjection.Notifications.cs`, and MMCA.Common's `Directory.Build.props` and
-> `Directory.Packages.props`.
+> `AzureBlobFileStorageService.cs`, `AzureBlobFileStorageSettings.cs`,
+> `AzureServiceCollectionExtensions.cs`, `ImageContentSniffer.cs`, `IMediaPickerService.cs`,
+> `DeleteBlobInternalCommandHandlerBase.cs` and Infrastructure `DependencyInjection.cs` in MMCA.Common;
+> the Identity module's `IImageProcessor.cs`, `SkiaSharpImageProcessor.cs`, `DependencyInjection.cs`,
+> `SetUserAvatarHandler.cs` and the SkiaSharp package references in MMCA.ADC.
 > No em dashes.
 
 **Subtitle:** A user uploads a profile photo. It is attacker-controlled bytes with GPS coordinates
 baked into the metadata and, if you are unlucky, a payload hiding behind a valid image header. Here
-is how MMCA.Common turns that upload into something you never have to trust.
+is how MMCA.Common and the app that consumes it turn that upload into something you never have to trust.
 
 ---
 
@@ -52,133 +52,159 @@ pixels, never the bytes the user sent.
 ## The MMCA answer: a storage boundary, and a re-encode that keeps only pixels
 
 Without a blob abstraction, anything file-shaped gets written directly against the Azure SDK inside a
-module, unusable by the next consumer and untestable. ADR-045 defines two Application-layer ports, split
-the Clean-Architecture way, plus a dependency-free validator. The ports carry more than avatars:
-ADR-045's avatar-only scope statement is superseded by ADR-123
-(`045-managed-file-storage-and-avatars.md:9-11`, `:88-90`), which publishes speaker session materials
+module, unusable by the next consumer and untestable. ADR-045 splits the job along the line between what
+every app needs and what only an image-handling app needs. The framework ships the storage port and a
+dependency-free magic-byte validator; the re-encode is the application's own processor. The port carries
+more than avatars: ADR-045's avatar-only scope statement is superseded by ADR-123
+(`045-managed-file-storage-and-avatars.md:11`, `:133-134`), which publishes speaker session materials
 through the same `IFileStorageService`.
 
-**`IFileStorageService`** (`IFileStorageService.cs:11`) is the storage boundary: `UploadAsync` takes a
-blob name, a stream, and a content type and returns the public `Uri` as a `Result<Uri>` (`:22`). A second
+**`IFileStorageService`** (`IFileStorageService.cs:15`) is the storage boundary: `UploadAsync` takes a
+blob name, a stream, and a content type and returns the public `Uri` as a `Result<Uri>` (`:26`). A second
 overload adds a `FileUploadOptions` carrying the `Content-Disposition` and `Cache-Control` headers to
-store with the blob (`:37`), and it is abstract, so every implementation provides it and honors those
-headers. `DeleteAsync` (`:43`) is idempotent: unknown blob names succeed rather than throw (`:39`).
+store with the blob (`:41`), and it is abstract, so every implementation provides it and honors those
+headers. `DeleteAsync` (`:47`) is idempotent: unknown blob names succeed rather than throw (`:43`).
 Callers pass only a blob name scoped within a container; the implementation owns the container, and the
 container itself is provisioned by infrastructure, never created by the app.
 
 The default implementation is deliberately inert. `NullFileStorageService`
-(`NullFileStorageService.cs:11`) reports `IsConfigured => false`, fails both upload overloads with a clear
-`FileStorage.NotConfigured` error, and lets deletes succeed (there is nothing to delete). A host that
-never wires storage does not crash mysteriously; its upload endpoints degrade with an honest message. A
-host that wants real storage calls `AddAzureBlobFileStorage(configuration)`
-(`DependencyInjection.Notifications.cs:117`), which swaps in `AzureBlobFileStorageService`
-(`AzureBlobFileStorageService.cs:15`) when the `FileStorage` section is complete.
+(`NullFileStorageService.cs:14`) reports `IsConfigured => false` (`:17`), fails both upload overloads with
+a clear `FileStorage.NotConfigured` error (`:34`), and lets deletes succeed (there is nothing to delete).
+A host that never wires storage does not crash mysteriously; its upload endpoints degrade with an honest
+message. A host that wants real storage calls a vendor adapter: `AddAzureBlobFileStorage(configuration)`
+from MMCA.Common.Azure (`AzureServiceCollectionExtensions.cs:41`) swaps in `AzureBlobFileStorageService`
+(`AzureBlobFileStorageService.cs:15`) when the `FileStorage` section is complete, and MMCA.Common.Aws and
+MMCA.Common.Gcp offer S3 and Google Cloud Storage adapters over the same port
+(`NullFileStorageService.cs:10-12`).
 
 That registration is defensive on purpose. An incomplete section is a no-op that leaves the Null default
-in place (`DependencyInjection.Notifications.cs:123-126`, `:130-133`), so hosts register it
-unconditionally. Production sets `ServiceUri` and authenticates with `DefaultAzureCredential` (`:138`);
-local development can use a `ConnectionString` against Azurite instead (`:139`,
-`FileStorageSettings.cs:16-19`). One detail earns its comment in the source: an empty-string `ServiceUri`
-binds to a *relative* `Uri`, so the guard only accepts an absolute one
-(`DependencyInjection.Notifications.cs:128-129`).
+in place (`AzureServiceCollectionExtensions.cs:49-52`, `:56-59`), so hosts register it
+unconditionally. Production sets `ServiceUri` and authenticates with `DefaultAzureCredential` (`:64`);
+local development can use a `ConnectionString` against Azurite instead (`:65`,
+`AzureBlobFileStorageSettings.cs:16-19`). One detail earns its comment in the source: an empty-string
+`ServiceUri` binds to a *relative* `Uri`, so the guard only accepts an absolute one
+(`AzureServiceCollectionExtensions.cs:54-55`).
 
-But storage is the boring half. The security boundary is the image processor.
+But storage is the boring half. The security boundary is the image processor, and the framework
+deliberately does not ship one: its own registration comment says image normalization is the
+application's concern, because decoding needs a native image library that every consumer of the
+package would otherwise carry (`DependencyInjection.cs:355-360`).
 
 ### The re-encode is the boundary
 
-`IImageProcessor` (`IImageProcessor.cs:11`) has one method,
-`NormalizeToSquareJpegAsync`, and its implementation `ImageSharpImageProcessor`
-(`ImageSharpImageProcessor.cs:22`) does something that looks like image resizing and is actually a
-security control. It reads and decodes only through a configuration that registers four formats, reads
-the header and refuses anything too big to decode, then decodes only the first frame of the upload, bakes
-EXIF orientation into the pixels, center-crops to an exact square, nulls the EXIF, XMP and IPTC
-profiles, and re-encodes as a fresh JPEG:
+In MMCA.ADC the processor belongs to the Identity module. `IImageProcessor`
+(`MMCA.ADC.Identity.Application/Users/IImageProcessor.cs:11`) has one method,
+`NormalizeToSquareJpegAsync` (`:18`), and its implementation `SkiaSharpImageProcessor`
+(`MMCA.ADC.Identity.Infrastructure/Services/Users/SkiaSharpImageProcessor.cs:16`) does something that
+looks like image resizing and is actually a security control. It buffers the upload under a byte
+ceiling, admits only four formats, reads the header and refuses anything too big to decode, decodes only
+the first frame, applies the EXIF orientation while it center-crops to an exact square, and encodes a
+fresh JPEG from that pixel buffer alone:
 
 ```csharp
-// ImageSharpImageProcessor.NormalizeToSquareJpegAsync (illustrative of shape)
-// Every read goes through CreateDecoderOptions: JPEG, PNG, WebP and GIF decoders only.
-// Header only: Identify reads the declared dimensions without allocating a frame.
-var info = await Image.IdentifyAsync(CreateDecoderOptions(maxFrames: uint.MaxValue), content, cancellationToken);
-if (TooLargeToDecode(info.Width, info.Height))
+// SkiaSharpImageProcessor.NormalizeToSquareJpegAsync (MMCA.ADC Identity.Infrastructure).
+// Excerpt: argument guards, cancellation checks and message arguments elided; trailing
+// comments on the call lines added for this article.
+using var data = await ReadBoundedAsync(content, cancellationToken).ConfigureAwait(false);
+if (data is null)
 {
-    return Result.Failure<byte[]>(Error.Validation("Image.TooLarge", ...));
+    return TooLarge(...);   // more than MaxEncodedBytes buffered
 }
 
-// One frame only: an animated file never expands into every frame's pixel buffer.
-using var image = await Image.LoadAsync(CreateDecoderOptions(maxFrames: 1), content, cancellationToken);
-// ...then the same TooLargeToDecode check re-runs on the decoded frame.
+using var codec = OpenAllowedCodec(data);   // magic bytes first, then the codec Skia picked
+if (codec is null)
+{
+    return Undecodable();
+}
 
-// AutoOrient BEFORE stripping metadata, or portrait phone photos come out rotated.
-image.Mutate(ctx => ctx
-    .AutoOrient()
-    .Resize(new ResizeOptions { Size = new Size(size, size), Mode = ResizeMode.Crop }));
+// Header only: SKCodec.Create parses the format's header and allocates no frame, so a
+// declared-oversize image is refused before the allocation it was built to provoke.
+var width = codec.Info.Width;
+var height = codec.Info.Height;
+if (TooLargeToDecode(width, height))
+{
+    return TooLarge(...);
+}
 
-image.Metadata.ExifProfile = null;   // EXIF GPS coordinates are PII
-image.Metadata.XmpProfile  = null;
-image.Metadata.IptcProfile = null;
+using var decoded = Decode(codec, width, height);   // frame 0 only, into exactly width x height
+if (decoded is null)
+{
+    return Undecodable();
+}
 
-await image.SaveAsync(output, new JpegEncoder { Quality = 85 }, cancellationToken);
+using var square = RenderCoverSquare(decoded, codec.EncodedOrigin, size);   // orient, then cover-crop
+using var pixmap = square.PeekPixels();
+
+// Encoded from the fresh pixel buffer alone: it carries no color space and no metadata, so
+// nothing from the original file can be written back out.
+using var jpeg = pixmap.Encode(new SKJpegEncoderOptions(JpegQuality, SKJpegEncoderDownsample.Downsample420, SKJpegEncoderAlphaOption.Ignore));
+return jpeg is null ? Undecodable() : Result.Success(jpeg.ToArray());
 ```
 
 The point is what does *not* survive. A full decode-then-re-encode means the original bytes never reach
-the output. EXIF GPS is gone because the EXIF, XMP and IPTC profiles are nulled
-(`ImageSharpImageProcessor.cs:94-96`). A polyglot payload in the image data is gone because the bytes
-that carried it were never re-emitted: the output is a new JPEG the encoder wrote from a decoded bitmap.
-One operation kills both classes of problem, and it does so by construction rather than by a blocklist
-you have to keep updating. The construction has one stated limit, the ICC color profile, which the
-processor does not clear (`ImageSharpImageProcessor.cs:19-20`); the trade-offs below cover it.
+the output. The square the encoder reads is a new bitmap allocated with no color space
+(`SkiaSharpImageProcessor.cs:237`), drawn from the decoded pixels and encoded at quality 85 (`:46`,
+`:105`), so EXIF (GPS included), XMP, IPTC and the ICC profile are all left behind (`:11-14`,
+`:103-104`). A polyglot payload is gone because the bytes that carried it were never re-emitted: the
+output is a new JPEG the encoder wrote from a bitmap. One operation kills both classes of problem, and it
+does so by construction rather than by a blocklist you have to keep updating.
 
-The header check in front of the decode is not a size nicety. The avatar contract's 2 MB cap bounds the
-*compressed* bytes, which a decompression bomb satisfies happily: a 2 MB PNG can declare 40000x40000 and
-cost roughly 6 GB of frame buffer the moment it is decoded (`ImageSharpImageProcessor.cs:29-30`). So the
-processor bounds the decoded frame instead, with `MaxDecodedPixels` at 50,000,000 (`:33`) and
-`MaxDecodedDimension` at 20,000 (`:40`); the edge ceiling sits beside the area one because a 1 x 200000
-strip is inside the area limit and still pathological for the resampler (`:36-38`). `Image.IdentifyAsync`
-applies both to the declared header before a single frame is allocated (`:54`), and the same predicate
-(`:149-152`) re-applies them to the decoded frame (`:74-82`), so a header that under-reports its real
-size does not get through. Past either ceiling the upload is
-`Error.Validation("Image.TooLarge", ...)` (`:56-62`): a clean 400 rather than the OutOfMemoryException the
-upload was built to provoke.
+The byte ceiling and the header check in front of the decode are not size niceties. The upload is
+buffered before decoding, and the read stops past `MaxEncodedBytes`, 32 MiB (`:43`, `:116-142`), so the
+stream length cannot choose the allocation even if a caller forgets its own cap (`:37-42`). The avatar
+contract's 2 MB cap bounds the *compressed* bytes, which a decompression bomb satisfies happily: a 2 MB
+PNG can declare 40000x40000 and cost roughly 6 GB of frame buffer the moment it is decoded (`:23-24`).
+So the processor bounds the decoded frame instead, with `MaxDecodedPixels` at 50,000,000 (`:27`) and
+`MaxDecodedDimension` at 20,000 (`:35`); the edge ceiling sits beside the area one because a 1 x 200000
+strip is inside the area limit and still pathological for the resampler (`:30-32`). `TooLargeToDecode`
+(`:323-328`) applies both, and refuses a non-positive dimension, to the header `SKCodec.Create` parsed
+without allocating a frame (`:81-90`). The decode then writes into a buffer of exactly those checked
+dimensions (`:199`), so no format can understate its header and decode into more memory than was
+checked (`:83-84`). Past either ceiling the upload is `Error.Validation("Image.TooLarge", ...)`
+(`:330-334`): a clean 400 rather than the OutOfMemoryException the upload was built to provoke.
 
-The frame count is bounded as well as the frame size. The decode passes
-`CreateDecoderOptions(maxFrames: 1)` (`ImageSharpImageProcessor.cs:72`): the output is a single JPEG
-built from the first frame, and decoding every frame of an animated file is how a small upload becomes
-hundreds of megabytes of pixel buffers (`:69-71`).
+The frame count is bounded as well as the frame size. `Decode` asks the codec for frame 0 only
+(`new SKCodecOptions(0)`, `:202`): the output is a single JPEG, and decoding every frame of an animated
+GIF or WebP is how a small upload becomes hundreds of megabytes of pixel buffers (`:185-187`). Anything
+short of a complete decode, a truncated scan included, is refused rather than stored half blank
+(`:192-195`, `:201-206`).
 
-The set of formats is bounded too. `CreateDecoderOptions` (`ImageSharpImageProcessor.cs:129-140`) builds
-the `DecoderOptions` for both the header read and the decode around an ImageSharp `Configuration` that
-registers exactly four modules: JPEG, PNG, WebP and GIF (`:131-135`). Every other format ImageSharp ships,
-TIFF and BMP among them, stays unregistered, so a payload in one of them fails as
-`UnknownImageFormatException` before any of that format's decoder code runs (`:115-120`). That matters
-because a library's attack surface is every decoder it can reach, not only the formats you meant to
-accept: this allowlist is the stated reason the ImageSharp TIFF advisories are unreachable here (see the
-trade-offs below).
+The set of formats is bounded too, and checked twice. Skia also decodes BMP, ICO, WBMP, HEIF, AVIF and
+RAW, and `SKCodec.Create` dispatches on the leading bytes, so `OpenAllowedCodec` (`:156-182`) runs the
+magic-byte check *before* Skia sees the content (`:145-149`, `:158`): the framework's
+`ImageContentSniffer` plus a GIF signature (`:301-308`). It then requires the decoder Skia actually
+picked to be JPEG, PNG, WebP or GIF (`:169`, `:313-314`). No decoder outside those four ever parses an
+upload. That matters because a library's attack surface is every decoder it can reach, not only the
+formats you meant to accept.
 
-Undecodable content is a validation failure too, not an exception. The processor catches
-`UnknownImageFormatException` and `InvalidImageContentException` and returns
-`Error.Validation("Image.Undecodable", ...)` (`ImageSharpImageProcessor.cs:105-110`), so a garbage upload
-or an unregistered format is a clean 400, not a 500. And because the processor has no external
-configuration, it is *always* registered as the real implementation (`DependencyInjection.cs:342`),
-unlike storage: there is no Null
-image processor, because there is no safe way to skip the re-encode.
+Undecodable content is a validation failure too, not an exception: a disallowed signature, a header Skia
+cannot parse, an incomplete decode or a failed encode all return
+`Error.Validation("Image.Undecodable", ...)` (`:336-340`), so a garbage upload is a clean 400, not a 500.
+The Identity module registers the processor unconditionally, as a stateless singleton, in
+`AddModuleIdentityInfrastructure` (`MMCA.ADC.Identity.Infrastructure/DependencyInjection.cs:22-24`).
+Unlike storage there is no Null image processor, because there is no safe way to skip the re-encode.
 
-Ahead of the processor sits `ImageContentSniffer` (`ImageContentSniffer.cs:10`), a static, dependency-free
-magic-byte check. `IsAllowedImage` accepts a payload only when its leading bytes match a JPEG, PNG, or
-WebP signature (`ImageContentSniffer.cs:15`): the JPEG SOI prefix `FF D8 FF`, the 8-byte PNG signature,
-or a RIFF container declaring the `WEBP` form type. The accepted formats are decided by the actual bytes,
-never the client-declared content type or the file extension. It narrows the input; the re-encode
-neutralizes what gets through. Defense in depth, cheaply.
+Ahead of the processor sits the framework's `ImageContentSniffer` (`ImageContentSniffer.cs:9`), a
+static, dependency-free magic-byte check. `IsAllowedImage` (`:14`) accepts a payload only when its
+leading bytes match a JPEG, PNG, or WebP signature: the JPEG SOI prefix `FF D8 FF` (`:21`), the 8-byte
+PNG signature (`:27`), or a RIFF container declaring the `WEBP` form type (`:34-35`). The accepted
+formats are decided by the actual bytes, never the client-declared content type or the file extension.
+ADC's avatar validator and handler both gate on it (`SetUserAvatarCommandValidator.cs:35`,
+`SetUserAvatarHandler.cs:63`), and MMCA.Store's product image validator uses it the same way
+(`UploadProductImageCommandValidator.cs:71`) without decoding anything. It narrows the input; the
+re-encode neutralizes what gets through. Defense in depth, cheaply.
 
 ### The avatar contract
 
-Storage and re-encode are framework legs. The avatar itself is a contract (BR-116a) each consumer applies:
-one avatar per user; accept jpeg/png/webp up to 2 MB; the server re-encodes to a 256x256 JPEG via
-`IImageProcessor`, treating client-declared content types as advisory only. The blob name is
+Storage and the sniffer are framework legs; the re-encode is the app's. The avatar itself is a contract
+(BR-116a) each consumer applies: one avatar per user; accept jpeg/png/webp up to 2 MB; the server
+re-encodes to a 256x256 JPEG (`SetUserAvatarHandler.cs:37`) through its own image processor, treating
+client-declared content types as advisory only. The blob name is
 `{userId}-{random8}.jpg` in the public-read `avatars` container, so the URL path reads
 `avatars/{userId}-{random8}.jpg`. Replacing, removing or erasing an avatar schedules a durable
 `DeleteAvatarBlobInternalCommand` (ADR-114) rather than deleting the blob inline. The URL lives on the
 user entity as `[Pii]`: nulled on anonymize with the blob delete scheduled in the same transaction, and
-included in the GDPR data export (`045-managed-file-storage-and-avatars.md:48-55`). That last part is why
+included in the GDPR data export (`045-managed-file-storage-and-avatars.md:87-94`). That last part is why
 this article carries a §30 (data privacy) tie alongside the §8 (data access) and §11 (security) ones: the
 avatar is treated as personal data from the moment it lands to the moment it is erased.
 
@@ -207,42 +233,36 @@ they are real design choices rather than oversights.
   staleness is bounded by cache TTLs and self-heals; there is no cache-busting dance to get right.
 - **Avatar blob deletion is eventual, not synchronous.** A replaced or deleted avatar has its blob
   deleted at least once, through the internal-command processor and within its retry budget
-  (`045-managed-file-storage-and-avatars.md:62-64`). Only erasure schedules inside its own transaction;
+  (`045-managed-file-storage-and-avatars.md:100-102`). Only erasure schedules inside its own transaction;
   replace and remove schedule after the save commits, so a host death in between, or a failed schedule,
-  leaves an orphaned blob that is only logged for manual removal (`:137-142`,
+  leaves an orphaned blob that is only logged for manual removal (`:184-186`,
   `SetUserAvatarHandler.cs:162-165`).
-- **The ICC color profile is not cleared.** The processor nulls the EXIF, XMP and IPTC profiles and
-  leaves the ICC profile in place (`ImageSharpImageProcessor.cs:15-20`, `:94-96`), and ADR-045 records that
-  the ImageSharp JPEG encoder writes an ICC profile into its output, so bytes carried inside an uploaded
-  ICC profile are not shown to be removed. The polyglot guarantee is scoped accordingly: the re-encode
-  kills a payload outside the metadata profiles (`045-managed-file-storage-and-avatars.md:37-41`).
 - **`DefaultAzureCredential` needs a data-plane role, not a secret.** In production the storage account
   requires a `Storage Blob Data Contributor` grant for the app identity. That is a bicep-level infrastructure
   grant, which is the correct place for it, but it does mean the app will not authenticate until the role
   assignment exists. It is not a connection string you can paste in.
-- **ImageSharp joins the dependency set under the Six Labors Split License, pinned to v3.** It ships
-  under Apache-2.0 terms for open-source and small-revenue use, which covers this project, and the ADR is
-  explicit that the license note must be revisited if the project's revenue posture changes. v4 requires a
-  commercial license key at build time, so the package is held at 3.1.12 and excluded from dependency
-  sweeps (`MMCA.Common/Directory.Packages.props:135-147`), and a fitness test fails the build if its major
-  version passes 3 (`DependencyVersionTestsBase.cs:49`).
-- **That pin carries five accepted advisories.** Five ImageSharp 3.1.12 advisories published 2026-10-07
-  are patched only in 4.1.2, which the pin rules out, so the NuGet audit suppresses them, each with its
-  reachability argument written beside it (`MMCA.Common/Directory.Build.props:33-52`). Each consumer
-  carries its own copy of the same five entries (`MMCA.ADC/Directory.Build.props:55-59`), so the lists
-  move together. Four do not reach
-  this code: two TIFF encoder overruns (nothing encodes TIFF), a BigTIFF decoder loop (the TIFF decoder
-  is not registered), and HistogramEqualization (nothing calls it). The fifth, GHSA-gwg2-r3hj-4w44 (ICC
-  CLUT parsing allocating from unvalidated dimensions), is reachable in principle through an
-  authenticated avatar upload that carries an ICC profile. It is accepted as a bounded denial-of-service
-  risk until a patched 3.x or a v4 license exists (`:43-46`). This one is about the cost of decoding an
-  ICC profile, not about what the re-encode emits.
+- **An app that normalizes images owns its processor and a native image library.** The framework ships
+  no decoder, so a consumer that accepts images writes (or copies) its own processor, and it takes on the
+  library behind it. ADC uses SkiaSharp 4.153.1 under MIT, three packages bumped together
+  (`MMCA.ADC/Directory.Packages.props:36-43`), whose native libraries come to roughly 490 MB across
+  platforms (`:36-40`). Containing them is a build-file discipline rather than a default: the Identity
+  Infrastructure project references SkiaSharp with `ExcludeAssets="native"`, so the natives never flow
+  to the projects that reference it (`MMCA.ADC.Identity.Infrastructure.csproj:7-10`); only the Identity
+  service host (`MMCA.ADC.Identity.Service.csproj:22-29`) and the processor's own tests
+  (`MMCA.ADC.Identity.Infrastructure.Tests.csproj:12-14`) reference the native packages. The host keeps
+  them without `PrivateAssets`, because that would drop them from its own ReadyToRun publish and the
+  image would fail on the first upload (`MMCA.ADC.Identity.Service.csproj:24-27`), so a project that
+  references the host, such as the service startup tests, excludes the natives on its own side
+  (`MMCA.ADC.Services.Tests.csproj:28-32`). The payoff is on the other side of the line: every app that
+  never decodes an image carries no image library at all, and MMCA.Common accepts no NuGet advisories
+  today (`MMCA.Common/Directory.Build.props:33`).
 
 Be precise about status: the framework legs are implemented and shipped in MMCA.Common, and two MMCA.ADC
 services wire them end to end. The Identity service calls `AddAzureBlobFileStorage(builder.Configuration)`
-at startup for avatars (`MMCA.ADC.Identity.Service/Program.cs:254`) and the Conference service calls it for
-speaker session assets (`MMCA.ADC.Conference.Service/Program.cs:361`). On the Identity side,
-`SetUserAvatarHandler` is the only request-path handler that calls `IFileStorageService`, for the upload
+at startup for avatars (`MMCA.ADC.Identity.Service/Program.cs:260`) and the Conference service calls it for
+speaker session assets (`MMCA.ADC.Conference.Service/Program.cs:367`). On the Identity side,
+`SetUserAvatarHandler` normalizes through the module's own processor (`SetUserAvatarHandler.cs:29`,
+`:103`) and is the only request-path handler that calls `IFileStorageService`, for the upload
 itself (`SetUserAvatarHandler.cs:117`). Every avatar blob delete is a durable
 `DeleteAvatarBlobInternalCommand` scheduled through `IInternalCommandScheduler`: the replaced blob once
 the new URL is saved (`SetUserAvatarHandler.cs:158-160`), the freshly uploaded blob when the save fails
@@ -255,28 +275,31 @@ which only names the blob kind for its log lines and inherits the work from Comm
 stays idempotent. The `Profile` page uploads through `IMediaPickerService` (`Profile.razor.cs:22`). Each
 consumer still provisions its own storage account and wires its own upload endpoints against these ports,
 so this is a capability the framework provides rather than one that is live in every downstream app by
-default: MMCA.Store has not adopted it.
+default: MMCA.Store has not adopted the storage port.
 
 ## Apply this even without MMCA
 
 The pattern ports to any stack and any blob store. The rules are short:
 
 1. **Never trust the declared content type or the file extension.** Sniff the leading magic bytes and accept
-   only the formats you actually support, and register only those decoders in the image library.
+   only the formats you actually support. When your image library can decode more than that, sniff
+   before it sees the bytes and check which decoder it picked.
 2. **Re-encode every uploaded image; do not store the original.** A full decode-then-re-encode is the single
    move that strips EXIF GPS (PII) and defeats polyglot payloads, because the original bytes never reach
-   the output. Null the metadata profiles explicitly, and check which ones your encoder writes back. Resize
-   to the size you will actually serve while you are at it.
-3. **Auto-orient before you strip metadata**, or portrait phone photos come out sideways once the EXIF
-   orientation flag is gone.
-4. **Bound the decoded frame, not just the uploaded bytes.** Read the header, refuse the declared
-   dimensions that would not fit in memory, decode only the one frame you keep, and re-check after the
-   decode.
+   the output. Encode from a fresh pixel buffer, so no metadata profile (ICC included) rides along, and
+   check what your encoder writes. Resize to the size you will actually serve while you are at it.
+3. **Apply the EXIF orientation before you crop**, or portrait phone photos come out sideways once the
+   orientation tag is gone.
+4. **Bound the decoded frame, not just the uploaded bytes.** Cap the bytes you buffer, read the header,
+   refuse the declared dimensions that would not fit in memory, decode only the one frame you keep, and
+   decode into a buffer of exactly the size you checked.
 5. **Put storage behind a port with an inert default.** An unconfigured implementation that fails uploads
    with a clear message beats a host that half-works or crashes at first use.
-6. **Treat the stored URL as PII.** If it points at a user's face, it belongs in your erasure path and your
+6. **Keep a native image library where it is used.** Reference its natives from the host that decodes and
+   the tests that exercise it, and exclude them everywhere else.
+7. **Treat the stored URL as PII.** If it points at a user's face, it belongs in your erasure path and your
    data export, not just your database.
-7. **Prefer managed identity over secrets** for the store, and let infrastructure provision the container and
+8. **Prefer managed identity over secrets** for the store, and let infrastructure provision the container and
    its access level. The app should never create the bucket it writes to.
 
 The takeaway: **an upload is hostile bytes until you have re-encoded it into something that can only be a
@@ -287,13 +310,13 @@ picture.** Storage is the easy half; the re-encode is the boundary that matters.
 **What we covered:** why an avatar upload is an untrusted-file problem in disguise (EXIF GPS as PII,
 content-type confusion, polyglot payloads); how `IFileStorageService` gives an upload-by-blob-name boundary
 with an inert `NullFileStorageService` default that fails clearly and an `AddAzureBlobFileStorage` swap to the
-real Azure implementation; how the real security boundary is the full re-encode in `ImageSharpImageProcessor`
-(four-format decoder allowlist, header size check, single-frame decode, auto-orient, center-crop, null
-the EXIF, XMP and IPTC profiles, re-encode JPEG) fronted by `ImageContentSniffer`'s magic-byte check; the
-avatar contract (256x256 JPEG, 2 MB, random-suffixed public-read blob, URL as `[Pii]`, blob deletes as
-durable internal commands); and the honest trade-offs (public-read container, cache staleness, eventual
-blob deletion, an ICC profile the re-encode does not clear, a data-plane role grant, the Six Labors Split
-License and its v3 pin with five suppressed advisories, one of them reachable in principle).
+real Azure implementation; how the real security boundary is the full re-encode in the app's own
+processor, ADC's `SkiaSharpImageProcessor` (bounded read, four-format allowlist checked by magic bytes and
+by codec, header size check, single-frame decode, EXIF orientation, center-crop, a fresh JPEG from pixels
+only) fronted by the framework's `ImageContentSniffer`; the avatar contract (256x256 JPEG, 2 MB,
+random-suffixed public-read blob, URL as `[Pii]`, blob deletes as durable internal commands); and the
+honest trade-offs (public-read container, cache staleness, eventual blob deletion, a data-plane role
+grant, and an app-owned processor whose native image library stays out of every other project).
 
 **Next in the series:** HTTP API versioning, proven not just claimed, one header-based policy adopted by every service and kept honest by a shared fitness contract that runs two live versions.
 
@@ -304,7 +327,68 @@ License and its v3 pin with five suppressed advisories, one of them reachable in
 
 *Tags: .NET, C Sharp, Software Architecture, Security, Cloud*
 
-*Notes (re-verified 2026-10-22 against MMCA.Common v1.250.0): every anchor below was re-read from source*
+*Notes (refreshed 2026-10-25 against MMCA.Common main v1.260.0 and MMCA.ADC main after #293): image*
+*normalization is no longer a framework capability. Common v1.258.0 (#603) moved the processor from*
+*SixLabors.ImageSharp to SkiaSharp, and v1.259.0 (#608) removed `IImageProcessor` and the SkiaSharp*
+*processor from MMCA.Common (CHANGELOG and facts file, not re-read here); re-confirmed this run: no*
+*`ImageSharp`, `SkiaSharp` or `IImageProcessor` in any `.cs`, `.csproj` or `.props` under*
+*`MMCA.Common/Source` or the root props, except a stale ImageSharp comment left in*
+*`MMCA.Common/Directory.Packages.props:144-150` above the storage packages; Common's*
+*`Directory.Build.props:33` says no NuGet advisories are accepted; the core registration comment at*
+*`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:355-360` names image*
+*normalization the application's concern and registers only the Null storage default at :360. Body*
+*changes: the "re-encode is the boundary" section, its code block (now an annotated excerpt of*
+*`SkiaSharpImageProcessor.NormalizeToSquareJpegAsync`, :68-106) and the sniffer paragraph describe ADC's*
+*processor; the ICC trade-off bullet is gone because the SkiaSharp encode carries no color space or*
+*metadata (`SkiaSharpImageProcessor.cs:11-14`, :103-105, bitmap allocated without a color space at :237;*
+*stated in source comments, not separately proven by a test read this run); the ImageSharp license, v3*
+*pin and five-advisory bullets are replaced by the native-asset bullet; the Apply list gains rule 6 and*
+*rewords rules 1 to 4. Storage anchors also moved with the 2026-10-24 adapter split (ADR-045 status*
+*:17-18): `AddAzureBlobFileStorage` is now `MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureServiceCollectionExtensions.cs:41`*
+*(ContainerName guard :49-52, absolute-`ServiceUri` comment :54 and check :55, neither-credential guard*
+*:56-59, `DefaultAzureCredential` :64, `ConnectionString` :65, `AzureBlobFileStorageService` registered*
+*:68), settings renamed `AzureBlobFileStorageSettings` (`.../MMCA.Common.Azure/Storage/AzureBlobFileStorageSettings.cs`,*
+*`SectionName` :13, `ServiceUri` :16, `ConnectionString` :19, `ContainerName` :22),*
+*`AzureBlobFileStorageService.cs:15` under `MMCA.Common.Azure/Storage/`; `IFileStorageService.cs:15`*
+*(`IsConfigured` :18, `UploadAsync` :26, options overload :41, idempotent doc :43, `DeleteAsync` :47);*
+*`NullFileStorageService.cs:14` (adapter list in doc :10-12, `IsConfigured` :17, `DeleteAsync` :29,*
+*`FileStorage.NotConfigured` :34); `ImageContentSniffer.cs:9` (`IsAllowedImage` :14, JPEG :21, PNG :27,*
+*RIFF/WEBP :34-35). ADC processor (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Infrastructure/Services/Users/SkiaSharpImageProcessor.cs`):*
+*class :16, `MaxDecodedPixels` :27 (rationale :23-24), `MaxDecodedDimension` :35 (strip :30-32),*
+*`MaxEncodedBytes` 32 MiB :43 (rationale :37-42), `JpegQuality = 85` :46, header-only codec :81-90,*
+*`ReadBoundedAsync` :116-142, `OpenAllowedCodec` :156-182 (sniff-first rationale :145-149, sniff :158,*
+*codec format check :169), `Decode` frame 0 :197-211 (`SKCodecOptions(0)` :202, rationale :185-187,*
+*incomplete decode refused :192-195), `RenderCoverSquare` :229-256 (orientation before crop :224-227,*
+*fresh bitmap :237, white flatten :240-241), `HasAllowedSignature` :301-302, GIF :307-308,*
+*`IsAllowedFormat` :313-314, `TooLargeToDecode` :323-328, `Image.TooLarge` :330-334,*
+*`Image.Undecodable` :336-340. `IImageProcessor` at*
+*`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/IImageProcessor.cs:11` (method*
+*:18; its summary still says "strips ALL metadata ... only pixels survive", which the implementation*
+*now matches); registration `TryAddSingleton<IImageProcessor, SkiaSharpImageProcessor>()` at*
+*`MMCA.ADC.Identity.Infrastructure/DependencyInjection.cs:24` (method :22). Native containment:*
+*`MMCA.ADC/Directory.Packages.props:36-43` (comment :36-40, SkiaSharp 4.153.1 :41, Linux and Win32*
+*natives :42-43); `ExcludeAssets="native"` at `MMCA.ADC.Identity.Infrastructure.csproj:10` (comment*
+*:7-9); natives in `MMCA.ADC.Identity.Service.csproj:28-29` (comment :22-27) and*
+*`MMCA.ADC.Identity.Infrastructure.Tests.csproj:13-14` (comment :12); excluded on the referencing side in*
+*`Tests/Services/MMCA.ADC.Services.Tests/MMCA.ADC.Services.Tests.csproj:31-32` (comment :28-30, which*
+*says ~470 MB where `Directory.Packages.props:37` says ~490 MB; the body uses the latter). Consumers:*
+*`SetUserAvatarHandler.cs` injects `IImageProcessor` :29 and `IFileStorageService` :30, `AvatarSize = 256`*
+*:37, sniffer gate :63, normalize :103, upload :117, `OnMutatedAsync` scheduling :158-160 with failed-schedule*
+*log :162-165, orphan cleanup :78-88 and :187 (all re-read); `SetUserAvatarCommandValidator.cs:35`;*
+*Identity `Program.cs:260` and Conference `Program.cs:367` for `AddAzureBlobFileStorage`; MMCA.Store's*
+*`UploadProductImageCommandValidator.cs:71` sniffs, and no `IFileStorageService`, `AddAzureBlobFileStorage`,*
+*`IMediaPickerService`, ImageSharp or SkiaSharp reference exists in any `.cs`, `.razor` or `.csproj` under*
+*`MMCA.Store/Source` (re-searched). ADR-045 anchors re-taken against its 2026-10-25 refresh: ADR-123*
+*supersede :11 and :133-134, BR-116a contract :87-94, eventual deletion :100-102, post-commit orphan*
+*:184-186. ADR-045's Decision now places the processor in ADC; only its earlier Revision sections still*
+*describe `ImageSharpImageProcessor` and the five suppressions, as history. Carried forward without a re-read this run:*
+*`RemoveUserAvatarHandler.cs:20,75`, `DeleteUserHandler.cs:34,83`,*
+*`DeleteAvatarBlobInternalCommandHandler.cs:17-23`, `DeleteBlobInternalCommandHandlerBase.cs:28`, :45,*
+*:53-57, `Profile.razor.cs:22`, `IMediaPickerService.cs`, `NullMediaPickerService.cs` and*
+*`FileUploadOptions.cs` anchors.*
+
+*Notes (re-verified 2026-10-22 against MMCA.Common v1.250.0; HISTORY: the ImageSharp, `DependencyInjection.Notifications.cs`,*
+*`FileStorageSettings.cs` and suppression anchors below describe the design before the 2026-10-25 entry above): every anchor below was re-read from source*
 *this run. 2026-10-22 changes, all now in the body: ADR-045's 2026-10-21 revision (`:167-205`) records*
 *that the processor nulls only the EXIF, XMP and IPTC profiles and that the ICC profile is not cleared*
 *(`ImageSharpImageProcessor.cs:15-20` class doc; ADR Decision `:34-43`, ICC sentence `:39-41`), so the*
