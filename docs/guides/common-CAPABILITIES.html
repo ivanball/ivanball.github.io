@@ -595,7 +595,7 @@
           </li>
           <li><strong>Compile-time layer guard for the framework itself.</strong> An MSBuild targets file fails a framework build on a forbidden project reference between the seven layered packages before the build resolves, the same rule set the runtime tests assert against compiled assemblies in every consumer.</li>
           <li><strong>Runtime conformance suites.</strong> Eight shipped bases prove you wired the framework correctly: decorator pipeline order, middleware pipeline order, security headers, ProblemDetails contract, OpenAPI contract, service-info versioning, gateway hardening (eight assertions covering throttling, per-route policies, bypasses, correlation, downstream readiness, active probes, and partitioning by forwarded client IP), and graceful shutdown.</li>
-          <li><strong>Guard rails on dependencies.</strong> <code>DependencyVersionTestsBase</code> fails if MassTransit reaches v9 or ImageSharp reaches v4 (both commercial-license boundaries); <code>FrameworkVersionConsistencyTestsBase</code> fails if a consumer&#39;s framework pins drift out of lockstep.</li>
+          <li><strong>Guard rails on dependencies.</strong> <code>DependencyVersionTestsBase</code> fails if any pinned MassTransit package reaches v9 (a commercial-license boundary); <code>FrameworkVersionConsistencyTestsBase</code> fails if a consumer&#39;s framework pins drift out of lockstep.</li>
           </ul>
           <h3 id="integration-and-unit-infrastructure">Integration and unit infrastructure</h3>
           <ul>

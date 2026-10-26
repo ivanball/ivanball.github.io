@@ -321,7 +321,7 @@ The framework ships its own enforcement: adopters subclass, and drift fails the 
   - Module conformance (declared name, dependencies, disabled stubs), dependency-pin governance, folder width (twelve direct code files per folder), SLO alert-to-runbook pairing
 - **Compile-time layer guard for the framework itself.** An MSBuild targets file fails a framework build on a forbidden project reference between the seven layered packages before the build resolves, the same rule set the runtime tests assert against compiled assemblies in every consumer.
 - **Runtime conformance suites.** Eight shipped bases prove you wired the framework correctly: decorator pipeline order, middleware pipeline order, security headers, ProblemDetails contract, OpenAPI contract, service-info versioning, gateway hardening (eight assertions covering throttling, per-route policies, bypasses, correlation, downstream readiness, active probes, and partitioning by forwarded client IP), and graceful shutdown.
-- **Guard rails on dependencies.** `DependencyVersionTestsBase` fails if MassTransit reaches v9 or ImageSharp reaches v4 (both commercial-license boundaries); `FrameworkVersionConsistencyTestsBase` fails if a consumer's framework pins drift out of lockstep.
+- **Guard rails on dependencies.** `DependencyVersionTestsBase` fails if any pinned MassTransit package reaches v9 (a commercial-license boundary); `FrameworkVersionConsistencyTestsBase` fails if a consumer's framework pins drift out of lockstep.
 
 ### Integration and unit infrastructure
 

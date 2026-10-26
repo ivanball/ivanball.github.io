@@ -12,6 +12,7 @@ Revised 2026-10-01 (current-state sections re-anchored to the composite actions;
 Revised 2026-10-06: the SQLitePCLRaw pin is recorded at its current version (3.0.5) and both projects that reference it, and `wasm-payload-budget` joins the first-party actions consumers reference by branch.
 Revised 2026-10-07: anchors refreshed after the v1.233.0 release, and the 2026-09-07 record of two `dotnet-coverage` installs is updated: the second install has since been removed, leaving the single pinned install in CI `build-and-test`.
 Revised 2026-10-21: the accept-list is no longer empty; it holds five ImageSharp 3.1.12 advisories, each with a reachability argument, and the consumer and SQLitePCLRaw anchors are refreshed.
+Revised 2026-10-25: the accept-list is empty again; the five ImageSharp 3.1.12 entries were removed in 1.258.0 when ImageSharp left the dependency graph, and the consumers deleted their mirrored entries in the same sweep (see the Revision below).
 ## Context
 MMCA.Common is a published framework: on every `v*` tag (release.yml:3-5) it packs its NuGet packages
 and pushes them to both GitHub Packages (release.yml:119-120) and nuget.org through OIDC trusted
@@ -57,29 +58,29 @@ posture ADR-015 applies to architecture rules. Four controls, each a hard gate:
    and Pack (release.yml:75-84), so an advisory published between the PR run and the tag also stops the
    push. The action runs `dotnet list <solution> package --vulnerable --include-transitive`
    (.github/actions/nuget-vulnerability-audit/action.yml:54) and fails the build (`exit 1`) on any
-   vulnerable-package row (action.yml:85-91). Accepted advisories are the sole
+   vulnerable-package row (action.yml:86-92). Accepted advisories are the sole
    exception, and their single source of truth is the `NuGetAuditSuppress` list in
    `Directory.Build.props`. Because `dotnet list --vulnerable` ignores `NuGetAuditSuppress`, the action
    re-derives that accept-list itself by reading only the `Include` value of each
    `<NuGetAuditSuppress>` element in `Directory.Build.props`, so a `GHSA-*` id mentioned in a comment
-   does not silence anything (action.yml:74-83). The action accepts the bare-id form or the
-   advisory-URL form (action.yml:81); only the URL form, which NuGet restore honors, satisfies both
-   gates (action.yml:74-76), and every current entry uses it (Directory.Build.props:48-52). The accept-list
-   currently holds five entries, all for `SixLabors.ImageSharp` 3.1.12 (Directory.Build.props:47-53,
-   pin at Directory.Packages.props:144): advisories published 2026-10-07 and patched only in 4.1.2,
-   which the v3 license pin rules out. The adjacent comment (Directory.Build.props:33-46) gives each
-   one's reachability argument: GHSA-j9gm-c75j-xc9q and GHSA-jjfr-hcj7-qf5w (TIFF encoder; nothing
-   encodes TIFF), GHSA-wmxv-xphr-5c9g (TIFF decoder; not registered), GHSA-j3p4-wp97-rph4
-   (HistogramEqualization; never called), and GHSA-gwg2-r3hj-4w44 (ICC profile parsing), the one
-   reachable in principle through an authenticated avatar upload and accepted as a bounded
-   denial-of-service risk until a patched 3.x or a v4 license exists. The earlier SQLite
+   does not silence anything (action.yml:74-84). The action accepts the bare-id form or the
+   advisory-URL form (action.yml:82); only the URL form, which NuGet restore honors, satisfies both
+   gates (action.yml:76-77). The accept-list is currently empty: `Directory.Build.props` holds no
+   `<NuGetAuditSuppress>` item, only a comment stating that no advisory is accepted today and that
+   each future entry goes in an ItemGroup there, in advisory-URL form, with its reachability argument
+   in a comment, for the CI audit action to re-apply (Directory.Build.props:33-36). An empty list is a
+   handled case, not an error: the action reports `<none>` as the accepted set (action.yml:85), skips
+   the filter (action.yml:87-89), and so fails on every vulnerable row (action.yml:90-91). The most
+   recent accepted entries, five `SixLabors.ImageSharp` 3.1.12 advisories, were removed in 1.258.0
+   when image normalization stopped depending on ImageSharp (CHANGELOG.md:23); see the 2026-10-25
+   Revision. The earlier SQLite
    advisory GHSA-2m69-gcr7-jv3q (CVE-2025-6965) was suppressed from 2026-06-19 while SQLitePCLRaw
    shipped no patched build. SQLitePCLRaw 2.1.12 (published 2026-07-14) delivered the patched build, so
    the suppression was removed on 2026-07-20 and replaced with a direct fix: a
    `SQLitePCLRaw.bundle_e_sqlite3` pin tracked in `Directory.Packages.props`, currently at version 3.0.5
-   (Directory.Packages.props:58, rationale comment :54-57), referenced directly by
-   `MMCA.Common.Infrastructure` (MMCA.Common.Infrastructure.csproj:43-45) and by `MMCA.Common.Aspire`
-   (MMCA.Common.Aspire.csproj:69-73, for the copy `AspNetCore.HealthChecks.Sqlite` pulls in) so the
+   (Directory.Packages.props:59, rationale comment :54-58), referenced directly by
+   `MMCA.Common.Infrastructure` (MMCA.Common.Infrastructure.csproj:36-38) and by `MMCA.Common.Aspire`
+   (MMCA.Common.Aspire.csproj:54-58, for the copy `AspNetCore.HealthChecks.Sqlite` pulls in) so the
    patched version flows to consumers through the published package graph, the same pattern used for
    the MessagePack pin. This complements the build-time audit: `NuGetAudit` with `NuGetAuditMode=all`
    (Directory.Build.props:9-10)
@@ -105,8 +106,8 @@ posture ADR-015 applies to architecture rules. Four controls, each a hard gate:
   `dotnet list --vulnerable` does not honor `NuGetAuditSuppress` (.github/actions/nuget-vulnerability-audit/action.yml:5). A `NuGetAuditSuppress`
   item is the sanctioned way to accept an advisory, paired with a dated rationale in an adjacent
   comment, so a reviewer sees every accepted advisory in one place rather than a blanket suppression.
-  Five suppressions are active today, all for ImageSharp 3.1.12, each with its reachability
-  argument in the adjacent comment (Directory.Build.props:33-53).
+  No suppression is active today: the file carries only the comment that states the empty list and
+  the shape a future entry takes (Directory.Build.props:33-36).
 - **Build-gates-invariants, at the supply-chain layer.** SBOM, audit, and source mapping turn
   "remember to check the dependencies" into red builds, the same lever ADR-015 uses for the layer and
   event rules and ADR-016 uses for the MassTransit pin.
@@ -120,11 +121,11 @@ posture ADR-015 applies to architecture rules. Four controls, each a hard gate:
   signature verification of the pushed packages. That is a possible follow-up, not a claim made here.
 - **Accept-list drift is possible.** A `NuGetAuditSuppress` entry silences the audit for that id until
   someone removes it, and its accompanying rationale comment is a review reminder, not an automated
-  expiry. The five active ImageSharp entries carry exactly this cost: the rationale comment's only
-  revisit instruction ("Revisit both on the next ImageSharp release") sits in the GHSA-gwg2-r3hj-4w44
-  bullet (Directory.Build.props:43-46), and nothing enforces a revisit for any of the five.
+  expiry. The list is empty today (Directory.Build.props:33-36), so the cost is latent: it returns
+  with the next entry, and the five ImageSharp entries that held it until 1.258.0 left only because
+  the package itself left the graph (CHANGELOG.md:23), not because anything prompted a revisit.
 - **Audit granularity is text-matched.** The audit action matches vulnerable rows and `GHSA-*` ids by
-  parsing tool output (.github/actions/nuget-vulnerability-audit/action.yml:85-91). It is deliberately simple and depends on the `dotnet list`
+  parsing tool output (.github/actions/nuget-vulnerability-audit/action.yml:82-91). It is deliberately simple and depends on the `dotnet list`
   output shape rather than a structured feed.
 - **Source mapping constrains where packages come from.** Restricting to nuget.org (nuget.config:15)
   is the point, but it means adding a dependency from any other feed is a deliberate `nuget.config`
@@ -290,6 +291,34 @@ What moved is the content of the accept-list: it is no longer empty.
      SBOM `:573`, `freshness-gate` `:794`, `:813`, `:834`, `:866`;
      `MMCA.ADC/.github/workflows/deploy.yml` `wasm-payload-budget` `:495`, audit `:609`, SBOM `:624`,
      `freshness-gate` `:850`, `:869`, `:892`, `:932`.
+
+## Revision (2026-10-25, accept-list empty again)
+Re-verified against current source. The four controls, the single accept-list in
+`Directory.Build.props`, and the audit action that re-applies it are unchanged. What moved is the
+content of the list: it is empty again, and the five entries recorded in the 2026-10-21 Revision are
+gone.
+
+1. **The five ImageSharp entries are removed.** In 1.258.0 image normalization moved from
+   `SixLabors.ImageSharp` to SkiaSharp, MMCA.Common.Infrastructure stopped depending on ImageSharp,
+   and with the package out of the dependency graph the five accepted 3.1.12 advisories no longer
+   apply, so their `NuGetAuditSuppress` entries were deleted (`MMCA.Common/CHANGELOG.md:23`). In
+   1.259.0 image normalization left the framework entirely (`CHANGELOG.md:17`), so the list did not
+   refill with a replacement package's advisories. `MMCA.Common/Directory.Build.props:33-36` now holds
+   only a comment: no advisory is accepted today, and a future entry is a `NuGetAuditSuppress` item in
+   advisory-URL form with its reachability argument in a comment, re-applied by the CI audit action.
+2. **An empty list is handled, not special-cased.** The action prints `<none>` as the accepted set
+   (`.github/actions/nuget-vulnerability-audit/action.yml:85`), applies no filter
+   (`action.yml:87-89`), and fails on any vulnerable row (`action.yml:90-91`). Decision 3, Rationale
+   and Trade-offs now describe the empty list in place of the five active entries.
+3. **The consumer mirrors went in the same sweep.** Store, ADC and Helpdesk each deleted the ImageSharp
+   suppress block they had mirrored from MMCA.Common, in their 2026-10-25 version-bump PRs (Store #227,
+   ADC #293, Helpdesk #192). On each repository's `main`, `Directory.Build.props` holds no
+   `NuGetAuditSuppress` item; Store's states the empty list in a comment
+   (`MMCA.Store/Directory.Build.props:39-42`).
+4. Anchors re-verified against current source: the audit action's report check `action.yml:71`,
+   accept-list `:74-84` (both forms `:82`), vulnerable-row match `:86`; the SQLite pin
+   `Directory.Packages.props:59` (comment `:54-58`), `MMCA.Common.Infrastructure.csproj:36-38` and
+   `MMCA.Common.Aspire.csproj:54-58`.
 
 ## Related
 ADR-016 (lockstep versioning + the MassTransit-v8 license pin; this record extends dependency
