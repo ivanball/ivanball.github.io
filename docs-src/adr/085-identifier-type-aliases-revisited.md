@@ -14,7 +14,9 @@ object-mapper file; see the Revision (2026-10-01) at the end). Revised 2026-10-0
 migration-surface census was re-measured to 3,945 lines across 1,227 files (see the Revision
 (2026-10-06) at the end). Revised 2026-10-21: the alias count rose to 49 (47 `int`) with ADC
 Engagement's `ErasedUserIdentifierType`, and the migration-surface census was re-measured to 4,069
-lines across 1,250 files (see the Revision (2026-10-21) at the end).
+lines across 1,250 files (see the Revision (2026-10-21) at the end). Revised 2026-10-26: the
+migration-surface census was re-measured to 4,085 lines across 1,256 files and the
+`AddStronglyTypedIds` anchor was refreshed (see the Revision (2026-10-26) at the end).
 **Revisits [ADR-048](048-primitive-identifier-type-aliases.md)**, which stays
 Accepted and unchanged in substance: the aliases remain the identifier model. What changes is the
 shape of the deferral. ADR-048 left the wrapper-struct alternative "considered and left unbuilt" with
@@ -71,7 +73,7 @@ Three facts frame the decision, all counted in the four repositories' `Source` t
   nullable twin `:56`) and is applied from `ApplicationDbContext.ConfigureConventions`
   (`Persistence/DbContexts/ApplicationDbContext.cs:402-409`). All of it is wired by one DI call,
   `AddStronglyTypedIds`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:382`), and shape-checked
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:401`), and shape-checked
   by a fitness rule, `StronglyTypedIdsAreReadonlyRecordStructs`
   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Domain/ArchitectureRules.StronglyTypedIds.cs:34`).
   That capability is [ADR-115](115-strongly-typed-identifiers-opt-in.md), and it is opt-in: no
@@ -115,16 +117,18 @@ the objection is not that the wrappers are laborious to author. The objection is
 switching.
 
 That radius is measurable, and the measurement only means something with its counting rule stated.
-An **alias token** here is any `*IdentifierType` token other than the framework's own generic
-parameter `TIdentifierType`, counted in the `.cs` and `.razor` files of the four `Source` trees on
-2026-10-21, with tests, `bin` and `obj` excluded, one hit per source line that carries at least one
-such token. On that rule the aliases appear on **4,069 lines across 1,250 files**: 343 in 124 files in
-MMCA.Common, 2,430 in 727 files in MMCA.ADC, 1,232 in 368 files in MMCA.Store, and 64 in 31 files in
+An **alias token** here is any `<Name>IdentifierType` token (a non-empty prefix, so the bare
+`IdentifierType` tuple element name in
+`MMCA.Common/Source/Core/MMCA.Common.Shared/Identifiers/StronglyTypedIdRegistry.cs:73` does not count)
+other than the framework's own generic parameter `TIdentifierType`, counted in the `.cs` and `.razor` files of the four `Source` trees on
+2026-10-26, with tests, `bin` and `obj` excluded, one hit per source line that carries at least one
+such token. On that rule the aliases appear on **4,085 lines across 1,256 files**: 352 in 130 files in
+MMCA.Common, 2,437 in 727 files in MMCA.ADC, 1,232 in 368 files in MMCA.Store, and 64 in 31 files in
 MMCA.Helpdesk. (Counting every token rather than every line raises the total and leaves the file
 count unchanged.) Excluding `TIdentifierType` is what makes the framework figure honest: 762 of
-MMCA.Common's 1,115 `IdentifierType` lines carry only that generic parameter, which a wrapper
+MMCA.Common's 1,124 `IdentifierType` lines carry only that generic parameter, which a wrapper
 migration re-satisfies with a new type argument rather than rewrites call
-site by call site. Every one of the 4,069 is a signature, a property, a generic argument, or a DTO
+site by call site. Every one of the 4,085 is a signature, a property, a generic argument, or a DTO
 field that a wrapper migration would have to either change or prove it can leave alone. Because
 MMCA.Common is a published package family released in lockstep
 ([ADR-016](016-lockstep-versioning-masstransit-pin.md)), the framework share of that count
@@ -160,7 +164,7 @@ Absent all three, this stays a recorded, priced deferral rather than an open que
 - **The cost is paid once and the benefit accrues per defect avoided, and the defect count is
   currently zero.** No production incident in any of the four repos has been traced to a swapped
   identifier. That is not proof of safety, and this record does not claim it is; it is the only
-  evidence available, and it does not support a 1,250-file change.
+  evidence available, and it does not support a 1,256-file change.
 - **A partial migration is worse than either endpoint.** Wrapping some identifiers and not others
   produces a codebase where the absence of a compiler error means nothing, because the reader cannot
   tell whether a given call site is protected or merely un-migrated. The change is therefore
@@ -190,7 +194,7 @@ Absent all three, this stays a recorded, priced deferral rather than an open que
   identifier assignment, so with no wrapper declared it matches nothing. Trigger 1 therefore depends on a
   production defect being *traced* to a transposition, and a wrong-user check-in is exactly the kind
   of defect that gets written off as a scanning mistake instead.
-- **The migration price rises with the codebase.** The 4,069 lines counted here are a snapshot
+- **The migration price rises with the codebase.** The 4,085 lines counted here are a snapshot
   and the number only grows. Deferring on cost grounds means the cost argument gets stronger every
   release, which is the classic shape of a decision that is never revisited on its merits.
 - **Trigger 3 is not measured.** No count of cross-module scalar identifier references is maintained,
@@ -363,3 +367,26 @@ count and the migration-surface census moved, and two Context anchors were re-po
 3. Anchors re-verified against current source: `AddStronglyTypedIds` now declares at
    `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:382` (the Context bullet
    carries it); the Engagement alias range is `:4-14`.
+
+## Revision (2026-10-26)
+Re-verified against current source. No decision, trigger, rationale or trade-off changed; the
+migration-surface census moved and one Context anchor was re-pointed.
+
+1. **The migration-surface census is re-measured on the same rule**: **4,085 lines across 1,256
+   files** (Common 352/130, ADC 2,437/727, Store 1,232/368, Helpdesk 64/31), against 4,069 across
+   1,250 on 2026-10-21. Store and Helpdesk are unmoved; Common and ADC grew. `MMCA.Common/Source` now
+   carries 1,124 `IdentifierType` lines: 352 alias-token lines, 762 carrying the generic parameter
+   `TIdentifierType` alone, 9 carrying the `IdentifierTypes` registry members and 1 holding the bare
+   `IdentifierType` tuple element name
+   (`MMCA.Common/Source/Core/MMCA.Common.Shared/Identifiers/StronglyTypedIdRegistry.cs:73`), which sums
+   exactly.
+   The token total was not re-measured. The Decision, Rationale and Trade-offs figures follow it.
+2. **Adoption is re-checked; the triggers are not re-measured.** No `IStronglyTypedId<`
+   implementation and no `Vogen` reference exists in the `Source` trees of MMCA.ADC, MMCA.Store or
+   MMCA.Helpdesk, so the capability stays unadopted in the existing consumers. That is an adoption
+   check, not a trigger check: trigger 1 stays unverified by design (see the Revision (2026-08-23)),
+   trigger 2 (a greenfield fifth consumer) was not checked in this pass, and trigger 3 stays
+   unmeasured. None of the three is recorded as fired.
+3. Anchors re-verified against current source: `AddStronglyTypedIds` now declares at
+   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:401` (the Context bullet
+   carries it).

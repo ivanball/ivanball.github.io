@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -249,7 +250,8 @@
           Revised 2026-10-01 (current-state corrections and refreshed citations, no decision changed).
           Revised 2026-10-06: the RowVersion mapping and the PostgreSQL/SQLite re-stamp are selected by the engine&#39;s declared <code>RowVersionStrategy</code> capability rather than by provider, and stale citations were refreshed.
           Revised 2026-10-07: MMCA.Helpdesk also subclasses <code>ConcurrencyConventionTestsBase</code> (three consumers), MMCA.Common&#39;s own subclass is recorded as vacuous (its map declares no module layer), and stale anchors were refreshed against current source.
-          Revised 2026-10-21: the set-based <code>ExecuteUpdateAsync</code> path is recorded as re-stamping the client-stamped <code>RowVersion</code> itself (it bypasses the audit interceptor), and stale anchors were refreshed.</p>
+          Revised 2026-10-21: the set-based <code>ExecuteUpdateAsync</code> path is recorded as re-stamping the client-stamped <code>RowVersion</code> itself (it bypasses the audit interceptor), and stale anchors were refreshed.
+          Revised 2026-10-26: concurrency conflicts are counted by <code>ConcurrencyConflictMetrics</code> in both the <code>[SupportsIfMatch]</code> filter and the global handler, the constructor-dependency trade-off records that this metric took the static-dependency route while the problem helper resolves its services from the request, and stale repository, filter and <code>DbUpdateExceptionHandler</code> anchors were refreshed.</p>
           <h2 id="context">Context</h2>
           <p>Every mutable aggregate in the framework is edited through a load-modify-save handler: the update use
           case fetches the tracked entity, applies the request, and calls <code>SaveChangesAsync</code>. With one shared
@@ -291,7 +293,7 @@
           UPDATE/DELETE <code>WHERE</code> clause and raises <code>DbUpdateConcurrencyException</code> when it matches no row. The
           set-based <code>ExecuteUpdateAsync</code> path is the exception: its <code>WHERE</code> is only the caller&#39;s predicate and
           a non-match returns <code>0</code> rather than throwing
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IRepository.cs:479</code>;
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IRepository.cs:468</code>;
           see Trade-offs).</p>
           </li>
           <li><p><strong>A read carries the token; a write does not.</strong> <code>IConcurrencyAware</code>
@@ -339,22 +341,25 @@
           client error, and running the write would ignore a precondition the caller did state.</li>
           <li><strong>A stale token is <code>412 Precondition Failed</code></strong>, produced after the action by
           <code>RewriteConflictToPreconditionFailed</code> (<code>:130</code>). A <code>DbUpdateConcurrencyException</code> is answered in
-          the filter rather than left to the global handler (<code>:132-138</code>), and an already-produced 409
+          the filter rather than left to the global handler (<code>:132-141</code>), and an already-produced 409
           result has its status and its <code>ProblemDetails.Status</code> rewritten in place with the body otherwise
-          untouched (<code>:141-158</code>).</li>
+          untouched (<code>:143-160</code>). Because the filter marks that exception handled, the global handler
+          never sees it, so the filter counts the conflict itself through <code>ConcurrencyConflictMetrics</code>
+          (<code>:137</code>), the same counter the global handler increments for an unconditioned
+          <code>DbUpdateConcurrencyException</code> (<code>DbUpdateExceptionHandler.cs:36-39</code>).</li>
           </ul>
-          <p>All three are RFC 9457 problem details built by one helper (<code>:204</code>) through the registered
+          <p>All three are RFC 9457 problem details built by one helper (<code>:206</code>) through the registered
           <code>ProblemDetailsFactory</code>, so they carry the same <code>traceId</code>/<code>requestId</code> diagnostics as every other
           problem response on the surface, and each carries the standard <code>errors</code> extension with a stable
-          code: <code>Concurrency.PreconditionRequired</code> (<code>:169</code>), <code>Concurrency.MalformedIfMatch</code> (<code>:181</code>),
-          <code>Concurrency.PreconditionFailed</code> (<code>:193</code>).</p>
+          code: <code>Concurrency.PreconditionRequired</code> (<code>:171</code>), <code>Concurrency.MalformedIfMatch</code> (<code>:183</code>),
+          <code>Concurrency.PreconditionFailed</code> (<code>:195</code>).</p>
           </li>
           <li><p><strong><code>SetOriginalRowVersion</code> is the persistence extension point.</strong>
           <code>IWriteRepository.SetOriginalRowVersion(TEntity, byte[])</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IRepository.cs:408</code>)
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IRepository.cs:396</code>)
           applies the caller&#39;s token as the tracked entity&#39;s <strong>original</strong> <code>RowVersion</code>; the <code>EFRepository</code>
           implementation writes it to <code>Entry(entity).Property(nameof(RowVersion)).OriginalValue</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFRepository.cs:81-83</code>).
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFRepository.cs:52-54</code>).
           The shared write workflow calls it right after loading the aggregate and before the mutation runs
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Crud/MutateEntityHandlerBase.cs:300</code>), so
           EF compares the client&#39;s token against the row&#39;s current value inside the UPDATE statement,
@@ -363,10 +368,10 @@
           <li><p><strong>Child entities are reached by the <code>IRowVersioned</code> overload.</strong> The first overload is typed to the
           repository&#39;s aggregate root (<code>TEntity</code>), so a child edit (a <code>ProductVariant</code> under a <code>Product</code>)
           cannot receive a token through it. A second overload,
-          <code>SetOriginalRowVersion(IRowVersioned childEntity, byte[] rowVersion)</code> (<code>IRepository.cs:419</code>,
-          implemented at <code>EFRepository.cs:87</code>), accepts any tracked auditable entity instead, and an update
+          <code>SetOriginalRowVersion(IRowVersioned childEntity, byte[] rowVersion)</code> (<code>IRepository.cs:407</code>,
+          implemented at <code>EFRepository.cs:58</code>), accepts any tracked auditable entity instead, and an update
           handler that mutates children through the aggregate&#39;s repository stamps each child itself. Both
-          overloads reject a null token (<code>EFRepository.cs:79</code>, <code>:90</code>): there is no value that means &quot;skip
+          overloads reject a null token (<code>EFRepository.cs:50</code>, <code>:61</code>): there is no value that means &quot;skip
           the check&quot;.</p>
           </li>
           <li><p><strong>A fitness function keeps the token out of the body.</strong>
@@ -430,7 +435,7 @@
           conditional request header, which is exactly what <code>If-Match</code> is. 409 stays the answer for a
           conflict the client did not condition on, which <code>DbUpdateExceptionHandler</code> still produces for any
           other <code>DbUpdateException</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/DbUpdateExceptionHandler.cs:33</code>, with
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/DbUpdateExceptionHandler.cs:41</code>, with
           a generic detail message so the schema is not leaked and the full exception logged rather than
           returned). Answering 409 for a failed precondition would make <code>If-Match</code> a decorative alias for an
           ordinary state conflict.</li>
@@ -443,18 +448,26 @@
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
           <li><strong>The rewrite keys on the conflict outcome, not on its cause.</strong> The filter turns any 409 result
-          the action returns under an <code>If-Match</code> request into a 412 (<code>SupportsIfMatchAttribute.cs:141-158</code>),
+          the action returns under an <code>If-Match</code> request into a 412 (<code>SupportsIfMatchAttribute.cs:143-160</code>),
           including a non-concurrency conflict a handler reports through the <code>Result</code> channel. A thrown
           <code>DbUpdateException</code> other than <code>DbUpdateConcurrencyException</code> (<code>:132</code>) is not touched: it leaves
           the filter unhandled and the global <code>DbUpdateExceptionHandler</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:161</code>) still answers 409
-          (<code>DbUpdateExceptionHandler.cs:33</code>). The response keeps its original problem details
+          (<code>DbUpdateExceptionHandler.cs:41</code>). The response keeps its original problem details
           and error codes, so the cause is still readable in the body, but one class of conflict wears a
           status code naming a precondition the client did not actually violate. The alternative, a dedicated
           concurrency error code threaded through the <code>Result</code> channel, was not worth a parallel failure path.</li>
-          <li><strong>The attribute cannot be configured.</strong> Being its own filter with no DI means no host can adjust
-          its behavior, and a future need for a service (a policy, a logger, a metric) forces either a
-          rewrite to <code>ServiceFilterAttribute</code> or a static dependency.</li>
+          <li><strong>The attribute takes no constructor dependencies.</strong> Being its own filter rather than a
+          <code>ServiceFilterAttribute</code> means nothing is injected and the attribute exposes no options, so a
+          dependency arrives by one of three routes: a rewrite to <code>ServiceFilterAttribute</code>, a lookup from
+          <code>HttpContext.RequestServices</code>, or a static dependency. The problem helper already uses the
+          lookup: it resolves <code>ProblemDetailsFactory</code> and <code>IErrorLocalizer</code> from the request&#39;s services
+          (<code>SupportsIfMatchAttribute.cs:208-209</code>, <code>:219</code>), so a host-registered factory or localizer does
+          shape the 428, 400 and 412 bodies. The conflict metric took the static route: the filter calls
+          <code>ConcurrencyConflictMetrics.RecordConflict</code> (<code>:137</code>), an internal static class over a
+          process-wide <code>Meter</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Concurrency/ConcurrencyConflictMetrics.cs:24</code>,
+          <code>RecordConflict</code> at <code>:46</code>), which no host can replace or reconfigure.</li>
           <li><strong>An absent <code>ETag</code> carries no signal.</strong> A DTO without a <code>RowVersion</code> property produces no header at
           all, so a client cannot distinguish &quot;this resource has no concurrency control&quot; from &quot;this
           deployment does not emit one&quot;. The no-op is the correct behavior and it says nothing.</li>
@@ -478,8 +491,8 @@
           <code>ExecuteUpdateAsync</code> bypasses that interceptor, so <code>EFRepository</code> re-stamps there itself: on a
           <code>ClientStamped</code> engine, when the caller did not assign <code>RowVersion</code> and the entity maps one, it adds
           a fresh <code>Guid.NewGuid().ToByteArray()</code> assignment to the same statement
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFRepository.cs:157</code>,
-          <code>StampRowVersion</code> at <code>:168-176</code>).
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFRepository.cs:128</code>,
+          <code>StampRowVersion</code> at <code>:139-147</code>).
           Cosmos gets no framework concurrency token at all: <code>CosmosDbContext.OnModelCreating</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/CosmosDbContext.cs:119-146</code>)
           calls neither the base nor <code>ConfigureConcurrencyTokens</code>, and no ETag concurrency is configured
@@ -596,6 +609,36 @@
           <code>StampRowVersion</code> at <code>:113-117</code>. Anchors inside the 2026-09-07 and 2026-10-07 Revisions are left
           as recorded; the 2026-10-06 Revision already records the current <code>TouchConcurrencyToken</code> anchors.</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. No decision changed: the token mapping, the header-only
+          transport, the three status codes, the original-value stamp, the set-based re-stamp and the Cosmos
+          gap all hold as written. One trade-off described as a future possibility has already happened, and
+          the repository, filter and <code>DbUpdateExceptionHandler</code> anchors had moved.</p>
+          <ol>
+          <li><strong>Conflicts are counted, and the count reached the filter through a static dependency.</strong> Both
+          places where an HTTP request turns a <code>DbUpdateConcurrencyException</code> into a response record it
+          on the
+          <code>persistence.concurrency.conflict</code> counter: the filter before rewriting to 412
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Concurrency/SupportsIfMatchAttribute.cs:137</code>)
+          and the global handler before answering 409, for the concurrency kind only
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/DbUpdateExceptionHandler.cs:36-39</code>).
+          <code>ConcurrencyConflictMetrics</code> is an internal static class
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Concurrency/ConcurrencyConflictMetrics.cs:24</code>,
+          <code>RecordConflict</code> at <code>:46</code>), so the constructor-dependency trade-off now records that the metric
+          took the static route while the problem helper resolves its services from the request. A
+          handler that catches a concurrency conflict itself (through <code>IConcurrencyConflictDetector</code> or
+          directly) does not record it, so the counter measures conflicts answered over HTTP, not every
+          conflict. Decision and Trade-offs now say so.</li>
+          <li>Anchors re-verified against current source: <code>IRepository.cs</code> <code>SetOriginalRowVersion(TEntity, byte[])</code> at <code>:396</code>, the <code>IRowVersioned</code> overload at <code>:407</code>, <code>TouchConcurrencyToken</code> at <code>:430</code>,
+          <code>ExecuteUpdateAsync</code> at <code>:468</code> (0 on a non-match, <code>:467</code>); <code>EFRepository.cs</code> original-value
+          writes at <code>:52-54</code> and <code>:63-65</code>, the overloads at <code>:47</code> and <code>:58</code>, null-token rejection at <code>:50</code>
+          and <code>:61</code>, <code>TouchConcurrencyToken</code> at <code>:69</code>, the <code>ExecuteUpdateAsync</code> re-stamp call at <code>:128</code>
+          and <code>StampRowVersion</code> at <code>:139-147</code>; <code>SupportsIfMatchAttribute.cs</code> concurrency catch at
+          <code>:132-141</code>, 409 rewrite at <code>:143-160</code>, codes at <code>:171</code>, <code>:183</code>, <code>:195</code>, the <code>Problem</code> helper at
+          <code>:206</code>; <code>DbUpdateExceptionHandler.cs</code> 409 at <code>:41</code> with the generic detail at <code>:45</code> (its
+          registration stays at <code>DependencyInjection.cs:161</code>). Anchors inside earlier Revisions are left as
+          recorded.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-017 (HTTP request idempotency, which dedups retries of the <strong>same</strong> request, the mirror-image
           concern to two <strong>distinct</strong> edits racing here, and whose declared-intent gate sits at this same
@@ -629,6 +672,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

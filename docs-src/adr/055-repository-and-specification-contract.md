@@ -55,7 +55,9 @@ forty-four sites across twenty-seven files, one of them an API controller; see t
 files, its raw-queryable allowlist shrank to seven files with no Identity entry (thirteen across
 Common and ADC), ADC composes at five fluent sites including the first production `.Not()`, and the
 Store specification-taking `CountAsync` caller the Revision (2026-10-01) recorded no longer exists;
-see the Revision (2026-10-21) at the end.
+see the Revision (2026-10-21) at the end. Revised 2026-10-26: anchors refreshed after line shifts in
+`IRepository.cs`, the ADC `SessionsController.cs`, the MMCA.Store `UserRegisteredHandler.cs` and
+`stage.ps1`; see the Revision (2026-10-26) at the end.
 
 ## Context
 Every read an application handler performs has to come from somewhere, and the shape of that contract
@@ -99,7 +101,7 @@ keeps the raw `IQueryable` surfaces out of Application code.
   client-side; and `FindIncludingDeletedAsync` (`:217`), which returns the active and the
   soft-deleted matches as two collections from one read.
   `IReadRepository` composes exactly those two (`:332-333`), and `IRepository` composes read plus
-  write (`:497`). The interface documentation directs new handlers at the focused sub-interfaces and
+  write (`:485`). The interface documentation directs new handlers at the focused sub-interfaces and
   leaves existing code on the composite (`:327-328`).
 - **The raw queryables live on the composite only.** `Table`, `TableNoTracking`,
   `TableNoTrackingSingleQuery`, and `TableNoTrackingSplitQuery` are declared on `IReadRepository`
@@ -153,10 +155,10 @@ keeps the raw `IQueryable` surfaces out of Application code.
   no hand-written class. Composition is used in production: ADC's paged session read ANDs the
   public-session specification with the speaker-scoped one rather than substituting, because dropping
   the public filter would leak non-accepted sessions to non-privileged callers
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionsController.cs:114`,
-  `:136`, rationale at `:108-112`). Every composing call site writes the fluent form, five in
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionsController.cs:113`,
+  `:135`, rationale at `:108-111`). Every composing call site writes the fluent form, five in
   MMCA.ADC, four `.And()` calls, for example `publicSpecification.And(...)`
-  (`SessionsController.cs:136`), and one `.Not()` on the Identity user-list read, the first
+  (`SessionsController.cs:135`), and one `.Not()` on the Identity user-list read, the first
   production caller of `Not`
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UserListEntityQueryService.cs:172`),
   and two in MMCA.Store
@@ -217,7 +219,7 @@ assigned from `GetReadRepository` at `:50`),
 a handler parameter narrowed to `IEntityReader`
 (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Categories/UseCases/AssignParentCategory/CategoryAssignParentUpdateHandler.cs:120`),
 and a querier parameter on the customer-provisioning handler's `LogCollisionAsync` helper
-(`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/DomainEventHandlers/UserRegisteredHandler.cs:131`);
+(`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/DomainEventHandlers/UserRegisteredHandler.cs:130`);
 `ProductVariantService`
 (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Products/ProductVariantService.cs:21`)
 deliberately stays on `IReadRepository` because it calls members of both halves. MMCA.Helpdesk
@@ -226,7 +228,7 @@ narrows one site, the reference app's by-id query handler, whose local is typed 
 (`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Application/Tickets/UseCases/GetById/GetTicketByIdHandler.cs:24`,
 with the reason written next to it at `:22-23`), so the seed teaches the narrowing rather than only
 describing it in the comments its template staging script carries
-(`MMCA.Helpdesk/build/templates/stage.ps1:670`, `:1416`).
+(`MMCA.Helpdesk/build/templates/stage.ps1:670`, `:1436`).
 
 What has not changed is the wiring, and that is deliberate. `IUnitOfWork` hands out only the
 composites (`IRepository` at
@@ -255,7 +257,7 @@ three consumer applications, sitting on an unchanged registration surface
   in a query and compiled in memory by `IsSatisfiedBy` (`Specification.cs:9-11`, `:32`), so an
   authorization predicate can be asserted in a domain test with no database at all.
 - **Composability keeps filters additive.** ANDing an authorization scope onto a business filter is a
-  single-expression construction (`SessionsController.cs:134-136`) instead of a second hand-written query path,
+  single-expression construction (`SessionsController.cs:133-135`) instead of a second hand-written query path,
   which is what makes "never substitute the public filter" a cheap rule to follow.
 - **A textual scan was chosen deliberately over IL analysis.** NetArchTest and reflection cannot see
   member usage inside method bodies, and the testing package carries no IL or Roslyn dependency on
@@ -689,3 +691,15 @@ and the fitness rule are unchanged; the consumer counts, the allowlists and one 
    `:591-593`; `SessionsController.cs` method at `:114`, `.And` at `:136`, leak rationale
    `:108-112`, Rationale ternary `:134-136`; `stage.ps1` comments at `:670` and `:1416`. Anchors
    inside the earlier Revision sections are left as historical records.
+
+## Revision (2026-10-26)
+Re-verified against current source. The decision, the read-interface split, the composition rules,
+the fitness rule and every consumer count are unchanged; only anchors in the live sections moved.
+
+1. Anchors re-verified against current source: `IRepository` composes read plus write at
+   `IRepository.cs:485` (`IReadRepository` still at `:332-333`, guidance still at `:327-328`); ADC
+   `SessionsController.cs` `BuildPagedSessionSpecificationAsync` at `:113`, `.And` at `:135`, leak
+   rationale `:108-111`, Rationale ternary `:133-135`; MMCA.Store `UserRegisteredHandler.cs:130`
+   (the other three Store holders, `CustomerService.cs:14`, `AuthenticationService.cs:49` and
+   `CategoryAssignParentUpdateHandler.cs:120`, still hold); `stage.ps1` comments at `:670` and
+   `:1436`. Anchors inside the earlier Revision sections are left as historical records.

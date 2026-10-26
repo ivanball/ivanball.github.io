@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -257,7 +258,9 @@
           directly), scopes the facades to toasts and confirmation, and re-anchors the ADC Web host&#39;s assembly
           wiring. Revised 2026-10-21: records that <code>AddCommonUiFacades()</code> also registers
           <code>IPendingToastService</code> and is called directly by the Helpdesk Web head, names permission gating in
-          the nav-trimming rationale, and refreshes anchors that moved.</p>
+          the nav-trimming rationale, and refreshes anchors that moved. Revised 2026-10-26: anchors refreshed
+          after both Blazor Web hosts gained an anonymous <code>MapStaticAssets()</code> call ahead of their assembly
+          wiring, and after <code>ResultUiExtensions.NotifyOnFailure</code> moved.</p>
           <h2 id="context">Context</h2>
           <p>ADR-059 decided how a module plugs into the <strong>server</strong>: an <code>IModule</code> implementation is discovered by
           reflection, registered in topological order, and a host composes an application out of those modules
@@ -358,7 +361,7 @@
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.UI/Infrastructure/BunitComponentTestBase.cs:54</code>),
           so a component test resolves the contracts without pulling in the rest of the shared-UI surface.
           The framework helpers that raise a toast take the toast facade
-          (<code>MMCA.Common.UI/Common/ResultUiExtensions.cs:289-291</code>, and
+          (<code>MMCA.Common.UI/Common/ResultUiExtensions.cs:255-257</code>, <code>:276-278</code>, and
           <code>ListPageActions.DeleteWithConfirmationAsync</code> at <code>MMCA.Common.UI/Pages/Common/ListPageActions.cs:61</code>).
           The delete confirmation is the component-side exception: <code>DeleteWithConfirmationAsync</code> asks its
           question through the <code>DeleteConfirmation</code> component it is handed (<code>ListPageActions.cs:58</code>, <code>:72</code>),
@@ -370,8 +373,8 @@
           </li>
           <li><p><strong>Blazor Web heads feed the same enumeration to the endpoint side.</strong> <code>MapRazorComponents&lt;App&gt;()</code>
           takes the module assemblies from <code>GetServices&lt;IUIModule&gt;()</code> in addition to the shell assemblies
-          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:313-330</code>, which also de-duplicates at <code>:324</code>, and
-          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:274-284</code>), so the router&#39;s view and the
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:322-336</code>, which also de-duplicates at <code>:330</code>, and
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:280-290</code>), so the router&#39;s view and the
           endpoint&#39;s view of the routable assemblies come from one source.</p>
           </li>
           </ul>
@@ -444,11 +447,11 @@
           protection still comes from <code>AuthorizeRouteView</code> and the pages&#39; own attributes (<code>Routes.razor:29-52</code>).</li>
           <li><strong>Blazor Web heads wire the assemblies twice.</strong> The router&#39;s <code>AdditionalAssemblies</code> and the
           endpoint&#39;s <code>AddAdditionalAssemblies</code> are separate calls, so both hosts repeat the enumeration in
-          <code>Program.cs</code> (<code>MMCA.ADC.UI.Web/Program.cs:313-330</code>, <code>MMCA.Store.UI.Web/Program.cs:274-284</code>); they
+          <code>Program.cs</code> (<code>MMCA.ADC.UI.Web/Program.cs:322-336</code>, <code>MMCA.Store.UI.Web/Program.cs:280-290</code>); they
           derive it from the same <code>IUIModule</code> registrations, but the duplication is real. The two hosts also
-          build the list differently: ADC concatenates and applies <code>.Distinct()</code> (<code>:323-324</code>), because the shell
+          build the list differently: ADC concatenates and applies <code>.Distinct()</code> (<code>:329-330</code>), because the shell
           assemblies it lists can overlap a module&#39;s, while Store spreads the module assemblies into a
-          collection expression with no de-duplication (<code>MMCA.Store.UI.Web/Program.cs:279-284</code>).</li>
+          collection expression with no de-duplication (<code>MMCA.Store.UI.Web/Program.cs:285-290</code>).</li>
           <li><strong>The reference seed does not demonstrate the pattern.</strong> Helpdesk&#39;s hand-rolled shell means an
           adopter following it gets the framework&#39;s components but not this composition model.</li>
           <li><strong>One vendor is also one upstream ceiling, and the facades cover two surfaces only.</strong> A MudBlazor
@@ -525,6 +528,22 @@
           <code>GalleryHost.cs:96</code>, ADC <code>MauiProgram.cs:167</code>, Store <code>MauiProgram.cs:87</code>. The 2026-10-06 revision&#39;s
           <code>MainLayout.razor:79-82</code> and its <code>IdentityUIModule.cs</code> line numbers are left as written there.</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. The contract, the shell, router and nav composition, the vendor
+          choice, the facades and the double-wiring trade-off (ADC de-duplicates, Store does not) are unchanged;
+          only anchors moved, because both Blazor Web hosts now map their static assets anonymously ahead of
+          the assembly wiring.</p>
+          <ol>
+          <li>Anchors re-verified against current source: ADC <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs</code>
+          assembly wiring <code>:322-336</code> (<code>GetServices&lt;IUIModule&gt;()</code> <code>:322</code>, <code>.Concat</code> <code>:329</code>, <code>.Distinct()</code>
+          <code>:330</code>, <code>MapRazorComponents&lt;App&gt;()</code> <code>:333</code>, <code>AddAdditionalAssemblies</code> <code>:336</code>, the overlap comment
+          <code>:319-321</code>); Store <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs</code> wiring <code>:280-290</code>
+          (<code>GetServices&lt;IUIModule&gt;()</code> <code>:280</code>, <code>MapRazorComponents&lt;App&gt;()</code> <code>:282</code>, the collection expression
+          <code>:285-290</code> with the module spread at <code>:290</code>, still no de-duplication); and
+          <code>ResultUiExtensions.NotifyOnFailure</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/ResultUiExtensions.cs:255-257</code>
+          for <code>Result</code>, <code>:276-278</code> for <code>Result&lt;T&gt;</code>). The 2026-10-07 revision&#39;s anchors are left as written
+          there.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-059 (the server-side <code>IModule</code> contract this mirrors in the presentation layer), ADR-056 (the
           render-mode strategy for the web heads, which decides how these components render but not who supplies
@@ -549,6 +568,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

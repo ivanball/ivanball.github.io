@@ -14,6 +14,9 @@ Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 Revised 2026-10-21: Decision 2 now records that the transactional execution path saves a
 still-enrolled command row just before the commit when no later save follows, and live anchors
 were refreshed.
+Revised 2026-10-26: live anchors refreshed (the `ICurrentUserService` decoration and the deployed
+polling settings), and Related now links ADR-135, noting that the queue sits outside the
+shared keyspaces that record namespaces.
 
 ## Context
 The framework has had two ways to move work off the request thread and neither of them is a job
@@ -132,7 +135,7 @@ first, then rebuilds a `ClaimsPrincipal` carrying the `sub` claim, one role clai
 carrier read by `ImpersonatingCurrentUserService`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Context/ImpersonatingCurrentUserService.cs:20`),
 which decorates whatever `ICurrentUserService` the host registered
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:247`). With no override
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:262`). With no override
 set every member reads straight through, so an HTTP request behaves exactly as before.
 
 **5. Failure policy: the outbox's, with one deliberate divergence.** `InternalCommandProcessor`
@@ -241,8 +244,8 @@ poll. `InternalCommands:PollingIntervalSeconds` ships at 2
 which is the same default `OutboxSettings` ships
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxSettings.cs:31`),
 so the divergence is a deployment decision rather than a framework one: ADC and Store both run the
-queue at 60 seconds (`MMCA.ADC/infra/main.bicep:1900`, `MMCA.Store/infra/main.bicep:1589`) while
-pushing the outbox to 300 (`MMCA.ADC/infra/main.bicep:1894`, `MMCA.Store/infra/main.bicep:1582`).
+queue at 60 seconds (`MMCA.ADC/infra/main.bicep:1936`, `MMCA.Store/infra/main.bicep:1595`) while
+pushing the outbox to 300 (`MMCA.ADC/infra/main.bicep:1930`, `MMCA.Store/infra/main.bicep:1588`).
 A host that raises the interval to cut idle polling accepts that much latency on any
 transaction-scheduled work the post-commit wake does not reach.
 
@@ -335,6 +338,21 @@ unchanged. One behavior was missing from Decision 2, and line anchors moved.
    `MMCA.Store/infra/main.bicep:1589` and `:1582`). The 2026-10-01, 2026-10-06 and 2026-10-07
    revisions keep their dated anchors as written.
 
+## Revision (2026-10-26)
+Re-verified against current source. The decision, the five parts, the failure policy, the settings
+defaults and the deployed 60-second queue and 300-second outbox intervals in ADC and Store are
+unchanged; only line anchors moved, and Related gained one record.
+
+1. Related now links [ADR-135](135-application-namespace-keyspace-isolation.md), which owns the
+   application namespace for shared keyspaces (Redis cache, lock, rate-limit, backplane, broker queue
+   names). The internal-command queue is not one of them: it is a per-source database table (Decision
+   3), so no internal-command code resolves the namespace.
+2. Anchors re-verified against current source: the `ICurrentUserService` decoration
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:262`) and the
+   deployed polling settings (`MMCA.ADC/infra/main.bicep:1936` for the queue and `:1930` for the
+   outbox, `MMCA.Store/infra/main.bicep:1595` and `:1588`). The 2026-10-01, 2026-10-06, 2026-10-07
+   and 2026-10-21 revisions keep their dated anchors as written.
+
 ## Related
 [ADR-003](003-outbox-dual-dispatch.md) (the claim-lease, backoff and dead-letter machinery this
 record borrows as an idiom),
@@ -344,4 +362,6 @@ unchanged),
 [ADR-052](052-background-job-execution.md) (the background execution posture the processor follows),
 [ADR-113](113-postgresql-as-a-first-class-engine.md) (the engine-aware index helpers the table reuses),
 [ADR-100](100-outbox-opt-in-resolved-from-messaging-mode.md) (why an always-mapped table is not a
-migration decision).
+migration decision),
+[ADR-135](135-application-namespace-keyspace-isolation.md) (the application namespace for shared
+keyspaces, which does not reach this per-source table).

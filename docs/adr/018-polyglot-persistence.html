@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -272,7 +273,8 @@
           (<code>DataSourceEngines</code>), and Cosmos&#39;s missing outbox follows from its non-relational capability rather
           than a <code>SupportsOutbox</code> member.
           Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
-          Revised 2026-10-21: anchors refreshed against the Common v1.250.0 source (Aspire data-source helpers).</p>
+          Revised 2026-10-21: anchors refreshed against the Common v1.250.0 source (Aspire data-source helpers).
+          Revised 2026-10-26: anchors refreshed after the Common v1.261.0 release.</p>
           <h2 id="context">Context</h2>
           <p>ADR-006 (database-per-service) splits storage along the <strong>Name</strong> axis: several physically separate
           databases, all on the same engine (SQL Server), one per service. A second, orthogonal axis is the
@@ -321,18 +323,18 @@
           change with no body edits.</li>
           <li><strong>One concrete context per engine, one instance per database.</strong> <code>SQLServerDbContext</code>,
           <code>PostgreSQLDbContext</code>
-          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/PostgreSQLDbContext.cs:23</code>),
+          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/PostgreSQLDbContext.cs:24</code>),
           <code>SqliteDbContext</code>, and <code>CosmosDbContext</code> are sealed contexts over the abstract <code>ApplicationDbContext</code>.
           Combined with ADR-006&#39;s &quot;one instance per <code>DataSourceKey</code>&quot;, a host materializes one context instance
           per physical (engine, name) source.</li>
           <li><strong>Configuration drives routing.</strong> <code>DataSourceResolver</code> builds a per-engine logical-to-physical map
           from the engine-specific connection strings (<code>SQLServerConnectionString</code> /
           <code>PostgreSQLConnectionString</code> / <code>CosmosConnectionString</code> / <code>SqliteConnectionString</code>, each read by
-          its engine: <code>DataSourceResolver.cs:500-501</code> for the top-level section and <code>:503-504</code> for a named
+          its engine: <code>DataSourceResolver.cs:519-520</code> for the top-level section and <code>:522-523</code> for a named
           entry delegate to the registry, for example <code>SQLServerDataSourceEngine.cs:52-63</code>,
           plus <code>CosmosDatabaseName</code> and a migrations assembly for the
           two server engines, <code>SQLServerMigrationsAssembly</code> and <code>PostgreSQLMigrationsAssembly</code>, which SQLite
-          and Cosmos leave empty at the top level (<code>DataSourceResolver.cs:255</code>, <code>:287-288</code>;
+          and Cosmos leave empty at the top level (<code>DataSourceResolver.cs:274</code>, <code>:306-307</code>;
           <code>SqliteDataSourceEngine.cs:74</code>, <code>CosmosDataSourceEngine.cs:73</code>) and which a named entry can override per source
           (<code>DataSourceEntrySettings.cs:37</code>, <code>:64</code>); a named entry also carries a <code>SqliteMigrationsAssembly</code>
           (<code>DataSourceEntrySettings.cs:55</code>, read by its engine at <code>SqliteDataSourceEngine.cs:77-80</code>)), read from either
@@ -342,7 +344,7 @@
           database on it, that database is the host&#39;s single database and becomes <code>Default</code>, which is what lets
           a host declare its databases only under <code>DataSources</code> and still route the framework-owned tables
           (outbox, inbox, scheduled jobs, audit trail) that resolve to the <code>Default</code> name
-          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/DataSourceResolver.cs:219-277</code>).
+          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/DataSourceResolver.cs:261-296</code>).
           Several distinct databases with no top-level value leave <code>Default</code> empty, since there is no single
           answer: a genuinely multi-database host names the one it wants shared by adding a
           <code>DataSources:Default</code> entry. Logical names with no entry for an engine collapse onto that engine&#39;s
@@ -366,22 +368,22 @@
           (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/CosmosDbContext.cs:123-127</code>, <code>:139-143</code>),
           so its events dispatch in-process only: the save interceptor writes outbox rows only for a relational
           engine
-          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:257</code>,
-          the synchronous save path at <code>:141</code>),
+          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:259</code>,
+          the synchronous save path at <code>:143</code>),
           and <code>BrokerEventBus</code> throws when the outbox target is not relational
           (<code>Source/Core/MMCA.Common.Infrastructure/Messaging/BrokerEventBus.cs:70-77</code>).</li>
           <li><strong>The host surface reads the same two shapes.</strong> The Aspire AppHost helpers
           <code>With{SQLServer,PostgreSQL,Cosmos,Sqlite}DataSource</code> inject the <code>DataSources__{logicalName}__*</code>
           environment variables for the source they attach
-          (<code>Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:540</code>, <code>:570</code>, <code>:599-600</code>, <code>:624</code>). The
+          (<code>Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:541</code>, <code>:571</code>, <code>:600-601</code>, <code>:625</code>). The
           database health checks enumerate the top-level section and every named
           entry, deduplicated by connection string, so each physical relational database (SQL Server,
           PostgreSQL or SQLite) contributes exactly one readiness check and the entries that collapse onto one
           database contribute one between them; a Cosmos database contributes none
-          (the per-engine enumeration at <code>Source/Hosting/MMCA.Common.Aspire/Extensions.Health.cs:258-295</code>,
-          registered at <code>:208-239</code>). The requirement that a host have a
+          (the per-engine enumeration at <code>Source/Hosting/MMCA.Common.Aspire/Extensions.Health.cs:268-305</code>,
+          registered at <code>:216-249</code>). The requirement that a host have a
           database at all is engine-agnostic: <code>AddInfrastructureHealthChecks(requireDatabase)</code> is satisfied by
-          SQL Server, PostgreSQL or SQLite, declared in either shape (<code>:69-73</code>, the rule at <code>:217-223</code>).</li>
+          SQL Server, PostgreSQL or SQLite, declared in either shape (<code>:69-73</code>, the rule at <code>:225-231</code>).</li>
           </ol>
           <h2 id="rationale">Rationale</h2>
           <ul>
@@ -546,6 +548,29 @@
           (connection string plus database name, declared at <code>:589</code>), and SQLite at <code>:624</code> (declared at
           <code>:614</code>).</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source (Common v1.261.0). No decision changed: the four sealed engine
+          contexts, the registry-delegated connection-string reads, the default-seed rule, the top-level
+          migrations assembly that only the two server engines carry, the relational-only outbox gate, the
+          Aspire data-source helpers and the deduplicated relational health checks all behave as described.
+          No production entity routes to a non-SQL-Server engine: the ADC, Store and Helpdesk sources carry
+          no <code>EntityTypeConfigurationCosmos</code>, <code>EntityTypeConfigurationSqlite</code>, <code>EntityTypeConfigurationPostgreSQL</code>
+          or <code>[UseDataSource(...)]</code>. Only line anchors moved.</p>
+          <ol>
+          <li>Anchors re-verified against current source: <code>PostgreSQLDbContext.cs:24</code> (sealed context);
+          <code>DataSourceResolver.cs:519-520</code> and <code>:522-523</code> (connection-string reads, delegating to the engine
+          registry), <code>:261-296</code> (<code>ResolveDefaultSeed</code>: top-level branch <code>:266-276</code>, single distinct database
+          <code>:278-294</code>, empty <code>Default</code> otherwise), <code>:274</code> and <code>:306-307</code> (top-level migrations assembly);
+          <code>DomainEventSaveChangesInterceptor.cs:259</code> (outbox-write gate) and <code>:143</code> (synchronous save path);
+          <code>Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:541</code> (SQL Server, helper declared at
+          <code>:531</code>), <code>:571</code> (PostgreSQL, <code>:561</code>), <code>:600-601</code> (Cosmos connection string plus database name,
+          <code>:590</code>) and <code>:625</code> (SQLite, <code>:615</code>); <code>Source/Hosting/MMCA.Common.Aspire/Extensions.Health.cs:268-305</code>
+          (per-engine enumeration, deduplicated by connection string at <code>:294-302</code>), <code>:216-249</code>
+          (registration) and <code>:225-231</code> (the <code>requireDatabase</code> rule). Unchanged and still correct:
+          <code>SQLServerDataSourceEngine.cs:52-63</code>, <code>SqliteDataSourceEngine.cs:74</code>, <code>:77-80</code>,
+          <code>CosmosDataSourceEngine.cs:73</code>, <code>DataSourceEntrySettings.cs:37</code>, <code>:55</code>, <code>:64</code>, and
+          <code>Extensions.Health.cs:69-73</code>.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -567,6 +592,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             </ul>
           </nav>
         </aside>

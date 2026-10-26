@@ -22,7 +22,8 @@ gateway does today. Revised 2026-10-07: Store's gateway comment now agrees with 
 so the Rationale no longer cites it as a live off-by-N example, and the ADC AppHost and bicep anchors
 in the Context are refreshed. Revised 2026-10-21: anchors refreshed after the AppHost, bicep and
 gateway `appsettings.json` edits that moved the gateway blocks, address books and route and cluster
-tables.
+tables. Revised 2026-10-26: anchors refreshed after the gateway `Program.cs`, AppHost, bicep and
+resilience-defaults edits that moved the cited lines.
 
 ## Context
 Before this record, both gateways built their route table by hand, in code. ADC made 26
@@ -31,8 +32,8 @@ a `ReverseProxy` section at all: YARP was present only as its forwarder primitiv
 Aspire service-discovery names (`http://identity`, `http://conference`, `http://catalog` and so on)
 resolved through `AddHttpForwarderWithServiceDiscovery`, which is the part of the arrangement that was
 right and stays, now as `AddServiceDiscoveryDestinationResolver`
-(`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:151`,
-`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:141`).
+(`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:157`,
+`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:147`).
 
 **The problem was not that the table was duplicated across deployment artifacts. It was that one table
 was described three times inside one repository, and the three already disagreed.** ADC was the worked
@@ -57,10 +58,10 @@ was pinned by no test at all.
 
 **What is genuinely elsewhere is not the route table, and that distinction is worth recording**,
 because it is the duplication a reader assumes exists. The Aspire AppHost holds references and
-start-ordering (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:353-361`,
-`MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:327-333`) and the bicep templates hold
+start-ordering (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:354-362`,
+`MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:329-335`) and the bicep templates hold
 `services__<name>__http__0` environment variables on the gateway container app
-(`MMCA.ADC/infra/main.bicep:2624-2627`, `MMCA.Store/infra/main.bicep:2037-2039`). Both are **address
+(`MMCA.ADC/infra/main.bicep:2660-2663`, `MMCA.Store/infra/main.bicep:2043-2045`). Both are **address
 books**: service name to URL, with no path prefix anywhere in them. They answer "where does
 `conference` resolve" and never "what reaches conference", so neither is a second route table and
 neither should become one.
@@ -69,7 +70,7 @@ Per-route behavior was hand-written too, and that is where the two repositories 
 ADC set `ForwarderRequestConfig.ActivityTimeout` from `Gateway:ForwarderActivityTimeoutSeconds`,
 defaulted to `HttpResilienceDefaults.TotalRequestTimeout` plus 10 seconds, so 100 seconds against the
 90-second client budget
-(`MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:19`), plus a
+(`MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:22`), plus a
 one-hour `Gateway:HubActivityTimeoutSeconds` for the SignalR route. **Store set no activity timeout
 anywhere.** Both of its `ForwarderRequestConfig` constructions omitted it, so every Store route, the
 Stripe webhook forward included, ran on YARP's implicit default with no relationship to the resilience
@@ -91,8 +92,8 @@ Make configuration the single source of the gateway route table, and pin it with
 ### 1. `ReverseProxy` configuration is the route table
 Each gateway calls `AddReverseProxy().LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"))`
 and `MapReverseProxy()`, and the `MapForwarder` lists are deleted. ADC wires it at
-`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:148-151` and maps it at `:234`; Store at
-`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:138-141` and `:173`. Routes and clusters live
+`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:154-157` and maps it at `:240`; Store at
+`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:144-147` and `:179`. Routes and clusters live
 in the gateway's own `appsettings.json`: 33 routes over five clusters for ADC (8 identity, 18
 conference, 5 engagement, 2 notification, at
 `MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:80-261`) and 15 routes over three clusters
@@ -146,7 +147,7 @@ the h2c-only hosts declare HTTP/2 with an exact version policy, and the mixed-en
 Notification, Store's Sales) state neither, keeping the version-negotiating default their traffic
 needs: the SignalR websocket on ADC's Notification hub route, and HTTP/1.1-capable REST plus the
 Stripe webhook on Store's Sales, which has no websocket route
-(`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:127-131`). ADC's `identity`, `conference` and
+(`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:133-137`). ADC's `identity`, `conference` and
 `engagement` clusters carry `Version` with
 `RequestVersionExact` (`appsettings.json:267-270`, `:276-279`, `:285-288`) and its two Notification
 clusters carry no `HttpRequest` block at all (`:290-294`, `:295-299`); Store's `catalog` and `identity`
@@ -199,7 +200,7 @@ declarative shape makes the difference a diff instead of an archaeology exercise
   SessionSelection") currently agrees with its 18 conference entries
   (`MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/RouteMapTests.cs:146-164`), and Store's gateway
   comment describing the `ReverseProxy` section as "fifteen routes, three clusters"
-  (`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:115`) agrees with its table of 15 routes
+  (`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:121`) agrees with its table of 15 routes
   (`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:51-144`). Both agree because someone
   corrected them by hand, not because anything holds them there: the next route added without a
   comment edit reopens the gap, just no longer load-bearing.
@@ -311,6 +312,32 @@ Only anchors moved.
    `HttpRequest` blocks (`:267-270`, `:276-279`, `:285-288`) and the two Notification clusters
    (`:290-294`, `:295-299`). The 2026-10-07 revision's statement that the Store AppHost and Store
    bicep anchors still held is superseded by these.
+
+## Revision (2026-10-26)
+Re-verified against current source. No decision and no current-state statement changed: both
+gateways still call `AddReverseProxy().LoadFromConfig(...)` with `AddMmcaGateway` and
+`AddServiceDiscoveryDestinationResolver`, both AppHost gateway blocks still hold only `WithReference`,
+`WaitFor` ordering and endpoint and health wiring with no route or path data, both bicep gateway
+address books still carry bare `http://<app>` destinations with no path prefix, Store's gateway
+comment still reads "fifteen routes, three clusters", and `HttpResilienceDefaults.TotalRequestTimeout`
+is still 90 seconds, so the 100-second `ActivityTimeout` (`00:01:40`) still sits 10 seconds above it
+(`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:45`,
+`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:24`). Only anchors moved.
+
+1. Anchors re-verified against current source: ADC gateway wiring
+   (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:154-157`, resolver at `:157`) and
+   `MapReverseProxy` (`:240`); Store gateway wiring
+   (`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:144-147`, resolver at `:147`) and
+   `MapReverseProxy` (`:179`); Store's "fifteen routes, three clusters" comment (`:121`) and its Sales
+   mixed-profile explanation (`:133-137`); the ADC AppHost gateway block
+   (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:354-362`, endpoint and health wiring at
+   `:363-365`); the Store AppHost gateway block
+   (`MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:329-335`); the ADC bicep gateway address
+   book (`MMCA.ADC/infra/main.bicep:2660-2663`, inside `gatewayApp` at `:2592`); the Store bicep
+   gateway address book (`MMCA.Store/infra/main.bicep:2043-2045`, inside `gatewayApp` at `:1972`);
+   and `TotalRequestTimeout`
+   (`MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:22`). The
+   2026-10-21 revision's AppHost and bicep anchors are superseded by these.
 
 ## Related
 [ADR-008](008-service-extraction-topology.md) (amended: the Gateway keeps the route-to-service map it

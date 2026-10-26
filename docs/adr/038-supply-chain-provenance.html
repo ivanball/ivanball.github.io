@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -253,7 +254,8 @@
           Revised 2026-10-06: the SQLitePCLRaw pin is recorded at its current version (3.0.5) and both projects that reference it, and <code>wasm-payload-budget</code> joins the first-party actions consumers reference by branch.
           Revised 2026-10-07: anchors refreshed after the v1.233.0 release, and the 2026-09-07 record of two <code>dotnet-coverage</code> installs is updated: the second install has since been removed, leaving the single pinned install in CI <code>build-and-test</code>.
           Revised 2026-10-21: the accept-list is no longer empty; it holds five ImageSharp 3.1.12 advisories, each with a reachability argument, and the consumer and SQLitePCLRaw anchors are refreshed.
-          Revised 2026-10-25: the accept-list is empty again; the five ImageSharp 3.1.12 entries were removed in 1.258.0 when ImageSharp left the dependency graph, and the consumers deleted their mirrored entries in the same sweep (see the Revision below).</p>
+          Revised 2026-10-25: the accept-list is empty again; the five ImageSharp 3.1.12 entries were removed in 1.258.0 when ImageSharp left the dependency graph, and the consumers deleted their mirrored entries in the same sweep (see the Revision below).
+          Revised 2026-10-26: the 2026-10-06 record that every <code>uses:</code> remains SHA-pinned is qualified to third-party actions (four <code>uses:</code> lines reference the repository&#39;s own composite actions by local path), and anchors are refreshed after the v1.261.0 release.</p>
           <h2 id="context">Context</h2>
           <p>MMCA.Common is a published framework: on every <code>v*</code> tag (release.yml:3-5) it packs its NuGet packages
           and pushes them to both GitHub Packages (release.yml:119-120) and nuget.org through OIDC trusted
@@ -269,7 +271,7 @@
           establish provenance and integrity, an SBOM release gate, committed lock files, a CI vulnerability
           audit, and package source mapping, already live in the release and CI workflows,
           <code>Directory.Build.props</code>, and <code>nuget.config</code>, and are summarized for consumers in SECURITY.md
-          (SECURITY.md:44-53). No ADR owned them as a single coherent posture. This record does, and it exceeds
+          (SECURITY.md:48-57). No ADR owned them as a single coherent posture. This record does, and it exceeds
           ADR-016&#39;s scope: ADR-016 gestures at lock files as sweep mechanics, this ADR owns supply-chain
           integrity as the decision.</p>
           <h2 id="decision">Decision</h2>
@@ -282,7 +284,7 @@
           software bill of materials for the whole solution (action.yml:66). It then fails the release
           (<code>exit 1</code>) when the BOM file is missing or empty (<code>test -s &quot;$bom&quot;</code>, action.yml:68) or lists zero
           components (action.yml:69-71), and the upload step sets <code>if-no-files-found: error</code>
-          (release.yml:112-117, and release.yml:228-233 in <code>publish-maui</code>). The step runs as a blocking gate
+          (release.yml:112-117, and release.yml:230-235 in <code>publish-maui</code>). The step runs as a blocking gate
           (release.yml:102-105), so every published version ships a verifiable SBOM or no packages are pushed.</p>
           </li>
           <li><p><strong>NuGet lock files are committed for reproducible restores.</strong> <code>RestorePackagesWithLockFile</code> is set
@@ -311,7 +313,7 @@
           handled case, not an error: the action reports <code>&lt;none&gt;</code> as the accepted set (action.yml:85), skips
           the filter (action.yml:87-89), and so fails on every vulnerable row (action.yml:90-91). The most
           recent accepted entries, five <code>SixLabors.ImageSharp</code> 3.1.12 advisories, were removed in 1.258.0
-          when image normalization stopped depending on ImageSharp (CHANGELOG.md:23); see the 2026-10-25
+          when image normalization stopped depending on ImageSharp (CHANGELOG.md:55); see the 2026-10-25
           Revision. The earlier SQLite
           advisory GHSA-2m69-gcr7-jv3q (CVE-2025-6965) was suppressed from 2026-06-19 while SQLitePCLRaw
           shipped no patched build. SQLitePCLRaw 2.1.12 (published 2026-07-14) delivered the patched build, so
@@ -365,7 +367,7 @@
           someone removes it, and its accompanying rationale comment is a review reminder, not an automated
           expiry. The list is empty today (Directory.Build.props:33-36), so the cost is latent: it returns
           with the next entry, and the five ImageSharp entries that held it until 1.258.0 left only because
-          the package itself left the graph (CHANGELOG.md:23), not because anything prompted a revisit.</li>
+          the package itself left the graph (CHANGELOG.md:55), not because anything prompted a revisit.</li>
           <li><strong>Audit granularity is text-matched.</strong> The audit action matches vulnerable rows and <code>GHSA-*</code> ids by
           parsing tool output (.github/actions/nuget-vulnerability-audit/action.yml:82-91). It is deliberately simple and depends on the <code>dotnet list</code>
           output shape rather than a structured feed.</li>
@@ -563,13 +565,42 @@
           <code>Directory.Packages.props:59</code> (comment <code>:54-58</code>), <code>MMCA.Common.Infrastructure.csproj:36-38</code> and
           <code>MMCA.Common.Aspire.csproj:54-58</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. The four controls, the empty accept-list, the SBOM gate in both
+          release jobs and the fail-closed audit are unchanged. What moved is the 1.261.0 CHANGELOG section,
+          which pushed the 1.258.0 and 1.259.0 entries down, plus one workflow anchor and the SECURITY.md
+          section; and one statement in the 2026-10-06 Revision needs a qualifier.</p>
+          <ol>
+          <li><strong>&quot;Every <code>uses:</code> remains SHA-pinned&quot; covers third-party actions only.</strong> The 2026-09-07 Revision
+          records that every <code>uses:</code> in MMCA.Common&#39;s pipelines names a 40-character SHA, which held when it
+          was written: the composite actions arrived with the 2026-09-22 change. The 2026-10-06 Revision
+          restates it (&quot;Every <code>uses:</code> remains SHA-pinned&quot;) after that change, so it was already too broad
+          then. Every third-party action still names a SHA, but four <code>uses:</code> lines reference the repository&#39;s own composite actions by local path,
+          which carries no SHA: <code>nuget-vulnerability-audit</code> at <code>MMCA.Common/.github/workflows/ci.yml:144</code>
+          and <code>MMCA.Common/.github/workflows/release.yml:80</code>, and <code>cyclonedx-sbom</code> at <code>release.yml:107</code> and
+          <code>:225</code>. That is the local-path consumption the 2026-09-22 Revision describes; the code reviewed is
+          the same commit being built, so there is no external ref to pin.</li>
+          <li>Anchors re-verified against current source:<ul>
+          <li><code>MMCA.Common/CHANGELOG.md</code>: the 1.258.0 entry (SkiaSharp replaces ImageSharp, the
+          <code>NuGetAuditSuppress</code> entries go) is <code>:55</code> under header <code>:51</code>; the 1.259.0 entry (image
+          normalization leaves the framework) is <code>:49</code> under header <code>:45</code>. Decision 3 and Trade-offs now
+          cite <code>:55</code>; the 2026-10-25 Revision&#39;s <code>:23</code> and <code>:17</code> are left as recorded.</li>
+          <li><code>MMCA.Common/SECURITY.md</code>: &quot;Dependency &amp; supply-chain security&quot; header <code>:48</code>, bullets <code>:50-57</code>
+          (CycloneDX SBOM bullet <code>:56</code>), cited in Context and Related.</li>
+          <li><code>release.yml</code>: <code>publish-maui</code> Generate SBOM <code>:221-228</code> (<code>uses</code> <code>:225</code>), Upload SBOM <code>:230-235</code>
+          (<code>if-no-files-found: error</code> at <code>:235</code>), cited in Decision 1. The <code>publish</code> job anchors in
+          Decision 1 (<code>:102-105</code>, <code>:106-110</code>, <code>:112-117</code>) and Context (<code>:119-120</code>, <code>:122-140</code>) and the locked restores
+          (<code>ci.yml:132</code>, <code>release.yml:66</code>) hold.</li>
+          </ul>
+          </li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-016 (lockstep versioning + the MassTransit-v8 license pin; this record extends dependency
           governance from versioning and licensing into supply-chain provenance and integrity), ADR-015
           (architecture invariants enforced as build-gating fitness functions; the same gate-the-build posture
           applied here to dependencies), ADR-010 (integration-event schema versioning; another release-discipline
           control that turns a contract into an enforced signal). See SECURITY.md (&quot;Dependency &amp; supply-chain
-          security&quot;, SECURITY.md:44-53) for the consumer-facing summary and rubric section 32
+          security&quot;, SECURITY.md:48-57) for the consumer-facing summary and rubric section 32
           (ArchitectureEvaluationCriteria.md:843-861) for the evaluation criteria.</p>
           
         <div class="doc-foot btn-row">
@@ -593,6 +624,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
             <li><a href="#revision-2026-10-25-accept-list-empty-again">Revision (2026-10-25, accept-list empty again)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

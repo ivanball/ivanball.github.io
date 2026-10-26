@@ -60,6 +60,10 @@ and image processing itself left the framework in v1.259.0), so the ImageSharp g
 list and its dependabot ignore are gone and MassTransit below major 9 is the only license-boundary
 pin; the ceiling now reads all five MassTransit packages Common pins, on the shared 8.5.12 patch,
 and the anchors are rebased.
+Revised 2026-10-26: the transport surface in **Transport exit options** is recounted as fifteen
+files across four packages and the trial point is restated as an `IBrokerTransport` registered
+through `AddBrokerTransport` beside four broker transports, replacing the retired
+`MessageBusProvider` switch; anchors are rebased after v1.261.0.
 
 ## Context
 MMCA.Common publishes its `MMCA.Common.*` NuGet package set (see `FACTS.md` for the authoritative
@@ -107,8 +111,10 @@ Two related governance questions had no recorded answer:
    under the v8 comment (`MMCA.Common/Directory.Packages.props:119-124`, the entries at `:125-127`,
    `:130` and `:136`), and dependabot ignores every `MassTransit*` semver-major update
    (`MMCA.Common/.github/dependabot.yml:57-60`). SixLabors.ImageSharp was a second instance (gated
-   below major 4) until v1.258.0, which removed the package, its fitness test, its package-id list
-   and its dependabot ignore (`MMCA.Common/CHANGELOG.md:23`); see the 2026-10-25 revision.
+   below major 4) until v1.258.0, which removed the package, its fitness test and its package-id list
+   (`MMCA.Common/CHANGELOG.md:55`); its dependabot ignore is gone too, leaving `MassTransit*` as the
+   only package ignore under `ignore:` (`MMCA.Common/.github/dependabot.yml:56-60`); see the
+   2026-10-25 revision.
 
    The assertions run in MMCA.Common only, the one repo that subclasses the base
    (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/DependencyVersionTests.cs:9`).
@@ -177,21 +183,35 @@ The pin has a horizon. MassTransit v8 is the free major and its community suppor
 candidates are recorded now so the eventual move is a comparison and not a scramble.
 
 What makes any of them a bounded change is where MassTransit actually sits. The whole
-`using MassTransit` surface is **nine files across two packages**. Eight are in
+`using MassTransit` surface is **fifteen files across four packages** (seventeen directives, because
+`Messaging/Consumers/FaultIntegrationEventConsumer.cs:1-2` and
+`Messaging/Transports/PostgreSqlBrokerTransport.cs:1-2` carry two each). Eleven are in
 `MMCA.Common.Infrastructure`: `Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:2`,
 `Messaging/BrokerMessageBus.cs:2`, `Messaging/Consumers/IntegrationEventConsumer.cs:1`,
 `Messaging/Consumers/IntegrationEventConsumerExtensions.cs:2`,
 `Messaging/Consumers/UpcastingIntegrationEventConsumer.cs:3`,
 `Messaging/Consumers/FaultIntegrationEventConsumer.cs:1`,
-`Messaging/Consumers/ConsumerOriginRestore.cs:2` and `Messaging/ServiceBusEmulatorSupport.cs:4`;
-the ninth is `Source/Hosting/MMCA.Common.Testing/Fixtures/ServiceBusEmulatorFixtureBase.cs:5`. The
-last two are the emulator test tier rather than the transport: each one lowers the process-global
+`Messaging/Consumers/ConsumerOriginRestore.cs:2`, `Messaging/Transports/IBrokerTransport.cs:1`,
+`Messaging/Transports/BrokerTransportPolicies.cs:1`, `Messaging/Transports/RabbitMqBrokerTransport.cs:1`
+and `Messaging/Transports/PostgreSqlBrokerTransport.cs:1`. `MMCA.Common.Azure` has two,
+`Source/Hosting/MMCA.Common.Azure/Messaging/AzureServiceBusTransport.cs:1` and
+`Messaging/ServiceBusEmulatorSupport.cs:4`; `MMCA.Common.Aws` has one,
+`Source/Hosting/MMCA.Common.Aws/Messaging/AmazonSqsTransport.cs:6`; and `MMCA.Common.Testing.Azure`
+has one, `Source/Hosting/MMCA.Common.Testing.Azure/Fixtures/ServiceBusEmulatorFixtureBase.cs:5`.
+`ServiceBusEmulatorSupport.cs` and `ServiceBusEmulatorFixtureBase.cs` are the emulator pair, and
+they sit on different sides: `ServiceBusEmulatorSupport.cs` ships in the `MMCA.Common.Azure`
+adapter and the transport itself calls it for any emulator connection string, the development-stack
+path (`AzureServiceBusTransport.cs:41-44`), while `ServiceBusEmulatorFixtureBase.cs` is the test
+tier in `MMCA.Common.Testing.Azure`. Each one lowers the process-global
 `MassTransit.AzureServiceBusTransport.Defaults` entity quotas the emulator rejects
 (`ServiceBusEmulatorSupport.cs:115-117`, `ServiceBusEmulatorFixtureBase.cs:74-76`), a v8 constraint
-that moves with that tier, not with the bus. Every one of the nine references a MassTransit **type**,
-so none of them is an unused import: `IConsumer<T>`, `ConsumeContext<T>`, `IPublishEndpoint` and
-`IBusRegistrationConfigurator` across the seven transport-side files, plus `Fault<T>`
-(`FaultIntegrationEventConsumer.cs:27`) and an explicit implementation of
+that moves with the Azure transport package and with the test fixture. Every one of the fifteen references a MassTransit
+**type**, so none of them is an unused import: `IConsumer<T>`, `ConsumeContext<T>`,
+`IPublishEndpoint` and `IBusRegistrationConfigurator` across the transport-side files (the last one
+is the parameter of `IBrokerTransport.Configure`, `Messaging/Transports/IBrokerTransport.cs:41`),
+`IBusFactoryConfigurator` in the shared receive policies
+(`Messaging/Transports/BrokerTransportPolicies.cs:37`), plus `Fault<T>`
+(`IConsumer<Fault<TEvent>>` at `FaultIntegrationEventConsumer.cs:39`) and an explicit implementation of
 `IEndpointRegistrationConfigurator` (`IntegrationEventConsumerExtensions.cs:189`), where
 `ConsumerOriginRestore` takes the consume context's `Headers`
 (`Messaging/Consumers/ConsumerOriginRestore.cs:35`); the emulator pair adds
@@ -210,7 +230,8 @@ adapter, the shape of candidate 3, second behind Wolverine):
 1. **The OpenTransit community fork of MassTransit v8.** Cheapest on paper, a package id swap under
    the same API. No repo in this workspace references it, and the part that would decide it is Azure
    Service Bus parity, since production runs Service Bus while local runs RabbitMQ
-   (`DependencyInjection.Messaging.cs:271`, `:302`). Its release status and its parity are external facts this
+   (`Messaging/Transports/RabbitMqBrokerTransport.cs:24`,
+   `MMCA.Common/Source/Hosting/MMCA.Common.Azure/Messaging/AzureServiceBusTransport.cs:33`). Its release status and its parity are external facts this
    record cannot verify and does not assert.
 2. **A commercial MassTransit v9 license.** The straight-line option: the pin exists only because v9
    demands `MT_LICENSE` at startup and every broker-enabled host crashes without it
@@ -219,18 +240,29 @@ adapter, the shape of candidate 3, second behind Wolverine):
 3. **A direct `Azure.Messaging.ServiceBus` implementation of `IMessageBus`.** The largest and the
    most owned. Publishing is one class (`BrokerMessageBus.cs:43`), but the consume side is where the
    library earns its keep: three consumers ride `IConsumer<T>` (`IntegrationEventConsumer.cs:42`,
-   `UpcastingIntegrationEventConsumer.cs:36`, `FaultIntegrationEventConsumer.cs:27`) and the
+   `UpcastingIntegrationEventConsumer.cs:36`, `FaultIntegrationEventConsumer.cs:39`) and the
    transport wiring supplies exponential in-process retry plus second-level delayed redelivery
-   (`DependencyInjection.Messaging.cs:279-296` on RabbitMQ, where the redelivery half is opt-in
-   behind `EnableDelayedRedelivery` and off by default, `:322-336` on Service Bus, where it is
-   unconditional, the two-level argument at `:245-250`), all of which would be hand-written. It also drops RabbitMQ, which the local
-   Aspire stack provisions.
+   (both in `Messaging/Transports/BrokerTransportPolicies.cs`, `UseDelayedRedelivery` at `:65` and
+   the exponential retry at `:85`, the two-level argument at `:11-22`; on RabbitMQ the redelivery
+   half is opt-in behind `EnableDelayedRedelivery`, off by default,
+   `Messaging/Transports/RabbitMqBrokerTransport.cs:33` and `Messaging/MessageBusSettings.cs:206`,
+   while on Service Bus it is unconditional, `AzureServiceBusTransport.cs:52`), all of which would be
+   hand-written. It also drops RabbitMQ, which the local Aspire stack provisions.
 
-The trial point is the same for all three and it is additive: a new case in the `MessageBusProvider`
-switch inside `ConfigureBrokerTransport`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:264`, switch at `:269`,
-enum at `Messaging/MessageBusSettings.cs:236`), so a candidate ships **beside** RabbitMQ and Service
-Bus instead of replacing either, and a consumer opts in by configuration. The two artifacts that move
+The trial point is the same for all three and it is additive: a new `IBrokerTransport` registered
+through `AddBrokerTransport`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:159`) before
+`AddBrokerMessaging`, which `ResolveBrokerTransport` (`:188`) finds by its provider name after the
+two built-in branches (`IsRabbitMq` at `:190`, `IsPostgreSql` at `:195`), throwing when no transport
+by that name is registered (`:219-220`). The built-in provider names are string constants in
+`Messaging/Transports/MessageBusProviders.cs` (`InProcess`, `RabbitMq` and `PostgreSql` at `:16`,
+`:19` and `:27`); an adapter transport carries its own name (`AzureServiceBus` is
+`AzureServiceBusTransport.ProviderName`,
+`MMCA.Common/Source/Hosting/MMCA.Common.Azure/Messaging/AzureServiceBusTransport.cs:19`), and
+`MessageBusProviders` only maps the two adapter names to their packages for the registration error,
+`AzureServiceBus` to `MMCA.Common.Azure` and `AmazonSqs` to `MMCA.Common.Aws` (`:37-38`). So a candidate ships **beside** the four existing broker transports (RabbitMQ and
+PostgreSQL built in, Azure Service Bus and Amazon SQS as adapters) instead of replacing any, and a
+consumer opts in by configuration. The two artifacts that move
 with a decision are the pin
 (`MMCA.Common/Directory.Packages.props:119-124`, the five entries at `:125-127`, `:130` and `:136`)
 and the fitness function that reads it
@@ -247,8 +279,8 @@ halves are recorded in ADR-066 and ADR-064). The deploy gate is a recency gate, 
 `cross-service-freshness` requires the `cross-service` and `servicebus-emulator-smoke` jobs to have
 both succeeded in one completed run of `cross-service-tests.yml` (whatever triggered it, so a
 dispatched green run counts too) within `window-days: '5'`
-(`MMCA.ADC/.github/workflows/deploy.yml:885-906`, window at `:898`, `same-run` at `:903`;
-`MMCA.Store/.github/workflows/deploy.yml:827-848`, window at `:840`, `same-run` at `:845`).
+(`MMCA.ADC/.github/workflows/deploy.yml:886-907`, window at `:899`, `same-run` at `:904`;
+`MMCA.Store/.github/workflows/deploy.yml:828-849`, window at `:841`, `same-run` at `:846`).
 The proof's age is floored to whole days and the gate fails only when that age exceeds the window
 (`MMCA.Common/.github/actions/freshness-gate/action.yml:25-26`, `:143-145`), so a red nightly blocks
 a deploy only once the last run green on both jobs is six or more whole days old.
@@ -399,6 +431,47 @@ is the second instance of the pattern, which no longer exists.
    `MMCA.ADC/Directory.Packages.props:68-73` (previously `:60-65`), Store's at
    `MMCA.Store/Directory.Packages.props:92-97` with the patch-agnostic sentence at `:93-94`
    (previously `:87-92` and `:88-89`).
+
+## Revision (2026-10-26)
+Re-verified against current source (MMCA.Common `main` at v1.261.0, MMCA.ADC and MMCA.Store `main`).
+The pin, the gate and the dependency set are unchanged, and so are the three candidates and their
+ordering under ADR-118. What moved is the shape of the transport layer this record inventories: the
+broker transports now sit behind an `IBrokerTransport` extension point with Azure Service Bus and
+Amazon SQS shipped as adapter packages, so **Transport exit options** is restated.
+
+1. The `using MassTransit` surface is now fifteen files across four packages (eleven in
+   `MMCA.Common.Infrastructure`, two in `MMCA.Common.Azure`, one in `MMCA.Common.Aws`, one in
+   `MMCA.Common.Testing.Azure`), which supersedes the nine-file, two-package figure. The four added
+   Infrastructure files are `Messaging/Transports/IBrokerTransport.cs:1`,
+   `BrokerTransportPolicies.cs:1`, `RabbitMqBrokerTransport.cs:1` and `PostgreSqlBrokerTransport.cs:1`;
+   `AzureServiceBusTransport.cs:1` and `AmazonSqsTransport.cs:6` are the adapters; the emulator pair
+   moved to `MMCA.Common.Azure/Messaging/ServiceBusEmulatorSupport.cs:4` and
+   `MMCA.Common.Testing.Azure/Fixtures/ServiceBusEmulatorFixtureBase.cs:5`. Application, Domain and
+   Shared still reference no MassTransit type.
+2. The trial point is no longer a new case in a `MessageBusProvider` switch inside
+   `ConfigureBrokerTransport` (neither exists): it is an `IBrokerTransport` registered through
+   `AddBrokerTransport` (`DependencyInjection.Messaging.cs:159`) and resolved by provider name in
+   `ResolveBrokerTransport` (`:188`, built-in branches `:190` and `:195`, the throw at `:219-220`),
+   with the built-in provider names as string constants in
+   `Messaging/Transports/MessageBusProviders.cs` (`:16`, `:19`, `:27`) and each adapter carrying its
+   own (`AzureServiceBusTransport.cs:19`). A
+   candidate now ships beside four broker transports, not two.
+3. Candidate 3's retry and redelivery description now points at the shared policy class
+   (`BrokerTransportPolicies.cs:11-22`, `:65`, `:85`) and the per-transport switch
+   (`RabbitMqBrokerTransport.cs:33` opt-in behind `EnableDelayedRedelivery`,
+   `MessageBusSettings.cs:206`, default false; `AzureServiceBusTransport.cs:52` unconditional). The
+   opt-in versus unconditional semantics are unchanged.
+4. Anchors re-verified against current source: `Fault<T>` at `FaultIntegrationEventConsumer.cs:39`
+   (previously `:27`); candidate 1's RabbitMQ and Service Bus wiring at
+   `RabbitMqBrokerTransport.cs:24` and `AzureServiceBusTransport.cs:33` (previously
+   `DependencyInjection.Messaging.cs:271`, `:302`); the ImageSharp removal in Decision 3 at
+   `MMCA.Common/CHANGELOG.md:55` (previously `:23`, before the 1.261.0 entry landed on top); the
+   `cross-service-freshness` step at `MMCA.ADC/.github/workflows/deploy.yml:886-907` (window `:899`,
+   `same-run` `:904`) and `MMCA.Store/.github/workflows/deploy.yml:828-849` (window `:841`,
+   `same-run` `:846`), previously `:885-906` and `:827-848`. Unchanged: `IntegrationEventConsumer.cs:42`,
+   `UpcastingIntegrationEventConsumer.cs:36`, `IntegrationEventConsumerExtensions.cs:189`,
+   `ConsumerOriginRestore.cs:35`, `BrokerMessageBus.cs:43`, `IMessageBus.cs:28`,
+   `ServiceBusEmulatorSupport.cs:87`, `:115-117` and `ServiceBusEmulatorFixtureBase.cs:68`, `:74-76`.
 
 ## Related
 ADR-015 (the fitness function that enforces the pins), ADR-003 / ADR-006 (MassTransit is the broker

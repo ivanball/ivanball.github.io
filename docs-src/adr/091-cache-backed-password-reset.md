@@ -10,6 +10,7 @@ and the link carries the token in the URL fragment; see Revision below).
 Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 Revised 2026-10-21: session revocation is saved before the new password is applied and stands even
 when the aggregate rejects it, and the reset email is localized (English and Spanish).
+Revised 2026-10-26: anchors refreshed after the v1.261.0 release.
 
 ## Context
 Both consumer apps shipped authenticated password *change* (`PUT /Auth/password`) and nothing for a
@@ -89,7 +90,7 @@ address, and so does a 500 when the SMTP hop is down.
    its user has to type the token into the reset page. A blank `ResetUrl` degrades to the token
    alone rather than shipping a broken link. Subject and body come from `UserEmailResources` and are
    composed in the recipient's stored preferred culture when the account has one, otherwise in the
-   culture of the forgot-password request (`ForgotPasswordHandlerBase.cs:85`, `:117`, `:132`;
+   culture of the forgot-password request (`ForgotPasswordHandlerBase.cs:82`, `:114`, `:129` to `:134`;
    `UserEmailResources.cs:32-35`), with
    English and Spanish shipped (`UserEmailResources.es.resx`). The send is awaited and its failure
    caught, logged and swallowed.
@@ -98,8 +99,8 @@ address, and so does a 500 when the SMTP hop is down.
    `PasswordResetController` supplying the two command factories. Configuration is one key
    (`PasswordReset:ResetUrl`) in each Identity service's `appsettings.json` (MMCA.ADC
    `Source/Services/MMCA.ADC.Identity.Service/appsettings.json:115`, MMCA.Store
-   `Source/Services/MMCA.Store.Identity.Service/appsettings.json:115`) and as `PasswordReset__ResetUrl`
-   in `infra/main.bicep` for production (MMCA.ADC `:1978`, MMCA.Store `:1640`). Only MMCA.ADC's Aspire
+   `Source/Services/MMCA.Store.Identity.Service/appsettings.json:114`) and as `PasswordReset__ResetUrl`
+   in `infra/main.bicep` for production (MMCA.ADC `:2014`, MMCA.Store `:1646`). Only MMCA.ADC's Aspire
    AppHost also sets it for local runs (`Source/Hosting/MMCA.ADC.AppHost/Program.cs:504`); MMCA.Store's
    local runs use the `appsettings.json` default. MMCA.ADC and MMCA.Store both
    adopted it in v1.160.0.
@@ -239,3 +240,24 @@ ordering of session revocation against the password save, and the language of th
    breaking change and its fix sit at `MMCA.Common/CHANGELOG.md:771` and `:776` under `[1.213.0]`
    (heading `:767`). Holding: `PasswordResetTokenService.cs:36`, `:41`, `:43`, `:68`, `:107`, `:128`;
    `ResetPasswordHandlerBase.cs:106`; `ForgotPasswordHandlerBase.cs:155`.
+
+## Revision (2026-10-26)
+Re-verified against current source. No behavior changed: the cache-backed token, the distributed
+lock on redemption, the session revocation ahead of the password write, the anti-enumeration
+contract, the URL-fragment link and the localized email all hold as recorded; only line anchors
+moved.
+
+1. Anchors re-verified against current source: `ForgotPasswordHandlerBase.cs:82` (the
+   `UserEmailResources.InRecipientCulture` call, was `:85`, which is now `emailSender.SendAsync`),
+   `:114` (`ForgotPassword.Subject`, was `:117`) and `:129` to `:134` (`ForgotPassword.LinkText`,
+   `Intro`, `Code` and `Ignore` in `ComposeBody`, recorded as `:132` to `:137` on 2026-10-21);
+   MMCA.Store Identity `appsettings.json:114` (the `ResetUrl` key, was `:115`); MMCA.ADC
+   `infra/main.bicep:2014` (was `:1978`) and MMCA.Store `infra/main.bicep:1646` (was `:1640`); the
+   MMCA.ADC AppHost email-confirmation comment at `Source/Hosting/MMCA.ADC.AppHost/Program.cs:508`
+   (recorded as `:507` on 2026-10-21). In `MMCA.Common/CHANGELOG.md`: M240 at `:290` under
+   `[1.247.0]` (heading `:260`), the localized-email entry at `:412` under `[1.243.0]` (heading
+   `:380`), and the `IDistributedLock` breaking change and its fix (L91) at `:986` and `:991` under
+   `[1.213.0]` (heading `:982`). Holding: `PasswordResetTokenService.cs:36`, `:41`, `:43`, `:68`,
+   `:107`, `:128`; `ResetPasswordHandlerBase.cs:48`, `:106`, `:110`, `:112`, `:117`, `:120`;
+   `ForgotPasswordHandlerBase.cs:155`; `UserEmailResources.cs:32-35`; MMCA.ADC Identity
+   `appsettings.json:115`; the MMCA.ADC AppHost key at `Source/Hosting/MMCA.ADC.AppHost/Program.cs:504`.

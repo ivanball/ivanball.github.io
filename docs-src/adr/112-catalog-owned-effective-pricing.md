@@ -20,6 +20,9 @@ body row-version token is scoped to the two variant discount endpoints.
 Revised 2026-10-21: a list-price change on a variant whose discount window has already ended is no
 longer blocked by that discount; anchors refreshed after the Catalog and Sales export moves.
 
+Revised 2026-10-26: anchors refreshed after the Catalog domain, checkout and Catalog service host
+edits moved them.
+
 ## Context
 MMCA.Store sells product variants, and a variant's price is one `Money` on the variant row
 (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/ProductVariant.cs:30`).
@@ -36,7 +39,7 @@ unit prices from Catalog through its `CheckOutPreflight` collaborator and `Check
 copies them onto order lines
 (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutHandler.cs:74-76`,
 `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutPreflight.cs:50-52`,
-`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/CheckOutDomainService.cs:113-121`).
+`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/CheckOutDomainService.cs:59,116-136`).
 The cart stores quantities, not money.
 
 The tempting shape is a Promotion aggregate with its own lifecycle, targets and precedence rules.
@@ -56,7 +59,7 @@ discounting is fan-out over the same value object, all or
 nothing: `Product.SetDiscountOnAllVariants` refuses a product that has no active variant to discount
 (`Product.NoActiveVariants`, an invariant error surfaced as 400) and otherwise validates the discount
 against every active variant's list price before it touches any of them
-(`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/Product.cs:592-607`,
+(`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/Product.cs:584-612`,
 `MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/ProductInvariants.cs:114`).
 
 **The list price is preserved and the effective price is computed in one method.**
@@ -109,7 +112,7 @@ the data-subject export line gains `list_price_amount = 6` and `promotion_label 
 (`MMCA.Store/Source/Services/MMCA.Store.Sales.Contracts/Protos/user_sales_export.proto:93,96`,
 `UserSalesExportService.cs:71-72`): new numbers on existing messages, which a peer built against the
 previous generation ignores. The `ProductVariantChanged` integration event keeps carrying the list
-price and nothing else (`Product.cs:549-550,570-571,615-616`), so ADR-010's schema-version rule is not engaged and
+price and nothing else (`Product.cs:542-543,562-563,607-608`), so ADR-010's schema-version rule is not engaged and
 ADR-083's one-lifecycle-event-per-entity taxonomy is unchanged. The two list-price columns land NOT NULL
 with defaults (`MMCA.Store/Source/Hosting/MMCA.Store.Migrations.SqlServer.Sales/Migrations/20260907232734_AddOrderLineListPrice.cs:28-44`)
 plus a guarded backfill from the unit price (`:60-63`), and `PromotionLabel` lands nullable
@@ -118,7 +121,7 @@ plus a guarded backfill from the unit price (`:60-63`), and `PromotionLabel` lan
 **The effective price must stay above zero.** Sales allows a zero line price
 (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/OrderInvariants.cs:24-30`) but refuses
 an order whose total the payment provider cannot charge, a zero total included, before anything is
-written (`CheckOutHandler.cs:155-160`), so a discount that resolves to zero would produce a variant
+written (`CheckOutHandler.cs:156-158`), so a discount that resolves to zero would produce a variant
 that can be added to a cart and fails checkout whenever it leaves the order unchargeable. Catalog refuses that pairing at the write instead: `VariantDiscount.ApplyTo` fails with
 `EffectivePriceNotPositive` (`VariantDiscount.cs:61-62,216-218,237-239`), which in practice means a
 zero-priced variant cannot carry an active or scheduled discount. A discount whose window has ended
@@ -162,8 +165,8 @@ a sale that ends between cart-add and checkout charges the list price, with no r
   `ICacheInvalidating` and their controllers evict the `catalog:products` output-cache tag, so an
   admin edit is visible at once. A window that opens or closes on the clock evicts nothing, so a
   cached storefront read can show the pre-boundary price until the products cache policy's 60-second TTL expires
-  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:154-159`). Checkout is never stale
-  because it is a live cross-service call.
+  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:165`, comment at `:160-164`).
+  Checkout is never stale because it is a live cross-service call.
 - **An order line records the two prices and the promotion's name, not the promotion itself.** A line
   answers "struck from 24.99, charged at 19.99, Summer Sale", which is what the receipt, the order
   page and the data-subject export render. It does not record the discount's kind, figure or window,
@@ -235,6 +238,22 @@ controllers and the Sales export moved.
    `user_sales_export.proto:93,96`, `UserSalesExportService.cs:71-72`,
    `ProductVariantsController.cs:157-158,184-185`, `ProductsController.cs:164-165,177`, and
    `ProductSetDiscountRequest.cs:15-34` (still no row-version member).
+
+## Revision (2026-10-26)
+Re-verified against current source. The decision, the invariants, the 60-second products cache
+policy, the chargeable-total refusal and the wire and event contracts are unchanged; only anchors in
+the live sections moved. Anchors inside the earlier dated revisions stay as written.
+
+1. Anchors re-verified against current source:
+   `MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/Product.cs:584-612`
+   (`SetDiscountOnAllVariants`: empty-set guard `:590-593`, every active variant validated
+   `:595-599`, apply loop `:601-609`) and `:542-543,562-563,607-608` (`ProductVariantChanged` with
+   the list price only);
+   `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/CheckOutDomainService.cs:116-136`
+   (`BuildOrderItems`, frozen pricing added at `:132`) and `:59` (`Order.Create`);
+   `CheckOutHandler.cs:156-158` (`EnsureChargeable` before `AddAsync`, comment `:153-155`); and
+   `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:165` (`ProductsCache`,
+   `TimeSpan.FromSeconds(60)`, tags `catalog` and `catalog:products`, comment `:160-164`).
 
 ## Related
 - [ADR-006](006-database-per-service.md), [ADR-008](008-service-extraction-topology.md): each service

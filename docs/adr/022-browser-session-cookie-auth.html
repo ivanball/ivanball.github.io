@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -246,7 +247,9 @@
           2026-10-06: both apps run the same-origin API proxy, so the server writes the session cookies, the
           browser receives only a claims-only token, and SameSite is a configured value (Lax in both apps).
           Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised 2026-10-21: anchors
-          refreshed after the v1.247.0 release.</p>
+          refreshed after the v1.247.0 release. Revised 2026-10-26: the <code>X-CSRF</code> gate is documented with
+          its one exemption (an HTTP/2 WebSocket extended <code>CONNECT</code>, held to the same-origin check instead),
+          and anchors refreshed after the v1.255.0 consumer adoption.</p>
           <h2 id="context">Context</h2>
           <p>The apps are Blazor Web Apps: a server-rendered (SSR) prerender pass runs on the first request, then
           an interactive phase (Blazor Server or WebAssembly) takes over. Authentication against the API is
@@ -270,8 +273,8 @@
           <code>mmca_auth_refresh</code> (the refresh token). In the framework&#39;s default mode the browser seeds them via
           <code>POST /auth/session-cookie</code> at login and <code>SessionCookieJar</code> writes them
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/SessionCookieEndpoints.cs:52</code>).
-          Both apps run the same-origin proxy (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:161</code>,
-          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:153</code>), which sets
+          Both apps run the same-origin proxy (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:167</code>,
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:159</code>), which sets
           <code>ClaimsOnlyBrowserTokens = true</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxyServiceExtensions.cs:73</code>),
           so that <code>POST</code> answers 204 without writing anything (<code>SessionCookieEndpoints.cs:41-55</code>). The cookies
@@ -307,8 +310,10 @@
           <code>:62</code>) and rest on the cookies&#39; <code>SameSite</code> value; the <code>/auth/session/token</code> refresh endpoint
           additionally rejects cross-site requests via the <code>Sec-Fetch-Site</code> header (<code>:72</code>, <code>:100-102</code>). Under the
           proxy, unsafe methods on <code>/api/**</code> and both handoff endpoints require the <code>X-CSRF: 1</code> header
-          (<code>SameOriginApiProxyEndpoint.cs:264</code>, <code>SessionHandoffEndpoints.cs:26</code>, <code>:44</code>), which is the CSRF gate
-          the apps rely on rather than SameSite.</li>
+          (<code>SameOriginApiProxyEndpoint.cs:266</code>, <code>SessionHandoffEndpoints.cs:26</code>, <code>:44</code>), which is the CSRF gate
+          the apps rely on rather than SameSite. The one exemption is an HTTP/2 WebSocket extended <code>CONNECT</code>,
+          which cannot carry the header and is instead held to this host&#39;s own <code>Origin</code> by the proxy&#39;s
+          same-origin gate (<code>SameOriginApiProxyEndpoint.cs:182-201</code>, <code>:265-266</code>).</li>
           </ul>
           <p>This is a backend-for-frontend (BFF) style token-storage layer: the browser holds an HttpOnly session
           whose refresh half it cannot read, the SSR pass authenticates from the access cookie without trusting
@@ -403,6 +408,21 @@
           <code>:26</code>, <code>:44</code>, <code>:55</code>, both <code>Program.cs</code> anchors, and
           <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/appsettings.json:53-54</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. The decision is unchanged: both apps run the same-origin proxy,
+          the server is the only writer of the session cookies, and unsafe proxied methods require <code>X-CSRF</code>.
+          One long-standing omission is corrected, and the <code>Program.cs</code> and proxy-endpoint anchors moved.</p>
+          <ol>
+          <li>The CSRF bullet in the Decision now names the gate&#39;s one exemption: an HTTP/2 WebSocket extended
+          <code>CONNECT</code> cannot carry the <code>X-CSRF</code> header, so it is admitted without it and relies on the proxy&#39;s
+          same-origin gate, which requires this host&#39;s own <code>Origin</code> on a WebSocket upgrade
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxyEndpoint.cs:182-201</code>,
+          <code>:265-266</code>).</li>
+          <li>Anchors re-verified against current source:
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:167</code> and
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:159</code> (<code>AddCommonSameOriginApiProxy</code>);
+          <code>SameOriginApiProxyEndpoint.cs:266</code> (<code>X-CSRF</code> gate on unsafe methods).</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-004 (the JWT/JWKS validation the API performs on every call, which is why the SSR handler can skip
           signature validation), ADR-008 (the gateway and topology the UI talks to), ADR-019 (rate limiting on the
@@ -427,6 +447,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

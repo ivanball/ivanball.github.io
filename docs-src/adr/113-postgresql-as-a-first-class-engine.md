@@ -12,7 +12,10 @@ Helpdesk template-staging changes. Revised 2026-10-25: PostgreSQL connection cus
 through `INpgsqlDataSourceConfigurator`, one shared `NpgsqlDataSource` per connection string for the
 context, the readiness check and the PostgreSql broker, with the RDS and Cloud SQL IAM token
 providers as its users; decisions 2 and 8 are extended and decision 10 is new. See Revision
-(2026-10-25) at the end.
+(2026-10-25) at the end. Revised 2026-10-26: decision 4 corrected (SQLite quotes outbox filter
+columns with double quotes like PostgreSQL, and only SQL Server and Cosmos answer brackets), decision
+9 gains the periodic-password-provider test, and anchors refreshed after the v1.257.0 and v1.261.0
+releases.
 
 ## Context
 The framework has shipped three database engines since its first release: SQL Server, Azure Cosmos DB
@@ -65,11 +68,12 @@ and differing from it only where the server forces a difference.**
    no existing public signature changes.
 
 2. **One sealed context, built like the SQL Server one.** `PostgreSQLDbContext`
-   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/PostgreSQLDbContext.cs:23`)
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/PostgreSQLDbContext.cs:24`)
    calls `UseNpgsql` with the resolved connection string, the per-source migrations assembly, the
    configured command timeout and the same retry-on-failure posture `SQLServerDbContext` uses
-   (`PostgreSQLDbContext.cs:51-82`, retry at `:74-77`), and suppresses `PendingModelChangesWarning` for the same
-   microservice-extraction reason (`PostgreSQLDbContext.cs:82`). Everything else the engine
+   (`OnConfiguring` at `PostgreSQLDbContext.cs:56-80`, `ConfigureNpgsql` at `:82-106`, retry at
+   `:102-105`), and suppresses `PendingModelChangesWarning` for the same microservice-extraction
+   reason (`PostgreSQLDbContext.cs:77`). Everything else the engine
    contributes lives in one `PostgreSQLDataSourceEngine`
    (`.../Persistence/DataSources/Engines/PostgreSQLDataSourceEngine.cs:17`), registered in the
    `DataSourceEngines` registry (`.../DataSources/Engines/DataSourceEngines.cs:19-28`):
@@ -104,16 +108,18 @@ and differing from it only where the server forces a difference.**
    The outbox filters are built through one `QuoteColumn` helper
    (`.../DbContexts/ApplicationDbContext.cs:619-620`, delegating to
    `SoftDeleteFilterSql.QuoteColumn` at `SoftDeleteFilterSql.cs:70-71` and on to the engine) that
-   returns the bracketed form for every engine except PostgreSQL (`PostgreSQLDataSourceEngine.cs:113`),
-   so the literals SQL Server and SQLite have always produced are
-   byte-identical. `IncludeColumns` (`.../DbContexts/ApplicationDbContext.cs:645-649`) asks the
-   engine for the provider's own `IncludeProperties` overload (`PostgreSQLDataSourceEngine.cs:109`)
-   for the same reason.
+   returns brackets for SQL Server (`.../DataSources/Engines/SQLServerDataSourceEngine.cs:114`) and
+   SQL-standard double quotes for PostgreSQL (`PostgreSQLDataSourceEngine.cs:113`) and SQLite
+   (`SqliteDataSourceEngine.cs:112`, whose soft-delete filter is `"IsDeleted" = 0` at `:115`).
+   Cosmos answers brackets too (`CosmosDataSourceEngine.cs:114`) but builds no soft-delete filter
+   (`null` at `:117`). `IncludeColumns` (`.../DbContexts/ApplicationDbContext.cs:645-649`) asks the
+   engine for the provider's own `IncludeProperties` overload (`PostgreSQLDataSourceEngine.cs:109-110`),
+   so each provider gets its own form.
 
 5. **Timestamps are normalized in the model, never with the process-wide switch.**
    `PostgreSQLDbContext.ConfigureConventions` maps every `DateTime` (and, through the same entry,
    every `DateTime?`) to `timestamp with time zone` through `UtcDateTimeConverter`
-   (`PostgreSQLDbContext.cs:95-105`,
+   (`PostgreSQLDbContext.cs:116-126`, the `DateTime` mapping at `:123-125`,
    `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Conversions/UtcDateTimeConverter.cs:25-40`).
    The converter treats `Unspecified` as already-UTC (the framework's own convention) and genuinely
    converts a `Local` value rather than relabelling it. **`Npgsql.EnableLegacyTimestampBehavior` is
@@ -144,9 +150,11 @@ and differing from it only where the server forces a difference.**
 
 8. **Readiness and orchestration are peers, not extras.**
    `AddInfrastructureHealthChecks()` registers an `AddNpgSql` check per declared PostgreSQL database
-   (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.Health.cs:232`), named `postgresql` for
-   the first one (`Extensions.Health.cs:263`), and `WithPostgreSQLDataSource(database, logicalName)`
-   (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:560`) wires a service
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.Health.cs:238-243`, through
+   `PostgreSqlHealthCheckRegistration.Register` at `:242`, which wraps `AddNpgSql` at
+   `.../Health/PostgreSqlHealthCheckRegistration.cs:32-33`), named `postgresql` for the first one
+   (`Extensions.Health.cs:273`), and `WithPostgreSQLDataSource(database, logicalName)`
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:561`) wires a service
    project to its own `PostgresDatabaseResource` with the same reference / `WaitFor` / environment
    shape `WithSQLServerDataSource` uses. **No Aspire client integration is added**
    (`Aspire.Npgsql.EntityFrameworkCore.PostgreSQL`), because the SQL Server path does not use one
@@ -162,12 +170,15 @@ and differing from it only where the server forces a difference.**
    `Tests/Core/MMCA.Common.Infrastructure.PostgreSQL.Tests` is a Testcontainers project outside
    `MMCA.Common.slnx` (the posture `Tests/Core/MMCA.Common.Infrastructure.Redis.Tests` established:
    Docker-gated, own CI job, kept out of the fast solution-wide unit loop), run by the
-   `postgresql-integration` CI job (`MMCA.Common/.github/workflows/ci.yml:769`). It creates the whole
-   schema, round-trips an auditable entity's UTC audit stamps, proves a soft-deleted row is hidden AND
-   frees its unique slot, writes and drains the outbox row of a local domain event, and writes the
-   outbox row of an integration event and asserts it stays pending for `OutboxProcessor`
-   (`Tests/Core/MMCA.Common.Infrastructure.PostgreSQL.Tests/PostgreSQLPersistenceTests.cs:217-260`). The three failures listed in the Context section are each caught by one of
-   those, and by nothing in the unit tier.
+   `postgresql-integration` CI job (`MMCA.Common/.github/workflows/ci.yml:822`). It creates the whole
+   schema, round-trips an auditable entity's UTC audit stamps (`PostgreSQLPersistenceTests.cs:119-120`),
+   proves a soft-deleted row is hidden (`:145-146`) AND frees its unique slot (`:179-180`), writes and
+   drains the outbox row of a local domain event, and writes the outbox row of an integration event
+   and asserts it stays pending for `OutboxProcessor`
+   (`Tests/Core/MMCA.Common.Infrastructure.PostgreSQL.Tests/PostgreSQLPersistenceTests.cs:204-248`).
+   The three failures listed in the Context section are each caught by one of those, and by nothing
+   in the unit tier. A further test authenticates through a periodic password provider on the
+   configured data source (`PostgreSQLPersistenceTests.cs:254-255`, decision 10).
 
 10. **Connection customization is one extension point, and cloud IAM authentication is its two users.**
     `INpgsqlDataSourceConfigurator`
@@ -201,12 +212,12 @@ and differing from it only where the server forces a difference.**
     60, while Npgsql reuses whatever it was handed for the whole interval (`:16-21`). Both send the token
     as the password, so both reject a connection string below `SSL Mode=Require`
     (`RdsIamAuthenticationConfigurator.cs:110-117`, `CloudSqlIamAuthenticationConfigurator.cs:100-107`)
-    and expect no password in it (`MMCA.Common/CHANGELOG.md:15`, `:21`). Neither reaches SQL Server:
+    and expect no password in it (`MMCA.Common/CHANGELOG.md:77`, `:83`). Neither reaches SQL Server:
     RDS and Cloud SQL offer no IAM database authentication for it
     (`AwsServiceCollectionExtensions.cs:98`, `GcpServiceCollectionExtensions.cs:80`), so an RDS SQL
-    Server password connection string stays in Secrets Manager (`MMCA.Common/CHANGELOG.md:15`). The
+    Server password connection string stays in Secrets Manager (`MMCA.Common/CHANGELOG.md:77`). The
     PostgreSQL tier covers a periodic password provider and the PostgreSql broker transport
-    (`MMCA.Common/CHANGELOG.md:28`).
+    (`MMCA.Common/CHANGELOG.md:90`).
 
 ### Rollout: the Helpdesk canary and the template axis
 Both live in MMCA.Helpdesk, outside the framework: a framework capability lands in a release, and a
@@ -361,6 +372,31 @@ connection-customization extension point.
    [ADR-130](130-per-engine-data-source-strategy.md) records why the engine strategy is untouched.
 3. The other `PostgreSQLDbContext.cs` and `Extensions.Health.cs` anchors in decisions 2 and 8 were not
    re-verified in this pass and are left as recorded on 2026-10-21.
+
+## Revision (2026-10-26)
+Re-verified against current source. The engine decision, its mapping, its timestamp handling and its
+rationale are unchanged. One statement in decision 4 was wrong and is corrected, decision 9 names a
+test added with decision 10, and the anchors left unverified on 2026-10-25 are re-pointed.
+
+1. **Decision 4 corrected.** `QuoteColumn` does not answer brackets for every engine except
+   PostgreSQL: SQLite answers SQL-standard double quotes (`SqliteDataSourceEngine.cs:112`) and builds
+   `"IsDeleted" = 0` (`:115`), as `ApplicationDbContext.cs:613-614` states. Only SQL Server
+   (`SQLServerDataSourceEngine.cs:114`) and Cosmos (`CosmosDataSourceEngine.cs:114`, whose soft-delete
+   filter is `null` at `:117`) answer brackets. The claim that SQL Server and SQLite literals are
+   byte-identical is removed.
+2. **Decision 9 extended** with `APeriodicPasswordProvider_AuthenticatesThroughTheConfiguredDataSource`
+   (`PostgreSQLPersistenceTests.cs:254-255`), and the outbox tests re-scoped to `:204-248`.
+3. Anchors re-verified against current source: `PostgreSQLDbContext.cs:24` (class), `:56-80`
+   (`OnConfiguring`, `UseNpgsql` at `:66` and `:70`), `:77` (`PendingModelChangesWarning`),
+   `:82-106` (`ConfigureNpgsql`, retry `:102-105`), `:116-126` (`ConfigureConventions`, mapping
+   `:123-125`); `UtcDateTimeConverter.cs:25-40` unchanged; `Extensions.Health.cs:238-243` (PostgreSQL
+   loop, `Register` at `:242`), `PostgreSqlHealthCheckRegistration.cs:32-33` (`AddNpgSql`) and `:45`,
+   `Extensions.Health.cs:273` (`postgresql` name); `MMCA.Common.Aspire.Hosting/Extensions.cs:561`
+   (`WithPostgreSQLDataSource`; `WithSQLServerDataSource` at `:531`); the `postgresql-integration`
+   job at `MMCA.Common/.github/workflows/ci.yml:822`; `PostgreSQLPersistenceTests.cs:119-120`,
+   `:145-146`, `:179-180`; and the v1.257.0 entries at `MMCA.Common/CHANGELOG.md:77`
+   (`AddAwsRdsIamAuthentication`), `:83` (`AddCloudSqlIamAuthentication`), `:87`
+   (`AddNpgsqlDataSourceConfigurator`) and `:90` (PostgreSQL tier).
 
 ## Related
 [ADR-006](006-database-per-service.md) (one sealed context per engine, one instance per database),

@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -262,11 +263,12 @@
           permission and timeout steps only when a derived command opts in. Revised 2026-10-06: the payment
           override now runs on the shared mutate workflow with its provider call inside <code>MutateAsync</code>, so the
           generic-path boundary is the generic update path, not the presence of a provider call. Revised
-          2026-10-21: anchors refreshed after the controller base and the consumer DI registrations shifted.</p>
+          2026-10-21: anchors refreshed after the controller base and the consumer DI registrations shifted.
+          Revised 2026-10-26: anchors refreshed after #590 shifted the controller base delete action.</p>
           <h2 id="context">Context</h2>
           <p>ADR-034 records the read side of the generic resource layer and stops one verb short. Its
           <code>AggregateRootEntityControllerBase</code> ships <code>[HttpPost]</code> create and <code>[HttpDelete(&quot;{id}&quot;)]</code>
-          (<code>Source/Presentation/MMCA.Common.API/Controllers/AggregateRootEntityControllerBase.cs:75</code>, <code>:107</code>),
+          (<code>Source/Presentation/MMCA.Common.API/Controllers/AggregateRootEntityControllerBase.cs:75</code>, <code>:106</code>),
           and the framework already carried a generic delete command and handler. Update was the verb every
           aggregate still hand-wrote.</p>
           <p>That gap is small for an application with four aggregates and expensive for the shape this release
@@ -680,6 +682,15 @@
           (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/DependencyInjection.cs:84-86</code>).
           The Store Catalog anchors (<code>:101-104</code>, <code>:105</code>, <code>:112</code>) are unchanged.</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. No decision, behavior or adoption changed: the generic create,
+          update and delete commands and the controller base actions are as recorded. Only one line position
+          moved in the controller base. Anchors inside the earlier Revisions are left as recorded.</p>
+          <ol>
+          <li>Anchors re-verified against current source: the base controller&#39;s <code>[HttpPost]</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AggregateRootEntityControllerBase.cs:75</code>)
+          and <code>[HttpDelete(&quot;{id}&quot;)]</code> (<code>:106</code>), re-pointed in Context.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -700,6 +711,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             </ul>
           </nav>
         </aside>

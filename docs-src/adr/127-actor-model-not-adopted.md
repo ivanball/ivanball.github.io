@@ -10,7 +10,8 @@ wording corrected. Revised 2026-10-06: the replica wording now reflects that not
 `minReplicas: 1` under `conferenceMode`. Revised 2026-10-07: the replica wording now reflects
 that the ADC UI app holds four replicas under `conferenceMode` and the Notification app stays at a
 ceiling of two, and anchors were refreshed. Revised 2026-10-21: anchors refreshed after the vote
-handler, the live-channel drain and both apps' `main.bicep` scale blocks moved.
+handler, the live-channel drain and both apps' `main.bicep` scale blocks moved. Revised 2026-10-26:
+anchors refreshed after the output-cache pipeline step and both apps' `main.bicep` scale blocks moved.
 
 ## Context
 The actor model gives every logical entity its own single-threaded unit of execution holding its state
@@ -53,7 +54,7 @@ resolving the publisher per item at `:131`), the one actor-shaped guarantee the 
 
 **Read pressure is absorbed by caching, and the load is small.** Tier 2 is an HTTP output cache in the
 pipeline
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Pipeline/MiddlewarePipelineBuilder.cs:133`)
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Pipeline/MiddlewarePipelineBuilder.cs:131`)
 backed by Redis when a connection string is present
 (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Caching/RedisCachingExtensions.cs:91`, registered at
 `:99`), with the Redis resource composed by each app's AppHost
@@ -103,9 +104,9 @@ tiers, and live fan-out stays on the notification hub.
   ADC Identity, Conference, Engagement, Gateway and UI apps reach four while Notification stays at two;
   every app runs `minReplicas: 1` except the ADC Gateway, which runs two under `conferenceMode`, and
   the ADC UI, which then holds its ceiling of four:
-  `MMCA.ADC/infra/main.bicep:2070`, `:2223`, `:2358`, `:2544`, `:2696` and `:2847`,
+  `MMCA.ADC/infra/main.bicep:2106`, `:2259`, `:2394`, `:2580`, `:2732` and `:2883`,
   `conferenceFrontDoorMinReplicas` at `:191`, `conferenceScaledMaxReplicas` at `:192`,
-  `MMCA.Store/infra/main.bicep:1682`, `:1806`, `:1954`, `:2072` and `:2190`),
+  `MMCA.Store/infra/main.bicep:1688`, `:1812`, `:1960`, `:2078` and `:2196`),
   so an in-process writer guarantee is not a guarantee, and it would silently weaken a
   correctness property the concurrency token holds across the fleet.
 - **Adopting actors only for live polls.** The live path is the least durable state in the system and
@@ -185,6 +186,21 @@ the single-reader FIFO drain is unchanged. Only anchors moved.
    `ConfigureConcurrencyTokens` at `:421` and `:589`, `IsRowVersion()` at `:602`,
    `IsConcurrencyToken()` at `:606`) and the AppHost Redis resource and builder (`Program.cs:44` and
    `:10`) still hold.
+
+## Revision (2026-10-26)
+Re-verified against current source. No decision or rationale changed: every container app still
+declares at least `maxReplicas: 2`, and the replica floors and ceilings match the 2026-10-07 wording.
+Only anchors moved.
+1. Anchors re-verified against current source: the output-cache pipeline step
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Pipeline/MiddlewarePipelineBuilder.cs:131`,
+   `UseOutputCache()` at `:132`, was `:133`); the ADC scale blocks for Identity, Conference and
+   Engagement (`MMCA.ADC/infra/main.bicep:2106`, `:2259`, `:2394`, min 1 and max
+   `conferenceScaledMaxReplicas`), Notification (`:2580`, min 1 and max 2), Gateway (`:2732`, min
+   `conferenceFrontDoorMinReplicas`) and UI (`:2883`, min
+   `conferenceMode ? conferenceScaledMaxReplicas : conferenceFrontDoorMinReplicas`), replacing
+   `:2070`, `:2223`, `:2358`, `:2544`, `:2696` and `:2847`; and every Store scale block
+   (`MMCA.Store/infra/main.bicep:1688`, `:1812`, `:1960`, `:2078` and `:2196`, all min 1 and max 2),
+   replacing `:1682`, `:1806`, `:1954`, `:2072` and `:2190`.
 
 ## Related
 [ADR-007](007-grpc-extraction.md), [ADR-008](008-service-extraction-topology.md) and

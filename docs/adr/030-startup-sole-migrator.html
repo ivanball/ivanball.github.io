@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -249,7 +250,9 @@
           replicas of one service are a supported case (EF&#39;s migrations lock plus a five-minute initialization
           command timeout), so <code>minReplicas: 1</code> is not a single-applier guarantee. Revised 2026-10-21: both
           <code>deploy.yml</code> sole-migrator comments now describe concurrent replicas serializing on the migrations
-          lock, so the Decision cites them as agreeing rather than stale; anchors refreshed.</p>
+          lock, so the Decision cites them as agreeing rather than stale; anchors refreshed. Revised
+          2026-10-26: anchors refreshed after later ADC and Store changes moved <code>main.bicep</code>, the Conference
+          seeder and the host <code>Program.cs</code> lines.</p>
           <h2 id="context">Context</h2>
           <p>Under database-per-service (ADR-006), each service owns its own database and its own migrations project,
           so <em>something</em> must apply pending migrations on every deploy. The framework&#39;s
@@ -278,14 +281,14 @@
           at startup, before the new revision serves traffic. There is deliberately <strong>no</strong> separate deploy-step
           migration (no <code>sqlcmd</code> / <code>dotnet ef database update</code> apply in <code>deploy.yml</code>).</p>
           <ul>
-          <li><strong>Set in prod for every service.</strong> <code>MMCA.Store/infra/main.bicep:1610,1781,1917</code> (Identity/Catalog/Sales)
-          and <code>MMCA.ADC/infra/main.bicep:1923,2164,2300,2454</code> (Identity/Conference/Engagement/Notification) all set
+          <li><strong>Set in prod for every service.</strong> <code>MMCA.Store/infra/main.bicep:1616,1787,1923</code> (Identity/Catalog/Sales)
+          and <code>MMCA.ADC/infra/main.bicep:1959,2200,2336,2490</code> (Identity/Conference/Engagement/Notification) all set
           <code>DatabaseInitStrategy = &#39;Migrate&#39;</code>.</li>
           <li><strong>Concurrent replicas serialize on EF&#39;s migrations lock.</strong> &quot;Sole migrator&quot; means the service is the
           only thing that migrates its database, not that one replica does. Every service runs
-          <code>minReplicas: 1</code> but scales above it (Store <code>MMCA.Store/infra/main.bicep:1682,1806,1954</code>, max 2; ADC
-          <code>MMCA.ADC/infra/main.bicep:2070,2223,2358</code>, max <code>conferenceScaledMaxReplicas</code>, 2 or 4 in conference
-          mode, <code>:192</code>, and <code>:2544</code>, max 2), so several replicas can run startup initialization at once. Each
+          <code>minReplicas: 1</code> but scales above it (Store <code>MMCA.Store/infra/main.bicep:1688,1812,1960</code>, max 2; ADC
+          <code>MMCA.ADC/infra/main.bicep:2106,2259,2394</code>, max <code>conferenceScaledMaxReplicas</code>, 2 or 4 in conference
+          mode, <code>:192</code>, and <code>:2580</code>, max 2), so several replicas can run startup initialization at once. Each
           calls <code>MigrateAsync</code>; every replica but one waits on EF&#39;s migrations lock (<code>__EFMigrationsLock</code>), and
           migration plus seeding run under a five-minute command timeout so that wait does not trip the
           30-second default
@@ -294,14 +297,14 @@
           startup probe is the tighter bound: it polls <code>/alive</code> with <code>initialDelaySeconds: 5</code>,
           <code>periodSeconds: 5</code> and <code>failureThreshold: 30</code> (about 155 seconds), and the host does not listen
           until initialization finishes, so a replica still waiting on the lock after that window is
-          restarted before the five-minute timeout is reached (ADC <code>MMCA.ADC/infra/main.bicep:2043-2050</code>,
-          with the same block at <code>:2196-2203</code>, <code>:2331-2338</code> and <code>:2498-2505</code>; Store
-          <code>MMCA.Store/infra/main.bicep:1676,1800,1948</code>). Seeding tolerates the overlap only where a
+          restarted before the five-minute timeout is reached (ADC <code>MMCA.ADC/infra/main.bicep:2079-2086</code>,
+          with the same block at <code>:2232-2239</code>, <code>:2367-2374</code> and <code>:2534-2541</code>; Store
+          <code>MMCA.Store/infra/main.bicep:1682,1806,1954</code>). Seeding tolerates the overlap only where a
           seeder handles it: ADC&#39;s <code>ConferenceModuleDbSeeder</code> treats a unique or primary-key violation on
           save as another replica having seeded those rows and detaches every pending entry of the failing
           context, the seed rows and the outbox rows the save captured
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/DbContexts/Seeding/ConferenceModuleDbSeeder.cs:68</code>,
-          <code>:574-594</code>). Store&#39;s seeders check then insert and save with a plain <code>SaveChangesAsync</code>, with no
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/DbContexts/Seeding/ConferenceModuleDbSeeder.cs:83</code>,
+          <code>:603-623</code>). Store&#39;s seeders check then insert and save with a plain <code>SaveChangesAsync</code>, with no
           violation handling
           (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Infrastructure/Persistence/DbContexts/Seeding/CatalogModuleDbSeeder.cs:55,79,122</code>,
           <code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Persistence/DbContexts/Seeding/SalesModuleDbSeeder.cs:118</code>).
@@ -365,8 +368,8 @@
           <p>ADR-006 (database-per-service: why each service owns and migrates its own database),
           ADR-025 (readiness gating; a still-migrating replica is not yet listening at all, because
           initialization completes before the host starts, e.g.
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:447</code> ahead of <code>app.RunAsync()</code> at
-          <code>:478</code>),
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:458</code> ahead of <code>app.RunAsync()</code> at
+          <code>:489</code>),
           ADR-003 (the outbox lease that makes scale-out safe on the dispatch side),
           ADR-009 (RTO/RPO + drilled restore is the recovery backstop for a bad migration).</p>
           <h2 id="revision-2026-08-07">Revision (2026-08-07)</h2>
@@ -544,6 +547,28 @@
           Identity <code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:304</code> (<code>:356</code>),
           Catalog <code>:317</code> (<code>:365</code>), Sales <code>:306</code> (<code>:338</code>).</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. Unchanged: every service host still sets
+          <code>DatabaseInitStrategy = &#39;Migrate&#39;</code> in production, is the sole migrator and seeder of its own
+          database, scales above <code>minReplicas: 1</code> (Store to 2; ADC to <code>conferenceScaledMaxReplicas</code>, still
+          <code>conferenceMode ? 4 : 2</code> at <code>MMCA.ADC/infra/main.bicep:192</code>, and Notification to 2), keeps the
+          <code>/alive</code> startup probe at 5/5/30, and initializes before it listens. ADC&#39;s Conference seeder still
+          tolerates a concurrent seed by detaching every Added, Modified or Deleted entry of the failing
+          context. Only line numbers moved.</p>
+          <ol>
+          <li>Anchors re-verified against current source: both <code>main.bicep</code> setting lines
+          (<code>MMCA.Store/infra/main.bicep:1616,1787,1923</code>; <code>MMCA.ADC/infra/main.bicep:1959,2200,2336,2490</code>);
+          the scale blocks (Store <code>:1688,1812,1960</code>; ADC <code>:2106,2259,2394</code> and Notification <code>:2580</code>); the
+          <code>/alive</code> startup probes (ADC <code>:2079-2086</code>, <code>:2232-2239</code>, <code>:2367-2374</code>, <code>:2534-2541</code>; Store
+          <code>:1682,1806,1954</code>); the Conference seeder&#39;s violation detector
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/DbContexts/Seeding/ConferenceModuleDbSeeder.cs:83</code>)
+          and <code>SaveToleratingConcurrentSeedAsync</code> (<code>:603-623</code>, called at <code>:155</code>, <code>:197</code>, <code>:246</code>, <code>:289</code>,
+          <code>:360</code>, <code>:386</code>, <code>:466</code>, <code>:522</code>, <code>:593</code>); the host call sites, all still ahead of
+          <code>app.RunAsync()</code>: ADC Identity <code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:369</code>
+          (<code>:398</code>), Conference <code>:458</code> (<code>:489</code>), Engagement <code>:334</code> (<code>:375</code>), Notification <code>:278</code> (<code>:321</code>);
+          Store Identity <code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:315</code> (<code>:367</code>),
+          Catalog <code>:328</code> (<code>:376</code>), Sales <code>:317</code> (<code>:349</code>).</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -565,6 +590,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             </ul>
           </nav>
         </aside>

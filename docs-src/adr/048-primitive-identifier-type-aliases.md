@@ -30,6 +30,9 @@ Revised 2026-10-06: the Status block now lists the 2026-10-01 revision, and the 
 Revised 2026-10-21: Engagement's alias file now declares eleven aliases, `UserSessionBookmarkIdentifierType`
 having been added, so the workspace total is 49 aliases across 10 files, 47 of them `int`; the three
 `Directory.Build.props` alias-block citations were re-anchored. See the Revision (2026-10-21) at the end.
+Revised 2026-10-26: anchors refreshed after the three `Directory.Build.props` alias link blocks, the
+`AuthenticationServiceBase<TUser>` constraint and the ADC `User` declarations moved without their
+content changing. See the Revision (2026-10-26) at the end.
 **Revisited by [ADR-085](085-identifier-type-aliases-revisited.md) (2026-08-18)**: the wrapper-struct
 alternative this record deferred was re-evaluated, priced, and deferred again, now against named
 revisit triggers instead of open-endedly. The decision below is unchanged; see the Revision
@@ -73,7 +76,7 @@ not as a wrapper struct.
   (`Source/Core/MMCA.Common.Domain/Entities/AuditableBaseEntity.cs:27,31`), and constrains the user
   type parameter of `AuthenticationServiceBase<TUser>`
   (`where TUser : AuditableAggregateRootEntity<UserIdentifierType>, IAuthUser`,
-  `Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:72`), with each consuming
+  `Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:75`), with each consuming
   app supplying the concrete `User` entity that satisfies it.
   Consumers follow the same pattern: ADC Identity
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/MMCA.ADC.Identity.GlobalUsings.IdentifierType.cs:2`),
@@ -91,13 +94,13 @@ not as a wrapper struct.
 - **Aliases are linked solution-wide via `Directory.Build.props`.** Each `GlobalUsings.*.cs` file is
   pulled into every project with a `<Compile Include ... Link=... />` block, so the alias is visible
   everywhere without a project reference: Common
-  (`MMCA.Common/Directory.Build.props:153-163`), ADC
-  (`MMCA.ADC/Directory.Build.props:138-152`), Store (`MMCA.Store/Directory.Build.props:138-149`). Adding a
+  (`MMCA.Common/Directory.Build.props:136-146`), ADC
+  (`MMCA.ADC/Directory.Build.props:122-136`), Store (`MMCA.Store/Directory.Build.props:124-135`). Adding a
   solution-wide alias is a new `GlobalUsings.*.cs` plus a matching `<Compile Include>` line, nothing more.
 - **The alias flows unchanged through every layer.** Tracing the ADC `User` aggregate: the domain
   entity is `User : AuditableAggregateRootEntity<UserIdentifierType>`
-  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:34`); the cross-context
-  reference to a speaker is typed `SpeakerIdentifierType? LinkedSpeakerId` (same file, line 78); the EF
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:35`); the cross-context
+  reference to a speaker is typed `SpeakerIdentifierType? LinkedSpeakerId` (same file, line 79); the EF
   configuration is `EntityTypeConfigurationSQLServer<User, UserIdentifierType>`
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Infrastructure/Persistence/EntityConfiguration/UserConfiguration.cs:13`);
   the repository handle is `GetRepository<User, UserIdentifierType>()`
@@ -352,3 +355,20 @@ are where the Revision (2026-09-19) put them. One count moved because Engagement
    (four `<Compile Include>` entries: Identity, Conference, Engagement, Notification) and
    `MMCA.Store/Directory.Build.props:138-149` (three: Catalog, Sales, Identity). The `:131-141` recorded
    in the Revision (2026-10-06) stays as recorded on that date.
+
+## Revision (2026-10-26)
+Re-verified against current source. No decision, no rationale and no count changed: the alias census in
+the Revision (2026-10-21) stands, and the four ADC and three Store `<Compile Include>` entries are in the
+order that revision recorded. Five Decision citations moved without their text changing.
+
+1. Anchors re-verified against current source: the `Directory.Build.props` alias link blocks are at
+   `MMCA.Common/Directory.Build.props:136-146` (the Common.Domain `UserIdentifierType` block at 136-140
+   and the Common.Shared notification block at 142-146), `MMCA.ADC/Directory.Build.props:122-136`
+   (Identity, Conference, Engagement, Notification) and `MMCA.Store/Directory.Build.props:124-135`
+   (Catalog, Sales, Identity); the `AuthenticationServiceBase<TUser>` constraint is at
+   `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:75`; ADC's
+   `User : AuditableAggregateRootEntity<UserIdentifierType>` is at
+   `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:35` and its
+   `SpeakerIdentifierType? LinkedSpeakerId` at line 79 of the same file. The ranges recorded in the
+   Revision (2026-10-21) and the `:72` recorded in the Revision (2026-10-06) stay as recorded on those
+   dates.

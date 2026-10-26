@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -262,7 +263,8 @@
           v1.217.0) below).
           Revised 2026-10-06: the registration also adds <code>ApiVersionReportingResultFilter</code> as a global MVC filter so output-cached responses keep the version headers; re-anchored the citations.
           Revised 2026-10-07: anchors re-verified against current source after the v1.233.0 release, no decision change.
-          Revised 2026-10-21: anchors refreshed after host <code>Program.cs</code> edits moved four <code>AddCommonApiVersioning</code> call sites and the OpenAPI contract-test anchor, no decision change.</p>
+          Revised 2026-10-21: anchors refreshed after host <code>Program.cs</code> edits moved four <code>AddCommonApiVersioning</code> call sites and the OpenAPI contract-test anchor, no decision change.
+          Revised 2026-10-26: anchors refreshed after host <code>Program.cs</code> edits moved all seven extracted-host <code>AddCommonApiVersioning</code> call sites, no decision change.</p>
           <h2 id="context">Context</h2>
           <p>The framework&#39;s REST surface is served by controllers hosted in extracted service processes behind a
           YARP gateway. As those services evolve, a response shape has to be able to change without breaking a
@@ -362,11 +364,11 @@
           costs nothing and still protects any other consumer of the API descriptions from the same null.</li>
           <li><strong>Every REST host adopts it the same way.</strong> The extracted services call <code>AddCommonApiVersioning</code>
           in their startup: ADC&#39;s Conference
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:220</code>) and Identity
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:155</code>) hosts, Store&#39;s Catalog host
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:140</code>), and the same call is made
-          by the other extracted hosts (ADC Engagement <code>Program.cs:150</code>, ADC Notification <code>Program.cs:139</code>,
-          Store Sales <code>Program.cs:148</code>, Store Identity <code>Program.cs:135</code>) and by the monolith reference host
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:226</code>) and Identity
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:161</code>) hosts, Store&#39;s Catalog host
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:146</code>), and the same call is made
+          by the other extracted hosts (ADC Engagement <code>Program.cs:156</code>, ADC Notification <code>Program.cs:145</code>,
+          Store Sales <code>Program.cs:154</code>, Store Identity <code>Program.cs:141</code>) and by the monolith reference host
           (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:35</code>).</li>
           </ul>
           <p>Application controllers beyond <code>ServiceInfo</code> declare <code>[ApiVersion(&quot;1.0&quot;)]</code> today: the second version
@@ -553,6 +555,19 @@
           <code>ApiVersioningTests.cs:14</code>, <code>OpenApiBaselineTests.cs</code> (present), <code>OpenApiContractTestsBase.cs:51</code>
           and <code>EntityControllerBase.cs:31-33</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. No decision, rationale or trade-off changed: all seven extracted
+          service hosts still call <code>AddCommonApiVersioning</code>, and each still registers <code>services.AddOpenApi()</code>
+          plus <code>services.AddCommonOpenApi()</code> and maps <code>app.MapCommonOpenApi()</code>. Host <code>Program.cs</code> edits moved
+          every extracted-host <code>AddCommonApiVersioning</code> call site by six lines, so those Decision anchors are
+          re-pointed in place below. Line numbers cited inside the earlier dated revisions (the 2026-10-21 call
+          sites, host OpenAPI registrations, the design-time skip helper, both <code>deploy.yml</code> gates and both
+          <code>Directory.Build.props</code> blocks) are left as recorded.</p>
+          <ol>
+          <li>Anchors re-verified against current source: the <code>AddCommonApiVersioning</code> host call sites (ADC
+          Conference <code>Program.cs:226</code>, Identity <code>:161</code>, Engagement <code>:156</code>, Notification <code>:145</code>; Store Catalog
+          <code>:146</code>, Sales <code>:154</code>, Identity <code>:141</code>; Helpdesk Web <code>Program.cs:35</code>, unchanged).</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-010 (integration-event schema versioning: the asynchronous, <code>SchemaVersion</code>-carried,
           consumer-resolved axis this deliberately contrasts with; HTTP versioning here is request-time and
@@ -585,6 +600,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

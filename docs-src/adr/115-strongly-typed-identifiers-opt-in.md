@@ -8,7 +8,9 @@ fitness rule's subclass list was completed; see the Revision (2026-09-19) at the
 the `CheckIn` parameter types were corrected). Revised 2026-10-06: the `string` identity-path
 rationale was corrected, since `System.String` does implement `IParsable<string>`. Revised
 2026-10-21: the alias count is 49 (47 `int`), `StronglyTypedIdMappings` ships two conversions
-rather than four, and the public API surface is 53 declarations rather than 55.
+rather than four, and the public API surface is 53 declarations rather than 55. Revised
+2026-10-26: anchors refreshed after `AddStronglyTypedIds` moved within the Infrastructure
+`DependencyInjection.cs`.
 **Revisits [ADR-048](048-primitive-identifier-type-aliases.md) and
 [ADR-085](085-identifier-type-aliases-revisited.md)** by adding the capability those records deferred,
 without migrating anything. ADR-048's decision (every entity identity is a primitive named through a
@@ -123,9 +125,9 @@ the framework pushes a consumer toward a wrapper.**
 
 6. **One call is the whole opt-in.**
    `services.AddStronglyTypedIds(typeof(OrderId).Assembly)`
-   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:382`) scans the named
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:401`) scans the named
    assemblies for wrappers, registers the `TypeConverter` for each, and registers a
-   `StronglyTypedIdRegistry` singleton through `TryAddSingleton` (`:391`)
+   `StronglyTypedIdRegistry` singleton through `TryAddSingleton` (`:410`)
    (`MMCA.Common/Source/Core/MMCA.Common.Shared/Identifiers/StronglyTypedIdRegistry.cs:22`). A host
    that never calls it keeps the aliases and sees no behavioural change anywhere.
 
@@ -447,3 +449,15 @@ Mapperly helper and the public API surface moved, and four anchors were re-point
    `ApplicationDbContext.cs:407-409`, `QueryFilterService.ResolveStrategy` is
    `QueryFilterService.cs:413-424` (the `:399-417` recorded by the Revision (2026-10-06) note was
    correct then; the method moved on 2026-10-10), and `StronglyTypedIdMappings.cs:36`.
+
+## Revision (2026-10-26)
+Re-verified against current source. The decision is unchanged: the framework still ships the
+capability, the aliases are still the default, and adoption is still zero. Only the opt-in entry
+point moved within its file; its behavior is the same.
+
+1. Anchors re-verified against current source: `AddStronglyTypedIds` is
+   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:401`; it builds the
+   registry (`:405`), registers each wrapper's converter through
+   `StronglyTypedIdTypeConverters.Register` (`:408`), and registers the singleton through
+   `TryAddSingleton` at `:410`. Decision point 6 now carries these anchors (the Revision
+   (2026-10-21) item 5 anchors stay as recorded). `StronglyTypedIdRegistry.cs:22` still holds.

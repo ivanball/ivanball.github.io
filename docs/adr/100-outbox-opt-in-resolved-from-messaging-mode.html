@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -253,7 +254,10 @@
           now scopes the explicit-value-wins rule to the in-process transport, as its cited source does.
           Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
           Revised 2026-10-21: anchors refreshed after the registration block and the outbox model
-          configuration moved.</p>
+          configuration moved.
+          Revised 2026-10-26: Decision 1 now quotes the resolution expression as source writes it
+          (<code>!MessageBusProviders.IsInProcess(Provider)</code> over a string provider, not a <code>MessageBusProvider</code>
+          enum), and anchors refreshed after the settings, registration, guard and interceptor moved.</p>
           <h2 id="context">Context</h2>
           <p>ADR-003 gives every host a transactional outbox: domain and integration events are written to
           <code>OutboxMessages</code> in the same transaction as the aggregate changes, <code>OutboxProcessor</code> publishes them,
@@ -268,8 +272,8 @@
           <p>ADR-021 had already answered the same question on the consumer side. <code>MessageBus:EnableInbox</code> became
           <code>bool?</code> and <code>IsInboxEnabled</code> resolves an unset value from the transport, ON for a broker and OFF for
           in-process, which has no redelivery to dedup
-          (<code>Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:141</code>, documented at
-          <code>:115-118</code>). The outbox had no such
+          (<code>Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:147</code>, documented at
+          <code>:121-131</code>). The outbox had no such
           resolution: it ran in every host, including the one that had nothing to forward to.</p>
           <p>The reverse posture is a real hazard rather than a symmetrical option. A broker deployment publishes
           integration events <strong>exclusively</strong> through the outbox: <code>BrokerEventBus</code> writes the rows and
@@ -280,36 +284,38 @@
           something, keep the schema, and refuse the one combination that cannot work.</p>
           <ol>
           <li><p><strong><code>MessageBus:EnableOutbox</code> is <code>bool?</code> and defaults to unset.</strong>
-          <code>MessageBusSettings.EnableOutbox</code> (<code>Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:167</code>)
-          carries the explicit override; <code>IsOutboxEnabled</code> (<code>:175</code>) is the resolved posture every framework
-          component reads: <code>EnableOutbox ?? Provider != MessageBusProvider.InProcess</code>. That is character for
-          character the inbox rule two properties above it (<code>:141</code>). An explicit value wins for the
-          in-process transport, in both directions, so a monolith that wants at-least-once delivery across a
-          crash sets <code>MessageBus:EnableOutbox=true</code> and gets the full outbox back; an explicit <code>false</code> under
-          a broker is refused instead (<code>:159-163</code>, see Decision 4).</p>
+          <code>MessageBusSettings.EnableOutbox</code> (<code>Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:177</code>)
+          carries the explicit override; <code>IsOutboxEnabled</code> (<code>:185</code>) is the resolved posture every framework
+          component reads: <code>EnableOutbox ?? !MessageBusProviders.IsInProcess(Provider)</code>, where <code>Provider</code> is
+          a string (<code>:25</code>) and <code>IsInProcess</code> treats a blank value as <code>InProcess</code>
+          (<code>Source/Core/MMCA.Common.Infrastructure/Messaging/Transports/MessageBusProviders.cs:44</code>). That is
+          character for character the inbox rule two properties above it (<code>:147</code>). An explicit value wins
+          for the in-process transport, in both directions, so a monolith that wants at-least-once delivery
+          across a crash sets <code>MessageBus:EnableOutbox=true</code> and gets the full outbox back; an explicit
+          <code>false</code> under a broker is refused instead (<code>:164-168</code>, see Decision 4).</p>
           </li>
           <li><p><strong>Resolution happens once, at registration.</strong> <code>AddInfrastructure</code> binds the section, and on the
           enabled path registers <code>OutboxProcessor</code> and <code>OutboxCleanupService</code>; on the disabled path it
           registers neither and adds <code>OutboxDisabledNoticeService</code> instead
-          (<code>Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:222-230</code>, settings read at
-          <code>:218-219</code>, reasoning at <code>:212-217</code>).</p>
+          (<code>Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:237-245</code>, settings read at
+          <code>:233-234</code>, reasoning at <code>:227-232</code>).</p>
           </li>
           <li><p><strong>The row writes are gated at both write points</strong>, not only the background services:
           <code>InProcessEventBus</code> takes its direct-dispatch branch when the outbox is off, with no rows, no save
           and no processor to retry (<code>Source/Core/MMCA.Common.Infrastructure/Messaging/InProcessEventBus.cs:43</code>,
           branch at <code>:82-86</code>, documented at <code>:70-74</code>), and <code>DomainEventSaveChangesInterceptor</code> captures and
           dispatches in-process without writing rows
-          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:54</code>,
-          flag at <code>:64</code>, contract at <code>:46-50</code>, row-writing gate at <code>:257</code>). Both fall back to the outbox path when no options are resolvable, so a
+          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:56</code>,
+          flag at <code>:66</code>, contract at <code>:46-52</code>, row-writing gate at <code>:259</code>). Both fall back to the outbox path when no options are resolvable, so a
           container that binds neither keeps the previous behavior. This is the same branch a context
           without outbox support (Cosmos) already took, reached by a second condition rather than a new one.</p>
           </li>
           <li><p><strong>A broker with the outbox explicitly disabled fails at startup.</strong>
           <code>EnsureOutboxAvailableForProvider</code> throws when the provider is anything other than <code>InProcess</code> and
           <code>EnableOutbox</code> is explicitly <code>false</code>
-          (<code>Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:202</code>, guard at <code>:204</code>,
-          throw at <code>:206-207</code>; called from <code>DependencyInjection.cs:220</code> and from <code>AddBrokerMessaging</code> at
-          <code>DependencyInjection.Messaging.cs:60</code>, so a broker host that skips <code>AddInfrastructure</code> still fails
+          (<code>Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:241</code>, guard at <code>:243</code>,
+          throw at <code>:245-246</code>; called from <code>DependencyInjection.cs:235</code> and from <code>AddBrokerMessaging</code> at
+          <code>DependencyInjection.Messaging.cs:65</code>, so a broker host that skips <code>AddInfrastructure</code> still fails
           at startup). The message names the
           mechanism (<code>BrokerEventBus</code> writes the rows, <code>OutboxProcessor</code> publishes them), the consequence
           (every cross-service event dropped silently) and the fix. Leaving the setting unset under a broker
@@ -421,6 +427,33 @@
           (unchanged), body <code>:662-720</code> (was <code>:662-715</code>; <code>IX_OutboxMessages_Ordering</code> at <code>:709-719</code>), Cosmos
           skip documented at <code>:654</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. No decision, default or rationale changed: <code>IsOutboxEnabled</code>
+          still resolves an unset <code>EnableOutbox</code> to ON for a broker and OFF for in-process, with the same
+          shape as <code>IsInboxEnabled</code>; <code>AddInfrastructure</code> still registers <code>OutboxProcessor</code> and
+          <code>OutboxCleanupService</code> on the enabled path and <code>OutboxDisabledNoticeService</code> otherwise; the startup
+          guard still throws only for a non-<code>InProcess</code> provider with <code>EnableOutbox</code> explicitly <code>false</code>; and
+          <code>DomainEventSaveChangesInterceptor</code> still falls back to the outbox path (<code>?? true</code>). One quoted
+          expression was stale and the anchors in Context and Decisions 1 to 4 moved.</p>
+          <ol>
+          <li>Decision 1 quoted the resolution as <code>EnableOutbox ?? Provider != MessageBusProvider.InProcess</code>.
+          No <code>MessageBusProvider</code> type exists: <code>Provider</code> is a string (<code>MessageBusSettings.cs:25</code>) and the
+          expression is <code>EnableOutbox ?? !MessageBusProviders.IsInProcess(Provider)</code> (<code>:185</code>), with
+          <code>IsInProcess</code> counting a blank provider as in-process (<code>Messaging/Transports/MessageBusProviders.cs:44</code>).
+          The inbox rule (<code>:147</code>) has the identical shape, so the parity statement stands.</li>
+          <li>Anchors re-verified against current source: <code>MessageBusSettings.cs:177</code> (<code>EnableOutbox</code>, was
+          <code>:167</code>), <code>IsOutboxEnabled</code> <code>:185</code> (was <code>:175</code>), <code>IsInboxEnabled</code> <code>:147</code> (was <code>:141</code>), inbox
+          transport-resolution doc <code>:121-131</code> (was <code>:115-118</code>), in-process-wins and broker-refused doc
+          <code>:164-168</code> (was <code>:159-163</code>); <code>DependencyInjection.cs:237-245</code> (enabled/disabled registration, was
+          <code>:222-230</code>; processor <code>:239</code>, cleanup <code>:240</code>, notice <code>:244</code>), settings read <code>:233-234</code> (was
+          <code>:218-219</code>), reasoning comment <code>:227-232</code> (was <code>:212-217</code>), <code>EnsureOutboxAvailableForProvider</code>
+          call <code>:235</code> (was <code>:220</code>); <code>DependencyInjection.Messaging.cs:241</code> (method, was <code>:202</code>), guard
+          <code>:243</code>, throw <code>:245-246</code>, <code>AddBrokerMessaging</code> call site <code>:65</code> (was <code>:60</code>, after the in-process
+          early return at <code>:57-60</code>); <code>DomainEventSaveChangesInterceptor.cs:56</code> (class, was <code>:54</code>),
+          <code>_outboxEnabled</code> <code>:66</code> (was <code>:64</code>), <code>messageBusOptions</code> contract <code>:46-52</code> (was <code>:46-50</code>),
+          row-writing gate <code>:259</code> (was <code>:257</code>). Unchanged: <code>InProcessEventBus.cs:43</code> and branch <code>:82</code>,
+          <code>ApplicationDbContext.cs:417</code>, <code>ConfigureOutbox</code> call <code>:424</code> and body start <code>:662</code>.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="003-outbox-dual-dispatch.html">ADR-003</a> (the outbox itself: the dual-dispatch contract, the processor,
           the retry and dead-letter policy, all unchanged for a host that runs it),
@@ -452,6 +485,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

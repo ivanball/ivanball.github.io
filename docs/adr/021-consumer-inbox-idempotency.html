@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -258,8 +259,8 @@
           warning), whereas <code>EnableOutbox=false</code> is refused at registration, because a broker deployment
           publishes exclusively through the outbox and has no other path
           (<code>EnsureOutboxAvailableForProvider</code> throws in
-          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:202-209</code>, stated on the
-          setting itself at <code>.../Messaging/MessageBusSettings.cs:161-164</code>). Nothing about the inbox contract
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:241-248</code>, stated on the
+          setting itself at <code>.../Messaging/MessageBusSettings.cs:163-169</code>). Nothing about the inbox contract
           changes.
           Revised 2026-09-07 (queue and endpoint names are prefixed per application by default, so a
           consumer either pins its pre-upgrade prefix or drains its old queues on cutover).
@@ -273,7 +274,11 @@
           and the crash window stays open; see the Revision (2026-10-06) at the end).
           Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
           Revised 2026-10-21: anchors refreshed after the ADC Identity, ADC Engagement and Store Sales
-          consumer registrations moved; no decision or inventory change.</p>
+          consumer registrations moved; no decision or inventory change.
+          Revised 2026-10-26: the unset inbox resolves ON for every non-<code>InProcess</code> transport (now keyed on a
+          provider name, so it covers the built-in PostgreSQL transport and any registered adapter, not only
+          RabbitMQ and Azure Service Bus), ADR-135 is linked as the owner of the application-namespace
+          decision, and anchors are refreshed.</p>
           <h2 id="context">Context</h2>
           <p>ADR-003 makes integration-event delivery <strong>at-least-once</strong>: the outbox guarantees a published event
           is not lost, and the MassTransit broker redelivers on consumer failure. At-least-once means a
@@ -347,19 +352,19 @@
           migration. Adoption inventory as of 2026-10-01: <strong>five of the seven service hosts consume from the
           broker</strong> and so use their inbox for real, three in ADC and two in Store. ADC Identity consumes
           <code>SpeakerLinkedToUser</code> and
-          <code>SpeakerUnlinkedFromUser</code> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:335-336</code>),
+          <code>SpeakerUnlinkedFromUser</code> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:346-347</code>),
           ADC Conference consumes <code>UserRegistered</code> and <code>UserDeleted</code>
           (<code>MMCA.ADC.Conference.Service/ConferenceBrokerConsumers.cs:34-35</code>) and chains a third broker consumer
           beside them, <code>RegisterOutputCacheEvictionConsumer()</code> (<code>MMCA.ADC.Conference.Service/ConferenceBrokerConsumers.cs:37</code>), and ADC
           Engagement consumes four events, <code>AttendeeCheckedIn</code>, <code>SessionFeedbackSubmitted</code>,
-          <code>EventFeedbackSubmitted</code> and <code>UserDeleted</code> (<code>MMCA.ADC.Engagement.Service/Program.cs:294-297</code>), the
+          <code>EventFeedbackSubmitted</code> and <code>UserDeleted</code> (<code>MMCA.ADC.Engagement.Service/Program.cs:305-308</code>), the
           first of which is ADC&#39;s first <strong>self-consumption</strong> over the broker: Engagement publishes
           <code>AttendeeCheckedIn</code> and consumes it back, which is precisely the shape a redelivery would double-count,
           so the inbox is load-bearing there rather than decorative. Store Sales consumes three events,
           <code>ProductVariantChanged</code>, <code>ProductInfoChanged</code> and <code>CustomerErased</code>
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:262</code>, <code>:267</code>, <code>:272</code>), and Store
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:273</code>, <code>:278</code>, <code>:283</code>), and Store
           Catalog consumes <code>OrderFulfilled</code> and <code>CustomerErased</code> plus the output-cache eviction event
-          (<code>MMCA.Store.Catalog.Service/Program.cs:274</code>, <code>:283</code>, <code>:290</code>), which makes Catalog both publisher and
+          (<code>MMCA.Store.Catalog.Service/Program.cs:285</code>, <code>:294</code>, <code>:301</code>), which makes Catalog both publisher and
           consumer of that eviction event and therefore exactly the redelivery-doubles-work shape the inbox
           guards. The remaining two hosts (<strong>ADC
           Notification</strong> and <strong>Store Identity</strong>) carry <code>EnableInbox: true</code> and the table while
@@ -381,11 +386,11 @@
           store to race on.</li>
           <li><strong>Off for in-process keeps the monolith simple.</strong> In-process dispatch (ADR-003) never redelivers,
           so a single-process or broker-less deployment needs no inbox: <code>IsInboxEnabled</code> resolves OFF for it
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:141</code>) and
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:147</code>) and
           <code>AddBrokerMessaging</code> returns before registering any inbox store
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:52-55</code>), so
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:57-60</code>), so
           it costs nothing. <code>NoOpInboxStore</code> is registered only for a broker host that explicitly opts out
-          (<code>:118</code>).</li>
+          (<code>:137</code>).</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
@@ -430,7 +435,10 @@
           non-<code>InProcess</code> providers are exactly the hosts the new startup warning fires in),
           <a href="087-broker-poison-message-handling.html">ADR-087</a> (second-level redelivery, which can now re-run a
           handler an hour after the original attempt: the inbox and every idempotent handler must hold across
-          that gap, not only across a retry burst).</p>
+          that gap, not only across a retry burst),
+          <a href="135-application-namespace-keyspace-isolation.html">ADR-135</a> (One Application Namespace Isolates Shared
+          Infrastructure Keyspaces: the record that owns the application-namespace decision behind the default
+          <code>MessageBus:EndpointPrefix</code> the Revision (2026-09-07) describes).</p>
           <h2 id="revision-2026-08-18">Revision (2026-08-18)</h2>
           <p><strong>The decision is unchanged: the inbox is still opt-in and <code>NoOpInboxStore</code> is still the default.</strong>
           What changed is that the default is now loud.</p>
@@ -702,6 +710,42 @@
           <code>:123</code>; <code>ScopedIntegrationEventHandlerBase.cs:14-16</code> and <code>:51</code>; the three Store <code>InitialCreate</code>
           migration lines; and the seven <code>EnableInbox</code> appsettings lines.</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. No decision changed: the inbox still resolves ON for a broker
+          transport, <code>EfInboxStore</code> is still the scoped store a broker host gets unless it writes
+          <code>EnableInbox=false</code>, and the consumer inventory is unchanged (the same consumers are registered on
+          the same five of the seven service hosts, and all seven hosts set <code>EnableInbox: true</code>). What moved
+          is how the transport is named, one link, and the live-section anchors; older Revision sections keep
+          their original anchors and wording.</p>
+          <ol>
+          <li><strong>The provider is a name, and every non-<code>InProcess</code> name resolves the inbox ON.</strong> The resolved
+          posture is now <code>IsInboxEnabled =&gt; EnableInbox ?? !MessageBusProviders.IsInProcess(Provider)</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:147</code>, the
+          raw <code>bool?</code> setting at <code>:139</code>), so the Revision (2026-08-26)&#39;s &quot;ON for RabbitMQ and Azure Service
+          Bus&quot; and its quoted <code>Provider != MessageBusProvider.InProcess</code> expression read today as &quot;ON for any
+          broker transport&quot;: the built-in <code>RabbitMq</code> and <code>PostgreSql</code> names
+          (<code>.../Messaging/Transports/MessageBusProviders.cs:19</code>, <code>:27</code>) and any transport adapter a host
+          registers before <code>AddBrokerMessaging</code>. The setting&#39;s own documentation states the same rule
+          (<code>MessageBusSettings.cs:122-124</code>). <code>AddBrokerMessaging</code> returns early for the in-process name
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:57-60</code>), and
+          past it <code>IsInboxEnabled</code> (<code>:127</code>) selects <code>EfInboxStore</code> (<code>:129</code>) or <code>NoOpInboxStore</code> (<code>:137</code>)
+          plus <code>InboxDisabledWarningService</code> (<code>:142</code>).</li>
+          <li><strong>ADR-135 is linked under Related</strong> as the record that owns the application-namespace decision
+          behind the default <code>MessageBus:EndpointPrefix</code> (<code>MessageBusSettings.cs:80</code>).</li>
+          <li>Anchors re-verified against current source: <code>EnsureOutboxAvailableForProvider</code> at
+          <code>DependencyInjection.Messaging.cs:241-248</code> (called at <code>:65</code>), and the outbox-refusal text on the
+          setting at <code>.../Messaging/MessageBusSettings.cs:163-169</code> (<code>EnableOutbox</code> at <code>:177</code>), both cited by
+          the Status; the Rationale&#39;s <code>IsInboxEnabled</code> at <code>MessageBusSettings.cs:147</code>, early return at
+          <code>DependencyInjection.Messaging.cs:57-60</code> and <code>NoOpInboxStore</code> at <code>:137</code>; ADC Identity
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:346-347</code>; ADC Engagement
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:305-308</code> (same four events, same
+          order); Store Sales <code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:273</code>, <code>:278</code>
+          and <code>:283</code>; Store Catalog <code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:285</code>,
+          <code>:294</code> and <code>:301</code>. The other live anchors hold as written: <code>ConferenceBrokerConsumers.cs:34-35</code>
+          and <code>:37</code>, and the seven <code>EnableInbox</code> appsettings lines. The <code>DependencyInjection.cs</code> and
+          <code>MessageBusSettings.cs</code> anchors inside the Revisions (2026-08-18), (2026-08-26) and (2026-09-07)
+          are historical: the messaging registration lives in <code>DependencyInjection.Messaging.cs</code>.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -726,6 +770,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             </ul>
           </nav>
         </aside>

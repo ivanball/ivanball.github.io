@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -250,7 +251,7 @@
           mechanism. Revised 2026-10-01: citations re-anchored. Revised 2026-10-06: the ADR-075 history claim
           is scoped to opted-in entities, with retention purging only where the host runs the scheduler. Revised 2026-10-07: the rationale acknowledges ADC&#39;s append-only points ledger and why it
           is not event sourcing, and the Marten rejection separates framework PostgreSQL support (ADR-113)
-          from production, where no deployment runs a PostgreSQL server. Revised 2026-10-21: anchors refreshed after Common and ADC source commits moved the outbox, inbox, provider and snapshot lines.</p>
+          from production, where no deployment runs a PostgreSQL server. Revised 2026-10-21: anchors refreshed after Common and ADC source commits moved the outbox, inbox, provider and snapshot lines. Revised 2026-10-26: anchors refreshed after Common source commits on 2026-10-25 moved the PostgreSQL provider pin and reference lines.</p>
           <h2 id="context">Context</h2>
           <p>Event sourcing keeps an append-only log of the facts that happened to an aggregate and treats that log
           as the system of record. Current state becomes a fold over the log, a &quot;state as of&quot; question is that
@@ -341,9 +342,9 @@
           and the specific option this record weighed. It was dropped on two grounds rather than on taste. It
           requires PostgreSQL. The framework already supports PostgreSQL as an engine
           (<a href="113-postgresql-as-a-first-class-engine.html">ADR-113</a>,
-          <code>MMCA.Common/Directory.Packages.props:63</code>), and the provider ships in every consumer as a direct
+          <code>MMCA.Common/Directory.Packages.props:64</code>), and the provider ships in every consumer as a direct
           dependency of <code>MMCA.Common.Infrastructure</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj:50</code>), but no
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj:43</code>), but no
           production deployment runs a PostgreSQL server and no production entity routes to a
           non-SQL-Server engine (<a href="018-polyglot-persistence.html">ADR-018</a>). So Marten would add no engine to the
           framework, but it would add a deployed PostgreSQL server for the adopting module&#39;s database
@@ -426,6 +427,19 @@
           (<code>MMCA.Common.Infrastructure.csproj:50</code>, previously <code>:47</code>). <code>MMCA.Common/Directory.Packages.props:63</code>
           holds.</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. The decision (event sourcing not adopted), the rationale and the
+          revisit trigger are unchanged, and the PostgreSQL provider is still pinned centrally and referenced
+          unconditionally by <code>MMCA.Common.Infrastructure</code>; two body anchors in the Marten rejection moved after
+          Common source commits on 2026-10-25 shifted the lines they cited.</p>
+          <ol>
+          <li>Anchors re-verified against current source: the <code>Npgsql.EntityFrameworkCore.PostgreSQL</code> version pin
+          (<code>MMCA.Common/Directory.Packages.props:64</code>, previously <code>:63</code>, which now holds the end of its
+          explanatory comment) and the unconditional provider reference
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj:43</code>,
+          previously <code>:50</code>, which now holds the comment for the <code>MassTransit.SqlTransport.PostgreSQL</code> broker
+          reference).</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="003-outbox-dual-dispatch.html">ADR-003</a> (at-least-once delivery of domain events, the mechanism a
           per-aggregate event log would duplicate rather than replace),
@@ -458,6 +472,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

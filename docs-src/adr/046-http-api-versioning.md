@@ -22,6 +22,7 @@ v1.217.0) below).
 Revised 2026-10-06: the registration also adds `ApiVersionReportingResultFilter` as a global MVC filter so output-cached responses keep the version headers; re-anchored the citations.
 Revised 2026-10-07: anchors re-verified against current source after the v1.233.0 release, no decision change.
 Revised 2026-10-21: anchors refreshed after host `Program.cs` edits moved four `AddCommonApiVersioning` call sites and the OpenAPI contract-test anchor, no decision change.
+Revised 2026-10-26: anchors refreshed after host `Program.cs` edits moved all seven extracted-host `AddCommonApiVersioning` call sites, no decision change.
 
 ## Context
 The framework's REST surface is served by controllers hosted in extracted service processes behind a
@@ -124,11 +125,11 @@ proves two live versions coexist.
   costs nothing and still protects any other consumer of the API descriptions from the same null.
 - **Every REST host adopts it the same way.** The extracted services call `AddCommonApiVersioning`
   in their startup: ADC's Conference
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:220`) and Identity
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:155`) hosts, Store's Catalog host
-  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:140`), and the same call is made
-  by the other extracted hosts (ADC Engagement `Program.cs:150`, ADC Notification `Program.cs:139`,
-  Store Sales `Program.cs:148`, Store Identity `Program.cs:135`) and by the monolith reference host
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:226`) and Identity
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:161`) hosts, Store's Catalog host
+  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:146`), and the same call is made
+  by the other extracted hosts (ADC Engagement `Program.cs:156`, ADC Notification `Program.cs:145`,
+  Store Sales `Program.cs:154`, Store Identity `Program.cs:141`) and by the monolith reference host
   (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:35`).
 
 Application controllers beyond `ServiceInfo` declare `[ApiVersion("1.0")]` today: the second version
@@ -328,6 +329,20 @@ OpenAPI registrations, the design-time skip helper, both `deploy.yml` gates and 
    Conference and Store Catalog), `ServiceInfoVersioningContractTestsBase.cs:20`, `:39`, `:55`,
    `ApiVersioningTests.cs:14`, `OpenApiBaselineTests.cs` (present), `OpenApiContractTestsBase.cs:51`
    and `EntityControllerBase.cs:31-33`.
+
+## Revision (2026-10-26)
+
+Re-verified against current source. No decision, rationale or trade-off changed: all seven extracted
+service hosts still call `AddCommonApiVersioning`, and each still registers `services.AddOpenApi()`
+plus `services.AddCommonOpenApi()` and maps `app.MapCommonOpenApi()`. Host `Program.cs` edits moved
+every extracted-host `AddCommonApiVersioning` call site by six lines, so those Decision anchors are
+re-pointed in place below. Line numbers cited inside the earlier dated revisions (the 2026-10-21 call
+sites, host OpenAPI registrations, the design-time skip helper, both `deploy.yml` gates and both
+`Directory.Build.props` blocks) are left as recorded.
+
+1. Anchors re-verified against current source: the `AddCommonApiVersioning` host call sites (ADC
+   Conference `Program.cs:226`, Identity `:161`, Engagement `:156`, Notification `:145`; Store Catalog
+   `:146`, Sales `:154`, Identity `:141`; Helpdesk Web `Program.cs:35`, unchanged).
 
 ## Related
 ADR-010 (integration-event schema versioning: the asynchronous, `SchemaVersion`-carried,

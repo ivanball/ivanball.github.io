@@ -35,6 +35,8 @@ configuration overload in every service.
 Revised 2026-10-21: the distributed limiter's increment and expiry run as one atomic Lua script, so
 no fault between them can leave a counter key without a TTL, and the forwarded-header trade-off
 records that both Bicep templates declare service ingress internal-only.
+Revised 2026-10-26: anchors refreshed after the source moves since 2026-10-21, and Related names
+ADR-135 as the record that owns the application-namespace decision the Redis partition key follows.
 ## Context
 Every service exposes read and write endpoints to the public internet through the gateway (ADR-008).
 Abusive or runaway clients (scrapers, credential stuffing, retry storms, a buggy SPA stuck in a loop)
@@ -71,7 +73,7 @@ Rate limiting is **layered**, and the always-on global limiter is **authenticate
    are served from the output cache (`UseOutputCache`; ADC's Conference service defines one
    public-endpoint policy per public aggregate, among them `EventsCache` / `CategoriesCache` /
    `QuestionsCache` / `RoomsCache`,
-   `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:270-301`), and login/registration brute-force is handled by `LoginProtectionService`
+   `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:276-307`), and login/registration brute-force is handled by `LoginProtectionService`
    (exponential-backoff account lockout after `MaxFailedAttempts` failed logins, plus per-IP
    registration throttling).
 3. **A per-IP cap on the anonymous authentication endpoints, on by default.** `AddCommonRateLimiting`
@@ -107,8 +109,8 @@ Rate limiting is **layered**, and the always-on global limiter is **authenticate
    rather than sharing one bucket with every other such request (a deliberate difference from the
    global limiter, which puts an unattributable authenticated request in one shared `"authenticated"`
    bucket and an unattributable anonymous hub request in one shared `"anonymous-hub"` bucket,
-   `MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:66`,
-   `:156`, `:309-310`); and the default is 30 rather than a tighter 10 for the same shared-IP reason,
+   `MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:87`,
+   `:177`, `:330-331`); and the default is 30 rather than a tighter 10 for the same shared-IP reason,
    since every Server-circuit user's login leaves from the UI host's address.
 4. **The remaining named policies are opt-in, per-endpoint tightening.** `AddCommonRateLimiting` also
    registers `FixedPolicy` and `UserPolicy`, which a specific action can apply with
@@ -158,9 +160,9 @@ Rate limiting is **layered**, and the always-on global limiter is **authenticate
   `KnownProxies` (the shared options only clear them,
   `MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/CommonForwardedHeaders.cs:49`). The first
   is declared in infrastructure instead: both Bicep templates give every service container app
-  internal-only ingress (`external: false`, `MMCA.ADC/infra/main.bicep:1840`, `:2093`, `:2246`,
-  `:2381`; `MMCA.Store/infra/main.bicep:1523`, `:1705`, `:1829`) and expose only the gateway and the
-  UI host (ADC `:2571`, `:2734`; Store `:1981`, `:2110`), so traffic from outside the environment
+  internal-only ingress (`external: false`, `MMCA.ADC/infra/main.bicep:1876`, `:2129`, `:2282`,
+  `:2417`; `MMCA.Store/infra/main.bicep:1529`, `:1711`, `:1835`) and expose only the gateway and the
+  UI host (ADC `:2607`, `:2770`; Store `:1987`, `:2116`), so traffic from outside the environment
   reaches a service only through the gateway. A caller already inside the container-apps
   environment can still reach a service directly.
 - **Per-user partitioning depends on the authenticated principal being populated** when the limiter
@@ -174,10 +176,11 @@ Rate limiting is **layered**, and the always-on global limiter is **authenticate
   This holds for `auth-ip` and `FixedPolicy` (always in-memory), for the gateway limiters, and for
   the global, per-user and hub windows in any host that leaves `Distributed` unset (see the Revision
   (2026-08-18)). ADC production sets `RateLimiting__Distributed=true` on all four services
-  (`MMCA.ADC/infra/main.bicep:1916`, `:2157`, `:2294`, `:2448`; the AppHost does the same,
-  `MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:476`), so there those three windows share one
+  (`MMCA.ADC/infra/main.bicep:1952`, `:2193`, `:2330`, `:2484`; the AppHost does the same only in its
+  opt-in multi-replica run, when `ADC_REPLICAS` is greater than 1,
+  `MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:459-464`, `:477`), so there those three windows share one
   Redis budget across replicas and only `auth-ip` and the gateway limiters scale with replica count
-  (`MMCA.ADC/infra/main.bicep:1910-1915`). Store sets no `Distributed` value, so every Store limiter
+  (`MMCA.ADC/infra/main.bicep:1946-1951`). Store sets no `Distributed` value, so every Store limiter
   stays per-instance.
 
 ## Revision (2026-08-18)
@@ -466,6 +469,66 @@ and the anchors that drifted since the 2026-10-19 revision are re-pointed.
    `:2016-2021`); the ADC `GatewayRateLimiting__TrustedCallerSecret` injections are at `:2647` and
    `:2806`, and Store's at `MMCA.Store/infra/main.bicep:2053` and `:2178`.
 
+## Revision (2026-10-26)
+
+Re-verified against current source. The layering, every default, the `auth-ip` surface, the
+fail-open posture, the atomic `INCRBY` script and its 65-second TTL, the application-namespaced Redis
+key, the declared internal-only service ingress and both gateways' `auth-tight` scoping are
+unchanged. No behavior moved; the anchors that drifted since the 2026-10-21 revision are re-pointed,
+and the Related section gains the record that owns the application namespace.
+
+1. **Related names ADR-135.** The Redis partition key's namespace (Revision 2026-10-07) is the
+   application namespace that ADR-135 records as the one isolation rule for shared infrastructure
+   keyspaces, so the Related section now points there for that decision rather than leaving it
+   implied by this record and ADR-026.
+2. **The unattributable-bucket anchors in Decision item 3 moved.** Revision 2026-10-07 recorded them
+   as unchanged; they have since moved with the file. In
+   `MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs`
+   the `"anonymous-hub"` fallback key is at `:87`, the `"authenticated"` fallback at `:177`, and the
+   `auth-ip` `__unknown-ip` `NoLimiter` branch at `:330-331` (inside the settings overload of
+   `AuthIpRateLimitPartition`, `:326`); Decision item 3 now cites those lines.
+3. Anchors re-verified against current source. In `WebApplicationBuilderExtensions.RateLimiting.cs`:
+   `IsRateLimitBypassed` `:67`, `AnonymousPartition` `:83` (the anonymous `NoLimiter` `:93`),
+   `IsAnonymousHubRequest` `:103`, the `__infra` `NoLimiter` `:166`, `auth-ip`
+   `allowDistributed: false` `:339`, and `FixedPolicy` `allowDistributed: false` `:439`. The Redis
+   partition key `{namespace}:{scope}:{partition}` is built at `:275` (rationale `:268-270`), the
+   namespace is resolved by `RateLimitKeyNamespace` (`:220-226`, trailing colon trimmed at `:225`),
+   and with no multiplexer registered the factory falls through to the in-memory limiters (`:263`,
+   `:280-283`). In
+   `MMCA.Common/Source/Presentation/MMCA.Common.API/RateLimiting/RedisFixedWindowRateLimiter.cs`:
+   `IncrementScript` `:50-53`, `KeyTtlSeconds` `:60`, the static `_lastLoggedFailureWindow` `:67`, the
+   `rl:` key built at `:164`, `ScriptEvaluateAsync` `:169`, the permit comparison `:175`, the
+   fail-open `catch` `:179` and its `Interlocked.Exchange` guard `:181`.
+   `MiddlewarePipelineBuilder.IsCleartextHttp2` is defined at
+   `MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Pipeline/MiddlewarePipelineBuilder.cs:349`
+   and used at `:85`. `GatewayRateLimitingSettings.cs` keeps `SectionName` `:51`,
+   `TrustedCallerHeaderName` `:126` and `TrustedCallerSecret` `:154`; in
+   `MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Gateway/GatewayRateLimitingExtensions.cs` the
+   `FixedTimeEquals` comparison is at `:195` inside the shared `PresentsSecret` helper (`:179`), which
+   `IsTrustedInternalCaller` (`:164`) calls with the trusted-caller settings (`:171-172`), applied at
+   `:208` (the last term of the `IsExemptFromLimiters` OR chain, `:205-208`) and `:225`. `AddTrustedCallerHeader`
+   (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:121`) is called from
+   `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:143` and
+   `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:135` and from no other host (outside those two, only MMCA.Common's own tests call it). Every service
+   calls `AddCommonRateLimiting(builder.Configuration)`: ADC Conference
+   `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:227`, Engagement `:157`, Identity
+   `:172`, Notification `:150`; Store Catalog
+   `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:147`, Sales `:155`, Identity
+   `:142`. The Conference output-cache policies run from `ConferencePublicCache`
+   (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:276`) to `BookmarkCountsCache`
+   (`:307`), with `EventsCache` `:277`, `RoomsCache` `:285`, `CategoriesCache` `:286` and
+   `QuestionsCache` `:287`, and Decision item 2 now cites `:276-307`. In `MMCA.ADC/infra/main.bicep`
+   `RateLimiting__Distributed` is set at `:1952`, `:2193`, `:2330` and `:2484` (rationale
+   `:1946-1951`; the AppHost at `MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:477`, only
+   when `ADC_REPLICAS` is greater than 1, `:459-464`),
+   `RateLimiting__AuthIpPermitLimit` `'300'` at `:2060` (rationale `:2052-2057`), service ingress is
+   internal at `:1876`, `:2129`, `:2282` and `:2417` and the gateway and UI host are external at
+   `:2607` and `:2770`, and the trusted-caller secret is injected at `:2683` and `:2842`. In
+   `MMCA.Store/infra/main.bicep` service ingress is internal at `:1529`, `:1711` and `:1835`, the
+   gateway and UI host are external at `:1987` and `:2116`, the trusted-caller secret is injected at
+   `:2059` and `:2184`, and no service-side `RateLimiting__` key is set. The Trade-offs anchors now
+   cite these lines.
+
 ## Related
 ADR-004 (the JWKS/discovery traffic the limiter exempts, and the authenticated principal it keys on),
 ADR-008 (the gateway edge this protects), ADR-017 (request idempotency, the other inbound-edge
@@ -476,4 +539,6 @@ Redis the distributed limiter reuses, and the `IncrementAsync` storage-format le
 Lua script here avoids by owning its own `rl:` keyspace, qualified per application), ADR-070 (the fail-fast configuration contract
 `RateLimitingSettings` binds into, and the `Distributed` degradation that sits outside it), ADR-079
 (the shared middleware pipeline that places `UseRateLimiter` after authentication and after forwarded
-headers, which is what makes both partition keys resolvable).
+headers, which is what makes both partition keys resolvable), ADR-135 (the application namespace that
+qualifies the distributed limiter's Redis partition key, one rule for every shared infrastructure
+keyspace).

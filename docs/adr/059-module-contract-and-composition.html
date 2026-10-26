@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -244,7 +245,8 @@
           <h2 id="status">Status</h2>
           <p>Accepted (2026-07-28; revised 2026-08-14). Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
           Revised 2026-10-19: ADC Conference and Engagement gain module conformance tests, so seven of the eight modules are checked (only Helpdesk Tickets is not).
-          Revised 2026-10-21: ADC <code>ConferenceModule</code> registers three stubs (adding the <code>IUserConferenceExportService</code> export stub), <code>DisabledEventLiveValidationService</code> fails open across five members, the empty-export stub list names the Conference and Store Catalog export stubs, and host anchors are refreshed.</p>
+          Revised 2026-10-21: ADC <code>ConferenceModule</code> registers three stubs (adding the <code>IUserConferenceExportService</code> export stub), <code>DisabledEventLiveValidationService</code> fails open across five members, the empty-export stub list names the Conference and Store Catalog export stubs, and host anchors are refreshed.
+          Revised 2026-10-26: service-host anchors refreshed after the host Program.cs files moved (no behavior change).</p>
           <h2 id="context">Context</h2>
           <p>The framework&#39;s headline claim is that an application is built as a modular monolith and later
           extracted into services without rewriting business logic. ADR-008 states the extracted shape in one
@@ -289,11 +291,11 @@
           first parameter and hands it to the loader it builds
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/ModuleHostExtensions.cs:51-53,84-90</code>),
           which is how the service hosts pass it: Store
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:125-127</code>,
-          <code>MMCA.Store.Identity.Service/Program.cs:120-122</code>, <code>MMCA.Store.Sales.Service/Program.cs:133-135</code>) and
-          ADC (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:266-268</code>,
-          <code>MMCA.ADC.Conference.Service/Program.cs:373-375</code>, <code>MMCA.ADC.Engagement.Service/Program.cs:214-216</code>,
-          <code>MMCA.ADC.Notification.Service/Program.cs:196-198</code>) each name the single assembly of the one module
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:131-133</code>,
+          <code>MMCA.Store.Identity.Service/Program.cs:126-128</code>, <code>MMCA.Store.Sales.Service/Program.cs:139-141</code>) and
+          ADC (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:272-274</code>,
+          <code>MMCA.ADC.Conference.Service/Program.cs:379-381</code>, <code>MMCA.ADC.Engagement.Service/Program.cs:220-222</code>,
+          <code>MMCA.ADC.Notification.Service/Program.cs:202-204</code>) each name the single assembly of the one module
           that host enables, so an extracted service&#39;s scan surface equals its own module. Helpdesk calls
           <code>DiscoverAndRegister</code> with its one module assembly inside a <code>Register</code> step of its
           <code>AddMmcaApplicationPipeline</code> call
@@ -410,7 +412,7 @@
           <code>Sales</code> and declares <code>[&quot;Catalog&quot;, &quot;Identity&quot;]</code> as <code>RemoteDependencies</code>
           (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:27-34</code>), then registers typed
           gRPC clients for the two contracts after the loader returns
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:241,247-248</code>); because the host names
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:252,258-259</code>); because the host names
           only its own module assembly, the peer modules are never discovered there and their stubs are never
           registered. ADC Engagement declares
           <code>[&quot;Conference&quot;]</code> remote (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/appsettings.json:38-46</code>)
@@ -419,7 +421,7 @@
           Conference enables one module and declares nothing remote
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/appsettings.json:21-26</code>) even though it wires
           Engagement&#39;s <code>IBookmarkCountService</code> as a gRPC client
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:420</code>), because
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:431</code>), because
           <code>ConferenceModule</code> never declares Engagement in <code>Dependencies</code>.</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
@@ -436,7 +438,7 @@
           branch for &quot;peer not present&quot;, which is precisely why a module&#39;s non-hosting layers are identical
           in-process and extracted (<code>ModuleLoader.cs:119</code>, <code>CatalogModule.cs:31-32</code>). An extracted host,
           which never discovers its peers, registers a real cross-process adapter for the same contract
-          instead (<code>Sales.Service/Program.cs:247-248</code>).</li>
+          instead (<code>Sales.Service/Program.cs:258-259</code>).</li>
           <li><strong>Two strictness levels, chosen per module.</strong> A module that genuinely cannot function without a
           peer opts into <code>RequiresDependencies = true</code> and fails fast (<code>SalesModule.cs:36</code>,
           <code>EngagementModule.cs:23</code>, <code>NotificationModule.cs:24</code>); everything else tolerates a missing peer and
@@ -455,7 +457,7 @@
           <li><strong>The composition root has to name every module assembly.</strong> Discovery scans exactly the list it is
           handed (<code>ModuleLoader.cs:59-65</code>), so adding a module to a host is a third edit beside the project
           reference and the <code>Modules</code> configuration entry: the assembly list in that host&#39;s <code>Program.cs</code>
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:125-127</code>). An assembly left out
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:131-133</code>). An assembly left out
           of the list contributes nothing, and the module surfaces as &quot;disabled&quot; (absence equals disabled,
           <code>ModulesSettings.cs:18-19</code>), not as an error. The trade is deliberate: an ambient scan would make
           the same omission depend on whether some code path happened to load the assembly first
@@ -481,10 +483,10 @@
           (<code>DependencyInjection.cs:224-231</code>, <code>ModuleLoader.cs:334-335,343-344</code>).</li>
           <li><strong>The dependency graph is a hand-written declaration, not a derived fact.</strong> ADC Conference consumes
           Engagement&#39;s <code>IBookmarkCountService</code> over gRPC without listing Engagement in <code>Dependencies</code>
-          (<code>ConferenceModule.cs:16-32</code> versus <code>Conference.Service/Program.cs:420</code>), and Store Identity
+          (<code>ConferenceModule.cs:16-32</code> versus <code>Conference.Service/Program.cs:431</code>), and Store Identity
           consumes the Sales and Catalog export services over gRPC while <code>IdentityModule</code> declares no
           <code>Dependencies</code> at all (<code>MMCA.Store.Identity.API/IdentityModule.cs:16-47</code> versus
-          <code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:273,284</code>), so neither the
+          <code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:284,295</code>), so neither the
           topological sort nor the <code>RequiresDependencies</code> check knows about those edges. Nothing derives
           <code>Dependencies</code> from the interfaces a module actually resolves. What is pinned is the declaration
           against a written expectation: <code>ModuleConformanceTestsBase&lt;TModule&gt;</code> asserts <code>Name</code>, <code>Dependencies</code>,
@@ -628,6 +630,29 @@
           <code>ConferenceModuleTests</code> class (<code>ConferenceModuleTests.cs:10</code>, with <code>ExpectedName</code> at <code>:12</code>,
           <code>ExpectedDependencies</code> at <code>:16</code> and <code>ExpectedRequiresDependencies</code> at <code>:18</code>).</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. The decision, the module inventory, the strictness rules and both
+          undeclared gRPC edges are unchanged: <code>ConferenceModule</code> and Store&#39;s <code>IdentityModule</code> still declare no
+          <code>Dependencies</code>, each extracted host still names only its own module assembly in a three-line
+          <code>AddModuleHost</code> call, and the Store Sales gRPC clients are still registered after the loader. Only
+          line numbers in the service hosts moved (by six to eleven lines).</p>
+          <ol>
+          <li>Anchors re-verified against current source: the <code>AddModuleHost</code> calls in Store Catalog
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:131-133</code>), Store Identity
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:126-128</code>), Store Sales
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:139-141</code>), ADC Identity
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:272-274</code>), ADC Conference
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:379-381</code>), ADC Engagement
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:220-222</code>) and ADC Notification
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:202-204</code>); the Store Sales
+          gRPC clients registered after <code>.Register(moduleHost.RegisterModules)</code>
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:252,258-259</code>); the Store Identity
+          export clients (<code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:284,295</code>); and
+          the ADC Conference bookmark-count client
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:431</code>). The host anchors in the
+          2026-10-01, 2026-10-06, 2026-10-07 and 2026-10-21 revisions are left as written and are superseded
+          by these.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-008 (the extraction topology that consumes this model: &quot;a service is the monolith with one module
           enabled&quot; is a statement about <code>ModuleLoader</code> plus the <code>Disabled*</code> stubs, cited there as pre-existing
@@ -657,6 +682,7 @@
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-19">Revision (2026-10-19)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

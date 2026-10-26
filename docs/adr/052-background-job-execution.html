@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -253,7 +254,8 @@
           drain now loops <code>WaitToReadAsync</code> plus <code>TryRead</code> and, on shutdown, drains what is still queued
           within a 5-second budget, logging what it abandons; the producer API is a void <code>Enqueue</code> rather
           than <code>TryEnqueue</code>; the session-scoring queue no longer exists in source; and the bookmark
-          cache-eviction signal is a second, coalescing (<code>DropWrite</code>) instance.</p>
+          cache-eviction signal is a second, coalescing (<code>DropWrite</code>) instance. Revised 2026-10-26: anchors
+          refreshed after the <code>SubmitQuestionHandler</code> and <code>OpenLivePollHandler</code> bodies shifted.</p>
           <h2 id="context">Context</h2>
           <p>Some requests trigger work that cannot run inside the request: an AI scoring pass over an event&#39;s
           sessions takes minutes and issues one paid API call per session, and a live-channel broadcast must
@@ -549,6 +551,36 @@
           </ul>
           </li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. <strong>Nothing in the decision, the post-commit rule or the
+          ephemeral half moved:</strong> <code>SubmitQuestionHandler</code> still saves inside the claim helper and enqueues
+          below that call, and <code>OpenLivePollHandler</code> still enqueues from the <code>OnMutatedAsync</code> post-save hook
+          of <code>MutateEntityHandlerBase</code>. Only line anchors moved: the <code>SubmitQuestionHandler</code> body after the
+          <code>ClaimWait</code> field sits a uniform four lines higher than item 7 of the Revision (2026-10-21) records,
+          and <code>OpenLivePollHandler</code> sits one line higher than the Revision (2026-08-31) records. The dated
+          revisions above keep their anchors as written.</p>
+          <ol>
+          <li>Anchors re-verified against current source:<ul>
+          <li><code>SubmitQuestionHandler.cs</code>
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs</code>):
+          class at <code>:32</code>, <code>IDistributedLock</code> parameter at <code>:35</code>, <code>ICommandHandler</code> base at <code>:39</code>,
+          <code>ClaimTimeToLive</code> at <code>:50</code>, <code>ClaimWait</code> at <code>:58</code>, <code>CreateUnderClaimAsync</code> call at <code>:95</code> and
+          definition at <code>:144</code>, <code>LogQuestionSubmitted</code> at <code>:99</code>, <code>EnqueueSubmittedAsync</code> call at <code>:101</code>,
+          <code>ClaimKey</code> at <code>:109</code>, <code>TryAcquireAsync</code> at <code>:150</code>, <code>SaveChangesAsync</code> at <code>:186</code>,
+          <code>EnqueueSubmittedAsync</code> and its <code>BestEffort.ExecuteAsync</code> body at <code>:207-208</code>, queue writes at
+          <code>:219</code> (approved) and <code>:234</code> (pending count).</li>
+          <li><code>OpenLivePollHandler.cs</code>
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/LivePolls/UseCases/Open/OpenLivePollHandler.cs</code>):
+          <code>MutateEntityHandlerBase</code> at <code>:26</code>, <code>LogMutated</code> override at <code>:78</code>, <code>EnqueueOpened(poll)</code> call
+          at <code>:87</code>, queue write at <code>:108</code>.</li>
+          <li><code>MutateEntityHandlerBase.cs</code>: <code>MutateEntityHandlerCore</code> at <code>:52</code>, <code>SaveSkipped</code> check at
+          <code>:310</code>, <code>SaveChangesAsync</code> at <code>:322</code>, <code>LogMutated</code> at <code>:324</code>, <code>OnMutatedAsync</code> at <code>:325</code>,
+          <code>MutateEntityHandlerBase</code> at <code>:339</code> (DTO variant at <code>:362</code>), unchanged.</li>
+          <li><code>SessionQuestionUpvoteChangedHandler.cs</code>: <code>IDomainEventHandler</code> at <code>:44</code>, <code>BestEffort</code> at
+          <code>:54</code>, enqueue at <code>:87</code>, unchanged.</li>
+          </ul>
+          </li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -569,6 +601,7 @@
             <li><a href="#revision-2026-08-31">Revision (2026-08-31)</a></li>
             <li><a href="#revision-2026-09-19">Revision (2026-09-19)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             </ul>
           </nav>
         </aside>

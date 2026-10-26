@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -248,7 +249,8 @@
           2026-09-11 (four in ADC, three in Store, one in Helpdesk), and all three applications subclass the
           shipped fitness-function base, so the Decision and Trade-offs record adopted state instead of
           pending work. Revised 2026-10-21: anchors refreshed after MMCA.Common moved the convention
-          registration and the permission-grant and internal-command hard deletes.</p>
+          registration and the permission-grant and internal-command hard deletes. Revised 2026-10-26: anchors
+          refreshed after MMCA.Common moved the outbox cleanup and permission-grant hard deletes.</p>
           <h2 id="context">Context</h2>
           <p>EF Core picks a delete behavior for you. A required relationship gets <code>Cascade</code>, an optional one gets
           <code>ClientSetNull</code>, and neither choice appears anywhere a reviewer reads. The consequence is a database
@@ -270,11 +272,11 @@
           jobs against leaf tables (audit trail retention at
           <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailCleanupJob.cs:158-161</code>,
           refresh sessions at <code>.../Persistence/Auth/RefreshSessionCleanupService.cs:127</code>, permission grants at
-          <code>.../Persistence/Auth/EFPermissionGrantStore.cs:145-148</code>, internal commands at
+          <code>.../Persistence/Auth/EFPermissionGrantStore.cs:143-146</code>, internal commands at
           <code>.../Persistence/InternalCommands/Administration/InternalCommandAdministration.cs:223-225</code> and
           <code>.../Persistence/InternalCommands/Administration/InternalCommandCleanupService.cs:112</code> and <code>:147</code>,
-          outbox messages at <code>.../Persistence/Outbox/Administration/OutboxCleanupService.cs:105</code>, <code>:161</code> and
-          <code>:177</code>), ADC&#39;s session-score replacement
+          outbox messages at <code>.../Persistence/Outbox/Administration/OutboxCleanupService.cs:105</code>, <code>:165</code> and
+          <code>:181</code>), ADC&#39;s session-score replacement
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/SessionScoringRunner.cs:170</code>),
           and Store&#39;s product image blob removal
           (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Infrastructure/Services/ProductImageStorageService.cs:101</code>
@@ -432,6 +434,17 @@
           and <code>InternalCommandAdministration.cs:223-225</code>. The earlier dated revisions keep the anchors that
           were accurate on their own dates.</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. No decision, rationale or trade-off changed: every cited hard
+          delete is still a set-based delete against a leaf table, and the convention and its registration are
+          as recorded. Only line anchors in the Context list moved.</p>
+          <ol>
+          <li>Anchors re-verified against current source: the outbox cleanup deletes are the processed purge
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxCleanupService.cs:105</code>),
+          the dead-letter purge (<code>:165</code>) and the inbox purge (<code>:181</code>), and the permission-grant revoke is one
+          set-based delete at <code>.../Persistence/Auth/EFPermissionGrantStore.cs:143-146</code> (<code>ExecuteDeleteAsync</code>
+          at <code>:145</code>). The earlier dated revisions keep the anchors that were accurate on their own dates.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="006-database-per-service.html">ADR-006</a> (one context class per engine over one abstract base, which is
           what makes this a single registration),
@@ -460,6 +473,7 @@
             <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

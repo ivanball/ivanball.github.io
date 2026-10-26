@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -254,7 +255,10 @@
           Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
           Revised 2026-10-21: Decision 2 now records that the transactional execution path saves a
           still-enrolled command row just before the commit when no later save follows, and live anchors
-          were refreshed.</p>
+          were refreshed.
+          Revised 2026-10-26: live anchors refreshed (the <code>ICurrentUserService</code> decoration and the deployed
+          polling settings), and Related now links ADR-135, noting that the queue sits outside the
+          shared keyspaces that record namespaces.</p>
           <h2 id="context">Context</h2>
           <p>The framework has had two ways to move work off the request thread and neither of them is a job
           queue.</p>
@@ -362,7 +366,7 @@
           carrier read by <code>ImpersonatingCurrentUserService</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Context/ImpersonatingCurrentUserService.cs:20</code>),
           which decorates whatever <code>ICurrentUserService</code> the host registered
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:247</code>). With no override
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:262</code>). With no override
           set every member reads straight through, so an HTTP request behaves exactly as before.</p>
           <p><strong>5. Failure policy: the outbox&#39;s, with one deliberate divergence.</strong> <code>InternalCommandProcessor</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Processing/InternalCommandProcessor.cs:43</code>)
@@ -458,8 +462,8 @@
           which is the same default <code>OutboxSettings</code> ships
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxSettings.cs:31</code>),
           so the divergence is a deployment decision rather than a framework one: ADC and Store both run the
-          queue at 60 seconds (<code>MMCA.ADC/infra/main.bicep:1900</code>, <code>MMCA.Store/infra/main.bicep:1589</code>) while
-          pushing the outbox to 300 (<code>MMCA.ADC/infra/main.bicep:1894</code>, <code>MMCA.Store/infra/main.bicep:1582</code>).
+          queue at 60 seconds (<code>MMCA.ADC/infra/main.bicep:1936</code>, <code>MMCA.Store/infra/main.bicep:1595</code>) while
+          pushing the outbox to 300 (<code>MMCA.ADC/infra/main.bicep:1930</code>, <code>MMCA.Store/infra/main.bicep:1588</code>).
           A host that raises the interval to cut idle polling accepts that much latency on any
           transaction-scheduled work the post-commit wake does not reach.</p>
           <p><strong>Two poll loops, not one.</strong> A host now runs the outbox processor and the queue processor side by
@@ -549,6 +553,21 @@
           <code>MMCA.Store/infra/main.bicep:1589</code> and <code>:1582</code>). The 2026-10-01, 2026-10-06 and 2026-10-07
           revisions keep their dated anchors as written.</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. The decision, the five parts, the failure policy, the settings
+          defaults and the deployed 60-second queue and 300-second outbox intervals in ADC and Store are
+          unchanged; only line anchors moved, and Related gained one record.</p>
+          <ol>
+          <li>Related now links <a href="135-application-namespace-keyspace-isolation.html">ADR-135</a>, which owns the
+          application namespace for shared keyspaces (Redis cache, lock, rate-limit, backplane, broker queue
+          names). The internal-command queue is not one of them: it is a per-source database table (Decision
+          3), so no internal-command code resolves the namespace.</li>
+          <li>Anchors re-verified against current source: the <code>ICurrentUserService</code> decoration
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:262</code>) and the
+          deployed polling settings (<code>MMCA.ADC/infra/main.bicep:1936</code> for the queue and <code>:1930</code> for the
+          outbox, <code>MMCA.Store/infra/main.bicep:1595</code> and <code>:1588</code>). The 2026-10-01, 2026-10-06, 2026-10-07
+          and 2026-10-21 revisions keep their dated anchors as written.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="003-outbox-dual-dispatch.html">ADR-003</a> (the claim-lease, backoff and dead-letter machinery this
           record borrows as an idiom),
@@ -558,7 +577,9 @@
           <a href="052-background-job-execution.html">ADR-052</a> (the background execution posture the processor follows),
           <a href="113-postgresql-as-a-first-class-engine.html">ADR-113</a> (the engine-aware index helpers the table reuses),
           <a href="100-outbox-opt-in-resolved-from-messaging-mode.html">ADR-100</a> (why an always-mapped table is not a
-          migration decision).</p>
+          migration decision),
+          <a href="135-application-namespace-keyspace-isolation.html">ADR-135</a> (the application namespace for shared
+          keyspaces, which does not reach this per-source table).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -578,6 +599,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

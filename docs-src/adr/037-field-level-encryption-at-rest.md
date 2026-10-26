@@ -7,6 +7,7 @@ Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 Revised 2026-10-21: key rotation step 3 now requires `MarkForReEncryption` (a plain load-and-save does not
 re-encrypt), the audit trail redacts encrypted properties, and a re-encryption test suite and the
 audit-trail test harness also wire the converter (v1.247.0); production adoption stays zero.
+Revised 2026-10-26: anchors refreshed after the v1.261.0 release.
 
 ## Context
 Transparent database encryption (TDE) protects the data files as a whole, but it decrypts
@@ -22,7 +23,7 @@ never recovered. Erasure (ADR-005) **removes or anonymizes** personal data on a 
 Neither covers the case of a field that must stay **retrievable in plaintext to the application** yet
 be **unreadable in the database itself**: an at-rest, reversible, column-level confidentiality control.
 ADR-005 already names this converter as the mechanism for erasure fields "that must remain retrievable"
-(`Website/docs-src/adr/005-soft-delete-vs-erasure.md:27`), and `SECURITY.md:36` lists it in the security model, so the
+(`Website/docs-src/adr/005-soft-delete-vs-erasure.md:27`), and `SECURITY.md:40` lists it in the security model, so the
 capability is referenced across the docs but was never recorded as a decision.
 
 The framework ships the plumbing for this, an EF Core value converter that encrypts and decrypts string
@@ -113,8 +114,8 @@ rest with authenticated encryption, applied per property in an entity configurat
    environment variables, never hardcoded (`EncryptedStringConverter.cs:35`, `:36`). One other
    Infrastructure type does recognize the converter: the audit-trail interceptor records its redaction
    token, never the value, for any property whose value converter is an `EncryptedStringConverter`
-   (`Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:636`
-   through `:639`, documented at `:56` through `:58`), because the change tracker hands it the decrypted
+   (`Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:637`
+   through `:640`, documented at `:56` through `:58`), because the change tracker hands it the decrypted
    plaintext and recording that would put in clear text exactly what the column encrypts. That needs no
    marker on the property.
 
@@ -144,8 +145,8 @@ rest with authenticated encryption, applied per property in an entity configurat
     (`EncryptedStringConverterTests.cs:244`, `:250`, `:259`, `:268`), and the defensive copy
     (`EncryptedStringConverterTests.cs:281`). Two further suites wire it into a real EF model:
     `EncryptedStringConverterReEncryptionTests`
-    (`Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Encryption/EncryptedStringConverterReEncryptionTests.cs:26`)
-    saves a row under version 1 against an SQLite table, then rewrites it under version 2 through
+    (`Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Encryption/EncryptedStringConverterReEncryptionTests.cs:14`,
+    test method at `:26`) saves a row under version 1 against an SQLite table, then rewrites it under version 2 through
     `MarkForReEncryption` (`HasConversion` at `:84`, converters at `:90` and `:96`), and the audit-trail
     test harness maps an encrypted property
     (`Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/AuditTrail/AuditTrailTestHarness.cs:264`) that
@@ -200,7 +201,7 @@ rest with authenticated encryption, applied per property in an entity configurat
 - **Latent today, proven by tests rather than production.** The plumbing is complete and unit-tested, but
   no production entity configuration wires it, so the encrypt/decrypt round-trip, the tag-validated integrity path, and
   the key-length guard are exercised only by tests (`EncryptedStringConverterTests`, plus the SQLite-backed
-  `EncryptedStringConverterReEncryptionTests.cs:26` and the audit-trail harness at
+  `EncryptedStringConverterReEncryptionTests.cs:14` and the audit-trail harness at
   `AuditTrailTestHarness.cs:264`) and not by any deployed column.
   ADR-005 names this converter as the mechanism for erasure fields that must remain retrievable
   (`Website/docs-src/adr/005-soft-delete-vs-erasure.md:27`), but that pairing is available, not yet applied. This is the same
@@ -250,7 +251,7 @@ mechanism for erasure fields that must stay retrievable, `Website/docs-src/adr/0
 (password hashing: the one-way credential counterpart in the same Infrastructure layer, which already calls
 this converter "the at-rest counterpart to hashing credentials"), ADR-018 (polyglot persistence: the
 shipped, tested, but unadopted precedent this record mirrors). This ADR backs the one-line "Field encryption"
-entry in the security model (`SECURITY.md:36`), which stays as the reader-facing pointer.
+entry in the security model (`SECURITY.md:40`), which stays as the reader-facing pointer.
 
 ## Revision (2026-07-24)
 Documented a constraint the converter always had but did not state: **the ciphertext is
@@ -390,3 +391,16 @@ converter, and the test footprint, all shipped in v1.247.0 (`MMCA.Common/CHANGEL
    `:268`. The three live ADR-005 citations now point at
    `Website/docs-src/adr/005-soft-delete-vs-erasure.md:27`, where Decision item 2 still names the
    converter. `EncryptedStringConverterTests.cs` anchors (`:24`, `:38`, `:82`, `:95`, `:226`) still hold.
+
+## Revision (2026-10-26)
+Re-verified against current source. Anchor-only refresh; no decision, rationale, trade-off or adoption
+fact changed. The audit trail still redacts encrypted properties, the re-encryption suite still wires the
+converter, and production adoption is still zero. The changelog and `UPGRADING.md` anchors inside the
+2026-10-21 revision are left as recorded.
+1. Anchors re-verified against current source: the audit-trail redaction check `IsRedacted` now runs
+   `Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:637`
+   through `:640` (the `EncryptedStringConverter` clause at `:640`), with the class-level remark still at
+   `:56` through `:58`; the re-encryption suite is cited by its class declaration,
+   `EncryptedStringConverterReEncryptionTests.cs:14`, with the test method at `:26` (`HasConversion` at
+   `:84`, converters at `:90`, `:96` unchanged); the "Field encryption" bullet sits at `SECURITY.md:40` in
+   Context and Related. `EncryptedStringConverter.cs:76` and `:143` still hold.

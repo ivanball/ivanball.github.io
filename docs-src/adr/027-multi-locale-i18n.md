@@ -1,7 +1,7 @@
 # ADR-027: Multi-Locale Internationalization (Supersedes ADR-011)
 
 ## Status
-Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, 2026-07-09, 2026-07-29, and 2026-09-15: the MudBlazor localization interceptor is replaced so no dependency assigns the current culture on a hybrid head; corrected 2026-08-01: the pseudo-locale CI gate is required on all three browser engines, and the hybrid applier sets only the thread defaults; revised 2026-10-01: four statements corrected to match the code; revised 2026-10-06: displayed times follow the viewer's clock except a conference schedule, which follows the event's own time zone (Decision 11), and client-synthesized HTTP failures localize by error code; revised 2026-10-07: when the caller supplies a localizer, a code-keyed client failure resolves from the framework's own `SharedResource` pair before the English fallback, and the stale "only coverage collection is chromium-only" note on the pseudo-locale gate is removed). Revised 2026-10-21: Decision 10 names the server-side account-email caller of `SupportedCultures.ResolveClosest`, the `Http.{status}` key count is corrected to eleven, and anchors are refreshed. **Supersedes [ADR-011](011-single-locale-i18n.md)** (single-locale by design).
+Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, 2026-07-09, 2026-07-29, and 2026-09-15: the MudBlazor localization interceptor is replaced so no dependency assigns the current culture on a hybrid head; corrected 2026-08-01: the pseudo-locale CI gate is required on all three browser engines, and the hybrid applier sets only the thread defaults; revised 2026-10-01: four statements corrected to match the code; revised 2026-10-06: displayed times follow the viewer's clock except a conference schedule, which follows the event's own time zone (Decision 11), and client-synthesized HTTP failures localize by error code; revised 2026-10-07: when the caller supplies a localizer, a code-keyed client failure resolves from the framework's own `SharedResource` pair before the English fallback, and the stale "only coverage collection is chromium-only" note on the pseudo-locale gate is removed). Revised 2026-10-21: Decision 10 names the server-side account-email caller of `SupportedCultures.ResolveClosest`, the `Http.{status}` key count is corrected to eleven, and anchors are refreshed. Revised 2026-10-26: the pseudo-locale sentinel check is no longer retried (the test sets the culture cookie and waits for network idle), Decision 11 states that formatted times render empty rather than in UTC until the viewer's zone resolves, and anchors are refreshed. **Supersedes [ADR-011](011-single-locale-i18n.md)** (single-locale by design).
 
 ## Context
 ADR-011 recorded single-locale (en-US) as a deliberate, *revisitable* non-goal and sketched what
@@ -106,14 +106,19 @@ machine `Code`, which makes server-side error localization a keyed lookup rather
    **The pseudo pass is also a required CI gate (since 2026-07-03).** The backend-less gallery host
    (test-only, never packaged) enables `qps-Ploc` unconditionally, and `PseudoLocalizationE2ETests`
    renders `/login`, `/register`, `/forgot-password`, `/reset-password`, and `/components` under it
-   (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/PseudoLocalizationE2ETests.cs:31`),
-   asserting (a) the bracket sentinel appears (every displayed string made the resource round-trip;
-   the sentinel check is retried up to three times, `:40`) and (b) the page does not overflow
-   horizontally under the ~40% expansion (the layout-tolerance criterion). The gate is **required on
+   (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/PseudoLocalizationE2ETests.cs:33`),
+   asserting (a) the bracket sentinel appears (every displayed string made the resource round-trip)
+   and (b) the page does not overflow horizontally under the ~40% expansion (the layout-tolerance
+   criterion). The sentinel check runs once, not in a retry loop: the test sets the ASP.NET culture
+   cookie to `qps-Ploc` so the interactive Server circuit renders under it as well as the prerender,
+   then waits for network idle before reading the page (`:49-63`), because a reload-and-retry only
+   repeats the race between the two renders (`:36-43`). The gate is **required on
    all three browser engines**, not just one: `ui-e2e` is a `chromium, firefox, webkit` matrix whose
-   legs are each a required merge check, and the run step executes the whole E2E project on every leg
-   with no per-class or per-browser filter. A leak-guard
-   test asserts the sentinel is absent under `en-US`. Production hosts are unchanged: they keep
+   legs are each a required merge check (`MMCA.Common/.github/workflows/ci.yml:232`), and the run
+   step executes the whole E2E project on every leg with no per-class or per-browser filter
+   (`:344-345`). A leak-guard
+   test asserts the sentinel is absent under `en-US` (`PseudoLocalizationE2ETests.cs:71-72`).
+   Production hosts are unchanged: they keep
    `qps-Ploc` Development-only.
 
 9. **User-visible literals are kept out of markup and code-behind by a second fitness gate, and
@@ -145,18 +150,18 @@ machine `Code`, which makes server-side error localization a keyed lookup rather
    pass-through** so an already-translated server message renders as-is and a client-side message
    that happens to be a key gets translated
    (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/ResultUiExtensions.cs:23-33`, the
-   pass-through lookup at `:407-416`). The one exception is a failure the client synthesized itself,
+   pass-through lookup at `:373-382`). The one exception is a failure the client synthesized itself,
    with no server-phrased message to pass through (a bodiless HTTP status, a transport failure, a
    client timeout): `LocalizeError` looks that up by its error **code** instead (`Http.{status}`, then
    the generic `Http.Status` format, `Http.TransportFailure`, `Http.Timeout`). When the caller
    supplies a localizer, each code lookup tries that localizer, then the framework's own
-   `SharedResource` pair for the current UI culture (`:377-396`, the `ResourceManager` at `:84`), and
-   falls back to the English message only when neither holds the key (`:350-373`, the code branches
-   at `:360-370`). The localizer parameter is optional and defaults to `null`, and with no localizer
+   `SharedResource` pair for the current UI culture (`:343-362`, the `ResourceManager` at `:84`), and
+   falls back to the English message only when neither holds the key (`:316-339`, the code branches
+   at `:326-336`). The localizer parameter is optional and defaults to `null`, and with no localizer
    `LocalizeError` returns the error's English `Message` at once, without consulting `SharedResource`
-   (`:352-355`). A transport or timeout failure
+   (`:318-321`). A transport or timeout failure
    is re-keyed only when its message is the executor's own English sentence, so a caller that reuses
-   one of those codes with a message of its own keeps that message (`:400-405`).
+   one of those codes with a message of its own keeps that message (`:364-371`).
    `ErrorMessages.LoadError` / `SaveError` / `DeleteError` cover the narrow
    remainder, and the type says so: they are for the exceptions a page can still raise on its own
    behalf (a JS-interop failure, a mapping bug, a callback the page supplied), never for a server
@@ -233,7 +238,7 @@ machine `Code`, which makes server-side error localization a keyed lookup rather
     (`MMCA.Common/Source/Core/MMCA.Common.Shared/Globalization/SupportedCultures.cs:51`, called from
     `.../MMCA.Common.UI.Maui/Globalization/MauiCultureStore.cs:43`); web heads keep the parent-culture
     matching of ASP.NET request localization (`UseCommonRequestLocalization`,
-    `.../MMCA.Common.API/Startup/WebApplicationExtensions.cs:73-93`). The one other caller is
+    `.../MMCA.Common.API/Startup/WebApplicationExtensions.cs:74-94`). The one other caller is
     server-side: the account emails resolve a recipient's stored preference through it and run the
     composition under that `CurrentUICulture`, restoring the previous culture afterwards
     (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/Emails/UserEmailResources.cs:34`,
@@ -244,13 +249,17 @@ machine `Code`, which makes server-side error localization a keyed lookup rather
 11. **Displayed times follow the viewer's clock, except a schedule, which follows the event's own
     zone (added 2026-10-06).** Instants are stored and serialized in UTC. `MMCA.Common.UI` renders
     them on the viewer's clock through `ViewerTimeZone`
-    (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Culture/ViewerTimeZone.cs:18`, registered
+    (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Culture/ViewerTimeZone.cs:22`, registered
     by `AddUIShared` at `.../MMCA.Common.UI/DependencyInjection.cs:198`): it reads the browser's IANA
-    zone once per scope through JS interop and resolves it with `TimeZoneInfo` (`:49-87`, `:122-125`);
-    until then, during SSR prerender, on a host without JS, or for an id the runtime does not know,
-    every conversion uses UTC (`:32`). The server's own zone is never used, because on Blazor Server
-    and during prerender `DateTime.ToLocalTime` is the server's clock (`:13-16`). Formatting uses
-    `CurrentCulture` (`:112-113`), so Decision 7 still governs the shape of the string. Common's own
+    zone once per scope through JS interop and resolves it with `TimeZoneInfo` (`:54-90`, `:128-131`).
+    Until the zone resolves (SSR prerender, the first interactive render, a host without JS),
+    `ToViewerTime` converts to UTC (`:36`, `:106`) but `Format` renders an empty placeholder rather
+    than a UTC time, so a prerendered UTC time never paints only to jump after hydration
+    (`:118-119`). A UTC time is displayed only when resolution completes without a usable zone (the
+    browser answers with a `JSException`, or a missing id or one the runtime does not know,
+    `:81-88`, `:128-131`). The server's own zone is never used, because on Blazor Server and during
+    prerender `DateTime.ToLocalTime` is the server's clock (`:15-16`). Formatting uses
+    `CurrentCulture` (`:118-119`), so Decision 7 still governs the shape of the string. Common's own
     pages use it (notifications, sessions), and so do Store's (`ReviewList`, `ProductReviewsPanel`,
     `OrderSummaryPanel`, for example
     `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Pages/Orders/OrderSummaryPanel.razor.cs:24`)
@@ -372,6 +381,31 @@ second caller of `SupportedCultures.ResolveClosest`, and one count recorded on 2
    2026-10-01 `:82-83` and `:268` are stale); the MudBlazor 9.11.0 pin at
    `MMCA.Common/Directory.Packages.props:183` (the 2026-10-01 `:180` and 2026-10-06 `:176` are
    stale).
+
+## Revision (2026-10-26)
+Re-verified against current source. No decision or rationale changed; Decision 8 no longer
+describes a sentinel retry, and Decision 11 now states what a viewer sees before the zone resolves.
+
+1. Decision 8: the pseudo-locale sentinel check is not retried. The test sets the ASP.NET culture
+   cookie to `qps-Ploc` and waits for network idle before one assertion
+   (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/PseudoLocalizationE2ETests.cs:49-63`),
+   because the circuit opened on `/_blazor` carries no query string and a reload only repeats the
+   race (`:36-43`). The retry recorded in Decision 8 and in the 2026-10-01 revision no longer exists.
+2. Decision 11: before the zone resolves, `ViewerTimeZone.Format` returns an empty placeholder, not
+   a UTC time (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Culture/ViewerTimeZone.cs:118-119`);
+   `ToViewerTime` still converts to UTC then (`:36`, `:106`). UTC is displayed only when resolution
+   completes without a usable zone (`:81-88`, `:128-131`).
+3. Anchors re-verified against current source: `PseudoLocalizationE2ETests.cs:33` (the five scanned
+   paths) and `:71-72` (the leak guard), replacing `:31`; the `ui-e2e` matrix at
+   `MMCA.Common/.github/workflows/ci.yml:232` and its run step at `:344-345` (the 2026-10-07
+   `:287-292` is stale); `ResultUiExtensions.cs` `LocalizeError` at `:316-339`, its code branches at
+   `:326-336`, the null-localizer return at `:318-321`, the code lookups at `:343-362`, the re-key
+   rule at `:364-371` and the pass-through `Localize` at `:373-382` (the 2026-10-07 `:350-373`,
+   `:360-370`, `:352-355`, `:377-396`, `:400-405` and `:407-416` are stale; `:23-33` and `:84` still
+   hold); `UseCommonRequestLocalization` at `WebApplicationExtensions.cs:74-94` (pseudo locale under
+   `IsDevelopment()` at `:81-84`); `ViewerTimeZone.cs:22` (class), `:54-90` (`EnsureResolvedAsync`),
+   `:128-131` (`ResolveZone`), `:36` (UTC default), `:15-16` (server-zone remark) and `:118-119`
+   (`Format`), replacing `:18`, `:49-87`, `:122-125`, `:32`, `:13-16` and `:112-113`.
 
 ## Related
 [ADR-011](011-single-locale-i18n.md) (superseded), [ADR-013](013-result-pattern.md) (the `Error.Code`

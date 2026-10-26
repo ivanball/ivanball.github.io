@@ -6,6 +6,7 @@ Revised 2026-10-01: the scoring trigger's feature gate and failure path, and ADR
 Revised 2026-10-06: the scoring trigger's event-existence 404 and the handler's current retry remarks.
 Revised 2026-10-07: the live drain's bounded shutdown flush (complete the queue, then publish what remains within a 5-second budget) and its `WaitToReadAsync` loop.
 Revised 2026-10-21: anchors refreshed after the live drain, upvote handler and question submit handler moved.
+Revised 2026-10-26: anchors refreshed after the live poll open handler and question submit handler moved.
 
 ## Context
 ADR-052 ran two different kinds of work through one mechanism: ephemeral broadcasts that must not
@@ -122,7 +123,7 @@ starts an untracked `Task` from a request, and nothing that must run lands here.
     enqueue is the body of that hook. `CloseLivePollHandler` declares the base at
     `.../LivePolls/UseCases/Close/CloseLivePollHandler.cs:24` and enqueues from the hook at `:73`
     (queue write at `:94-95`); `OpenLivePollHandler` at
-    `.../LivePolls/UseCases/Open/OpenLivePollHandler.cs:26` and `:88` (write at `:109-110`);
+    `.../LivePolls/UseCases/Open/OpenLivePollHandler.cs:26` and `:87` (write at `:108-109`);
     `ModerateQuestionHandler` at `.../SessionQuestions/UseCases/Moderate/ModerateQuestionHandler.cs:28`
     and `:89`, whose helper wraps its work in `BestEffort.ExecuteAsync` (`:138`) with one write per
     branch (`:140`, `:154`).
@@ -130,10 +131,10 @@ starts an untracked `Task` from a request, and nothing that must run lands here.
     `SubmitQuestionHandler` implements `ICommandHandler<SubmitQuestionCommand, Result<SessionQuestionDTO>>`
     directly (`.../SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs:39`), so it owns its
     sequence. Its save is not inline: the count-decide-insert-save sequence runs inside
-    `CreateUnderClaimAsync` (`:148`) under a per-`(session, user)` `IDistributedLock` claim (`:154`,
-    `SaveChangesAsync` at `:190`), and `HandleAsync` calls that helper at `:97`, logs at `:103` and
-    awaits `EnqueueSubmittedAsync(question)` at `:105`, whose `BestEffort.ExecuteAsync` body
-    (`:211-212`) writes the queue at `:223` (approved) and `:238` (pending count). The rule a
+    `CreateUnderClaimAsync` (`:144`) under a per-`(session, user)` `IDistributedLock` claim (`:150`,
+    `SaveChangesAsync` at `:186`), and `HandleAsync` calls that helper at `:95`, logs at `:99` and
+    awaits `EnqueueSubmittedAsync(question)` at `:101`, whose `BestEffort.ExecuteAsync` body
+    (`:207-208`) writes the queue at `:219` (approved) and `:234` (pending count). The rule a
     future edit has to keep is therefore **the enqueue stays below the `CreateUnderClaimAsync` call**,
     not below a save statement in the same method.
 - **Work that must run does not go here.** Anything expensive, paid, long-running or not
@@ -184,7 +185,7 @@ Two implementations exist: `LiveChannelPublishQueue` / `LiveChannelPublishProces
   needs its own queue rather than a wider reader, or ordering is lost.
 - **One post-save ordering is remembered rather than enforced.** The three base-class handlers cannot
   express the wrong order, but `SubmitQuestionHandler` can: an edit that lifted its enqueue above the
-  `CreateUnderClaimAsync` call (`SubmitQuestionHandler.cs:97`, `:105`) would broadcast a question that
+  `CreateUnderClaimAsync` call (`SubmitQuestionHandler.cs:95`, `:101`) would broadcast a question that
   may never have persisted, and no test or analyzer catches that shape.
 - **Choosing this over ADR-114 is a per-job judgement.** Putting must-run work on a `DropOldest`
   channel loses it silently, and putting a broadcast through a durable command pays a row, a poll
@@ -281,6 +282,22 @@ line numbers moved in the live drain, the upvote handler and `SubmitQuestionHand
    gRPC adapter's token forwarding and `Cancelled` mapping
    (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Contracts/LiveChannelPublisherGrpcAdapter.cs:49-53`,
    forward at `:49`, catch at `:51`, rethrow at `:53`).
+
+## Revision (2026-10-26)
+Re-verified against current source. The decision, rationale and trade-offs are unchanged, and so
+is every behavior they describe (the post-commit enqueue in both shapes and the
+`SubmitQuestionHandler` ordering rule, whose enqueue still follows the `CreateUnderClaimAsync`
+call); only line numbers moved in `OpenLivePollHandler` and `SubmitQuestionHandler`.
+1. Anchors re-verified against current source: in
+   `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/LivePolls/UseCases/Open/OpenLivePollHandler.cs`,
+   the hook's enqueue call (`:87`, inside the `OnMutatedAsync` override at `:82`) and the queue
+   write (`:108-109`); in `.../SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs`,
+   `CreateUnderClaimAsync` (defined at `:144`, claim at `:150`), `SaveChangesAsync` (`:186`), the
+   helper call (`:95`), the log (`:99`), the `EnqueueSubmittedAsync` call (`:101`, body at
+   `:207-208`) and the queue writes (`:219`, `:234`), also in Trade-offs. Unchanged and confirmed:
+   `CloseLivePollHandler.cs` (`:24`, hook enqueue call `:73` inside the override at `:68`, write
+   `:94-95`), `ModerateQuestionHandler.cs` (`:28`, `:89`, `:138`, `:140`, `:154`), and the
+   `MutateEntityHandlerBase` lines (`:339`, `:52`, `:322`, `:325`).
 
 ## Related
 [ADR-114](114-internal-commands-durable-job-queue.md) (the durable, leased, retrying queue that owns

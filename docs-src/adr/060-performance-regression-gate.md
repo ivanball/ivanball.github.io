@@ -13,7 +13,8 @@ default success mode; the omitted 2026-10-01 entry is added here; anchors re-ver
 2026-10-07: the consumer load-freshness gate is a step of a single `freshness` job, which
 `deploy.needs` lists, and the shared action, which the consumers pin at `@main`, filters runs
 client-side; anchors re-verified against current source. Revised 2026-10-21: anchors refreshed
-after the consumer deploy workflows, `CONTRIBUTING.md` and `release.yml` shifted.
+after the consumer deploy workflows, `CONTRIBUTING.md` and `release.yml` shifted. Revised
+2026-10-26: anchors refreshed after the Common `ci.yml` and the consumer deploy workflows shifted.
 
 ## Context
 Rubric section 12 asks for hot-path efficiency that is **measured, not assumed**
@@ -31,7 +32,7 @@ problem this record answers.
 
 No existing ADR covers it. ADR-015's fitness functions assert **structure and registration**, and
 say so explicitly: they are "not runtime behavior"
-(`Website/docs-src/adr/015-architecture-fitness-functions.md:93`). ADR-038 gates the supply chain
+(`Website/docs-src/adr/015-architecture-fitness-functions.md:114`). ADR-038 gates the supply chain
 (SBOM, lock files, vulnerability audit), which is provenance, not cost. ADR-041 instruments
 production, so it observes a regression **after** it deploys rather than failing the PR that
 introduced it. Nothing owned the statement "a performance regression must fail the merge."
@@ -43,12 +44,12 @@ benchmark-to-benchmark ratio floors where it is not.
 
 - **A dedicated CI job measures, then verifies.** The `performance-smoke` job, named
   `Performance gate (BenchmarkDotNet Short + baseline verify)`
-  (`MMCA.Common/.github/workflows/ci.yml:310-311`), runs the suite with `--filter "*" --job Short
-  --exporters json` (`ci.yml:343`) and then runs the verifier over the exported artifacts
-  (`ci.yml:352`). `--job Short` (3 warmup plus 3 iterations) is chosen to produce real
-  measurements inside the job's 15-minute budget (`ci.yml:314,341`); `--filter "*"` is required
+  (`MMCA.Common/.github/workflows/ci.yml:363-364`), runs the suite with `--filter "*" --job Short
+  --exporters json` (`ci.yml:396`) and then runs the verifier over the exported artifacts
+  (`ci.yml:405`). `--job Short` (3 warmup plus 3 iterations) is chosen to produce real
+  measurements inside the job's 15-minute budget (`ci.yml:367,394`); `--filter "*"` is required
   because BenchmarkDotNet otherwise prompts for a selection and would hang the runner
-  (`ci.yml:340-341`).
+  (`ci.yml:393-395`).
 
 - **The baseline is a committed JSON file, not a stored previous run.**
   `MMCA.Common/Tests/Performance/perf-baseline.json:1-20` holds an `allocationCeilingsBytes` object
@@ -84,7 +85,7 @@ benchmark-to-benchmark ratio floors where it is not.
   (`MMCA.Common/build/perfgate/perfgate.csproj:2-21`), so the gate itself cannot become a restore or
   supply-chain problem. It reads BenchmarkDotNet's `*-report-full-compressed.json` exports from the
   results directory it is handed (`Program.cs:26-33`), which CI points at
-  `BenchmarkDotNet.Artifacts/results` (`ci.yml:352`).
+  `BenchmarkDotNet.Artifacts/results` (`ci.yml:405`).
 
 - **The job is a required merge gate, not advisory.** It is listed among the eight required contexts
   in `MMCA.Common/CONTRIBUTING.md:68-71` and in the reproducible ruleset payload there
@@ -110,20 +111,20 @@ artifact for backend hot paths is a k6 load test against deployed read endpoints
 on a schedule and on demand, not on a pull request (`MMCA.ADC/.github/workflows/load-test.yml:13-23`,
 `MMCA.Store/.github/workflows/load-test.yml:11-21`). Both consumers gate every production deploy on
 that run's recency: a `load-freshness` step fails the deploy when the latest successful `load-test.yml`
-run is older than 35 days (ADC `MMCA.ADC/.github/workflows/deploy.yml:864-865`, window at `:873`;
-Store `MMCA.Store/.github/workflows/deploy.yml:808-809`, window at `:817`). The step is one of four
-inside a single `freshness` job (ADC `deploy.yml:832`, Store `deploy.yml:776`) and runs unless the
-job is cancelled (ADC `deploy.yml:866`, Store `deploy.yml:810`), so it reports even when an earlier
+run is older than 35 days (ADC `MMCA.ADC/.github/workflows/deploy.yml:865-866`, window at `:874`;
+Store `MMCA.Store/.github/workflows/deploy.yml:809-810`, window at `:818`). The step is one of four
+inside a single `freshness` job (ADC `deploy.yml:833`, Store `deploy.yml:777`) and runs unless the
+job is cancelled (ADC `deploy.yml:867`, Store `deploy.yml:811`), so it reports even when an earlier
 freshness step fails. Both steps call the shared composite action
-`ivanball/MMCA.Common/.github/actions/freshness-gate@main` (ADC `deploy.yml:869`, Store
-`deploy.yml:813`) in its default success mode (no `required-jobs` input), which lists the workflow's
+`ivanball/MMCA.Common/.github/actions/freshness-gate@main` (ADC `deploy.yml:870`, Store
+`deploy.yml:814`) in its default success mode (no `required-jobs` input), which lists the workflow's
 runs with no server-side status filter, keeps the completed ones whose conclusion is success on the
 client, and takes the newest
 (`MMCA.Common/.github/actions/freshness-gate/action.yml:158-183,222-231`), then fails when its age in
 whole days exceeds the window (`action.yml:139-149`). The `deploy` job lists `freshness` in `needs`
-(ADC `deploy.yml:1160`, Store `deploy.yml:1098`). A break-glass skip exists and refuses to fire
+(ADC `deploy.yml:1161`, Store `deploy.yml:1099`). A break-glass skip exists and refuses to fire
 without a written justification (`action.yml:99-104`; the deploy workflows pass `skip` and
-`skip-justification` at ADC `deploy.yml:875-876`, Store `deploy.yml:819-820`).
+`skip-justification` at ADC `deploy.yml:876-877`, Store `deploy.yml:820-821`).
 That makes the k6 run a standing precondition of shipping, not a per-PR measurement: it proves
 capacity was checked within the window, not that the change being deployed kept it. MMCA.Helpdesk
 has neither. The client-side
@@ -169,9 +170,9 @@ counterpart, a Core Web Vitals budget asserted per deploy inside the chromium e2
 
 ## Trade-offs
 - **The Short job cannot see small latency regressions.** Three warmup and three iterations
-  (`ci.yml:341`) give wide confidence intervals: enough for a 1000x floor and for counting bytes,
+  (`ci.yml:394`) give wide confidence intervals: enough for a 1000x floor and for counting bytes,
   useless for detecting a 5% slowdown. Detecting that would need a longer job and a dedicated runner,
-  which the 15-minute budget (`ci.yml:314`) deliberately does not buy.
+  which the 15-minute budget (`ci.yml:367`) deliberately does not buy.
 - **Only one ratio floor exists today** (`perf-baseline.json:13-19`), so the machine-independent
   latency half of the gate protects exactly one invariant. That floor names two of the eight
   benchmarks (`perf-baseline.json:14-18`), so the remaining six are gated on allocations alone,
@@ -193,7 +194,7 @@ counterpart, a Core Web Vitals budget asserted per deploy inside the chromium e2
   the baseline.
 - **A green context does not always mean the benchmarks ran.** On a documentation-only PR the heavy
   steps are skipped by the `changes` classifier while all required contexts still post green, which
-  is what keeps branch protection satisfiable (`ci.yml:41-44,332,338,346`).
+  is what keeps branch protection satisfiable (`ci.yml:41-44,385,391,399`).
 - **Consumers inherit the numbers, not the gate.** MMCA.ADC, MMCA.Store and MMCA.Helpdesk get the
   framework's bounded hot paths through the released packages, but none of them gates their own
   application code this way.
@@ -257,6 +258,23 @@ with a mandatory justification) are as recorded. Only line anchors moved.
    (`!cancelled()`), `:869` (action), `:873` (window), `:875-876` (skip inputs), `:1160`
    (`deploy.needs`); Store `MMCA.Store/.github/workflows/deploy.yml:776`, `:808-809`, `:810`,
    `:813`, `:817`, `:819-820`, `:1098`. The anchors in the earlier revisions are kept as recorded.
+
+## Revision (2026-10-26)
+Re-verified against current source. No decision or rationale changed: the `performance-smoke` job
+name and 15-minute budget, the benchmark command, the perfgate invocation, the docs-only step guards
+and the consumer `freshness` job (four steps, `load-freshness` second, success mode with no
+`required-jobs` input, 35-day window, break-glass skip with a mandatory justification) are as
+recorded. Only line anchors moved.
+
+1. Anchors re-verified against current source: `MMCA.Common/.github/workflows/ci.yml:363-364` (job
+   and name), `:367` (15-minute budget), `:393-395` (`--filter "*"` and Short-job rationale; `:394`
+   for the Short job alone), `:396` (run), `:405` (perfgate), `:385,391,399` (docs-only guards; the
+   classifier comment at `:41-44` is unchanged); ADC `MMCA.ADC/.github/workflows/deploy.yml:833`
+   (job), `:865-866` (step name and id), `:867` (`!cancelled()`), `:870` (action), `:874` (window),
+   `:876-877` (skip inputs), `:1161` (`deploy.needs`); Store `MMCA.Store/.github/workflows/deploy.yml:777`,
+   `:809-810`, `:811`, `:814`, `:818`, `:820-821`, `:1099`; and ADR-015's "not runtime behavior"
+   sentence at `015-architecture-fitness-functions.md:114`. The anchors in the earlier revisions are
+   kept as recorded.
 
 ## Related
 ADR-015 (structural fitness functions, which explicitly stop at structure and registration; this is

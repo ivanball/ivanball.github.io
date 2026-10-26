@@ -9,6 +9,8 @@ reads to the audience-visible states).
 Revised 2026-09-25 (re-anchored the backplane-prefix citation, which now lives in the
 `DependencyInjection.Notifications.cs` partial, and the ADC poll manage endpoint).
 Revised 2026-10-21: anchors refreshed after the ADC live poll manage endpoint moved.
+Revised 2026-10-26: linked ADR-135 as the owner of the application namespace behind the backplane
+prefix; anchors refreshed after the connection-cap, backplane-prefix and poll-read-scope code moved.
 ## Context
 
 Conference-day features (live polls, session Q&A, live result counters) need sub-second fan-out of
@@ -160,3 +162,35 @@ carries a doc comment above its route attribute.
      (`Range(0, 10_000)` at `:45`), and the refusal in `NotificationHub.OnConnectedAsync`
      (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/NotificationHub.cs:61`),
      which reads the cap at `:63`, compares at `:69` and throws `HubException` at `:74`.
+
+## Revision (2026-10-26)
+Re-verified against current source. No change to the channel model, the per-user connection cap,
+its default of 20, the per-application backplane prefix or the ADC live poll read scope recorded on
+2026-09-07. The record now links the ADR that owns the application-namespace decision, and three
+anchors have moved since the 2026-10-21 refresh.
+
+1. **Related record added.** The backplane prefix in item 3 of the 2026-09-07 revision is one use
+   of the application namespace; ADR-135 owns that decision for every shared keyspace and is listed
+   under Related below.
+2. Anchors re-verified against current source:
+   - The `MaxConnectionsPerUser` default of 20 is declared at
+     `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/PushNotificationSettings.cs:50`
+     (`Range(0, 10_000)` at `:49`).
+   - The refusal of a connection past the cap is in `NotificationHub.OnConnectedAsync`
+     (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/NotificationHub.cs:61`),
+     which reads the cap at `:63`, compares at `:69` and throws `HubException` at `:74`.
+   - The Redis backplane prefix is resolved through `ApplicationNamespace.Resolve` at
+     `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:56`
+     and applied as the channel prefix at `:57-58`; the resolver is still at
+     `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/ApplicationNamespace.cs:53`.
+   - `GetPollResultsHandler` still defines audience-readable at
+     `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/LivePolls/UseCases/GetPollResults/GetPollResultsHandler.cs:65-66`
+     and applies it at `:109` and `:124`.
+   - The manage endpoint (`GET /api/livepolls/manage`) is still declared at
+     `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:186`.
+
+## Related
+
+- [ADR-024](024-push-notifications.md): the durable push notification pipeline and hub this ADR extends.
+- [ADR-135](135-application-namespace-keyspace-isolation.md): One Application Namespace Isolates
+  Shared Infrastructure Keyspaces (owns the namespace the backplane prefix derives from).

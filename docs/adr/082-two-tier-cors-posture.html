@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -242,7 +243,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-082-two-tier-cross-origin-posture-allow-listed-service-policies-an-any-header-gateway-policy">ADR-082: Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-08-14). Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised 2026-10-21: the ADC and Store browser clients now send API traffic through the UI host&#39;s same-origin proxy (ADR-131), whose own deny-all cross-origin gate replaces the &quot;no UI API surface&quot; statement; anchors refreshed.</p>
+          <p>Accepted (2026-08-14). Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised 2026-10-21: the ADC and Store browser clients now send API traffic through the UI host&#39;s same-origin proxy (ADR-131), whose own deny-all cross-origin gate replaces the &quot;no UI API surface&quot; statement; anchors refreshed. Revised 2026-10-26: anchors refreshed after the host, Bicep and pipeline-extension lines shifted.</p>
           <h2 id="context">Context</h2>
           <p>Both deployed applications put a YARP gateway in front of per-module service hosts (ADR-008), and
           clients reach the gateway origin while the services answer on their own internal origins. MAUI
@@ -260,9 +261,9 @@
           has.</p>
           <p>CORS already appears in the record twice, but only in passing: ADR-008 lists it as gateway
           middleware and as a reason the gateway exists
-          (<code>Website/docs-src/adr/008-service-extraction-topology.md:65</code>, <code>:95</code>), and ADR-058 pins its test
+          (<code>Website/docs-src/adr/008-service-extraction-topology.md:71</code>, <code>:101</code>), and ADR-058 pins its test
           hosts to Production so the restrictive branch is the one under test
-          (<code>Website/docs-src/adr/058-runtime-conformance-suites-as-a-package.md:77-79</code>). Its edge siblings
+          (<code>Website/docs-src/adr/058-runtime-conformance-suites-as-a-package.md:82-84</code>). Its edge siblings
           each have their own record: ADR-023 for the security-response headers and ADR-019 for rate limiting
           and the forwarded-header trust that feeds it. This ADR records the posture itself.</p>
           <h2 id="decision">Decision</h2>
@@ -280,7 +281,7 @@
           (<code>:142</code>) is what lets cookie and bearer traffic cross. The <code>x-signalr-user-agent</code> entry is
           load-bearing rather than decorative: it plus credentials is what allows the SignalR hub to
           negotiate cross-origin with a bearer token
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:134-137</code>).</li>
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:140-141</code>).</li>
           <li><strong>The environment picks between the two policies in the shared middleware pipeline, not at
           registration.</strong> The selection is one named step of the ADR-079 pipeline: the <code>Cors</code> step calls
           <code>app.UseCors(...)</code> with <code>CorsPolicyAllowAll</code> when <code>app.Environment.IsDevelopment()</code> and
@@ -288,7 +289,7 @@
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Pipeline/MiddlewarePipelineBuilder.cs:97-101</code>),
           seeded by <code>CreateDefault()</code> (<code>:31</code>) after the <code>Routing</code> step (<code>:93-95</code>) and before
           <code>Authentication</code> (<code>:103-105</code>). Hosts reach it through <code>UseCommonMiddlewarePipeline()</code>
-          (<code>WebApplicationExtensions.cs:48</code>, <code>:60</code>), which delegates to that builder (<code>:170</code>, <code>:172</code>).
+          (<code>WebApplicationExtensions.cs:49</code>, <code>:61</code>), which delegates to that builder (<code>:171</code>, <code>:173</code>).
           Registration stays environment-agnostic; one step decides the posture.</li>
           <li><strong>The gateway gets a different policy, and it is the default policy.</strong>
           <code>AddCommonGatewayCors(IConfiguration, IHostEnvironment)</code>
@@ -314,34 +315,34 @@
           <code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:21-22</code>), and Bicep injects the
           real value into the gateway container of both applications as
           <code>Cors__AllowedOrigins__0</code>, pointing at the UI container app&#39;s FQDN
-          (<code>MMCA.ADC/infra/main.bicep:2618</code>, <code>MMCA.Store/infra/main.bicep:2031</code>). With the ADC and Store
+          (<code>MMCA.ADC/infra/main.bicep:2654</code>, <code>MMCA.Store/infra/main.bicep:2037</code>). With the ADC and Store
           WebAssembly clients routed through the same-origin proxy (Context), no first-party browser fetch
           to the gateway remains, so that allow-listed UI origin now governs no cross-origin browser call
           from the UI; the grant stays in place for any client that still calls the gateway from that
           origin. On Store the same key can
           also arrive from Key Vault as <code>Cors--AllowedOrigins--0</code>, which is why the vault provider is
           registered before anything reads configuration: the allow-list binds eagerly
-          (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:54-62</code>, <code>:63</code>).</li>
+          (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:55-63</code>, <code>:64</code>).</li>
           <li><strong>Adoption is complete on both tiers.</strong> All seven ADC and Store service hosts call <code>AddCommonCors</code>
-          (<code>MMCA.ADC.Identity.Service/Program.cs:154</code>, <code>MMCA.ADC.Conference.Service/Program.cs:219</code>,
-          <code>MMCA.ADC.Engagement.Service/Program.cs:149</code>, <code>MMCA.ADC.Notification.Service/Program.cs:138</code>,
-          <code>MMCA.Store.Catalog.Service/Program.cs:139</code>, <code>MMCA.Store.Identity.Service/Program.cs:134</code>,
-          <code>MMCA.Store.Sales.Service/Program.cs:147</code>), as does the Helpdesk reference host
+          (<code>MMCA.ADC.Identity.Service/Program.cs:160</code>, <code>MMCA.ADC.Conference.Service/Program.cs:225</code>,
+          <code>MMCA.ADC.Engagement.Service/Program.cs:155</code>, <code>MMCA.ADC.Notification.Service/Program.cs:144</code>,
+          <code>MMCA.Store.Catalog.Service/Program.cs:145</code>, <code>MMCA.Store.Identity.Service/Program.cs:140</code>,
+          <code>MMCA.Store.Sales.Service/Program.cs:153</code>), as does the Helpdesk reference host
           (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:34</code>), and every one of the eight then
           runs <code>UseCommonMiddlewarePipeline()</code> so the selection above applies
-          (<code>MMCA.ADC.Identity.Service/Program.cs:361</code>, <code>MMCA.ADC.Conference.Service/Program.cs:450</code>,
-          <code>MMCA.ADC.Engagement.Service/Program.cs:326</code>, <code>MMCA.ADC.Notification.Service/Program.cs:270</code>,
-          <code>MMCA.Store.Catalog.Service/Program.cs:320</code>, <code>MMCA.Store.Identity.Service/Program.cs:307</code>,
-          <code>MMCA.Store.Sales.Service/Program.cs:309</code>, <code>MMCA.Helpdesk.Web/Program.cs:149</code>). Both gateways call
+          (<code>MMCA.ADC.Identity.Service/Program.cs:372</code>, <code>MMCA.ADC.Conference.Service/Program.cs:461</code>,
+          <code>MMCA.ADC.Engagement.Service/Program.cs:337</code>, <code>MMCA.ADC.Notification.Service/Program.cs:281</code>,
+          <code>MMCA.Store.Catalog.Service/Program.cs:331</code>, <code>MMCA.Store.Identity.Service/Program.cs:318</code>,
+          <code>MMCA.Store.Sales.Service/Program.cs:320</code>, <code>MMCA.Helpdesk.Web/Program.cs:149</code>). Both gateways call
           <code>AddCommonGatewayCors</code> and the bare <code>app.UseCors()</code>
-          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:125</code>, <code>:173</code>;
-          <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:77</code>, <code>:162</code>).</li>
+          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:131</code>, <code>:179</code>;
+          <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:83</code>, <code>:168</code>).</li>
           </ul>
           <p>The Blazor UI hosts register neither call, and no UI host runs the CORS middleware. The ADC and
           Store UI.Web hosts do expose an API surface, the same-origin proxy of ADR-131
-          (<code>AddCommonSameOriginApiProxy</code> at <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:161</code> and
-          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:153</code>, mapped by
-          <code>MapCommonSameOriginApiProxy</code> at <code>:284</code> and <code>:262</code>), but it carries its own deny-all cross-origin
+          (<code>AddCommonSameOriginApiProxy</code> at <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:167</code> and
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:159</code>, mapped by
+          <code>MapCommonSameOriginApiProxy</code> at <code>:290</code> and <code>:268</code>), but it carries its own deny-all cross-origin
           posture outside the CORS middleware: a foreign <code>Origin</code> or <code>Sec-Fetch-Site</code> gets 403, and <code>OPTIONS</code>
           is answered locally with 204, no CORS grant and no forwarding, so no preflight ever reaches the
           gateway and the gateway policy never decides whether a proxied request may proceed
@@ -464,6 +465,33 @@
           <code>MMCA.ADC.Notification.Service/Program.cs:270</code>, <code>MMCA.Store.Identity.Service/Program.cs:307</code>,
           <code>MMCA.Store.Sales.Service/Program.cs:309</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. The two tiers, both policies, the environment selection step,
+          the deploy-time origin injection, the Store Key Vault ordering, adoption on all eight service-tier
+          hosts and both gateways, and the UI hosts&#39; proxy-only API surface (no <code>AddCommonCors</code> or <code>UseCors</code>
+          in either UI.Web host) are unchanged; only anchors moved.</p>
+          <ol>
+          <li>Anchors re-verified against current source: the <code>UseCommonMiddlewarePipeline</code> overloads
+          (<code>WebApplicationExtensions.cs:49</code>, <code>:61</code>) and their delegation (<code>ApplyPipeline</code> at <code>:171</code>,
+          <code>CreateDefault()</code> at <code>:173</code>); the SignalR header comment
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:140-141</code>); the gateway Bicep
+          entries (<code>MMCA.ADC/infra/main.bicep:2654</code>, <code>MMCA.Store/infra/main.bicep:2037</code>); the Store gateway
+          Key Vault comment and call (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:55-63</code>,
+          <code>:64</code>); <code>AddCommonCors</code> in <code>MMCA.ADC.Identity.Service/Program.cs:160</code>,
+          <code>MMCA.ADC.Conference.Service/Program.cs:225</code>, <code>MMCA.ADC.Engagement.Service/Program.cs:155</code>,
+          <code>MMCA.ADC.Notification.Service/Program.cs:144</code>, <code>MMCA.Store.Catalog.Service/Program.cs:145</code>,
+          <code>MMCA.Store.Identity.Service/Program.cs:140</code>, <code>MMCA.Store.Sales.Service/Program.cs:153</code>;
+          <code>UseCommonMiddlewarePipeline()</code> in <code>MMCA.ADC.Identity.Service/Program.cs:372</code>,
+          <code>MMCA.ADC.Conference.Service/Program.cs:461</code>, <code>MMCA.ADC.Engagement.Service/Program.cs:337</code>,
+          <code>MMCA.ADC.Notification.Service/Program.cs:281</code>, <code>MMCA.Store.Catalog.Service/Program.cs:331</code>,
+          <code>MMCA.Store.Identity.Service/Program.cs:318</code>, <code>MMCA.Store.Sales.Service/Program.cs:320</code> (Helpdesk
+          unchanged at <code>:34</code> and <code>:149</code>); the gateway CORS calls
+          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:131</code>, <code>:179</code>;
+          <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:83</code>, <code>:168</code>); the same-origin proxy
+          registration and mapping (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:167</code>, <code>:290</code>;
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:159</code>, <code>:268</code>); and the ADR-008
+          (<code>:71</code>, <code>:101</code>) and ADR-058 (<code>:82-84</code>) cross-references.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="079-shared-http-middleware-pipeline.html">ADR-079</a> (the shared middleware pipeline whose fixed order
           places the environment-selected CORS policy between routing and authentication), ADR-008 (the
@@ -496,6 +524,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

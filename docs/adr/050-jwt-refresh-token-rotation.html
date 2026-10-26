@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -259,7 +260,7 @@
           type declares them; neither Domain analyzer ledger mentions them any more (the unshipped ledger holds
           only <code>#nullable enable</code>, <code>Source/Core/MMCA.Common.Domain/PublicAPI.Unshipped.txt:1</code>, and the shipped
           <code>IAuthUser</code> entries list only <code>PasswordHash</code> and <code>PasswordSalt</code>, <code>PublicAPI.Shipped.txt:16-18</code>), so the
-          removal record survives only in Common&#39;s changelog (<code>MMCA.Common/CHANGELOG.md:3364</code>). The only callable copies left are on a
+          removal record survives only in Common&#39;s changelog (<code>MMCA.Common/CHANGELOG.md:3580</code>). The only callable copies left are on a
           Common test double
           (<code>MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Users/UserUseCaseTestDoubles.cs:83,89</code>), which is
           not dead code: <code>DeleteUserHandlerBaseTests.cs:81</code> still calls <code>UpdateRefreshToken</code> on it. Beyond that,
@@ -274,10 +275,12 @@
           and <code>:139</code>, Store
           <code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/Administration/UserAdministrationService.cs:82</code>
           and <code>:134</code>), while the aggregate transitions themselves carry no refresh state (ADC
-          <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:497</code>, <code>:519</code>, Store
-          <code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Domain/Users/User.cs:204</code>, <code>:303</code>).
+          <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:523</code>, <code>:545</code>, Store
+          <code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Domain/Users/User.cs:229</code>, <code>:328</code>).
           Revised 2026-10-21: anchors refreshed after the <code>AuthSessionIssuer</code>, <code>JwtSettings</code>, changelog and
-          user-administration code moved; behavior and defaults are unchanged.</p>
+          user-administration code moved; behavior and defaults are unchanged. Revised 2026-10-26: a token
+          presented on a row already revoked as <code>ReuseDetected</code> now fails that request alone instead of
+          revoking the user&#39;s live sessions again (Common #612, v1.261.0); anchors refreshed.</p>
           <p>Note (2026-09-03): the body bullet on account deactivation and erasure described shipped code when this
           record was written (ADC revoked in <code>Delete()</code> and <code>Anonymize()</code>, Store in <code>Deactivate()</code> and
           <code>Anonymize()</code>), and stopped describing it on 2026-08-26, when the refresh-sessions sweep removed the
@@ -312,7 +315,7 @@
           lifetime must stay short to bound exposure, which in turn makes a refresh token necessary for a usable
           session. And a refresh token is a bearer credential with a long life: if it is captured, replay must be
           detectable and answerable. The workflow lives once in <code>AuthenticationServiceBase&lt;TUser&gt;</code>
-          (<code>Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:64</code>); the app-specific claim set
+          (<code>Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:67</code>); the app-specific claim set
           and account gates stay in each app&#39;s sealed subclass (ADR-004 dual-fetch, ADR-032 hashing).</p>
           <h2 id="decision">Decision</h2>
           <p>Mint a stateless JWT access token plus a single, server-stored refresh token that rotates on every use,
@@ -338,28 +341,28 @@
           Registration seeds the first refresh token the same way (<code>AuthenticationServiceBase.cs:263</code>).
           <code>UpdateRefreshToken</code> sets the token and its expiry on each app&#39;s <code>User</code> aggregate. The previous
           refresh token is therefore invalid the moment a new one is issued. Today that shared entry point is
-          gone from the refresh path: only login (<code>AuthenticationServiceBase.cs:212</code>) and registration
-          (<code>AuthenticationServiceBase.cs:305</code>) still call <code>IssueTokensAsync</code> (body at
-          <code>AuthenticationServiceBase.cs:443</code>, which delegates to <code>sessionIssuer.IssueAsync</code> at <code>:451</code>), while
-          <code>RefreshTokenAsync</code> (<code>AuthenticationServiceBase.cs:309</code>) does not call it at all, delegating instead
-          to <code>sessionIssuer.RotateAsync</code> (<code>AuthenticationServiceBase.cs:363</code>). That method
+          gone from the refresh path: only login (<code>AuthenticationServiceBase.cs:230</code>) and registration
+          (<code>AuthenticationServiceBase.cs:325</code>) still call <code>IssueTokensAsync</code> (body at
+          <code>AuthenticationServiceBase.cs:463</code>, which delegates to <code>sessionIssuer.IssueAsync</code> at <code>:471</code>), while
+          <code>RefreshTokenAsync</code> (<code>AuthenticationServiceBase.cs:329</code>) does not call it at all, delegating instead
+          to <code>sessionIssuer.RotateAsync</code> (<code>AuthenticationServiceBase.cs:383</code>). That method
           (<code>Source/Core/MMCA.Common.Application/Auth/Sessions/AuthSessionIssuer.cs:92</code>) runs
-          <code>ResolveRotatableSessionAsync</code> (called at <code>AuthSessionIssuer.cs:103</code>, body at <code>:298</code>) and then
-          <code>RotateSessionAsync</code> (called at <code>AuthSessionIssuer.cs:111</code>, body at <code>:394</code>). (Today that overwrite is a successor session row
-          claimed atomically through <code>IRefreshSessionStore.TryRotateAsync</code>, called at <code>AuthSessionIssuer.cs:418</code>.)</li>
+          <code>ResolveRotatableSessionAsync</code> (called at <code>AuthSessionIssuer.cs:103</code>, body at <code>:300</code>) and then
+          <code>RotateSessionAsync</code> (called at <code>AuthSessionIssuer.cs:111</code>, body at <code>:396</code>). (Today that overwrite is a successor session row
+          claimed atomically through <code>IRefreshSessionStore.TryRotateAsync</code>, called at <code>AuthSessionIssuer.cs:419</code>.)</li>
           <li><strong>Refresh binds to the same principal via the expired access token.</strong> <code>RefreshTokenAsync</code> requires the
           client to present the expired access token alongside the refresh token and calls
-          <code>TokenService.GetPrincipalFromExpiredToken</code> (<code>AuthenticationServiceBase.cs:323</code>). That method
+          <code>TokenService.GetPrincipalFromExpiredToken</code> (<code>AuthenticationServiceBase.cs:343</code>). That method
           validates issuer, audience, signing key, and the pinned algorithm but skips only the lifetime check
           (<code>TokenService.cs:178-180,182,187,196-197</code>), so an unsigned, wrong-audience, or algorithm-swapped token
-          yields no principal and the refresh fails (<code>AuthenticationServiceBase.cs:324-328</code>). The user id claim
-          from that principal (<code>principal.GetUserId()</code>, <code>AuthenticationServiceBase.cs:333</code>) selects the user
+          yields no principal and the refresh fails (<code>AuthenticationServiceBase.cs:344-348</code>). The user id claim
+          from that principal (<code>principal.GetUserId()</code>, <code>AuthenticationServiceBase.cs:353</code>) selects the user
           whose stored refresh credential is then compared. (Today that compare is a lookup by token hash plus
-          a user-id match, <code>AuthSessionIssuer.cs:309-316</code>.)</li>
+          a user-id match, <code>AuthSessionIssuer.cs:311-317</code>.)</li>
           <li><strong>Sliding per-rotation expiry, from a bound setting.</strong> Every issuance (login, refresh, and the first
           token seeded at registration) stamps the stored refresh token&#39;s expiry as now plus the
           <code>RefreshTokenLifetime</code> property (today private to the session issuer, <code>AuthSessionIssuer.cs:60</code>;
-          stamped at <code>:364</code> when a session opens and <code>:407</code> on the rotation successor), so the window restarts
+          stamped at <code>:367</code> when a session opens and <code>:409</code> on the rotation successor), so the window restarts
           from the moment of each successful rotation rather than staying pinned to the opening login. That
           property reads the value the token service derives from <code>JwtSettings.RefreshTokenExpirationDays</code>
           (<code>JwtSettings.cs:73</code>, default 7 days) via <code>TokenService.RefreshTokenLifetime</code> (<code>TokenService.cs:165</code>),
@@ -374,26 +377,31 @@
           rotated away (the signature of reuse or theft) invalidates the current stored token as well, forcing a
           fresh password login rather than silently reissuing. (Today the equivalent rule runs against session
           rows: a presented token that lands on a row revoked as a reuse signal (guard <code>IsReuseSignal</code> at
-          <code>AuthSessionIssuer.cs:320</code>, defined at <code>:462</code>) revokes every live session the user holds,
-          <code>RevokeLiveSessionsAsync</code> with <code>ReasonReuseDetected</code> at <code>AuthSessionIssuer.cs:335</code>, unless the row was
-          rotated within the rotation grace window (<code>IsWithinRotationGrace</code>, called at <code>:328</code>, defined at
-          <code>:479</code>; <code>RefreshSessionSettings.ReuseGraceSeconds</code>, default 10,
+          <code>AuthSessionIssuer.cs:322</code>, defined at <code>:466</code>) revokes every live session the user holds,
+          <code>RevokeLiveSessionsAsync</code> with <code>ReasonReuseDetected</code> at <code>AuthSessionIssuer.cs:338</code>, unless the row was
+          rotated within the rotation grace window (<code>IsWithinRotationGrace</code>, called at <code>:331</code>, defined at
+          <code>:486</code>; <code>RefreshSessionSettings.ReuseGraceSeconds</code>, default 10,
           <code>Source/Core/MMCA.Common.Application/Auth/RefreshSessionSettings.cs:98</code>), which answers a
           <code>409 Conflict</code> <code>Auth.RefreshSuperseded</code> (<code>AuthSessionIssuer.cs:278-282</code>) with nothing revoked. A
           token that loses the atomic rotation claim branches the same three ways on a re-read of its row: lost
-          to a sign-out or a cap eviction, only that request fails (<code>AuthSessionIssuer.cs:430-436</code>); rotated
-          inside the grace, the 409 with nothing revoked (<code>:438-441</code>); otherwise the whole live family is
-          revoked (<code>:446</code>). A row revoked by sign-out, sign-out-everywhere, a password change, or eviction by
-          the session cap fails only that request and leaves the user&#39;s other sessions live,
-          <code>AuthSessionIssuer.cs:318-326</code>.)</li>
+          to a sign-out, a cap eviction or a reuse sweep of that same row, only that request fails
+          (<code>AuthSessionIssuer.cs:431-437</code>); rotated inside the grace, the 409 with nothing revoked
+          (<code>:439-442</code>); otherwise the whole live family is revoked (<code>:447</code>). A row revoked by sign-out,
+          sign-out-everywhere, a password change, eviction by the session cap, or already swept by an earlier
+          reuse event (<code>ReasonReuseDetected</code>, excluded from <code>IsReuseSignal</code> at <code>AuthSessionIssuer.cs:473-475</code>)
+          fails only that request and leaves the user&#39;s other sessions live, <code>AuthSessionIssuer.cs:322-329</code>;
+          a row carrying a successor hash (<code>:468-471</code>), or revoked for any reason other than <code>SignedOut</code>,
+          <code>SessionCapExceeded</code> or <code>ReuseDetected</code> (<code>Rotated</code>, <code>AccountDeleted</code> at
+          <code>Source/Core/MMCA.Common.Domain/Auth/RefreshSession.cs:70</code>, an unrecognized reason, or none), is a
+          reuse signal.)</li>
           <li><strong>Explicit revocation and account-state changes clear the same slot.</strong> <code>RevokeTokenAsync</code> loads the
-          user and revokes the stored token on demand (today <code>AuthenticationServiceBase.cs:378</code>, delegating to
-          <code>sessionIssuer.SignOutAsync</code> at <code>:389</code>). Both apps also
+          user and revokes the stored token on demand (today <code>AuthenticationServiceBase.cs:398</code>, delegating to
+          <code>sessionIssuer.SignOutAsync</code> at <code>:409</code>). Both apps also
           revoked on account deactivation and erasure, so those transitions immediately ended the refresh chain:
           ADC in <code>Delete()</code> and <code>Anonymize()</code>, Store in <code>Deactivate()</code> and <code>Anonymize()</code>. That half stopped
           applying on 2026-08-26 (see the Status note): those methods leave refresh state untouched today
-          (ADC <code>MMCA.ADC/.../Identity.Domain/Users/User.cs:497,519</code>, Store
-          <code>MMCA.Store/.../Identity.Domain/Users/User.cs:204,303</code>), and the revocation on an account lock or a
+          (ADC <code>MMCA.ADC/.../Identity.Domain/Users/User.cs:523,545</code>, Store
+          <code>MMCA.Store/.../Identity.Domain/Users/User.cs:229,328</code>), and the revocation on an account lock or a
           role change now runs in each app&#39;s user-administration service instead (ADC
           <code>UserAdministrationService.cs:85,139</code>, Store <code>UserAdministrationService.cs:82,134</code>).</li>
           <li><strong>Both apps inherit the workflow through a sealed subclass.</strong> ADC&#39;s <code>AuthenticationService</code>
@@ -409,11 +417,11 @@
           The rotation, reuse-detection, and lifetime logic is identical across both apps because it lives once in
           the base, with no app-level difference at the edge: neither app overrides <code>CreateRefreshUserMissingError</code>,
           so a refresh for a vanished user answers the base&#39;s 401 in both
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:600-601</code>,
-          called at <code>:343</code>). ADC&#39;s
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:620-621</code>,
+          called at <code>:363</code>). ADC&#39;s
           external OAuth path (ADR-036) issues the same refresh credential when it exchanges an
           external identity for the local token pair, by routing into the shared <code>IssueTokensAsync</code>
-          (<code>AuthenticationService.cs:338</code>).</li>
+          (<code>AuthenticationService.cs:336</code>).</li>
           </ul>
           <h2 id="rationale">Rationale</h2>
           <ul>
@@ -425,14 +433,14 @@
           token that no longer matches, which surfaces the compromise instead of letting two parties refresh
           indefinitely from the same secret. (Today that detection has a blind spot: a replay of a stolen
           token that arrives within the rotation grace window of a legitimate rotation is answered 409 with
-          nothing revoked, <code>RefreshSessionSettings.cs:90-93</code>; see the Trade-offs.)</li>
+          nothing revoked, <code>RefreshSessionSettings.cs:90-92</code>; see the Trade-offs.)</li>
           <li><strong>Revoke-on-mismatch turns a silent replay into a forced re-login.</strong> Treating any mismatch as reuse and
           clearing the stored token means a captured-and-replayed refresh cannot quietly mint tokens; it ends the
           session for everyone holding that token and requires a password to reopen it. (Today a token
           re-presented within the rotation grace window is treated as a race rather than reuse: it is answered
-          409 with nothing revoked, <code>AuthSessionIssuer.cs:328-333</code>; see the Trade-offs.)</li>
+          409 with nothing revoked, <code>AuthSessionIssuer.cs:331-336</code>; see the Trade-offs.)</li>
           <li><strong>Rotation plus a sliding inactivity window, not an absolute cap.</strong> Because the expiry is re-stamped on
-          every rotation (<code>AuthSessionIssuer.cs:364,407</code>), an actively refreshing client is never forced onto
+          every rotation (<code>AuthSessionIssuer.cs:367,409</code>), an actively refreshing client is never forced onto
           a fixed re-authentication schedule; the window bounds inactivity instead, lapsing a chain that goes a
           full lifetime with no successful refresh. There is deliberately no absolute session cap: rotation (each
           refresh invalidates its predecessor) and reuse-detection revocation are the backstops that make a
@@ -455,16 +463,16 @@
           than <code>RefreshSessionSettings.ReuseGraceSeconds</code> ago (default 10,
           <code>Source/Core/MMCA.Common.Application/Auth/RefreshSessionSettings.cs:98</code>) is answered <code>409 Conflict</code>
           <code>Auth.RefreshSuperseded</code> with nothing revoked, on both the lookup path and the lost-claim path
-          (<code>AuthSessionIssuer.cs:328</code>, <code>:438</code>, defined at <code>:479</code>), so a sibling-tab race inside the window fails
+          (<code>AuthSessionIssuer.cs:331</code>, <code>:439</code>, defined at <code>:486</code>), so a sibling-tab race inside the window fails
           only that request. The cost is the converse: a replay of a stolen token that arrives inside the window
           of a legitimate rotation gets the same 409 and revokes nothing, a trade-off the setting itself
-          documents (<code>RefreshSessionSettings.cs:90-93</code>; set it to <code>0</code> to treat every returning rotated token as
+          documents (<code>RefreshSessionSettings.cs:90-92</code>; set it to <code>0</code> to treat every returning rotated token as
           reuse, <code>:94</code>). A re-presentation after the window still revokes the whole live family.)</li>
           <li><strong>The refresh token is server-side state.</strong> Unlike the fully stateless access token, the refresh token
           is a column that must be written on every login and every refresh, so the refresh path always incurs
           a write to the Identity database; it is not a stateless operation.</li>
           <li><strong>No absolute session cap.</strong> Because the refresh lifetime is re-stamped on every rotation
-          (<code>AuthSessionIssuer.cs:364,407</code>), the configured window (seven days by default) bounds inactivity,
+          (<code>AuthSessionIssuer.cs:367,409</code>), the configured window (seven days by default) bounds inactivity,
           not total session age: a continuously active client that refreshes at least once per window stays signed
           in indefinitely without re-entering a password. The flip side is exposure: a captured refresh-token
           chain that keeps refreshing never lapses on its own, so rotation (each refresh invalidates its
@@ -577,6 +585,44 @@
           <code>:497</code> and <code>Anonymize()</code> <code>:519</code> (Store <code>:204</code>, <code>:303</code> hold). The 2026-10-07 and earlier revisions
           keep the anchors they recorded.</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. The decision, the superseded status, the rotation grace window
+          (<code>ReuseGraceSeconds</code> default 10, <code>RefreshSessionSettings.cs:98</code>) and the <code>AuthenticationServiceBase</code>
+          delegation are unchanged; what moved is which revoked rows count as a reuse signal, plus line anchors.</p>
+          <ol>
+          <li><strong>A row already swept by a reuse event is no longer a reuse signal.</strong> <code>IsReuseSignal</code> now treats
+          <code>ReasonReuseDetected</code> like <code>ReasonSignedOut</code> and <code>ReasonSessionCap</code>
+          (<code>Source/Core/MMCA.Common.Application/Auth/Sessions/AuthSessionIssuer.cs:473-475</code>), so presenting
+          a token whose row an earlier reuse event already revoked fails that request alone, on the lookup
+          path (<code>:322-329</code>) and on the lost-claim path (<code>:431-437</code>), instead of revoking the user&#39;s newer
+          sessions a second time. A row carrying a successor hash (<code>:468-471</code>), or revoked for any other
+          reason (<code>Rotated</code>, <code>AccountDeleted</code> at <code>Source/Core/MMCA.Common.Domain/Auth/RefreshSession.cs:70</code>,
+          an unrecognized reason, or none), still triggers the family revoke (<code>:338</code>, <code>:447</code>). This is the Common #612 change
+          (v1.261.0). The Decision&#39;s list of non-reuse revocations and its lost-claim branch now include it.</li>
+          <li><strong>The setting&#39;s trade-off citation narrows to <code>RefreshSessionSettings.cs:90-92</code>.</strong> Lines <code>:90-92</code>
+          still document the in-window stolen-token trade-off; the clause at <code>:92-93</code> saying a row already
+          flagged as reuse still revokes the family no longer matches the code above, so the Rationale and
+          Trade-offs no longer cite it.</li>
+          <li>Anchors re-verified against current source: <code>AuthenticationServiceBase.cs</code> class <code>:67</code>, login and
+          registration <code>IssueTokensAsync</code> calls <code>:230</code> and <code>:325</code>, body <code>:463</code> delegating to
+          <code>sessionIssuer.IssueAsync</code> at <code>:471</code>, <code>RefreshTokenAsync</code> <code>:329</code>, <code>GetPrincipalFromExpiredToken</code>
+          <code>:343</code>, the null-principal failure <code>:344-348</code>, <code>GetUserId</code> <code>:353</code>, the missing-user call <code>:363</code>
+          with <code>CreateRefreshUserMissingError</code> defined <code>:620-621</code> (neither app overrides it), <code>RotateAsync</code>
+          delegation <code>:383</code>, <code>RevokeTokenAsync</code> <code>:398</code> delegating to <code>SignOutAsync</code> at <code>:409</code>;
+          <code>AuthSessionIssuer.cs</code> <code>ResolveRotatableSessionAsync</code> body <code>:300</code>, the token-hash lookup plus
+          user-id match <code>:311-317</code>, the <code>IsRevoked</code> block <code>:320</code>, the grace check on the lookup path
+          <code>:331-336</code>, the reuse revoke <code>:338</code>, the sliding-expiry stamps <code>:367</code> (open) and <code>:409</code> (rotation
+          successor), <code>RotateSessionAsync</code> body <code>:396</code>, <code>TryRotateAsync</code> called <code>:419</code>, the lost-claim
+          grace <code>:439-442</code> and family revoke <code>:447</code>, <code>IsReuseSignal</code> defined <code>:466</code>,
+          <code>IsWithinRotationGrace</code> defined <code>:486</code> (<code>RotateAsync</code> <code>:92</code>, the calls at <code>:103</code> and <code>:111</code>,
+          <code>RefreshSupersededError</code> <code>:278-282</code> and the <code>RefreshTokenLifetime</code> guard <code>:60-61</code> hold); the
+          removal record <code>MMCA.Common/CHANGELOG.md:3580</code>; ADC&#39;s external-login <code>IssueTokensAsync</code> call
+          <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:336</code>
+          (its constructor anchors <code>:50</code>, <code>:56</code>, <code>:57</code>, <code>:64</code>, <code>:66</code> and Store&#39;s <code>:26</code>, <code>:31</code>, <code>:32</code>, <code>:38</code>,
+          <code>:40</code> hold); ADC <code>User.cs</code> <code>Delete()</code> <code>:523</code> and <code>Anonymize()</code> <code>:545</code>, Store <code>User.cs</code>
+          <code>Deactivate()</code> <code>:229</code> and <code>Anonymize()</code> <code>:328</code>. The 2026-10-21 and earlier revisions keep the
+          anchors they recorded.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-004 (the stateless RS256/JWKS access token this refresh flow reissues, and the algorithm pinning
           <code>GetPrincipalFromExpiredToken</code> relies on), ADR-032 (the password hashing that gates the login which opens
@@ -605,6 +651,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

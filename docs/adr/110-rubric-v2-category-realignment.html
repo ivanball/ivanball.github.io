@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -249,7 +250,8 @@
           workflow). Revised 2026-09-25 (the section 10 carried-score caveat is discharged for all three repos:
           MMCA.ADC&#39;s scorecard now scores section 10 on the v2 criteria as well). Revised 2026-10-21: evidence
           dates moved to the 2026-10-18 re-scores, the articles no longer name the old titles as current, and
-          the drift prompt is now a tracked harness file.</p>
+          the drift prompt is now a tracked harness file. Revised 2026-10-26: evidence dates moved to the
+          2026-10-22 re-scores, which lowered MMCA.Common&#39;s section 10 row from M4/I9 to M4/I8.</p>
           <h2 id="context">Context</h2>
           <p>The 34-category Architecture Evaluation Criteria
           (<code>Website/docs-src/governance/ArchitectureEvaluationCriteria.md</code>) is the only basis on which the
@@ -293,7 +295,7 @@
           and stating the scope-out in the scorecard&#39;s N/A note (Sigma-weight 79). MMCA.Common was scoped
           out the same way at the rebase and is no longer: it scores the category from 2026-09-11, first at
           M2/I5 when <code>MMCA.Common.AI</code> shipped under <a href="120-governed-chat-client-boundary.html">ADR-120</a>, and at
-          M3/I6 from 2026-09-15 (M4/I9 as of 2026-10-18, <code>Website/docs-src/governance/common-ArchitectureScorecard.md:80</code>), so its weight-2 row rejoined both denominators (Sigma-weight 82).
+          M3/I6 from 2026-09-15 (M4/I9 as of 2026-10-22, <code>Website/docs-src/governance/common-ArchitectureScorecard.md:80</code>), so its weight-2 row rejoined both denominators (Sigma-weight 82).
           MMCA.ADC scores it: its AI
           session-scoring feature calls the Anthropic Messages API in production, so the weight-2 category
           is live in both of its denominators from the 2026-09-04 re-score
@@ -323,11 +325,11 @@
           the rebase for MMCA.Common and MMCA.Store. For MMCA.ADC §16 is scored rather than scoped out, so
           its weight-2 row re-enters both denominators and its sum returns to 81. Since the rebase, every
           repo has re-scored section 10 against the v2 criteria, so no row carries a merged-prior figure:
-          MMCA.Common re-scored it on 2026-09-04 and confirmed it, and its row reads M4/I9
-          (<code>Website/docs-src/governance/common-ArchitectureScorecard.md:74</code>); MMCA.Store&#39;s row reads M3/I8
+          MMCA.Common re-scored it on 2026-09-04 and confirmed it, and its row reads M4/I8 after the
+          2026-10-22 re-score (<code>Website/docs-src/governance/common-ArchitectureScorecard.md:74</code>); MMCA.Store&#39;s row reads M3/I8
           (<code>Website/docs-src/governance/store-ArchitectureScorecard.md:51</code>); MMCA.ADC&#39;s row scores it on the
           v2 criteria at M3/I8 (<code>Website/docs-src/governance/adc-ArchitectureScorecard.md:74</code>, evidence as of
-          2026-10-18 per <code>:5</code>). MMCA.Common&#39;s section 16 scope-out ended on 2026-09-11, taking its sum to 82.</p>
+          2026-10-22 per <code>:5</code>). MMCA.Common&#39;s section 16 scope-out ended on 2026-09-11, taking its sum to 82.</p>
           </li>
           <li><p><strong>Landing order.</strong> The rubric, the three scorecards, the three backlogs, and this record land in
           one Website PR, because the workflow reads its category list from the scorecard rows and a rubric
@@ -360,12 +362,16 @@
           re-score, which the row says explicitly. Store&#39;s §10 sits at implementation 8, so its
           implementation-band priority rises from 2 to 3 with the weight before any new evidence is read.
           That carried state has since cleared for all three repos: each scorecard&#39;s section 10 row is scored
-          against the v2 criteria (Common M4/I9, ADC M3/I8, Store M3/I8), so no row reads as carried and the
+          against the v2 criteria (Common M4/I8, ADC M3/I8, Store M3/I8), so no row reads as carried and the
           section 10 figures are comparable across repos again.</li>
           <li>The former §16 evidence (lockstep pin, evolvability gate, tech-debt ledger) lives on as prose in
           the retired row and in §32/§33/§34, but nothing re-scores it as its own line.</li>
           <li>The onboarding chapters and the articles no longer name either old title as current; the article
-          pages mention them only as &quot;former&quot; titles in their Notes blocks, and the build-skipped
+          pages mention them only as &quot;former&quot; titles in their Notes blocks (one body sentence of the
+          fitness-functions article refers to &quot;the former maintainability criteria&quot; without naming the
+          title, and the rubric article&#39;s body names &quot;Cross-Cutting Concerns&quot; only inside the current Part C
+          label, <code>Website/docs-src/articles/34-category-architecture-rubric.md:61</code>, which the rubric still uses at
+          <code>ArchitectureEvaluationCriteria.md:768</code>), and the build-skipped
           <code>_ledger.md</code> keeps them only in dated historical entries. Prose that names them as current
           still exists in the wiki sources, which the governance commands have not yet refreshed. The drift
           prompt (<code>Docs/Planning/Drift/DriftAnalysis-prompt.md</code>, tracked in the workspace harness repo) was
@@ -407,6 +413,29 @@
           <code>feature-flags-cqrs-pipeline.md:367</code>; <code>architecture-fitness-functions.md:626-627</code>;
           <code>DriftAnalysis-prompt.md:157</code>, <code>:163</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. The decision, the 34-category numbering, the section 10 and
+          section 16 replacements, and the MMCA.ADC and MMCA.Store values this record cites are unchanged; what moved is the
+          evidence date of the three scorecards and MMCA.Common&#39;s section 10 implementation score.</p>
+          <ol>
+          <li>The scorecards were re-scored on 2026-10-22 at v1.250.0
+          (<code>Website/docs-src/governance/common-ArchitectureScorecard.md:5</code>, <code>adc-ArchitectureScorecard.md:5</code>,
+          <code>store-ArchitectureScorecard.md:5</code>). Items 2 and 5 of the Decision now carry the 2026-10-22 date.</li>
+          <li>MMCA.Common&#39;s section 10 row now reads weight 3, M4/I8, 12/24 (<code>common-ArchitectureScorecard.md:74</code>),
+          down from the M4/I9 the 2026-10-21 revision recorded. Decision item 5 and the second Trade-offs
+          bullet now read M4/I8. MMCA.Common section 16 still reads M4/I9 (<code>common-ArchitectureScorecard.md:80</code>);
+          MMCA.ADC section 10 M3/I8 (<code>adc-ArchitectureScorecard.md:74</code>) and MMCA.Store section 10 M3/I8
+          (<code>store-ArchitectureScorecard.md:51</code>) are unchanged.</li>
+          <li>The article mentions of the former titles still say &quot;former&quot; and still sit in the Notes blocks
+          (<code>Website/docs-src/articles/feature-flags-cqrs-pipeline.md:389</code>, Notes from <code>:272</code>;
+          <code>architecture-fitness-functions.md:662-663</code>, Notes from <code>:579</code>). One body sentence outside a Notes
+          block, <code>architecture-fitness-functions.md:169</code>, refers to &quot;the former maintainability criteria&quot;
+          without naming the old title; the Trade-offs bullet now says so.</li>
+          <li>Anchors re-verified against current source: <code>common-ArchitectureScorecard.md:5</code>, <code>:74</code>, <code>:80</code>;
+          <code>adc-ArchitectureScorecard.md:5</code>, <code>:74</code>; <code>store-ArchitectureScorecard.md:5</code>, <code>:51</code>;
+          <code>feature-flags-cqrs-pipeline.md:272</code>, <code>:389</code>; <code>architecture-fitness-functions.md:169</code>, <code>:579</code>,
+          <code>:662-663</code>.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -423,6 +452,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             </ul>
           </nav>
         </aside>

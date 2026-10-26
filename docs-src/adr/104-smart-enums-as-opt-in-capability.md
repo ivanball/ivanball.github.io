@@ -12,11 +12,13 @@ Revised 2026-10-07: Decision point 13 now separates code references from comment
 `Enumeration<T>`; adoption remains zero.
 Revised 2026-10-21: anchors refreshed after the Shared public-API baseline grew; the eighteen
 shipped declarations are unchanged.
+Revised 2026-10-26: Context and Decision point 11 no longer list the message-bus provider as a plain
+enum, because the `MessageBusProvider` enum was replaced by a string with built-in values on
+`MessageBusProviders`.
 
 ## Context
 A bounded set of named values shows up everywhere in this workspace: the state that triggered a
-domain event, an error category, a rate-limiting algorithm, a message-bus provider, a JWT signing
-algorithm. The framework answers that need with an ordinary CLR enum. `DomainEntityState`
+domain event, an error category, a rate-limiting algorithm, a JWT signing algorithm. The framework answers that need with an ordinary CLR enum. `DomainEntityState`
 (`MMCA.Common/Source/Core/MMCA.Common.Domain/Enums/DomainEntityState.cs:7-13`) is the canonical
 example, and it is the discriminator ADR-083 chose for the whole CRUD lifecycle taxonomy.
 
@@ -136,7 +138,7 @@ whose members need behavior or data, and nothing in the framework pushes a consu
 11. **The rule for choosing.** Use a plain C# enum when the members are names for states or options
     and every decision about them is made by the code that reads them: it is the cheaper type, it
     needs no converter registration, and it is what ADR-083's discriminator, `ErrorType`,
-    `RateLimitAlgorithm`, `MessageBusProvider` and `JwtSigningAlgorithm` all are today. Reach for
+    `RateLimitAlgorithm` and `JwtSigningAlgorithm` all are today. Reach for
     `Enumeration<T>` when a member must carry data or behavior (a rate, a policy, a display rule, a
     per-member override), when the same `switch` over the set is about to appear in a third place,
     or when the set needs `Result`-shaped parsing at a boundary. Declare the concrete type sealed
@@ -276,6 +278,29 @@ surface still holds eighteen declarations; only the Shared public-API anchors mo
    `MMCA.Common/Source/Core/MMCA.Common.Shared/PublicAPI.Shipped.txt:766-770` and the static block
    (`All`, `FromName`, `FromValue`) at `:994-996`. Unchanged: Shared `:567-572` and Infrastructure
    `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:356-357`, `:360-361`.
+
+## Revision (2026-10-26)
+Re-verified against current source. No decision or rationale changed, and adoption is still zero.
+One example, in the Context and in Decision point 11, is corrected.
+
+1. The Context and Decision point 11 listed the message-bus provider (`MessageBusProvider`) among
+   the plain C# enums. That was true when written; the enum has since been replaced by a string
+   (`MMCA.Common/UPGRADING.md:120`, `:169`). The provider is now `MessageBusSettings.Provider`
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:25`),
+   whose three built-in values are string constants on the static class `MessageBusProviders`
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Transports/MessageBusProviders.cs:10`,
+   constants at `:16`, `:19`, `:27`) matched through `IsInProcess`, `IsRabbitMq` and `IsPostgreSql`
+   (`:44`, `:50`, `:56`); any other value names an `IBrokerTransport` an adapter package registers
+   (`AzureServiceBus` and `AmazonSqs` are listed in the internal `KnownAdapterTransports`
+   dictionary at `:34-39`). The Context no longer names it among the bounded sets, and Decision
+   point 11 now names only the plain enums: ADR-083's discriminator (`DomainEntityState`),
+   `ErrorType`, `RateLimitAlgorithm` and `JwtSigningAlgorithm`.
+2. Anchors re-verified against current source: `ErrorType`
+   (`MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/ErrorType.cs:10`), `RateLimitAlgorithm`
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/RateLimiting/RateLimitAlgorithm.cs:8`) and
+   `JwtSigningAlgorithm`
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/JwtSigningAlgorithm.cs:21`) are still
+   plain enums.
 
 ## Related
 [ADR-037](037-field-level-encryption-at-rest.md) (the precedent for recording a shipped, tested and

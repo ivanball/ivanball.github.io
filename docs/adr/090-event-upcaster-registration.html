@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -252,7 +253,9 @@
           Revised 2026-10-01: citations refreshed only. Revised 2026-10-06: a terminal unresolvable-type
           miss leaves <code>ProcessedOn</code> null rather than stamping it, so the row stays listed and replayable.
           Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
-          Revised 2026-10-21: anchors refreshed after the outbox releases through v1.247.0.</p>
+          Revised 2026-10-21: anchors refreshed after the outbox releases through v1.247.0.
+          Revised 2026-10-26: a terminal unresolvable-type miss now stamps <code>LockedUntil</code> to the current time
+          instead of clearing it, so the dead-letter retention window runs from the last failed attempt.</p>
           <h2 id="context">Context</h2>
           <p>ADR-010 splits event evolution into a signal and a discipline. The signal (<code>SchemaVersion</code>, a
           fitness-function-gated property on every integration event) shipped with ADR-010 itself. The
@@ -466,6 +469,31 @@ x.RegisterUpcastedIntegrationEventConsumer&lt;ProductVariantChanged&gt;(); <span
           <code>EventUpcasterRegistry</code>, <code>IntegrationEventConsumerExtensions</code> and <code>ArchitectureRules.Upcasters.cs</code>
           are unchanged.</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. The decision, the mechanism, and both delivery paths are
+          unchanged, and a terminal unresolvable-type miss still leaves <code>ProcessedOn</code> null so the row stays
+          listed and replayable. One detail of that terminal path moved in v1.261.0, which the 2026-10-21
+          revision&#39;s &quot;unchanged&quot; no longer covers. Line anchors in <code>OutboxProcessor.cs</code> moved by two, except
+          inside <code>HandleUnresolvableType</code>&#39;s terminal block, where they moved by five (item 1).
+          Anchors inside the earlier revisions are left as recorded.</p>
+          <ol>
+          <li><strong>The terminal miss stamps <code>LockedUntil</code> rather than clearing it.</strong> <code>HandleUnresolvableType</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:1034</code>)
+          sets <code>RetryCount</code> to <code>MaxRetries</code> (<code>:1049</code>) and then sets <code>LockedUntil</code> to the current UTC time
+          (<code>:1053</code>), so the dead-letter retention window runs from the last failed attempt (comment at
+          <code>:1051-1052</code>). The row still leaves the poll through the <code>RetryCount &lt; MaxRetries</code> filter in
+          <code>FetchCandidatesAsync</code> (<code>:302</code>, filter at <code>:313</code>; the backlog gauge <code>CountPendingAsync</code> at <code>:270</code>
+          copies it at <code>:287</code>), and the dead-letter sweep keys its cutoff on <code>LockedUntil ?? OccurredOn</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxCleanupService.cs:163</code>).
+          The dead-letter counter increment tagged <code>reason</code> <code>type_unresolvable</code> is unchanged
+          (<code>:1054-1057</code>).</li>
+          <li><strong>Anchors re-verified against current source:</strong> In <code>OutboxProcessor.cs</code>, the <code>DeserializeEvent</code>
+          call is at <code>:574</code>, the <code>HandleUnresolvableType</code> call at <code>:577</code>, and the method at <code>:1034</code>, with
+          its XML doc at <code>:1018-1028</code> (<code>ProcessedOn</code> stays null, <code>:1024-1025</code>). In
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs</code>,
+          <code>FromDomainEvent</code> (<code>:140</code>) stores <code>GetStorageName</code> at <code>:148</code>, <code>DeserializeEvent</code> (<code>:176</code>) calls
+          <code>ResolveEventType</code> at <code>:178</code> (defined at <code>:199</code>), and the fallback is at <code>:209</code>, all unchanged.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -486,6 +514,7 @@ x.RegisterUpcastedIntegrationEventConsumer&lt;ProductVariantChanged&gt;(); <span
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             </ul>
           </nav>
         </aside>

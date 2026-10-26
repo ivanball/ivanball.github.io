@@ -16,6 +16,9 @@ Revised 2026-10-07: anchors refreshed after the v1.233.0 release.
 Revised 2026-10-21: since v1.247.0 every thrown exception, not only a cancellation, rolls back best-effort and
 rethrows the original even when the rollback itself throws, a sixth commit-ambiguity test pins that, and anchors
 are refreshed after the v1.250.0 release.
+Revised 2026-10-26: the Context and Decision item 3 now name PostgreSQL alongside SQL Server as a retrying engine
+under the same contract (a SQLite unit runs under a non-retrying strategy), and anchors are refreshed after the
+v1.261.0 release.
 
 ## Context
 Every transactional write in this workspace funnels through one method. `IUnitOfWork.ExecuteInTransactionAsync`
@@ -30,9 +33,11 @@ Application-layer name for it, `UnitOfWork` forwards straight through
 directly.
 
 The name suggests "begin, do work, commit". The behavior is materially more specific, and every one of those
-specifics is a durability decision. The delegate runs under EF Core's execution strategy, which for SQL Server is a
-retrying one: `EnableRetryOnFailure(maxRetryCount: 5, maxRetryDelay: TimeSpan.FromSeconds(10))`
-(`.../Persistence/DbContexts/SQLServerDbContext.cs:63-66`). So the delegate can run more than once, the change
+specifics is a durability decision. The delegate runs under EF Core's execution strategy, which for SQL Server and
+PostgreSQL alike is a retrying one with the same budget:
+`EnableRetryOnFailure(maxRetryCount: 5, maxRetryDelay: TimeSpan.FromSeconds(10))`
+(`.../Persistence/DbContexts/SQLServerDbContext.cs:63-66`, `.../Persistence/DbContexts/PostgreSQLDbContext.cs:102-105`).
+So the delegate can run more than once, the change
 tracker has to be reset between attempts, in-process event dispatch has to be held back until the data is durable,
 and a failure of the commit itself must not be retried at all because its outcome is unknown.
 
@@ -67,7 +72,16 @@ work, the commit phase is deliberately outside the retry, and a commit whose out
 3. **The whole delegate is the retriable unit, and each attempt starts from a clean change tracker.** The strategy
    comes from the first transaction-capable context, or from a default context created on the spot so one exists
    before the handler's first repository call; that default context's engine goes through the data-source resolver
-   (`ResolveLogical`) rather than being taken literally as SQL Server (`:597-598`). The delegate is invoked inside
+   (`ResolveLogical`) rather than being taken literally as SQL Server (`:597-598`), so in a host that does not
+   configure SQL Server it is the engine the host does configure
+   (`.../Persistence/DataSources/DataSourceResolver.cs:97`, `:110-118`). Every relational engine is
+   transaction-capable (`DbContextFactory.cs:892-893`), and that includes SQLite
+   (`.../DataSources/Engines/SqliteDataSourceEngine.cs:41`). A SQL Server or PostgreSQL unit runs under a retrying
+   strategy (`SQLServerDbContext.cs:63-66`, `PostgreSQLDbContext.cs:102-105`), so the rules below cover a
+   PostgreSQL unit exactly as they cover a SQL Server one. A SQLite unit runs under a non-retrying strategy,
+   because `SqliteDbContext` configures no `EnableRetryOnFailure` (`.../Persistence/DbContexts/SqliteDbContext.cs:23-33`);
+   the reset, commit-once and ambiguity rules still apply to it, but a transient failure is never retried. The
+   delegate is invoked inside
    `strategy.ExecuteAsync` (`:604-612`). From the second attempt on, `ResetForRetry` runs first (`:606-607`): it
    drops deferred dispatch and calls `ChangeTracker.Clear()` on every context (`:868-875`). Without it, entities the
    failed attempt added are still `Added` and the retry inserts them a second time, with a duplicate outbox row per
@@ -116,8 +130,8 @@ work, the commit phase is deliberately outside the retry, and a commit whose out
 
 8. **Deferred in-process dispatch is flushed only after a successful commit, and dropped on every other path.**
    Handlers deferred while a transaction is open are flushed per context immediately after the commit succeeds
-   (`DbContextFactory.cs:665-669`, `.../Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:160`).
-   `RollbackTransaction` drops them (`DbContextFactory.cs:510-521`, `DomainEventSaveChangesInterceptor.cs:177`), and
+   (`DbContextFactory.cs:665-669`, `.../Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:162`).
+   `RollbackTransaction` drops them (`DbContextFactory.cs:510-521`, `DomainEventSaveChangesInterceptor.cs:179`), and
    so do `ResetForRetry` between attempts and `AbandonAfterCommitFailure` after an ambiguous commit (`:872`,
    `:798`). The processor wake owed by internal commands enrolled in the unit follows the same rule:
    `EnrolledCommandWake.Release` runs right after a successful commit and ahead of the event flush, so a throwing
@@ -141,7 +155,7 @@ work, the commit phase is deliberately outside the retry, and a commit whose out
 
 11. **Recovery belongs to the caller, and today that means the ADR-017 idempotency filter.** The remarks say so
     (`:562-563`), and the exception is part of the frozen public surface
-    (`.../MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:531-539`), which is what makes it a contract a caller can
+    (`.../MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:520-528`), which is what makes it a contract a caller can
     bind to rather than an internal detail. No framework or consumer code catches it: across the four repos the type
     is referenced in code only by the two files that define it and by
     `.../MMCA.Common.Infrastructure.Tests/Persistence/DbContexts/DbContextFactoryCommitAmbiguityTests.cs`, whose six
@@ -166,9 +180,9 @@ work, the commit phase is deliberately outside the retry, and a commit whose out
     ("Deliberately NOT `ITransactional`": `VerifyPaymentCommand.cs:11`, `ProcessPaymentWebhookCommand.cs:9`,
     `CheckOutCommand.cs:9`, `BulkSetInventoryCommand.cs:11`), and MMCA.Helpdesk has none. Direct callers are the
     framework's own `EFRefreshSessionStore` rotation
-    (`.../Infrastructure/Persistence/Auth/EFRefreshSessionStore.cs:184`), ADC's `AuthenticationService` for both
+    (`.../Infrastructure/Persistence/Auth/EFRefreshSessionStore.cs:187`), ADC's `AuthenticationService` for both
     registration and external login
-    (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:86`, `:221`), ADC's
+    (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:86`, `:220`), ADC's
     `RefreshFromSessionizeHandler` (`RefreshFromSessionizeHandler.cs:149`), `DeleteSessionHandler` and
     `DeleteEventHandler` (`DeleteSessionHandler.cs:47`, `DeleteEventHandler.cs:43`, which open the transaction
     themselves because the shared CRUD delete command is not `ITransactional`), ADC's `SessionScoringRunner`
@@ -210,8 +224,8 @@ work, the commit phase is deliberately outside the retry, and a commit whose out
   display name, so their latency never holds database locks, `CheckOutHandler.cs:24-31`), the code does that
   pre-flight before opening the transaction (`:54-78`), and the write-phase remarks explain why the whole
   read-execute-write unit runs inside (`:99-107`) and why a commit failure is not retried (`:108-115`, citing this
-  record for the behavior MMCA.Common shipped in v1.135.0, `MMCA.Common/CHANGELOG.md:4310`, and that Store consumes at
-  v1.250.0, `MMCA.Store/Directory.Packages.props:11`). That is discipline, not enforcement: nothing checks that a
+  record for the behavior MMCA.Common shipped in v1.135.0, `MMCA.Common/CHANGELOG.md:4525`, and that Store consumes at
+  v1.260.0, `MMCA.Store/Directory.Packages.props:11`). That is discipline, not enforcement: nothing checks that a
   new handler keeps its commit dependencies inside the delegate.
 - **Cosmos participation is silent.** A Cosmos context in a transactional scope is skipped without a warning
   (`DbContextFactory.cs:892-893`), so a future host mixing engines gets partial atomicity with no signal at the call
@@ -296,6 +310,34 @@ rules are unchanged; the exception path of an attempt moved, a test was added, a
    v1.135.0 CHANGELOG heading is at `MMCA.Common/CHANGELOG.md:4310`; Store consumes MMCA.Common v1.250.0
    (`MMCA.Store/Directory.Packages.props:11`); the ADR-006 trade-off is at `006-database-per-service.md:71` and the
    ADR-054 premise at `054-saga-compensation-and-reconciliation.md:219-220`.
+
+## Revision (2026-10-26)
+Re-verified against current source. The re-entrant, retriable, commit-once, ambiguity and deferred-dispatch
+rules are unchanged, every live `DbContextFactory.cs` anchor still holds, and the ADC and Store adoption counts
+and remaining direct-caller anchors are unchanged; the record now names the second retrying engine, and a few
+anchors and the Store package pin moved.
+
+1. The Context and Decision item 3 name PostgreSQL alongside SQL Server. `PostgreSQLDbContext` calls
+   `npgsql.EnableRetryOnFailure(maxRetryCount: 5, maxRetryDelay: TimeSpan.FromSeconds(10), errorCodesToAdd: null)`
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/PostgreSQLDbContext.cs:102-105`),
+   the same budget as `SQLServerDbContext.cs:63-66`, and the strategy is taken from the first
+   transaction-capable context (`DbContextFactory.cs:597-598`), so the retriable-delegate and commit-once rules
+   cover a PostgreSQL unit too. SQLite is also relational (`SqliteDataSourceEngine.cs:41`), so it is
+   transaction-capable and can supply the strategy, including for the default context when the host configures
+   no SQL Server (`DataSourceResolver.cs:97`, `:110-118`); `SqliteDbContext` sets no `EnableRetryOnFailure`
+   (`SqliteDbContext.cs:23-33`), so a SQLite unit is not retried. The earlier text was an omission rather than a
+   false statement.
+2. Anchors re-verified against current source: `DomainEventSaveChangesInterceptor.FlushDeferredAsync` is at
+   `.../Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:162` and `DropDeferred` at `:179` (the
+   flush call in `DbContextFactory.cs` is at `:667`, inside `:665-669`); the `EFRefreshSessionStore` rotation
+   calls `ExecuteInTransactionAsync` at `EFRefreshSessionStore.cs:187`; ADC's `AuthenticationService` calls it at
+   `AuthenticationService.cs:86` and `:220`; the nine `TransactionCommitAmbiguousException` entries are at
+   `.../MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:520-528`; the v1.135.0 CHANGELOG heading is at
+   `MMCA.Common/CHANGELOG.md:4525` (its `TransactionCommitAmbiguousException` entry at `:4567`), the v1.215.0
+   heading cited in the 2026-10-01 revision is at `:949`, and the v1.247.0 heading and M229 entry cited in the
+   2026-10-21 revision are at `:260` and `:313`; Store consumes MMCA.Common v1.260.0
+   (`MMCA.Store/Directory.Packages.props:11`, every `MMCA.Common.*` entry at the same version, on `:8-25`, `:27`, `:77` and `:114`). The
+   anchors restated in the dated revisions above stay as written.
 
 ## Related
 [ADR-014](014-cqrs-decorator-pipeline.md) (the Transactional decorator that is the main caller, and whose

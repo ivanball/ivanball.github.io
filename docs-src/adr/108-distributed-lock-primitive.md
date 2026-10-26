@@ -16,13 +16,16 @@ Revised 2026-10-07: adoption is five call sites, the fifth being the framework's
 redemption in `OAuthControllerBase`, which ADC's OAuth controller wires with the lock.
 Revised 2026-10-19: adoption is six call sites, the sixth being Store's Stripe webhook registration, whose check-then-act on Stripe's endpoint list now runs under the lock; point 12 no longer says Store takes none.
 Revised 2026-10-21: anchors refreshed after the AddCaching, SubmitQuestionHandler, OutboxProcessor and ADC Bicep line shifts.
+Revised 2026-10-26: adoption is seven call sites, the seventh being the framework's two-factor
+time-step acceptance in `TwoFactorAuthenticator`; anchors refreshed for the question submit handler,
+the outbox claim and the ADC Bicep declarations.
 
 ## Context
 Both deployed apps run more than one replica of every service. ADC's Conference container app
-(`MMCA.ADC/infra/main.bicep:2078`) scales with `minReplicas: 1` and
-`maxReplicas: conferenceScaledMaxReplicas` (scale at `:2223`), which is 2 by default and 4 in
-conference mode (`:192`); Identity and Engagement scale the same way (`:2070`, `:2358`) and
-Notification at a fixed `maxReplicas: 2` (`:2544`). Anything in the framework that
+(`MMCA.ADC/infra/main.bicep:2114`) scales with `minReplicas: 1` and
+`maxReplicas: conferenceScaledMaxReplicas` (scale at `:2259`), which is 2 by default and 4 in
+conference mode (`:192`); Identity and Engagement scale the same way (`:2106`, `:2394`) and
+Notification at a fixed `maxReplicas: 2` (`:2580`). Anything in the framework that
 relies on "only one of these runs at a time" therefore runs once per replica unless the exclusion
 lives somewhere all the replicas can see.
 
@@ -31,8 +34,8 @@ The in-process tools do not reach that far. A `SemaphoreSlim`, or the striped `K
 callers inside one process only. The framework already had a second, stronger answer for durable
 queue work: a database claim-lease. `OutboxProcessor` stamps `LockedUntil` and a `LockToken` in a
 conditional `ExecuteUpdateAsync` so exactly one replica wins a row
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:343`,
-claim at `:370-374`), and `ScheduledJobRunner` does the same on `ScheduledJobEntry`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:345`,
+claim at `:368-375`), and `ScheduledJobRunner` does the same on `ScheduledJobEntry`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Scheduling/ScheduledJobRunner.cs:410`, claim at
 `:437-445`). That pattern needs a row to claim.
 
@@ -124,7 +127,7 @@ persistence can enforce.**
 9. **First consumer: the idempotency filter's execute-then-store window.** `IdempotencyFilter`
    resolves the lock with `GetService` on the slow path
    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyFilter.cs:149`) and runs
-   the guarded section under it (`:239`) with a 30s TTL (`:98`) and a 5s wait (`:105`). A duplicate
+   the guarded section under it (`:239`, acquired at `:251`) with a 30s TTL (`:98`) and a 5s wait (`:105`). A duplicate
    that cannot acquire within the wait re-checks the cache; finding nothing, it gets 409 Conflict
    rather than a second execution (`:262-271`, result at `:302-311`). A lock backend that faults is
    treated differently from a lock that is held: the action runs unguarded and the degradation is
@@ -142,18 +145,18 @@ persistence can enforce.**
 
 11. **The choose-between rule.** Work that already owns a durable row uses the claim-lease: the
     outbox and the scheduler both stamp `LockedUntil` plus a `LockToken` in a conditional update whose
-    predicate is the exclusion (`OutboxProcessor.cs:370-374`, `ScheduledJobRunner.cs:437-445`), which
+    predicate is the exclusion (`OutboxProcessor.cs:368-375`, `ScheduledJobRunner.cs:437-445`), which
     survives a Redis outage and needs no extra dependency. `IDistributedLock` is for a section whose
     state is not a row it can conditionally update: a cache entry, an external paid API call, a pass
     over rows it does not own. Inventing a row purely to hold a lease is not the answer for those, and
     neither is holding a database transaction open across the work.
 
-12. **Adoption is exactly these six call sites.** The third is ADC's question submit cap:
+12. **Adoption is exactly these seven call sites.** The third is ADC's question submit cap:
     `SubmitQuestionHandler` takes the lock as a constructor dependency
     (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs:35`)
     and serializes the per-(session, user) open-question cap, whose count-then-insert is not one
-    atomic statement, under a claim keyed `session-question:submit:{sessionId}:{userId}` (`:114`,
-    taken at `:153-154`) with a 30 second TTL (`:50`) and a 2 second wait (`:58`); a submit that cannot
+    atomic statement, under a claim keyed `session-question:submit:{sessionId}:{userId}` (`:109-110`,
+    taken at `:150`) with a 30 second TTL (`:50`) and a 2 second wait (`:58`); a submit that cannot
     get in within the wait is answered with the same cap failure the count itself would have
     returned, so contention never surfaces as a fault. The fourth is the framework's password-reset
     token redemption: `PasswordResetTokenService` takes the lock as a constructor dependency
@@ -183,9 +186,23 @@ persistence can enforce.**
     Stripe alone (`:147-155`). Two tests pin both branches
     (`MMCA.Store/Tests/Modules/Sales/MMCA.Store.Sales.Infrastructure.Tests/Services/StripeWebhookRegistrationServiceTests.cs:221`,
     `:260`).
+    The seventh is the framework's two-factor time-step acceptance: `TwoFactorAuthenticator` takes the
+    lock as a constructor dependency
+    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TwoFactor/TwoFactorAuthenticator.cs:45`)
+    and runs the read, compare and write of an account's last accepted time step under
+    `lock:{key}` (`:130-131`) with a 10 second TTL (`:47`) and a 5 second wait (`:49`), so two
+    concurrent submissions of one time-based code do not both pass while the lock holds (best-effort
+    per point 2: a holder paused past the TTL, or a host on the process-local fallback of point 7, is
+    not excluded across replicas); a submission that cannot take the lock is answered as an invalid
+    code, never as a second success (`:132-135`). This site is shipped but unadopted: only the opt-in
+    `AddTwoFactorAuthentication`
+    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Auth.cs:40`) registers
+    `TwoFactorAuthenticator` (`:51`), and no host in MMCA.ADC, MMCA.Store or MMCA.Helpdesk calls it,
+    so nothing deployed runs this lock today.
     No other MMCA.Common component, nothing else in MMCA.Store, and nothing in MMCA.Helpdesk takes a
     lock today. The primitive is shipped and registered in every host that calls `AddInfrastructure`,
-    and used in six places. That an application takes no lock
+    and used in seven places, six of them reached by a deployed host (the two-factor site waits on a
+    host opting in). That an application takes no lock
     of its own is the rule applied, not a gap to close: a lock is reached for only when there is
     duplicate work to collapse that persistence cannot guard (point 2), and work that owns a durable
     row takes the claim-lease instead (point 11). Store's other multi-replica work is guarded by
@@ -238,15 +255,15 @@ persistence can enforce.**
   `adc` and the same `Cache:KeyPrefix` of `adc:`
   (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/appsettings.json:38`, `:45`, and the same in the
   Identity, Engagement and Notification service hosts) and share one Redis instance
-  (`MMCA.ADC/infra/main.bicep:1584`, injected per app as `ConnectionStrings__redis` at `:1909`,
-  `:2155`, `:2292`, `:2446`). Two ADC
+  (`MMCA.ADC/infra/main.bicep:1620`, injected per app as `ConnectionStrings__redis` at `:1945`,
+  `:2191`, `:2328`, `:2482`). Two ADC
   services choosing the same logical key would collide, and today only the callers' key shapes
   prevent it.
 - **409 is a real cost to a caller.** The idempotency filter answers a duplicate whose original is
   still in flight with a conflict rather than a longer wait (`IdempotencyFilter.cs:262-271`), so the
   client has to retry. That is deliberate, but it is behavior the TTL and wait pairing tunes rather
   than removes.
-- **Six consumers is a thin evidence base.** The contract's edges (TTL loss, wait expiry, idempotent
+- **Seven consumers is a thin evidence base.** The contract's edges (TTL loss, wait expiry, idempotent
   disposal) are exercised by unit tests against a mocked `IDatabase`
   (`Infrastructure.Tests/Concurrency/RedisDistributedLockTests.cs:60-202`, seven cases) and by the
   in-process tests, not against a live Redis under failover. The behavior most likely to matter in
@@ -337,6 +354,38 @@ registration, the six call sites and the choose-between rule are unchanged; only
      `ConnectionStrings__redis` injections at `:1909`, `:2155`, `:2292` and `:2446`;
      `conferenceScaledMaxReplicas` stays at `:192`.
 
+## Revision (2026-10-26)
+Re-verified against current source. The primitive, its contract, both implementations, the
+registration and the choose-between rule are unchanged; adoption grew by one framework call site,
+and several anchors moved.
+1. Point 12 and the Trade-offs consumer count now name seven call sites, not six. The seventh is
+   `TwoFactorAuthenticator`, which takes `IDistributedLock` as a constructor dependency
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TwoFactor/TwoFactorAuthenticator.cs:45`)
+   and serializes acceptance of an account's time step under `lock:{key}` (`:131`; 10 second TTL at
+   `:47`, 5 second wait at `:49`), answering a lock miss as an invalid code. It is shipped but
+   unadopted: only the opt-in `AddTwoFactorAuthentication` registers it
+   (`DependencyInjection.Auth.cs:40`, `:51`) and no host in MMCA.ADC, MMCA.Store or MMCA.Helpdesk
+   calls that. The other six call sites
+   are unchanged (`IdempotencyFilter.cs:251`, `PasswordResetTokenService.cs:36`,
+   `OAuthControllerBase.cs:54`, `ScoreEventSessionsInternalCommandHandler.cs:49`,
+   `SubmitQuestionHandler.cs:35`, `StripeWebhookRegistrationService.cs:52`); MMCA.Helpdesk still
+   takes none.
+2. Related now names [ADR-135](135-application-namespace-keyspace-isolation.md) as the record that
+   owns the application-namespace decision the lock key namespace defaults to.
+3. Anchors re-verified against current source:
+   - Question submit (point 12): the claim key at `SubmitQuestionHandler.cs:109-110` and the
+     acquisition at `:150`; the constructor dependency (`:35`), TTL (`:50`) and wait (`:58`) are
+     unchanged.
+   - Outbox claim-lease: `ClaimEligibleAsync` at `OutboxProcessor.cs:345` (called at `:232`), its
+     predicate chosen at `:368-370` and the conditional `ExecuteUpdateAsync` at `:373-375`. The
+     scheduler claim stays at `ScheduledJobRunner.cs:410` with its predicate and update at
+     `:437-445`.
+   - ADC Bicep: the Conference app at `MMCA.ADC/infra/main.bicep:2114` with its scale at `:2259`,
+     the Identity and Engagement scale lines at `:2106` and `:2394`, Notification's fixed
+     `maxReplicas: 2` at `:2580`, the Redis resource at `:1620`, and the per-app
+     `ConnectionStrings__redis` injections at `:1945`, `:2191`, `:2328` and `:2482`;
+     `conferenceScaledMaxReplicas` stays at `:192`.
+
 ## Related
 [ADR-017](017-request-idempotency.md) (the HTTP idempotency filter, the first consumer, whose
 409-on-lock-miss this record explains), [ADR-026](026-caching-strategy.md) (the cache registration
@@ -346,4 +395,6 @@ durable queue work), [ADR-074](074-recurring-job-scheduler.md) (the scheduler, w
 claim-lease to cron rows), [ADR-052](052-background-job-execution.md) (in-process background work,
 which is per-replica by design and names a distributed lock as the point at which it should become a
 real job), [ADR-006](006-database-per-service.md) (database-per-service, which is why a shared database
-is not itself the exclusion boundary).
+is not itself the exclusion boundary), [ADR-135](135-application-namespace-keyspace-isolation.md)
+(One Application Namespace Isolates Shared Infrastructure Keyspaces: the record that owns the
+application-namespace decision the lock key namespace defaults to).

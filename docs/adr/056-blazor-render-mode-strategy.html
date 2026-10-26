@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -262,7 +263,10 @@
           pages now post from <code>OnParametersSetAsync</code> behind a compound guard that posts once per new scan and skips a re-render of the id last posted, the
           <code>E2E__ForceServer</code> injection and its environment-variable gate now live in the shared
           <code>WithE2eForceServer</code> extension that both AppHosts call, and the citations were re-anchored to current
-          source.</p>
+          source. Revised 2026-10-26: recorded the third anti-double-fetch mechanism (ADC&#39;s public event,
+          session and speaker detail pages persist their prerendered DTO through <code>[PersistentState]</code>, so the
+          session and speaker pages no longer skip the prerender fetch), noted that those prerender fetches carry
+          no prerender timeout, and re-anchored the citations to current source.</p>
           <h2 id="context">Context</h2>
           <p>Both web applications are Blazor Web Apps: a static server-rendered (SSR) prerender pass produces the
           first HTML, then an interactive runtime takes over, either a Blazor Server SignalR circuit or a
@@ -271,14 +275,14 @@
           authentication, localization, theming, data fetching, and the test suite.</p>
           <p>Four accepted ADRs already reason about that transition and each treats it as <strong>given context</strong> rather
           than deciding it: ADR-022 solves <code>[Authorize]</code> on fresh GETs by reading an HttpOnly cookie &quot;during SSR
-          prerender&quot; (<code>022-browser-session-cookie-auth.md:26-27</code>); ADR-027 states that its hard part is flowing one
-          culture decision through &quot;a Blazor <code>InteractiveAuto</code> app (SSR prerender, InteractiveServer circuit,
+          prerender&quot; (<code>022-browser-session-cookie-auth.md:28-29</code>); ADR-027 states that its hard part is flowing one
+          culture decision through &quot;a Blazor <code>InteractiveAuto</code> app (SSR prerender -&gt; InteractiveServer circuit -&gt;
           InteractiveWebAssembly client)&quot; (<code>027-multi-locale-i18n.md:13-16</code>); ADR-028 repeats the same three-phase
           premise for the theme and records that &quot;there is no free no-flash for InteractiveAuto&quot;
-          (<code>028-dark-theme-mode.md:14-17</code>, <code>028-dark-theme-mode.md:105</code>); ADR-051 builds the whole client token
+          (<code>028-dark-theme-mode.md:14-17</code>, <code>028-dark-theme-mode.md:130</code>); ADR-051 builds the whole client token
           lifecycle around three heads with three storage stories and ends with &quot;the UI code above them never
-          branches on render mode&quot; (<code>051-client-auth-token-lifecycle.md:30-39</code>,
-          <code>051-client-auth-token-lifecycle.md:52</code>). ADR-042 covers the MAUI head and never mentions render modes at
+          branches on render mode&quot; (<code>051-client-auth-token-lifecycle.md:34-43</code>,
+          <code>051-client-auth-token-lifecycle.md:56</code>). ADR-042 covers the MAUI head and never mentions render modes at
           all. So four decisions depend on a render-mode policy that no ADR states, and the policy itself is only
           discoverable by reading two <code>App.razor</code> files, two AppHosts, two CI workflows, and one framework base
           class. This ADR states it.</p>
@@ -304,8 +308,8 @@
           both sides of the pipeline: <code>AddInteractiveServerComponents()</code> + <code>AddInteractiveWebAssemblyComponents()</code>
           at service registration and <code>AddInteractiveServerRenderMode()</code> + <code>AddInteractiveWebAssemblyRenderMode()</code>
           on <code>MapRazorComponents&lt;App&gt;()</code>
-          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:71-73</code>, <code>Program.cs:327-329</code>;
-          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:77-79</code>, <code>Program.cs:276-278</code>).</li>
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:77-79</code>, <code>Program.cs:333-335</code>;
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:83-85</code>, <code>Program.cs:282-284</code>).</li>
           <li><strong>Prerendering stays enabled.</strong> No host anywhere in the workspace passes <code>prerender: false</code> or
           constructs a render mode with prerendering disabled; every render mode in use is the stock static
           instance. Prerender is what ADR-022&#39;s SSR cookie scheme exists to serve, so it is kept and its cost is
@@ -313,13 +317,13 @@
           <li><strong>The SSR/interactive double fetch is removed once, in the shared list-page base.</strong>
           <code>DataGridListPageBase&lt;TDto&gt;</code> injects <code>PersistentComponentState</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/DataGridListPageBase.cs:32</code>), restores a
-          per-page-type key <code>grid:{TypeFullName}</code> in <code>OnInitialized</code> (<code>DataGridListPageBase.cs:186-190</code>), and
+          per-page-type key <code>grid:{TypeFullName}</code> in <code>OnInitialized</code> (<code>DataGridListPageBase.cs:202-206</code>), and
           registers a persist callback so the prerender pass hands its rows forward
-          (<code>DataGridListPageBase.cs:199-209</code>). The first interactive <code>ServerData</code> call returns that snapshot and
-          clears it instead of issuing a redundant API round-trip (<code>DataGridListPageBase.cs:663-678</code>), which the
+          (<code>DataGridListPageBase.cs:215-225</code>). The first interactive <code>ServerData</code> call returns that snapshot and
+          clears it instead of issuing a redundant API round-trip (<code>DataGridListPageBase.cs:686-702</code>), which the
           base&#39;s own comment records as the fix for the visible cancel-retry cycle caused by the
-          SSR to Server to WASM transition (<code>DataGridListPageBase.cs:182-185</code>). The payload is a
-          <code>PersistedGridState</code> record of items plus total (<code>DataGridListPageBase.cs:1268</code>). <strong>Twenty types
+          SSR to Server to WASM transition (<code>DataGridListPageBase.cs:198-201</code>). The payload is a
+          <code>PersistedGridState</code> record of items plus total (<code>DataGridListPageBase.cs:1372</code>). <strong>Twenty types
           inherit this base</strong> (thirteen in ADC, seven in Store), nineteen of them routable list pages plus ADC&#39;s
           non-routable Engagement <code>AttendeeSearchPanel</code>
           (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/CheckIns/AttendeeSearchPanel.razor.cs:16</code>),
@@ -332,39 +336,61 @@
           the same policy reaches those two pages by composition.</li>
           <li><strong>The persist callback declares <code>InteractiveAuto</code> explicitly.</strong> The base passes
           <code>RenderMode.InteractiveAuto</code> as the second argument to <code>RegisterOnPersisting</code>
-          (<code>DataGridListPageBase.cs:209</code>) because a page that inherits its mode from
+          (<code>DataGridListPageBase.cs:225</code>) because a page that inherits its mode from
           <code>&lt;Routes @rendermode=&quot;...&quot;&gt;</code> declares none of its own, and the callback would otherwise fail render-mode
           inference during the static prerender pass; the reasoning is recorded inline
-          (<code>DataGridListPageBase.cs:192-198</code>).</li>
-          <li><strong>The prerender fetch is time-bounded so a cold backend cannot block the page.</strong> <code>CreateFetchCts</code> links
-          to the request token and, when <code>RendererInfo.IsInteractive</code> is false, cancels after
-          <code>PrerenderFetchTimeoutMs</code> (5000 ms) (<code>DataGridListPageBase.cs:96</code>, <code>DataGridListPageBase.cs:933-944</code>).
-          On timeout the page returns an empty grid that the first interactive call refills
-          (<code>DataGridListPageBase.cs:92-95</code>, <code>DataGridListPageBase.cs:732</code>, <code>DataGridListPageBase.cs:854-868</code>).</li>
-          <li><strong>Detail and dashboard pages take the other route: they skip the prerender fetch entirely.</strong> An early
-          <code>if (!RendererInfo.IsInteractive) return;</code> guard in <code>OnParametersSetAsync</code> / <code>OnInitializedAsync</code> appears
-          across both apps, with four different stated reasons. Most of them avoid the doubled reads under
-          <code>InteractiveAuto</code>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/Sessions/PublicSessionDetail.razor.cs:93-100</code>,
-          <code>.../Pages/Public/Speakers/PublicSpeakerDetail.razor.cs:76</code>,
-          <code>.../Pages/Speakers/SpeakerDashboard.razor.cs:82</code>,
+          (<code>DataGridListPageBase.cs:208-214</code>).</li>
+          <li><strong>The list-page prerender fetch is time-bounded so a cold backend cannot block the page.</strong>
+          <code>CreateFetchCts</code> links to the request token and, when <code>RendererInfo.IsInteractive</code> is false, cancels
+          after <code>PrerenderFetchTimeoutMs</code> (5000 ms) (<code>DataGridListPageBase.cs:112</code>,
+          <code>DataGridListPageBase.cs:984-995</code>). On timeout the page returns an empty grid that the first
+          interactive call refills (<code>DataGridListPageBase.cs:108-111</code>, <code>DataGridListPageBase.cs:760</code>,
+          <code>DataGridListPageBase.cs:899-913</code>). The bound lives in the list-page base only; the detail-page
+          prerender fetches below carry no prerender timeout.</li>
+          <li><strong>Most detail and dashboard pages skip the prerender fetch entirely.</strong> A
+          <code>RendererInfo.IsInteractive</code> check in <code>OnParametersSetAsync</code> / <code>OnInitializedAsync</code> (an early return,
+          or in <code>SpeakerDashboard</code> a ternary that returns a completed task) appears across both apps, with four
+          different stated reasons. Most of them avoid the doubled reads under <code>InteractiveAuto</code>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Speakers/SpeakerDashboard.razor.cs:90</code>,
           <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/SessionLive/SessionLive.razor.cs:81</code>,
           <code>.../Pages/SessionLive/PresenterView.razor.cs:67</code>;
-          <code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.UI/Pages/Catalog/CatalogProductDetail.razor.cs:58</code>,
-          <code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Pages/ShoppingCarts/ShoppingCartDetail.razor.cs:64</code>).
+          <code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.UI/Pages/Catalog/CatalogProductDetail.razor.cs:57</code>,
+          <code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Pages/ShoppingCarts/ShoppingCartDetail.razor.cs:60</code>).
+          ADC&#39;s public session and speaker detail pages split the difference: the prerender branch fetches only
+          the primary DTO and persists it (see the <code>[PersistentState]</code> bullet below), while the expensive
+          lookups stay interactive-only
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/Sessions/PublicSessionDetail.razor.cs:107-110</code>,
+          <code>.../Pages/Public/Speakers/PublicSpeakerDetail.razor.cs:85-88</code>).
           Store&#39;s <code>OrderDetail</code> states the second reason: no auth token can be read at prerender time, so every
-          authenticated call would 401 (<code>.../Pages/Orders/OrderDetail.razor.cs:123-126</code>). The third is that a write or
+          authenticated call would 401 (<code>.../Pages/Orders/OrderDetail.razor.cs:119-122</code>). The third is that a write or
           a hub join must not run on a pass the interactive instance repeats: ADC&#39;s sponsor-visit and room check-in
           pages post from <code>OnParametersSetAsync</code> behind a compound guard that also skips the id it last posted, so
           each new scan of a sponsor or room posts once and a re-render of the same id posts nothing
-          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/CheckIns/Sponsors/SponsorVisit.razor.cs:58-62</code>,
-          <code>.../Pages/CheckIns/Rooms/RoomCheckIn.razor.cs:55-60</code>), and <code>HappeningNow</code> gates its SignalR join on the same
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/CheckIns/Sponsors/SponsorVisit.razor.cs:61-68</code>,
+          <code>.../Pages/CheckIns/Rooms/RoomCheckIn.razor.cs:58-66</code>), and <code>HappeningNow</code> gates its SignalR join on the same
           flag, in <code>OnAfterRenderAsync</code> rather than an initialization method
-          (<code>.../Pages/HappeningNow/HappeningNow.razor.cs:120</code>). The fourth is that an un-timed call to a cold or
+          (<code>.../Pages/HappeningNow/HappeningNow.razor.cs:132</code>). The fourth is that an un-timed call to a cold or
           unreachable backend would block the prerender, and with it the page load and the post-login navigation:
           ADC&#39;s home page skips its event fetch and countdown timer at prerender for that reason
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Home/ADCHome.razor.cs:138-143</code>).</li>
-          <li><strong>One page outside the grid family repeats the persistence pattern by hand.</strong> Store&#39;s <code>CatalogBrowse</code>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Home/ADCHome.razor.cs:145-150</code>).</li>
+          <li><strong>Three ADC public detail pages persist their prerendered DTO declaratively.</strong> <code>PublicEventDetail</code>,
+          <code>PublicSessionDetail</code> and <code>PublicSpeakerDetail</code> each carry a pair of .NET 10 <code>[PersistentState]</code>
+          properties, the DTO plus the route id it was fetched for, which the interactive instance reads at most
+          once and only for the same id
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/Events/PublicEventDetail.razor.cs:87-92</code>,
+          <code>.../Pages/Public/Sessions/PublicSessionDetail.razor.cs:73-78</code>,
+          <code>.../Pages/Public/Speakers/PublicSpeakerDetail.razor.cs:62-67</code>). The session and speaker pages fill it
+          from a dedicated prerender branch (<code>PublicSessionDetail.razor.cs:125-140</code>); the event page has no
+          prerender branch, runs its full load on both passes, and writes the pair on every successful load so
+          the interactive pass reuses the event instead of fetching it again (<code>PublicEventDetail.razor.cs:120-122</code>,
+          <code>PublicEventDetail.razor.cs:139-140</code>). The session and speaker fetches pass the page&#39;s lifetime token
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/DetailPageBase.cs:38</code>,
+          <code>PublicSessionDetail.razor.cs:129</code>, <code>PublicSpeakerDetail.razor.cs:107</code>); the event fetch passes the
+          per-load token its <code>BeginLoad</code> call issues (<code>PublicEventDetail.razor.cs:110</code>, <code>:122</code>), which comes
+          from a fresh <code>CancellationTokenSource</code> per load
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/LatestLoadGuard.cs:55-58</code>). None of the three
+          applies a prerender timeout.</li>
+          <li><strong>One further page outside the grid family repeats the list-page pattern by hand.</strong> Store&#39;s <code>CatalogBrowse</code>
           persists its prerendered products, categories and filter tuple and rehydrates them when the interactive
           pass starts on the same filter combination
           (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.UI/Pages/Catalog/CatalogBrowse.razor.cs:82-89</code>,
@@ -375,16 +401,16 @@
           client <code>Program.cs</code> mirrors its server host&#39;s registrations (MudBlazor, <code>AddUIShared</code>, browser device
           capabilities, the auth trio, the same conditional per-module UI registrations)
           (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Program.cs:33-76</code> against
-          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:71-178</code>;
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:77-183</code>;
           <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web.Client/Program.cs:31-64</code> against
-          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:77-171</code>), and each client bootstraps its thread
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:83-172</code>), and each client bootstraps its thread
           culture from the same cookie before running so hydration does not disagree with the prerender
           (<code>MMCA.ADC/.../MMCA.ADC.UI.Web.Client/Program.cs:83</code>,
           <code>MMCA.Store/.../MMCA.Store.UI.Web.Client/Program.cs:71</code>, ADR-027).</li>
           <li><strong>A build-time layer rule is what keeps the shared UI package runnable in the browser.</strong>
           <code>MMCA.Common.UI</code> may not reference Domain, Application, Infrastructure or API, and the enforcement
           target says so in its failure text: &quot;UI depends only on Shared for Blazor WASM compatibility&quot;
-          (<code>MMCA.Common/Source/Build/MMCA.Common.LayerEnforcement.targets:102-115</code>). Server-only components are
+          (<code>MMCA.Common/Source/Build/MMCA.Common.LayerEnforcement.targets:157-170</code>). Server-only components are
           hoisted out into <code>MMCA.Common.UI.Web</code> for exactly that reason, for example the shared <code>/Error</code> page,
           whose <code>HttpContext</code> cascading parameter cannot exist in the WASM-safe package
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Components/Pages/Error.razor:12-21</code>, <code>Error.razor:52-53</code>).</li>
@@ -393,16 +419,16 @@
           returns <code>InteractiveWebAssembly</code> and wins if both are set (<code>MMCA.ADC/.../App.razor:66-77</code>,
           <code>MMCA.Store/.../App.razor:38-41</code>). Those config keys are injected only through the AppHosts, and only when
           the matching environment variable is present. ADC reads <code>E2E_FORCE_WASM</code> and sets
-          <code>E2E__ForceWebAssembly</code> itself (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:420-424</code>); for
+          <code>E2E__ForceWebAssembly</code> itself (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:421-425</code>); for
           <code>E2E__ForceServer</code> both AppHosts call the shared <code>WithE2eForceServer</code> extension, ADC passing
           <code>unlessAlso: forceWasm</code> so the WebAssembly flag wins
-          (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:432</code>,
-          <code>MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:430</code>), and that extension forwards the key
+          (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:433</code>,
+          <code>MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:432</code>), and that extension forwards the key
           only when <code>E2E_FORCE_SERVER</code> is <code>true</code>
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:441-454</code>). In CI only <code>E2E_FORCE_SERVER</code> is
-          exported (<code>MMCA.ADC/.github/workflows/e2e.yml:226</code>, <code>MMCA.Store/.github/workflows/e2e.yml:229</code>);
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:442-455</code>). In CI only <code>E2E_FORCE_SERVER</code> is
+          exported (<code>MMCA.ADC/.github/workflows/e2e.yml:241</code>, <code>MMCA.Store/.github/workflows/e2e.yml:229</code>);
           ADC&#39;s workflow deliberately does <strong>not</strong> set <code>E2E_FORCE_WASM</code> and records why
-          (<code>MMCA.ADC/.github/workflows/e2e.yml:211-218</code>). Both <code>App.razor</code> comments cite the same trace evidence:
+          (<code>MMCA.ADC/.github/workflows/e2e.yml:226-233</code>). Both <code>App.razor</code> comments cite the same trace evidence:
           under <code>InteractiveAuto</code> each test&#39;s second page load switched to the background-downloaded WASM bundle,
           whose runtime boot on a shared 2-core runner exceeded every suite wait while the download starved the
           live circuits.</li>
@@ -418,7 +444,7 @@
           <code>InteractiveServer</code>-only (<code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.Gallery/Components/App.razor:21</code>,
           <code>App.razor:25</code>, <code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.Gallery/GalleryHost.cs:53</code>, <code>GalleryHost.cs:134-135</code>). ADR-028
           already noted Helpdesk&#39;s status (&quot;As an <code>InteractiveServer</code>-only host it has no WASM boundary&quot;,
-          <code>028-dark-theme-mode.md:85</code>); this ADR makes it part of the record rather than an aside.</li>
+          <code>028-dark-theme-mode.md:104</code>); this ADR makes it part of the record rather than an aside.</li>
           </ul>
           <h2 id="rationale">Rationale</h2>
           <ul>
@@ -426,7 +452,7 @@
           Server circuit&#39;s immediate interactivity while the WASM bundle downloads in the background; return
           visits run client-side and stop consuming a server circuit. Because the mode is applied at the root
           router, no page has to opt in or know which runtime it is in, which is the same posture ADR-051 takes
-          for tokens (<code>051-client-auth-token-lifecycle.md:52</code>).</li>
+          for tokens (<code>051-client-auth-token-lifecycle.md:56</code>).</li>
           <li><strong>Keeping prerender is not negotiable, so the double fetch had to be fixed instead.</strong> Prerender is the
           entire reason ADR-022&#39;s SSR cookie scheme exists, and it is what makes public browse pages render
           without waiting on a runtime boot. Disabling it would have removed the duplicate fetch by removing the
@@ -435,11 +461,16 @@
           persist/restore path, the explicit render-mode registration, and the bounded prerender fetch by
           inheriting one type; the alternative was the same 30 lines repeated per page, which is what
           <code>CatalogBrowse</code> shows happening the moment a page falls outside the family.</li>
-          <li><strong>Two anti-double-fetch mechanisms, matched to two page shapes.</strong> A list page has data worth carrying
-          across the transition (the grid would otherwise flash empty), so it persists. A detail or dashboard
-          page, public or authenticated, skips and renders its loading state, so the interactive pass makes the
-          only read; for <code>OrderDetail</code> skipping is also forced, because no token can be read at prerender time.
-          Persisting where skipping would do would only inflate the HTML.</li>
+          <li><strong>Three anti-double-fetch mechanisms, matched to page shapes.</strong> A list page has data worth carrying
+          across the transition (the grid would otherwise flash empty), so it persists through the base&#39;s
+          registered callback. Most detail and dashboard pages, public or authenticated, skip and render their
+          loading state, so the interactive pass makes the only read; for <code>OrderDetail</code> skipping is also forced,
+          because no token can be read at prerender time. ADC&#39;s three public detail pages persist just their
+          primary DTO through <code>[PersistentState]</code>, which needs no callback registration, so the prerender carries
+          the record; on the session and speaker pages the expensive lookups stay interactive-only, while the
+          event page runs its full load, distance lookup included, on both passes
+          (<code>PublicEventDetail.razor.cs:96-105</code>, <code>:152</code>). Persisting where skipping would do would
+          only inflate the HTML.</li>
           <li><strong>The E2E pin is a runner concession, not a product decision.</strong> Pinning <code>InteractiveServer</code> is confined
           to a config flag that only the AppHost sets and only CI exports, so the production and local-dev path
           is unchanged by it, and the flag&#39;s justification (with run ids) lives next to the code that reads it.</li>
@@ -447,7 +478,7 @@
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
           <li><strong>Everything shared has to run in both runtimes.</strong> The WASM-compatibility layer rule
-          (<code>MMCA.Common.LayerEnforcement.targets:102-115</code>) forbids the shared UI package from touching Domain,
+          (<code>MMCA.Common.LayerEnforcement.targets:157-170</code>) forbids the shared UI package from touching Domain,
           Application, Infrastructure or API, so anything server-only needs a second package
           (<code>MMCA.Common.UI.Web</code>) and an explicit <code>AddAdditionalAssemblies</code> entry in every app host (the
           component gallery adds only <code>MMCA.Common.UI</code>, <code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.Gallery/GalleryHost.cs:136</code>).</li>
@@ -456,11 +487,17 @@
           <code>Program.cs</code> files; nothing checks that the two lists agree, so a service added to one and not the other
           fails only in the runtime that missed it.</li>
           <li><strong>The double-fetch fix is opt-in per page, not a framework guarantee.</strong> Only pages that inherit
-          <code>DataGridListPageBase</code> or hand-roll the pattern (<code>CatalogBrowse</code>) or take the
-          <code>RendererInfo.IsInteractive</code> guard avoid the duplicate work; a new page that does none of the three
-          silently fetches twice on every load. No test or analyzer flags that.</li>
+          <code>DataGridListPageBase</code>, hand-roll the pattern (<code>CatalogBrowse</code>), declare <code>[PersistentState]</code> (the three
+          ADC public detail pages) or take the <code>RendererInfo.IsInteractive</code> guard avoid the duplicate work; a new
+          page that does none of the four silently fetches twice on every load. No test or analyzer flags that.</li>
+          <li><strong>Only the list-page prerender fetch is time-bounded.</strong> The detail pages that fetch during prerender
+          pass either the page&#39;s lifetime token (<code>DetailPageBase.cs:38</code>, <code>PublicSessionDetail.razor.cs:129</code>,
+          <code>PublicSpeakerDetail.razor.cs:107</code>) or, on the event page, a per-load token
+          (<code>PublicEventDetail.razor.cs:110</code>), with no <code>CancelAfter</code> on either, so a cold or unreachable backend can hold
+          their prerender, which is the hazard <code>ADCHome</code> skips its fetch to avoid and <code>PrerenderFetchTimeoutMs</code>
+          caps for the grids.</li>
           <li><strong>Persisting grid rows inflates the prerendered HTML.</strong> The full page of DTOs is serialized into the
-          response so the interactive pass can reuse it (<code>DataGridListPageBase.cs:204</code>), trading response size for
+          response so the interactive pass can reuse it (<code>DataGridListPageBase.cs:220</code>), trading response size for
           one fewer API round-trip; a large page size makes that trade worse.</li>
           <li><strong>The deploy-gating E2E suite measures a mode production does not run.</strong> Because CI pins
           <code>InteractiveServer</code>, the chromium e2e-gate never exercises the <code>InteractiveAuto</code> transition it was pinned
@@ -476,7 +513,7 @@
           (deliberately), and a fourth host could differ by accident.</li>
           <li><strong>A first-paint flash remains for anything restored after hydration.</strong> ADR-028&#39;s theme read runs in
           <code>OnAfterRenderAsync</code> and deliberately not during prerender, so <code>InteractiveAuto</code> still permits a brief
-          wrong-theme paint (<code>028-dark-theme-mode.md:41-47</code>, <code>028-dark-theme-mode.md:105</code>); the render-mode
+          wrong-theme paint (<code>028-dark-theme-mode.md:41-47</code>, <code>028-dark-theme-mode.md:130</code>); the render-mode
           choice does not close that gap, it defines it.</li>
           </ul>
           <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
@@ -546,6 +583,42 @@
           ADR-022 (<code>022-browser-session-cookie-auth.md:26-27</code>), ADR-028 (<code>028-dark-theme-mode.md:14-17</code>,
           <code>:41-47</code>, <code>:85</code>, <code>:105</code>) and ADR-051 (<code>051-client-auth-token-lifecycle.md:30-39</code>, <code>:52</code>).</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. The root render mode, the E2E pin, the list-page base&#39;s
+          persist/restore and bounded prerender fetch, the four stated guard reasons and the Helpdesk and gallery
+          adoption are unchanged; the detail-page side of the double-fetch fix moved.</p>
+          <ol>
+          <li>The guard bullet: ADC&#39;s <code>PublicSessionDetail</code> and <code>PublicSpeakerDetail</code> no longer skip the prerender
+          fetch. Their prerender branch fetches the primary DTO and persists it for the interactive instance
+          (<code>PublicSessionDetail.razor.cs:107-110</code>, <code>:125-140</code>; <code>PublicSpeakerDetail.razor.cs:85-88</code>), so they
+          left the doubled-reads skip list. <code>SpeakerDashboard</code> checks the flag in a ternary
+          (<code>SpeakerDashboard.razor.cs:90</code>), not an early return.</li>
+          <li>A new Decision bullet records the third mechanism: <code>[PersistentState]</code> property pairs on
+          <code>PublicEventDetail</code> (<code>PublicEventDetail.razor.cs:87-92</code>, written on every successful load at
+          <code>:139-140</code>), <code>PublicSessionDetail</code> (<code>:73-78</code>) and <code>PublicSpeakerDetail</code> (<code>:62-67</code>). <code>CatalogBrowse</code>
+          remains the only hand-rolled <code>RegisterOnPersisting</code> caller outside the base
+          (<code>CatalogBrowse.razor.cs:101</code>). The Rationale&#39;s &quot;two mechanisms&quot; bullet and the opt-in trade-off now
+          name all of them.</li>
+          <li>A new trade-off and a sentence in the bounded-fetch bullet: the <code>PrerenderFetchTimeoutMs</code> bound is
+          list-page only. The session and speaker prerender fetches pass the page&#39;s lifetime token
+          (<code>DetailPageBase.cs:38</code>, <code>PublicSessionDetail.razor.cs:129</code>, <code>PublicSpeakerDetail.razor.cs:107</code>) and
+          the event page a per-load <code>BeginLoad</code> token (<code>PublicEventDetail.razor.cs:110</code>, <code>:122</code>;
+          <code>LatestLoadGuard.cs:55-58</code>), none with a <code>CancelAfter</code>.</li>
+          <li>The ADR-027 quote now carries the arrows its source line uses, written as ASCII <code>-&gt;</code> in place of the
+          source&#39;s Unicode arrow (<code>027-multi-locale-i18n.md:14</code>).</li>
+          <li>Anchors re-verified against current source: both host <code>Program.cs</code> registration and mapping chains
+          (ADC <code>:77-79</code>, <code>:333-335</code>; Store <code>:83-85</code>, <code>:282-284</code>) and WASM-mirror ranges (ADC <code>:77-183</code>, Store
+          <code>:83-172</code>), <code>DataGridListPageBase</code> (<code>:202-206</code>, <code>:215-225</code>, <code>:225</code>, <code>:208-214</code>, <code>:198-201</code>,
+          <code>:686-702</code>, <code>:108-111</code>, <code>:112</code>, <code>:760</code>, <code>:899-913</code>, <code>:984-995</code>, <code>:1372</code>, and the serialization at
+          <code>:220</code>), the guards (<code>SessionLive.razor.cs:81</code>, <code>PresenterView.razor.cs:67</code>,
+          <code>CatalogProductDetail.razor.cs:57</code>, <code>ShoppingCartDetail.razor.cs:60</code>, <code>OrderDetail.razor.cs:119-122</code>,
+          <code>ADCHome.razor.cs:145-150</code>, <code>SponsorVisit.razor.cs:61-68</code>, <code>RoomCheckIn.razor.cs:58-66</code>,
+          <code>HappeningNow.razor.cs:132</code>), the layer target (<code>MMCA.Common.LayerEnforcement.targets:157-170</code>), the
+          AppHosts (ADC <code>Program.cs:421-425</code>, <code>:433</code>; Store <code>Program.cs:432</code>; <code>Extensions.cs:442-455</code>), the
+          workflows (ADC <code>e2e.yml:241</code>, <code>:226-233</code>), and the cross-ADR quotes in ADR-022
+          (<code>022-browser-session-cookie-auth.md:28-29</code>), ADR-028 (<code>028-dark-theme-mode.md:104</code>, <code>:130</code>) and
+          ADR-051 (<code>051-client-auth-token-lifecycle.md:34-43</code>, <code>:56</code>).</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-022 (reads the HttpOnly session cookie during the SSR prerender pass this decision keeps enabled),
           ADR-027 (flows one culture through the SSR to Server to WASM sequence this decision establishes, and owns
@@ -573,6 +646,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

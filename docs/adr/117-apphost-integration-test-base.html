@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -261,6 +262,7 @@
           <p>Revised 2026-10-21: the Aspire pin reads 13.6.2 on every Aspire entry, decision 9 says the package&#39;s
           only xUnit reference is <code>xunit.v3.extensibility.core</code> rather than its only reference, and anchors
           are refreshed.</p>
+          <p>Revised 2026-10-26: the Aspire pin reads 13.6.4 on every Aspire entry, and anchors are refreshed.</p>
           <h2 id="context">Context</h2>
           <p>The AppHost is the only file that states how a whole stack fits together: which project resources
           exist, which database each one owns, which broker they share, where JWKS discovery points, and the
@@ -291,7 +293,7 @@
           CI runner has no user secrets, so the JwtBearer options factory threw on the first request. Every
           request answered 500, including <code>/alive</code>, so the liveness probe never turned Identity healthy and
           every <code>WaitFor(identity)</code> edge waited out the twelve-minute budget. The framework already has the
-          channel for the fix (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:365</code>,
+          channel for the fix (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:366</code>,
           <code>WithE2eRsaKeys()</code>, which forwards <code>E2E_JWT_PRIVATE_KEY_PEM</code> / <code>E2E_JWT_PUBLIC_KEY_PEM</code> onto
           <code>Jwt__*</code> and <code>Jwks__*</code>); what it did not have was anything that put a keypair into those
           variables.</li>
@@ -349,7 +351,7 @@
           machine-level act a test fixture has no business performing silently; a CI job that needs one runs
           <code>dotnet dev-certs https --trust</code> as an explicit step. The framework&#39;s own <code>apphost-testing</code> job
           needs none, because its sample AppHost serves cleartext only, and its header says a consumer stack
-          with an https launch profile adds that step (<code>MMCA.Common/.github/workflows/ci.yml:846</code>, <code>:859-862</code>).</p>
+          with an https launch profile adds that step (<code>MMCA.Common/.github/workflows/ci.yml:989</code>, <code>:1002-1005</code>).</p>
           </li>
           <li><p><strong>The RS256 keypair is minted when the environment has none.</strong> <code>EphemeralRsaKeyPair.Create()</code>
           (<code>.../Preconditions/EphemeralRsaKeyPair.cs:42</code>) generates an RSA-2048 pair and the fixture pushes
@@ -380,7 +382,7 @@
           <li><p><strong>The package&#39;s layer ceiling is <code>MMCA.Common.Testing</code>, enforced twice.</strong> It reuses
           <code>JwtTokenGenerator</code> and reaches Application and API only through that one edge. The compile-time
           gate is <code>EnforceTestingAspireLayerBoundary</code>
-          (<code>MMCA.Common/Source/Build/MMCA.Common.LayerEnforcement.targets:164</code>), which judges the references
+          (<code>MMCA.Common/Source/Build/MMCA.Common.LayerEnforcement.targets:219</code>), which judges the references
           this csproj DECLARES (by <code>DefiningProjectName</code>) rather than the transitive closure the SDK folds
           into <code>@(ProjectReference)</code> before <code>ResolveProjectReferences</code>. The runtime gate is
           <code>TestingAspireBoundaryTests</code>
@@ -407,7 +409,7 @@
           </li>
           <li><p><strong>The tier runs in CI, blocking, against an in-repo sample.</strong> The <code>apphost-testing</code> job carries
           no <code>continue-on-error</code>, so a red fails the run, but it is not a required merge check
-          (<code>MMCA.Common/.github/workflows/ci.yml:846</code>, <code>:851-852</code>).
+          (<code>MMCA.Common/.github/workflows/ci.yml:989</code>, <code>:994-995</code>).
           <code>Tests/Hosting/MMCA.Common.Testing.Aspire.AppHostTests</code> boots a sample AppHost with a SQLite file
           and ONE sample service project declared as TWO resources, so it needs no container runtime, and
           asserts every helper against it. The two resources are the two cleartext protocol profiles,
@@ -469,13 +471,13 @@
           over <code>AppHostTestBase&lt;AdcAppHostFixture&gt;</code>, and Store&#39;s had the same shape. Both projects, and the
           <code>apphost-smoke</code> job that ran them, are removed. Each consumer&#39;s real AppHost composition is exercised
           instead by its <code>e2e.yml</code>, which boots the AppHost for every E2E run, including the deploy&#39;s chromium
-          <code>e2e-gate</code> (<code>MMCA.ADC/.github/workflows/e2e.yml:29-30</code>, <code>:227</code>;
+          <code>e2e-gate</code> (<code>MMCA.ADC/.github/workflows/e2e.yml:34-36</code>, <code>:242</code>;
           <code>MMCA.Store/.github/workflows/e2e.yml:252</code>), and the base itself by MMCA.Common&#39;s own tier
           (<code>MMCA.ADC/AGENTS.md:77</code>, <code>MMCA.Store/AGENTS.md:76</code>). The package is unchanged, so a consumer that
           wants the wiring assertions back writes the subclass again rather than a harness.</li>
           <li><strong>Cost: this is the slowest tier per assertion, and it blocks the CI run without being a required
           merge check.</strong> The <code>apphost-testing</code> job has no <code>continue-on-error</code>, so a red fails the MMCA.Common
-          CI run, but it is not a required merge check (<code>MMCA.Common/.github/workflows/ci.yml:851-852</code>).</li>
+          CI run, but it is not a required merge check (<code>MMCA.Common/.github/workflows/ci.yml:994-995</code>).</li>
           <li><strong>A consumer&#39;s real stack still needs Docker on the runner.</strong> The in-repo sample avoids containers
           on purpose, so the framework&#39;s own CI does not pay for image pulls, but ADC&#39;s AppHost starts SQL
           Server, Redis, RabbitMQ and MailDev. That is why <code>AppHostEnvironmentRequirement.Docker</code> is part of
@@ -483,12 +485,12 @@
           (<code>MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Aspire.AppHostTests/SampleAppHostFixture.cs:42</code>)
           rather than the other way round.</li>
           <li><strong>The framework carries one more package</strong> (<code>MMCA.Common.Testing.Aspire</code>, listed with the current
-          count in <code>MMCA.Common/FACTS.md:40</code>), and every <code>MMCA.Common.*</code> pin
+          count in <code>MMCA.Common/FACTS.md:43</code>), and every <code>MMCA.Common.*</code> pin
           in each consumer&#39;s <code>Directory.Packages.props</code> moves together at the next release
           (<a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a>).</li>
           <li><strong>Aspire versions are now coupled in one more place.</strong> <code>Aspire.Hosting.Testing</code> is pinned at the
-          same 13.6.2 as every other Aspire entry (<code>MMCA.Common/Directory.Packages.props:375</code>, against
-          <code>Aspire.Hosting</code> at <code>:366</code>), because the
+          same 13.6.4 as every other Aspire entry (<code>MMCA.Common/Directory.Packages.props:444</code>, against
+          <code>Aspire.Hosting</code> at <code>:435</code>), because the
           testing host builds the application model the AppHost package produces; a version split between
           them is a model mismatch rather than an upgrade.</li>
           </ul>
@@ -564,6 +566,29 @@
           (variables read at <code>:369-370</code>, forwarded at <code>:377-379</code>). The anchors inside earlier revisions stay
           as written.</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. No decision or rationale changed: the <code>apphost-testing</code> job is
+          still blocking with no <code>continue-on-error</code> anywhere in <code>ci.yml</code> and no dev-certs step,
+          <code>WithE2eRsaKeys()</code> still forwards the two E2E variables onto <code>Jwt__*</code> and <code>Jwks__*</code>, the layer
+          boundary target still judges declared references and forbids <code>MMCA.Common.Aspire</code>, and the Aspire
+          same-version coupling still holds. What moved is the pin version and the anchors.</p>
+          <ol>
+          <li>The Aspire pin reads 13.6.4 on every Aspire entry: <code>Aspire.Hosting</code> at
+          <code>MMCA.Common/Directory.Packages.props:435</code>, <code>Aspire.Hosting.Testing</code> at <code>:444</code>, with the
+          same-version rationale comment at <code>:440-443</code>. Trade-offs now says so.</li>
+          <li>Anchors re-verified against current source: <code>apphost-testing</code> job at
+          <code>MMCA.Common/.github/workflows/ci.yml:989</code>, the BLOCKING, not-a-required-merge-check comment at
+          <code>:994-995</code>, the no-container, no-dev-certificate header and the consumer
+          <code>dotnet dev-certs https --trust</code> note at <code>:1002-1005</code> (decisions 4 and 10, Trade-offs);
+          <code>WithE2eRsaKeys()</code> at <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:366</code>
+          (variables read at <code>:370-371</code>, forwarded at <code>:378-380</code>); <code>EnforceTestingAspireLayerBoundary</code> at
+          <code>MMCA.Common/Source/Build/MMCA.Common.LayerEnforcement.targets:219</code> (<code>BeforeTargets</code> at <code>:220</code>,
+          the <code>DefiningProjectName</code> filter at <code>:229</code>, <code>MMCA.Common.Aspire</code> forbidden at <code>:236</code>);
+          <code>MMCA.Common.Testing.Aspire</code> in <code>MMCA.Common/FACTS.md:43</code>; and in ADC&#39;s <code>e2e.yml</code> the
+          <code>workflow_call</code> entry point the deploy&#39;s <code>e2e-gate</code> uses at
+          <code>MMCA.ADC/.github/workflows/e2e.yml:34-36</code> and the AppHost launch at <code>:242</code>. The anchors inside
+          earlier revisions stay as written.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="098-aspire-orchestration-not-testing-or-dashboards.html">ADR-098</a> (the orchestration posture this tier
           tests without changing),
@@ -592,6 +617,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

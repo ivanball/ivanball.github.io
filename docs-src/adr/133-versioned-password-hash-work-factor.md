@@ -3,18 +3,20 @@
 ## Status
 Accepted (2026-10-23). Supersedes [ADR-102](102-pbkdf2-only-password-hashing.md).
 The change is the MMCA.Common v1.252.0 entry of the framework changelog
-(`MMCA.Common/CHANGELOG.md:7`, `:16`, `:22`). ADR-102's single-path decision (one interface, one
+(`MMCA.Common/CHANGELOG.md:171`, `:181-183`, `:187`). ADR-102's single-path decision (one interface, one
 implementation, PBKDF2 only, constant-time compare, canonical-material guard) carries forward
 unchanged; what this record replaces is its fixed, unstored work factor and its header-less format.
+Revised 2026-10-26: anchors refreshed after the v1.252.0 changelog moved below later releases and
+ADR-102 gained its Superseded banner.
 
 ## Context
 ADR-102 recorded PBKDF2-HMAC-SHA512 with a 32-byte salt, a 64-byte digest and a compile-time
 `Iterations = 600_000`, described as tracking OWASP guidance for that primitive
-(`102-pbkdf2-only-password-hashing.md:48-53`). Its own Trade-offs named the cost of that shape:
+(`102-pbkdf2-only-password-hashing.md:56-57`). Its own Trade-offs named the cost of that shape:
 verification recomputed with the same constant the write path used and no per-record count was
 stored, so changing the constant in either direction would stop every stored credential from
-verifying (`102-pbkdf2-only-password-hashing.md:155-159`), and the format carried no version marker
-(`:160-162`).
+verifying (`102-pbkdf2-only-password-hashing.md:155-163`), and the format carried no version marker
+(`:164-166`).
 
 Two facts made the constant worth changing. First, the figure was wrong for the primitive: 600,000
 is the OWASP Password Storage Cheat Sheet figure for PBKDF2-HMAC-**SHA256**, while its figure for
@@ -28,7 +30,8 @@ unknown address, or one with no stored credential, still burns one full derivati
 `:648-656`), and a known address with a wrong password runs the real verification (`:178`). Behind
 the venue NAT many attendees share one address, so ADC's per-IP auth limit had to be raised from its
 default of 30 per minute to 300 per minute in conference mode
-(`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:164-165`), which raises in step how
+(`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:162-172`,
+`MMCA.ADC/infra/main.bicep:2060`), which raises in step how
 much hashing one anonymous source can demand.
 
 Under ADR-102's format the constant could not move at all without breaking every stored password,
@@ -142,7 +145,7 @@ sign-in.
   guidance asks for and cost CPU at exactly the moment a conference needed it.
 - **An explicit version marker, not another data convention.** ADR-102 rejected selecting an algorithm
   from a data property such as salt length and said a future format change was better served by an
-  explicit version marker (`102-pbkdf2-only-password-hashing.md:134-137`). The `0x01` byte is that
+  explicit version marker (`102-pbkdf2-only-password-hashing.md:138-141`). The `0x01` byte is that
   marker, and the iteration bounds stop the data from choosing a weaker or abusive cost.
 - **Sign-in is the only moment the upgrade is possible.** The plaintext exists only transiently at
   login, so the rehash runs there, after verification has proven it. Making it best effort keeps a
@@ -182,7 +185,7 @@ Weighed and rejected on 2026-10-23.
   a schema migration in every consumer. Revisit if a per-record parameter ever has to be queryable in
   the database rather than read at verification time.
 - **Changing the constant without a stored count.** Under ADR-102's format every stored password would
-  stop verifying (`102-pbkdf2-only-password-hashing.md:155-159`), leaving a reset for every account as
+  stop verifying (`102-pbkdf2-only-password-hashing.md:159-163`), leaving a reset for every account as
   the only remedy.
 - **Argon2id.** It is not in the .NET base class library, so adopting it would add a native or
   third-party dependency to a framework that ships PBKDF2 only and pins that dependency in an IL-shape
@@ -197,6 +200,22 @@ Weighed and rejected on 2026-10-23.
   timing difference above both stay.
 - A future work-factor change is a constant edit plus a release, with the upgrade riding the same
   sign-in path.
+
+## Revision (2026-10-26)
+Re-verified against current source. The decision, the format, the counts and the upgrade path are
+unchanged; only anchors moved, as later releases pushed the v1.252.0 changelog entry down and ADR-102
+gained its Superseded banner.
+
+1. Anchors re-verified against current source: the v1.252.0 entry is now
+   `MMCA.Common/CHANGELOG.md:171` (heading), `:181-183` (`NeedsRehash`, `IPasswordRehashableUser`, the
+   sign-in rehash) and `:187` (the versioned 69-byte format, 210,000 iterations, "Supersedes
+   ADR-102"); the ADC per-IP auth limit explanation is
+   `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:162-171` with the
+   `AddCommonRateLimiting` call at `:172`, and the conference-mode value of 300 is set as
+   `RateLimiting__AuthIpPermitLimit` at `MMCA.ADC/infra/main.bicep:2060`; ADR-102's constants and
+   OWASP note are at `102-pbkdf2-only-password-hashing.md:56-57`, its explicit-version-marker advice
+   at `:138-141`, the fixed-constant and invalidation Trade-offs at `:155-163` (invalidation alone at
+   `:159-163`), and the no-version-marker Trade-off at `:164-166`.
 
 ## Related
 [ADR-102](102-pbkdf2-only-password-hashing.md) (the superseded record: the single PBKDF2 path, the

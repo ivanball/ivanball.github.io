@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -259,7 +260,10 @@
           as a no-op there. Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised
           2026-10-21: the tenant-resolution pass-through is recorded as also covering excluded paths and the
           <code>RequireTenant</code> opt-out, the pre-forwarded-capture trade-off now names all four texts that still claim
-          a consumer, and the call-site and cross-ADR anchors are refreshed.</p>
+          a consumer, and the call-site and cross-ADR anchors are refreshed. Revised 2026-10-26: the
+          pre-forwarded-capture trade-off now names the one text that still claims a consumer (the fitness
+          function&#39;s <code>because</code> text), since the keys&#39; XML doc, the step comment and the class summary now say
+          the captured Items have no reader; anchors refreshed after the call sites and pipeline files moved.</p>
           <h2 id="context">Context</h2>
           <p>In ASP.NET Core, middleware order is behavior, not style: a rate limiter placed before authentication
           partitions every request as anonymous, an HTTPS redirect placed in front of a gRPC call breaks the
@@ -267,10 +271,10 @@
           Each of those is a silent, correct-looking build.</p>
           <p>The framework already ships that pipeline as a single call. Three accepted records cite it as <em>where</em>
           their middleware sits: ADR-019 relies on forwarded headers running before the rate limiter
-          (<code>019-rate-limiting.md:117-121</code>), ADR-047 pins <code>SoftDeletedUserMiddleware</code> between authentication and
-          authorization (<code>047-soft-deleted-user-session-revocation.md:51-63</code>), and ADR-073 places
+          (<code>019-rate-limiting.md:119-123</code>), ADR-047 pins <code>SoftDeletedUserMiddleware</code> between authentication and
+          authorization (<code>047-soft-deleted-user-session-revocation.md:52-64</code>), and ADR-073 places
           <code>TenantResolutionMiddleware</code> immediately after <code>UseAuthentication</code> because claim-first resolution needs
-          a populated principal (<code>073-multi-tenancy-model.md:111-116</code>). All three take the pipeline as given
+          a populated principal (<code>073-multi-tenancy-model.md:132-134</code>). All three take the pipeline as given
           context. None of them decides it, and nothing else does either, so the one ordering that every host in
           both production apps depends on has been an implementation detail of a method rather than a recorded
           decision. This record makes the pipeline itself the decision.</p>
@@ -278,77 +282,77 @@
           documented order that handler and host authors do not re-litigate per project.</p>
           <h2 id="decision">Decision</h2>
           <p>Ship the edge as <strong>one ordered pipeline in the framework</strong>, <code>UseCommonMiddlewarePipeline</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationExtensions.cs:48</code>), and have
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationExtensions.cs:49</code>), and have
           every REST/gRPC host call it instead of composing its own.</p>
           <ul>
           <li><strong>One call, whole edge, controllers included.</strong> The method is an <code>extension(WebApplication app)</code>
-          member (<code>WebApplicationExtensions.cs:37</code>) that applies every edge middleware and finishes by
+          member (<code>WebApplicationExtensions.cs:38</code>) that applies every edge middleware and finishes by
           mapping controllers, returning the app for chaining. A host&#39;s composition root is one line, not a
           hand-ordered list.</li>
           <li><strong>The order is data, not prose.</strong> Each step is a named <code>MiddlewarePipelineStep</code> (a name plus the
           configure delegate), the names are constants on <code>MiddlewarePipelineStepNames</code>
           (<code>Startup/Pipeline/MiddlewarePipelineStepNames.cs:17-74</code>, declared in application order), and
-          <code>MiddlewarePipelineBuilder.CreateDefault()</code> (<code>Startup/Pipeline/MiddlewarePipelineBuilder.cs:31-151</code>) seeds
+          <code>MiddlewarePipelineBuilder.CreateDefault()</code> (<code>Startup/Pipeline/MiddlewarePipelineBuilder.cs:31-150</code>) seeds
           the eighteen defaults: exception handler, correlation id, request localization, pre-forwarded
           scheme/host capture, forwarded headers, gRPC-exempt HTTPS redirect, response compression, routing,
           CORS, authentication, tenant resolution, rate limiter, soft-deleted-user check, authorization,
           output cache, JWKS and OIDC discovery endpoints, controllers. Both overloads route through one
-          private helper that builds the list and applies it in order (<code>WebApplicationExtensions.cs:170-181</code>).</li>
+          private helper that builds the list and applies it in order (<code>WebApplicationExtensions.cs:171-182</code>).</li>
           <li><strong>A scoped escape hatch, validated at startup.</strong> The
           <code>UseCommonMiddlewarePipeline(Action&lt;MiddlewarePipelineBuilder&gt;)</code> overload
-          (<code>WebApplicationExtensions.cs:60</code>) hands the host the seeded builder, which can <code>InsertBefore</code>,
-          <code>InsertAfter</code>, <code>Replace</code>, or <code>Remove</code> steps by name (<code>MiddlewarePipelineBuilder.cs:161-224</code>;
-          unknown anchors and duplicate names throw). <code>Build()</code> (<code>:252-275</code>) then re-checks the load-bearing
+          (<code>WebApplicationExtensions.cs:61</code>) hands the host the seeded builder, which can <code>InsertBefore</code>,
+          <code>InsertAfter</code>, <code>Replace</code>, or <code>Remove</code> steps by name (<code>MiddlewarePipelineBuilder.cs:160-223</code>;
+          unknown anchors and duplicate names throw). <code>Build()</code> (<code>:251-274</code>) then re-checks the load-bearing
           adjacencies below and throws naming the violated invariant, so a customized pipeline fails while
           the host is starting instead of misordering silently. An invariant binds only when both of its
           steps are still present, so dropping a whole capability (both members of a pair) stays legal.</li>
           <li><strong>Authentication before tenant resolution, and the code says why.</strong> The <code>TenantResolution</code> step
-          sits immediately after <code>Authentication</code> (<code>MiddlewarePipelineBuilder.cs:107-113</code>), because the claim
+          sits immediately after <code>Authentication</code> (<code>MiddlewarePipelineBuilder.cs:106-112</code>), because the claim
           strategy reads <code>HttpContext.User</code>, which carries token claims only once authentication has run
-          (comment at <code>:109-112</code>, ADR-073). <code>Build()</code> enforces the adjacency (<code>:259-262</code>).</li>
+          (comment at <code>:108-111</code>, ADR-073). <code>Build()</code> enforces the adjacency (<code>:258-261</code>).</li>
           <li><strong>Authentication before rate limiting, and the code says why.</strong> The <code>RateLimiting</code> step runs
           after authentication on purpose: the global partition keys on the authenticated principal and routes
           anonymous traffic down a <code>NoLimiter</code> branch, so an unpopulated <code>HttpContext.User</code> would make every
           request look anonymous and the per-user cap would never engage (comment at
-          <code>MiddlewarePipelineBuilder.cs:117-120</code>, ADR-019). <code>Build()</code> enforces the precedence (<code>:264-267</code>).</li>
+          <code>MiddlewarePipelineBuilder.cs:116-119</code>, ADR-019). <code>Build()</code> enforces the precedence (<code>:263-266</code>).</li>
           <li><strong>Forwarded headers before anything that reads the client IP, trusting any proxy.</strong>
-          The <code>ForwardedHeaders</code> step (<code>MiddlewarePipelineBuilder.cs:64-69</code>) builds its options from the
-          framework&#39;s one posture, <code>CommonForwardedHeaders.Create()</code> (<code>:69</code>;
+          The <code>ForwardedHeaders</code> step (<code>MiddlewarePipelineBuilder.cs:63-68</code>) builds its options from the
+          framework&#39;s one posture, <code>CommonForwardedHeaders.Create()</code> (<code>:68</code>;
           <code>Startup/CommonForwardedHeaders.cs:42-53</code>): <code>XForwardedFor | XForwardedProto | XForwardedHost</code>
           (<code>CommonForwardedHeaders.cs:33-34</code>) with both <code>KnownProxies</code> and <code>KnownIPNetworks</code> cleared
           (<code>:49-50</code>), because cloud reverse proxies front the services from internal addresses that are not in
-          the default allow-lists (<code>:14-20</code>, and the step&#39;s own comment at <code>MiddlewarePipelineBuilder.cs:66-68</code>).
+          the default allow-lists (<code>:14-20</code>, and the step&#39;s own comment at <code>MiddlewarePipelineBuilder.cs:65-67</code>).
           The same factory is what the server-rendered UI hosts adopt through <code>UseCommonUiForwardedHeaders()</code>
           (<code>Startup/CommonForwardedHeadersExtensions.cs:24-25</code>), so a service and a UI host behind the same
           ingress read the scheme, host and client address identically. It sits ahead of the rate limiter,
           which is the ordering ADR-019 depends on, and <code>Build()</code> enforces that it precedes the HTTPS redirect
-          (<code>MiddlewarePipelineBuilder.cs:269-272</code>).</li>
+          (<code>MiddlewarePipelineBuilder.cs:268-271</code>).</li>
           <li><strong>HTTPS redirect is exempted for cleartext HTTP/2, which is the gRPC case.</strong> The redirect is wrapped
           in <code>app.UseWhen</code> and skipped for any request that matches
-          <code>MiddlewarePipelineBuilder.IsCleartextHttp2</code> (<code>MiddlewarePipelineBuilder.cs:85-87</code>), a predicate
-          defined as <code>!Request.IsHttps &amp;&amp; HttpProtocol.IsHttp2(Request.Protocol)</code> (<code>:350-356</code>), because
+          <code>MiddlewarePipelineBuilder.IsCleartextHttp2</code> (<code>MiddlewarePipelineBuilder.cs:84-86</code>), a predicate
+          defined as <code>!Request.IsHttps &amp;&amp; HttpProtocol.IsHttp2(Request.Protocol)</code> (<code>:349-355</code>), because
           extracted services are reached over HTTP/2 cleartext (h2c) and a 307 on those requests breaks the
-          call (comment at <code>:73-77</code>, ADR-012). The exemption keys on the protocol Kestrel negotiated during
+          call (comment at <code>:72-76</code>, ADR-012). The exemption keys on the protocol Kestrel negotiated during
           connection setup, which no header can fake; it does not read <code>Content-Type</code> and it does not read
           routed-endpoint gRPC metadata, because the step runs before <code>UseRouting</code> and no endpoint metadata
-          exists yet (comment at <code>:79-84</code>). Matching on a <code>Content-Type</code> of <code>application/grpc</code> was the
+          exists yet (comment at <code>:78-83</code>). Matching on a <code>Content-Type</code> of <code>application/grpc</code> was the
           original shape and was replaced as forgeable: any caller could have set that header and been served
           plaintext (SEC-Common-44). The predicate is <code>public</code> so a host that rebuilds this step through the
-          configure overload reuses it rather than reinventing the weaker check (<code>:345-349</code>).</li>
+          configure overload reuses it rather than reinventing the weaker check (<code>:344-348</code>).</li>
           <li><strong>The soft-deleted-user check sits between the limiter and authorization.</strong>
           <code>SoftDeletedUserMiddleware</code> (<code>Source/Presentation/MMCA.Common.API/Middleware/SoftDeletedUserMiddleware.cs:37</code>)
-          is the <code>SoftDeletedUserFilter</code> step (<code>MiddlewarePipelineBuilder.cs:123-125</code>), after <code>RateLimiting</code>
+          is the <code>SoftDeletedUserFilter</code> step (<code>MiddlewarePipelineBuilder.cs:122-124</code>), after <code>RateLimiting</code>
           and before <code>Authorization</code>, so a revoked account is rejected before any endpoint authorizes it
           (ADR-047).</li>
           <li><strong>JWKS and OIDC discovery are always mapped.</strong> The <code>JwksEndpoint</code> and <code>OidcDiscoveryEndpoint</code> steps
-          (<code>MiddlewarePipelineBuilder.cs:135-146</code>) are unconditional; a non-Identity host answers with an
-          empty key set or a 404 rather than a different pipeline shape (comment at <code>:137-141</code>;
+          (<code>MiddlewarePipelineBuilder.cs:134-145</code>) are unconditional; a non-Identity host answers with an
+          empty key set or a 404 rather than a different pipeline shape (comment at <code>:136-140</code>;
           <code>OidcDiscoveryEndpointExtensions.cs:63-66</code> is the 404 path).</li>
           <li><strong>The order is frozen by a fitness function.</strong> <code>MiddlewarePipelineOrderTestsBase</code>
-          (<code>Source/Hosting/MMCA.Common.Testing/Conformance/MiddlewarePipelineOrderTestsBase.cs:29</code>) is the edge
+          (<code>Source/Hosting/MMCA.Common.Testing/Conformance/MiddlewarePipelineOrderTestsBase.cs:31</code>) is the edge
           counterpart of ADR-014&#39;s <code>DecoratorPipelineOrderTestsBase</code>: it seeds the default builder, applies
-          the subclass&#39;s <code>Configure</code> customization if any (<code>:35</code>), and asserts the step sequence is exactly
-          the documented order (<code>:60-67</code>) and that <code>Build()</code>&#39;s invariants hold (<code>:69-77</code>). No
+          the subclass&#39;s <code>Configure</code> customization if any (<code>:37</code>), and asserts the step sequence is exactly
+          the documented order (<code>:62-69</code>) and that <code>Build()</code>&#39;s invariants hold (<code>:71-79</code>). No
           <code>WebApplication</code> is built, so it runs in the fast unit tier. The framework subclasses it in its own
           test pass (<code>Tests/Hosting/MMCA.Common.Testing.Tests/Conformance/MiddlewarePipelineOrderTests.cs:12</code>), and all
           three consumer repos subclass it next to their decorator-order tests, each with no overrides
@@ -357,8 +361,8 @@
           <code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Api/MiddlewarePipelineOrderTests.cs:16</code>
           and <code>MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/MiddlewarePipelineOrderTests.cs:15</code>.</li>
           <li><strong>Conditional middleware is registered unconditionally and adapts at runtime.</strong> Both
-          <code>TenantResolutionMiddleware</code> (the <code>TenantResolution</code> step, <code>MiddlewarePipelineBuilder.cs:107-113</code>) and
-          <code>SoftDeletedUserMiddleware</code> (the <code>SoftDeletedUserFilter</code> step, <code>:123-125</code>) are always in the chain:
+          <code>TenantResolutionMiddleware</code> (the <code>TenantResolution</code> step, <code>MiddlewarePipelineBuilder.cs:106-112</code>) and
+          <code>SoftDeletedUserMiddleware</code> (the <code>SoftDeletedUserFilter</code> step, <code>:122-124</code>) are always in the chain:
           the first passes the request straight through unless <code>Tenancy:Enabled</code> is set, and also when the
           request path is excluded (<code>Middleware/TenantResolutionMiddleware.cs:63</code>, settings read at <code>:61</code>).
           On an enabled host a request that resolves no tenant is rejected, unless the host has opted out
@@ -373,37 +377,37 @@
           (<code>:114-122</code>). Either way the pipeline is literally one shape on every host rather than a per-host
           permutation.</li>
           <li><strong>Every REST/gRPC host calls it.</strong> All seven extracted services in the two production apps: ADC
-          Identity (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:361</code>), ADC Conference
-          (<code>MMCA.ADC.Conference.Service/Program.cs:450</code>), ADC Engagement
-          (<code>MMCA.ADC.Engagement.Service/Program.cs:326</code>), ADC Notification
-          (<code>MMCA.ADC.Notification.Service/Program.cs:270</code>), Store Catalog
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:320</code>), Store Identity
-          (<code>MMCA.Store.Identity.Service/Program.cs:307</code>) and Store Sales
-          (<code>MMCA.Store.Sales.Service/Program.cs:309</code>). The reference app calls it too
+          Identity (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:372</code>), ADC Conference
+          (<code>MMCA.ADC.Conference.Service/Program.cs:461</code>), ADC Engagement
+          (<code>MMCA.ADC.Engagement.Service/Program.cs:337</code>), ADC Notification
+          (<code>MMCA.ADC.Notification.Service/Program.cs:281</code>), Store Catalog
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:331</code>), Store Identity
+          (<code>MMCA.Store.Identity.Service/Program.cs:318</code>) and Store Sales
+          (<code>MMCA.Store.Sales.Service/Program.cs:320</code>). The reference app calls it too
           (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:149</code>), and because that tree <strong>is</strong> the
           <code>mmca-app</code> template (<code>MMCA.Helpdesk/.template.config/template.json:5,7</code>, ADR-065), a scaffolded app
           gets the same line.</li>
           <li><strong>Hosts extend it by appending, after the call, or through the builder.</strong> Service hosts map their
           extra endpoints below the one line: OpenAPI outside Production
-          (<code>MMCA.ADC.Notification.Service/Program.cs:272-277</code>, the <code>MapCommonOpenApi</code> call at <code>:277</code>, with the
-          Production gate inside <code>OpenApiEndpointExtensions.cs:62</code>), the SignalR hub (<code>:284</code>, which
+          (<code>MMCA.ADC.Notification.Service/Program.cs:283-288</code>, the <code>MapCommonOpenApi</code> call at <code>:288</code>, with the
+          Production gate inside <code>OpenApiEndpointExtensions.cs:62</code>), the SignalR hub (<code>:295</code>, which
           <code>SignalRExtensions.cs:18-19</code> documents as &quot;call after <code>UseCommonMiddlewarePipeline</code>&quot;), and gRPC
-          services (<code>:293</code> and <code>:301</code>). A host that needs a change inside the edge uses the configure overload
+          services (<code>:304</code> and <code>:312</code>). A host that needs a change inside the edge uses the configure overload
           instead; no host does today, and every one of the eight production and reference hosts calls the
           zero-argument overload.</li>
           </ul>
           <p>Scope is REST and gRPC service hosts. The Blazor UI hosts and the YARP gateways deliberately do not
-          call it: the gateways compose a much thinner chain (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:160-234</code>,
-          <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:150-173</code>), and the UI hosts hand-compose their own,
+          call it: the gateways compose a much thinner chain (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:161-240</code>,
+          <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:151-179</code>), and the UI hosts hand-compose their own,
           reusing two pieces of this pipeline through public methods. The first is the forwarded-headers posture,
           opened first in each UI pipeline via <code>UseCommonUiForwardedHeaders()</code>
-          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:210</code>,
-          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:200</code>), which applies the same
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:216</code>,
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:206</code>), which applies the same
           <code>CommonForwardedHeaders.Create()</code> options the <code>ForwardedHeaders</code> step uses
           (<code>Startup/CommonForwardedHeadersExtensions.cs:24-25</code>). The second is the localization half via
-          <code>UseCommonRequestLocalization()</code> (<code>MMCA.ADC.UI.Web/Program.cs:238</code>, <code>MMCA.Store.UI.Web/Program.cs:233</code>),
+          <code>UseCommonRequestLocalization()</code> (<code>MMCA.ADC.UI.Web/Program.cs:244</code>, <code>MMCA.Store.UI.Web/Program.cs:239</code>),
           which is the public method the pipeline&#39;s <code>RequestLocalization</code> step calls
-          (<code>MiddlewarePipelineBuilder.cs:47</code>, <code>WebApplicationExtensions.cs:73</code>).</p>
+          (<code>MiddlewarePipelineBuilder.cs:47</code>, <code>WebApplicationExtensions.cs:74</code>).</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
           <li><strong>Order is behavior, so it belongs to the framework, not to each host.</strong> Four of the adjacencies above
@@ -430,8 +434,8 @@
           that was the weakest point of the decision) and there was no extension point (the method took no
           parameters, so the escape hatch was all-or-nothing: stop calling it and re-implement the chain,
           which is what the Blazor UI hosts still deliberately do,
-          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:200,204,233</code>,
-          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:210,216,238</code>). Both are addressed by the revision
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:206,210,239</code>,
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:216,222,244</code>). Both are addressed by the revision
           above: <code>MiddlewarePipelineOrderTestsBase</code> turns a reorder into a red test, <code>Build()</code> turns a
           misordered customization into a startup failure, and the configure overload makes the escape hatch
           scoped instead of all-or-nothing. What remains true: the fitness function is opt-in per repo. All
@@ -443,7 +447,7 @@
           cover, is a behavior change for any host using the configure overload. No host uses it yet, which
           makes this cheap today and easy to underestimate later.</li>
           <li><strong>Controllers are mapped inside the call.</strong> Because the <code>Controllers</code> step is last
-          (<code>MiddlewarePipelineBuilder.cs:148-150</code>), every endpoint a host maps after the call is registered
+          (<code>MiddlewarePipelineBuilder.cs:147-149</code>), every endpoint a host maps after the call is registered
           after controller routing. Hosts that need a hub or a gRPC service simply map it later; a host that
           genuinely needs something ahead of controllers can now <code>InsertBefore(Controllers, ...)</code> through the
           configure overload instead of abandoning the method.</li>
@@ -455,17 +459,17 @@
           assumption stated in the code: the ingress is the only thing that can reach the container
           (<code>CommonForwardedHeaders.cs:19-20</code>).</li>
           <li><strong>Security-response headers are not in this pipeline.</strong> ADR-023&#39;s <code>UseCommonSecurityHeaders</code> is applied
-          by the gateways and UI hosts only (<code>MMCA.ADC.Gateway/Program.cs:170</code>, <code>MMCA.Store.Gateway/Program.cs:159</code>,
-          <code>MMCA.ADC.UI.Web/Program.cs:216</code>, <code>MMCA.Store.UI.Web/Program.cs:204</code>). A service host exposed directly,
+          by the gateways and UI hosts only (<code>MMCA.ADC.Gateway/Program.cs:176</code>, <code>MMCA.Store.Gateway/Program.cs:165</code>,
+          <code>MMCA.ADC.UI.Web/Program.cs:222</code>, <code>MMCA.Store.UI.Web/Program.cs:210</code>). A service host exposed directly,
           without a gateway in front, would serve responses without them.</li>
           <li><strong>One step in the fixed order is currently dead weight.</strong> The pre-forwarded scheme/host capture
-          (the <code>PreForwardedCapture</code> step, <code>MiddlewarePipelineBuilder.cs:49-62</code>) writes
-          <code>HttpContext.Items[&quot;PreForwardedScheme&quot;]</code> and <code>[&quot;PreForwardedHost&quot;]</code>, and four texts still say
-          the OIDC discovery endpoint needs them: the keys&#39; XML doc (<code>WebApplicationExtensions.cs:18-35</code>),
-          the step&#39;s own comment (<code>MiddlewarePipelineBuilder.cs:51-56</code>), and in the fitness function both
-          the class summary, which names &quot;an unreachable <code>jwks_uri</code>&quot; as the runtime failure of a misordered
-          capture (<code>MiddlewarePipelineOrderTestsBase.cs:13-18</code>, claim at <code>:16-17</code>), and the <code>because</code> text
-          (<code>:66</code>). It no longer does: <code>MapOidcDiscoveryEndpoint</code> derives <code>jwks_uri</code> from <code>Jwt:Issuer</code>
+          (the <code>PreForwardedCapture</code> step, <code>MiddlewarePipelineBuilder.cs:49-61</code>) writes
+          <code>HttpContext.Items[&quot;PreForwardedScheme&quot;]</code> and <code>[&quot;PreForwardedHost&quot;]</code> (<code>:58-59</code>). The keys&#39; XML
+          doc (<code>WebApplicationExtensions.cs:18-24</code>, <code>:27-35</code>), the step&#39;s own comment
+          (<code>MiddlewarePipelineBuilder.cs:51-55</code>) and the fitness function&#39;s class summary
+          (<code>MiddlewarePipelineOrderTestsBase.cs:17-19</code>) all say the captured Items have no reader; one text
+          still says the OIDC discovery endpoint needs them, the fitness function&#39;s <code>because</code> text, which
+          pins the capture &quot;for jwks_uri to stay reachable&quot; (<code>:68</code>). It no longer does: <code>MapOidcDiscoveryEndpoint</code> derives <code>jwks_uri</code> from <code>Jwt:Issuer</code>
           (<code>OidcDiscoveryEndpointExtensions.cs:76</code>, with the rationale at <code>:68-75</code>), and a workspace-wide search
           for <code>PreForwarded</code> finds no reader anywhere outside this file and the onboarding chapters that
           describe it. The step costs one delegate per request and stays because removing it is a separate
@@ -540,6 +544,45 @@
           cross-ADR citations in Context (<code>019-rate-limiting.md:117-121</code>,
           <code>047-soft-deleted-user-session-revocation.md:51-63</code>, <code>073-multi-tenancy-model.md:111-116</code>).</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. The eighteen-step order, the four <code>Build()</code> invariants, the eight
+          zero-argument <code>UseCommonMiddlewarePipeline()</code> call sites (no host passes a configure delegate) and the
+          UI-host reuse hold as written; one trade-off statement changed and most anchors moved.</p>
+          <ol>
+          <li>The pre-forwarded-capture trade-off no longer names four stale texts. The keys&#39; XML doc
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationExtensions.cs:18-24</code>,
+          <code>:27-35</code>), the step&#39;s comment
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Pipeline/MiddlewarePipelineBuilder.cs:51-55</code>)
+          and the fitness function&#39;s class summary
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/Conformance/MiddlewarePipelineOrderTestsBase.cs:17-19</code>)
+          now say the captured Items have no reader; only the <code>because</code> text (<code>:68</code>) still ties the capture
+          to a reachable <code>jwks_uri</code>. A search of the Common sources still finds no reader: the writer
+          (<code>MiddlewarePipelineBuilder.cs:58-59</code>), the key constants (<code>WebApplicationExtensions.cs:25</code>,
+          <code>:36</code>), the step name and the <code>Build()</code> invariant are the only references.</li>
+          <li>Anchors re-verified against current source: the zero-argument overload
+          (<code>WebApplicationExtensions.cs:49</code>), its <code>extension(WebApplication app)</code> block (<code>:38</code>), the configure
+          overload (<code>:61</code>), <code>ApplyPipeline</code> (<code>:171-182</code>) and <code>UseCommonRequestLocalization</code> (<code>:74</code>);
+          <code>CreateDefault()</code> (<code>MiddlewarePipelineBuilder.cs:31-150</code>), the capture step (<code>:49-61</code>), forwarded
+          headers (<code>:63-68</code>, comment <code>:65-67</code>), HTTPS redirect (<code>:84-86</code>, comments <code>:72-76</code> and <code>:78-83</code>),
+          tenant resolution (<code>:106-112</code>, comment <code>:108-111</code>), the rate-limit comment (<code>:116-119</code>), the
+          soft-deleted-user step (<code>:122-124</code>), output cache (<code>:130-132</code>), JWKS and OIDC discovery (<code>:134-145</code>,
+          comment <code>:136-140</code>), controllers (<code>:147-149</code>), the edit methods (<code>:160-223</code>), <code>Build()</code> (<code>:251-274</code>,
+          invariants <code>:258-261</code>, <code>:263-266</code>, <code>:268-271</code>) and <code>IsCleartextHttp2</code> (<code>:349-355</code>, remarks
+          <code>:344-348</code>); the fitness class (<code>MiddlewarePipelineOrderTestsBase.cs:31</code>), <code>Configure</code> (<code>:37</code>), and
+          its two tests (<code>:62-69</code>, <code>:71-79</code>); the service call sites (ADC Identity
+          <code>MMCA.ADC.Identity.Service/Program.cs:372</code>, Conference <code>:461</code>, Engagement <code>:337</code>, Notification
+          <code>:281</code>; Store Catalog <code>MMCA.Store.Catalog.Service/Program.cs:331</code>, Identity
+          <code>MMCA.Store.Identity.Service/Program.cs:318</code>, Sales <code>MMCA.Store.Sales.Service/Program.cs:320</code>;
+          Helpdesk Web confirmed at <code>:149</code>); the Notification host extras (OpenAPI <code>:283-288</code> with the call
+          at <code>:288</code>, hub <code>:295</code>, gRPC <code>:304</code> and <code>:312</code>); the gateway chains
+          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:161-240</code>, security headers <code>:176</code>;
+          <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:151-179</code>, security headers <code>:165</code>); the UI
+          hosts (ADC <code>MMCA.ADC.UI.Web/Program.cs:216</code>, <code>:222</code>, <code>:244</code>; Store <code>MMCA.Store.UI.Web/Program.cs:206</code>,
+          <code>:210</code>, <code>:239</code>); and the three cross-ADR citations in Context: ADR-019 item 5 now at
+          <code>019-rate-limiting.md:119-123</code>, the ADR-047 position bullet at
+          <code>047-soft-deleted-user-session-revocation.md:52-64</code>, and the ADR-073 placement statement at
+          <code>073-multi-tenancy-model.md:132-134</code>.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="014-cqrs-decorator-pipeline.html">ADR-014</a> (the in-process sibling: one fixed decorator order for commands
           and queries), <a href="019-rate-limiting.html">ADR-019</a> (depends on forwarded headers before the limiter and on the
@@ -548,7 +591,7 @@
           immediately after authentication), <a href="027-multi-locale-i18n.html">ADR-027</a> (the request localization this
           pipeline wires at <code>:47</code>), <a href="012-grpc-host-transport.html">ADR-012</a> (the h2c transport the HTTPS-redirect
           exemption exists for), <a href="040-authenticated-output-caching-for-public-reads.html">ADR-040</a> (the output cache
-          at <code>:131-133</code>), <a href="023-security-response-headers.html">ADR-023</a> (the edge middleware deliberately NOT in this
+          at <code>:130-132</code>), <a href="023-security-response-headers.html">ADR-023</a> (the edge middleware deliberately NOT in this
           pipeline), <a href="008-service-extraction-topology.html">ADR-008</a> (the extraction path this shared edge preserves).</p>
           
         <div class="doc-foot btn-row">
@@ -569,6 +612,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

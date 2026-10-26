@@ -30,6 +30,10 @@ import of the local-source swap MMCA.Common ships rather than the swap itself. R
 the seed measurements were re-taken at MMCA.Helpdesk `f10bc45` (139 files, 12,157 lines, 57 pins),
 the `--database` text now says only `sqlite` and `postgresql` carry a computed symbol with
 `sqlserver` the fallback, and the staging, README, smoke and FACTS anchors were re-pointed.
+Revised 2026-10-26: the overlay README now names `MMCA_CONTRACT_SNAPSHOT_OUT` rather than saying
+the failure prints the live value, and the seed measurements were re-taken at MMCA.Helpdesk
+`5fd74de` (143 files, 12,571 lines, 57 pins) with the staging guard and README anchors re-pointed; the
+`mmca-command` row now lists the validator and the cache-invalidation test builder the slice ships.
 
 ## Context
 
@@ -43,12 +47,12 @@ is now the six-step `dotnet new install MMCA.Templates` path
 (`common-GETTING-STARTED.md:10-22`) and the by-hand transcription moved to its own guide.
 
 Measured against MMCA.Helpdesk, the deliberately minimal seed, a brand-new app on the framework
-starts by hand-creating **12 projects, 139 files, and 12,157 lines** before a line of its own
-business logic. The method, re-run on 2026-10-21 at MMCA.Helpdesk `f10bc45` and stated here so the
-figures can be reproduced rather than trusted: every tracked file under `Source/` and `Tests/` (132
-files, 11,068 lines), plus the seven root build files below (1,089 lines). Those
+starts by hand-creating **12 projects, 143 files, and 12,571 lines** before a line of its own
+business logic. The method, re-run on 2026-10-26 at MMCA.Helpdesk `5fd74de` and stated here so the
+figures can be reproduced rather than trusted: every tracked file under `Source/` and `Tests/` (136
+files, 11,497 lines), plus the seven root build files below (1,074 lines). Those
 seven are an 827-line `.editorconfig`, a 99-line `Directory.Packages.props` carrying 57 pins,
-a 92-line `Directory.Build.props`, a 7-line `Directory.Build.targets` that imports the local-source
+a 77-line `Directory.Build.props`, a 7-line `Directory.Build.targets` that imports the local-source
 swap from MMCA.Common's `build/LocalSource/MMCA.Common.LocalSource.targets`
 (`Directory.Build.targets:6`), a 5-line `global.json`, a 26-line `nuget.config`, and the 33-line
 solution file. Under `Source/` and `Tests/` sit the module
@@ -71,7 +75,7 @@ Ship a `dotnet new` template pack, **`MMCA.Templates`**, containing four templat
 |---|---|
 | `mmca-app` | the whole solution: build plumbing, one module across five layers, both hosts, the AppHost, migrations, and the test projects |
 | `mmca-module` | a new business module: five layer projects, both test projects, a migrations project |
-| `mmca-command` | one write-side vertical slice (command record + handler) |
+| `mmca-command` | one write-side vertical slice (command record, validator, handler), plus its cache-invalidation test builder written into the module's Application.Tests project |
 | `mmca-query` | one read-side vertical slice (cacheable query record + handler) |
 
 **The template content is the MMCA.Helpdesk reference application itself, staged at pack time.**
@@ -117,15 +121,15 @@ one member a shape flag can remove, `RequesterUserId`, is a comma-separated list
 `stage.ps1`'s `$optionalAxisLines` rewrites like any other. The generated app therefore arrives with
 its own contract already frozen, under its own names, green on the first test run. Staging asserts
 exactly one `IntegrationEventContractTests` class in the staged fitness map and throws otherwise
-(`stage.ps1:1321-1332`), because a class the staging pass cannot find is a template about to ship an
+(`stage.ps1:1322-1333`), because a class the staging pass cannot find is a template about to ship an
 unfrozen wire contract behind a README that says it is frozen. That README section tells the adopter
 what the test guards and how to evolve it: an event added or reshaped on purpose is versioned
 (ADR-010) and `ExpectedContract` updated in the same commit
-(`build/templates/overlay/mmca-app/README.md:126-143`). The failure lists each difference (missing or
+(`build/templates/overlay/mmca-app/README.md:126-146`). The failure lists each difference (missing or
 new event, missing, extra or retyped member) and names `MMCA_CONTRACT_SNAPSHOT_OUT`, which, set to a
 file path, writes the live contract as paste-ready literals on the next run
-(`IntegrationEventContractTestsBase.cs:27`, `:40-52`); the README's own line still says the failure
-prints the live value (`README.md:138`).
+(`IntegrationEventContractTestsBase.cs:27`, `:40-52`), and the README gives the adopter that same
+variable with a paste-ready command (`README.md:137-144`).
 
 `mmca-module` additionally prints seven numbered wire-ups `dotnet new` cannot perform
 (`templates/mmca-module/.template.config/template.json:261-277`): the solution entries for the eight
@@ -247,7 +251,7 @@ silently: the output still compiles, it just carries someone else's domain vocab
   app that turns off shape axes runs fewer than the seed, and no gate
   pins the figure on either side: `smoke.ps1:361`, `:487` and `:910` all pass
   `--minimum-expected-tests 1`, as does the seed's own CI (`.github/workflows/ci.yml:104`). The cost
-  of shipping the freeze is that staging has to keep finding the class: `stage.ps1:1330-1331` throws when
+  of shipping the freeze is that staging has to keep finding the class: `stage.ps1:1331-1332` throws when
   the match count is not exactly one, so renaming or reshaping that subclass fails the pack rather
   than shipping an unfrozen contract behind a README that promises a frozen one.
 
@@ -305,3 +309,36 @@ cases behave as described. The seed measurements and several anchors moved with 
    smoke wire-up step at `smoke.ps1:701-810`, the migration step at `:812-830`, the rerun step at
    `:835` and the third `--minimum-expected-tests 1` at `:910`; the packable-projects statement at
    `MMCA.Common/FACTS.md:20`.
+
+## Revision (2026-10-26)
+
+Re-verified against current source. No decision or rationale changed: the staged analyzer delta, the
+shipped wire-contract freeze and its staging guard, the printed `mmca-module` wire-ups and the smoke
+cases behave as described. The overlay README's contract wording, the `mmca-command` contents, the
+seed measurements and the guard and README anchors moved with the tree.
+
+1. The overlay README no longer says the contract failure prints the live value: its freeze section
+   names `MMCA_CONTRACT_SNAPSHOT_OUT` and gives a paste-ready command for writing the live contract
+   as literals (`build/templates/overlay/mmca-app/README.md:137-144`). The Decision text now says so.
+2. The seed measurements were re-taken at MMCA.Helpdesk `5fd74de` with the same method: 136 files
+   and 11,497 lines under `Source/` and `Tests/`, plus 1,074 lines across the seven root build files
+   (`.editorconfig` 827, `Directory.Packages.props` 99 with 57 `PackageVersion` entries,
+   `Directory.Build.props` 77, `Directory.Build.targets` 7, `global.json` 5, `nuget.config` 26,
+   `MMCA.Helpdesk.slnx` 33), for 143 files and 12,571 lines. The method still reproduces the
+   2026-10-21 pair at `f10bc45`; only the tree moved (`Directory.Build.props` lost 15 lines). The 12
+   projects and the local-source import (`Directory.Build.targets:6`) are unchanged.
+3. `mmca-command` ships more than a command and handler. It stages the command, its validator and
+   the handler (`build/templates/stage.ps1:1371`, rationale at `:1363-1368`: the generated app's
+   validator-coverage rule fails a data-carrying command with no validator), and it also ships the
+   slice's cache-invalidation test builder, `DeleteTicketCommandCacheBuilder.cs`, staged under
+   `tests/` (`stage.ps1:1409-1426`) and written by the template's second source seven levels up, at
+   the solution root, into the module's Application.Tests project
+   (`templates/mmca-command/.template.config/template.json:102-103`). The module's cache-invalidation
+   test fails by name on a command with no builder, so the slice is green on arrival. The Decision
+   table now says so.
+4. Anchors re-verified against current source: the staged delta at `stage.ps1:1261-1263` with its
+   header at `:1258`; the contract guard at `stage.ps1:1322-1333` (the count at `:1329`, the test at
+   `:1331`, the throw at `:1332`); the overlay README fixup command at `README.md:115`, the `IDE0021`
+   note at `:121-124`, and the freeze section at `:126-146`; `IntegrationEventContractTests` at
+   `ArchitectureTests.cs:99`; the `--minimum-expected-tests 1` runs at `smoke.ps1:361`, `:487`, `:910`
+   and `.github/workflows/ci.yml:104`.

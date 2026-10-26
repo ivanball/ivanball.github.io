@@ -24,6 +24,9 @@ falling back to English, and the error-catalog rule's own summary now states tha
 Revised 2026-10-21: the error-catalog rule now recognizes `Error.TooManyRequests` (v1.247.0), so
 codes built through it are held to the uniqueness and prefix gates; the 499 handler also answers a
 `DbException` raised after the client disconnects (v1.241.0); anchors refreshed.
+Revised 2026-10-26: `TryGetValue` is an instance member of `Result<T>` (v1.252.0) and the page-side
+extension keeps only the overload that hands the errors back, which decides on a non-null success
+value; the 409 handler's concurrency metric is recorded; anchors refreshed.
 
 ## Context
 Operations at every layer fail in *expected* ways: input is invalid, a domain invariant is broken, a
@@ -57,15 +60,18 @@ not exceptions.
 - Domain factory methods and mutators return `Result<T>`; application command/query handlers thread
   results through combinators instead of `try`/`catch`. The surface is:
   - **Lifting without naming a factory.** An `Error` converts implicitly to a failed `Result`
-    (`.../Shared/Abstractions/Result.cs:43`) or `Result<T>` (`:233-237`), and a value converts
-    implicitly to a successful `Result<T>` (`:249`), so a guard clause writes `return someError;` and
+    (`.../Shared/Abstractions/Result.cs:43`) or `Result<T>` (`:254-258`), and a value converts
+    implicitly to a successful `Result<T>` (`:270`), so a guard clause writes `return someError;` and
     a happy path writes `return theValue;`. `Result.FromError` is the named alternate for the
     non-generic conversion (`:49-53`); the inherited `Result.Failure<T>` / `Result.Success<T>`
-    factories are the named alternates on the generic type (`:229-232`, `:245-248`).
-  - **On `Result<T>`:** `Match` (`:260-268`) / `MatchAsync` (`:355-365`), exactly one branch running
-    in both; `Map` (`:276-280`), `Bind` (`:302-306`) / `BindAsync` (`:289-293`), `Tap` (a side effect
-    on the success value, returning the same instance, `:314-324`) and `Ensure` (fail the chain with a
-    supplied `Error` when the value does not satisfy a predicate, `:334-345`).
+    factories are the named alternates on the generic type (`:250-253`, `:266-269`).
+  - **On `Result<T>`:** `Match` (`:281-289`) / `MatchAsync` (`:376-386`), exactly one branch running
+    in both; `Map` (`:297-301`), `Bind` (`:323-327`) / `BindAsync` (`:310-314`), `Tap` (a side effect
+    on the success value, returning the same instance, `:335-345`) and `Ensure` (fail the chain with a
+    supplied `Error` when the value does not satisfy a predicate, `:355-366`). `TryGetValue` unwraps
+    the value inside a conditional the way `Dictionary.TryGetValue` does, deciding on `IsFailure`
+    rather than on the value so a value-type default is not mistaken for success (`:218-228`, the
+    check at `:220`).
   - **On the non-generic `Result`:** `Match` (`:155-161`), `Bind` (`:187-191`) and `OnFailure`
     (`:169-179`), so a valueless step composes the same way instead of forcing an `IsFailure` check.
   - **On a pending `Task<Result<T>>`:** `ResultExtensions`
@@ -77,7 +83,7 @@ not exceptions.
     `MapAsync` delegate to them, `TapAsync` runs its asynchronous action inline only on success
     (`:89-92`), and `MatchAsync` hands the awaited result to the synchronous `Match` (`:115-116`).
   - Every combinator short-circuits: a failed result never invokes the delegate it was handed
-    (`Result.cs:279`, `:292`, `:305`, `:339-342`).
+    (`Result.cs:300`, `:313`, `:326`, `:360-363`).
 - The transport mapping lives only at the edge. `ApiControllerBase.HandleFailure()`
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/ApiControllerBase.cs:35-61`) maps an
   `ErrorType` to an HTTP status through a `FrozenDictionary` (`ErrorHttpMapping.cs:20-32`, resolved at
@@ -138,8 +144,10 @@ not exceptions.
     (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/DomainExceptionHandler.cs:27,32`).
   - `DbUpdateExceptionHandler` maps an EF Core `DbUpdateException` (concurrency, unique-constraint, or
     foreign-key failure) to HTTP 409 Conflict, returning a generic detail so no database schema detail
-    leaks to the client
-    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/DbUpdateExceptionHandler.cs:28,33,37`).
+    leaks to the client; the full exception is logged at error, and a concurrency conflict (only that
+    kind) is also counted in a metric
+    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/DbUpdateExceptionHandler.cs:29,32,41,45`,
+    the metric at `:36-39`).
   - `ValidationExceptionHandler` maps a FluentValidation `ValidationException` to HTTP 400, grouping the
     failures by property name into an `errors` extension that matches ASP.NET Core's model-validation
     shape
@@ -217,31 +225,33 @@ call, so an already-abandoned request never reaches the network (`:63`, `:98`).
 
 **Pages branch; they do not catch.** `ResultUiExtensions`
 (`.../MMCA.Common.UI/Common/ResultUiExtensions.cs:74`) is the page-side idiom, written once so no
-page hand-rolls it: `TryGetValue` unwraps inside a conditional the way `Dictionary.TryGetValue`
-does, deciding the failing branch on `IsFailure` rather than on the value so a value-type default is
-not mistaken for success (`:103-118`, the check at `:110-114`, the overload handing the errors back
-at `:137`); `OnFailureSetError` pushes the composed message into a page field (`:248`, `:260`) and
-`NotifyOnFailure` raises it as exactly one snackbar, never one per error (`:289`, `:310`); and
-`HasErrorType` with `IsNotFound` / `IsUnauthorized` lets a page turn a 404 into an empty state and
-a 401 into a redirect instead of an alert (`:328-332`, `:340`, `:348`). Messages are localized as
-resource keys **with pass-through**, so one call site handles both an API error the server already
-translated and a client-side error whose `Message` is a key (`:23-27`, `Localize` at `:407-416`,
-ADR-027). The failures the client synthesized itself have no server-phrased message to pass
-through, so they are looked up by their error code instead: a bodiless `Http.{status}` (recognized
-through `ProblemDetailsResultReader.TryGetSynthesizedStatus`, `:360`), then the generic
-`Http.Status` format, plus `Http.TransportFailure` and `Http.Timeout` (`:27-33`, `LocalizeError` at
-`:350-373`). Each code resolves through the localizer the page passed and then, when that
-localizer has no such key, through the framework's own `SharedResource` pair for the current UI
-culture, so a page passing its own `IStringLocalizer<PageType>` still shows the translated sentence;
-the English message is the last resort (`:30-33`, the two-step lookup at `:377-383` and `:386-397`).
-The lookup runs only when a localizer is passed: `OnFailureSetError` and `NotifyOnFailure` default
-it to null (`:248`, `:260`, `:292`, `:313`), and with none `LocalizeError` returns the raw English
-message without consulting `SharedResource` (`:352-355`).
+page hand-rolls it. A page unwraps with the instance `Result<T>.TryGetValue` (`Result.cs:218-228`);
+the one `TryGetValue` left here is the overload that also hands the errors back on the failing
+branch (`ResultUiExtensions.cs:103-120`). That overload decides on `IsSuccess` and a non-null
+value (`:110`), so a success carrying a null value takes its failing branch with an empty error
+list (stated at `:90-95`), where the instance method returns true because it decides on
+`IsFailure` alone (`Result.cs:220-227`). Back in `ResultUiExtensions.cs`, `OnFailureSetError`
+pushes the composed message into a page field (`:214`, `:226`) and `NotifyOnFailure` raises it as exactly one snackbar, never one per
+error (`:255`, `:276`); and `HasErrorType` with `IsNotFound` / `IsUnauthorized` lets a page turn a
+404 into an empty state and a 401 into a redirect instead of an alert (`:294-298`, `:306`, `:314`).
+Messages are localized as resource keys **with pass-through**, so one call site handles both an API
+error the server already translated and a client-side error whose `Message` is a key (`:23-27`,
+`Localize` at `:373-382`, ADR-027). The failures the client synthesized itself have no
+server-phrased message to pass through, so they are looked up by their error code instead: a
+bodiless `Http.{status}` (recognized through `ProblemDetailsResultReader.TryGetSynthesizedStatus`,
+`:326`), then the generic `Http.Status` format, plus `Http.TransportFailure` and `Http.Timeout`
+(`:27-33`, `LocalizeError` at `:316-339`). Each code resolves through the localizer the page passed
+and then, when that localizer has no such key, through the framework's own `SharedResource` pair
+for the current UI culture, so a page passing its own `IStringLocalizer<PageType>` still shows the
+translated sentence; the English message is the last resort (`:30-33`, the two-step lookup at
+`:343-349` and `:352-362`). The lookup runs only when a localizer is passed: `OnFailureSetError`
+and `NotifyOnFailure` default it to null (`:214`, `:226`, `:258`, `:279`), and with none
+`LocalizeError` returns the raw English message without consulting `SharedResource` (`:318-321`).
 A transport or timeout code is replaced only while it still carries the executor's own English
 sentence, so a caller that reused the code with a message of its own keeps that message
-(`:398-405`). The messages are deduplicated and ordered by the same `ErrorTypeSeverity` rank the
-edges use, so a real 403 leads and an incidental validation message never buries it (`:166-180`,
-the ordering at `:176`, the deduplication at `:179`). The shared `ErrorSummary` component
+(`:366-371`). The messages are deduplicated and ordered by the same `ErrorTypeSeverity` rank the
+edges use, so a real 403 leads and an incidental validation message never buries it (`:132-146`,
+the ordering at `:142`, the deduplication at `:145`). The shared `ErrorSummary` component
 renders the same list as one deduplicating `MudAlert`, taking a failed `Result` and the
 `MudForm.Errors` shape together and rendering nothing at all when there is nothing to say
 (`.../MMCA.Common.UI/Components/Forms/ErrorSummary.razor:8`, both shapes merged at `:87-105`, one message
@@ -443,6 +453,32 @@ exception type, and anchors into four files moved.
    `:191-199` (`:198`), `:261-264`, `:266-270` (`:269`); `ArchitectureRules.ErrorCatalog.cs:32-38`,
    `:63`, `:74`, `:103`, `:148-156`, `:170`, `:184-190`, `:206-207`, `:211-214`, `:218-223`;
    `Error.cs:103-104`.
+
+## Revision (2026-10-26)
+Re-verified against current source. The decision, the ten categories, the severity ranking, the
+exception-handler order and the localization behavior are unchanged; v1.252.0 moved the unwrap
+idiom onto `Result<T>` itself, which shifted every generic `Result.cs` anchor, and anchors into
+`ResultUiExtensions.cs` and `DbUpdateExceptionHandler.cs` moved.
+1. Changed: `TryGetValue` is now the instance method `Result<T>.TryGetValue`, deciding on
+   `IsFailure` (`MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/Result.cs:218-228`, the
+   check at `:220`); the one-argument `ResultUiExtensions.TryGetValue` is removed
+   (`MMCA.Common/CHANGELOG.md:201`). The remaining `ResultUiExtensions.TryGetValue` overload hands
+   the errors back and decides on `IsSuccess` with a non-null value, so a success carrying a null
+   value takes its failing branch there (`ResultUiExtensions.cs:103-120`, the check at `:110`,
+   documented at `:90-95`). The live text no longer attributes the `IsFailure` decision to the UI
+   extension.
+2. Added: `DbUpdateExceptionHandler` counts a `DbUpdateConcurrencyException` (and only that kind)
+   through `ConcurrencyConflictMetrics.RecordConflict` before answering 409
+   (`DbUpdateExceptionHandler.cs:36-39`); the client detail stays the fixed generic string (`:45`).
+3. Anchors re-verified against current source: `Result.cs:254-258`, `:270`, `:250-253`,
+   `:266-269`, `:281-289`, `:297-301`, `:310-314`, `:323-327`, `:335-345`, `:355-366`, `:376-386`,
+   short-circuits `:300`, `:313`, `:326`, `:360-363` (the non-generic `:43`, `:49-53`, `:155`,
+   `:169`, `:187` did not move); `DbUpdateExceptionHandler.cs:29`, `:32`, `:41`, `:45`;
+   `ResultUiExtensions.cs:132-146` (`:142`, `:145`), `:214`, `:226`, `:255`, `:258`, `:276`, `:279`,
+   `:294-298`, `:306`, `:314`, `:316-339` (`:318-321`, `:326`), `:343-349`, `:352-362`, `:366-371`,
+   `:373-382` (`:23-27`, `:27-33`, `:30-33` and `:74` did not move). The 2026-10-21 entry above keeps
+   its `CHANGELOG.md:93` and `:230` as written; the v1.247.0 and v1.241.0 entries now sit at
+   `CHANGELOG.md:308` and `:445`.
 
 ## Related
 [ADR-007](007-grpc-extraction.md) (Result over the wire via gRPC, the second edge the shared severity

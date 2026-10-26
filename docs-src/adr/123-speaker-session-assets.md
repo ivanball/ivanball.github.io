@@ -4,7 +4,7 @@
 Accepted (2026-09-12). Extends [ADR-045](045-managed-file-storage-and-avatars.md) from images to
 documents: the framework gains a document content sniffer, a blob-name sanitizer and stored response
 headers, and ADC gains a `SessionAsset` aggregate that uses them. ADR-045's avatar-only scope
-statement ("no other managed uploads exist") is superseded by this record. Revised 2026-10-01 (the upload-options overload is abstract and the template enables on-upload malware scanning by default; see Revision below). Revised 2026-10-06: all three delete paths schedule blob removal inside the delete's transaction, so there is no post-commit tail. Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised 2026-10-21: the file upload action now runs a claim-level pre-check that refuses a caller with neither a speaker_id claim nor the manage capability before the handler (the per-session decision stays in the handler), and anchors were refreshed.
+statement ("no other managed uploads exist") is superseded by this record. Revised 2026-10-01 (the upload-options overload is abstract and the template enables on-upload malware scanning by default; see Revision below). Revised 2026-10-06: all three delete paths schedule blob removal inside the delete's transaction, so there is no post-commit tail. Revised 2026-10-07: anchors refreshed after the v1.233.0 release. Revised 2026-10-21: the file upload action now runs a claim-level pre-check that refuses a caller with neither a speaker_id claim nor the manage capability before the handler (the per-session decision stays in the handler), and anchors were refreshed. Revised 2026-10-26: the Azure storage implementation now lives in the MMCA.Common.Azure adapter and the S3 and GCS adapters implement the same abstract options overload, and anchors were refreshed.
 
 ## Context
 A speaker finishes a talk and forty people want the deck. Until now ADC's only answer was
@@ -111,24 +111,31 @@ under `MMCA.Common.Application/Interfaces/Infrastructure/Storage/`:
 - **`FileUploadOptions`** (`FileUploadOptions.cs:13`) carries the `Content-Disposition` and
   `Cache-Control` headers stored **with the blob**, built by `Attachment` (`:48`) or `Inline` (`:59`)
   with RFC 6266 / RFC 5987 encoding of the user-facing file name. They are delivered through a new
-  `UploadAsync` overload that is **abstract** (`IFileStorageService.cs:37`), so every implementation
+  `UploadAsync` overload that is **abstract** (`IFileStorageService.cs:41`), so every implementation
   must declare it rather than inherit a default that dropped the options (the null default declares it and
-  fails with not-configured, `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Storage/NullFileStorageService.cs:22-23`); `AzureBlobFileStorageService` implements it and writes the headers onto
-  `BlobHttpHeaders` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Storage/AzureBlobFileStorageService.cs:28`,
-  `:39-43`), and its three-argument overload forwards to it with `FileUploadOptions.None` (`:23-24`).
+  fails with not-configured, `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Storage/NullFileStorageService.cs:25-26`). Each
+  cloud adapter implements it, stores the headers with the object, and forwards its three-argument
+  overload to it with `FileUploadOptions.None`: `AzureBlobFileStorageService` in MMCA.Common.Azure
+  writes them onto `BlobHttpHeaders`
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/Storage/AzureBlobFileStorageService.cs:34`, headers
+  `:45-50`, forward `:29-30`), `S3FileStorageService` in MMCA.Common.Aws
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Aws/Storage/S3FileStorageService.cs:40`, headers `:64-71`,
+  forward `:35-36`) and `GcsFileStorageService` in MMCA.Common.Gcp
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Gcp/Storage/GcsFileStorageService.cs:42`, headers `:57-58`,
+  forward `:37-38`).
 
 ADC's upload handler sniffs first and stores the canonical type
 (`.../SessionAssets/UseCases/UploadFile/UploadSessionAssetHandler.cs:66-73`), and picks the
 disposition by format: a PDF is `inline`, so it opens in the browser's own viewer, and everything
-else is `attachment` (`:153-155`), both with an immutable one-year `Cache-Control` (`:47`) that is
+else is `attachment` (`:151-153`), both with an immutable one-year `Cache-Control` (`:47`) that is
 safe precisely because a blob name carries a fresh asset id and therefore never changes content.
 
 **5. Storage reuses ADR-045 with its own container, and downloads go straight to the blob.** The
 Conference service registers the same `AddAzureBlobFileStorage`
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:361`) against a new **public-read
-`session-assets` container** on the existing storage account (`MMCA.ADC/infra/main.bicep:1478-1484`,
-container name injected at `:2185`); the account-scoped data-plane grant already covers it, so no
-second role assignment (`:1512-1520`, comment at `:1505-1507`). The blob name is
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:367`) against a new **public-read
+`session-assets` container** on the existing storage account (`MMCA.ADC/infra/main.bicep:1512-1518`,
+container name injected at `:2221`); the account-scoped data-plane grant already covers it, so no
+second role assignment (`:1548-1556`, comment at `:1539-1541`). The blob name is
 `{eventId}/{sessionId}/{assetId}/{sanitized-file-name}`
 (`UploadSessionAssetHandler.cs:90-94`), which is what makes a public container acceptable: the GUID
 segment is unguessable, so holding one asset URL reveals nothing about any other. Attendees download
@@ -137,9 +144,9 @@ Where storage is not configured, the null default stands and an upload fails wit
 `SessionAsset.StorageNotConfigured` while links keep working (`:56-62`), which is the local-dev
 posture. Optional on-upload malware scanning (Microsoft Defender for Storage) is available behind the
 bicep parameter `enableSessionAssetMalwareScanning`, **defaulting to true**
-(`MMCA.ADC/infra/main.bicep:136`, resource at `:1532-1548`): the deploy identity's Contributor role covers
-the settings write (comment at `:1522-1531`), and the per-GB scanning cost is bounded by a
-50 GB monthly cap (`:1540`). Production diverges from the template: an `az rest` read of the
+(`MMCA.ADC/infra/main.bicep:136`, resource at `:1568-1584`): the deploy identity's Contributor role covers
+the settings write (comment at `:1558-1567`), and the per-GB scanning cost is bounded by a
+50 GB monthly cap (`:1576`). Production diverges from the template: an `az rest` read of the
 account's `defenderForStorageSettings/current` on 2026-10-01 returned Defender for Storage enabled
 but `malwareScanning.onUpload.isEnabled=false` (`capGBPerMonth=-1`). It is defence in depth behind the content gate, not the primary
 control.
@@ -160,14 +167,14 @@ blobs, `:81-89`), an event delete
 `EventCascadeDeletionDomainService.CascadeDelete` which now takes the event's assets as a fifth
 collection, `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/EventCascadeDeletionDomainService.cs:31-37`),
 and an upload whose row could not be created or failed to commit after the bytes had already landed
-(`UploadSessionAssetHandler.cs:114`, `:131`). The three delete paths schedule **inside** the delete's
+(`UploadSessionAssetHandler.cs:114`, `:129`). The three delete paths schedule **inside** the delete's
 transaction, before its save, so the internal-command row commits with the soft-delete or not at
 all: the processor only sees it once the delete has committed, so a rolled-back delete never removes
 a file its row still points at, and a scheduling failure fails the delete, which rolls back, rather
 than committing it without the file's removal. There is no post-commit tail. Only the upload-orphan
 path schedules outside a transaction, from `ScheduleOrphanCleanupAsync`
-(`UploadSessionAssetHandler.cs:178-195`), and only it logs a blob that could not be scheduled as one
-that must be removed by hand (`:200-204`).
+(`UploadSessionAssetHandler.cs:176-193`), and only it logs a blob that could not be scheduled as one
+that must be removed by hand (`:198-202`).
 
 **Limits.** 50 MB per file and at most 10 live assets per session, both stated once on
 `SessionAssetLimits`
@@ -180,7 +187,7 @@ refused by Kestrel with a bare 413 before the friendly validation error can run;
 applies it with `[RequestSizeLimit]` (`SessionAssetsController.cs:151-153`). The YARP gateway
 terminates the request before the service sees it and has no endpoint to hang an attribute on, so the
 body-size raise there is **path-scoped to `/SessionAssets/file` alone**
-(`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:207-226`), not global: every other route keeps
+(`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:213-232`, path match `:222`), not global: every other route keeps
 its default budget. The gateway's forwarding route itself is anonymous, as every gateway route is
 (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:221-225`).
 
@@ -227,7 +234,7 @@ product manuals) and MMCA.Helpdesk's ticket attachments are the same problem ver
 one test suite, one place to fix a format quirk, and the extension cost is bounded: the sniffer and
 `BlobNames` are dependency-free static classes, `FileUploadOptions` is a dependency-free sealed record
 (`FileUploadOptions.cs:13`), and the `UploadAsync` overload is abstract, so every implementation must
-declare it rather than inherit a default that silently dropped the headers (`IFileStorageService.cs:37`).
+declare it rather than inherit a default that silently dropped the headers (`IFileStorageService.cs:41`).
 
 **Embargo until the session ends (deferred, not rejected).** Holding materials back until a talk
 finishes is a real request from organizers who do not want the deck read instead of the talk
@@ -355,6 +362,37 @@ on-upload scanning default with the 50 GB cap are unchanged, and the recorded pr
    `SessionAssetAccessService.cs:135-137` and the public visibility rule `:118-133`; the v1.210.0
    breaking change at `MMCA.Common/CHANGELOG.md:1016-1017` (release heading `:954`); and the panel on
    `SpeakerDashboard.razor:231`.
+
+## Revision (2026-10-26)
+Re-verified against current source. The decision, the six parts, the limits, the trade-offs and the
+template's on-upload scanning default with the 50 GB cap are unchanged, and the recorded production
+read (2026-10-01) is not re-checked here. Part 4 now names every storage adapter, and the anchors
+below moved, so the 2026-10-21 list no longer holds for them.
+
+1. Part 4 no longer places `AzureBlobFileStorageService` in MMCA.Common.Infrastructure: it lives in
+   the MMCA.Common.Azure adapter
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/Storage/AzureBlobFileStorageService.cs:20`), and
+   two more adapters implement the abstract options overload the same way, forwarding their
+   three-argument overload with `FileUploadOptions.None` and storing both headers with the object:
+   `S3FileStorageService` in MMCA.Common.Aws
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Aws/Storage/S3FileStorageService.cs:23`, overload `:40`,
+   headers `:64-71`) and `GcsFileStorageService` in MMCA.Common.Gcp
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Gcp/Storage/GcsFileStorageService.cs:25`, overload `:42`,
+   headers `:57-58`).
+2. Anchors re-verified against current source: the abstract overload
+   `IFileStorageService.cs:41`; the null default `NullFileStorageService.cs:25-26`; the Azure
+   overload `AzureBlobFileStorageService.cs:34`, its `BlobHttpHeaders` block `:45-50` and forward
+   `:29-30`; the Conference service registration
+   `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:367`; the public-read container
+   `MMCA.ADC/infra/main.bicep:1512-1518` (name `:1514`, `publicAccess: 'Blob'` `:1516`), its
+   container name injected at `:2221`; the account-scoped grant `:1548-1556` with its coverage
+   comment at `:1539-1541`; the scanning resource `:1568-1584` (cap `:1576`, Contributor comment
+   `:1558-1567`), its parameter default still at `:136`; the PDF-inline choice
+   `UploadSessionAssetHandler.cs:151-153`, the second orphan schedule `:129`,
+   `ScheduleOrphanCleanupAsync` `:176-193` and its removal-by-hand log messages `:198-202`; the
+   gateway body-size raise `MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:213-232` (path match
+   `:222`); and the v1.210.0 breaking change at `MMCA.Common/CHANGELOG.md:1231-1232` (release
+   heading `:1169`).
 
 ## Related
 [ADR-045](045-managed-file-storage-and-avatars.md) (the storage abstraction, the image path this

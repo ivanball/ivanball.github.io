@@ -12,7 +12,10 @@ them. Revised 2026-10-07: the lockstep rationale now says the metapackage sets i
 as minimum-version floors rather than exact pins, and the host claim says application hosts depend
 on all six mostly transitively; anchors refreshed after the v1.233.0 release. Revised 2026-10-21:
 anchors refreshed after the package-consumption CI stages moved into
-`build/consumer-check/Invoke-ConsumerCheck.ps1`.
+`build/consumer-check/Invoke-ConsumerCheck.ps1`. Revised 2026-10-26: the Rationale now says the
+gateway hosts take `MMCA.Common.Aspire`, `MMCA.Common.Azure` and `MMCA.Common.Gateway` directly
+(and, through Azure, every core layer except API) and that the Blazor web hosts also reference
+`MMCA.Common.Azure`; package-consumption CI anchors refreshed.
 
 ## Context
 ADR-053 made the install path credential-free: `dotnet add package MMCA.Common.API` works for anyone,
@@ -75,10 +78,11 @@ Publish a metapackage named `MMCA.Common` that carries dependencies and no code.
   later than it should.
 - **The set is not arbitrary.** Every application in this workspace pins all six under Central
   Package Management (among its other `MMCA.Common.*` entries), and its application hosts (API,
-  service and Blazor web hosts, not the YARP gateway, which takes only `MMCA.Common.Aspire` and
-  `MMCA.Common.Gateway`) end up depending on all six, although none references all of them
-  directly: a host references `MMCA.Common.Aspire` (plus `MMCA.Common.API` in the ADC and Store
-  Blazor web hosts) and receives the other layers transitively through its module projects or the
+  service and Blazor web hosts, not the YARP gateway, which references `MMCA.Common.Aspire`,
+  `MMCA.Common.Azure` and `MMCA.Common.Gateway` and through Azure depends on every core layer except
+  API) end up depending on all six, although none references all of them
+  directly: a host references `MMCA.Common.Aspire` (plus `MMCA.Common.Azure` and `MMCA.Common.API` in
+  the ADC and Store Blazor web hosts) and receives the other layers transitively through its module projects or the
   API package's own dependencies. Bundling a set that real hosts already depend on together is a
   shortcut, not a new opinion about what belongs where.
 - **A code-free package cannot drift from the layers.** With no assembly, there is nothing for the
@@ -111,7 +115,7 @@ Publish a metapackage named `MMCA.Common` that carries dependencies and no code.
   justified in place, but it is a warning switched off, and a future genuine packaging problem in
   this project would have to be caught by the pack output rather than by the build.
 - **No consumer exercises it.** The package-consumption CI job
-  (`MMCA.Common/.github/workflows/ci.yml:674-699`) runs its stages through
+  (`MMCA.Common/.github/workflows/ci.yml:693`, stage steps `:727-752`) runs its stages through
   `MMCA.Common/build/consumer-check/Invoke-ConsumerCheck.ps1`, whose pack stage packs every package
   in `MMCA.Common.slnx` (`:143-147`), the metapackage included, so a pack break is caught, but it
   never restores the metapackage: its throwaway consumer references only `MMCA.Common.API`,
@@ -179,6 +183,40 @@ Trade-offs bullet cites the script instead of inline workflow steps.
    `MMCA.Common/.github/workflows/ci.yml:674-699`, and the script stages
    `MMCA.Common/build/consumer-check/Invoke-ConsumerCheck.ps1:143-147`, `:168`, `:171`, `:184-186`
    and `:261-277`.
+
+## Revision (2026-10-26)
+Re-verified against current source. The decision, the Trade-offs and the "No consumer exercises it"
+statement are unchanged: the metapackage still bundles the six in layer order
+(`MMCA.Common/Source/MMCA.Common/MMCA.Common.csproj:26-31`), still ships no assembly (`:9`) with
+NU5128 suppressed (`:14`), and the package-consumption check still packs it without restoring it.
+Two Rationale statements about which hosts take `MMCA.Common.Azure` are corrected, and the CI job anchors moved.
+
+1. **The gateway hosts also take `MMCA.Common.Azure`.** The ADC gateway references
+   `MMCA.Common.Aspire`, `MMCA.Common.Azure` and `MMCA.Common.Gateway`
+   (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/MMCA.ADC.Gateway.csproj:3-5`), and the Store gateway the
+   same three (`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/MMCA.Store.Gateway.csproj:25-27`).
+   Neither references a core layer directly, but `MMCA.Common.Azure` references Infrastructure and
+   Aspire (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/MMCA.Common.Azure.csproj:43-44`), so each
+   gateway now resolves Shared, Domain, Application and Infrastructure transitively
+   (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/packages.lock.json:40`, `:74`, `:1047`, `:1061`). API is
+   the one core layer absent, so the gateway is still not an all-six host; the Rationale bullet no
+   longer says the gateway takes only Aspire and Gateway, and states the transitive set.
+2. **The Blazor web hosts also take `MMCA.Common.Azure`.** The ADC and Store Blazor web hosts
+   reference Aspire, Azure and API
+   (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/MMCA.ADC.UI.Web.csproj:14-16`,
+   `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/MMCA.Store.UI.Web.csproj:16-18`); the Rationale
+   bullet now names Azure alongside API for those hosts.
+3. Anchors re-verified against current source: the package-consumption job header is
+   `MMCA.Common/.github/workflows/ci.yml:693` and its four stage steps, each calling
+   `Invoke-ConsumerCheck.ps1` with one `-Stage`, run `:727-752` (Pack `:730`, Scaffold `:737`, Build
+   `:742`, Probes `:752`); the script stages are unchanged at
+   `MMCA.Common/build/consumer-check/Invoke-ConsumerCheck.ps1:143-147`, `:168`, `:171`, `:184-186`
+   and `:261-277`. The ADC and Store Blazor web hosts reference Aspire and API at
+   `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/MMCA.ADC.UI.Web.csproj:14` and `:16`, and
+   `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/MMCA.Store.UI.Web.csproj:16` and `:18`. The six core
+   `PackageVersion` pins remain `MMCA.Helpdesk/Directory.Packages.props:83-88`, and the API package's
+   Application and Infrastructure floors are
+   `MMCA.Common/Source/Presentation/MMCA.Common.API/MMCA.Common.API.csproj:32-33`.
 
 ## Related
 [ADR-053](053-dual-registry-package-publishing.md) (dual-registry publishing, which the metapackage

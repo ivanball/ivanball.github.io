@@ -28,6 +28,8 @@ Revised 2026-10-21: the Aspire pin reads 13.6.2 on every Aspire entry, decision 
 only xUnit reference is `xunit.v3.extensibility.core` rather than its only reference, and anchors
 are refreshed.
 
+Revised 2026-10-26: the Aspire pin reads 13.6.4 on every Aspire entry, and anchors are refreshed.
+
 ## Context
 The AppHost is the only file that states how a whole stack fits together: which project resources
 exist, which database each one owns, which broker they share, where JWKS discovery points, and the
@@ -61,7 +63,7 @@ something that presents as a timeout on an unrelated resource:
    CI runner has no user secrets, so the JwtBearer options factory threw on the first request. Every
    request answered 500, including `/alive`, so the liveness probe never turned Identity healthy and
    every `WaitFor(identity)` edge waited out the twelve-minute budget. The framework already has the
-   channel for the fix (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:365`,
+   channel for the fix (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:366`,
    `WithE2eRsaKeys()`, which forwards `E2E_JWT_PRIVATE_KEY_PEM` / `E2E_JWT_PUBLIC_KEY_PEM` onto
    `Jwt__*` and `Jwks__*`); what it did not have was anything that put a keypair into those
    variables.
@@ -120,7 +122,7 @@ skip rather than a timeout, and wait for readiness per resource rather than for 
    machine-level act a test fixture has no business performing silently; a CI job that needs one runs
    `dotnet dev-certs https --trust` as an explicit step. The framework's own `apphost-testing` job
    needs none, because its sample AppHost serves cleartext only, and its header says a consumer stack
-   with an https launch profile adds that step (`MMCA.Common/.github/workflows/ci.yml:846`, `:859-862`).
+   with an https launch profile adds that step (`MMCA.Common/.github/workflows/ci.yml:989`, `:1002-1005`).
 
 5. **The RS256 keypair is minted when the environment has none.** `EphemeralRsaKeyPair.Create()`
    (`.../Preconditions/EphemeralRsaKeyPair.cs:42`) generates an RSA-2048 pair and the fixture pushes
@@ -151,7 +153,7 @@ skip rather than a timeout, and wait for readiness per resource rather than for 
 8. **The package's layer ceiling is `MMCA.Common.Testing`, enforced twice.** It reuses
    `JwtTokenGenerator` and reaches Application and API only through that one edge. The compile-time
    gate is `EnforceTestingAspireLayerBoundary`
-   (`MMCA.Common/Source/Build/MMCA.Common.LayerEnforcement.targets:164`), which judges the references
+   (`MMCA.Common/Source/Build/MMCA.Common.LayerEnforcement.targets:219`), which judges the references
    this csproj DECLARES (by `DefiningProjectName`) rather than the transitive closure the SDK folds
    into `@(ProjectReference)` before `ResolveProjectReferences`. The runtime gate is
    `TestingAspireBoundaryTests`
@@ -179,7 +181,7 @@ skip rather than a timeout, and wait for readiness per resource rather than for 
 
 10. **The tier runs in CI, blocking, against an in-repo sample.** The `apphost-testing` job carries
     no `continue-on-error`, so a red fails the run, but it is not a required merge check
-    (`MMCA.Common/.github/workflows/ci.yml:846`, `:851-852`).
+    (`MMCA.Common/.github/workflows/ci.yml:989`, `:994-995`).
     `Tests/Hosting/MMCA.Common.Testing.Aspire.AppHostTests` boots a sample AppHost with a SQLite file
     and ONE sample service project declared as TWO resources, so it needs no container runtime, and
     asserts every helper against it. The two resources are the two cleartext protocol profiles,
@@ -240,13 +242,13 @@ Six shapes were weighed, and each rejection is a property the package keeps:
   over `AppHostTestBase<AdcAppHostFixture>`, and Store's had the same shape. Both projects, and the
   `apphost-smoke` job that ran them, are removed. Each consumer's real AppHost composition is exercised
   instead by its `e2e.yml`, which boots the AppHost for every E2E run, including the deploy's chromium
-  `e2e-gate` (`MMCA.ADC/.github/workflows/e2e.yml:29-30`, `:227`;
+  `e2e-gate` (`MMCA.ADC/.github/workflows/e2e.yml:34-36`, `:242`;
   `MMCA.Store/.github/workflows/e2e.yml:252`), and the base itself by MMCA.Common's own tier
   (`MMCA.ADC/AGENTS.md:77`, `MMCA.Store/AGENTS.md:76`). The package is unchanged, so a consumer that
   wants the wiring assertions back writes the subclass again rather than a harness.
 - **Cost: this is the slowest tier per assertion, and it blocks the CI run without being a required
   merge check.** The `apphost-testing` job has no `continue-on-error`, so a red fails the MMCA.Common
-  CI run, but it is not a required merge check (`MMCA.Common/.github/workflows/ci.yml:851-852`).
+  CI run, but it is not a required merge check (`MMCA.Common/.github/workflows/ci.yml:994-995`).
 - **A consumer's real stack still needs Docker on the runner.** The in-repo sample avoids containers
   on purpose, so the framework's own CI does not pay for image pulls, but ADC's AppHost starts SQL
   Server, Redis, RabbitMQ and MailDev. That is why `AppHostEnvironmentRequirement.Docker` is part of
@@ -254,12 +256,12 @@ Six shapes were weighed, and each rejection is a property the package keeps:
   (`MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Aspire.AppHostTests/SampleAppHostFixture.cs:42`)
   rather than the other way round.
 - **The framework carries one more package** (`MMCA.Common.Testing.Aspire`, listed with the current
-  count in `MMCA.Common/FACTS.md:40`), and every `MMCA.Common.*` pin
+  count in `MMCA.Common/FACTS.md:43`), and every `MMCA.Common.*` pin
   in each consumer's `Directory.Packages.props` moves together at the next release
   ([ADR-016](016-lockstep-versioning-masstransit-pin.md)).
 - **Aspire versions are now coupled in one more place.** `Aspire.Hosting.Testing` is pinned at the
-  same 13.6.2 as every other Aspire entry (`MMCA.Common/Directory.Packages.props:375`, against
-  `Aspire.Hosting` at `:366`), because the
+  same 13.6.4 as every other Aspire entry (`MMCA.Common/Directory.Packages.props:444`, against
+  `Aspire.Hosting` at `:435`), because the
   testing host builds the application model the AppHost package produces; a version split between
   them is a model mismatch rather than an upgrade.
 
@@ -335,6 +337,29 @@ the pin version, one wording in decision 9, and the anchors.
    `WithE2eRsaKeys()` at `MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:365`
    (variables read at `:369-370`, forwarded at `:377-379`). The anchors inside earlier revisions stay
    as written.
+
+## Revision (2026-10-26)
+Re-verified against current source. No decision or rationale changed: the `apphost-testing` job is
+still blocking with no `continue-on-error` anywhere in `ci.yml` and no dev-certs step,
+`WithE2eRsaKeys()` still forwards the two E2E variables onto `Jwt__*` and `Jwks__*`, the layer
+boundary target still judges declared references and forbids `MMCA.Common.Aspire`, and the Aspire
+same-version coupling still holds. What moved is the pin version and the anchors.
+
+1. The Aspire pin reads 13.6.4 on every Aspire entry: `Aspire.Hosting` at
+   `MMCA.Common/Directory.Packages.props:435`, `Aspire.Hosting.Testing` at `:444`, with the
+   same-version rationale comment at `:440-443`. Trade-offs now says so.
+2. Anchors re-verified against current source: `apphost-testing` job at
+   `MMCA.Common/.github/workflows/ci.yml:989`, the BLOCKING, not-a-required-merge-check comment at
+   `:994-995`, the no-container, no-dev-certificate header and the consumer
+   `dotnet dev-certs https --trust` note at `:1002-1005` (decisions 4 and 10, Trade-offs);
+   `WithE2eRsaKeys()` at `MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:366`
+   (variables read at `:370-371`, forwarded at `:378-380`); `EnforceTestingAspireLayerBoundary` at
+   `MMCA.Common/Source/Build/MMCA.Common.LayerEnforcement.targets:219` (`BeforeTargets` at `:220`,
+   the `DefiningProjectName` filter at `:229`, `MMCA.Common.Aspire` forbidden at `:236`);
+   `MMCA.Common.Testing.Aspire` in `MMCA.Common/FACTS.md:43`; and in ADC's `e2e.yml` the
+   `workflow_call` entry point the deploy's `e2e-gate` uses at
+   `MMCA.ADC/.github/workflows/e2e.yml:34-36` and the AppHost launch at `:242`. The anchors inside
+   earlier revisions stay as written.
 
 ## Related
 [ADR-098](098-aspire-orchestration-not-testing-or-dashboards.md) (the orchestration posture this tier

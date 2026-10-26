@@ -16,29 +16,30 @@ v1.233.0 release. Revised 2026-10-21: the circuit-breaker description now matche
 the `IMessageBus` publish, which is the broker hop only in broker mode), and anchors are refreshed.
 Revised 2026-10-24: `MassTransit.AmazonSQS` 8.5.11 joins the pinned set for the SQS adapter transport, the pin and its gate unchanged ([ADR-134](134-cloud-neutral-core-vendor-adapters.md)); the trial point and the surface inventory are corrected in place. See Revision (2026-10-24) at the end.
 Revised 2026-10-25: `MassTransit.SqlTransport.PostgreSQL` 8.5.11 (Apache-2.0) joins the pinned set for the built-in PostgreSQL transport and reaches every consumer of MMCA.Common.Infrastructure with Dapper; Decision 1 now records that the build gate covers three of MMCA.Common's five MassTransit entries. See Revision (2026-10-25) at the end.
+Revised 2026-10-26: every MassTransit entry is at the 8.5.12 v8 patch, the build gate now covers all five MMCA.Common entries, MMCA.Common's `using MassTransit` surface is recounted as fifteen files and the swap surface is restated to include the consumer service hosts' MassTransit-typed consumer registration, and the `Azure.Messaging.ServiceBus` pin is restated as also serving the Azure transport; anchors refreshed.
 
 ## Context
-MassTransit is the only message-broker library in this workspace, and it is pinned to 8.5.11 across
-all three of its packages (`MMCA.Common/Directory.Packages.props:124-126`, the pin comment at
-`:119-123`). Two consumers declare a
-`MassTransit.Azure.ServiceBus.Core` entry of their own at the same 8.5.11 patch for their Service Bus
-emulator test tier (`MMCA.ADC/Directory.Packages.props:65`,
-`MMCA.Store/Directory.Packages.props:92`), so the workspace carries five pinned MassTransit entries,
-not three. The pin is a policy
+MassTransit is the only message-broker library in this workspace, and it is pinned to 8.5.12 across
+all five of MMCA.Common's MassTransit packages (`MMCA.Common/Directory.Packages.props:125-127`,
+`:130`, `:136`, the pin comment at `:120-124`). Two consumers declare a
+`MassTransit.Azure.ServiceBus.Core` entry of their own at the same 8.5.12 patch for their Service Bus
+emulator test tier (`MMCA.ADC/Directory.Packages.props:73`,
+`MMCA.Store/Directory.Packages.props:97`), so the workspace carries seven pinned MassTransit entries.
+The pin is a policy
 rather than a lag: v9 was announced in April 2025 and shipped in January 2026 as a commercial,
 source-available product with a runtime licence key (those two dates are the vendor's own public
 record, not something this repository can assert). A v9 bus fails its startup licence check and
 every broker-enabled service host crashes, which is a failure mode a build cannot see because CI
 never starts a broker. That is why the ceiling is a fitness function rather than a comment:
 `MassTransit_MustNotExceed_MajorVersion8`
-(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/DependencyVersionTestsBase.cs:26`)
-parses `Directory.Packages.props` and fails the build at an exclusive major ceiling of 9 (`:32`),
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/DependencyVersionTestsBase.cs:28`)
+parses `Directory.Packages.props` and fails the build at an exclusive major ceiling of 9 (`:34`),
 and MMCA.Common subclasses it
 (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/DependencyVersionTests.cs:9`).
 A blanket package update bumped the version to 9.1.2 once before and reintroduced the crash. The
 gate reads the props file found by walking up from the running test assembly, and MMCA.Common is the
 only repo that subclasses the base (the base's own doc comment tells consumers not to), so the build
-gate covers Common's three entries and nothing else. What holds the two consumer entries at v8 is
+gate covers Common's five entries and nothing else. What holds the two consumer entries at v8 is
 the lockstep sweep plus a `dependabot.yml` in each repo that manages only the github-actions and docker
 ecosystems (`MMCA.ADC/.github/dependabot.yml:28`, `MMCA.Store/.github/dependabot.yml:32`), whose
 comment says NuGet is excluded and MassTransit must stay v8 (`MMCA.ADC/.github/dependabot.yml:1-4`,
@@ -63,11 +64,11 @@ are not MassTransit's:
   is the broker's.
 - **The publish and consume leg is the only part MassTransit owns.** `OutboxProcessor` resolves
   `IMessageBus` from the per-row scope
-  (`.../Persistence/Outbox/Processing/OutboxProcessor.cs:774`) and publishes every integration event
-  through it (`PublishAsync` at `:783`), and only that `IMessageBus` publish is wrapped in the
-  circuit breaker (`:781-785`, the comment saying so at `:776-780`). In broker mode that publish is
+  (`.../Persistence/Outbox/Processing/OutboxProcessor.cs:776`) and publishes every integration event
+  through it (`PublishAsync` at `:785`), and only that `IMessageBus` publish is wrapped in the
+  circuit breaker (`:783-787`, the comment saying so at `:778-782`). In broker mode that publish is
   the broker hop; on a monolith the default `InProcessMessageBus` runs the integration-event
-  handlers inside the same breaker (the field doc at `:102-105`)
+  handlers inside the same breaker (the field doc at `:103-110`)
   ([ADR-087](087-broker-poison-message-handling.md)).
 
 The abstractions that stand between application code and the library are already in place and are
@@ -77,14 +78,32 @@ this workspace's own types: `IMessageBus`
 implements the first over a MassTransit `IPublishEndpoint`
 (`.../Infrastructure/Messaging/BrokerMessageBus.cs:43-44`); `BrokerEventBus` implements the second and
 does not reference MassTransit at all (`.../Infrastructure/Messaging/BrokerEventBus.cs:31`), because
-in broker mode its whole job is to write the outbox row and signal the processor. The whole
-`using MassTransit` surface is **nine files**: eight inside `MMCA.Common.Infrastructure`
-(`DependencyInjection.Messaging.cs`, `Messaging/BrokerMessageBus.cs`, the `Messaging/Transports/` extension point
-and the five consumer files under `Messaging/Consumers/`: `IntegrationEventConsumer.cs`,
-`IntegrationEventConsumerExtensions.cs`, `UpcastingIntegrationEventConsumer.cs`,
-`FaultIntegrationEventConsumer.cs` and `ConsumerOriginRestore.cs`) plus the emulator test fixture
-`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Azure/Fixtures/ServiceBusEmulatorFixtureBase.cs:54`; the Service Bus and SQS transports themselves sit in the adapter packages (see the Revision (2026-10-24)). Domain,
-Application and Shared hold the interfaces alone, and that is build-gated:
+in broker mode its whole job is to write the outbox row and signal the processor. MMCA.Common's
+`using MassTransit` surface is **fifteen files**: eleven inside `MMCA.Common.Infrastructure`
+(`DependencyInjection.Messaging.cs`, `Messaging/BrokerMessageBus.cs`, four files of the
+`Messaging/Transports/` extension point (`IBrokerTransport.cs`, `BrokerTransportPolicies.cs`,
+`RabbitMqBrokerTransport.cs`, `PostgreSqlBrokerTransport.cs`) and the five consumer files under
+`Messaging/Consumers/`: `IntegrationEventConsumer.cs`, `IntegrationEventConsumerExtensions.cs`,
+`UpcastingIntegrationEventConsumer.cs`, `FaultIntegrationEventConsumer.cs` and
+`ConsumerOriginRestore.cs`), three in the adapter packages (`MMCA.Common.Azure`'s
+`Messaging/AzureServiceBusTransport.cs` and `Messaging/ServiceBusEmulatorSupport.cs`,
+`MMCA.Common.Aws`'s `Messaging/AmazonSqsTransport.cs`; see the Revision (2026-10-24)), plus the
+emulator test fixture
+`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Azure/Fixtures/ServiceBusEmulatorFixtureBase.cs:54`.
+The surface does not stop at MMCA.Common. Its public consumer-registration API is typed on
+MassTransit: `AddBrokerMessaging` takes an `Action<IBusRegistrationConfigurator>`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:48-50`) and
+`RegisterIntegrationEventConsumer` an `Action<IEndpointRegistrationConfigurator>`
+(`.../Messaging/Consumers/IntegrationEventConsumerExtensions.cs:60-62`). Every consumer service host
+that runs broker consumers passes such a lambda (for example
+`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:269-283`,
+`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:303-307`), ADC's Conference host
+names MassTransit directly
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/ConferenceBrokerConsumers.cs:1`, `:32-37`),
+and each consumer's Service Bus emulator fixture does too
+(`MMCA.ADC/Tests/Integration/MMCA.ADC.ServiceBusEmulator.IntegrationTests/Infrastructure/ServiceBusEmulatorFixture.cs:1`,
+`MMCA.Store/Tests/Integration/MMCA.Store.ServiceBusEmulator.IntegrationTests/Infrastructure/ServiceBusEmulatorFixture.cs:1`).
+Domain, Application and Shared hold the interfaces alone, and that is build-gated:
 `MicroserviceExtractionTestsBase`
 (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Layering/MicroserviceExtractionTestsBase.cs:8`)
 bans MassTransit, gRPC and Protobuf from the Domain, Application and Shared layers
@@ -104,18 +123,17 @@ published: none of them is verifiable from this repository, which is the same he
 that is what keeps a transport swap cheap. Record the exit triggers now, and the replacement order,
 so the pin is a dated decision rather than an open-ended hold.**
 
-1. **The pin stands; the build gate in MMCA.Common covers three of its five entries.** MassTransit
-   remains on v8 (8.5.11 today) on all five MMCA.Common entries: `MassTransit`, `MassTransit.RabbitMQ`
+1. **The pin stands; the build gate in MMCA.Common covers all five of its entries.** MassTransit
+   remains on v8 (8.5.12 today) on all five MMCA.Common entries: `MassTransit`, `MassTransit.RabbitMQ`
    and `MassTransit.Azure.ServiceBus.Core` (`MMCA.Common/Directory.Packages.props:125-127`),
    `MassTransit.AmazonSQS` (`:130`) and `MassTransit.SqlTransport.PostgreSQL` (`:136`), the last two
    commented as tracking the same v8 line and version as the rest (`:129`, `:134`).
-   `DependencyVersionTestsBase` remains the enforcement point, but its `MassTransitPackageIds` list
-   names only the first three
-   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/DependencyVersionTestsBase.cs:18-23`)
-   and MMCA.Common's subclass does not override it
-   (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/DependencyVersionTests.cs:9`),
-   so the two transport entries are held at v8 by the lockstep sweep and the props comments, not by
-   the gate. The two consumer-declared `MassTransit.Azure.ServiceBus.Core` entries are held at the same patch
+   `DependencyVersionTestsBase` remains the enforcement point, and its `MassTransitPackageIds` list
+   names all five
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/DependencyVersionTestsBase.cs:18-25`,
+   the two transport ids at `:23-24`), which MMCA.Common's subclass inherits without an override
+   (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/DependencyVersionTests.cs:9`).
+   The two consumer-declared `MassTransit.Azure.ServiceBus.Core` entries are held at the same patch
    by the lockstep sweep and the NuGet-excluded dependabot config, not by a build gate, and a
    consumer that wants its own guard overrides `MassTransitPackageIds` rather than subclassing the
    base as shipped. The ceiling is the major version only: v8 patch and minor updates are ordinary
@@ -134,15 +152,16 @@ so the pin is a dated decision rather than an open-ended hold.**
      the end of 2026).
 
 4. **The replacement order is decided in advance.** Both candidates implement the existing
-   `IMessageBus` and neither touches a consumer:
+   `IMessageBus`, so no consumer handler, module or contract changes; the consumer service hosts'
+   MassTransit-typed consumer registration (see Context) is the part a swap does touch:
    - **First: Wolverine** (Apache 2.0). Message handling is plain methods rather than a consumer
      class per message, and its transports cover the two this workspace runs (RabbitMQ, Azure Service
      Bus) plus SQS and Kafka. Its own durable-inbox and outbox features would be left off, because
      decision 2 already owns that layer.
    - **Second: a raw-SDK adapter.** `RabbitMQ.Client` plus `Azure.Messaging.ServiceBus`, the latter
-     already pinned at 7.21.0 for the Service Bus emulator test tier
-     (`MMCA.Common/Directory.Packages.props:131`; the comment at `:127-130` names 7.20.2 as the first
-     line with working emulator admin-plane support). This is the floor option: no third-party
+     already pinned at 7.21.0 for the `MMCA.Common.Azure` Service Bus transport and its emulator
+     test tier (`MMCA.Common/Directory.Packages.props:141`; the comment at `:137-140` names 7.20.2
+     as the first line with working emulator admin-plane support). This is the floor option: no third-party
      abstraction at all, at the cost of hand-writing consumer dispatch, retry and delayed redelivery.
 
 5. **Two options are rejected outright, and recorded so they are not re-proposed.**
@@ -163,7 +182,7 @@ so the pin is a dated decision rather than an open-ended hold.**
    since 2026-08-31 (TD-17), and `deploy.yml`'s cross-service-freshness gate requires it to have
    concluded success alongside the `cross-service` job in the same qualifying nightly
    (`MMCA.ADC/.github/workflows/cross-service-tests.yml:142`, the gating rationale at `:116-126`;
-   the gate's `required-jobs` at `MMCA.ADC/.github/workflows/deploy.yml:900-902`), so
+   the gate's `required-jobs` at `MMCA.ADC/.github/workflows/deploy.yml:901-903`), so
    a candidate arm that regresses Service Bus topology or the AMQP round-trip blocks the next deploy.
 
 ## Rationale
@@ -174,7 +193,9 @@ so the pin is a dated decision rather than an open-ended hold.**
 - **Custom durable machinery is what makes the transport replaceable.** A library that owned the
   outbox would own the lease semantics, the ordering guarantee, the dead-letter retention window and
   the replay API, and every one of those would have to be re-earned against a new library's model.
-  Owning them means a swap is a publish-and-consume adapter, which is the nine-file surface above.
+  Owning them means a swap is a publish-and-consume adapter: MMCA.Common's fifteen-file surface
+  above, plus the MassTransit-typed consumer registration in each consumer service host and emulator
+  fixture.
 - **Wolverine ahead of raw SDKs** because it keeps retry, delayed redelivery and consumer dispatch as
   library concerns on both transports this workspace runs, which is precisely the part the raw-SDK
   option hand-writes. It is ordered first on licence and transport coverage, not on a benchmark run
@@ -190,20 +211,25 @@ so the pin is a dated decision rather than an open-ended hold.**
   is the whole point of decision 2.
 - **A v8 security advisory has no patch path but the exit.** There is no commercial support contract
   on the v8 line, so an advisory with no community patch moves straight to the replacement list.
-- **An adapter spike is a Common-only change.** No consumer handler, module or contract changes, and
-  no consumer repo gains a dependency, because the candidate ships behind `IMessageBus` and the ban
-  in `MicroserviceExtractionTestsBase` already guarantees no consumer references the library. The
-  cost lands in one package and one release, swept under
+- **An adapter spike is mostly a Common change, but not only one.** No consumer handler, module or
+  contract changes, because the candidate ships behind `IMessageBus` and the ban in
+  `MicroserviceExtractionTestsBase` keeps the library out of consumer Domain, Application and Shared
+  layers. The ban does not reach service hosts or test fixtures, though: the consumer hosts register
+  consumers through MassTransit's `IBusRegistrationConfigurator` and
+  `IEndpointRegistrationConfigurator` (see Context), so a swap that changes the
+  `AddBrokerMessaging` signature also edits those hosts and the consumer emulator fixtures. The cost
+  lands in one Common release plus that host-level change per consumer, swept under
   [ADR-016](016-lockstep-versioning-masstransit-pin.md)'s lockstep policy.
 - **The PostgreSQL transport is core, so its package reaches every consumer.**
   `PostgreSqlBrokerTransport` ships in MMCA.Common.Infrastructure because any PostgreSQL is the broker
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Transports/PostgreSqlBrokerTransport.cs:10-14`,
   `:40`), so every consumer of that package restores `MassTransit.SqlTransport.PostgreSQL` and the
-  Dapper it brings (`MMCA.Common/CHANGELOG.md:24`, `MMCA.Common/Directory.Packages.props:134-135`)
+  Dapper it brings (`MMCA.Common/CHANGELOG.md:86`, `MMCA.Common/Directory.Packages.props:134-135`)
   whether or not it selects the transport.
 - **The emulator test tier is coupled to the choice.** `ServiceBusEmulatorFixtureBase` uses the
   MassTransit v8 custom-clients `Host()` overload, so a transport swap re-writes that fixture and
-  re-checks the `Azure.Messaging.ServiceBus` 7.21.0 pin it exists for.
+  re-checks the `Azure.Messaging.ServiceBus` 7.21.0 pin it shares with the `MMCA.Common.Azure`
+  Service Bus transport.
 - **Ordering the candidates without running them is deliberate but partial.** The list narrows what a
   spike has to evaluate; it does not stand in for the spike.
 
@@ -318,6 +344,59 @@ The library choice, the v8 pin, the exit triggers and the replacement order are 
    `:188`, `:188-197`). The three-entry and five-entry counts in Context and their props anchors are
    left as recorded, Decision 1 carrying the current figures, and the `using MassTransit` file count
    in Context was not recounted in this pass.
+
+## Revision (2026-10-26)
+Re-verified against current source. The library choice, the v8 pin, the major-9 ceiling, the exit
+triggers and the replacement order are unchanged. What moved: every MassTransit entry took the
+8.5.12 v8 patch, the build gate's list now covers all five MMCA.Common entries, and the
+`using MassTransit` surface is recounted, with the swap surface restated to reach the consumer
+service hosts. The earlier revisions are left as written.
+
+1. **All seven MassTransit entries are at 8.5.12**, an ordinary v8 patch update under decision 1:
+   MMCA.Common's five (`MMCA.Common/Directory.Packages.props:125-127`, `:130`, `:136`) and the two
+   consumer `MassTransit.Azure.ServiceBus.Core` entries (`MMCA.ADC/Directory.Packages.props:73`,
+   `MMCA.Store/Directory.Packages.props:97`). Context now states the five MMCA.Common entries and
+   the seven-entry workspace count in place of the three-package and five-entry wording.
+2. **The build gate covers every MMCA.Common MassTransit entry.** `MassTransitPackageIds` now names
+   `MassTransit.AmazonSQS` and `MassTransit.SqlTransport.PostgreSQL` beside the original three
+   (`DependencyVersionTestsBase.cs:18-25`, the two at `:23-24`; recorded in
+   `MMCA.Common/CHANGELOG.md:65`, release 1.258.0), and Common's subclass still inherits the list
+   (`DependencyVersionTests.cs:9`). Decision 1 and Context now say the gate covers all five; the
+   2026-10-25 revision's "three gated" describes the list as it was.
+3. **The `using MassTransit` surface is fifteen files, not nine**: eleven in
+   `MMCA.Common.Infrastructure` (the four `Messaging/Transports/` files `IBrokerTransport.cs`,
+   `BrokerTransportPolicies.cs`, `RabbitMqBrokerTransport.cs` and `PostgreSqlBrokerTransport.cs`
+   among them), `AzureServiceBusTransport.cs` and `ServiceBusEmulatorSupport.cs` in
+   `MMCA.Common.Azure`, `AmazonSqsTransport.cs` in `MMCA.Common.Aws`, and the
+   `ServiceBusEmulatorFixtureBase` fixture. That count is MMCA.Common's own. Context and Rationale
+   are corrected in place.
+4. **The swap surface reaches the consumer service hosts.** `AddBrokerMessaging` takes an
+   `Action<IBusRegistrationConfigurator>` (`DependencyInjection.Messaging.cs:48-50`) and
+   `RegisterIntegrationEventConsumer` an `Action<IEndpointRegistrationConfigurator>`
+   (`IntegrationEventConsumerExtensions.cs:60-62`); the consumer hosts pass such lambdas
+   (`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:269-283`,
+   `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:279-301`,
+   `MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:303-307`), ADC's Conference host
+   references MassTransit directly (`ConferenceBrokerConsumers.cs:1`, `:32-37`, wired at
+   `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:432`), and both consumer emulator
+   fixtures carry `using MassTransit` (`ServiceBusEmulatorFixture.cs:1` in each). Context, Decision 4,
+   Rationale and the adapter-spike Trade-offs bullet no longer say a swap is Common-only or leaves
+   consumers untouched; the `MicroserviceExtractionTestsBase` ban covers Domain, Application and
+   Shared only.
+5. **`Azure.Messaging.ServiceBus` 7.21.0 also serves the `MMCA.Common.Azure` Service Bus transport**,
+   not only the emulator test tier (`MMCA.Common/Directory.Packages.props:137-141`). Decision 4 and
+   the emulator Trade-offs bullet now say so.
+6. Anchors re-verified against current source: `MassTransit_MustNotExceed_MajorVersion8` at
+   `DependencyVersionTestsBase.cs:28` with `exclusiveMajorCeiling: 9` at `:34`; the props pin comment
+   at `MMCA.Common/Directory.Packages.props:120-124`; `IMessageBus` resolved at
+   `OutboxProcessor.cs:776`, the breaker at `:783-787`, `PublishAsync` at `:785`, the comment at
+   `:778-782` and the field doc at `:103-110`; the `cross-service-freshness` gate's `required-jobs`
+   at `MMCA.ADC/.github/workflows/deploy.yml:901-903` (`required-jobs-mode: same-run` at `:904`);
+   and the PostgreSQL transport entry in the Trade-offs bullet at `MMCA.Common/CHANGELOG.md:86`
+   (release 1.257.0). The `MMCA.Common.LayerEnforcement.targets` and `CHANGELOG.md:24` anchors
+   inside the 2026-10-24 and 2026-10-25 revisions are left as written; the vendor-transport refusal
+   now sits in target `EnforceCloudVendorBoundary` (`:130`, conditions at `:144-145`, error at
+   `:151`).
 
 ## Related
 [ADR-016](016-lockstep-versioning-masstransit-pin.md) (the lockstep release policy this pin is

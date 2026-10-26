@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -270,7 +271,14 @@
           Revised 2026-10-21: inventory re-counted to thirty-five framework registrations (<code>ServiceTokenSettings</code>
           and the <code>DefaultSchemeGuard</code> marker added), four <code>IValidatableObject</code> types and six custom validators
           (<code>GatewaySettingsValidator</code> added), seven ADC Application injections, and get-only collections noted
-          on <code>SameOriginApiProxySettings</code>; source citations re-anchored.</p>
+          on <code>SameOriginApiProxySettings</code>; source citations re-anchored.
+          Revised 2026-10-26: inventory re-counted to thirty-seven framework registrations (the
+          <code>CloudAdapterTripwireOptions</code> and <code>HostIntegrationTripwireOptions</code> startup-tripwire markers added),
+          eight custom validators, and fifteen framework exceptions now that the cloud adapter packages bind six
+          vendor sections off the chain in place of <code>NativePushSettings</code> and <code>FileStorageSettings</code>; source
+          citations re-anchored; the <code>NativePush:Enabled</code> tripwire also fails an incomplete push section, the SNS
+          and FCM push settings bind only once push is enabled and complete, and registration-time <code>Get&lt;T&gt;()</code>
+          reads never placed in the container are stated as outside the exception inventory.</p>
           <h2 id="context">Context</h2>
           <p>Every host in the workspace reads a dozen or more configuration sections: connection strings, SMTP,
           JWT key material, outbox tuning, message-bus provider, module enablement, page-size limits. A settings
@@ -302,44 +310,50 @@
           <li><strong>The framework owns the base set.</strong> Nineteen sections are bound this way in the Infrastructure package&#39;s
           <code>DependencyInjection</code> partial class, which spans <code>DependencyInjection.cs</code> and its <code>.Caching</code>, <code>.Auth</code>,
           <code>.Jobs</code>, <code>.Notifications</code> and <code>.Messaging</code> parts (the last holds <code>AddBrokerMessaging</code>,
-          <code>DependencyInjection.Messaging.cs:43</code>, which registers no options chain of its own and reads the
-          <code>MessageBus</code> section back with a plain <code>Get&lt;MessageBusSettings&gt;()</code> at <code>:49</code> to pick the transport; the
+          <code>DependencyInjection.Messaging.cs:48</code>, which registers no options chain of its own and reads the
+          <code>MessageBus</code> section back with a plain <code>Get&lt;MessageBusSettings&gt;()</code> at <code>:54</code> to pick the transport; the
           validated chain for that section is the one in <code>AddInfrastructure</code>). Nine sit directly inside <code>AddInfrastructure</code>
           (the method starting at
           <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:57</code>; <code>ConnectionStringSettings</code>
           <code>:72-75</code>, <code>SmtpSettings</code> <code>:98-101</code>, <code>PersistenceSettings</code> <code>:144-147</code>, <code>OutboxSettings</code> <code>:149-152</code>,
           <code>LoginProtectionSettings</code> <code>:154-157</code>, <code>PasswordResetSettings</code> <code>:160-163</code>, <code>RefreshSessionSettings</code>
           <code>:168-171</code>, <code>MessageBusSettings</code> <code>:192-195</code>, <code>JwksSettings</code> <code>:197-200</code>), a tenth arrives through the
-          private <code>AddInternalCommands</code> helper that <code>AddInfrastructure</code> calls (<code>:237</code>): <code>InternalCommandsSettings</code>
+          private <code>AddInternalCommands</code> helper that <code>AddInfrastructure</code> calls (<code>:252</code>): <code>InternalCommandsSettings</code>
           (<code>DependencyInjection.Jobs.cs:148-152</code>, the helper starting at <code>:146</code>), and two more arrive through the
           <code>services.AddCaching(configuration)</code> call that <code>AddInfrastructure</code> itself makes (<code>:140</code>):
           <code>CacheSettings</code> (<code>DependencyInjection.Caching.cs:43-46</code>) and <code>QueryCachePipelineSettings</code> (<code>:48-51</code>).
-          Those twelve reach every host that registers the package. The remaining seven sit in opt-in registration
+          Those twelve reach every host that registers the package, and so does a twentieth Infrastructure
+          registration that binds no section: <code>AddInfrastructure</code> puts a <code>CloudAdapterTripwireOptions</code> marker on
+          the chain (<code>DependencyInjection.cs:221</code>, its validator registered at <code>:222-223</code>, the reason at
+          <code>:217-220</code>) so that a host whose configuration enables <code>NativePush</code> while the push sender is still the
+          inert core default (no adapter call was made, or the call was made but its push section is incomplete,
+          so it returned early) fails at startup. The remaining seven sit in opt-in registration
           methods a host calls only when it wants the feature: <code>SchedulerSettings</code> in <code>AddScheduledJobs</code>
           (<code>DependencyInjection.Jobs.cs:39-42</code>), <code>TwoFactorSettings</code> in <code>AddTwoFactorAuthentication</code>
           (<code>DependencyInjection.Auth.cs:42-45</code>), <code>EmailConfirmationSettings</code> in <code>AddEmailConfirmation</code>
           (<code>DependencyInjection.Auth.cs:70-73</code>), <code>PermissionGrantSettings</code> in <code>AddStoredPermissionGrants</code>
           (<code>DependencyInjection.Auth.cs:141-144</code>), <code>AuditTrailSettings</code> in <code>AddAuditTrail</code>
           (<code>DependencyInjection.Jobs.cs:110-113</code>), <code>TenancySettings</code> in <code>AddMultiTenancy</code>
-          (<code>DependencyInjection.cs:284-287</code>, the method starting at <code>:282</code>), and <code>PushNotificationSettings</code> in <code>AddPushNotifications</code>
-          (<code>DependencyInjection.Notifications.cs:43-46</code>). The two cache sections take the chain only when the
+          (<code>DependencyInjection.cs:299-302</code>, the method starting at <code>:297</code>), and <code>PushNotificationSettings</code> in <code>AddPushNotifications</code>
+          (<code>DependencyInjection.Notifications.cs:40-43</code>, the method starting at <code>:38</code>). The two cache sections take the chain only when the
           caller passes configuration: <code>AddCaching</code> takes an optional <code>IConfiguration</code>
           (<code>DependencyInjection.Caching.cs:26</code>) and, called without one, registers both unbound (<code>:55-56</code>), so
           <code>IOptions&lt;T&gt;</code> resolves to the compiled-in defaults instead of failing a caller that configures no cache
-          section at all. Sixteen more registrations sit outside the Infrastructure package, fifteen of them
+          section at all. Seventeen more registrations sit outside the Infrastructure package, fifteen of them
           binding a section: <code>IdempotencySettings</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:77-80</code>), <code>JwtSettings</code>, bound
           inside <code>AddCommonAuthentication</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.Authentication.cs:135-138</code>,
           the method starting at <code>:133</code>), <code>RateLimitingSettings</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:378</code>),
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:399</code>),
           <code>ApiSettings</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:43-46</code>, the method
           starting at <code>:40</code>),
           <code>SecurityHeadersSettings</code>, bound by the Aspire hosting package&#39;s <code>AddCommonSecurityHeaders</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Security/SecurityHeaders.cs:276-277</code>, the method starting
           at <code>:268</code>),
           <code>GatewayRateLimitingSettings</code>, bound by the Aspire hosting package&#39;s <code>AddGatewayRateLimiting</code>
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Gateway/GatewayRateLimitingExtensions.cs:273-276</code>),
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Gateway/GatewayRateLimitingExtensions.cs:296-299</code>,
+          the method starting at <code>:290</code>),
           <code>GatewaySettings</code>, bound by the Gateway package&#39;s <code>AddMmcaGateway</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gateway/GatewayReverseProxyExtensions.cs:55-58</code>), <code>AiSettings</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.AI/DependencyInjection.cs:123-126</code>), <code>ContentPolicySettings</code>
@@ -350,26 +364,33 @@
           <code>BlazorCircuitLimitSettings</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hardening/BlazorCircuitLimitExtensions.cs:55-58</code>),
           <code>UiRateLimitingSettings</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:180-183</code>, the
-          method starting at <code>:175</code>),
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:202-205</code>, the
+          method starting at <code>:197</code>),
           <code>HealthReportCacheOptions</code>, bound by the Aspire hosting package
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.Health.cs:33-36</code>), and
           <code>ServiceTokenSettings</code>, bound once by a private helper that both of the gRPC package&#39;s
           <code>AddServiceTokenClient</code> and <code>AddServiceTokenAuthentication</code> call
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Authentication/ServiceTokenServiceCollectionExtensions.cs:103-106</code>,
-          the helper starting at <code>:96</code>, called at <code>:39</code> and <code>:67</code>). The sixteenth binds no section: the same
+          the helper starting at <code>:96</code>, called at <code>:39</code> and <code>:67</code>). The last two bind no section. The same
           file&#39;s <code>AddServiceTokenAuthentication</code> puts a <code>DefaultSchemeGuard</code> marker type on the chain so that a
           service-token scheme which became the default authentication scheme fails the host at startup
-          (<code>:78-82</code>, the reason at <code>:74-77</code>). Thirty-five framework registrations in all.</li>
+          (<code>:78-82</code>, the reason at <code>:74-77</code>), and the Aspire hosting package&#39;s <code>AddServiceDefaults</code> puts a
+          <code>HostIntegrationTripwireOptions</code> marker on it
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:44</code>, its validator registered at
+          <code>:45-46</code>, the reason at <code>:40-43</code>) so that configuration asking for a vendor integration whose adapter
+          call was never made (an Application Insights connection string with no exporter, a vault URI with no
+          configuration source) fails the host at startup
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Integrations/HostIntegrationTripwire.cs:15</code>).
+          Thirty-seven framework registrations in all.</li>
           <li><strong>Each service host adds exactly two of its own</strong>, <code>ApplicationSettings</code> and <code>ModulesSettings</code>, and the
           same pair of chains covers all eight hosts across the three application repos. Seven of the eight reach
           them through one shared framework call rather than an inline copy: <code>AddModuleHost</code> binds and validates
           both sections before it builds the host&#39;s <code>ModuleLoader</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/ModuleHostExtensions.cs:61-64</code> and <code>:69-72</code>,
           the method starting at <code>:51</code>), so ADC&#39;s four services
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:373-375</code>, and the comment at <code>:364</code>
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:379-381</code>, and the comment at <code>:370</code>
           says what the call binds) and Store&#39;s three
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:125-127</code>) each declare the two
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:131-133</code>, the comment at <code>:119</code>) each declare the two
           sections in a single line of host code. The Helpdesk monolith seed still writes both chains out in its
           own <code>Program.cs</code> (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:19-22</code> and <code>:92-95</code>), which is
           exactly what the shared call expands to, so the contract reads the same whether a host takes the helper
@@ -411,7 +432,7 @@
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilterOptions.cs:16</code>,
           <code>:24</code>, <code>:31</code>), which a host sets with <code>services.Configure</code> in code, and <code>FallbackAuthorizationOptions.Enabled</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/Fallback/FallbackAuthorizationOptions.cs:52</code>).</li>
-          <li><strong>Eleven exceptions in the framework, nine of them on one shared reason: an absent section is a
+          <li><strong>Fifteen exceptions in the framework, thirteen of them on one shared reason: an absent section is a
           working default, not a misconfiguration.</strong> <code>CacheKeyPrefixOptions</code> is bound with a bare <code>services.Configure</code>
           and no validation, because an absent section must leave cache keys exactly as callers write them (a
           single call inside <code>AddCaching</code>,
@@ -429,16 +450,44 @@
           its one setting has no invalid value (any version string turns the feature on, null or whitespace
           turns it off); the reason sits in a comment at the call (<code>:106-108</code>), and the method&#39;s XML remarks
           (<code>:100-101</code>) add that registration asks for acceptance only while <code>Legal:CurrentTermsVersion</code> is set.
-          <code>NativePushSettings</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:87-88</code>)
-          and <code>FileStorageSettings</code> (<code>:119-120</code>) bind the same way inside their opt-in registration methods,
-          both of which read the section back and turn themselves into a no-op when it is absent or incomplete,
-          so a host registers them unconditionally and switches the feature on by configuration alone.
+          The cloud adapter packages bind their six vendor sections with a bare <code>AddOptions&lt;T&gt;().Bind(...)</code> and
+          no validation, in one of two orders. The four file-storage and hub methods bind first and then read
+          the section back: <code>AzureBlobFileStorageSettings</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureServiceCollectionExtensions.cs:45-46</code>, read back at
+          <code>:48</code>), <code>AzureNotificationHubSettings</code> (<code>:87-88</code>, read back at <code>:90</code>), <code>S3FileStorageSettings</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/AwsServiceCollectionExtensions.cs:54-55</code>, read back at
+          <code>:57</code>) and <code>GcsFileStorageSettings</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gcp/GcpServiceCollectionExtensions.cs:52-53</code>, read back at
+          <code>:55</code>). The SNS and FCM push methods reverse the order: they read the section first, return early
+          unless <code>NativePush:Enabled</code> is true and the section is complete, and only then bind
+          <code>SnsNativePushSettings</code> (<code>AwsServiceCollectionExtensions.cs:168-175</code>, bound at <code>:180</code>) and
+          <code>FcmNativePushSettings</code> (<code>GcpServiceCollectionExtensions.cs:146-153</code>, bound at <code>:158</code>), so with push
+          off those two register no options at all. Either way each method turns itself into a no-op when its
+          section is absent or incomplete, so a host registers it unconditionally and switches the feature on
+          by configuration alone. The one guard is the <code>CloudAdapterTripwireOptions</code> marker above: a host that
+          sets <code>NativePush:Enabled</code> while <code>INativePushSender</code> is still <code>NullNativePushSender</code> fails at startup,
+          whether it made no adapter call or made one whose push section is incomplete (the check at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/CloudAdapterTripwire.cs:48-50</code>, the
+          message naming both causes at <code>:53</code>, the validator at <code>:30</code>), so an incomplete push section with push
+          switched on fails the host rather than becoming a silent no-op, while
+          file storage is deliberately unchecked because a <code>FileStorage</code> section is routinely shared
+          configuration and the core default fails every upload loudly instead (<code>:22-26</code>).
           <code>DataSourcesSettings</code> is the one exception with a mechanical rather than a policy reason: it is
           constructed directly from the section rather than through <code>AddOptions</code>, because a root-level dictionary
           section does not bind through the options pipeline
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:87-89</code>, the reason at
-          <code>:85-86</code>).
-          <code>OwnerOrAdminFilterOptions</code> is the eleventh and keeps more of the chain than the rest: it binds no
+          <code>:85-86</code>), and it still counts because the result is registered for runtime resolution (<code>:90</code>). A
+          plain <code>Get&lt;T&gt;()</code> that a registration method uses only to decide what to register, and never puts in
+          the container, is not an exception: like the <code>Get&lt;MessageBusSettings&gt;()</code> above, the reads of
+          <code>RdsIamAuthenticationSettings</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/AwsServiceCollectionExtensions.cs:111</code>),
+          <code>CloudSqlIamAuthenticationSettings</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gcp/GcpServiceCollectionExtensions.cs:94</code>) and
+          <code>AmazonSqsTransportSettings</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/Messaging/AmazonSqsTransport.cs:78</code>) run while the
+          host registers its services, so whatever they check (a half-set key pair, a connection string that
+          would send a token in clear) fails registration rather than first use.
+          <code>OwnerOrAdminFilterOptions</code> is the fifteenth and keeps more of the chain than the rest: it binds no
           section (hosts set it in code), is registered with <code>ValidateDataAnnotations()</code> and drops only
           <code>ValidateOnStart</code>, because its required <code>BypassRole</code> has no
           framework default (the framework knows no role names), so validating at startup would fail every host
@@ -447,10 +496,10 @@
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:91-92</code>, the reason at <code>:87-90</code>).</li>
           <li><strong>Consumer hosts take the same escape twice, and write the reason at the call site.</strong> ADC&#39;s Engagement
           service binds <code>PointsSettings</code>
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:128-129</code>, the reason at <code>:125-127</code>) and
-          <code>CheckInSettings</code> (<code>:135-136</code>, the reason at <code>:132-134</code>) without <code>ValidateOnStart</code>: the defaults are working values and an explicit zero is the
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:134-135</code>, the reason at <code>:131-133</code>) and
+          <code>CheckInSettings</code> (<code>:141-142</code>, the reason at <code>:138-140</code>) without <code>ValidateOnStart</code>: the defaults are working values and an explicit zero is the
           documented per-rule kill switch, so no value an organizer could set should stop that host from booting
-          mid-conference. Both follow the rule the framework&#39;s eleven follow: an exception is legitimate when the
+          mid-conference. Both follow the rule the framework&#39;s fifteen follow: an exception is legitimate when the
           section has no invalid value, and the reason belongs in a comment beside the binding rather than left
           to be inferred from its absence.</li>
           </ul>
@@ -458,20 +507,20 @@
           or per-request <code>IOptions&lt;T&gt;</code>: <code>OutboxProcessor</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:61</code>),
           <code>BrokerEventBus</code> (<code>.../Messaging/BrokerEventBus.cs:35</code>), <code>LoginProtectionService</code>
-          (<code>.../Auth/LoginProtectionService.cs:30</code>), <code>RsaJwksProvider</code> (<code>.../Auth/RsaJwksProvider.cs:14</code>),
+          (<code>.../Auth/LoginProtectionService.cs:32</code>), <code>RsaJwksProvider</code> (<code>.../Auth/RsaJwksProvider.cs:14</code>),
           <code>SQLServerDbContext</code> (<code>.../Persistence/DbContexts/SQLServerDbContext.cs:36</code>), and <code>IdempotencyFilter</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyFilter.cs:443</code>), and so does the
           framework&#39;s <code>/client-config</code> minimal-API handler, which reads <code>IOptions&lt;ApiSettings&gt;</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/ClientConfig/ClientConfigEndpointExtensions.cs:53</code>)
           and which ADC&#39;s web host maps with <code>app.MapClientConfigEndpoint</code>
-          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:265</code>). Consumer code reads its own sections the
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:271</code>). Consumer code reads its own sections the
           same way: Store&#39;s Sales Infrastructure in <code>StripeClientFactory.cs:37</code>, <code>StripePaymentService.cs:63</code> (and
           <code>:67</code>), <code>StripeWebhookRegistrationService.cs:49</code>, <code>PaymentReconciliationService.cs:71-72</code>,
           <code>DenormalizationBackfillService.cs:40</code> and <code>OrderFulfilledBackfillService.cs:39</code>.</p>
           <p>The Application layer names the options pipeline too, and the framework supplies six of those
           injections itself, one in each of six classes: <code>AuthenticationServiceBase&lt;TUser&gt;</code> takes an optional
           <code>IOptions&lt;EmailConfirmationSettings&gt;</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:71</code>),
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:74</code>),
           <code>AuthSessionIssuer</code> takes <code>IOptions&lt;RefreshSessionSettings&gt;</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Sessions/AuthSessionIssuer.cs:44</code>),
           <code>AuthenticationValidators</code> takes an optional <code>IOptions&lt;LegalAcceptanceOptions&gt;</code>
@@ -493,7 +542,7 @@
           (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/Points/Services/PointsAwarder.cs:31</code>),
           <code>GetLeaderboardHandler</code> (<code>.../Points/UseCases/GetLeaderboard/GetLeaderboardHandler.cs:30</code>) and
           <code>RecordRoomCheckInHandler</code>, which takes two, <code>IOptions&lt;CheckInSettings&gt;</code> and <code>IOptions&lt;PointsSettings&gt;</code>
-          (<code>.../CheckIns/UseCases/RecordRoomCheckIn/RecordRoomCheckInHandler.cs:46</code> and <code>:47</code>).
+          (<code>.../CheckIns/UseCases/RecordRoomCheckIn/RecordRoomCheckInHandler.cs:47</code> and <code>:48</code>).
           Store adds ten, with the same shape: its Identity <code>AuthenticationService</code> takes the same single
           injection
           (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/AuthenticationService.cs:32</code>),
@@ -549,14 +598,18 @@
           <code>SameOriginApiProxyServiceExtensions.cs:55-65</code>; <code>SecurityHeadersSettings</code> calls <code>.Bind</code> only when
           configuration was supplied, <code>SecurityHeaders.cs:276-281</code>; <code>RateLimitingSettings</code>
           writes the chain on one line,
-          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:378</code>;
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:399</code>;
           Store&#39;s <code>StoreTimeZoneSettings</code> inserts a delegate <code>.Validate(...)</code>,
           <code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/CatalogModule.cs:40-44</code>; the gRPC
           package&#39;s <code>DefaultSchemeGuard</code> binds no section at all and validates through a
           <code>.Validate&lt;IOptions&lt;AuthenticationOptions&gt;&gt;(...)</code> delegate,
-          <code>ServiceTokenServiceCollectionExtensions.cs:78-82</code>), a grep for
+          <code>ServiceTokenServiceCollectionExtensions.cs:78-82</code>; the two startup tripwires,
+          <code>CloudAdapterTripwireOptions</code> and <code>HostIntegrationTripwireOptions</code>, are a bare
+          <code>AddOptions&lt;T&gt;().ValidateOnStart()</code> with no <code>Bind</code> and no annotations, checked only by an
+          <code>IValidateOptions&lt;T&gt;</code>, <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:221</code>
+          and <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:44</code>), a grep for
           <code>ValidateOnStart</code> is a complete inventory of what a host validates at boot: the
-          thirty-five framework registrations, plus whatever the host and its modules add. Collapsing the two
+          thirty-seven framework registrations, plus whatever the host and its modules add. Collapsing the two
           host-owned sections into <code>AddModuleHost</code> shortens that inventory rather than hiding it, since the pair
           is now read once in the framework instead of eight times across the repos.</li>
           </ul>
@@ -565,13 +618,14 @@
           <li><strong>Nothing enforces it.</strong> There is no architecture fitness test asserting that a new <code>AddOptions&lt;T&gt;</code> call
           carries <code>ValidateDataAnnotations().ValidateOnStart()</code>. The uniformity above is convention held by review,
           not a gate, which is weaker than the invariant-over-discipline posture ADR-015 applies elsewhere. A
-          section added without the chain fails silently, which is to say it fails later. Eleven framework bindings
+          section added without the chain fails silently, which is to say it fails later. Fifteen framework bindings
           and two consumer-host bindings sit off the chain by choice, and nothing in the build distinguishes
           those from a section whose author simply forgot: only a source comment near each one does (one comment
-          covers both client-side UI sections, and for <code>NativePushSettings</code> and <code>FileStorageSettings</code> the reason
-          sits only in the XML summary of the registration method,
-          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:79-81</code> and
-          <code>:112-113</code>).</li>
+          covers both client-side UI sections, and for the six cloud adapter sections the reason sits only in
+          the XML summary of each registration method, for example
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Azure/AzureServiceCollectionExtensions.cs:37</code> and <code>:77-79</code>,
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Aws/AwsServiceCollectionExtensions.cs:43</code> and <code>:146</code>, and
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Gcp/GcpServiceCollectionExtensions.cs:38</code> and <code>:122</code>).</li>
           <li><strong>Bad configuration becomes a crash loop, not a degraded start.</strong> A deployed replica with a missing
           required value never reaches the warm-up and readiness machinery of ADR-025: it terminates at host build.
           That is the intended trade (no half-configured replica serves traffic), but it means a configuration
@@ -582,13 +636,13 @@
           record takes the pipeline over the second type.</li>
           <li><strong>Data annotations are the vocabulary.</strong> Anything richer needs <code>IValidatableObject</code> or a custom
           <code>IValidateOptions&lt;T&gt;</code>, and both escape hatches are in use in the framework: the former four times, the
-          latter six times. <code>JwtSettings</code> implements <code>IValidatableObject</code>
+          latter eight times. <code>JwtSettings</code> implements <code>IValidatableObject</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/JwtSettings.cs:16</code>), and so do <code>AiSettings</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.AI/AiSettings.cs:22</code>), whose section is bound with the full chain
           (<code>MMCA.Common/Source/Core/MMCA.Common.AI/DependencyInjection.cs:123-126</code>), <code>ContentPolicySettings</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/ContentPolicySettings.cs:23</code>) and
           <code>ServiceTokenSettings</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Authentication/ServiceTokenSettings.cs:18</code>). Six validator
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Authentication/ServiceTokenSettings.cs:18</code>). Eight validator
           classes sit beside a chain instead, each registered with <code>TryAddEnumerable</code> so two modules calling the
           same registration method cannot run the validation twice.
           <code>AiProviderValidator</code>
@@ -598,7 +652,7 @@
           no annotation on <code>AiSettings</code> can see.
           <code>TenancySettingsValidator</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettingsValidator.cs:24-25</code>,
-          registered at <code>DependencyInjection.cs:290-291</code>) exists because confirming that a tenant&#39;s data-source
+          registered at <code>DependencyInjection.cs:305-306</code>) exists because confirming that a tenant&#39;s data-source
           override names a real physical source needs <code>IDataSourceResolver</code>, which no annotation can reach.
           <code>ConnectionStringSettingsValidator</code>
           (<code>.../Persistence/DataSources/ConnectionStringSettingsValidator.cs:30-31</code>,
@@ -619,7 +673,14 @@
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gateway/GatewaySettingsValidator.cs:19</code>, registered at
           <code>GatewayReverseProxyExtensions.cs:62-63</code>, the reason at <code>:60-61</code>) exists because
           <code>ValidateDataAnnotations()</code> does not recurse into the nested trace-header and health-check objects,
-          so their <code>[Required]</code> values would otherwise never be checked at startup. The cost of
+          so their <code>[Required]</code> values would otherwise never be checked at startup.
+          <code>CloudAdapterTripwire</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/CloudAdapterTripwire.cs:30</code>,
+          registered at <code>DependencyInjection.cs:222-223</code>) and <code>HostIntegrationTripwire</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Integrations/HostIntegrationTripwire.cs:15</code>,
+          registered at <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:45-46</code>) validate marker
+          types that carry no data at all, because what they check is whether a vendor adapter call was made,
+          which only the registered services can show. The cost of
           the second form is that the rule
           leaves the settings type and has to be registered separately, so a host that binds the section without
           also registering the validator validates less than it appears to. Store uses both forms on its own
@@ -729,6 +790,66 @@
           <code>StripeWebhookRegistrationService.cs:49</code>; <code>ForgotPasswordHandlerBase.cs:41</code>;
           <code>SendEmailConfirmationHandlerBase.cs:45</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. The decision, the rationale, the nineteen Infrastructure sections
+          (twelve reaching every host, seven opt-in), the two consumer-host exceptions and the six framework
+          Application injections are unchanged; the cloud-neutral adapter split moved two exceptions into vendor
+          packages and added two startup tripwires.</p>
+          <ol>
+          <li>A grep now finds 39 <code>ValidateOnStart()</code> calls in 22 files under <code>MMCA.Common/Source</code>; less the
+          host-owned pair in <code>ModuleHostExtensions.cs:64</code> and <code>:72</code> that is thirty-seven framework
+          registrations (twenty in Infrastructure, seventeen outside). The two new ones bind no section:
+          <code>CloudAdapterTripwireOptions</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:221</code>), inside
+          <code>AddInfrastructure</code> and so reaching every host, and <code>HostIntegrationTripwireOptions</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:44</code>), inside <code>AddServiceDefaults</code>. Both
+          are a bare <code>AddOptions&lt;T&gt;().ValidateOnStart()</code>, and the Rationale&#39;s list of chain variants now names
+          that shape.</li>
+          <li>Custom <code>IValidateOptions&lt;T&gt;</code> validators are eight: <code>CloudAdapterTripwire</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/CloudAdapterTripwire.cs:30</code>,
+          registered with <code>TryAddEnumerable</code> at <code>DependencyInjection.cs:222-223</code>) and <code>HostIntegrationTripwire</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Integrations/HostIntegrationTripwire.cs:15</code>,
+          registered at <code>Extensions.cs:45-46</code>) are new.</li>
+          <li><code>NativePushSettings</code> and <code>FileStorageSettings</code> no longer exist, and
+          <code>DependencyInjection.Notifications.cs</code> holds only the <code>PushNotificationSettings</code> chain (<code>:40-43</code>). The
+          cloud adapter packages bind six vendor sections off the chain instead: <code>AzureBlobFileStorageSettings</code>
+          and <code>AzureNotificationHubSettings</code> (<code>AzureServiceCollectionExtensions.cs:45-46</code>, <code>:87-88</code>),
+          <code>S3FileStorageSettings</code> and <code>SnsNativePushSettings</code> (<code>AwsServiceCollectionExtensions.cs:54-55</code>,
+          <code>:180</code>), and <code>GcsFileStorageSettings</code> and <code>FcmNativePushSettings</code>
+          (<code>GcpServiceCollectionExtensions.cs:52-53</code>, <code>:158</code>). The framework exceptions are therefore fifteen,
+          thirteen on the shared &quot;absent section is a working default&quot; reason; the Trade-offs now cite the
+          adapter XML summaries for that reason, and the Decision notes that <code>NativePush:Enabled</code> with the push
+          sender still <code>NullNativePushSender</code> fails startup through <code>CloudAdapterTripwire</code>.</li>
+          <li>The tripwire covers more than a missing adapter call: it fails whenever <code>INativePushSender</code> is still
+          <code>NullNativePushSender</code> (<code>CloudAdapterTripwire.cs:48-50</code>, message at <code>:53</code>), which includes an adapter
+          call whose push section is incomplete, because each push method returns early then
+          (<code>AzureServiceCollectionExtensions.cs:91-96</code>, <code>AwsServiceCollectionExtensions.cs:170-175</code>,
+          <code>GcpServiceCollectionExtensions.cs:148-153</code>). The two non-Azure push methods also bind in the other
+          order from the four storage and hub methods: the section is read first and
+          <code>AddOptions&lt;T&gt;().Bind(...)</code> runs only past the enabled-and-complete gate (Aws <code>:168-180</code>, Gcp
+          <code>:146-158</code>), so with push off they register no options. The Decision now says both.</li>
+          <li>The fifteen exceptions are unchanged in count. The Decision now states that a registration-time
+          <code>Get&lt;T&gt;()</code> never placed in the container is outside the inventory, naming the three adapter reads that
+          fall there: <code>RdsIamAuthenticationSettings</code> (<code>AwsServiceCollectionExtensions.cs:111</code>),
+          <code>CloudSqlIamAuthenticationSettings</code> (<code>GcpServiceCollectionExtensions.cs:94</code>) and
+          <code>AmazonSqsTransportSettings</code> (<code>AmazonSqsTransport.cs:78</code>); <code>DataSourcesSettings</code> counts because it is
+          registered (<code>DependencyInjection.cs:90</code>).</li>
+          <li>Anchors re-verified against current source: Infrastructure <code>DependencyInjection.cs</code> (<code>AddCaching</code> call
+          <code>:140</code>, <code>AddInternalCommands</code> call <code>:252</code>, <code>AddMultiTenancy</code> <code>:297</code> with its chain at <code>:299-302</code> and the
+          <code>TenancySettingsValidator</code> registration at <code>:305-306</code>); <code>AddPushNotifications</code>
+          (<code>DependencyInjection.Notifications.cs:38</code>, chain <code>:40-43</code>); <code>AddBrokerMessaging</code>
+          (<code>DependencyInjection.Messaging.cs:48</code>, <code>Get&lt;MessageBusSettings&gt;()</code> at <code>:54</code>); <code>RateLimitingSettings</code>
+          (<code>WebApplicationBuilderExtensions.RateLimiting.cs:399</code>); <code>GatewayRateLimitingSettings</code>
+          (<code>GatewayRateLimitingExtensions.cs:296-299</code>, method <code>:290</code>); <code>UiRateLimitingSettings</code>
+          (<code>UiRateLimitingExtensions.cs:202-205</code>, method <code>:197</code>); ADC Conference.Service <code>AddModuleHost</code>
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:379-381</code>, the comment at <code>:370</code>);
+          Store Catalog.Service <code>AddModuleHost</code>
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:131-133</code>, the comment at <code>:119</code>);
+          ADC Engagement <code>PointsSettings</code> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:134-135</code>,
+          reason <code>:131-133</code>) and <code>CheckInSettings</code> (<code>:141-142</code>, reason <code>:138-140</code>);
+          <code>AuthenticationServiceBase.cs:74</code>; <code>RecordRoomCheckInHandler.cs:47</code> and <code>:48</code>;
+          <code>LoginProtectionService.cs:32</code>; ADC UI Web <code>MapClientConfigEndpoint</code> (<code>Program.cs:271</code>).</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-025 (startup warm-up and readiness gating: this contract decides what happens <em>before</em> a host reaches
           that machinery), ADR-031 (feature flags read from configuration, whose section this contract governs the
@@ -754,6 +875,7 @@
             <li><a href="#revision-2026-10-06">Revision (2026-10-06)</a></li>
             <li><a href="#revision-2026-10-07">Revision (2026-10-07)</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

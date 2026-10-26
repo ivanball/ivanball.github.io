@@ -11,6 +11,7 @@ Revised 2026-10-21: anchors refreshed after the releases that moved the device c
 registration service and the registrar.
 Revised 2026-10-24: the Notification Hubs sender and registrar moved to MMCA.Common.Azure, registered by `AddAzureNotificationHubsPush` ([ADR-134](134-cloud-neutral-core-vendor-adapters.md)); see Revision (2026-10-24).
 Revised 2026-10-25: two more delivery adapters ship, SNS mobile push over a DynamoDB registry (MMCA.Common.Aws) and FCM HTTP v1 over a Firestore registry (MMCA.Common.Gcp), and the payload builders moved into the core; see Revision (2026-10-25).
+Revised 2026-10-26: anchors refreshed after the releases that moved the SNS sender and registrar and the core payload builders.
 
 ## Context
 ADR-024 established two notification channels: a durable per-user `UserNotification` inbox (the
@@ -48,9 +49,9 @@ may not exist when the code ships.
     rule is one conditional write, `attribute_not_exists(InstallationId) OR UserId = :me OR
     PushChannel = :channel` (`SnsInstallationRegistry.cs:36`, applied at `:97`), so it holds under
     concurrency without a lock. A broadcast is one publish to the topic every endpoint subscribes
-    to (`Notifications/SnsPushDeviceRegistrar.cs:140-143`, `Notifications/SnsNativePushSender.cs:65-74`),
+    to (`Notifications/SnsPushDeviceRegistrar.cs:157-167`, `Notifications/SnsNativePushSender.cs:73-80`),
     and an endpoint SNS reports disabled or missing is removed with its row on send
-    (`SnsNativePushSender.cs:93-96`).
+    (`SnsNativePushSender.cs:99-102`).
   - **Google FCM HTTP v1**, `AddFirebaseCloudMessagingPush(configuration)`
     (`MMCA.Common/Source/Hosting/MMCA.Common.Gcp/GcpServiceCollectionExtensions.cs:142`), gated on
     `NativePush:Fcm` carrying `ProjectId`, `InstallationsCollection` and `BroadcastTopic`
@@ -78,7 +79,7 @@ may not exist when the code ships.
   at a time, `FirestoreInstallationRegistry.cs:23`).
 - **One payload shape in the core.** `NativePushPayloads.BuildFcmV1Payload` and `BuildApnsPayload`
   are public in `MMCA.Common.Infrastructure.Notifications.Push`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/NativePushPayloads.cs:11,18,40`),
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/NativePushPayloads.cs:13,20,42`),
   called by the Notification Hubs sender
   (`MMCA.Common/Source/Hosting/MMCA.Common.Azure/Notifications/AzureNotificationHubNativePushSender.cs:22-23`)
   and the SNS message builder
@@ -254,3 +255,18 @@ the client lifecycle. The Decision now describes three adapters.
    describe the Notification Hubs adapter. The SNS and FCM registrars enforce the same owner-scoped
    delete and channel handover through the DynamoDB condition and the Firestore transaction
    (`AwsServiceCollectionExtensions.cs:134-136`, `GcpServiceCollectionExtensions.cs:113-115`).
+
+## Revision (2026-10-26)
+Re-verified against current source. The decision is unchanged: three delivery adapters, the
+Null-by-default sender and registrar, the `NativePush:Enabled` gate, and one payload shape in the
+core. Only anchors in the live sections moved.
+
+1. Anchors re-verified against current source: the SNS broadcast topic subscription is
+   `MMCA.Common/Source/Hosting/MMCA.Common.Aws/Notifications/SnsPushDeviceRegistrar.cs:157-167`
+   (`TopicArn = options.Value.BroadcastTopicArn` at `:162`); the single broadcast publish is
+   `Notifications/SnsNativePushSender.cs:73-80` inside `BroadcastAsync` (`:71`); the disabled or
+   missing endpoint pruning is `SnsNativePushSender.cs:99-102`; and `NativePushPayloads`,
+   `BuildFcmV1Payload` and `BuildApnsPayload` are
+   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/NativePushPayloads.cs:13,20,42`.
+   The `AddMauiPushDeviceTokenProvider()` anchor inside the 2026-10-01 revision is left as recorded;
+   the live Decision already cites `MMCA.Common.UI.Maui/DependencyInjection.cs:124-132`.

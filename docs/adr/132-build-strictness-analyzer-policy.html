@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 134 ADRs</summary>
+        <summary>All 135 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -234,6 +234,7 @@
         <li><a href="132-build-strictness-analyzer-policy.html" aria-current="page">132 · Build Strictness: Analyzers at Error Severity, a Shared Baseline, and CI Test Floors</a></li>
         <li><a href="133-versioned-password-hash-work-factor.html">133 · Versioned Password Hash Work Factor</a></li>
         <li><a href="134-cloud-neutral-core-vendor-adapters.html">134 · Cloud-Neutral Core With Vendor Adapter Packages</a></li>
+        <li><a href="135-application-namespace-keyspace-isolation.html">135 · One Application Namespace Isolates Shared Infrastructure Keyspaces</a></li>
           </ol>
         </nav>
       </details>
@@ -246,7 +247,9 @@
           some time, and this is the first written decision for it rather than the start of the practice.
           Revised 2026-10-21: the four repos now pin identical analyzer versions (the pins stay per repo),
           Common&#39;s source-only PublicApiAnalyzers group is recorded, and the props, workflow and coverage-gate
-          anchors are re-pointed.</p>
+          anchors are re-pointed.
+          Revised 2026-10-26: Meziantou moves to <code>3.0.317</code> in all four repos, Common&#39;s AWS LocalStack and
+          Google Cloud emulator floors are recorded, and the props and workflow anchors are re-pointed.</p>
           <h2 id="context">Context</h2>
           <p>Four repos (<code>MMCA.Common</code>, <code>MMCA.ADC</code>, <code>MMCA.Store</code>, <code>MMCA.Helpdesk</code>) share one framework, one set of
           conventions, and a large share of their code is written or edited by agents. A convention that lives
@@ -276,23 +279,23 @@
           command-line build too.</li>
           <li><strong>Five third-party analyzer packages run on every project in the strict build.</strong> Meziantou,
           Microsoft.VisualStudio.Threading, Roslynator, SonarAnalyzer and StyleCop are referenced from the
-          root props of each repo (<code>MMCA.Common/Directory.Build.props:131-150</code>,
-          <code>MMCA.ADC/Directory.Build.props:117-136</code>, <code>MMCA.Store/Directory.Build.props:117-136</code>,
-          <code>MMCA.Helpdesk/Directory.Build.props:48-67</code>). Two kinds of project are outside it. Docker Compose
+          root props of each repo (<code>MMCA.Common/Directory.Build.props:114-133</code>,
+          <code>MMCA.ADC/Directory.Build.props:101-120</code>, <code>MMCA.Store/Directory.Build.props:103-122</code>,
+          <code>MMCA.Helpdesk/Directory.Build.props:33-52</code>). Two kinds of project are outside it. Docker Compose
           <code>.dcproj</code> projects are excluded by the condition on that item group
-          (<code>MMCA.Common/Directory.Build.props:130</code>, <code>MMCA.ADC/Directory.Build.props:116</code>,
-          <code>MMCA.Store/Directory.Build.props:116</code>, <code>MMCA.Helpdesk/Directory.Build.props:47</code>), because they
+          (<code>MMCA.Common/Directory.Build.props:113</code>, <code>MMCA.ADC/Directory.Build.props:100</code>,
+          <code>MMCA.Store/Directory.Build.props:102</code>, <code>MMCA.Helpdesk/Directory.Build.props:32</code>), because they
           have no compiler to run an analyzer in. Common adds a sixth analyzer,
           Microsoft.CodeAnalysis.PublicApiAnalyzers (the RS0016/RS0017 public API baseline), only on its
-          <code>Source</code> projects, never on a <code>.dcproj</code> and never on <code>MMCA.Common.UI.Maui</code> (<code>MMCA.Common/Directory.Build.props:111-118</code>). Common&#39;s two build tools, the FACTS generator and the perf
+          <code>Source</code> projects, never on a <code>.dcproj</code> and never on <code>MMCA.Common.UI.Maui</code> (<code>MMCA.Common/Directory.Build.props:94-101</code>). Common&#39;s two build tools, the FACTS generator and the perf
           gate, are isolated from the strict build through <code>MMCA.Common/build/Directory.Build.props</code>
           (<code>MMCA.Common/build/facts/facts.csproj:5</code>) and turn off <code>TreatWarningsAsErrors</code>,
           <code>EnforceCodeStyleInBuild</code> and <code>RunAnalyzers</code> (<code>MMCA.Common/build/facts/facts.csproj:14-16</code>,
           <code>MMCA.Common/build/perfgate/perfgate.csproj:14-16</code>). The packages are pinned
-          through Central Package Management (<code>MMCA.Common/Directory.Packages.props:230</code>, <code>:236-239</code>, PublicApiAnalyzers at <code>:235</code>;
-          <code>MMCA.ADC/Directory.Packages.props:42-46</code>; <code>MMCA.Store/Directory.Packages.props:61-64</code>, <code>:73</code>;
+          through Central Package Management (<code>MMCA.Common/Directory.Packages.props:286</code>, <code>:292-295</code>, PublicApiAnalyzers at <code>:291</code>;
+          <code>MMCA.ADC/Directory.Packages.props:50-54</code>; <code>MMCA.Store/Directory.Packages.props:66-69</code>, <code>:78</code>;
           <code>MMCA.Helpdesk/Directory.Packages.props:35-39</code>). The pins are per repo and are not required to
-          match; today all four carry the same versions (Meziantou <code>3.0.315</code>, Threading <code>18.12.1</code>,
+          match; today all four carry the same versions (Meziantou <code>3.0.317</code>, Threading <code>18.12.1</code>,
           Roslynator <code>5.0.1</code>, SonarAnalyzer <code>10.35.0.4138</code>, StyleCop <code>1.2.0-beta.556</code>).</li>
           <li><strong>Every analyzer diagnostic defaults to error severity.</strong> The shared <code>.editorconfig</code> block sets
           <code>dotnet_analyzer_diagnostic.severity = error</code> (<code>MMCA.Common/.editorconfig:312</code>, the same line in
@@ -317,35 +320,36 @@
           (<code>.claude/hooks/post-edit-followups.sh:23-26</code>).</li>
           <li><strong>CI asserts a minimum test count, so an empty run fails.</strong> The solution-wide unit runs carry
           <code>--minimum-expected-tests</code>: Common <code>2000</code> (<code>MMCA.Common/.github/workflows/ci.yml:163</code>, and again
-          in <code>release.yml:89</code>), ADC <code>5000</code> (<code>MMCA.ADC/.github/workflows/deploy.yml:366</code>), Store <code>2650</code>
+          in <code>release.yml:89</code>), ADC <code>5000</code> (<code>MMCA.ADC/.github/workflows/deploy.yml:367</code>), Store <code>2650</code>
           (<code>MMCA.Store/.github/workflows/deploy.yml:338</code>), Helpdesk <code>1</code>
           (<code>MMCA.Helpdesk/.github/workflows/ci.yml:104</code>). The integration tiers carry their own (ADC <code>450</code> at
-          <code>MMCA.ADC/.github/workflows/deploy.yml:730</code>, Store <code>250</code> at
-          <code>MMCA.Store/.github/workflows/deploy.yml:677</code>), as do Common&#39;s gallery E2E (<code>ci.yml:292</code>), Redis
-          (<code>:767</code>), per-engine PostgreSQL and SQL Server (<code>:804</code>, <code>:844</code>) and AppHost (<code>:891</code>) jobs,
-          Common&#39;s Helpdesk canary (<code>ci.yml:527</code>, <code>40</code>)
+          <code>MMCA.ADC/.github/workflows/deploy.yml:731</code>, Store <code>250</code> at
+          <code>MMCA.Store/.github/workflows/deploy.yml:678</code>), as do Common&#39;s gallery E2E (<code>ci.yml:345</code>), Redis
+          (<code>:820</code>), per-engine PostgreSQL and SQL Server (<code>:860</code>, <code>:900</code>), AWS LocalStack (<code>:940</code>), Google
+          Cloud emulator (<code>:987</code>) and AppHost (<code>:1034</code>) jobs,
+          Common&#39;s Helpdesk canary (<code>ci.yml:580</code>, <code>40</code>)
           and both consumers&#39; cross-service jobs
           (<code>MMCA.ADC/.github/workflows/cross-service-tests.yml:110</code>, <code>:169</code>;
           <code>MMCA.Store/.github/workflows/cross-service-tests.yml:114</code>, <code>:167</code>). Adoption is not universal: the
-          ADC and Store browser E2E runs carry no floor (<code>MMCA.ADC/.github/workflows/e2e.yml:335-337</code>,
+          ADC and Store browser E2E runs carry no floor (<code>MMCA.ADC/.github/workflows/e2e.yml:360-362</code>,
           <code>MMCA.Store/.github/workflows/e2e.yml:394-397</code>), and ADC&#39;s live AI judge omits it on purpose,
-          because without its API key every case skips (<code>MMCA.ADC/.github/workflows/deploy.yml:557-560</code>),
+          because without its API key every case skips (<code>MMCA.ADC/.github/workflows/deploy.yml:558-561</code>),
           while the gating golden-replay and prompt-contract step in the same job keeps a floor of <code>1</code>
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:555</code>, rationale at <code>:549-550</code>).</li>
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:556</code>, rationale at <code>:550-551</code>).</li>
           <li><strong>CI enforces a line-coverage floor on the unit tier, not the merged report.</strong> Common gates the
           unit, architecture and bUnit tier with generated code excluded at <code>68.3</code> percent
-          (<code>MMCA.Common/.github/workflows/ci.yml:395-396</code>, comparison at <code>:409</code>), and says why the merged
-          report is not used: the gallery E2E tier dilutes it (<code>:395</code>). ADC gates its own code (filtered to
+          (<code>MMCA.Common/.github/workflows/ci.yml:448-449</code>, comparison at <code>:462</code>), and says why the merged
+          report is not used: the gallery E2E tier dilutes it (<code>:448</code>). ADC gates its own code (filtered to
           <code>MMCA.ADC.*</code> minus the test, <code>*.Service</code> host and <code>*.Contracts</code> assemblies,
-          <code>MMCA.ADC/.github/workflows/deploy.yml:404</code>) at <code>55.5</code> percent line coverage (<code>:406</code>, comparison at
-          <code>:408</code>) and adds an Application-layer branch floor of <code>77.5</code> percent (filter <code>:433</code>, floor <code>:442</code>,
-          comparison <code>:444</code>), which also fails when the report covers fewer than four Application
-          assemblies (<code>:436</code>). Store does
+          <code>MMCA.ADC/.github/workflows/deploy.yml:405</code>) at <code>55.5</code> percent line coverage (<code>:407</code>, comparison at
+          <code>:409</code>) and adds an Application-layer branch floor of <code>77.5</code> percent (filter <code>:434</code>, floor <code>:443</code>,
+          comparison <code>:445</code>), which also fails when the report covers fewer than four Application
+          assemblies (<code>:437</code>). Store does
           the same over <code>MMCA.Store.*</code> minus tests and <code>*.Contracts</code> (<code>MMCA.Store/.github/workflows/deploy.yml:372</code>)
           at <code>51.6</code> percent line (<code>:374</code>, <code>:376</code>) and <code>72.8</code> percent Application-layer branch (<code>:407</code>, <code>:409</code>),
           which also fails when the report covers fewer than three Application assemblies (<code>:401</code>). Both
           consumers&#39; line and branch floors fail closed when the coverage file is missing
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:397-399</code>, <code>:427-429</code>,
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:398-400</code>, <code>:428-430</code>,
           <code>MMCA.Store/.github/workflows/deploy.yml:368</code>, <code>:395</code>). Helpdesk has no coverage floor in its CI. The
           values are configuration and change by ratchet; current test counts and measured coverage belong
           to <code>MMCA.Common/FACTS.md</code> and are not restated here.</li>
@@ -425,6 +429,43 @@
           the Decision 1 and 3 to 5 anchors, Common <code>ci.yml:163</code>, <code>:292</code>, <code>:395-396</code>, <code>:409</code>, <code>:527</code>, and
           Store <code>deploy.yml:338</code>, <code>:368</code>, <code>:372-376</code>, <code>:407</code>, <code>:409</code>.</li>
           </ol>
+          <h2 id="revision-2026-10-26">Revision (2026-10-26)</h2>
+          <p>Re-verified against current source. The policy and every floor value are unchanged: warnings as
+          errors, five analyzer packages on every non-<code>.dcproj</code> project, Common&#39;s source-only
+          PublicApiAnalyzers group, error-by-default severity, the shared <code>.editorconfig</code> block above the
+          marker at <code>:821</code>, count floors Common <code>2000</code>, ADC <code>5000</code>, Store <code>2650</code>, Helpdesk <code>1</code>, and coverage
+          floors <code>68.3</code>, <code>55.5</code>/<code>77.5</code> and <code>51.6</code>/<code>72.8</code>. What moved is one analyzer pin, two Common floored
+          jobs not yet listed, and most props and workflow anchors.</p>
+          <ol>
+          <li>Meziantou.Analyzer is now <code>3.0.317</code> in all four repos
+          (<code>MMCA.Common/Directory.Packages.props:286</code>, <code>MMCA.ADC/Directory.Packages.props:50</code>,
+          <code>MMCA.Store/Directory.Packages.props:66</code>, <code>MMCA.Helpdesk/Directory.Packages.props:35</code>); the other
+          four pins are unchanged and still identical, so Decision 2 records <code>3.0.317</code>.</li>
+          <li>Common&#39;s CI also floors its AWS LocalStack job (<code>--minimum-expected-tests 14</code>,
+          <code>MMCA.Common/.github/workflows/ci.yml:940</code>) and its Google Cloud emulator job (<code>14</code>, <code>:987</code>);
+          Decision 6 now lists both.</li>
+          <li>Anchors re-verified against current source: analyzer item groups
+          <code>MMCA.Common/Directory.Build.props:113</code>, <code>:114-133</code>; <code>MMCA.ADC/Directory.Build.props:100</code>,
+          <code>:101-120</code>; <code>MMCA.Store/Directory.Build.props:102</code>, <code>:103-122</code>;
+          <code>MMCA.Helpdesk/Directory.Build.props:32</code>, <code>:33-52</code>; PublicApiAnalyzers group
+          <code>MMCA.Common/Directory.Build.props:94-101</code>. Pins: <code>MMCA.Common/Directory.Packages.props:286</code>,
+          <code>:292-295</code>, PublicApiAnalyzers <code>5.6.0</code> at <code>:291</code>; <code>MMCA.ADC/Directory.Packages.props:50-54</code>;
+          <code>MMCA.Store/Directory.Packages.props:66-69</code>, <code>:78</code>. Floors: ADC unit
+          <code>MMCA.ADC/.github/workflows/deploy.yml:367</code>, ADC integration <code>:731</code>, Store integration
+          <code>MMCA.Store/.github/workflows/deploy.yml:678</code>; Common gallery E2E
+          <code>MMCA.Common/.github/workflows/ci.yml:345</code>, Helpdesk canary <code>:580</code>, Redis <code>:820</code>, PostgreSQL
+          <code>:860</code>, SQL Server <code>:900</code>, AppHost <code>:1034</code>. ADC AI evaluation: golden replay
+          <code>MMCA.ADC/.github/workflows/deploy.yml:556</code>, rationale <code>:550-551</code>, live judge <code>:558-561</code>. ADC
+          browser E2E <code>MMCA.ADC/.github/workflows/e2e.yml:360-362</code>. Common coverage gate: rationale
+          <code>MMCA.Common/.github/workflows/ci.yml:448-449</code>, comparison <code>:462</code>. ADC coverage gate: filter
+          <code>MMCA.ADC/.github/workflows/deploy.yml:405</code>, floor <code>:407</code>, comparison <code>:409</code>, fail-closed
+          <code>:398-400</code>; branch filter <code>:434</code>, assembly count <code>:437</code>, floor <code>:443</code>, comparison <code>:445</code>,
+          fail-closed <code>:428-430</code>. Unchanged and confirmed: the Decision 1 and 3 to 5 anchors,
+          <code>MMCA.Helpdesk/Directory.Packages.props:35-39</code>, Common <code>ci.yml:163</code> and <code>release.yml:89</code>, Store
+          <code>deploy.yml:338</code>, <code>:368</code>, <code>:372-376</code>, <code>:395</code>, <code>:401</code>, <code>:407</code>, <code>:409</code>,
+          <code>MMCA.Store/.github/workflows/e2e.yml:394-397</code>, Helpdesk <code>ci.yml:104</code>, and the cross-service
+          floors.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="015-architecture-fitness-functions.html">ADR-015</a> (fitness tests, the other executable-convention
           layer), <a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a> (lockstep package versioning, which
@@ -449,6 +490,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-10-21">Revision (2026-10-21)</a></li>
+            <li><a href="#revision-2026-10-26">Revision (2026-10-26)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

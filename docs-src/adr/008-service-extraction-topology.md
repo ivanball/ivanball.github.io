@@ -21,6 +21,8 @@ cross-service tier's cadence is corrected to weeknights only (a scheduled night 
 `main` has not moved since the last successful run), the single arm-deploy step is scoped to
 `main.bicep`, and anchors are refreshed after the v1.233.0 release. Revised 2026-10-21: anchors
 refreshed after the v1.250.0 consumer sweep. Revised 2026-10-24: anchors refreshed against current source.
+Revised 2026-10-26: anchors refreshed against current source, including the live-section host,
+Gateway and `Extensions.cs` anchors the 2026-10-24 pass left stale.
 
 ## Context
 ADC began as a modular monolith: one `MMCA.ADC.WebAPI` host loaded every module (Identity, Conference,
@@ -47,9 +49,9 @@ and front them with a single **YARP reverse-proxy Gateway** (`MMCA.ADC.Gateway`,
 
 - **Each service is the monolith with one module enabled.** The hosts still run `ModuleLoader`, just with
   `Modules:{Module}:Enabled=true` for their own module, and each names only its own module assembly
-  to `AddModuleHost` (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:373-375`), so
+  to `AddModuleHost` (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:379-381`), so
   peer modules are never discovered there; the cross-module interfaces a service consumes are
-  satisfied by gRPC clients the host registers (`:420`). The Domain/Application/Shared code is identical whether it runs in-process or extracted.
+  satisfied by gRPC clients the host registers (`:431`). The Domain/Application/Shared code is identical whether it runs in-process or extracted.
 - **Extraction follows the Strangler Fig route; a rewrite is never the plan.** Nothing in the topology
   needs a big-bang switch. A module is extracted by (1) starting its single-module service host beside
   the combined host, which keeps running with that module turned off (`Modules:{Module}:Enabled=false`)
@@ -64,29 +66,29 @@ and front them with a single **YARP reverse-proxy Gateway** (`MMCA.ADC.Gateway`,
 - **The Gateway is the only client entry point.** It owns the route-to-service map (`/Auth`, `/Events`,
   `/Bookmarks`, `/hubs`, `/.well-known`, and so on); clients (Blazor/MAUI) never address a service directly. It
   has no DbContext or controllers. Its pipeline is edge rate limiting
-  (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:76`, `:180`), one per-downstream readiness check
-  per service (`:90`), forwarded headers (`:160`), correlation (`:165`), security-headers middleware
-  (ADR-023, `:120`, `:170`), CORS (`:125`, `:173`), static files (`:185`), `/privacy`, `/terms` and
-  `/delete-account` minimal-API endpoints (`:192`, `:199`, `:203`), a request-body cap raised only for
-  the session-asset upload path (`:215-222`),
+  (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:82`, `:186`), one per-downstream readiness check
+  per service (`:96`), forwarded headers (`:166`), correlation (`:171`), security-headers middleware
+  (ADR-023, `:126`, `:176`), CORS (`:131`, `:179`), static files (`:191`), `/privacy`, `/terms` and
+  `/delete-account` minimal-API endpoints (`:198`, `:205`, `:209`), a request-body cap raised only for
+  the session-asset upload path (`:220-232`),
   authorization middleware that evaluates the `anonymous` policy every route declares
-  (`AddAuthorization` at `:114`, `UseAuthorization` at `:231`; no authentication scheme is registered,
+  (`AddAuthorization` at `:120`, `UseAuthorization` at `:237`; no authentication scheme is registered,
   so the Gateway authenticates no one, ADR-088), and the proxy itself: the route table is loaded from
-  the `ReverseProxy` configuration section and mapped by `MapReverseProxy` (`:148-149`, `:234`), not
+  the `ReverseProxy` configuration section and mapped by `MapReverseProxy` (`:154-155`, `:240`), not
   expressed as `MapForwarder` calls in code (ADR-089). Both Gateways layer Azure Key Vault
-  configuration before anything binds settings (ADC `:67`, ahead of `AddServiceDefaults` at `:69`, the
+  configuration before anything binds settings (ADC `:68`, ahead of `AddServiceDefaults` at `:70`, the
   order every ADC service and UI host now follows too, for example
-  `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:114` before `:116`; Store
-  `MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:63`). Store's Gateway is the same shape
+  `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:115` before `:117`; Store
+  `MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:64`). Store's Gateway is the same shape
   without the static files, the `/privacy`, `/terms` and `/delete-account` endpoints, the upload cap and the authorization pair: its
   routes declare `anonymous` too, but it registers no authorization middleware, by design
   (`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:45-49`).
 - **Cross-service communication uses edge transports:** synchronous calls over gRPC contracts (ADR-007);
   asynchronous flows over the outbox to MassTransit broker (ADR-003, ADR-006). Token validation is
   federated via JWKS (ADR-004): locally the AppHost points each service at Identity through the Gateway
-  (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:373-375`), while in production each service
-  sets its JWT authority to Identity's internal URL directly (`MMCA.ADC/infra/main.bicep:2194`, `:2330`,
-  `:2484`). Each service owns its own database (ADR-006).
+  (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:374-376`), while in production each service
+  sets its JWT authority to Identity's internal URL directly (`MMCA.ADC/infra/main.bicep:2195`, `:2331`,
+  `:2485`). Each service owns its own database (ADR-006).
 - **Transport stays at the edge, enforced.** `MicroserviceExtractionTests` in the architecture suite
   forbid gRPC / MassTransit / Protobuf dependencies in any Domain, Application, or Shared assembly, so the
   core stays host-agnostic and the split stays reversible.
@@ -103,7 +105,7 @@ and front them with a single **YARP reverse-proxy Gateway** (`MMCA.ADC.Gateway`,
 - **Reversible by construction.** Transport at the edge + the `ModuleLoader` mean a service can be
   re-collapsed into a combined host (or peers co-hosted) by a host-level change, not a domain change: a
   host names the module assemblies it boots in code
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:373-375`), and configuration then
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:379-381`), and configuration then
   enables or disables each of them. Useful
   insurance for a small team adopting microservices.
 
@@ -119,7 +121,7 @@ and front them with a single **YARP reverse-proxy Gateway** (`MMCA.ADC.Gateway`,
   nuance that didn't exist in the monolith.
 - **Duplicated host wiring.** Each service repeats the same pipeline setup; shared concerns live in the
   framework packages (`MMCA.Common.API`, plus `AddServiceDefaults` from `MMCA.Common.Aspire` at
-  `MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:30`) to limit the drift. Neither consumer
+  `MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:33`) to limit the drift. Neither consumer
   carries a `ServiceDefaults` project of its own.
 
 ## Applicability
@@ -139,8 +141,8 @@ first of all to demonstrate and continuously exercise the extraction path end to
 nothing runs is a claim. They are not the output of a scale, team or deploy-cadence trigger. The
 conference peaked at roughly 67 concurrent users (Context above), one team owns every module, and all
 six deployables still ship in a single pipeline run from one template
-(`MMCA.ADC/infra/main.bicep:1860`, `:2113`, `:2266`, `:2401`, `:2591`, `:2754`, deployed together by a
-single `azure/arm-deploy` step for `main.bicep` at `MMCA.ADC/.github/workflows/deploy.yml:1449-1455`), so the
+(`MMCA.ADC/infra/main.bicep:1861`, `:2114`, `:2267`, `:2402`, `:2592`, `:2755`, deployed together by a
+single `azure/arm-deploy` step for `main.bicep` at `MMCA.ADC/.github/workflows/deploy.yml:1448-1454`), so the
 independent-deploy benefit this record lists is available rather than taken. What ADC does buy with the split is proof under load that the path
 works: transport stays out of Domain, Application and Shared under a build gate
 (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Layering/MicroserviceExtractionTests.cs:3`), and the
@@ -233,6 +235,37 @@ arm-deploy step. Only line numbers moved; the dated revisions above keep their a
    and `:2754` (UI); the `main.bicep` arm-deploy step at
    `MMCA.ADC/.github/workflows/deploy.yml:1449-1455` and the `foundation.bicep` arm-deploy step at
    `:988`.
+
+## Revision (2026-10-26)
+Re-verified against current source. No content changed: each extracted host still names a single
+module assembly to `AddModuleHost`, the Conference host still registers its Engagement gRPC client,
+both Gateways still layer Key Vault configuration ahead of `AddServiceDefaults`, the ADC Gateway
+pipeline holds the same middleware in the same order, JWKS federation still runs through the Gateway
+only under the AppHost, and exactly six container apps (and no container app jobs) still deploy from
+one `main.bicep` arm-deploy step. Only line numbers moved, and this pass also re-points the live-section
+host, Gateway and `Extensions.cs` anchors the 2026-10-24 pass did not cover; the dated revisions above
+keep their anchors as written.
+
+1. Anchors re-verified against current source: Conference host `AddModuleHost` call at
+   `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:379-381` (single-assembly array
+   at `:380`; likewise Engagement `:221`, Identity `:273`, Notification `:203`), Key Vault at `:115`
+   before `AddServiceDefaults` at `:117`, gRPC client registration `AddEngagementBookmarkCountClient`
+   at `:431` inside the `AddMmcaApplicationPipeline` call starting at `:429`; ADC Gateway
+   (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs`) Key Vault `:68`, `AddServiceDefaults` `:70`,
+   `AddGatewayRateLimiting` `:82` and `UseGatewayRateLimiting` `:186`, downstream readiness checks
+   `:96`, `AddAuthorization` `:120`, `AddCommonSecurityHeaders` `:126` and `UseCommonSecurityHeaders`
+   `:176`, `AddCommonGatewayCors` `:131` and `UseCors` `:179`, `AddReverseProxy` with `LoadFromConfig`
+   `:154-155`, forwarded headers `:166`, correlation `:171`, static files `:191`, `/privacy` `:198`,
+   `/terms` `:205`, `/delete-account` `:209`, upload cap `:220-232`, `UseAuthorization` `:237`,
+   `MapReverseProxy` `:240`; Store Gateway Key Vault at
+   `MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:64` before `AddServiceDefaults` at `:66`;
+   AppHost JWKS wiring at `MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:374-376`; production
+   JWT authority at `MMCA.ADC/infra/main.bicep:2195`, `:2331` and `:2485`; the six container apps at
+   `:1861` (Identity), `:2114` (Conference), `:2267` (Engagement), `:2402` (Notification), `:2592`
+   (Gateway) and `:2755` (UI); the `main.bicep` arm-deploy step at
+   `MMCA.ADC/.github/workflows/deploy.yml:1448-1454` and the `foundation.bicep` arm-deploy step at
+   `:988`; `AddServiceDefaults` declared at
+   `MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:33`.
 
 ## Related
 ADR-003 (outbox dual dispatch), ADR-004 (cross-service token validation via JWKS), ADR-006 (database
